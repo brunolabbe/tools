@@ -1,0 +1,2085 @@
+{
+  "road-trip/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-07-03",
+          "items": [
+            {
+              "id": "rev-1-item-rt-cand-2",
+              "candidateId": "rt-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-rt-cand-3",
+              "candidateId": "rt-cand-3",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-07-04",
+          "items": [
+            {
+              "id": "rev-1-item-rt-cand-4",
+              "candidateId": "rt-cand-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-07-05",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-07-06",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-07-07",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-07-08",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-07-09",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-07-10",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-8",
+          "dayIndex": 8,
+          "date": "2027-07-11",
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "route-and-logistics",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "rt-cand-4"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "rt-cand-3"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 8,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "rt-cand-1",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "road-trip/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-07-03",
+          "items": [
+            {
+              "id": "rev-1-item-rt-cand-2",
+              "candidateId": "rt-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-rt-cand-3",
+              "candidateId": "rt-cand-3",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 60000,
+                "durationMinutes": 45,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/test",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-22T00:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-07-04",
+          "items": [
+            {
+              "id": "rev-1-item-rt-cand-4",
+              "candidateId": "rt-cand-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-07-05",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-07-06",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-07-07",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-07-08",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-07-09",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-07-10",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-8",
+          "dayIndex": 8,
+          "date": "2027-07-11",
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "route-and-logistics",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "rt-cand-4"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "rt-cand-3"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 8,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "rt-cand-1",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "backcountry/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-bc-cand-2",
+              "candidateId": "bc-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-bc-cand-1",
+              "candidateId": "bc-cand-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "daily-distance",
+        "detail": "How far each day actually goes was not checked. Nothing here measures a distance on foot.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "bc-cand-1"
+        ]
+      },
+      {
+        "kind": "budget-band",
+        "detail": "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "bc-cand-3",
+        "reason": "not-schedulable"
+      },
+      {
+        "candidateId": "bc-cand-4",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "backcountry/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-bc-cand-2",
+              "candidateId": "bc-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-bc-cand-1",
+              "candidateId": "bc-cand-1",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 60000,
+                "durationMinutes": 45,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/test",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-22T00:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "daily-distance",
+        "detail": "How far each day actually goes was not checked. Nothing here measures a distance on foot.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "bc-cand-1"
+        ]
+      },
+      {
+        "kind": "budget-band",
+        "detail": "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "bc-cand-3",
+        "reason": "not-schedulable"
+      },
+      {
+        "candidateId": "bc-cand-4",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "motorised-touring/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mt-cand-1",
+              "candidateId": "mt-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "lodging",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: everything it found had to be booked further ahead than there is time for."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "machine-range",
+        "detail": "Whether each day stays inside your range was not checked. Nothing here measures a distance along a trail network.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "mt-cand-4",
+        "reason": "booking-deadline-passed"
+      },
+      {
+        "candidateId": "mt-cand-2",
+        "reason": "not-schedulable"
+      },
+      {
+        "candidateId": "mt-cand-3",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "motorised-touring/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mt-cand-1",
+              "candidateId": "mt-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "lodging",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: everything it found had to be booked further ahead than there is time for."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "machine-range",
+        "detail": "Whether each day stays inside your range was not checked. Nothing here measures a distance along a trail network.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "mt-cand-4",
+        "reason": "booking-deadline-passed"
+      },
+      {
+        "candidateId": "mt-cand-2",
+        "reason": "not-schedulable"
+      },
+      {
+        "candidateId": "mt-cand-3",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "city-and-culture/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-10-09",
+          "items": [
+            {
+              "id": "rev-1-item-cc-cand-1",
+              "candidateId": "cc-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-cc-cand-4",
+              "candidateId": "cc-cand-4",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "not-established"
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-10-10",
+          "items": [
+            {
+              "id": "rev-1-item-cc-cand-3",
+              "candidateId": "cc-cand-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-10-11",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-10-12",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-10-13",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-10-14",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-10-15",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-10-16",
+          "items": []
+        }
+      ],
+      "gaps": [],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "cc-cand-3"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-unknown",
+        "detail": "Nobody established when these are open, so they were left in.",
+        "candidateIds": [
+          "cc-cand-4"
+        ]
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "cc-cand-4"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "cc-cand-2",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "city-and-culture/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-10-09",
+          "items": [
+            {
+              "id": "rev-1-item-cc-cand-1",
+              "candidateId": "cc-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-cc-cand-4",
+              "candidateId": "cc-cand-4",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 60000,
+                "durationMinutes": 45,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/test",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-22T00:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": "2027-10-10",
+          "items": [
+            {
+              "id": "rev-1-item-cc-cand-3",
+              "candidateId": "cc-cand-3",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": "2027-10-11",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": "2027-10-12",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": "2027-10-13",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": "2027-10-14",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": "2027-10-15",
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": "2027-10-16",
+          "items": []
+        }
+      ],
+      "gaps": [],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "cc-cand-3"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-unknown",
+        "detail": "Nobody established when these are open, so they were left in.",
+        "candidateIds": [
+          "cc-cand-4"
+        ]
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "cc-cand-4"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "cc-cand-2",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "resort/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-rs-cand-1",
+              "candidateId": "rs-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "route-and-logistics",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-no-calendar",
+        "detail": "There are no dates yet, so nothing was checked against a season.",
+        "candidateIds": []
+      },
+      {
+        "kind": "booking-no-departure",
+        "detail": "There are no dates yet, so no booking deadline could be checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "rs-cand-1"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "rs-cand-2",
+        "reason": "no-day-had-room"
+      },
+      {
+        "candidateId": "rs-cand-3",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "resort/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-rs-cand-1",
+              "candidateId": "rs-cand-1",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": "How long this takes was not established, so it was not counted against the day.",
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "route-and-logistics",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-no-calendar",
+        "detail": "There are no dates yet, so nothing was checked against a season.",
+        "candidateIds": []
+      },
+      {
+        "kind": "booking-no-departure",
+        "detail": "There are no dates yet, so no booking deadline could be checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "duration-unknown",
+        "detail": "How long these take was never established, so they were not counted against the day.",
+        "candidateIds": [
+          "rs-cand-1"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 1,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "rs-cand-2",
+        "reason": "no-day-had-room"
+      },
+      {
+        "candidateId": "rs-cand-3",
+        "reason": "not-schedulable"
+      }
+    ]
+  },
+  "multi-city/nothing-measured": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mc-cand-2",
+              "candidateId": "mc-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mc-cand-4",
+              "candidateId": "mc-cand-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-8",
+          "dayIndex": 8,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-9",
+          "dayIndex": 9,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-10",
+          "dayIndex": 10,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-11",
+          "dayIndex": 11,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-12",
+          "dayIndex": 12,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "activities",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "mc-cand-4"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-unknown",
+        "detail": "Nobody established when these are open, so they were left in.",
+        "candidateIds": [
+          "mc-cand-4"
+        ]
+      },
+      {
+        "kind": "budget-band",
+        "detail": "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 8,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 9,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 10,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 11,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 12,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "mc-cand-1",
+        "reason": "no-day-had-room"
+      },
+      {
+        "candidateId": "mc-cand-3",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "multi-city/measured-everywhere": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mc-cand-2",
+              "candidateId": "mc-cand-2",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-1",
+          "dayIndex": 1,
+          "date": null,
+          "items": [
+            {
+              "id": "rev-1-item-mc-cand-4",
+              "candidateId": "mc-cand-4",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            }
+          ]
+        },
+        {
+          "id": "rev-1-day-2",
+          "dayIndex": 2,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-3",
+          "dayIndex": 3,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-4",
+          "dayIndex": 4,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-5",
+          "dayIndex": 5,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-6",
+          "dayIndex": 6,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-7",
+          "dayIndex": 7,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-8",
+          "dayIndex": 8,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-9",
+          "dayIndex": 9,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-10",
+          "dayIndex": 10,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-11",
+          "dayIndex": 11,
+          "date": null,
+          "items": []
+        },
+        {
+          "id": "rev-1-day-12",
+          "dayIndex": 12,
+          "date": null,
+          "items": []
+        }
+      ],
+      "gaps": [
+        {
+          "specialist": "activities",
+          "reason": "no-candidates-found",
+          "detail": "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has."
+        }
+      ],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "travel-time",
+        "detail": "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+        "candidateIds": []
+      },
+      {
+        "kind": "travel-time",
+        "detail": "Getting from the end of one day to the start of the next was not checked. Only the moves within a single day were looked at.",
+        "candidateIds": [
+          "mc-cand-4"
+        ]
+      },
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "deal-breakers",
+        "detail": "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-unknown",
+        "detail": "Nobody established when these are open, so they were left in.",
+        "candidateIds": [
+          "mc-cand-4"
+        ]
+      },
+      {
+        "kind": "budget-band",
+        "detail": "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
+        "candidateIds": []
+      }
+    ],
+    "findings": [
+      {
+        "kind": "empty-day",
+        "dayIndex": 2,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 3,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 4,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 5,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 6,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 7,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 8,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 9,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 10,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 11,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      },
+      {
+        "kind": "empty-day",
+        "dayIndex": 12,
+        "detail": "Nothing was found for this day.",
+        "dropCandidateId": null
+      }
+    ],
+    "excluded": [
+      {
+        "candidateId": "mc-cand-1",
+        "reason": "no-day-had-room"
+      },
+      {
+        "candidateId": "mc-cand-3",
+        "reason": "no-day-had-room"
+      }
+    ]
+  },
+  "transition/three-activities-45-minutes-apart": {
+    "revision": {
+      "id": "rev-1",
+      "reason": "The first draft.",
+      "operation": {
+        "kind": "first-draft"
+      },
+      "createdAt": "2027-01-01T00:00:00.000Z",
+      "days": [
+        {
+          "id": "rev-1-day-0",
+          "dayIndex": 0,
+          "date": "2027-07-05",
+          "items": [
+            {
+              "id": "rev-1-item-baseline-activity-a",
+              "candidateId": "baseline-activity-a",
+              "position": 0,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": null
+            },
+            {
+              "id": "rev-1-item-baseline-activity-b",
+              "candidateId": "baseline-activity-b",
+              "position": 1,
+              "startsAt": null,
+              "pinned": false,
+              "note": null,
+              "travelFromPrevious": {
+                "kind": "measured",
+                "distanceMeters": 60000,
+                "durationMinutes": 45,
+                "provenance": {
+                  "kind": "grounded",
+                  "sources": [
+                    {
+                      "url": "https://fixtures.invalid/planner/legs/test",
+                      "title": "Checked-in fixture, not a measurement",
+                      "fetchedAt": "2026-08-22T00:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "gaps": [],
+      "coverage": [],
+      "reading": []
+    },
+    "unchecked": [
+      {
+        "kind": "opening-hours",
+        "detail": "Whether these places are open on the days they were put on was not checked.",
+        "candidateIds": []
+      },
+      {
+        "kind": "season-unknown",
+        "detail": "Nobody established when these are open, so they were left in.",
+        "candidateIds": [
+          "baseline-activity-a",
+          "baseline-activity-b"
+        ]
+      }
+    ],
+    "findings": [],
+    "excluded": [
+      {
+        "candidateId": "baseline-activity-c",
+        "reason": "no-day-had-room"
+      }
+    ]
+  }
+}

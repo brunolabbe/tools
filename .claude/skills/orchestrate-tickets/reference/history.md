@@ -2770,3 +2770,236 @@ this dispatch saw a different shape of it.
   stop on `contract/` for one doc comment, and citation pins. A map read at intake
   cannot see either, and `git merge-tree` on the finished heads is the check that
   can.
+
+## Twentieth session — 2026-09-14/15
+
+**Written by a records-only dispatch (Claude Opus 5, dispatched as `opus`),
+transcribing the orchestrating session's own account of a batch it ran, with no
+gate on this branch — scoped to this file alone.** At 2026-09-15 02:12 UTC, all
+seven pull requests (#241–#247) were read with `gh pr view <n> --json
+number,title,isDraft,state,mergeable,headRefOid,baseRefName,statusCheckRollup,body`,
+and the surrounding list with `gh pr list --state all --json`. Neither was read by
+eye. Each verdict was read from the ticket's committed `## Review` with `git show
+<head>:<ticket>`, at the head sha that command returned. Each ticket's `status:`
+was read at its build and gate commits with `git grep '^status:' <sha>`. The
+merge conflicts were measured with `git merge-tree --write-tree --name-only` over
+all six pairs of the four planner heads, plus #246 × #247. The intake count was
+re-run as `npm run status -- --ready` on `95c6403`, which is still `origin/main`.
+Each skill claim was checked with `git grep` and `git log` on `origin/main`. The
+token total and its split were re-added with `node -e`. **Orchestrator-reported,
+not verified here:** the seam map and how the batch question was put, the order
+and wording of the owner's answers beyond the five that PR bodies record, every
+round, resume and wake count and each attribution of fault, every token figure,
+the shared checkout's install and lockfile revert, the peer session, the
+usage-limit episode, and the episodes behind items 3, 13 and 15.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4**, with each `difficulty` confirmed in frontmatter on `main` and at each head: `pl-49` (`hard`) → **#242**, not draft, at `20fd119`; `pl-43` (`hard`) → **#244**, draft, at `b0fc116`; `pl-41` (`standard`) → **#245**, draft, at `52be920`; `pl-45` (`standard`) → **#246**, draft, at `b5e42af`. All four are `status: done` at their heads, `OPEN` and `MERGEABLE`, with every check `SUCCESS`: `CI` `check`, `changes` and both `test` jobs, `planner` `docker` and `e2e`, `security` and `pr-title`. **Filings, none gated:** `repo-45` → **#241** at `22435fa`; `repo-46` and `repo-47` → **#243** at `72aa40c`. Both bodies say the reproduction is the verification. **#247**, not draft, at `926b57a`, is titled `docs(downloader): qualify dl-15's app.test.tsx citations before a planner test takes the name`. It changes only dl-15's ticket, 42 lines each way. #246's head still carries the same dl-15 change, and its body says it stays a draft until #247 and #242 merge. #246 × #247 merges clean. **Intake:** `--ready` returned **11** at `95c6403`, reproduced exactly (six `dl-`, five `pl-`). There were **0 open feature PRs**, consistent with `gh pr list`: before #241 was created at 22:58 UTC on 2026-09-14, the only open PRs were release PRs #232 and #233. The owner took the four planner tickets and no downloader ticket. #248 (`dl-51`, created 02:04 UTC on 2026-09-15) is not this batch's. It is consistent with the peer's downloader batch, but that is not checked |
+| `agents` / `dispatches` | **12** agents by the orchestrator's table, this one included. **1 seam-mapper**, `sonnet`: no model was passed at dispatch, so it came from `.claude/agents/seam-mapper.md@95c6403:5 "model: sonnet"`. **4 builders**: `opus` for pl-49 and pl-43, `sonnet` for pl-41 and pl-45. **2 filers**, both `opus`. **4 reviewers**: `sonnet` for pl-49 and pl-43, `opus` for pl-41 and pl-45. **This records-only builder**, `opus`. Every builder and reviewer model matches its PR body, and the filers' models match #241 and #243. **#247's body says "Dispatched as `sonnet`", and the table lists no agent for it.** It was one of the two Sonnet builders or an agent missing from the table, and the branch cannot say which. **Resumes started by the orchestrator: about 20. Wakes between agents: not counted.** Around 01:40–02:00 UTC on 2026-09-15, the weekly usage limit (HTTP 429) killed two agents mid-turn. No damage was found, and one was resumed by message after the 02:00 reset (orchestrator-reported) |
+| `builder rounds` | **About 19**, orchestrator-reported: pl-49 about 6, pl-45 about 5, pl-43 about 4, pl-41 about 4. **At least 4 were the orchestrator's fault.** Two were pl-49 stops at citation conditions the orchestrator had not anticipated. Two were ship conditions that could not be satisfied (item 6). Commits over `95c6403`, which are not rounds: pl-49 6, pl-41 5, pl-43 4, pl-45 4. pl-49's last commit, `20fd119`, only adds the transcription note to its Log (item 8) |
+| `gates` | **4** reviewers over **7** gate passes, and **6 of the 7 returned findings**, read from each committed `## Review`. **pl-49: CONCERNS** against `a4bd8a6`, which the header names as a pre-squash sha. It raised 1 low, closed on the branch: pl-44 and pl-47 still named migration 9. The only row not proven is the in-image `--days 1` line, marked `unproven (gate)`. CI's `docker` job passed at `20fd119`, but that job builds the image and does not run the report. **pl-43: PASS** against `1a9ffff`, with 1 low repaired at `1a9ffff`. **pl-41: gate 1 CONCERNS at `7e72ce5`**, with 11 returned and 7 carried in 6 bullets. **Gate 2 PASS at `9e4e522`**, reviewed at `3b1225f`, with 4 returned and 3 carried and closed. **pl-45: gate 1 FAIL at `f796e8b`**, with 16 returned and 12 carried (5 med, 7 low). **Gate 2 PASS at `52bf582`**, with 4 returned, 3 carried and 2 gate-1 lows withdrawn. **Gate 3 PASS at `c8d46ee`**, with 0 returned. **Owner decisions: 12 answers to 11 questions** by the orchestrator's count, listed below. PR bodies record 5 of them as AskUserQuestion answers, one question each |
+| `wrong findings` | **2 gate findings withdrawn** after the builder's pushback, which the reviewer reproduced. Both were pl-45 gate-1 lows that predate the ticket: the zero-specialist progress bar and the doubled `Unchecked` comment. **Both reached the committed record, labelled as withdrawn.** Gate 1 marks each "withdrawn in gate 2", and gate 2 says "both builder objections reproduced". **Every other wrong claim the orchestrator reports stayed out of the committed records**, judged by reading each record and grepping each ticket. pl-43's scope bullet carries the corrected figure ("about 55 sites … Only 2 were flipped individually"), and nothing in pl-43 says §3 decided the season question. pl-41's record gives the gate's own account of the `kind` tie-break: the mutation survived at `3b1225f` and goes red at `9e4e522`. The builder's account is not there. pl-49's Log says the gate "sent it as a message and did not write it into this file". The seam map is committed nowhere. **Two further wrong claims, found here, did reach a commit or a PR body.** pl-45's Log first reported `npm run check` exiting 2 on the missing SDK as the state of the unmutated tree. A later entry corrects it ("The Log's own verification was wrong"), and gate 1 carried it as a low. And #242's and #246's bodies both report "0 malformed" from `citations.mjs`, a figure that script never prints when the count is zero (item 6) |
+| `subagent tokens` | **3,111,086** observed across 11 agents, re-added here and equal to the orchestrator's figure. Each figure is cumulative per agent, as last observed: seam-mapper **99,203** · pl-41 builder **225,811** · pl-43 builder **417,393** · pl-45 builder **615,384** · pl-49 builder **376,412** · repo-45 filer **101,134** · repo-46/47 filer **152,847** · pl-41 gate **326,251** · pl-43 gate **329,206** · pl-45 gate **303,995** · pl-49 gate **163,450** · this row **not reported**, since an agent cannot see its own figure. Split, also re-added: builders **1,635,000 (52.6%)** · gates **1,122,902 (36.1%)** · filers **253,981 (8.2%)** · intake **99,203 (3.2%)**. The shares are rounded and sum to 100.1%. **Two figures are floors.** The pl-41 builder's later turns ended in `SendMessage`, and the pl-45 gate's last turn failed at the usage limit. The total is a floor on the batch and **not the bill**: cache reads are uncounted |
+| `cost` | **≈ $56.62** at **the stale 2026-09-02 rate** of $0.0182/1k, recomputed here. An arithmetic conversion of the observed floor, not billed |
+
+**Model pairing: Opus built and Sonnet gated the `hard` tickets; Sonnet built and
+Opus gated the `standard` ones.** #242's and #244's bodies name `opus` building
+and `sonnet` gating. #245's and #246's name Sonnet building and Opus gating.
+pl-43's record header agrees: "ticket-reviewer, sonnet; the builder ran opus".
+
+**Owner decisions: 12 answers**, all through AskUserQuestion by the orchestrator's
+account. Every one took the recommended option **except the merge order**, where
+the owner chose "mark #244 draft, merge later" over "merge #242 soon". #244's
+draft flag is consistent with that choice. **(body)** marks an answer that the named PR
+body records as the owner's:
+1. the batch: "no downloader tickets", then "pl-41, pl-43, pl-45, pl-49";
+2. install `node_modules` in the shared checkout, and file repo-45. #242's body says the owner "has approved running `npm install` in the shared checkout", and pl-45's Log gives 22:46 UTC as when the SDK reached it;
+3. pl-40 `depends_on` pl-49 **(body, #242)**. At #242's head pl-40 reads `depends_on: [pl-39, pl-49]`;
+4. a dated Log line on pl-39 **(body, #242)**;
+5. pl-45's "Watch it" becomes an honest attaching state, option 1 of 4 **(body, #246)**;
+6. file repo-46;
+7. file repo-47;
+8. pl-41 keeps the cap at 40 with a mixed ranking, option 1 of 3 **(body, #245)**;
+9. pl-43 counts only the named days as in season **(body, #244)**;
+10. merge order;
+11. split dl-15's citation repair into its own docs PR. #247's body gives the release-routing reason, and does not say who decided;
+12. the downloader/planner split at intake, **counted within question 1**, which is why there are 12 answers to 11 questions.
+
+**Settled by the orchestrator, not the owner.** PR bodies record six of these seven
+as orchestrator-settled:
+- **moving pl-44 and pl-47 off migration 9** (#242). On `main`, pl-44 names migration 9 three times, and pl-47 once. At #242's head, pl-44 names migration 10 in all three places, and pl-47's step 1 says "pl-49 took 9". pl-47's one remaining "migration 9" sits under "## The gate on this filing". #242's body calls that passage "its dated filing Log", but it is not in the Log;
+- **the header sha of pl-49's record** (#242). The header names `a4bd8a6` as a pre-squash sha;
+- **pinning moved citations to `95c6403`**, following repo-44's precedent. #242 pins six other records, and #244 pins pl-42's;
+- **pinning pl-39's line-130 citation**, which had not moved, because the moved shorthands that inherit from it cannot carry a pin of their own (#242);
+- **accepting oxfmt's re-padding** of pl-36's table (#242);
+- **the ticket status convention on pl-43** (#244, "Settled by the orchestrator as a convention question");
+- **PR title types.** The orchestrator retitled #245 from `feat` to `fix` to match `kind: fix`. No body mentions the retitle. #245's checks show a second `pr-title` run at 00:08 UTC, 25 minutes after the PR was created, which is consistent with an edit.
+
+**Merge conflicts, reproduced at the current heads.** #242 conflicts with #244 in
+pl-42's ticket, with #245 in pl-37's, and with #246 in pl-36's. Each of those runs exits 1
+and lists only that file. #244 × #245, #244 × #246 and #245 × #246 exit 0, and so
+does #246 × #247. **All three conflicts are in gate records that more than one
+branch pins, and none is in source** (item 10).
+
+**Environment, orchestrator-reported except where a record corroborates it:**
+- The shared checkout's `node_modules` had lacked `@anthropic-ai/sdk` and 5 of its dependencies since pl-39 (#229); #242's body names the same six. A dry run showed 109 added, 0 changed and 0 removed. The owner approved `npm install` there at 22:46 UTC on 2026-09-14, and pl-45's Log gives that same time. The install added 6 packages and rewrote two version lines in the lockfile, and the orchestrator reverted those two lines. This dispatch did not look at the shared checkout.
+- A peer session (`tools-7a`) ran a downloader batch at the same time, and the two sessions coordinated ids and seams by message.
+- Around 01:40–02:00 UTC on 2026-09-15, the weekly usage limit killed two agents mid-turn. No damage was found, and one agent was resumed after the 02:00 reset.
+
+### What the skill got wrong
+
+Fifteen items, from the orchestrator's account. Items 1, 2, 9, 10, 11, 12 and 14
+are verified here against the pages they name; 10 with a count corrected. Items
+5, 7 and 8 are partly contradicted, and 4 and 6 are partly verified. Items 3 and
+13 are orchestrator-reported. Item 15 is relayed, and this dispatch saw the same
+shape.
+
+1. **The nineteenth session's item 1 recurred unchanged.** No step runs
+   `node scripts/citations-gate.mjs --against origin/main` before a PR opens.
+   **Verified.** `git log` since 2026-09-13 returns nothing for
+   `.claude/agents`, `.claude/scripts`, `review-ticket`, or any
+   `orchestrate-tickets` page other than this one. **The account's exception is
+   narrower than it says.** Three commits touched `.claude/` in that window,
+   not one. #237 changed `.claude/skills/add-tool/SKILL.md` by 6 lines: a
+   skill page, not a README, though the PR is about READMEs. #224 and #231 each
+   added one entry to this page. `git grep citations-gate` over skills and
+   agents still finds the script named and never invoked as a step. All four
+   planner PR bodies report it exiting 0, which is the orchestrator's ship
+   condition doing the step's work. #243's body confirms repo-47's framing: "the
+   citations gate fails a code PR on citations in merged records that still
+   verify on the base". The two pl-49 stops and the three throwaway
+   pre-measurements are orchestrator-reported.
+2. **The nineteenth session's item 6 recurred as repo-45.** No procedure covers a merged
+   dependency, and the farm step has no freshness check. **Verified as absent.**
+   The farm script's only check on the source is that it exists
+   (`.claude/scripts/worktree-farm.sh@95c6403:34 "no shared node_modules at"`),
+   and nothing in it compares it with the lockfile. `git grep` for "fresh",
+   "stale" or "reinstall" in `builder.md` and `ticket-reviewer.md` finds nothing.
+   The packing is confirmed twice. #242's body records `npm pack --offline` for
+   pl-49, and pl-45's Log records the same command. **The red check reported as
+   pre-existing is confirmed in pl-45's Log**, whose entry says `npm run check`
+   "exits 2, solely on" the missing `@anthropic-ai/sdk`, "reproduced on the
+   unmutated tree". pl-45's gate 1 carried it as a low: "The Log verification
+   figures described a worktree without `@anthropic-ai/sdk`". The count of three
+   builders and three gates is orchestrator-reported.
+3. **The nineteenth session's item 7 recurred.** "Ask every agent what the skill got wrong"
+   was in no dispatch prompt, and was asked mid-batch or after it. This page's
+   schema row still asks for it "explicitly at dispatch". Dispatch prompts are
+   not in the repository, so the omission is orchestrator-reported.
+4. **The nineteenth session's item 5 recurred.** **Partly verified.** For pl-49, #242's body
+   records the repair as "An anchor added to the gate's reliability citation",
+   and the Log's transcription note lists it as one of three differences from
+   the gate's text. For pl-45, the sandbox refusing the gate's file write is
+   orchestrator-reported. Neither pl-45's record nor its Log mentions it.
+5. **`builder.md` on status.** **Partly contradicted.** The two lines are
+   `.claude/agents/builder.md@95c6403:212 "Append a dated entry to the ticket's Log and set"`,
+   which goes on "in its frontmatter, in the commit that earns it", and
+   `.claude/agents/builder.md@95c6403:218 "explicit ship authority, and then commit the gate record above"`.
+   As written they do not contradict each other: one says when `done` is set,
+   the other when the record is committed, and neither says which commit earns
+   `done`. `status.mjs`'s `reviewedButReady` fails only a `ready` ticket that
+   carries a `## Review`, so a `done` ticket without one passes. **Measured, the
+   builders split three to one.** `git grep '^status:'` shows pl-49 `done` at
+   `a4bd8a6`, pl-41 at `7e72ce5` and pl-45 at `f796e8b`, each before its first
+   gate. pl-43 stayed `ready` until `b0fc116`, the commit that also adds its gate
+   record. CI passes both readings. The defect is an undefined "commit that
+   earns it", not two lines that disagree.
+6. **Three ship conditions could not be satisfied.** **Partly verified: two of
+   the three are confirmed in the code.** First, "0 malformed":
+   `citations.mjs` adds `malformed-pin` to its summary only above zero
+   (`scripts/citations.mjs@95c6403:1356 "are the two figures printed only above"`),
+   yet #242's and #246's bodies both report "0 malformed". Second, the
+   shorthands: a shorthand that carries its own pin is refused
+   (`scripts/citations.mjs@95c6403:266 "so it is malformed rather than read"`),
+   so rewriting only the moved citations cannot work when one of them is a
+   shorthand. #242's body records the resulting deviation on pl-39. Third, the
+   `git diff -w` splice check is orchestrator-reported as a condition. #242's
+   body records its outcome: under `-w`, only the pinned row and the separator
+   row change.
+7. **Multi-gate records whose earlier gate reviewed a pre-squash sha.**
+   **Partly contradicted.** `records.md` does document a header that names a
+   pre-squash sha:
+   `.claude/skills/orchestrate-tickets/reference/records.md@95c6403:135 "A gate record pins to the sha it reviewed"`.
+   Its surviving-sha rule covers `@rev` pins and Log passages:
+   `.claude/skills/orchestrate-tickets/reference/records.md@95c6403:257 "never a pre-squash branch tip"`.
+   The gap is narrower than the account puts it. Nothing covers **one record
+   holding gates at two or more shas**, since the checker reads one tree per run.
+   Both shapes are confirmed in the records. pl-41's gate 1 is "Summarised
+   without line citations, which moved in gate 2". **pl-45's gate 1 is recorded
+   by finding, and it is gate 2 that is recorded by test name**, not gate 1 as
+   the account had it.
+8. **The transcription disclosure has no home.** **Partly contradicted.**
+   `review-ticket` gives it one:
+   `.claude/skills/review-ticket/SKILL.md@95c6403:143 "The disclosure note is required, not a habit."`,
+   "Alongside the section", and its step 8 commits the note "together with" the
+   section. But `builder.md` preloads no skill, and `git grep disclosure` over
+   `.claude/agents` and `orchestrate-tickets` returns nothing. So the agent that
+   commits the note has no instruction unless it opens `review-ticket`. Neither
+   page says whether the note belongs in the Log or next to the section. The
+   episodes are confirmed. pl-41's Log note quotes the message of commit
+   `5ab1633` and landed in a later commit, `52be920`. pl-49's note is its own
+   commit, `20fd119`. All four tickets now carry the note in the Log.
+9. **A new file name broke another tool's record.** **Verified.**
+   `tools/planner/web/test/app.test.tsx` and
+   `tools/downloader/web/test/app.test.tsx` are both tracked at #246's head
+   (`git ls-tree`), and #247's body explains the ambiguity and the
+   release-routing reason for the split. `git grep release-please` over
+   `.claude/skills` and `.claude/agents` finds only `add-tool` and this page.
+   Nothing in `orchestrate-tickets` or `review-ticket` covers either half.
+10. **The seam map does not see gate records.** **Verified, with the count
+    corrected.** `.claude/agents/seam-mapper.md` never mentions a gate record,
+    `## Review` or a citation (`git grep`). **This dispatch measured three
+    conflicts, not four**, across every pair of this batch's open PRs that
+    touch the planner. All three are in gate records: pl-42's, pl-37's and
+    pl-36's. pl-36 is touched by three branches. The #242 × #245 merge
+    auto-merges it, which means both sides changed it, and #242 × #246
+    conflicts in it.
+11. **A gate prompt scoped too wide.** **Verified in the record.** pl-43's scope
+    bullet counts "about 55 sites" across five files, says "Only 2 were flipped
+    individually", and calls it "A scope limit of this gate, disclosed rather
+    than a defect found". The prompt's wording is orchestrator-reported.
+12. **PR title type against ticket `kind`.** **Verified as absent.** `git grep`
+    for "title" and "kind" over the `orchestrate-tickets` pages finds no rule
+    on title types. `docs/01-TICKETS.md@95c6403:105 "work-package"` lists the
+    three kinds. No conventional type corresponds to `work-package`, so "match
+    the kind" has no answer for pl-43, pl-45 or pl-49, which are all
+    `work-package` and titled `feat`. pl-41 is `kind: fix`, and #245 is now
+    titled `fix(planner): …`. The earlier `feat` title is orchestrator-reported.
+13. **A resumed builder's final message did not arrive**: pl-43's, after
+    shipping, which had to be asked for again. And the pl-49 builder saw a
+    reviewer's stated reply id differ from the message's `from=`.
+    Orchestrator-reported. The branches cannot show either.
+14. **No periodic peer check.** **Verified as worded.** The instruction is
+    triggered by an event:
+    `.claude/skills/orchestrate-tickets/reference/concurrency.md@95c6403:269 "so send it as soon as"`.
+    `git grep` over `SKILL.md`, `concurrency.md` and `dispatching.md` finds no
+    step that repeats `git worktree list` or `ListAgents` during a batch.
+    Finding the peer through three foreign worktrees is orchestrator-reported.
+15. **Relayed from builders: the worktree sandbox refuses compound `git`.**
+    **This dispatch saw the same shape.** Two commands were refused before they
+    ran. One was a `for` loop over `gh pr view` ("inside a construct too complex
+    to verify"). The other was a `git fetch` followed by a `for` loop of
+    `git merge-tree` ("names git in a form too complex to verify"). Plain `git`,
+    a plain `git show` redirected to a file, a pipe-free `grep` over several
+    files, and `node -e` all ran. This is the nineteenth session's item 8 again.
+
+### What this row's verification added
+
+- **The seam map's two failed claims are confirmed.** `git grep -i migration`
+  on dl-53 returns nothing, while dl-57 has
+  `tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md@95c6403:60 "Migration 5: a"`.
+  On `main`, pl-40 does not name pl-49 anywhere. Its only "after it lands",
+  `tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md@95c6403:89 "run the paid sets after it lands"`,
+  refers to pl-41. The orchestrator's narrower reading, that pl-49 matters to
+  pl-40's paid run, is consistent with pl-40's title ("the bill it ran up is
+  on record") and not checked further.
+- **Corrections to the account:** three conflicts rather than four (item 10);
+  pl-45's gate 1 recorded by finding, not by test name (item 7); #237 touched a
+  skill page, and #224 and #231 touched this page (item 1); "0 malformed" in
+  two PR bodies (item 6); #247's `sonnet` dispatch missing from the token table;
+  and pl-47's surviving "migration 9" sitting in its filing gate, not its Log.
+- **Green CI does not close pl-49's one unproven line.** pl-49's CONCERNS rests on
+  running the report in the image. CI's `docker` job builds that image and
+  passed at `20fd119`, but it does not run the report, so the line stays
+  `unproven (gate)`.

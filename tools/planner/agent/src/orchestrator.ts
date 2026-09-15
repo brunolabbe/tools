@@ -56,7 +56,7 @@ import type {
 import { askSpecialist, type CandidateProposal } from "./ask.ts";
 import { applyBudget, rosterGaps, type RunBudget } from "./budget.ts";
 import type { Find } from "./grounding.ts";
-import type { ModelProvider } from "./provider.ts";
+import type { ModelProvider, ModelReply } from "./provider.ts";
 import { rosterFor, type RosterEntry } from "./roster.ts";
 import { candidateCeiling, SPECIALIST_DEFINITIONS, type TripCapacity } from "./specialists.ts";
 
@@ -102,6 +102,90 @@ export interface FanOutInput {
    * so `api` wraps each of these in a `RunEvent` and reads the clock once.
    */
   onProgress?: ((event: RunProgress) => void) | undefined;
+  /**
+   * Told what the run has spent so far, each time a reply lands (pl-49).
+   *
+   * **The running total, not only the final one, because a run that ends in a
+   * throw never returns a `FanOutResult`.** A cancellation rethrows out of
+   * this function, and every reply that finished before it was billed all the
+   * same — so the caller keeps the last total it was handed and records that,
+   * however the run ended.
+   *
+   * A callback beside `onProgress` rather than a frame on it: `RunProgress`
+   * is `@planner/contract`'s and is forwarded to the browser, and a token
+   * count is neither something the plan view renders nor a reason to change a
+   * contract. Nothing here reads a clock or a price; it only adds.
+   */
+  onUsage?: ((usage: RunUsage) => void) | undefined;
+}
+
+/**
+ * What a run spent, where the provider was willing to say (pl-49).
+ *
+ * Every token field is `null` until some reply reports that kind — the
+ * scripted provider reports none, and "nobody said" is not zero. `calls` and
+ * `fallbackCalls` are counts this file makes itself, so they are never null.
+ */
+export interface RunUsage {
+  /**
+   * Replies that came back, **whatever became of them**: one that did not
+   * parse, one that was refused and one whose specialist then failed were each
+   * billed, and each is counted.
+   */
+  calls: number;
+  inputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  outputTokens: number | null;
+  /**
+   * Replies a model other than the configured one served — a refusal fallback.
+   * Their tokens are in the totals above, billed at that other model's rates,
+   * which is why a report pricing the totals at one rate calls itself
+   * approximate when this is not zero.
+   */
+  fallbackCalls: number;
+}
+
+/** A sum where `null` is "nobody said": it stays null until some value is reported. */
+function add(sum: number | null, value: number | null): number | null {
+  return value === null ? sum : (sum ?? 0) + value;
+}
+
+/** A run that has not been answered once. */
+export function emptyRunUsage(): RunUsage {
+  return {
+    calls: 0,
+    inputTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    outputTokens: null,
+    fallbackCalls: 0,
+  };
+}
+
+/**
+ * The total with one more reply in it.
+ *
+ * "Served by another model" is the provider's own test, applied to the same two
+ * strings — `AnthropicProvider` logs a reply whose `servedModel` differs from
+ * its `model`, and this counts exactly those. A reply that names no served
+ * model is not a fallback: the backend had nothing to say.
+ */
+export function addReplyUsage(
+  total: RunUsage,
+  reply: ModelReply,
+  configuredModel: string,
+): RunUsage {
+  return {
+    calls: total.calls + 1,
+    inputTokens: add(total.inputTokens, reply.usage.inputTokens),
+    cacheReadTokens: add(total.cacheReadTokens, reply.usage.cacheReadTokens),
+    cacheWriteTokens: add(total.cacheWriteTokens, reply.usage.cacheWriteTokens),
+    outputTokens: add(total.outputTokens, reply.usage.outputTokens),
+    fallbackCalls:
+      total.fallbackCalls +
+      (reply.servedModel !== undefined && reply.servedModel !== configuredModel ? 1 : 0),
+  };
 }
 
 /** A proposal that came back and was refused, with the reason, for the log. */
@@ -122,12 +206,8 @@ export interface FanOutResult {
     notApplicable: RosterEntry[];
   };
   rejected: RejectedProposal[];
-  usage: {
-    calls: number;
-    /** `null` when no provider reported a count — a local model usually will not. */
-    inputTokens: number | null;
-    outputTokens: number | null;
-  };
+  /** Every reply this run was billed for. The last total `onUsage` was handed. */
+  usage: RunUsage;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,13 +228,31 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
     total,
   });
 
+  // Counted at the seam rather than from what each specialist returned. A
+  // specialist that throws — refused, or malformed past its re-ask — takes the
+  // replies it was billed for down with it, and so does a cancellation, which
+  // rethrows before anything could be added up afterwards. Before pl-49 both
+  // fell out of the count. Wrapping `send` sees every reply that landed,
+  // whatever the caller did with it next.
+  let usage = emptyRunUsage();
+  const provider: ModelProvider = {
+    name: input.provider.name,
+    model: input.provider.model,
+    send: async (request) => {
+      const reply = await input.provider.send(request);
+      usage = addReplyUsage(usage, reply, input.provider.model);
+      input.onUsage?.(usage);
+      return reply;
+    },
+  };
+
   let done = 0;
   const outcomes = await Promise.all(
     budgeted.running.map(async (entry): Promise<SpecialistOutcome> => {
       input.onProgress?.({ type: "specialist-started", specialist: entry.specialist, total });
       try {
         const asked = await askSpecialist({
-          provider: input.provider,
+          provider,
           specialist: entry.specialist,
           shape,
           brief: input.brief,
@@ -171,7 +269,7 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
           done,
           total,
         });
-        return { entry, proposals: asked.proposals, replies: asked.replies, error: null };
+        return { entry, proposals: asked.proposals, error: null };
       } catch (error: unknown) {
         // A cancellation is not a gap. "Lodging was not checked because you
         // stopped the run" is a sentence about the run, and the run is about to
@@ -188,7 +286,7 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
           done,
           total,
         });
-        return { entry, proposals: [], replies: [], error: appError };
+        return { entry, proposals: [], error: appError };
       }
     }),
   );
@@ -243,14 +341,13 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
       notApplicable: roster.notApplicable,
     },
     rejected,
-    usage: tally(outcomes),
+    usage,
   };
 }
 
 interface SpecialistOutcome {
   entry: RosterEntry;
   proposals: CandidateProposal[];
-  replies: { usage: { inputTokens: number | null; outputTokens: number | null } }[];
   error: AppError | null;
 }
 
@@ -375,25 +472,4 @@ function accept(input: {
   }
 
   return { candidates, rejected };
-}
-
-/** What the run cost, where the provider was willing to say. */
-function tally(outcomes: readonly SpecialistOutcome[]): FanOutResult["usage"] {
-  let calls = 0;
-  let inputTokens: number | null = null;
-  let outputTokens: number | null = null;
-
-  for (const outcome of outcomes) {
-    for (const reply of outcome.replies) {
-      calls += 1;
-      if (reply.usage.inputTokens !== null) {
-        inputTokens = (inputTokens ?? 0) + reply.usage.inputTokens;
-      }
-      if (reply.usage.outputTokens !== null) {
-        outputTokens = (outputTokens ?? 0) + reply.usage.outputTokens;
-      }
-    }
-  }
-
-  return { calls, inputTokens, outputTokens };
 }

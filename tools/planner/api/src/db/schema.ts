@@ -358,6 +358,34 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE plan_revisions ADD COLUMN reading_json TEXT NOT NULL DEFAULT '[]';
   `,
+
+  // 9 — what a run spent, token kind by token kind (pl-49).
+  //
+  // Columns on `plan_runs` rather than a table of their own: one run has one
+  // cost, and this row already carries the run's lifecycle. Columns rather than
+  // JSON, against migration 2's rule, because this is exactly the case that
+  // rule excludes — the report aggregates them, and a percentile over a JSON
+  // field is a parse of every row.
+  //
+  // **All nullable, and NULL is not zero.** A queued run has spent nothing yet;
+  // the scripted provider reports no counts at all; and a run written before
+  // this migration has no record. Each reads back as "nobody said", which is
+  // what the report prints for it.
+  //
+  // The three input kinds are three columns because they are three prices: a
+  // cache read bills at about a tenth of the input rate and a cache write at
+  // about a quarter more. `model` is the configured model, not the one that
+  // served — `fallback_calls` counts the replies another model answered, which
+  // is what lets the report say its dollars are approximate.
+  `
+  ALTER TABLE plan_runs ADD COLUMN model TEXT;
+  ALTER TABLE plan_runs ADD COLUMN model_calls INTEGER;
+  ALTER TABLE plan_runs ADD COLUMN input_tokens INTEGER;
+  ALTER TABLE plan_runs ADD COLUMN cache_read_tokens INTEGER;
+  ALTER TABLE plan_runs ADD COLUMN cache_write_tokens INTEGER;
+  ALTER TABLE plan_runs ADD COLUMN output_tokens INTEGER;
+  ALTER TABLE plan_runs ADD COLUMN fallback_calls INTEGER;
+  `,
 ];
 
 export function migrate(db: Database): void {

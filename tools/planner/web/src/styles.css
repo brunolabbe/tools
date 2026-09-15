@@ -498,6 +498,54 @@ ul.answers li + li {
   font-weight: 500;
 }
 
+/* ---------------------------------------------------------------------------
+ * Revisions, editing and the diff (pl-45)
+ * ------------------------------------------------------------------------ */
+
+.version-picker {
+  margin: 0.5rem 0 1rem;
+}
+
+.item-controls {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.move-control {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.move-control select {
+  width: auto;
+}
+
+.replan {
+  margin: 1.5rem 0;
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.replan legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
+}
+
+.diff h4 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.diff-group ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
 /* --- The health readout, now a footnote rather than the page --- */
 
 .health {

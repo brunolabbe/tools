@@ -17,11 +17,16 @@
  *   lose, because **a packed plan looks equally finished whether every
  *   constraint was enforced or three were skipped for want of data.** It comes
  *   down the wire on every read, derived from the stored revision, so it does
- *   not depend on having watched the run that produced it.
+ *   not depend on having watched the run that produced it. **Latest revision
+ *   only** — pl-42's contract says so on `PlanView.diffs`'s doc comment — so it
+ *   is shown only when `shownRevision` is the latest, never carried onto an
+ *   older page.
  *
- * **The diff is Phase 4 and is out of scope.** The revision count is surfaced
- * read-only; what is rendered is the latest draft, which is also the one
- * `unchecked` describes and the one whose items a pin can constrain.
+ * **The diff is Phase 4, and pl-45 built it.** Every revision after the first
+ * has one, resolved against `view.diffs` by `revisionId` rather than by array
+ * index — a revision and its diff are appended together, but nothing says a
+ * client must trust that they line up positionally, and an off-by-one there
+ * would silently show the wrong diff for every later revision.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -29,17 +34,27 @@ import {
   AppError,
   isAnswered,
   latestRevision,
+  MAX_REVISION_NOTE_CHARS,
+  SPECIALISTS as ALL_SPECIALISTS,
   type Candidate,
+  type DiffEntry,
+  type DiffPlacement,
+  type ErrorCode,
   type PlanDay,
   type PlanGap,
   type PlanItem,
+  type PlanRevision,
   type PlanView as PlanViewDocument,
+  type ReviseRequest,
+  type RevisionDiff,
+  type Run,
   type Source,
+  type Specialist,
   type TripShape,
   uncheckedConstraintKey,
   type UncheckedConstraint,
 } from "@planner/contract";
-import { fetchPlan, pinItem } from "../api/plan.ts";
+import { editPlan, fetchPlan, pinItem, startReplan } from "../api/plan.ts";
 import { describeCost, describeLocation, dayHeading, humanise } from "./format.ts";
 import { ProvenanceNote } from "./Provenance.tsx";
 
@@ -97,55 +112,209 @@ type State =
   | { kind: "failed"; message: string }
   | { kind: "ready"; view: PlanViewDocument };
 
+/** What a synchronous write can fail with, and what the banner needs to know. */
+interface ActionError {
+  message: string;
+  code: ErrorCode;
+  /** `PLAN_BUSY` only — the run already in progress on this plan. */
+  runId: string | null;
+  /** Whatever the server sent, for `PLAN_INFEASIBLE` and `ITEM_NOT_FOUND` (step 9). */
+  details: Record<string, unknown> | undefined;
+}
+
+function runIdFrom(error: AppError): string | null {
+  const run = error.details?.["run"];
+  return typeof run === "string" ? run : null;
+}
+
+/** One place that turns a rejection into the banner's state, for every write. */
+function toActionError(error: unknown): ActionError {
+  const appError = AppError.from(error);
+  return {
+    message: appError.message,
+    code: appError.code,
+    runId: appError.code === "PLAN_BUSY" ? runIdFrom(appError) : null,
+    details: appError.details,
+  };
+}
+
+/**
+ * The one shape of `PLAN_INFEASIBLE.details` this file knows: the composer's
+ * `findings` (`@planner/itinerary`'s `compose.ts`), each already a sentence in
+ * the user's terms plus the day it names.
+ */
+interface InfeasibleFinding {
+  dayIndex: number;
+  detail: string;
+}
+
+function infeasibleFindings(details: Record<string, unknown> | undefined): InfeasibleFinding[] {
+  const raw = details?.["findings"];
+  if (!Array.isArray(raw)) return [];
+  const findings: InfeasibleFinding[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const dayIndex = (entry as Record<string, unknown>)["dayIndex"];
+    const detail = (entry as Record<string, unknown>)["detail"];
+    if (typeof dayIndex === "number" && typeof detail === "string") {
+      findings.push({ dayIndex, detail });
+    }
+  }
+  return findings;
+}
+
+/**
+ * What `details` adds beside the message, per step 9 — **only for the codes
+ * this file has an actual shape for.** `ITEM_NOT_FOUND.details` is `{ item:
+ * <id> }` (`api`'s orchestrator), an id nobody typed and not a sentence for a
+ * reader, so it degrades to the message alone exactly as step 9 asks for a
+ * `details` that is "not the shape expected" — here, not a shape worth
+ * rendering at all. `REVISION_STALE` and `PLAN_BUSY` have their own buttons,
+ * built beside this rather than through it.
+ */
+function ActionErrorDetails({
+  code,
+  details,
+}: {
+  code: ErrorCode;
+  details: Record<string, unknown> | undefined;
+}): React.ReactElement | null {
+  if (code !== "PLAN_INFEASIBLE") return null;
+  const findings = infeasibleFindings(details);
+  if (findings.length === 0) return null;
+
+  return (
+    <ul className="action-error-details">
+      {findings.map((finding) => (
+        // No stable id on a finding — it is not stored, only ever the shape of
+        // one failed attempt — so its content is the only handle there is.
+        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>
+          Day {String(finding.dayIndex + 1)}: {finding.detail}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PlanView({
   planId,
   onExit,
+  onReplan,
+  onWatchRun,
 }: {
   planId: string;
   onExit: () => void;
+  /** A re-plan started: control leaves this component entirely. */
+  onReplan: (run: Run) => void;
+  /** `PLAN_BUSY`'s "Watch it": open the run already in progress. */
+  onWatchRun: (runId: string, planId: string) => void;
 }): React.ReactElement {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   /**
-   * A pin that did not take, reported **beside the document rather than instead
-   * of it.**
+   * Any move, remove, restore or re-plan-start in flight.
    *
-   * Separate from `state` on purpose. Folding it into the page-level `failed`
-   * threw the whole loaded plan away over one stale item — and the error most
-   * likely to arrive here is `ITEM_NOT_FOUND`, whose own copy tells the reader
-   * to reload the plan to see the current draft. Replacing the plan with a bare
-   * message and a "back to the plans" button is the one response that makes
-   * that advice impossible to follow.
+   * One flag for the whole document rather than per control: `PLAN_BUSY`'s own
+   * invariant is that only one write may be building on the latest revision at
+   * a time, so a UI that let a second edit start before the first answered
+   * would just be racing toward the error the server already refuses.
    */
-  const [pinFailed, setPinFailed] = useState<string | null>(null);
+  const [writeBusy, setWriteBusy] = useState(false);
+  /**
+   * A write that did not take, reported **beside the document rather than
+   * instead of it.**
+   *
+   * Separate from `state` on purpose, and shared by the pin route and the
+   * revise route: the error most likely to arrive here is one whose own copy
+   * tells the reader what to do next — reload, wait, or read `details` — and
+   * replacing the loaded plan with a bare message would make that advice
+   * impossible to follow. See pl-10's original finding on `pinFailed`.
+   */
+  const [actionError, setActionError] = useState<ActionError | null>(null);
+  /** The revision the reader is looking at. `null` means "the latest". */
+  const [shownRevisionNumber, setShownRevisionNumber] = useState<number | null>(null);
+
+  const load = useCallback(
+    (signal?: AbortSignal): void => {
+      fetchPlan(planId, signal)
+        .then((view) => {
+          setState({ kind: "ready", view });
+          setShownRevisionNumber(null);
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          // A cancelled request is the effect being cleaned up, not a failure to
+          // report — under StrictMode it happens on every mount in development.
+          if (signal?.aborted) return;
+          setState({ kind: "failed", message: AppError.from(error).message });
+        });
+    },
+    [planId],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: "loading" });
-    fetchPlan(planId, controller.signal)
-      .then((view) => setState({ kind: "ready", view }))
-      .catch((error: unknown) => {
-        // A cancelled request is the effect being cleaned up, not a failure to
-        // report — under StrictMode it happens on every mount in development.
-        if (controller.signal.aborted) return;
-        setState({ kind: "failed", message: AppError.from(error).message });
-      });
+    load(controller.signal);
     return () => controller.abort();
-  }, [planId]);
+  }, [planId, load]);
 
   const pin = useCallback(
     (item: PlanItem): void => {
       setBusy(item.id);
-      setPinFailed(null);
+      setActionError(null);
       pinItem(planId, item.id, !item.pinned)
         .then((view) => setState({ kind: "ready", view }))
         .catch((error: unknown) => {
-          setPinFailed(AppError.from(error).message);
+          setActionError(toActionError(error));
         })
         .finally(() => setBusy(null));
     },
     [planId],
   );
+
+  /**
+   * Every move, remove and restore lands here: the response is the whole view,
+   * and `shownRevisionNumber` resets to `null` (the latest) because all three
+   * only ever run while the latest is on screen — see `editable` below.
+   */
+  const submitEdit = useCallback(
+    (request: Exclude<ReviseRequest, { kind: "replan" }>): void => {
+      setWriteBusy(true);
+      setActionError(null);
+      editPlan(planId, request)
+        .then((view) => {
+          setState({ kind: "ready", view });
+          setShownRevisionNumber(null);
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          setActionError(toActionError(error));
+        })
+        .finally(() => setWriteBusy(false));
+    },
+    [planId],
+  );
+
+  const submitReplan = useCallback(
+    (request: Extract<ReviseRequest, { kind: "replan" }>): void => {
+      setWriteBusy(true);
+      setActionError(null);
+      startReplan(planId, request)
+        .then((run) => onReplan(run))
+        .catch((error: unknown) => {
+          setActionError(toActionError(error));
+        })
+        .finally(() => setWriteBusy(false));
+    },
+    [planId, onReplan],
+  );
+
+  /** `REVISION_STALE`'s own advice: look again, rather than retry blindly. */
+  const reload = useCallback((): void => {
+    setActionError(null);
+    load();
+  }, [load]);
 
   if (state.kind === "loading") {
     return (
@@ -169,71 +338,183 @@ export function PlanView({
   }
 
   return (
-    <Document view={state.view} onPin={pin} busyItem={busy} pinFailed={pinFailed} onExit={onExit} />
+    <Document
+      view={state.view}
+      shownRevisionNumber={shownRevisionNumber}
+      onShowRevision={setShownRevisionNumber}
+      onPin={pin}
+      busyItem={busy}
+      writeBusy={writeBusy}
+      actionError={actionError}
+      onReload={reload}
+      onWatchRun={(runId) => onWatchRun(runId, planId)}
+      onEdit={submitEdit}
+      onReplan={submitReplan}
+      onExit={onExit}
+    />
   );
 }
 
 function Document({
   view,
+  shownRevisionNumber,
+  onShowRevision,
   onPin,
   busyItem,
-  pinFailed,
+  writeBusy,
+  actionError,
+  onReload,
+  onWatchRun,
+  onEdit,
+  onReplan,
   onExit,
 }: {
   view: PlanViewDocument;
+  shownRevisionNumber: number | null;
+  onShowRevision: (revision: number | null) => void;
   onPin: (item: PlanItem) => void;
   busyItem: string | null;
-  pinFailed: string | null;
+  writeBusy: boolean;
+  actionError: ActionError | null;
+  onReload: () => void;
+  onWatchRun: (runId: string) => void;
+  onEdit: (request: Exclude<ReviseRequest, { kind: "replan" }>) => void;
+  onReplan: (request: Extract<ReviseRequest, { kind: "replan" }>) => void;
   onExit: () => void;
 }): React.ReactElement {
   const { plan } = view;
-  const revision = latestRevision(plan);
+  const latest = latestRevision(plan);
   const shape = isAnswered(plan.brief.shape) ? plan.brief.shape.value : null;
   const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
+
+  if (latest === null) {
+    return (
+      <section className="panel plan">
+        <h2>{plan.title}</h2>
+        {/* Real and reachable: the plan row is written before the fan-out, so a
+            plan with no revisions is one whose first run has not finished. It
+            is not a missing plan and is not rendered as an error. */}
+        <p className="muted">This plan has no draft yet.</p>
+        <div className="actions">
+          <button type="button" className="primary" onClick={onExit}>
+            Back to the plans
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const shownRevision =
+    (shownRevisionNumber === null
+      ? undefined
+      : plan.revisions.find((each) => each.revision === shownRevisionNumber)) ?? latest;
+  const isLatest = shownRevision.revision === plan.latestRevision;
+  const diff = view.diffs.find((each) => each.revisionId === shownRevision.id);
 
   return (
     <section className="panel plan">
       <h2>{plan.title}</h2>
 
-      {revision === null ? (
-        // Real and reachable: the plan row is written before the fan-out, so a
-        // plan with no revisions is one whose first run has not finished. It is
-        // not a missing plan and is not rendered as an error.
-        <p className="muted">This plan has no draft yet.</p>
+      <p className="crumb">
+        Version {String(shownRevision.revision)} of {String(plan.latestRevision)} ·{" "}
+        {shownRevision.reason}
+      </p>
+
+      <VersionPicker
+        revisions={plan.revisions}
+        shown={shownRevision.revision}
+        onShow={onShowRevision}
+      />
+
+      {!isLatest && (
+        <div className="actions">
+          <button
+            type="button"
+            disabled={writeBusy}
+            onClick={() =>
+              onEdit({
+                kind: "restore",
+                baseRevisionId: latest.id,
+                revision: shownRevision.revision,
+              })
+            }
+          >
+            Restore this version
+          </button>
+        </div>
+      )}
+
+      {/* Beside the plan, never instead of it — see `actionError`. */}
+      {actionError !== null && (
+        <div className="bad" role="alert">
+          <p>{actionError.message}</p>
+          <ActionErrorDetails code={actionError.code} details={actionError.details} />
+          <div className="actions">
+            {actionError.code === "REVISION_STALE" && (
+              <button type="button" onClick={onReload}>
+                Reload the plan
+              </button>
+            )}
+            {actionError.code === "PLAN_BUSY" && actionError.runId !== null && (
+              <button type="button" onClick={() => onWatchRun(actionError.runId!)}>
+                Watch it
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {caution !== undefined && (
+        <p className="notice caution" role="note">
+          {caution}
+        </p>
+      )}
+
+      {shownRevision.days.map((day) => (
+        <Day
+          key={day.id}
+          day={day}
+          days={shownRevision.days}
+          candidates={plan.candidates}
+          onPin={onPin}
+          busyItem={busyItem}
+          editable={isLatest}
+          writeBusy={writeBusy}
+          onMove={(item, toDayIndex, toPosition) =>
+            onEdit({
+              kind: "move",
+              baseRevisionId: latest.id,
+              itemId: item.id,
+              toDayIndex,
+              toPosition,
+            })
+          }
+          onRemove={(item) =>
+            onEdit({ kind: "remove", baseRevisionId: latest.id, itemId: item.id })
+          }
+        />
+      ))}
+
+      <Gaps gaps={shownRevision.gaps} />
+      {isLatest && <Unchecked unchecked={view.unchecked} candidates={plan.candidates} />}
+      <TravelSources days={shownRevision.days} />
+      <RouteReading reading={shownRevision.reading} />
+
+      {shownRevision.revision > 1 && (
+        <Diff diff={diff} candidates={plan.candidates} operation={shownRevision.operation} />
+      )}
+
+      {isLatest ? (
+        <ReplanForm
+          days={shownRevision.days}
+          busy={writeBusy}
+          onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
+        />
       ) : (
-        <>
-          <p className="crumb">
-            Version {String(revision.revision)} of {String(plan.latestRevision)} · {revision.reason}
-          </p>
-
-          {/* Beside the plan, never instead of it — see `pinFailed`. */}
-          {pinFailed !== null && (
-            <p className="bad" role="alert">
-              {pinFailed}
-            </p>
-          )}
-
-          {caution !== undefined && (
-            <p className="notice caution" role="note">
-              {caution}
-            </p>
-          )}
-
-          {revision.days.map((day) => (
-            <Day
-              key={day.id}
-              day={day}
-              candidates={plan.candidates}
-              onPin={onPin}
-              busyItem={busyItem}
-            />
-          ))}
-
-          <Gaps gaps={revision.gaps} />
-          <Unchecked unchecked={view.unchecked} candidates={plan.candidates} />
-          <TravelSources days={revision.days} />
-          <RouteReading reading={revision.reading} />
-        </>
+        <p className="notice" role="note">
+          Editing works on the latest version. Restore this one to bring it back, or open the latest
+          to keep going.
+        </p>
       )}
 
       <div className="actions">
@@ -242,6 +523,55 @@ function Document({
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * A picker over `plan.revisions`, beside the crumb line and never inside it —
+ * that line's exact text is load-bearing outside this package (pl-19's
+ * `e2e/pin.spec.ts`), and a control rendered into it, or copy added to it,
+ * would break a suite this ticket cannot run locally.
+ *
+ * `plan.revisions` is already the whole history on the document handed to the
+ * browser — no per-revision fetch, here or anywhere else in this file.
+ */
+function VersionPicker({
+  revisions,
+  shown,
+  onShow,
+}: {
+  revisions: readonly PlanRevision[];
+  shown: number;
+  onShow: (revision: number | null) => void;
+}): React.ReactElement | null {
+  if (revisions.length < 2) return null;
+
+  const latest = revisions.at(-1)?.revision ?? shown;
+
+  return (
+    <p className="version-picker">
+      <label htmlFor="version-picker">Version</label>{" "}
+      <select
+        id="version-picker"
+        className="field"
+        value={shown}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          onShow(next === latest ? null : next);
+        }}
+      >
+        {revisions.map((each) => (
+          // Deliberately not the crumb's own "Version N of M · reason" —
+          // repeating that exact sentence in an `<option>` would give the
+          // page two elements with identical accessible text whenever the
+          // selected option is the one shown, and the crumb line's text is
+          // the one that must stay unique (see the module comment).
+          <option key={each.id} value={each.revision}>
+            Version {each.revision} · {each.reason}
+          </option>
+        ))}
+      </select>
+    </p>
   );
 }
 
@@ -258,14 +588,26 @@ function Document({
  */
 function Day({
   day,
+  days,
   candidates,
   onPin,
   busyItem,
+  editable,
+  writeBusy,
+  onMove,
+  onRemove,
 }: {
   day: PlanDay;
+  /** Every day of the revision being shown — the move control's own day list. */
+  days: readonly PlanDay[];
   candidates: readonly Candidate[];
   onPin: (item: PlanItem) => void;
   busyItem: string | null;
+  /** Move and remove act on the latest revision only (pl-22, extended by pl-45). */
+  editable: boolean;
+  writeBusy: boolean;
+  onMove: (item: PlanItem, toDayIndex: number, toPosition: number) => void;
+  onRemove: (item: PlanItem) => void;
 }): React.ReactElement {
   return (
     <article className="day">
@@ -278,9 +620,15 @@ function Day({
             <Item
               key={item.id}
               item={item}
+              fromDayIndex={day.dayIndex}
+              days={days}
               candidate={candidates.find((each) => each.id === item.candidateId)}
               onPin={onPin}
               busy={busyItem === item.id}
+              editable={editable}
+              writeBusy={writeBusy}
+              onMove={onMove}
+              onRemove={onRemove}
             />
           ))}
         </ol>
@@ -291,14 +639,26 @@ function Day({
 
 function Item({
   item,
+  fromDayIndex,
+  days,
   candidate,
   onPin,
   busy,
+  editable,
+  writeBusy,
+  onMove,
+  onRemove,
 }: {
   item: PlanItem;
+  fromDayIndex: number;
+  days: readonly PlanDay[];
   candidate: Candidate | undefined;
   onPin: (item: PlanItem) => void;
   busy: boolean;
+  editable: boolean;
+  writeBusy: boolean;
+  onMove: (item: PlanItem, toDayIndex: number, toPosition: number) => void;
+  onRemove: (item: PlanItem) => void;
 }): React.ReactElement {
   // A placed item whose candidate is gone is not a state the store can produce
   // — a corrupt candidate is a fatal read there — but the resolution happens
@@ -315,15 +675,31 @@ function Item({
     <li className="item">
       <div className="item-head">
         <h4>{candidate.title}</h4>
-        <button
-          type="button"
-          className={item.pinned ? "pin on" : "pin"}
-          onClick={() => onPin(item)}
-          disabled={busy}
-          aria-pressed={item.pinned}
-        >
-          {item.pinned ? "Pinned" : "Pin"}
-        </button>
+        <span className="item-controls">
+          <button
+            type="button"
+            className={item.pinned ? "pin on" : "pin"}
+            onClick={() => onPin(item)}
+            disabled={busy}
+            aria-pressed={item.pinned}
+          >
+            {item.pinned ? "Pinned" : "Pin"}
+          </button>
+          {editable && (
+            <>
+              <MoveControl
+                item={item}
+                fromDayIndex={fromDayIndex}
+                days={days}
+                disabled={writeBusy}
+                onMove={(toDayIndex, toPosition) => onMove(item, toDayIndex, toPosition)}
+              />
+              <button type="button" disabled={writeBusy} onClick={() => onRemove(item)}>
+                Remove
+              </button>
+            </>
+          )}
+        </span>
       </div>
 
       <p className="where">{describeLocation(candidate.location)}</p>
@@ -333,8 +709,8 @@ function Item({
         {specialistName(candidate.specialist)}
         {/*
           A wall-clock start is only ever set when something outside the plan
-          fixes it — a ferry, a timed entry. `null` is the normal case and means
-          "this is the third thing that day", which the list order already says.
+          fixes it — a ferry, a timed entry. `null` is the normal case and
+          means "this is the third thing that day", which the list order already says.
         */}
         {item.startsAt !== null && ` · from ${item.startsAt}`}
         {candidate.durationMinutes !== null && ` · about ${String(candidate.durationMinutes)} min`}
@@ -357,6 +733,97 @@ function Item({
 
       <ProvenanceNote provenance={candidate.provenance} what="this" />
     </li>
+  );
+}
+
+/**
+ * Move, as a button that opens an inline, keyboard-operable pair of selects —
+ * no drag-and-drop, matching every other control in this file.
+ *
+ * The position options are **scoped to the destination day's current item
+ * count**, and shift by one when the destination is the item's own day:
+ * `toPosition` is defined as the index in the destination list *after* the
+ * item has left its source (`RevisionOperation`'s own comment), so a same-day
+ * move has one fewer honest slot than the day's current length.
+ */
+function MoveControl({
+  item,
+  fromDayIndex,
+  days,
+  disabled,
+  onMove,
+}: {
+  item: PlanItem;
+  fromDayIndex: number;
+  days: readonly PlanDay[];
+  disabled: boolean;
+  onMove: (toDayIndex: number, toPosition: number) => void;
+}): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const [toDayIndex, setToDayIndex] = useState(fromDayIndex);
+  const [toPosition, setToPosition] = useState(item.position);
+
+  if (!open) {
+    return (
+      <button type="button" disabled={disabled} onClick={() => setOpen(true)}>
+        Move
+      </button>
+    );
+  }
+
+  const destination = days.find((each) => each.dayIndex === toDayIndex);
+  const count = destination?.items.length ?? 0;
+  const maxPosition = toDayIndex === fromDayIndex ? Math.max(count - 1, 0) : count;
+  const positions = Array.from({ length: maxPosition + 1 }, (_, index) => index);
+
+  return (
+    <span className="move-control">
+      <label>
+        Day{" "}
+        <select
+          className="field"
+          value={toDayIndex}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            setToDayIndex(next);
+            setToPosition(0);
+          }}
+        >
+          {days.map((each) => (
+            <option key={each.id} value={each.dayIndex}>
+              {dayHeading(each)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Spot{" "}
+        <select
+          className="field"
+          value={toPosition}
+          onChange={(event) => setToPosition(Number(event.target.value))}
+        >
+          {positions.map((position) => (
+            <option key={position} value={position}>
+              {String(position + 1)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          onMove(toDayIndex, toPosition);
+          setOpen(false);
+        }}
+      >
+        Move here
+      </button>
+      <button type="button" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+    </span>
   );
 }
 
@@ -393,6 +860,10 @@ function Gaps({ gaps }: { gaps: readonly PlanGap[] }): React.ReactElement | null
  * render most plainly. `candidateIds` is empty when the constraint is about the
  * whole plan; when it is not, the affected items are named by title, because an
  * id is not something a reader can find on the page.
+ *
+ * **Latest revision only** (pl-42's contract, pl-45's `isLatest` gate at the
+ * call site): an older page must not go on showing the previous unchecked
+ * list once nothing here describes it any more.
  */
 /**
  * The key is the entry's identity, and it comes from the contract.
@@ -542,5 +1013,212 @@ function RouteReading({ reading }: { reading: readonly Source[] }): React.ReactE
         what="Background on this route"
       />
     </section>
+  );
+}
+
+/**
+ * What changed since the parent revision, as three short lists and never as
+ * prose.
+ *
+ * **Resolved by `revisionId`, never by array index.** `view.diffs` is appended
+ * to alongside `plan.revisions`, but nothing here assumes the two line up
+ * positionally — revision 1 has no diff at all, and an off-by-one would
+ * silently show the wrong diff for every later revision.
+ *
+ * **The caption is `shownRevision.reason`, and it is not repeated here** — the
+ * crumb line above already renders it. What is not shown anywhere else is a
+ * re-plan's own `note`, so that is what this section adds, marked plainly as
+ * what the user wrote and not as the tool's own words.
+ */
+function Diff({
+  diff,
+  candidates,
+  operation,
+}: {
+  diff: RevisionDiff | undefined;
+  candidates: readonly Candidate[];
+  operation: PlanRevision["operation"];
+}): React.ReactElement | null {
+  if (diff === undefined) return null;
+
+  const note = operation.kind === "replan" ? operation.note : null;
+  const added = diff.entries.filter((entry) => entry.kind === "added");
+  const removed = diff.entries.filter((entry) => entry.kind === "removed");
+  const moved = diff.entries.filter((entry) => entry.kind === "moved");
+
+  return (
+    <section className="diff">
+      <h3>What changed</h3>
+      {note !== null && (
+        <p className="hint">
+          <span className="mark">What was asked</span> “{note}”
+        </p>
+      )}
+      <DiffList label="Added" entries={added} candidates={candidates} />
+      <DiffList label="Removed" entries={removed} candidates={candidates} />
+      <DiffList label="Moved" entries={moved} candidates={candidates} />
+    </section>
+  );
+}
+
+function candidateTitle(candidates: readonly Candidate[], candidateId: string): string {
+  return candidates.find((each) => each.id === candidateId)?.title ?? "Something removed since";
+}
+
+/** `dayIndex` is 0-based on the wire, 1-based on the page — `dayHeading`'s rule. */
+function dayLabel(placement: DiffPlacement): string {
+  return `Day ${String(placement.dayIndex + 1)}`;
+}
+
+function DiffList({
+  label,
+  entries,
+  candidates,
+}: {
+  label: string;
+  entries: readonly DiffEntry[];
+  candidates: readonly Candidate[];
+}): React.ReactElement | null {
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="diff-group">
+      <h4>{label}</h4>
+      <ul>
+        {entries.map((entry) => (
+          <li key={`${entry.kind}-${entry.candidateId}`}>
+            {candidateTitle(candidates, entry.candidateId)} —{" "}
+            {entry.kind === "added" && dayLabel(entry.to)}
+            {entry.kind === "removed" && dayLabel(entry.from)}
+            {entry.kind === "moved" && `${dayLabel(entry.from)} → ${dayLabel(entry.to)}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** What this form can honestly build; `Document` supplies `baseRevisionId`. */
+type ReplanDraft = Omit<Extract<ReviseRequest, { kind: "replan" }>, "baseRevisionId">;
+
+/**
+ * Re-plan named days, on the latest revision only.
+ *
+ * **Leaving every specialist box unchecked is one of the two choices, not the
+ * absence of one.** It re-packs the selected days from candidates the plan
+ * already has, with no model call and no new lookups — the copy beside the
+ * checkboxes says so, so the empty state does not read as "you forgot
+ * something".
+ */
+function ReplanForm({
+  days,
+  busy,
+  onSubmit,
+}: {
+  days: readonly PlanDay[];
+  busy: boolean;
+  onSubmit: (request: ReplanDraft) => void;
+}): React.ReactElement {
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [selectedSpecialists, setSelectedSpecialists] = useState<Specialist[]>([]);
+  const [note, setNote] = useState("");
+
+  const toggleDay = (dayIndex: number): void => {
+    setSelectedDays((current) =>
+      current.includes(dayIndex)
+        ? current.filter((each) => each !== dayIndex)
+        : [...current, dayIndex].toSorted((a, b) => a - b),
+    );
+  };
+
+  const toggleSpecialist = (specialist: Specialist): void => {
+    setSelectedSpecialists((current) =>
+      current.includes(specialist)
+        ? current.filter((each) => each !== specialist)
+        : [...current, specialist],
+    );
+  };
+
+  /**
+   * Nothing here clears the form on submit. A successful re-plan is a `Run`,
+   * and control leaves `PlanView` entirely (Build step 5) — this component
+   * unmounts, so there is no state left to reset. A failed one — `PLAN_BUSY`
+   * above all, since it is retryable — leaves `PlanView` on screen, and
+   * clearing the days, specialists and note the reader just chose would mean
+   * typing the whole thing again to retry the one request that is actually
+   * meant to be retried.
+   */
+  const submit = (): void => {
+    onSubmit({
+      kind: "replan",
+      days: selectedDays,
+      specialists: selectedSpecialists,
+      note: note.trim() === "" ? null : note,
+    });
+  };
+
+  return (
+    <fieldset className="replan">
+      <legend>Re-plan some days</legend>
+
+      <div className="choices">
+        {days.map((day) => (
+          <label
+            key={day.id}
+            className={selectedDays.includes(day.dayIndex) ? "choice on" : "choice"}
+          >
+            <input
+              type="checkbox"
+              checked={selectedDays.includes(day.dayIndex)}
+              onChange={() => toggleDay(day.dayIndex)}
+            />
+            <span>{dayHeading(day)}</span>
+          </label>
+        ))}
+      </div>
+      <p className="hint">Choose at least one day to re-plan.</p>
+
+      <div className="choices">
+        {ALL_SPECIALISTS.map((specialist) => (
+          <label
+            key={specialist}
+            className={selectedSpecialists.includes(specialist) ? "choice on" : "choice"}
+          >
+            <input
+              type="checkbox"
+              checked={selectedSpecialists.includes(specialist)}
+              onChange={() => toggleSpecialist(specialist)}
+            />
+            <span>{specialistName(specialist)}</span>
+          </label>
+        ))}
+      </div>
+      <p className="hint">
+        Optional. Leaving every box unchecked re-packs these days from what the plan already has —
+        no model call.
+      </p>
+
+      <label htmlFor="replan-note">Anything the specialists should know?</label>
+      <textarea
+        id="replan-note"
+        className="field"
+        rows={2}
+        maxLength={MAX_REVISION_NOTE_CHARS}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      <p className="hint">Read as context by the specialists, never as an instruction.</p>
+
+      <div className="actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || selectedDays.length === 0}
+          onClick={submit}
+        >
+          Re-plan these days
+        </button>
+      </div>
+    </fieldset>
   );
 }

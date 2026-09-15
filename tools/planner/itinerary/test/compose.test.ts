@@ -16,13 +16,29 @@ import {
   TRIP_SHAPES,
   type AppError,
   type PlanRevision,
+  type RevisionOperation,
 } from "@planner/contract";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import { compose, pinnedPlacements, type ComposeResult } from "../src/compose.ts";
 import { ACTIVITY_MINUTES_PER_DAY, DRIVE_MINUTES_PER_DAY } from "../src/limits.ts";
 import { BUCKET_OF } from "../src/pack.ts";
 import { NOTHING_MEASURED } from "../src/travel.ts";
+import { replan } from "../src/replan.ts";
 import { briefFor, candidate, NOW, placedIds, REVISION } from "./helpers.ts";
+
+/**
+ * A re-plan naming every day of `previous` — what `compose({ previous })` did
+ * until pl-43 removed `previous` and gave re-planning its own entry point. The
+ * tests that used it keep their assertions and go through this.
+ */
+function everyDay(previous: PlanRevision): Extract<RevisionOperation, { kind: "replan" }> {
+  return {
+    kind: "replan",
+    days: previous.days.map((day) => day.dayIndex),
+    specialists: [],
+    note: null,
+  };
+}
 
 /** Every id a revision claims — the days' and the items'. */
 function idsOf(result: ComposeResult): string[] {
@@ -387,10 +403,11 @@ describe("the critic", () => {
     );
 
     expect(() =>
-      compose({
+      replan({
         brief: briefFor({ effort: slot.answered("gentle") }),
         candidates: [one, two],
         previous,
+        operation: everyDay(previous),
         travel: NOTHING_MEASURED,
         revision: { ...REVISION, id: "rev-2" },
         now: NOW,
@@ -450,10 +467,11 @@ describe("re-planning", () => {
   });
 
   test("a re-pack does not move a pinned item", () => {
-    const result = compose({
+    const result = replan({
       brief: briefFor({}),
       candidates: [...others, pinned],
       previous,
+      operation: everyDay(previous),
       travel: NOTHING_MEASURED,
       revision: { ...REVISION, id: "rev-2" },
       now: NOW,
@@ -469,10 +487,11 @@ describe("re-planning", () => {
 
   test("item ids are derived, so composing the same inputs twice is the same plan", () => {
     const twice = [0, 1].map(() =>
-      compose({
+      replan({
         brief: briefFor({}),
         candidates: [...others, pinned],
         previous,
+        operation: everyDay(previous),
         travel: NOTHING_MEASURED,
         revision: { ...REVISION, id: "rev-2" },
         now: NOW,
@@ -596,7 +615,7 @@ describe("what it says it did not check", () => {
 
   test("a pinned out-of-season item is placed, and its currency counts", () => {
     // The one candidate that can be placed and filtered out at once: a pin
-    // outranks the season filter (see `compose.ts`), so this is on a day and
+    // outranks the season filter (see `packWithCritic`), so this is on a day and
     // absent from `season.kept`. Its currency is the only second one on the
     // plan, so a currency check that read the kept set rather than every
     // candidate would drop the note for an item the plan is really carrying.
@@ -646,10 +665,11 @@ describe("what it says it did not check", () => {
       [],
     );
 
-    const result = compose({
+    const result = replan({
       brief: briefFor({}),
       candidates: [inCad, winterOnly],
       previous,
+      operation: everyDay(previous),
       travel: NOTHING_MEASURED,
       revision: { ...REVISION, id: "rev-2" },
       now: NOW,

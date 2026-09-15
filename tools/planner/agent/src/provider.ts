@@ -56,9 +56,28 @@ export interface ModelRequest {
   signal?: AbortSignal | undefined;
 }
 
+/**
+ * What one call billed, token kind by token kind (pl-49).
+ *
+ * **The three input kinds are kept apart because they are priced apart.** A
+ * cache read bills at about a tenth of the input rate and a cache write at
+ * about a quarter more, so one input total priced at one rate is wrong in
+ * whichever direction the cache went. Before pl-49 `inputTokens` was all three
+ * summed; it is now the uncached input alone, which is also what the Messages
+ * API's own `input_tokens` means.
+ *
+ * Every field is `null` where the provider does not report that kind — a local
+ * model usually reports none, and the scripted provider reports none on
+ * purpose. `null` is "nobody said", never zero.
+ */
 export interface ModelUsage {
-  /** Null where the provider does not report it — a local model usually will not. */
+  /** Uncached input only. */
   inputTokens: number | null;
+  /** Input served from the prompt cache. */
+  cacheReadTokens: number | null;
+  /** Input written to the prompt cache. */
+  cacheWriteTokens: number | null;
+  /** Output, thinking included where the model thinks. */
   outputTokens: number | null;
 }
 

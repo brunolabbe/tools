@@ -20,6 +20,7 @@ import {
   type Run,
   type RunStatus,
 } from "@planner/contract";
+import type { RunUsage } from "@planner/agent";
 import type { Database } from "better-sqlite3";
 
 interface RunRow {
@@ -140,4 +141,42 @@ export function updateRunRoster(db: Database, id: string, rosterSize: number): v
 /** Set rather than incremented: the fan-out already counts, and it is the authority. */
 export function updateRunProgress(db: Database, id: string, specialistsDone: number): void {
   db.prepare("UPDATE plan_runs SET specialists_done = ? WHERE id = ?").run(specialistsDone, id);
+}
+
+/**
+ * What the run spent, written once as it ends (pl-49).
+ *
+ * Set rather than added to, for `updateRunProgress`'s reason: the fan-out keeps
+ * the running total and is the authority on it. Numbers and the configured
+ * model's name only — nothing a traveller wrote reaches these columns.
+ *
+ * Not part of `Run` and not read back by any route: the plan view has no use
+ * for a token count, and `@planner/contract`'s `Run` is not widened for a
+ * reader that is an operator's report. `cost-report.ts` reads the columns
+ * directly.
+ */
+export function updateRunUsage(
+  db: Database,
+  record: { id: string; model: string; usage: RunUsage },
+): void {
+  db.prepare(
+    `UPDATE plan_runs
+        SET model = ?,
+            model_calls = ?,
+            input_tokens = ?,
+            cache_read_tokens = ?,
+            cache_write_tokens = ?,
+            output_tokens = ?,
+            fallback_calls = ?
+      WHERE id = ?`,
+  ).run(
+    record.model,
+    record.usage.calls,
+    record.usage.inputTokens,
+    record.usage.cacheReadTokens,
+    record.usage.cacheWriteTokens,
+    record.usage.outputTokens,
+    record.usage.fallbackCalls,
+    record.id,
+  );
 }

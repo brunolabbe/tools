@@ -163,6 +163,14 @@ export interface PackInput {
   pinned?: readonly PinnedPlacement[];
   /** Candidates the critic has already ruled out this run. */
   excluded?: ReadonlySet<string>;
+  /**
+   * Days a re-plan may not touch, by index, with the items they already hold
+   * (pl-43). A frozen day is emitted exactly as given and offered to no
+   * candidate, and a pin on it is not honoured — it is on the day already.
+   * Nothing on it is measured: `travel.between` is never asked about a pair
+   * there.
+   */
+  frozen?: ReadonlyMap<number, readonly PackedItem[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +228,8 @@ interface DayState {
   driveMinutes: number;
   activityCount: number;
   hasAnchor: boolean;
+  /** What a re-plan froze on this day, emitted as given; `null` for a day that may be filled. */
+  frozen: readonly PackedItem[] | null;
   /**
    * The candidate the next item on this day will be travelled to from, or
    * `null` while the day is empty.
@@ -353,6 +363,7 @@ export function pack(input: PackInput): PackResult {
     driveMinutes: 0,
     activityCount: 0,
     hasAnchor: false,
+    frozen: input.frozen?.get(dayIndex) ?? null,
     lastCandidateId: null,
   }));
 
@@ -372,7 +383,7 @@ export function pack(input: PackInput): PackResult {
   for (const placement of pinnedInOrder) {
     const candidate = byId.get(placement.candidateId);
     const day = days[placement.dayIndex];
-    if (candidate === undefined || day === undefined) continue;
+    if (candidate === undefined || day === undefined || day.frozen !== null) continue;
     const bucket = BUCKET_OF[candidate.specialist];
     const travelled = transitionTo(day, candidate, input.travel, byId);
     day.pinnedItems.push({
@@ -387,7 +398,9 @@ export function pack(input: PackInput): PackResult {
   }
 
   // --- Then everything else, bucket by bucket. Drives are the skeleton of a
-  // day, activities hang off them, and the anchor is where the day ends.
+  // day, activities hang off them, and the anchor is where the day ends. Only
+  // a day that is not frozen is offered anything, or asked about.
+  const open = days.filter((day) => day.frozen === null);
   for (const bucket of PLACEMENT_ORDER) {
     for (const candidate of input.candidates) {
       if (pinnedBy.has(candidate.id)) continue;
@@ -410,9 +423,9 @@ export function pack(input: PackInput): PackResult {
       // so it is worked out once per candidate and day, and the same value
       // decides the fit and pays for it.
       const travelled = new Map<number, ItemTravel | null>(
-        days.map((day) => [day.dayIndex, transitionTo(day, candidate, input.travel, byId)]),
+        open.map((day) => [day.dayIndex, transitionTo(day, candidate, input.travel, byId)]),
       );
-      const options = days.filter((day) =>
+      const options = open.filter((day) =>
         fits(
           day,
           candidate,
@@ -430,7 +443,7 @@ export function pack(input: PackInput): PackResult {
         // Distinguish "the calendar was against it" from "the days were full":
         // they are different sentences to a user, and only one of them is
         // fixable by dropping something else.
-        const anyDayInSeason = days.some((day) => inSeasonOnDay(candidate, day.date));
+        const anyDayInSeason = open.some((day) => inSeasonOnDay(candidate, day.date));
         excluded.push({
           candidateId: candidate.id,
           reason: anyDayInSeason ? "no-day-had-room" : "no-day-in-season",
@@ -465,7 +478,10 @@ export function pack(input: PackInput): PackResult {
       // bucket order. Positions are assigned from this list and are dense,
       // which the contract requires — so a pin fixes the day and the order
       // among pins, and cannot fix an absolute index the day may no longer have.
-      items: [...day.pinnedItems, ...sortByBucket(day.packedItems)],
+      items:
+        day.frozen === null
+          ? [...day.pinnedItems, ...sortByBucket(day.packedItems)]
+          : day.frozen.map((item) => ({ ...item })),
     })),
     excluded,
     durationUnknown,

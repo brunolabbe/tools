@@ -866,6 +866,38 @@ specialist is four times `MAX_OUTPUT_TOKENS` — 32,000 at the default — not t
 16,000 the budget divides by. The arithmetic is deliberately left alone here, as
 the input-token gap is; how often a fallback fires is pl-40's to measure.
 
+#### What the runs cost
+
+Every run records what it spent as it ends — `done`, `failed` or `canceled` —
+token kind by token kind, on its `plan_runs` row:
+[pl-49](../tools/planner/docs/work/pl-49-what-a-run-costs.md). The report reads
+those rows. It opens the database read-only, so it runs beside the live server:
+
+```bash
+docker compose exec planner node tools/planner/api/dist/report.js --days 7
+```
+
+The path is relative to the image's `WORKDIR`, `/app`, which is where `exec`
+starts and where the image's own `CMD` runs `main.js` from. `DATABASE_PATH` is
+already set in the image. It prints runs by status, and p50, p95 and the mean
+of each token kind per run. A run on `scripted` reports no counts, and is
+left out of those figures rather than counted as free.
+
+**Dollars need all four prices.** Set `MODEL_PRICE_INPUT_PER_MTOK`,
+`MODEL_PRICE_OUTPUT_PER_MTOK`, `MODEL_PRICE_CACHE_READ_PER_MTOK` and
+`MODEL_PRICE_CACHE_WRITE_PER_MTOK` — dollars per million tokens, from the
+provider's price page for the model in `MODEL` — in the same host-side override
+file as the key. With any of them unset the report names the missing ones
+instead of printing a figure. For a one-off, `docker compose exec -e
+MODEL_PRICE_INPUT_PER_MTOK=5 …` passes them to the report alone. A value that is
+not a non-negative number refuses to boot, and fails the report the same way.
+
+Two things the dollars are not. **They are today's prices on past tokens**:
+the rate a run was billed at is not stored. **And a refusal fallback is priced
+at the configured model's rates**: a run whose reply another model served is in
+the totals, and the report says its dollars are approximate when the window
+holds one.
+
 ---
 
 ## Migrating the volumes onto the project name

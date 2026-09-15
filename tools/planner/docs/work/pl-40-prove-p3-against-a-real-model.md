@@ -5,7 +5,7 @@ title: A real model has run the plan, and the bill it ran up is on record
 kind: work-package
 status: ready
 milestone: P3
-depends_on: [pl-39]
+depends_on: [pl-39, pl-49]
 difficulty: standard
 ---
 

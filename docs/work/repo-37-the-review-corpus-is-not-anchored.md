@@ -182,7 +182,7 @@ entry allows 15` — then reverts clean. The bookkeeping is a check, not a habit
   `tools/planner/intake/test/tree.test.ts:182 "a question the draft needs cannot be declined past"`
   while the claim it was offered as proof of is the one now at
   `tools/planner/intake/test/tree.test.ts:192 "an early question the draft does not need can be declined"`;
-  `tools/planner/api/src/runs/orchestrator.ts:362 "trip: tripContextFor(brief),"`
+  `tools/planner/api/src/runs/orchestrator.ts@95c6403:362 "trip: tripContextFor(brief),"`
   genuinely carries `pl-37`'s cited call while `tools/planner/api/src/runs/travel.ts:362 "travel: tableFor(null, order, unlocated, ends, geocoded)"`
   does not contain that text at all, so the "right line, wrong file" reading is not a coincidence
   at a shared number; and `pl-33`'s ~660-line jumps, the largest on the branch,

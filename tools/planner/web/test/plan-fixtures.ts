@@ -17,6 +17,8 @@ import {
   MODEL_ASSERTED,
   slot,
   type Candidate,
+  type DiffEntry,
+  type DiffPlacement,
   type PlanDay,
   type PlanDetail,
   type PlanGap,
@@ -24,6 +26,7 @@ import {
   type PlanRevision,
   type PlanView,
   type RevisionDiff,
+  type RevisionOperation,
   type Source,
   type TripBrief,
   type TripDates,
@@ -81,26 +84,80 @@ export function day(dayIndex: number, items: PlanItem[], date: string | null = n
   return { id: `day-${String(dayIndex)}`, dayIndex, date, items };
 }
 
+export interface RevisionOverrides {
+  id?: string;
+  /** 1-based. Defaults to 1 — the first draft — for every existing caller. */
+  revision?: number;
+  parentRevisionId?: string | null;
+  reason?: string;
+  /** Defaults to `first-draft` for revision 1 and `restore` of 1 otherwise. */
+  operation?: RevisionOperation;
+}
+
+/**
+ * `PlanRevision`'s own field gained `operation` under pl-42, which this
+ * builder's default already carried. pl-45 adds the ability to build a
+ * *later* revision — a version picker, a restore or a diff needs at least
+ * two — without every one of this suite's thirty-odd `revision(...)` calls
+ * having to say so: `revision` defaults to 1, exactly the shape they already
+ * pass.
+ */
 export function revision(
   days: PlanDay[],
   gaps: PlanGap[] = [],
   coverage: UncheckedConstraint[] = [],
   /** pl-33's editorial context about the route. Rendered since pl-36. */
   reading: Source[] = [],
+  overrides: RevisionOverrides = {},
 ): PlanRevision {
+  const number = overrides.revision ?? 1;
   return {
-    id: "rev-1",
+    id: overrides.id ?? `rev-${String(number)}`,
     planId: "plan-1",
-    revision: 1,
-    parentRevisionId: null,
-    reason: "The first draft.",
-    operation: { kind: "first-draft" },
+    revision: number,
+    parentRevisionId:
+      overrides.parentRevisionId ?? (number === 1 ? null : `rev-${String(number - 1)}`),
+    reason: overrides.reason ?? (number === 1 ? "The first draft." : "A change was made."),
+    operation:
+      overrides.operation ??
+      (number === 1 ? { kind: "first-draft" } : { kind: "restore", revision: 1 }),
     createdAt: CREATED,
     days,
     gaps,
     coverage,
     reading,
   };
+}
+
+/** One placement in a diff: a candidate's day and its spot on it. */
+export function diffPlacement(dayIndex: number, position = 0): DiffPlacement {
+  return { dayIndex, position };
+}
+
+export function addedEntry(candidateId: string, to: DiffPlacement): DiffEntry {
+  return { kind: "added", candidateId, to };
+}
+
+export function removedEntry(candidateId: string, from: DiffPlacement): DiffEntry {
+  return { kind: "removed", candidateId, from };
+}
+
+export function movedEntry(candidateId: string, from: DiffPlacement, to: DiffPlacement): DiffEntry {
+  return { kind: "moved", candidateId, from, to };
+}
+
+/**
+ * What a revision changed against its parent (pl-42). Never stored — see
+ * `RevisionDiff`'s own comment — so a fixture builds one directly rather than
+ * deriving it from two revisions the way `@planner/itinerary`'s `diffRevisions`
+ * does; this package only ever renders one.
+ */
+export function revisionDiff(
+  revisionId: string,
+  parentRevisionId: string,
+  entries: DiffEntry[] = [],
+): RevisionDiff {
+  return { revisionId, parentRevisionId, entries };
 }
 
 export interface ViewOverrides {
