@@ -3171,7 +3171,14 @@ independently checked; item 7 is checked against item 1's simulation.
    later option text was also wrong: it said "only prose" would remain once
    the affected branches merged, though the reviewed commits still exist,
    fetchable, on every branch checked here, so tagging them remains
-   possible — item 1's simulation depends on exactly that.
+   possible — item 1's simulation depends on exactly that. **It then failed
+   for real:** tried on all three branches carrying orphaned pins,
+   re-resolve-at-tip failed identically on each, because the pinned
+   citations quote code later gate rounds had already rewritten. The
+   pin-repair builder stopped rather than guess, which was correct. One
+   `citations.mjs` run against an unpinned copy of the record would have
+   shown this before the remedy was recommended — see "What happened after
+   this row was written," below.
 8. **A reviewer reported lacking `ListAgents`,** which its frontmatter
    grants (orchestrator-reported). This is a self-report; this dispatch has
    no channel to that agent's transcript and does not check it.
@@ -3190,3 +3197,87 @@ independently checked; item 7 is checked against item 1's simulation.
   (`routes/probe.ts`, `config.ts`, `server.ts`). A different method, applied
   before the rebase collapsed the two branches' histories together, may be
   what produced 11.
+
+### What happened after this row was written
+
+This row was written before the batch's last phase, and under-reported it.
+The correction below exists because the owner asked for it, not because a new
+gate ran on this branch — the same shape as this page's own mandatory field,
+which "does not arrive on its own" unless an agent is asked for it explicitly
+(see "Why the last field is mandatory," above). Orchestrator-observed unless
+marked otherwise; nothing below is independently reproduced by this amending
+dispatch except where stated.
+
+**The pinning defect played out, and cost four repair rounds across five
+PRs.** Item 1 above already records the defect as a simulated failure; this
+is what it cost for real:
+
+- After #252 (dl-60) merged as `cbfdbba` and its branch was deleted, a fresh
+  clone of `origin/main` at `49515ba` failed the gate:
+  `dl-60-guard-embedded-ipv4.md` — 1 unresolvable, rev `f43135f` not in this
+  repository. **`main`'s `check` job was red, and so was every open PR's, in
+  both sessions.** A peer session reproduced it independently.
+- The owner was offered archive tags (simulation exit 0) versus prose repair,
+  and chose **prose**: re-point a citation that still resolves at the tip,
+  rewrite the rest as prose naming the reviewed commit. The earlier "merge
+  first, repair after" choice is what made `main` red in between.
+- Repairs: #255 (dl-60's record, on `main`), then #248 and #251 on their
+  branches, then #250 after its rebase. Each was proven by a squash-and-prune
+  simulation in a fresh clone, and by the orchestrator re-running that
+  simulation itself.
+- **dl-51 then moved four unpinned citations in dl-60's merged record** —
+  `probe.ts`, around line 48 and again around line 134; `jobs.ts`, around
+  line 53; `config.ts`, around line 427 — which CI caught; they were pinned
+  to `@cbfdbba`.
+- **dl-57 carried 41 orphaned pins** (`@790c17b`, `@7b0cdcb`): 34 re-pointed,
+  7 rewritten as prose.
+- Final state: everything merged; `main` at `b6d3014` verified in a fresh
+  clone — citations gate exit 0 (81 enforced, 0 failing), `npm run status --
+  --json` exit 0.
+
+**Three more entries for "what the skill got wrong," continuing the
+numbering above:**
+
+9. **A citation on an extension-less file is invisible to the checker.**
+   `tools/downloader/Dockerfile@790c17b:152` carried a dead pin that
+   `citations.mjs`'s grammar cannot see — confirmed by this dispatch reading
+   `INLINE`'s pattern, which requires either a slash-qualified path ending
+   in `.\w+` or a known extension, and `Dockerfile` has neither — so it is
+   not counted, not resolved, and not failed. dl-57's builder found it by
+   grep. A green citations run is not evidence that every citation in a
+   record was checked.
+10. **A stale object store makes the check lie.** Any checkout that ever
+    fetched the branch still holds the pinned commit until gc, so the gate
+    exits 0 locally while CI fails. A peer session hit this. Only a fresh
+    clone, or squash plus `git gc --prune=now`, is a valid test;
+    `git branch -r --contains <sha>` printing nothing is the tell.
+11. **Re-running a workflow does not pick up a repaired base.**
+    `gh run rerun` re-uses the merge commit computed when the run was
+    created: #251 failed with the identical error at 21:37 and again at
+    23:24 after `main` was fixed. A push — merging `origin/main` into the
+    branch is enough — is what produces a fresh merge ref. This cost two
+    extra pushes (#251, #256).
+
+Item 7's outcome, once the remedy it offered unmeasured was tried for real,
+is recorded in place above rather than repeated here.
+
+**Agent and token figures, corrected.** The row above lists 11 agents and a
+verified total of 3,446,956 subagent tokens — the sum of its own eleven
+per-agent figures, re-added here rather than trusted. Six more agents ran
+afterward:
+
+| Agent | Model | Task | Tokens |
+| --- | --- | --- | --- |
+| builder | sonnet | pin repairs on #255, #248, #251 | 265,947 |
+| builder | sonnet | dl-63 measurement and filing (#256) | 116,035 |
+| builder | haiku | rebased the history row (#253) | 61,654 |
+| builder | haiku | merged main into dl-55 (#251) | 37,902 |
+| builder | haiku | merged main into dl-63 (#256) | 30,224 |
+| builder | sonnet | dl-57 rebase and 41-citation repair (#250) | 187,258 |
+
+That makes **17** agents. The verified base (3,446,956) plus these six rows
+sums to **4,145,976**; the account handed to this row instead states the new
+total as 4,240,242, which does not reconcile against that arithmetic from
+any stated base — not reconciled here. Both readings are still missing two
+gate agents' final rounds, per the original row's own caveat, so either is a
+floor rather than a count.
