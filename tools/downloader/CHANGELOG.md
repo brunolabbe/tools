@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/brunolabbe/tools/compare/downloader-v0.5.0...downloader-v0.6.0) (2026-09-16)
+
+
+### Features
+
+* **downloader:** record how each probe and download ended, and add a report (dl-57) ([#250](https://github.com/brunolabbe/tools/issues/250)) ([b6d3014](https://github.com/brunolabbe/tools/commit/b6d301439b40466b8f6313321e6c0cb7a5063aa0))
+
+
+### Fixes
+
+* **downloader:** cap job and probe slots per client, and bound the wait line (dl-51) ([#248](https://github.com/brunolabbe/tools/issues/248)) ([01d66fa](https://github.com/brunolabbe/tools/commit/01d66faedc6870cf080c9a6ef641002477bf05a3))
+* **downloader:** choose the player over a related-video card, and guard clicks that navigate (dl-55) ([#251](https://github.com/brunolabbe/tools/issues/251)) ([1806525](https://github.com/brunolabbe/tools/commit/180652518ddeed03da9ead1a19dab32a12dd9ce7))
+* **downloader:** keep yt-dlp nulls out of stored variants, and unreported audio unverified (dl-62) ([#254](https://github.com/brunolabbe/tools/issues/254)) ([361327e](https://github.com/brunolabbe/tools/commit/361327e9c24b0650c3cfde20132c47c9959a947b))
+
 ## [0.5.0](https://github.com/brunolabbe/tools/compare/downloader-v0.4.0...downloader-v0.5.0) (2026-09-15)
 
 
