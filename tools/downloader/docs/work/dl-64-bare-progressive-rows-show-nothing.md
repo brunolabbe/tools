@@ -133,8 +133,29 @@ library; it covers MP4/MOV only, and any other container stays `—`.
    the cap; a test proves it.
 6. A variant that already carries a bitrate, a size or a codec keeps it
    unchanged; the existing `size-sample` and `ytdlp` suites pass untouched.
-7. An aborted signal during sizing or header reading ends the work without
-   rejecting the probe with anything but the abort's own code.
+7. An aborted signal during sizing or header reading starts no further
+   requests and resolves with the probe as measured so far. It never rejects:
+   the registry does not check its deadline again after a resolver returns, so
+   a rejection there would turn yt-dlp's completed answer into `TIMEOUT`.
+
+## Review
+
+**Gate: PASS** — 2026-09-16 · `562f60c...b0c219a` · ticket-reviewer on Sonnet 5, builder on Opus 5, own defect hunt at medium depth
+
+| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Every row sized exactly with a derived bitrate; a failing row stays blank, the probe succeeds | `resolvers/test/ytdlp-bare-progressive.test.ts:109 "row.filesizeBytes).toBe(bytes)"`, `:111 "row.bitrateBps).toBe(Math.round"`, `:148 "filesizeBytes !== undefined)).toHaveLength(13"` ✓                                                                                                                                                            |
+| 2. `avc1` on plain rows, `av1` kept, `mp4a` and `hasAudio: true` on both                         | `resolvers/test/ytdlp-bare-progressive.test.ts:113 "row.videoCodec).toBe(format.isAv1"`, `:114 "row.audioCodec).toBe("` ✓ — red on `ytdlp.ts` reverted to `562f60c` (2 of 5 fail), green restored                                                                                                                                                   |
+| 3. Tail `moov` in no more than two reads beyond the first                                        | `resolvers/test/mp4-header.test.ts:62 "reads.length - 1).toBeLessThanOrEqual(2)"` ✓                                                                                                                                                                                                                                                                 |
+| 4. Sample entry wins over a disagreeing brand, both directions                                   | `resolvers/test/mp4-header.test.ts:90 "an AV1 file listing avc1 among its brands reports av01"`, `:96 "an H.264 file listing no avc1 brand, and av01 instead"` ✓                                                                                                                                                                                    |
+| 5. An absurd declared size reads no further than the cap                                         | `resolvers/test/mp4-header.test.ts:149 "sizes a file declares are not trusted"`, `resolvers/test/size-probe.test.ts:185 "a server that ignores Range is read no further than the range"` ✓ — plus a hand fuzz (size 4 box, truncated `stsd`, 50 top-level and 2,000 `trak` siblings): no throw, no hang                                             |
+| 6. Reported values kept; existing suites unedited                                                | `resolvers/test/size-sample.test.ts:564 "a size, a bitrate, or a paired audio file already there is kept"`, `resolvers/test/mp4-header.test.ts:280 "a codec, an audio answer or a size already reported is kept"`; existing test files append-only ✓                                                                                                |
+| 7. An abort resolves with what was measured, never rejects                                       | `resolvers/test/ytdlp-bare-progressive.test.ts:203 "through the registry, a deadline landing mid-measurement still returns yt-dlp's answer"`, `resolvers/test/size-sample.test.ts:610 "an abort mid-way starts no further requests and rejects nothing"`, `resolvers/test/mp4-header.test.ts:225 "an abort after the first read sends no second"` ✓ |
+
+- **low** · Done when 7 was worded as "without rejecting with anything but the abort's code", met only vacuously by code that never rejects. **Fixed** in this commit: the line now states the behaviour and why. The behaviour itself was checked against `registry.ts`, which returns a resolved probe without re-checking the deadline.
+- **findings** · 1 returned, 1 fixed, 0 carried, 0 dropped.
+- NFR: security ✓ (ranged reads go through the same `GuardedFetch` as the `HEAD`); performance ✓ (4-wide bound per stage, stages sequential; not measured against a real origin); reliability ✓ (no `throw` in the three touched sources; fuzzed); maintainability ✓.
+- Checked clean: direct and browser tiers cannot reach the per-file branch (browser routes files through `progressiveVariants`, `direct.ts` never calls `measureVariantSizes`); no contract edit, no shell, no `console`; the diff carries only `example.com` hosts, and no identifying value of the reproducing page.
 
 ## Log
 
@@ -211,3 +232,6 @@ library; it covers MP4/MOV only, and any other container stays `—`.
     behaviour with a `Range` header against a real origin. The new resolver
     test lives in its own file, so no import is added to `ytdlp.test.ts`,
     whose line numbers merged gate records cite.
+- 2026-09-16 — Gated PASS with one low finding (Done when 7's wording), fixed
+  by rewording the line to the behaviour the builder chose and the gate
+  confirmed against `registry.ts`.
