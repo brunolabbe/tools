@@ -775,3 +775,29 @@ test("a cancel the server refused for a job that has since finished shows how it
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
 });
+
+test("a cancel the server accepted before the job stopped keeps following it to canceled", async () => {
+  // The cancel route answers before the orchestrator's abort unwinds, so a job
+  // canceled mid-probe comes back still running. Detaching on that answer
+  // closed the only stream that would carry its `canceled` frame, and the card
+  // sat on its last step until a reload.
+  const probing = job("probing", { id: "job-1" });
+  const { fake, listeners } = await watchOneJob(probing, [probing]);
+  (fake.client.cancelJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
+    Promise.resolve({ job: probing }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await settle();
+
+  act(() => {
+    listeners[0]?.onEvent({
+      type: "canceled",
+      jobId: "job-1",
+      error: { code: "JOB_CANCELED", message: "The download was canceled.", retryable: false },
+      at: "2026-09-07T10:00:05.000Z",
+    });
+  });
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(screen.getAllByText("Canceled").length).toBeGreaterThan(0);
+});

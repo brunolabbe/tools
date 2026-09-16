@@ -168,6 +168,10 @@ export function useJobs(api: ApiClient): UseJobs {
       try {
         const { job } = await api.cancelJob(id);
         mergeJob(job);
+        // The route answers before the abort unwinds, so a job canceled
+        // mid-probe comes back still running; its `canceled` frame arrives on
+        // the stream, which must still be open to deliver it.
+        if (!isTerminal(job)) return;
       } catch {
         // A cancel request that failed says nothing about the job: it is most
         // likely still running on the server. Marking the card failed and

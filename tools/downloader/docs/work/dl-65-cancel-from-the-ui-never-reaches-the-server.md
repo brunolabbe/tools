@@ -63,7 +63,35 @@ its own defect with an open decision about the code — see
 - A cancel the server refuses for a job that finished meanwhile shows how it
   finished, not the cancel's error — `web/test/app.test.tsx`, "a cancel the
   server refused for a job that has since finished shows how it finished".
+- A cancel the server accepts while the job is still running keeps the card
+  attached until the `canceled` frame lands — `web/test/app.test.tsx`, "a cancel
+  the server accepted before the job stopped keeps following it to canceled".
 - `npm run check` and `npm test -- --project downloader` are green.
+
+## Review
+
+**Gate: PASS after one repair** — 2026-09-16, `ticket-reviewer` on `3754898`,
+repaired in the following commit.
+
+| Done when                                                                | Proof                                                                                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Body-less request declares no `Content-Type`; a body still declares JSON | `web/test/http-client.test.ts`, both tests ✓                                                            |
+| A refused cancel leaves the card active and attached                     | `app.test.tsx`, "a cancel the server refused leaves the card following the job it could not stop" ✓     |
+| A refused cancel for a finished job shows how it finished                | `app.test.tsx`, "a cancel the server refused for a job that has since finished shows how it finished" ✓ |
+| An accepted cancel of a still-running job follows it to `canceled`       | `app.test.tsx`, "a cancel the server accepted before the job stopped keeps following it to canceled" ✓  |
+| `npm run check`, `npm test -- --project downloader` green                | run on the repaired tip ✓                                                                               |
+
+- **Premise** — verified independently by the reviewer against the API harness:
+  a cancel `inject` carrying `content-type: application/json` and no body
+  answers `500 INTERNAL`; without the header it reaches the route.
+- **(med) The success path detached a job still running** — `cancel()` detached
+  on any `200`, but the route answers before the abort unwinds, so a job
+  canceled mid-probe comes back non-terminal and its `canceled` frame had no
+  stream left to arrive on. Pre-existing, and the same symptom the browser run
+  showed in its third round. **Fixed**: `if (!isTerminal(job)) return;` after
+  `mergeJob`, with the test above; it fails with the line removed.
+- Informational: no other web request had the header problem; the planner's
+  client already gates `Content-Type` on a body.
 
 ## Log
 
@@ -80,3 +108,7 @@ its own defect with an open decision about the code — see
   with its Cancel button. That is deliberate — the one failure this fix knows of
   is gone, and inventing copy for an unknown one is worse than letting the user
   press Cancel again.
+- 2026-09-16 — Gate found the success path detaching a job that the cancel's
+  `200` still reported as running (see Review). Fixed in the same branch. The
+  brief's "keep the stream attached while it is still running" applied to both
+  paths, not only the failed one.
