@@ -149,3 +149,19 @@ deleted afterwards.
 also call `optional()`. That run came before a lint fix moved one test helper
 to module scope; the two changed test files were re-run after it, and all 118
 tests passed.
+
+**Re-proven after the rebases, 2026-09-16.** The branch was rebased three times
+while it waited, ending on a `main` carrying dl-51, dl-55 and dl-57, all of which
+touch the job path. Rebuilt at `e672069` and run again: the job reached
+`completed` in 6 s, the stored variant had neither an `fps` nor a `hasAudio` key,
+and the 30,570,115-byte file holds `h264` video and `aac` audio. Deleted
+afterwards, with the scratch tree checked for traces.
+
+The new cases sit at the **end** of `resolvers/test/ytdlp.test.ts` rather than
+beside the null-codec ones. Inserting them mid-file shifted the lines below and
+moved 11 citations in five already-merged gate records — repo-34, repo-39,
+dl-34, dl-37 and dl-47 — which failed the citation gate on a branch that never
+touched those records. That is repo-47's failure class. The owner chose the move
+over pinning each citation: it edits nothing outside this branch and cannot go
+stale the next time that file shifts. Measured both ways on the same base, the
+gate reports 0 failing with the move and 5 failing without it.
