@@ -45,6 +45,7 @@ import {
 } from "../common.ts";
 import type { MirrorCandidate } from "../common.ts";
 import type { MediaSegment } from "../manifest/hls.ts";
+import { describeProgressiveTracks } from "../mp4-header.ts";
 import { createFetchSizeProbe } from "../size-probe.ts";
 import { measureVariantSizes } from "../size-sample.ts";
 import { TIER_TRUST_STORE_HINT, ytdlpCertificateMarker } from "../tls-verification.ts";
@@ -292,23 +293,33 @@ export class YtDlpResolver implements Resolver {
     const fetchImpl = this.#fetch;
     if (fetchImpl === undefined) return probe;
 
+    const sizeProbe = createFetchSizeProbe({
+      fetch: fetchImpl,
+      headers: probe.requestContext.headers,
+      signal: options.signal,
+    });
     // dl-30: `tbr` on an adaptive format is the manifest's declared bandwidth,
     // which is a ceiling rather than an average. Weigh one rendition against it.
-    const variants = await measureVariantSizes(
-      probe.variants,
-      createFetchSizeProbe({
-        fetch: fetchImpl,
-        headers: probe.requestContext.headers,
-        signal: options.signal,
-      }),
-      {
-        isLive: probe.isLive,
-        segmentsByUrl: fragmentSegments(info),
-        signal: options.signal,
-        ...optional({ durationSec: probe.durationSec }),
-      },
-    );
-    return { ...probe, variants };
+    // dl-64: and when nothing declared a bitrate, ask each plain file its size.
+    const sized = await measureVariantSizes(probe.variants, sizeProbe, {
+      isLive: probe.isLive,
+      segmentsByUrl: fragmentSegments(info),
+      signal: options.signal,
+      ...optional({ durationSec: probe.durationSec }),
+    });
+    // dl-64: an extractor that names no codec for a progressive MP4 has not
+    // hidden it — the file's own sample entries say.
+    const described = await describeProgressiveTracks(sized, sizeProbe, {
+      signal: options.signal,
+    });
+    // Both steps stop starting requests on an abort and return what they have,
+    // rather than rejecting: yt-dlp already answered, and a deadline that lands
+    // while we are filling in columns must not turn that answer into a TIMEOUT.
+    // The registry returns a resolved probe as it is, so throwing here would.
+    //
+    // A measured bitrate can reorder rows of one height, and best-first is the
+    // mapper's promise.
+    return { ...probe, variants: described.toSorted(compareVariantQuality) };
   }
 }
 

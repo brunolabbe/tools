@@ -146,3 +146,99 @@ describe("text", () => {
     ).toBeUndefined();
   });
 });
+
+describe("bytes (dl-64)", () => {
+  const FILE = Uint8Array.from({ length: 1000 }, (_, index) => index % 251);
+
+  function ranged(call: Call): Response {
+    const [, from, to] = /^bytes=(\d+)-(\d+)$/u.exec(call.range ?? "") ?? [];
+    const start = Number(from);
+    const end = Math.min(Number(to), FILE.byteLength - 1);
+    return new Response(FILE.slice(start, end + 1), {
+      status: 206,
+      headers: {
+        "content-range": `bytes ${String(start)}-${String(end)}/${String(FILE.byteLength)}`,
+      },
+    });
+  }
+
+  test("answers the range asked for, with the total the server named, replaying headers", async () => {
+    const seen: Headers[] = [];
+    const served = stub((call) => ranged(call));
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      seen.push(new Headers(init?.headers));
+      return await served.fetch(input, init);
+    };
+    const probe = createFetchSizeProbe({ fetch, headers: HEADERS });
+
+    const answer = await probe.bytes(URL_UNDER_TEST, 100, 199);
+
+    expect(served.calls).toEqual([{ url: URL_UNDER_TEST, method: "GET", range: "bytes=100-199" }]);
+    expect(answer?.totalBytes).toBe(1000);
+    expect(answer?.bytes).toEqual(FILE.slice(100, 200));
+    expect(seen[0]?.get("referer")).toBe(HEADERS.Referer);
+
+    // A range running past the end comes back short, not refused.
+    expect((await probe.bytes(URL_UNDER_TEST, 900, 1999))?.bytes.byteLength).toBe(100);
+  });
+
+  test("a server that ignores Range is read no further than the range, and from byte zero only", async () => {
+    let pulled = 0;
+    let canceled = false;
+    const endless = (): Response =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            pulled += 1;
+            controller.enqueue(new Uint8Array(4096));
+          },
+          cancel() {
+            canceled = true;
+          },
+        }),
+        { headers: { "content-length": "9999999999" } },
+      );
+    const ignoring = stub(() => endless());
+    const probe = createFetchSizeProbe({ fetch: ignoring.fetch, headers: HEADERS });
+
+    const prefix = await probe.bytes(URL_UNDER_TEST, 0, 9999);
+    expect(prefix?.bytes.byteLength).toBe(10_000);
+    expect(prefix?.totalBytes).toBe(9_999_999_999);
+    expect(canceled).toBe(true);
+    // Three 4 KiB chunks cover the range; a stream may be pulled ahead a little.
+    expect(pulled).toBeLessThan(10);
+
+    // From anywhere else, a whole-file body is the wrong bytes.
+    expect(await probe.bytes(URL_UNDER_TEST, 40, 99)).toBeUndefined();
+  });
+
+  test("a 206 for another range, a refusal, a throw, or a request over the cap is no answer", async () => {
+    const elsewhere = stub(
+      () =>
+        new Response(FILE.slice(0, 60), {
+          status: 206,
+          headers: { "content-range": "bytes 0-59/1000" },
+        }),
+    );
+    const wrongRange = createFetchSizeProbe({ fetch: elsewhere.fetch, headers: HEADERS });
+    expect(await wrongRange.bytes("u", 40, 99)).toBeUndefined();
+
+    const refused = stub(() => new Response(null, { status: 416 }));
+    const refusing = createFetchSizeProbe({ fetch: refused.fetch, headers: HEADERS });
+    expect(await refusing.bytes("u", 0, 9)).toBeUndefined();
+
+    const threw = createFetchSizeProbe({ fetch: throwingFetch, headers: HEADERS });
+    expect(await threw.bytes("u", 0, 9)).toBeUndefined();
+
+    const counted = stub((call) => ranged(call));
+    const capped = createFetchSizeProbe({
+      fetch: counted.fetch,
+      headers: HEADERS,
+      maxRangeBytes: 64,
+    });
+    expect(await capped.bytes("u", 0, 64)).toBeUndefined();
+    expect(await capped.bytes("u", -1, 10)).toBeUndefined();
+    expect(await capped.bytes("u", 10, 9)).toBeUndefined();
+    expect(counted.calls).toEqual([]);
+  });
+});

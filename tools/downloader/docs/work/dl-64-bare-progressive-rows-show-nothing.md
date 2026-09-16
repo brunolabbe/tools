@@ -3,7 +3,7 @@ id: dl-64
 tool: downloader
 title: A progressive format yt-dlp describes only by height shows no codec, audio, bitrate or size
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -140,3 +140,74 @@ library; it covers MP4/MOV only, and any other container stays `—`.
 
 - 2026-09-16 — Filed from a live reproduction; page, host and ids withheld at
   the owner's request. Codec approach decided by the owner (see **Decided**).
+- 2026-09-16 — Built (Opus 5). `size-sample.ts` sizes each bare progressive
+  file when no reference qualifies (`sizeEachFile`, concurrency 4 via
+  `mapBounded`); `size-probe.ts` gains `bytes()`; the new
+  `resolvers/src/mp4-header.ts` reads `moov` (`readMp4Tracks`) and fills
+  variants (`describeProgressiveTracks`), called from `ytdlp.ts` after sizing.
+  Every test is synthetic, with `media.example.com` URLs: MP4s are built box by
+  box in `resolvers/test/helpers/mp4.ts`, and `extractor-null-fps.json` is used
+  as it is, not extended. No real site was fetched.
+  - **Done when → tests.** 1: `ytdlp-bare-progressive.test.ts` "every row is
+    sized exactly…" and "a file refusing every request stays blank…", with
+    `size-sample.test.ts` "every file is asked its size…" and "a file that will
+    not answer stays unsized…". 2: the same first resolver test. 3:
+    `mp4-header.test.ts` "a tail moov behind a leading mdat…", checked with and
+    without a known total. 4: "an AV1 file listing avc1…" and "an H.264 file
+    listing no avc1 brand, and av01 instead…". 5: the four tests under "sizes a
+    file declares are not trusted", plus `size-probe.test.ts` "a server that
+    ignores Range…". 6: `size-sample.test.ts` "a size, a bitrate, or a paired
+    audio file already there is kept…", `mp4-header.test.ts` "a codec, an
+    audio answer or a size already reported is kept"; the existing suites pass
+    unedited. 7: the three tests under "an abort while measuring a bare ladder",
+    plus `size-sample.test.ts` "an abort mid-way…" and `mp4-header.test.ts` "an
+    abort after the first read sends no second".
+  - **Mutations run, and each failed the tests named:** dropping the `moov`
+    cap failed both cap tests. Throwing `toAbortError` after enrichment failed
+    all three abort tests. Letting the file's fourcc replace a reported codec
+    failed the resolver test and the "kept" test.
+  - **What the brief had wrong, or left open:**
+    - **`SizeProbe.bytes` is optional, not required.** The browser tier's probe
+      cannot keep a ranged read's bound: Playwright's `APIResponse` hands over a
+      body it has already read in full, so a server ignoring `Range` would hand
+      it the whole file. Without `bytes`, codecs stay as the tier reported them.
+      The fetch-backed `bytes()` reads a stream no further than the range, and
+      refuses a 200 for a range that does not start at zero.
+    - **Done when 7 is met by resolving, not rejecting.** An early draft threw
+      the abort's code after enrichment. The registry returns a resolved probe
+      as it stands and does not check the deadline again, so that throw would
+      turn a successful yt-dlp answer into `TIMEOUT` whenever the deadline fell
+      during measurement. dl-30's sampling already returned quietly on abort.
+      Both steps now stop starting requests and return what they have. A
+      registry-level test pins this with an origin that never answers.
+    - **The request estimate is 28 ranged reads for this page, not ~21.** The
+      measured faststart `moov`s (242–309 KiB) are larger than the 64 KiB first
+      read, so each file costs two reads. A tail `moov` also costs two, because
+      when the rest of the file fits the cap, the second read goes to the end of
+      the file. Add 14 `HEAD`s.
+    - **`hasAudio: false` needs every track classified.** A `trak` without a
+      readable `hdlr` leaves `hasAudio` unset rather than false. Protected
+      entries (`encv`/`enca`) name no codec, though an `enca` still counts as
+      audio.
+    - **Depth is bounded by construction.** The walk inside `moov` follows one
+      fixed path and never recurses, so there is no depth counter. The limits
+      are `MAX_CHILDREN` per level, `MAX_TOP_LEVEL_BOXES`, and `MAX_READS` (4)
+      per file. The `moov` cap is 16 MiB.
+    - **Rows are re-sorted after enrichment.** Measured bitrates break ties
+      within a height, and the mapper promises best-first. This is a small
+      widening.
+    - **A mixed list still takes the dl-30 path, as the brief scoped it.** If
+      one progressive row carries a bitrate and a duration, it becomes the
+      reference, and bare rows beside it stay unsized.
+      `size-sample.test.ts` had to strip durations to exercise the per-file
+      path for a row that has a bitrate.
+    - **Files that are not ISO BMFF, or have a paired `audioUrl`, are not read.**
+      A known non-MP4 `container` is skipped. A paired `audioUrl` would make a
+      missing audio track in this file mean nothing.
+    - The direct and browser tiers call `measureVariantSizes` only on
+      manifest-parsed (HLS/DASH) variants, so the per-file path does not reach
+      them. This comes from reading the call sites, not from a test.
+  - **Not measured:** real latency added to a probe, and `GuardedFetch`'s
+    behaviour with a `Range` header against a real origin. The new resolver
+    test lives in its own file, so no import is added to `ytdlp.test.ts`,
+    whose line numbers merged gate records cite.

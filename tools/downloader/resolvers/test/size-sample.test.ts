@@ -495,3 +495,139 @@ describe("fragmentSegments", () => {
     expect(probe.calls.some((call) => call.startsWith("TXT"))).toBe(false);
   });
 });
+
+/**
+ * dl-64: a progressive ladder described by height alone. No variant declares a
+ * bitrate, so there is no reference to weigh — and no need of one, because
+ * each file answers its own size.
+ */
+describe("plain files that declare no bitrate (dl-64)", () => {
+  const bare = mapYtDlpInfo(
+    JSON.parse(
+      readFileSync(new URL("./fixtures/ytdlp/extractor-null-fps.json", import.meta.url), "utf8"),
+    ) as YtDlpInfo,
+    "https://vod.example.com/watch/clip",
+    "yt-dlp",
+    {},
+  ).variants;
+  const DURATION = 803;
+  /** Distinct per file, so a size landing on the wrong row cannot pass. */
+  const lengths = Object.fromEntries(
+    bare.map((variant, index) => [variant.url, 9_000_000 + index * 1_234_567]),
+  );
+
+  test("every file is asked its size, which is exact, and its bitrate follows", async () => {
+    const probe = stubProbe(lengths);
+    const measured = await measureVariantSizes(bare, probe, { durationSec: DURATION });
+
+    expect(probe.calls.toSorted()).toEqual(bare.map((variant) => `LEN ${variant.url}`).toSorted());
+    for (const variant of measured) {
+      const bytes = lengths[variant.url] ?? 0;
+      expect(variant.filesizeBytes).toBe(bytes);
+      expect(variant.filesizeIsEstimate).toBe(false);
+      expect(variant.bitrateBps).toBe(Math.round((bytes * 8) / DURATION));
+    }
+    // Order is the parser's, and the label now carries the size.
+    expect(measured.map((variant) => variant.id)).toEqual(bare.map((variant) => variant.id));
+    expect(byId(measured, "480p").label).toMatch(/^480p · \d/u);
+  });
+
+  test("a file that will not answer stays unsized, and the rest are sized", async () => {
+    const refused = bare.find((variant) => variant.id === "360p")?.url ?? "";
+    const { [refused]: _dropped, ...answering } = lengths;
+    const measured = await measureVariantSizes(bare, stubProbe(answering), {
+      durationSec: DURATION,
+    });
+
+    expect(byId(measured, "360p")).toEqual(byId(bare, "360p"));
+    expect(measured.filter((variant) => variant.filesizeBytes !== undefined)).toHaveLength(13);
+  });
+
+  test("a probe that throws for one file costs only that file", async () => {
+    const poisoned = bare.find((variant) => variant.id === "720p_HD")?.url ?? "";
+    const probe: SizeProbe = {
+      async contentLength(url) {
+        if (url === poisoned) throw new Error("socket hang up");
+        return await Promise.resolve(lengths[url]);
+      },
+      async text() {
+        return await Promise.resolve(undefined);
+      },
+    };
+    const measured = await measureVariantSizes(bare, probe, { durationSec: DURATION });
+    expect(byId(measured, "720p_HD")).toEqual(byId(bare, "720p_HD"));
+    expect(byId(measured, "av1-720p_HD").filesizeBytes).toBe(
+      lengths[byId(bare, "av1-720p_HD").url],
+    );
+  });
+
+  test("a size, a bitrate, or a paired audio file already there is kept and not asked about", async () => {
+    // Durations stripped: with one, a row carrying a bitrate is a dl-30
+    // reference and never reaches the per-file path at all.
+    const [first, second, third, fourth] = bare.map(
+      ({ durationSec: _duration, ...variant }) => variant,
+    ) as [MediaVariant, MediaVariant, MediaVariant, MediaVariant];
+    const sized = { ...first, filesizeBytes: 42, filesizeIsEstimate: true };
+    // A bitrate with no duration anywhere is not a reference, so this row is
+    // sized by the new path and its bitrate must survive it.
+    const rated = { ...second, bitrateBps: 777_000 };
+    const split = { ...third, audioUrl: "https://media.example.com/clip/audio.m4a" };
+    const probe = stubProbe(lengths);
+
+    const measured = await measureVariantSizes([sized, rated, split, fourth], probe, {});
+
+    expect(measured[0]).toEqual(sized);
+    expect(measured[1]?.bitrateBps).toBe(777_000);
+    expect(measured[1]?.filesizeBytes).toBe(lengths[second.url]);
+    expect(measured[2]).toEqual(split);
+    // No duration: sized exactly, no bitrate invented.
+    expect(measured[3]?.filesizeBytes).toBe(lengths[fourth.url]);
+    expect(measured[3]).not.toHaveProperty("bitrateBps");
+    expect(probe.calls).toEqual([`LEN ${second.url}`, `LEN ${fourth.url}`]);
+  });
+
+  test("no more than four files are asked at once", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const probe: SizeProbe = {
+      async contentLength(url) {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => {
+          setTimeout(resolve, 5);
+        });
+        inFlight -= 1;
+        return lengths[url];
+      },
+      async text() {
+        return await Promise.resolve(undefined);
+      },
+    };
+    await measureVariantSizes(bare, probe, { durationSec: DURATION });
+    expect(peak).toBe(4);
+  });
+
+  test("an abort mid-way starts no further requests and rejects nothing", async () => {
+    const controller = new AbortController();
+    const asked: string[] = [];
+    const probe: SizeProbe = {
+      async contentLength(url) {
+        asked.push(url);
+        if (asked.length === 2) controller.abort();
+        return await Promise.resolve(lengths[url]);
+      },
+      async text() {
+        return await Promise.resolve(undefined);
+      },
+    };
+    const measured = await measureVariantSizes(bare, probe, {
+      durationSec: DURATION,
+      signal: controller.signal,
+    });
+
+    // At most the four workers' first files are ever asked for; the other ten
+    // are never started once the signal has fired.
+    expect(asked.length).toBeLessThanOrEqual(4);
+    expect(measured).toHaveLength(bare.length);
+  });
+});
