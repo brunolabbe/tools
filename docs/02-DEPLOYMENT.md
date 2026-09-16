@@ -481,6 +481,27 @@ were mid-download are failed honestly at boot rather than left showing a progres
 bar that will never move. The planner's holds every intake, answer and plan — the
 only copy of anything a user typed.
 
+### Reading the downloader's outcome report
+
+Every `POST /api/probe` and every download leaves a durable row — `probe_outcomes`
+and `jobs` respectively — and `report.js` reads both, read-only, so it never
+contends with the server's own writer. Run it inside the container, with the
+full path from `/app` — the container's working directory, which `docker
+compose exec` inherits — not `dist/report.js` alone, which resolves to a path
+that does not exist and fails with `MODULE_NOT_FOUND`:
+
+```bash
+docker compose exec downloader node tools/downloader/api/dist/report.js --days 7
+```
+
+It prints, over the window given: probe success rate overall and by winning
+resolver, the hosts that fail most with their codes and the tiers tried, p50/p95
+probe duration per resolver, download success rate and the job error codes
+behind the rest, and p50 download duration. Neither table carries a path, a
+query string or an address; `OUTCOME_RETENTION_DAYS` (default 90) bounds
+`probe_outcomes` by size rather than by privacy — see
+[dl-57](../tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md).
+
 ### Things that bite every tool
 
 **Rate limits silently stop working if `TRUST_PROXY` is wrong.** Every limiter

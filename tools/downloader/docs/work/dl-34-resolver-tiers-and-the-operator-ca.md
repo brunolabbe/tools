@@ -122,7 +122,7 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   (`"unable to get local issuer certificate"`), which is unrelated to a private
   root and which Chromium frequently recovers from via AIA chasing where
   yt-dlp's default backend does not. Since yt-dlp runs before the browser tier
-  and `TLS_VERIFICATION_FAILED` now stops the chain (`registry.ts:98 "if (error.code !=="`), an
+  and `TLS_VERIFICATION_FAILED` now stops the chain (`registry.ts@95c6403:98 "if (error.code !=="`), an
   ordinary public-site misconfiguration would have hard-stopped instead of
   falling through to a tier likely to succeed. Reproduced on both sides: the
   reviewer measured the regex match; the builder built a real two-level chain

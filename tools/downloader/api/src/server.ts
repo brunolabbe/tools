@@ -727,8 +727,18 @@ export async function runRetentionSweep(context: AppContext): Promise<void> {
       context.store.deleteToken(token);
     }
 
+    // `probe_outcomes` carries no address and no path, so this bound is about
+    // table size, not privacy (dl-57). 0 keeps every row, the same convention
+    // the rate limits use for "off".
+    const outcomesPruned =
+      context.config.outcomeRetentionDays <= 0
+        ? 0
+        : context.store.pruneProbeOutcomes(
+            new Date(nowMs - context.config.outcomeRetentionDays * 24 * 3_600_000).toISOString(),
+          );
+
     const report = await context.engine.collectGarbage(nowMs);
-    context.logger.debug("retention sweep complete", { ...report });
+    context.logger.debug("retention sweep complete", { ...report, outcomesPruned });
   } catch (error: unknown) {
     context.logger.warn("retention sweep failed", { error: String(error) });
   }

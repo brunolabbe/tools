@@ -3,6 +3,7 @@ import { AppError } from "@downloader/contract";
 import type { ProbeResult, ProbeStageEvent, Resolver, ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { ResolverRegistry } from "../src/registry.ts";
+import type { ResolverAttempt } from "../src/registry.ts";
 import { YtDlpResolver } from "../src/resolvers/ytdlp.ts";
 
 /** The stand-in binary `ytdlp.test.ts` drives; `mode` selects its behaviour. */
@@ -205,8 +206,93 @@ describe("fallthrough versus rethrow", () => {
     expect(error).toBeInstanceOf(AppError);
     expect((error as AppError).code).toBe("NO_MEDIA_FOUND");
     expect((error as AppError).details?.["attempts"]).toEqual([
-      { resolver: "yt-dlp", code: "NO_MEDIA_FOUND" },
-      { resolver: "browser", code: "NO_MEDIA_FOUND" },
+      { resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      { resolver: "browser", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+    ]);
+  });
+});
+
+describe("the attempts out-parameter (dl-57)", () => {
+  test("is filled with every candidate tried, win or lose, whether resolve() returns or throws", async () => {
+    const first = new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "no-media" });
+    const second = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const attempts: ResolverAttempt[] = [];
+
+    const result = await new ResolverRegistry([first, second]).resolve(
+      URL_UNDER_TEST,
+      options(),
+      attempts,
+    );
+
+    expect(result.resolver).toBe("browser");
+    expect(attempts).toEqual([
+      { resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      { resolver: "browser", code: null, durationMs: expect.any(Number) },
+    ]);
+  });
+
+  test("still carries the failed candidates when the chain stops on a terminal error", async () => {
+    const first = new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "no-media" });
+    const second = new StubResolver({
+      name: "browser",
+      priority: 50,
+      behaviour: new AppError("DRM_PROTECTED"),
+    });
+    const attempts: ResolverAttempt[] = [];
+
+    await expect(
+      new ResolverRegistry([first, second]).resolve(URL_UNDER_TEST, options(), attempts),
+    ).rejects.toMatchObject({ code: "DRM_PROTECTED" });
+
+    expect(attempts).toEqual([
+      { resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      { resolver: "browser", code: "DRM_PROTECTED", durationMs: expect.any(Number) },
+    ]);
+  });
+
+  test("defaults to an internal array when the caller passes none, unchanged from before", async () => {
+    const resolver = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const result = await new ResolverRegistry([resolver]).resolve(URL_UNDER_TEST, options());
+    expect(result.resolver).toBe("browser");
+  });
+
+  test("the tier the deadline cuts off is still named, with the code the timeout raises", async () => {
+    // Without pushing before the abort throws, this tier — the expensive one
+    // that ran out the clock, which is exactly the one a timed-out probe most
+    // needs named — is silently missing from `attempts`.
+    const miss = new StubResolver({ name: "direct", priority: 10, behaviour: "no-media" });
+    const hang = new StubResolver({ name: "browser", priority: 50, behaviour: "never-settles" });
+    const attempts: ResolverAttempt[] = [];
+
+    await expect(
+      new ResolverRegistry([miss, hang]).resolve(
+        URL_UNDER_TEST,
+        options({ timeoutMs: 60 }),
+        attempts,
+      ),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
+
+    expect(attempts).toEqual([
+      { resolver: "direct", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      { resolver: "browser", code: "TIMEOUT", durationMs: expect.any(Number) },
+    ]);
+  });
+
+  test("the tier a caller cancel cuts off is named with CANCELED", async () => {
+    const hang = new StubResolver({ name: "browser", priority: 50, behaviour: "never-settles" });
+    const controller = new AbortController();
+    const attempts: ResolverAttempt[] = [];
+
+    const pending = new ResolverRegistry([hang]).resolve(
+      URL_UNDER_TEST,
+      options({ signal: controller.signal }),
+      attempts,
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "CANCELED" });
+    expect(attempts).toEqual([
+      { resolver: "browser", code: "CANCELED", durationMs: expect.any(Number) },
     ]);
   });
 });

@@ -221,10 +221,11 @@ describe("the preview path, and the migration that adds its column", () => {
 
     migrate(legacy);
 
-    // 4, not 3: dl-44 appended `thumbnail_files`. The number is the count of
-    // shipped migrations, and it moves every time one is added — which is the
-    // point of asserting it rather than asserting "greater than 2".
-    expect(legacy.pragma("user_version", { simple: true })).toBe(4);
+    // 5, not 3: dl-44 appended `thumbnail_files` and dl-57 appended
+    // `probe_outcomes` plus `jobs.host`. The number is the count of shipped
+    // migrations, and it moves every time one is added — which is the point of
+    // asserting it rather than asserting "greater than 2".
+    expect(legacy.pragma("user_version", { simple: true })).toBe(5);
     const upgraded = new JobStore(legacy).get("legacy-1");
     expect(upgraded.status).toBe("completed");
     // Null, not absent and not invented: nothing may fabricate a token that was
@@ -239,7 +240,7 @@ describe("the preview path, and the migration that adds its column", () => {
     const legacy = legacyDatabase();
     migrate(legacy);
     expect(() => migrate(legacy)).not.toThrow();
-    expect(legacy.pragma("user_version", { simple: true })).toBe(4);
+    expect(legacy.pragma("user_version", { simple: true })).toBe(5);
     expect(new JobStore(legacy).get("legacy-1").thumbnailPath).toBeNull();
     legacy.close();
   });
@@ -403,5 +404,141 @@ describe("file tokens", () => {
 
     store.delete("job-1");
     expect(store.findThumbnail("thumb-tok")).toBeNull();
+  });
+});
+
+describe("jobs.host (dl-57)", () => {
+  test("is the hostname of the source URL, computed at creation", () => {
+    create();
+    expect(store.jobHost("job-1")).toBe("site.example");
+  });
+
+  test("never carries the path, the query string or a credential in it", () => {
+    store.create({
+      id: "job-2",
+      sourceUrl: "https://cdn.example/watch/42?sig=super-secret-token",
+      options: {},
+      variantId: null,
+      createdAt: "2026-08-06T10:00:00.000Z",
+    });
+    const host = store.jobHost("job-2");
+    expect(host).toBe("cdn.example");
+    expect(host).not.toContain("/watch/42");
+    expect(host).not.toContain("sig=");
+    expect(host).not.toContain("super-secret-token");
+  });
+
+  test("is null for an id with no row, rather than throwing", () => {
+    expect(store.jobHost("nope")).toBeNull();
+  });
+
+  test("masks an IP-literal source URL's host, dl-57 decision C", () => {
+    store.create({
+      id: "job-3",
+      sourceUrl: "http://93.184.215.14/x",
+      options: {},
+      variantId: null,
+      createdAt: "2026-08-06T10:00:00.000Z",
+    });
+    const host = store.jobHost("job-3");
+    expect(host).toBe("ip-literal");
+    expect(host).not.toContain("93.184.215.14");
+  });
+});
+
+describe("probe_outcomes (dl-57)", () => {
+  test("records a row with the fields given, and reads it back typed", () => {
+    store.recordProbeOutcome(
+      {
+        host: "site.example",
+        outcome: "ok",
+        resolver: "browser",
+        attempts: [{ resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: 12 }],
+        durationMs: 340,
+        cached: false,
+        variants: 3,
+        drm: false,
+      },
+      "2026-08-06T10:00:00.000Z",
+    );
+
+    const rows = store.probeOutcomes();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      host: "site.example",
+      outcome: "ok",
+      resolver: "browser",
+      attempts: [{ resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: 12 }],
+      durationMs: 340,
+      cached: false,
+      variants: 3,
+      drm: false,
+      createdAt: "2026-08-06T10:00:00.000Z",
+    });
+  });
+
+  test("never carries a path, a query string or an address — only a hostname", () => {
+    // The row itself has no field that could hold one; this pins that the
+    // schema stayed that way rather than growing a `url` column back.
+    store.recordProbeOutcome({
+      host: "cdn.example",
+      outcome: "NO_MEDIA_FOUND",
+      resolver: null,
+      attempts: [],
+      durationMs: 10,
+      cached: false,
+      variants: null,
+      drm: false,
+    });
+    const [row] = store.probeOutcomes();
+    expect(Object.keys(row as object).toSorted()).toEqual(
+      [
+        "attempts",
+        "cached",
+        "createdAt",
+        "drm",
+        "durationMs",
+        "host",
+        "id",
+        "outcome",
+        "resolver",
+        "variants",
+      ].toSorted(),
+    );
+  });
+
+  test("pruneProbeOutcomes drops rows older than the cutoff and keeps newer ones", () => {
+    store.recordProbeOutcome(
+      {
+        host: "old.example",
+        outcome: "ok",
+        resolver: "direct",
+        attempts: [],
+        durationMs: 1,
+        cached: false,
+        variants: 1,
+        drm: false,
+      },
+      "2026-08-01T00:00:00.000Z",
+    );
+    store.recordProbeOutcome(
+      {
+        host: "new.example",
+        outcome: "ok",
+        resolver: "direct",
+        attempts: [],
+        durationMs: 1,
+        cached: false,
+        variants: 1,
+        drm: false,
+      },
+      "2026-08-10T00:00:00.000Z",
+    );
+
+    const removed = store.pruneProbeOutcomes("2026-08-05T00:00:00.000Z");
+    expect(removed).toBe(1);
+
+    const hosts = store.probeOutcomes().map((row) => row.host);
+    expect(hosts).toEqual(["new.example"]);
   });
 });

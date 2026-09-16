@@ -24,6 +24,18 @@ function byPriority(a: Resolver, b: Resolver): number {
   return a.priority - b.priority;
 }
 
+/**
+ * One resolver's turn in the chain, win or lose (dl-57).
+ *
+ * `code` is `null` for the attempt that returned a result — the only way to
+ * tell it apart from a `NO_MEDIA_FOUND` fall-through without a separate flag.
+ */
+export interface ResolverAttempt {
+  resolver: string;
+  code: string | null;
+  durationMs: number;
+}
+
 export class ResolverRegistry {
   #resolvers: readonly Resolver[];
 
@@ -46,8 +58,17 @@ export class ResolverRegistry {
    * `options.timeoutMs` is a budget for the *whole chain*, not per resolver: a
    * caller that waited 45 s does not care that three resolvers each stayed
    * under their own limit.
+   *
+   * `attempts`, when passed, is appended to in place with every resolver this
+   * call tries — losers and the eventual winner alike — so a caller building an
+   * outcome record has the full timeline whether `resolve()` returns or throws
+   * (dl-57). Optional and unused by every caller that predates it.
    */
-  async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+  async resolve(
+    url: URL,
+    options: ResolveOptions,
+    attempts: ResolverAttempt[] = [],
+  ): Promise<ProbeResult> {
     const candidates = this.#resolvers.filter((resolver) => resolver.canHandle(url));
     if (candidates.length === 0) {
       throw new AppError("NO_MEDIA_FOUND", "No resolver can handle that address.", {
@@ -77,26 +98,36 @@ export class ResolverRegistry {
       signal,
       ...(onStage === undefined ? {} : { onStage }),
     };
-    const attempts: Array<{ resolver: string; code: string }> = [];
-
     for (const resolver of candidates) {
       abortIfNeeded(options.signal, deadline);
       // Before `resolve`, not after: firing on the way out would never announce
       // the tier that succeeds, which is the only one the user waits on.
       onStage?.({ stage: "resolver-start", resolver: resolver.name });
+      const startedAt = Date.now();
       try {
         // Sequential on purpose: the point of the chain is that the cheap tiers
         // spare us the expensive ones. Running them in parallel would pay for
         // a browser probe on every request.
         // oxlint-disable-next-line no-await-in-loop
-        return await resolver.resolve(url, chainOptions);
+        const result = await resolver.resolve(url, chainOptions);
+        attempts.push({ resolver: resolver.name, code: null, durationMs: Date.now() - startedAt });
+        return result;
       } catch (cause) {
+        const durationMs = Date.now() - startedAt;
         // An abort surfaces from inside a resolver in whatever shape its
-        // transport chose, so the signals are authoritative, not the error.
-        abortIfNeeded(options.signal, deadline);
+        // transport chose, so the signals are authoritative, not the error —
+        // and the attempt is pushed with the code this is about to throw,
+        // before it throws. Otherwise the tier the deadline or a caller's
+        // cancel cut off is silently missing from `attempts`, which is
+        // exactly the expensive one a timed-out probe most needs named (dl-57).
+        const abortError = abortReason(options.signal, deadline);
+        if (abortError !== null) {
+          attempts.push({ resolver: resolver.name, code: abortError.code, durationMs });
+          throw abortError;
+        }
         const error = AppError.from(cause);
+        attempts.push({ resolver: resolver.name, code: error.code, durationMs });
         if (error.code !== "NO_MEDIA_FOUND") throw error;
-        attempts.push({ resolver: resolver.name, code: error.code });
       }
     }
 
@@ -128,15 +159,26 @@ export class ResolverRegistry {
   }
 }
 
-function abortIfNeeded(caller: AbortSignal, deadline: AbortSignal): void {
+/**
+ * What `abortIfNeeded` would throw, without throwing it — so a caller can
+ * record the code an abort is about to raise before it actually unwinds the
+ * stack. Null when neither signal has fired.
+ */
+function abortReason(caller: AbortSignal, deadline: AbortSignal): AppError | null {
   if (deadline.aborted) {
-    throw new AppError("TIMEOUT", "Analysing that page took too long.");
+    return new AppError("TIMEOUT", "Analysing that page took too long.");
   }
   if (caller.aborted) {
-    if (caller.reason instanceof AppError) throw caller.reason;
+    if (caller.reason instanceof AppError) return caller.reason;
     // `CANCELED`, not `JOB_CANCELED`: resolvers know nothing about jobs, and a
     // registry embedded in a CLI or a test has no job to have canceled. The
     // orchestrator translates this into job vocabulary at its own layer.
-    throw new AppError("CANCELED");
+    return new AppError("CANCELED");
   }
+  return null;
+}
+
+function abortIfNeeded(caller: AbortSignal, deadline: AbortSignal): void {
+  const reason = abortReason(caller, deadline);
+  if (reason !== null) throw reason;
 }

@@ -22,6 +22,7 @@ import type {
   MediaVariant,
 } from "@downloader/contract";
 import type { Database, Statement } from "better-sqlite3";
+import { hostnameOrNull } from "../host.ts";
 
 export interface FileToken {
   token: string;
@@ -52,6 +53,60 @@ export interface CreateJobInput {
   createdAt: string;
 }
 
+/**
+ * One resolver's turn during a probe, win or lose. Structurally the same shape
+ * `ResolverRegistry.resolve()`'s `attempts` out-parameter fills — duplicated
+ * rather than imported so this module, which persists rows, does not need to
+ * depend on `@downloader/resolvers`, which resolves them.
+ */
+export interface ProbeAttempt {
+  resolver: string;
+  code: string | null;
+  durationMs: number;
+}
+
+/** What `POST /api/probe` records on every way out. See dl-57. */
+export interface ProbeOutcomeInput {
+  /** Hostname only — never a path, a query string or an address. */
+  host: string;
+  /** `"ok"`, or the `AppError` code that ended the probe. */
+  outcome: string;
+  /** The tier that answered, or null when nothing won. */
+  resolver: string | null;
+  attempts: readonly ProbeAttempt[];
+  durationMs: number;
+  cached: boolean;
+  /** Null when there is no successful `ProbeResult` to count variants on. */
+  variants: number | null;
+  drm: boolean;
+}
+
+export interface ProbeOutcomeRow {
+  id: number;
+  host: string;
+  outcome: string;
+  resolver: string | null;
+  attempts: ProbeAttempt[];
+  durationMs: number;
+  cached: boolean;
+  variants: number | null;
+  drm: boolean;
+  createdAt: string;
+}
+
+interface ProbeOutcomeSqlRow {
+  id: number;
+  host: string;
+  outcome: string;
+  resolver: string | null;
+  attempts_json: string;
+  duration_ms: number;
+  cached: number;
+  variants: number | null;
+  drm: number;
+  created_at: string;
+}
+
 /** Fields a transition may set alongside the new status. */
 export interface TransitionPatch {
   progress?: JobProgress;
@@ -79,6 +134,7 @@ interface JobRow {
   updated_at: string;
   finished_at: string | null;
   thumbnail_path: string | null;
+  host: string | null;
 }
 
 export function initialProgress(stage: JobStatus = "queued"): JobProgress {
@@ -104,6 +160,21 @@ function parseJson<T>(raw: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function probeOutcomeRow(row: ProbeOutcomeSqlRow): ProbeOutcomeRow {
+  return {
+    id: row.id,
+    host: row.host,
+    outcome: row.outcome,
+    resolver: row.resolver,
+    attempts: parseJson<ProbeAttempt[]>(row.attempts_json) ?? [],
+    durationMs: row.duration_ms,
+    cached: row.cached !== 0,
+    variants: row.variants,
+    drm: row.drm !== 0,
+    createdAt: row.created_at,
+  };
 }
 
 function rowToJob(row: JobRow): Job {
@@ -155,6 +226,10 @@ export class JobStore {
     insertThumbnail: Statement;
     thumbnailByToken: Statement;
     dropThumbnailsForJob: Statement;
+    hostById: Statement;
+    insertProbeOutcome: Statement;
+    listProbeOutcomes: Statement;
+    pruneProbeOutcomes: Statement;
   };
 
   constructor(db: Database) {
@@ -162,9 +237,9 @@ export class JobStore {
     this.#statements = {
       insert: db.prepare(
         `INSERT INTO jobs (id, source_url, variant_id, variant_json, status, progress_json,
-                           result_json, error_json, attempts, options_json, created_at, updated_at, finished_at)
+                           result_json, error_json, attempts, options_json, created_at, updated_at, finished_at, host)
          VALUES (@id, @source_url, @variant_id, NULL, @status, @progress_json,
-                 NULL, NULL, 0, @options_json, @created_at, @created_at, NULL)`,
+                 NULL, NULL, 0, @options_json, @created_at, @created_at, NULL, @host)`,
       ),
       byId: db.prepare(`SELECT * FROM jobs WHERE id = ?`),
       list: db.prepare(`SELECT * FROM jobs ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`),
@@ -201,6 +276,13 @@ export class JobStore {
       ),
       thumbnailByToken: db.prepare(`SELECT * FROM thumbnail_files WHERE token = ?`),
       dropThumbnailsForJob: db.prepare(`DELETE FROM thumbnail_files WHERE job_id = ?`),
+      hostById: db.prepare(`SELECT host FROM jobs WHERE id = ?`),
+      insertProbeOutcome: db.prepare(
+        `INSERT INTO probe_outcomes (host, outcome, resolver, attempts_json, duration_ms, cached, variants, drm, created_at)
+         VALUES (@host, @outcome, @resolver, @attempts_json, @duration_ms, @cached, @variants, @drm, @created_at)`,
+      ),
+      listProbeOutcomes: db.prepare(`SELECT * FROM probe_outcomes ORDER BY id`),
+      pruneProbeOutcomes: db.prepare(`DELETE FROM probe_outcomes WHERE created_at < ?`),
     };
   }
 
@@ -213,6 +295,12 @@ export class JobStore {
       progress_json: JSON.stringify(initialProgress("queued")),
       options_json: JSON.stringify(input.options),
       created_at: input.createdAt,
+      // Hostname only, never the path or query string a signed URL carries its
+      // credential in (dl-57), and never a bare IP literal (dl-57 decision C).
+      // The route already validated `sourceUrl` with the SSRF guard before
+      // calling here, so this should never fail to parse — `null` is the
+      // honest answer on the day that stops being true.
+      host: hostnameOrNull(input.sourceUrl),
     });
     const created = this.find(input.id);
     if (created === null)
@@ -451,5 +539,48 @@ export class JobStore {
    */
   removeThumbnailsForJob(jobId: string): void {
     this.#statements.dropThumbnailsForJob.run(jobId);
+  }
+
+  // --- probe outcomes (dl-57) -----------------------------------------------
+
+  /**
+   * The hostname stored for a job at creation, or null for a job that has none
+   * — either it predates dl-57, or its source URL would not parse. Narrower
+   * than `Job`: nothing in the wire schema needs this, it exists for the
+   * offline report and for tests.
+   */
+  jobHost(id: string): string | null {
+    const row = this.#statements.hostById.get(id) as { host: string | null } | undefined;
+    return row?.host ?? null;
+  }
+
+  /**
+   * Records one row for a probe's outcome. Never throws on a constraint this
+   * table itself cannot satisfy — the caller (`probe-outcomes.ts`) is the one
+   * that decides a failed write must not fail the probe it describes; this
+   * method just does the write.
+   */
+  recordProbeOutcome(input: ProbeOutcomeInput, now = new Date().toISOString()): void {
+    this.#statements.insertProbeOutcome.run({
+      host: input.host,
+      outcome: input.outcome,
+      resolver: input.resolver,
+      attempts_json: JSON.stringify(input.attempts),
+      duration_ms: input.durationMs,
+      cached: input.cached ? 1 : 0,
+      variants: input.variants,
+      drm: input.drm ? 1 : 0,
+      created_at: now,
+    });
+  }
+
+  /** Every recorded outcome, oldest first. Test and reporting use only. */
+  probeOutcomes(): ProbeOutcomeRow[] {
+    return (this.#statements.listProbeOutcomes.all() as ProbeOutcomeSqlRow[]).map(probeOutcomeRow);
+  }
+
+  /** Drops outcome rows older than `beforeIso`. Returns how many were removed. */
+  pruneProbeOutcomes(beforeIso: string): number {
+    return this.#statements.pruneProbeOutcomes.run(beforeIso).changes;
   }
 }
