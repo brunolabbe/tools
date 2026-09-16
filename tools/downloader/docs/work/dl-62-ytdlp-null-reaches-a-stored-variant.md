@@ -1,0 +1,167 @@
+---
+id: dl-62
+tool: downloader
+title: A null that yt-dlp reports passes the probe and fails every job at its first read back
+kind: fix
+status: done
+milestone: null
+depends_on: []
+difficulty: standard
+---
+
+# dl-62 — a `null` from yt-dlp reaches a stored variant
+
+**Packages:** `resolvers` (`common.ts`, `resolvers/ytdlp.ts`).
+
+## Why
+
+Reported by the owner on 2026-09-15: a page failed to download. The page is
+deliberately not named anywhere, at the owner's request, and the fixture below
+has its host, id, title and every URL rewritten.
+
+The probe succeeded, offering 14 progressive renditions from 240p to 2160p. The
+job failed two seconds after it was accepted:
+
+```
+INTERNAL — A stored job could not be read.
+issues: [{ path: ["variant", "fps"], expected: "number", received: null }]
+```
+
+yt-dlp's site-specific extractor for that page reports `fps` as JSON `null` on
+every format, together with `tbr`, `vbr`, `abr` and `filesize_approx`.
+`YtDlpFormat` declared `fps?: number`, and `optional()` in `common.ts` dropped
+only `undefined`, so `fps: null` went into the variant. Nothing on the probe path
+validates a variant against `mediaVariantSchema`, but `rowToJob` in
+`api/src/db/job-store.ts` does, through `jobSchema`. So the first read-back of
+the job threw.
+
+It is the same shape as dl-37's `null` codec, one field over. dl-37's rule was
+to widen a field's type only after it is measured null. That keeps the type
+honest, but it cannot protect the next field nobody has measured yet.
+
+The same pages show a second, smaller fault. The extractor names no `acodec`,
+so the mapper wrote `hasAudio: false`, and the picker said "no audio" about
+files that do carry AAC (checked with ffprobe). dl-42 already settled that
+audio nobody checked is `undefined`, not `false`.
+
+## Build
+
+The owner chose to guard every field the mapper copies rather than only `fps`,
+and to fix the audio claim in the same change.
+
+1. `optional()` drops `null` as well as `undefined`. Every field it builds is
+   optional and never nullable in the contract, so this is safe for the HLS,
+   DASH and direct callers too.
+2. `YtDlpFormat.fps` becomes `number | null`, recorded in the measured list
+   with the shape it was seen in.
+3. Values the mapper reads outside `optional()` get a guard: the label's
+   height, width and fps through `reportedNumber`, header values through
+   `stringValues`, and a subtitle's `url` through a `typeof` check.
+4. `hasAudio` has three states: `true` when a codec is known (its own or a
+   paired one), `false` only when yt-dlp says `"none"`, and absent otherwise.
+
+## Done when
+
+1. Captured output with `fps: null` maps to variants that each pass
+   `mediaVariantSchema`, and a probe that passes `probeResultSchema`.
+2. A `null` fps is absent from the variant and does not change its label.
+3. A format that names no audio codec has no `hasAudio`; `"none"` still maps to
+   `false`.
+4. A `null` in any field the mapper copies, including unmeasured ones, still
+   maps to a valid probe.
+5. `optional()` drops `null` and keeps `0`, `""` and `false`.
+6. With the fix reverted, the tests for 1 to 5 fail.
+7. A real job against the reported page completes with both video and audio.
+8. `npm run check` and the downloader suite pass.
+
+## Review
+
+Gated at `202fca7` by `ticket-reviewer`, on a different model from the one that
+wrote the change. **PASS.**
+
+| #   | Proof                                                                                                              | Verdict                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 1   | `ytdlp.test.ts` › "every variant passes the schema a stored job is read back through"                              | proven                                                                           |
+| 2   | `ytdlp.test.ts` › "a null fps is absent from the variant and from its label"                                       | proven                                                                           |
+| 3   | `ytdlp.test.ts` › "a format that names no audio codec is unverified, not silent" and "`none` is still the answer…" | proven                                                                           |
+| 4   | `ytdlp.test.ts` › "a null in any field the mapper copies still maps to a valid probe"                              | proven                                                                           |
+| 5   | `common.test.ts` › "drops null as well as undefined, and keeps every other falsy value"                            | proven                                                                           |
+| 6   | Reviewer reverted both source files and reran: exactly the tests for 1 to 5 failed                                 | verified                                                                         |
+| 7   | Log, end-to-end run                                                                                                | accepted from the Log; the reviewer was barred from touching the page on purpose |
+| 8   | Reviewer reran `npm run check` (exit 0) and the downloader suite (1,271 passed)                                    | verified                                                                         |
+
+The reviewer mutation-tested each guard. Removing `stringValues`, the subtitle
+`typeof` check, `audioClaim` or `optional()`'s `null` drop each breaks a named
+test.
+
+- **low**: `reportedNumber` on the label's `height` and `width` can be removed
+  without any test failing. **No change.** `buildLabel` only prints a height or
+  width when it is `> 0`, and `null > 0` is false, so `null` and absent take the
+  same path. No assertion could tell the guard from its absence; it is there so
+  the label's inputs match their declared types.
+- `optional()` dropping `null` is safe for the HLS, DASH and direct callers:
+  every contract field they fill is `.optional()`, none `.nullable()`. No
+  change.
+- `hasAudio` going from `false` to absent was traced through variant
+  selection, the engine's audio mapping, the size estimate and the web label.
+  All four already handle dl-42's three states, so nothing regresses. No change.
+- The fixture was read in full; nothing identifies the reported page. No
+  change.
+
+## Log
+
+**Reproduction, 2026-09-15.** Ran the API from a worktree on `main@95c6403`
+with local storage and every tier enabled.
+
+- yt-dlp 2025.09.26 on its own extracted the page cleanly.
+- Every rendition URL answered a range request with `206 video/mp4`, with or
+  without the extractor's headers, so headers were never the problem.
+- `POST /api/probe` returned 14 variants in about 2 s.
+- `POST /api/jobs` went `probing` → `failed` with the error above.
+- Coercing `fps` alone made the same job complete: a 30.6 MB MP4 holding H.264
+  video and AAC audio. The audio survived `hasAudio: false` only because a
+  progressive file is copied whole; the picker's label was still wrong.
+
+The first attempt to prove the patch measured nothing. The API imports
+`@downloader/resolvers` through its package exports, which point at `dist/`,
+so an edit to `src/` changes nothing until `npm run build`. `api/package.json`
+warns about this; it cost one restart.
+
+`extractor-null-fps.json` was written directly from yt-dlp's output. It keeps
+only the declared fields, rewrites the id, title, host and URLs, and was checked
+for no trace of the original page before it was saved. The raw capture was
+never written to disk.
+
+**Fail first.** With `common.ts` and `ytdlp.ts` restored from `main` and the
+new tests left in place, the five tests for Done when 1 to 5 failed and 113
+others passed. With the fix back, all 118 passed. The sixth new test, `"none"`
+still meaning no audio, guards against a regression and passes either way, as
+it should.
+
+**End to end on the finished code**, rebuilt into `dist`. The reported page's
+job went `probing` → `downloading` → `completed` in 6 s. The stored variant had
+neither an `fps` nor a `hasAudio` key, and the 30,570,115-byte file holds `h264`
+video and `aac` audio. The file and every scratch file naming the page were
+deleted afterwards.
+
+**Gates.** `npm run check` passes. `npm test -- --project downloader` passed
+75 files and 1,271 tests, which includes the HLS, DASH and direct suites that
+also call `optional()`. That run came before a lint fix moved one test helper
+to module scope; the two changed test files were re-run after it, and all 118
+tests passed.
+
+**Re-proven after the rebases, 2026-09-16.** The branch was rebased three times
+while it waited, ending on a `main` carrying dl-51, dl-55 and dl-57, all of which
+touch the job path. Rebuilt at `e672069` and run again: the job reached
+`completed` in 6 s, the stored variant had neither an `fps` nor a `hasAudio` key,
+and the 30,570,115-byte file holds `h264` video and `aac` audio. Deleted
+afterwards, with the scratch tree checked for traces.
+
+The new cases sit at the **end** of `resolvers/test/ytdlp.test.ts` rather than
+beside the null-codec ones. Inserting them mid-file shifted the lines below and
+moved 11 citations in five already-merged gate records — repo-34, repo-39,
+dl-34, dl-37 and dl-47 — which failed the citation gate on a branch that never
+touched those records. That is repo-47's failure class. The owner chose the move
+over pinning each citation: it edits nothing outside this branch and cannot go
+stale the next time that file shifts. Measured both ways on the same base, the
+gate reports 0 failing with the move and 5 failing without it.

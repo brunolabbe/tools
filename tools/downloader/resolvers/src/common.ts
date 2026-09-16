@@ -9,18 +9,25 @@
 import type { MediaVariant } from "@downloader/contract";
 
 /**
- * Drops `undefined` entries so an object literal can be spread into a type
- * compiled with `exactOptionalPropertyTypes`, where `{ width: undefined }` is
- * not assignable to `width?: number`.
+ * Drops `undefined` and `null` entries so an object literal can be spread into a
+ * type compiled with `exactOptionalPropertyTypes`, where `{ width: undefined }`
+ * is not assignable to `width?: number`.
+ *
+ * `null` goes too because every field this builds is optional and none is
+ * nullable in the contract, so absent is the only spelling of "not known" that
+ * `mediaVariantSchema` accepts. yt-dlp writes JSON `null` as readily as it omits
+ * a key, and one `fps: null` copied through here passed the probe and then
+ * failed every job for that page at its first read back from the job store,
+ * as `INTERNAL` (dl-62).
  */
 export function optional<T extends Record<string, unknown>>(
   input: T,
-): Partial<{ [K in keyof T]: Exclude<T[K], undefined> }> {
+): Partial<{ [K in keyof T]: Exclude<T[K], undefined | null> }> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
-    if (value !== undefined) out[key] = value;
+    if (value !== undefined && value !== null) out[key] = value;
   }
-  return out as Partial<{ [K in keyof T]: Exclude<T[K], undefined> }>;
+  return out as Partial<{ [K in keyof T]: Exclude<T[K], undefined | null> }>;
 }
 
 /** Resolves a possibly-relative manifest URI. Returns the input unchanged when it cannot. */
