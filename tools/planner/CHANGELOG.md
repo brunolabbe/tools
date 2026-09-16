@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/brunolabbe/tools/compare/planner-v0.5.1...planner-v0.6.0) (2026-09-16)
+
+
+### Features
+
+* **planner:** a real model behind the seam — Anthropic, structured replies, a bounded bill (pl-39) ([#229](https://github.com/brunolabbe/tools/issues/229)) ([de3b3f8](https://github.com/brunolabbe/tools/commit/de3b3f8447ccb46cbf098e374ddb1e4699e46043))
+* **planner:** re-plan named days, apply an edit, restore and diff revisions (pl-43) ([#244](https://github.com/brunolabbe/tools/issues/244)) ([22a0452](https://github.com/brunolabbe/tools/commit/22a0452742007eebe72b10bbe26c2adb303e8d3c))
+* **planner:** record what each run spends, by token kind, and a report that prices it (pl-49) ([#242](https://github.com/brunolabbe/tools/issues/242)) ([8894b75](https://github.com/brunolabbe/tools/commit/8894b757468a8fe42f42d31531eea7e1cc3558dc))
+* **planner:** revise a plan, pick a version, and read the diff (pl-45) ([#246](https://github.com/brunolabbe/tools/issues/246)) ([9d0f245](https://github.com/brunolabbe/tools/commit/9d0f24550b86258ad7a99f02d7e776864035e506))
+* **planner:** the revision contract — operations, the re-plan run, and the diff (pl-42) ([#228](https://github.com/brunolabbe/tools/issues/228)) ([caeeb44](https://github.com/brunolabbe/tools/commit/caeeb44622340d2da3725d162e9b67c32143d2c6))
+
+
+### Fixes
+
+* **downloader:** cap job and probe slots per client, and bound the wait line (dl-51) ([#248](https://github.com/brunolabbe/tools/issues/248)) ([01d66fa](https://github.com/brunolabbe/tools/commit/01d66faedc6870cf080c9a6ef641002477bf05a3))
+* **planner:** cap and rank corridor finds before the prompt (pl-41) ([#245](https://github.com/brunolabbe/tools/issues/245)) ([5a6c9a8](https://github.com/brunolabbe/tools/commit/5a6c9a8251f135f6c3cec01e1a9a319ab5f06701))
+
 ## [0.5.1](https://github.com/brunolabbe/tools/compare/planner-v0.5.0...planner-v0.5.1) (2026-09-09)
 
 
