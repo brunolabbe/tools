@@ -18,6 +18,19 @@ export interface QueuedTask {
   jobId: string;
   /** Receives a signal that fires on cancel *and* on shutdown. */
   run: (signal: AbortSignal) => Promise<void>;
+  /**
+   * Called exactly once when this task leaves the queue, however it leaves:
+   * ran to completion (success or failure), canceled or aborted while
+   * running, canceled while still waiting, or dropped at shutdown before it
+   * ever ran.
+   *
+   * Exists for dl-51: a caller tracking per-client admission needs to release
+   * its count on every exit path, and `run`'s own promise only ever settles
+   * for the paths where the task actually ran — a job canceled or dropped
+   * while still waiting never reaches `run` at all. This is the one signal
+   * that covers every path uniformly.
+   */
+  onSettle?: () => void;
 }
 
 export interface JobQueue {
@@ -95,6 +108,10 @@ export class InProcessJobQueue implements JobQueue {
     if (index === -1) return false;
     const [removed] = this.#waiting.splice(index, 1);
     removed?.controller.abort(new AppError("JOB_CANCELED"));
+    // `run` will never be called for this entry, so its own settle path (in
+    // `#pump`, below) will never fire. This is the only place that can tell a
+    // caller it is done.
+    removed?.task.onSettle?.();
     return true;
   }
 
@@ -105,6 +122,9 @@ export class InProcessJobQueue implements JobQueue {
     while (this.#waiting.length > 0) {
       const entry = this.#waiting.pop();
       entry?.controller.abort(new AppError("JOB_CANCELED"));
+      // Same reasoning as `cancel`'s waiting branch: this entry never reaches
+      // `run`, so this is its only settle signal.
+      entry?.task.onSettle?.();
     }
     for (const entry of this.#running.values()) {
       entry.controller.abort(new AppError("JOB_CANCELED"));
@@ -126,6 +146,10 @@ export class InProcessJobQueue implements JobQueue {
         .finally(() => {
           this.#running.delete(entry.task.jobId);
           this.#settled.delete(promise);
+          // The settle signal for every task that actually ran: success,
+          // failure, cancel-while-running, timeout, or shutdown-while-running
+          // all resolve or reject this same promise.
+          entry.task.onSettle?.();
           // Only pump again once we are not closing, or a shutdown would keep
           // starting the very work it is trying to stop.
           if (!this.#closing) this.#pump();

@@ -32,6 +32,7 @@ import { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
+import { PerClientConcurrencyGate } from "./per-client-gate.ts";
 import { redactLoggedUrl, registerRequestLogging, requestIdFrom } from "./request-log.ts";
 import { buildRegistry } from "./resolvers.ts";
 import { registerEventRoutes } from "./routes/events.ts";
@@ -491,6 +492,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       }),
     },
     probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
+    jobClientGate: new PerClientConcurrencyGate(config.maxJobsPerClient),
+    probeClientGate: new PerClientConcurrencyGate(config.maxProbesPerClient),
     now,
     isShuttingDown: () => shuttingDown,
   };

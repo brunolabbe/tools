@@ -531,7 +531,14 @@ describe("a job list does not hand out capabilities", () => {
     // With the list gone the id is the whole of what stands in front of a job.
     // If this ever fails, `GET /api/jobs/:id` needs real authorisation and the
     // reasoning at the top of this block stops holding.
-    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    // dl-51's per-client cap is a different concern from this test's — every
+    // job here comes from the same simulated address and nothing waits for
+    // one to finish before the next is created, so it is disabled rather than
+    // sized around.
+    harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { maxJobsPerClient: 0 },
+    });
     const ids = new Set<string>();
     for (let index = 0; index < 5; index++) {
       // oxlint-disable-next-line no-await-in-loop

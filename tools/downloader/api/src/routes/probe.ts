@@ -16,6 +16,7 @@
 
 import { AppError, probeRequestSchema, ROUTES } from "@downloader/contract";
 import type { ProbeResponse, ProbeResult, ResolveOptions } from "@downloader/contract";
+import { clientKey } from "@webtools/core/rate-limit";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
@@ -99,73 +100,95 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       if (narrating && probeId !== undefined) context.probeStages.done(probeId);
     };
 
-    // The per-IP bucket above bounds one caller. This bounds the whole server,
-    // which is the only thing that helps when the requests arrive from a
-    // thousand addresses that have each spent nothing.
-    const release = context.probeGate.tryAcquire();
-    if (release === null) {
+    // Bounds one client's own share of the server-wide gate below — a client
+    // inside its per-minute bucket but still holding a prior slow probe
+    // otherwise gets to start another (dl-51). Same key `rateLimits.probe`
+    // buckets on, so `TRUST_PROXY` means the same thing for both.
+    const clientReleaseProbe = context.probeClientGate.tryAcquire(clientKey(request.ip));
+    if (clientReleaseProbe === null) {
       finishNarration();
-      context.logger.warn("probe refused: concurrency gate full", {
-        limit: context.probeGate.limit,
+      context.logger.warn("probe refused: per-client cap reached", {
+        limit: context.probeClientGate.limit,
       });
       reply.header("Retry-After", String(GATE_RETRY_AFTER_SEC));
       throw new AppError(
         "RATE_LIMITED",
-        "The server is analysing as many pages as it can at once. Try again shortly.",
-        { details: { scope: "probe-gate", retryAfterSec: GATE_RETRY_AFTER_SEC } },
+        "You already have as many analyses running as this server allows per client. Try again shortly.",
+        { details: { scope: "probe-client-cap", retryAfterSec: GATE_RETRY_AFTER_SEC } },
       );
     }
 
     try {
-      let probe: ProbeResult;
-      try {
-        // The resolvers echo the proxy they were given; that is this process's own
-        // loopback port and no client's business.
-        probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
-      } finally {
-        release();
+      // The per-IP bucket above bounds one caller. This bounds the whole server,
+      // which is the only thing that helps when the requests arrive from a
+      // thousand addresses that have each spent nothing.
+      const release = context.probeGate.tryAcquire();
+      if (release === null) {
+        finishNarration();
+        context.logger.warn("probe refused: concurrency gate full", {
+          limit: context.probeGate.limit,
+        });
+        reply.header("Retry-After", String(GATE_RETRY_AFTER_SEC));
+        throw new AppError(
+          "RATE_LIMITED",
+          "The server is analysing as many pages as it can at once. Try again shortly.",
+          { details: { scope: "probe-gate", retryAfterSec: GATE_RETRY_AFTER_SEC } },
+        );
       }
 
-      // Resolver output is attacker-influenced. Vetting it here means a client
-      // never even learns that an internal address answered. `mustPass` only —
-      // `bestEffort` is the preview image, whose refusal must not cost the user a
-      // downloadable video, so it is vetted inside `captureThumbnail` where the
-      // refusal is caught. See `urlsInProbeResult`.
-      await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
+      try {
+        let probe: ProbeResult;
+        try {
+          // The resolvers echo the proxy they were given; that is this process's own
+          // loopback port and no client's business.
+          probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
+        } finally {
+          release();
+        }
 
-      // Before the cache write and before the response, so both carry our path
-      // and neither carries the origin URL. Eager rather than on demand because
-      // `probe.requestContext.headers` is the only credential that will ever
-      // fetch this image, and it exists here and nowhere later.
-      const captured = await captureThumbnail({
-        probe,
-        guard: context.guard,
-        fetchImpl: context.guardedFetch,
-        store: context.thumbnails,
-        logger: context.logger,
-      });
-      // A bare probe has no job and so no `out/` directory to keep a copy
-      // beside; the in-memory store is the whole of its retention. Only the
-      // job pipeline persists (dl-44).
-      const thumbnailPath = captured?.path ?? null;
-      const clientProbe = withThumbnailPath(probe, thumbnailPath);
+        // Resolver output is attacker-influenced. Vetting it here means a client
+        // never even learns that an internal address answered. `mustPass` only —
+        // `bestEffort` is the preview image, whose refusal must not cost the user a
+        // downloadable video, so it is vetted inside `captureThumbnail` where the
+        // refusal is caught. See `urlsInProbeResult`.
+        await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
 
-      // The **rewritten** probe is what is cached, so the double-click that this
-      // cache exists for gets the same token rather than a second fetch. That is
-      // why `THUMBNAIL_TTL_MS` is required to exceed `PROBE_CACHE_TTL_CEILING_MS`.
-      context.probeCache.set(cacheKey, clientProbe);
-      context.logger.info("probe complete", {
-        resolver: probe.resolver,
-        variants: probe.variants.length,
-        drm: probe.drm.protected,
-        preview: thumbnailPath !== null,
-        requestContext: probe.requestContext,
-      });
+        // Before the cache write and before the response, so both carry our path
+        // and neither carries the origin URL. Eager rather than on demand because
+        // `probe.requestContext.headers` is the only credential that will ever
+        // fetch this image, and it exists here and nowhere later.
+        const captured = await captureThumbnail({
+          probe,
+          guard: context.guard,
+          fetchImpl: context.guardedFetch,
+          store: context.thumbnails,
+          logger: context.logger,
+        });
+        // A bare probe has no job and so no `out/` directory to keep a copy
+        // beside; the in-memory store is the whole of its retention. Only the
+        // job pipeline persists (dl-44).
+        const thumbnailPath = captured?.path ?? null;
+        const clientProbe = withThumbnailPath(probe, thumbnailPath);
 
-      const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
-      return await reply.send(body);
+        // The **rewritten** probe is what is cached, so the double-click that this
+        // cache exists for gets the same token rather than a second fetch. That is
+        // why `THUMBNAIL_TTL_MS` is required to exceed `PROBE_CACHE_TTL_CEILING_MS`.
+        context.probeCache.set(cacheKey, clientProbe);
+        context.logger.info("probe complete", {
+          resolver: probe.resolver,
+          variants: probe.variants.length,
+          drm: probe.drm.protected,
+          preview: thumbnailPath !== null,
+          requestContext: probe.requestContext,
+        });
+
+        const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
+        return await reply.send(body);
+      } finally {
+        finishNarration();
+      }
     } finally {
-      finishNarration();
+      clientReleaseProbe();
     }
   });
 }

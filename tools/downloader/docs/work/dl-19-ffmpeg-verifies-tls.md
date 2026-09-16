@@ -151,7 +151,7 @@ layer that nothing pins.
    verbatim. Not fixed on this branch: `main` verified nothing at all, so this
    narrows a pre-existing hole rather than creating one, and the owner's decision
    was to land it as a partial.
-2. **Flipping the default at `tools/downloader/api/src/config.ts:430 "overrides.ffmpegAllowUnverifiedTls ??"` so a stock deployment ships
+2. **Flipping the default at `tools/downloader/api/src/config.ts@95c6403:430 "overrides.ffmpegAllowUnverifiedTls ??"` so a stock deployment ships
    with verification off survived** — all 651 tests stayed green under exactly
    the regression this ticket exists to prevent. — **Fixed here**:
    `api/test/queue-and-shutdown.test.ts:100 "a stock deployment verifies certificates, and both TLS settings read env and override"`, which also covers reading override
@@ -177,7 +177,7 @@ layer that nothing pins.
 5. **`FFMPEG_CA_FILE` is not validated at boot.** A typo'd path fails every
    download as `TLS_VERIFICATION_FAILED` and blames the site, where `PROXY_URL`
    is refused at boot for exactly this class of mistake
-   (`tools/downloader/api/src/config.ts:332 "function proxyUrl("`). Also, **`-ca_file` replaces the system trust store
+   (`tools/downloader/api/src/config.ts@95c6403:332 "function proxyUrl("`). Also, **`-ca_file` replaces the system trust store
    rather than adding to it** — the code comment said so, `.env.example` did not.
    — **Half fixed**: both facts are now documented in `.env.example`, including
    that a corporate root means public CAs stop being trusted. The boot check is

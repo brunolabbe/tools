@@ -167,7 +167,7 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   every ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent
   from that function's `DROPPED_HEADERS`
   (`engine/src/ffmpeg/headers.ts:28-42 "const DROPPED_HEADERS"`); and `ffmpegTlsIntercept` defaults to
-  `true` (`downloader/api/src/config.ts:431 "ffmpegTlsIntercept: overrides.ffmpegTlsIntercept"`) — so a captured cookie already crosses this
+  `true` (`downloader/api/src/config.ts@95c6403:431 "ffmpegTlsIntercept: overrides.ffmpegTlsIntercept"`) — so a captured cookie already crosses this
   process in plaintext through ffmpeg's existing terminating proxy, by default,
   today. Both reviewer and builder independently verified all four citations.
   The conclusion (Chromium's exposure is larger) stands on **breadth of

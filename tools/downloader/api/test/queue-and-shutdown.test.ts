@@ -281,6 +281,172 @@ describe("InProcessJobQueue", () => {
     await queue.close();
     expect(() => queue.enqueue({ jobId: "late", run: async () => undefined })).toThrow(AppError);
   });
+
+  // dl-51: a caller tracking per-client admission needs one signal that fires
+  // on every way a task can leave the queue, because `run`'s own promise only
+  // ever settles for the paths where the task actually started.
+  describe("onSettle", () => {
+    test("fires once a task that ran to completion has finished", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1 });
+      let settles = 0;
+      const done = new Promise<void>((resolve) => {
+        queue.enqueue({
+          jobId: "job",
+          run: async () => resolve(),
+          onSettle: () => {
+            settles++;
+          },
+        });
+      });
+      await done;
+      // `onSettle` is called from the queue's own `.finally`, which can run
+      // one microtask after the task's own promise resolves — wait for it
+      // rather than asserting synchronously against a race.
+      await waitFor(
+        () => settles,
+        (count) => count === 1,
+      );
+      await queue.close();
+    });
+
+    test("fires once a failed task has finished", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1, onTaskError: () => undefined });
+      let settles = 0;
+      const failed = new Promise<void>((resolve) => {
+        queue.enqueue({
+          jobId: "job",
+          run: async () => {
+            throw new Error("boom");
+          },
+          onSettle: () => {
+            settles++;
+            resolve();
+          },
+        });
+      });
+      await failed;
+      expect(settles).toBe(1);
+      await queue.close();
+    });
+
+    test("fires exactly once for a task canceled while it was still waiting, which never runs at all", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1 });
+      const ran: string[] = [];
+      const blocker = new Promise<void>((resolve) => setTimeout(resolve, 20));
+      let settles = 0;
+
+      queue.enqueue({
+        jobId: "first",
+        run: async () => {
+          ran.push("first");
+          await blocker;
+        },
+      });
+      queue.enqueue({
+        jobId: "second",
+        run: async () => {
+          ran.push("second");
+        },
+        onSettle: () => {
+          settles++;
+        },
+      });
+
+      expect(queue.cancel("second")).toBe(true);
+      // Synchronous, unlike the running-task case: `cancel` calls `onSettle`
+      // itself before returning, because a waiting task never reaches `run`.
+      // A count, not a boolean — a duplicate call here would leave a caller's
+      // own release idempotency as the only thing masking it.
+      expect(settles).toBe(1);
+      await blocker;
+      await queue.close();
+      // Already removed from the queue by `cancel`, so `close` must not call
+      // it again.
+      expect(settles).toBe(1);
+      expect(ran).toEqual(["first"]);
+    });
+
+    test("fires for a task canceled while running", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1 });
+      let started: (() => void) | undefined;
+      const hasStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      let settles = 0;
+      const finished = new Promise<void>((resolve) => {
+        queue.enqueue({
+          jobId: "job",
+          run: async (signal) => {
+            started?.();
+            await new Promise<void>((settle) => {
+              signal.addEventListener("abort", () => settle());
+            });
+          },
+          onSettle: () => {
+            settles++;
+            resolve();
+          },
+        });
+      });
+
+      await hasStarted;
+      expect(queue.cancel("job")).toBe(true);
+      await finished;
+      expect(settles).toBe(1);
+      await queue.close();
+    });
+
+    test("fires exactly once for every waiting task dropped at shutdown", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1 });
+      const blocker = new Promise<void>((resolve) => setTimeout(resolve, 20));
+      let settles = 0;
+
+      queue.enqueue({
+        jobId: "first",
+        run: async () => {
+          await blocker;
+        },
+      });
+      queue.enqueue({
+        jobId: "second",
+        run: async () => undefined,
+        onSettle: () => {
+          settles++;
+        },
+      });
+
+      await queue.close();
+      // A count, not a boolean — a duplicate call at the drop site would be
+      // indistinguishable from a correct one otherwise.
+      expect(settles).toBe(1);
+    });
+
+    test("fires for a task still running at shutdown", async () => {
+      const queue = new InProcessJobQueue({ concurrency: 1 });
+      let started: (() => void) | undefined;
+      const hasStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      let settled = false;
+
+      queue.enqueue({
+        jobId: "job",
+        run: async (signal) => {
+          started?.();
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve());
+          });
+        },
+        onSettle: () => {
+          settled = true;
+        },
+      });
+
+      await hasStarted;
+      await queue.close();
+      expect(settled).toBe(true);
+    });
+  });
 });
 
 describe("graceful shutdown", () => {

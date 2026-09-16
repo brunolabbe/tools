@@ -20,9 +20,13 @@
 import { randomUUID } from "node:crypto";
 import { AppError, createJobRequestSchema, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse } from "@downloader/contract";
+import { clientKey } from "@webtools/core/rate-limit";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
+
+/** What we tell a client to wait when a cap, rather than the per-minute bucket, refused. */
+const CAP_RETRY_AFTER_SEC = 30;
 
 export function registerJobRoutes(app: FastifyInstance, context: AppContext): void {
   // Only on creation. Reading and cancelling are cheap, and rate limiting a
@@ -52,19 +56,73 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     // between and the row may sit in the queue for a while.
     await context.guard.assertAllowed(parsed.data.url);
 
-    const options = parsed.data.options ?? {};
-    const job = context.store.create({
-      id: randomUUID(),
-      sourceUrl: parsed.data.url,
-      options,
-      variantId: options.variantId ?? null,
-      createdAt: context.now().toISOString(),
-    });
+    // Read-only, so it costs nothing to check before touching the per-client
+    // gate's state: a flood spread across many client keys, each comfortably
+    // under `maxJobsPerClient`, could otherwise still fill the wait line
+    // without bound (dl-51).
+    if (context.config.maxQueuedJobs > 0 && context.queue.waiting >= context.config.maxQueuedJobs) {
+      reply.header("Retry-After", String(CAP_RETRY_AFTER_SEC));
+      context.logger.warn("job refused: the wait line is full", {
+        waiting: context.queue.waiting,
+        limit: context.config.maxQueuedJobs,
+      });
+      throw new AppError(
+        "RATE_LIMITED",
+        "The server is already working through as many jobs as it can hold. Try again shortly.",
+        { details: { scope: "jobs-queue-full", retryAfterSec: CAP_RETRY_AFTER_SEC } },
+      );
+    }
 
-    context.queue.enqueue({
-      jobId: job.id,
-      run: (signal) => context.orchestrator.run(job.id, signal, { requestId: request.id }),
-    });
+    // The same key `rateLimits.jobs` buckets on, so `TRUST_PROXY` means the
+    // same thing for both. Counts running and waiting together — see
+    // `maxJobsPerClient` — so a client cannot dodge the cap by getting there
+    // first and filling the wait line instead of the running slots.
+    const key = clientKey(request.ip);
+    const releaseJobSlot = context.jobClientGate.tryAcquire(key);
+    if (releaseJobSlot === null) {
+      reply.header("Retry-After", String(CAP_RETRY_AFTER_SEC));
+      context.logger.warn("job refused: per-client cap reached", {
+        key,
+        limit: context.jobClientGate.limit,
+      });
+      throw new AppError(
+        "RATE_LIMITED",
+        "You already have as many jobs running or waiting as this server allows per client. Try again once one finishes.",
+        { details: { scope: "jobs-client-cap", retryAfterSec: CAP_RETRY_AFTER_SEC } },
+      );
+    }
+
+    const options = parsed.data.options ?? {};
+    // From here until `enqueue` hands `onSettle` its own responsibility for
+    // the slot, this route holds it itself: `store.create` can throw
+    // (`DISK_FULL`, say) and `enqueue` throws once shutdown has begun, which
+    // is reachable across the `assertAllowed` suspension above. Without this,
+    // either throw would leak the slot permanently — worse than no cap at
+    // all, the same failure step 5 warns against for every other exit path.
+    let job: Job;
+    try {
+      job = context.store.create({
+        id: randomUUID(),
+        sourceUrl: parsed.data.url,
+        options,
+        variantId: options.variantId ?? null,
+        createdAt: context.now().toISOString(),
+      });
+
+      context.queue.enqueue({
+        jobId: job.id,
+        run: (signal) => context.orchestrator.run(job.id, signal, { requestId: request.id }),
+        // Fires exactly once whenever this job leaves the queue — success,
+        // failure, cancel while running or waiting, timeout, or shutdown —
+        // which is what lets this release the slot on every exit path
+        // (dl-51). Ownership of the slot passes to it only once `enqueue`
+        // itself has returned without throwing.
+        onSettle: releaseJobSlot,
+      });
+    } catch (error: unknown) {
+      releaseJobSlot();
+      throw error;
+    }
 
     request.logger.info("job accepted", { jobId: job.id, variantId: job.variantId });
     const body: JobResponse = { job };
