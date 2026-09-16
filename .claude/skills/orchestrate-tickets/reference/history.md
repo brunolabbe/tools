@@ -3261,23 +3261,38 @@ numbering above:**
 Item 7's outcome, once the remedy it offered unmeasured was tried for real,
 is recorded in place above rather than repeated here.
 
-**Agent and token figures, corrected.** The row above lists 11 agents and a
-verified total of 3,446,956 subagent tokens — the sum of its own eleven
-per-agent figures, re-added here rather than trusted. Six more agents ran
-afterward:
+**Agent and token figures, reconciled.** The row above's 3,446,956 was
+correct for its own eleven agents at the time — the sum of its own
+per-agent figures, re-added here rather than trusted. Two adjustments carry
+it forward rather than simply adding to it:
+
+- **`102,914` — the pin-repair agent's first report, superseded rather than
+  added to.** `subagent_tokens` are cumulative per agent (see the schema
+  section, above), so a later report replaces an earlier one rather than
+  joining it; the pin-repair agent's own last report, `265,947`, is the row
+  below and belongs in the total once, not twice.
+- **`197,180` — the agent that wrote the original row itself, never counted
+  in its own eleven** because an agent cannot report its own total inside
+  the document it is writing. It belongs in the total from here.
+
+Five more agents ran afterward, distinct from the eleven above:
 
 | Agent | Model | Task | Tokens |
 | --- | --- | --- | --- |
-| builder | sonnet | pin repairs on #255, #248, #251 | 265,947 |
+| builder | sonnet | pin repairs on #255, #248, #251 (supersedes the `102,914` above) | 265,947 |
 | builder | sonnet | dl-63 measurement and filing (#256) | 116,035 |
 | builder | haiku | rebased the history row (#253) | 61,654 |
 | builder | haiku | merged main into dl-55 (#251) | 37,902 |
 | builder | haiku | merged main into dl-63 (#256) | 30,224 |
 | builder | sonnet | dl-57 rebase and 41-citation repair (#250) | 187,258 |
 
-That makes **17** agents. The verified base (3,446,956) plus these six rows
-sums to **4,145,976**; the account handed to this row instead states the new
-total as 4,240,242, which does not reconcile against that arithmetic from
-any stated base — not reconciled here. Both readings are still missing two
-gate agents' final rounds, per the original row's own caveat, so either is a
-floor rather than a count.
+That makes **17** distinct agents: the original eleven, five new builders in
+the table above, and the row's own author. The reconciled total is
+**4,240,242**: `3,446,956 − 102,914 (superseded) + 699,020 (the six rows
+above, which already carry the supersession's new figure) + 197,180 (the
+row's own author) = 4,240,242` — equivalently, the sum of all seventeen
+agents at their last observed figure. Both this total and every other token
+figure on this page **exclude cache reads**, which dwarf it and are
+effectively the whole bill (see the schema section, above); and it is still
+missing two gate agents' unreported final rounds, per the original row's own
+caveat, so `4,240,242` is a floor rather than a count.
