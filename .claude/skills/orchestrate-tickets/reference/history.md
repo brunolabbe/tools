@@ -3003,3 +3003,190 @@ shape.
   running the report in the image. CI's `docker` job builds that image and
   passed at `20fd119`, but it does not run the report, so the line stays
   `unproven (gate)`.
+## Twenty-first session — 2026-09-14/15
+
+**Written by Claude Sonnet 5, dispatched as a records-only builder for this
+step, transcribing the orchestrating session's own account of a batch it ran,
+with no gate on this branch — scoped to this file alone.** Four pull requests
+were read with `gh pr view <n> --json …`, never by eye: #248 (`dl-51`), #250
+(`dl-57`, a draft stacked on #248), #251 (`dl-55`), and #252 (`dl-60`). Each
+ticket's committed `## Review` and Log were read with `git show
+<branch>:<ticket>` after fetching all four branches locally. `npm run status
+-- --ready` was re-run on this branch's own base (`origin/main` at `95c6403`).
+
+**Independently reproduced here, not merely relayed:**
+
+- The `records.md` pinning-rule failure (item 1): a fresh clone, dl-51's
+  branch squashed onto a local copy of `main`, the branch ref deleted, `git gc
+  --prune=now`, then `citations-gate.mjs --against origin/main`. Exit 1: 16
+  unresolvable, `rev 04c2fb7 not in this repository`. Tagging that commit
+  before deletion and pruning instead makes the same run exit 0 (74 enforced,
+  0 failing).
+- That dl-57's phase-1 gate pins, `@790c17b` and `@7b0cdcb`, are not ancestors
+  of the branch's current tip (`git merge-base --is-ancestor`, both return
+  false), consistent with the phase-2 rebase having orphaned them. Whether
+  CI's `check` job fails on that branch with the same message is the
+  orchestrator's account and is not re-run here.
+- That `ci.yml`'s `check` job checks out with `fetch-depth: 0` and runs `node
+  scripts/citations-gate.mjs --against` at line 190.
+- That `builder.md` and `ticket-reviewer.md` never mention
+  `citations-gate.mjs` (`grep -rn` across `.claude/agents/` and
+  `.claude/skills/` finds nothing), while `review-ticket/SKILL.md` names it
+  twice.
+- The builder self-reports the gates refuted, quoted from the committed
+  ticket text: dl-55's "no evaluation context" claim, and dl-60's "each call
+  site has its own test" claim and its own retracted "would not load" line.
+- The Haiku reword commit, `9dfe385` on `dl-57-outcome-record`.
+- The dl-51 × dl-57 file overlap: diffing dl-57's own commits (over dl-51's
+  tip, which it carries as an ancestor after the rebase) against dl-51's own
+  diff over `main` finds **9** shared paths here, not the reported 11 — see
+  "What this row's verification added" below.
+- dl-60's gate sequence: the committed ticket carries **two** rounds
+  (CONCERNS at `f43135f`, PASS at `faebe96`), not the three below — also
+  unreconciled, see the same section.
+
+**Orchestrator-reported, not verified here:** the agent and dispatch counts,
+every wake count, the attribution of orchestrator-fault rounds, the Sonnet
+weekly usage-limit episode and its timestamps, the pin-repair dispatch and
+its failure on all three branches, every per-agent token figure (an agent
+cannot see its own total, and this dispatch was not present for any of the
+others'), and the reviewer's self-report of lacking `ListAgents` (item 8).
+Whether the repository has `deleteBranchOnMerge: true` is also
+orchestrator-reported: `gh api` is denied to this dispatch, so the repository
+setting itself was not read here, only its consequence — the pruning
+behaviour the simulation reproduces regardless of which setting caused a
+branch ref to go away.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from ready (or filed) to a gated PR: `dl-51` → **#248** (`2e8aa7b`, 4 commits, `MERGEABLE`/`CLEAN`), `dl-55` → **#251** (`7df48f6`, 5 commits, `MERGEABLE`/`CLEAN`), `dl-57` → **#250** (`9dfe385`, 7 commits over #248, `MERGEABLE`/`UNSTABLE`, **draft**, stacked on #248), `dl-60` → **#252** (`56f7238`, 5 commits, `MERGEABLE`/`CLEAN`), a security fix filed and built inside this session rather than taken from intake. All four `status: done` on their branch tips (`git show <branch>:<ticket>`). Two further tickets were filed by builders mid-build rather than at intake: **dl-59** (a defect, with reproduction, on #248's branch, `status: ready`, not built) and **dl-61** (the shadow-DOM regression, `depends_on: [dl-55]`, on #251's branch, `status: ready`, not built). A mechanical builder made one further commit on #250, a reword of a dropped Log note, changing no finding, verdict or citation. `npm run status -- --ready` on this branch's base lists dl-51, dl-55 and dl-57 as ready; dl-60 carries no ticket file on `main` at all and no `difficulty` field on its own branch |
+| `agents` / `dispatches` | **11** agents, orchestrator-reported: 1 seam-mapper; 6 builders (dl-51, dl-55 and dl-57 on Sonnet; dl-60 on Opus; a Haiku one-line reword; a Sonnet pin-repair that stopped correctly, without committing a wrong remedy); 4 ticket-reviewers (dl-51, dl-55 and dl-57 on Opus; dl-60 on Sonnet — confirmed in #252's body, "Builder: Claude Opus 5. Gate: Claude Sonnet"). **11** spawns. Wakes were **not tallied** |
+| `builder rounds` | **Not tallied exactly.** At least **2** were the orchestrator's own fault: the dl-51 × dl-57 seam miss, which forced a stacked rebase of dl-57 and a separate phase-2 gate; and the pin-repair dispatch, whose remedy (re-resolve citations at the tip) the orchestrator recommended without measuring it first, and which failed on all 3 branches it was tried on. A Sonnet weekly usage limit also killed the dl-57 builder mid-round, orchestrator-reported at 01:40 UTC; it resumed after the 02:00 reset. dl-57's own committed Log separately records at least 3 gate-driven rounds (the FAIL fix, the CONCERNS fix, the phase-2 rebase) not attributed to orchestrator fault |
+| `gates` | Verdict sequences, read from each ticket's committed `## Review`: **dl-51** CONCERNS (`04c2fb7`) → PASS (`d331300`). **dl-55** FAIL (`fc8be9e`) → CONCERNS (`16084d2`) → CONCERNS (`d8aced1`), then shipped under conditional authority with no committed PASS round. **dl-57** FAIL (`790c17b`) → CONCERNS (`7b0cdcb`, three lows fixed after) → CONCERNS (`c64defb`, the phase-2 rebase gate) → PASS (`2c26f18`). **dl-60** CONCERNS (`f43135f`) → PASS (`faebe96`) — **two rounds as committed**, where the account handed to this row states three; not reconciled here. Every round short of the three named PASSes returned findings |
+| `wrong findings` | **0 gate findings refuted.** Builder self-reports refuted by a gate, both confirmed in committed ticket text: dl-55's claim that a cross-origin frame "has no evaluation context" (round 2 measured it false directly, against two real cross-origin servers); dl-60's claim that "each call site has its own test" (gate 1's med finding: `jobs/orchestrator.ts:220` had none, closed in `faebe96`). A third self-correction, not a finding that reached a commit wrong: an earlier draft of dl-60's own Log claimed its round-2 spec "would not load" on `main`; the gate disproved it by running the spec (22 failed, 6 passed of 28), and the Log was corrected before committing. Separately, one gate wrote a self-contradictory sentence, orchestrator-reported and in no committed record: a `TypeError` "counted as 1 of the 6 passes — actually a failure." The orchestrator relayed the wrong half; the builder caught it before any commit |
+| `subagent tokens` | **3,446,956** in total, last observed per agent: seam-mapper 98,673 · dl-51 builder 486,017 · dl-57 builder 784,264 · dl-55 builder 586,523 · dl-60 builder 282,531 · Haiku reword 70,665 · pin-repair 102,914 · dl-51 gate 220,718 · dl-55 gate 196,927 · dl-57 gate 287,553 · dl-60 gate 330,171. Split: builders 2,312,914 (67.1%) · gate 1,035,369 (30.0%) · intake 98,673 (2.9%). **Caveats, orchestrator-reported:** the dl-55 gate's figure was reported twice, non-monotonically (202,260 then 196,927), and its round-3 total was never reported; the dl-57 gate's final rounds ended in `SendMessage` and were not reported. The total above undercounts by an unknown amount |
+| `cost` | **≈ $62.73** at the page's 2026-09-02 rate of $0.0182/1k — an arithmetic conversion of the token total above, not billed. That rate is not re-measured here and is now over a week stale |
+
+**Model pairing.** dl-51, dl-55 and dl-57 each carry `difficulty: standard` in
+their own frontmatter, and each PR body names its builder as Sonnet and its
+gate as Opus (#248: "Builder: Claude Sonnet 5. Gate: Claude Opus 5"). dl-60
+carries no `difficulty` field — an emergent, same-session filing rather than
+an intake ticket — and #252's body names Opus as builder, Sonnet as gate.
+
+### What the skill got wrong
+
+Eight items, from the orchestrator's account. Items 1–3 and the self-report
+parts of "wrong findings" above are checked here against the pages and
+tickets they name; items 4, 5, 6 and 8 are orchestrator-reported and not
+independently checked; item 7 is checked against item 1's simulation.
+
+1. **`reference/records.md`'s pinning rule is measured false under this
+   repo's settings.** It says a gate record
+   (`.claude/skills/orchestrate-tickets/reference/records.md@95c6403:135 "A gate record pins to the sha it reviewed"`)
+   stays
+   (`.claude/skills/orchestrate-tickets/reference/records.md@95c6403:137 "reachable afterwards through the ticket's pull request"`).
+   Whether this repo deletes a branch on merge is orchestrator-reported (`gh
+   api` is denied here); what is independently confirmed is CI's `check` job
+   checking out with `fetch-depth: 0`
+   (`.github/workflows/ci.yml@95c6403:98 "cheaper of the two ways to give the gate a memory"`),
+   which fetches branches and tags, never `refs/pull/*`.
+   - **The simulation, reproduced here:** a fresh clone, dl-51's branch
+     squashed onto a local `main`, its branch ref deleted, `git gc
+     --prune=now`, then `citations-gate.mjs --against origin/main`. Exit 1:
+     16 unresolvable, `rev 04c2fb7 not in this repository` — `04c2fb7` is
+     dl-51's own gate-1 fix commit, which the committed record pins 16
+     citations to.
+   - **Already live on #250:** its pre-merge rebase orphaned the phase-1
+     gate's `@790c17b` and `@7b0cdcb` pins — confirmed here, both fail
+     `git merge-base --is-ancestor` against the branch's current tip. That
+     CI's `check` job fails on that branch with the same message is the
+     orchestrator's account, not re-run here.
+   - **Re-resolving pins at the tip is not a remedy:** the pinned citations
+     quote code that later gate rounds rewrote (orchestrator-reported,
+     matching item 7 below).
+   - **A tag on the reviewed commit is a remedy:** the same simulation, with
+     a tag placed on `04c2fb7` before deletion and pruning, exits 0 (74
+     enforced, 0 failing) — reproduced here.
+   - **The owner chose to merge and repair on `main` afterwards**, and to
+     record the defect here rather than file a ticket (orchestrator-reported).
+   - **Contrast, orchestrator-reported and not checked here:** the peer
+     session's gates name reviewed shas only in prose headers, never as
+     `@sha:` pins, and none of its six PRs is exposed to this failure mode.
+2. **The seam map missed dl-51 × dl-57.** As finished, diffing dl-57's own
+   commits (over dl-51's tip, which it carries as an ancestor after the
+   rebase) against dl-51's own diff over `main` finds **9** shared paths
+   here — `.env.example`, `config.ts`, `routes/probe.ts`, `server.ts`,
+   `01-ARCHITECTURE.md`, and four ticket records — not the reported 11; the
+   method behind that count is not stated in the account handed to this row.
+   dl-57's own committed Log records the real cost of the rebase itself: one
+   structural conflict in `routes/probe.ts` (dl-51 wraps the handler body in
+   an outer `try`/`finally`; dl-57 had restructured the same region into a
+   `try`/`catch`/`finally` dl-51's tree never had) and two more in citation
+   pins shared with the `dl-32` and `dl-46` records, resolved by taking the
+   union of both branches' pins. A peer session's seam-mapper had flagged the
+   refusal-classification seam first (orchestrator-reported, not checked
+   here).
+3. **`builder.md` never mentions `scripts/citations-gate.mjs`,** which CI's
+   `check` job runs
+   (`.github/workflows/ci.yml@95c6403:190 "node scripts/citations-gate.mjs --against"`).
+   Confirmed absent across `.claude/agents/` and `.claude/skills/` apart from
+   `review-ticket/SKILL.md`, which does name it
+   (`.claude/skills/review-ticket/SKILL.md@95c6403:213 "job over every"`
+   and
+   `.claude/skills/review-ticket/SKILL.md@95c6403:403 "one part of a ticket CI checks"`)
+   — but nothing tells a *builder* to run it before pushing. Builders
+   learned of it mid-batch from a peer session's warning
+   (orchestrator-reported).
+4. **No procedure for a vulnerability a gate finds in a public repo.** dl-60
+   is exactly that case — a live SSRF bypass, per #252's body, "live on the
+   deployed downloader." The improvised practice, orchestrator-reported:
+   - keep it out of every committed record, using a neutral line;
+   - build the fix locally, gated from the shared object store without a
+     push;
+   - push only on the owner's word;
+   - keep related weaknesses out until the fix merges.
+
+   This row follows the same instruction it was given for the same reason:
+   it names only the IPv6 spellings #252's own body already states publicly
+   (mapped, SIIT, compatible, well-known NAT64, Teredo, 6to4, local-use
+   NAT64) and no others.
+5. **No guidance on model usage limits.** A weekly limit killed a builder
+   mid-round with uncommitted work (orchestrator-reported: the dl-57
+   builder, 01:40 UTC, resumed after the 02:00 reset). The work survived
+   only because the worktree was held open rather than reclaimed on
+   completion.
+6. **The resume-versus-fresh cost is unguided.** Resuming the dl-57 builder
+   — cumulatively 784,264 tokens by this session's own figures — for a
+   one-line Log reword would have reloaded that whole context; a fresh Haiku
+   builder did the same edit for 70,665, about 9% of it. Both totals are the
+   orchestrator's account; the artifact the cheaper path produced, `9dfe385`,
+   is confirmed here and changes exactly the one Log line its own message
+   describes.
+7. **The orchestrator offered a remedy it had not measured.** Re-resolve-at-
+   tip failed on its premise: the pinned citations quote code that later
+   gate rounds rewrote, so re-resolving against the tip repoints a citation
+   at text the reviewed commit never had. Running `citations.mjs` on an
+   unpinned copy — what the pin-repair builder did, per the orchestrator's
+   account — would have shown the failure before it was recommended. Its
+   later option text was also wrong: it said "only prose" would remain once
+   the affected branches merged, though the reviewed commits still exist,
+   fetchable, on every branch checked here, so tagging them remains
+   possible — item 1's simulation depends on exactly that.
+8. **A reviewer reported lacking `ListAgents`,** which its frontmatter
+   grants (orchestrator-reported). This is a self-report; this dispatch has
+   no channel to that agent's transcript and does not check it.
+
+### What this row's verification added
+
+- **dl-60's committed gate history carries two rounds, not three.** Its
+  `## Review` shows CONCERNS at `f43135f` and PASS at `faebe96` only; no
+  third verdict is committed anywhere in the ticket. The account handed to
+  this row states three. Neither side settles which is right here — a third
+  round could have happened and gone unrecorded, or the account over-counts.
+- **The dl-51 × dl-57 file-overlap count does not reproduce at 11.** The
+  method available to this dispatch — diffing dl-57's own commits against
+  dl-51's, since dl-57 carries dl-51 as an ancestor after the rebase — finds
+  9 shared paths, including the three the account names by name
+  (`routes/probe.ts`, `config.ts`, `server.ts`). A different method, applied
+  before the rebase collapsed the two branches' histories together, may be
+  what produced 11.
