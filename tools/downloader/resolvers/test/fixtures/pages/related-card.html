@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Related-card trap</title>
+  </head>
+  <body>
+    <h1>Related-card trap</h1>
+    <!-- A related-video card, first in the DOM and LARGER than the real
+         player — so only excluding it by its link ancestor, not by picking
+         the larger candidate, chooses the player correctly (dl-55). No
+         `src`: `PLAY_SCRIPT` calling `play()` on it must never produce a
+         request, and there is nothing here for it to need. -->
+    <a id="card-link" href="/related-card-target.html">
+      <video id="card" width="800" height="450" muted playsinline></video>
+    </a>
+
+    <!-- The real player: smaller than the card, on purpose, and started only
+         by a `click` DOM event — never by `PLAY_SCRIPT`'s blanket `play()`
+         call, which dispatches no `click` (dl-55). -->
+    <video id="player" width="480" height="270" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("player").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

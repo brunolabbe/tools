@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: script redirect after load</title>
+  </head>
+  <body>
+    <h1>Guard: script redirect after load</h1>
+    <!-- An analytics-style redirect, ~200 ms after `load` — well after
+         `domcontentloaded`, and even after `load` itself, so a landing URL
+         read at either fires on this page and is gone by the time this tier
+         has done anything a person would call a click (dl-55, decision 2). -->
+    <script>
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          location.replace("/guard-script-redirect-target.html");
+        }, 200);
+      });
+    </script>
+  </body>
+</html>

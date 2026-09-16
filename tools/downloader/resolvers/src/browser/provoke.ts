@@ -145,6 +145,97 @@ const UNMARK_CLOSE_SCRIPT = `(() => {
   for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(CLOSE_MARK)});
 })()`;
 
+/** Marks the element `CHOOSE_VIDEO_SCRIPT` chose, so the click goes through the locator API. */
+const VIDEO_MARK = "data-downloader-video";
+
+/**
+ * Scans a list of `<video>` elements and returns the index of the one a
+ * person would call "the player": visible, no `a[href]` or `[role='link']`
+ * ancestor, and — among those — the largest rendered area. `-1` when none
+ * qualify.
+ *
+ * **A `<video>` inside a link is a card, never the player.** dl-55's page put
+ * a muted hover-preview `<video>` inside a related-video link, first in
+ * document order and ahead of the real player; a first-match chooser picked
+ * it, and a click there navigated the tab to the card's own page.
+ *
+ * Takes the candidate list as a parameter rather than querying the document
+ * itself, so the identical rule runs two ways without drifting apart: as the
+ * body of `CHOOSE_VIDEO_FN` below, and as `CHOOSE_VIDEO_INDEX_SCRIPT`, run
+ * through `frame.evaluate` regardless of frame origin (dl-55, decision 3) —
+ * both wrap this same function around one `document.querySelectorAll('video')`
+ * call; only what the caller does with the result differs.
+ */
+const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
+  var best = -1;
+  var bestArea = 0;
+  for (var i = 0; i < videos.length; i++) {
+    var el = videos[i];
+    var rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    var style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    var linked = false;
+    for (var node = el.parentElement; node; node = node.parentElement) {
+      var role = node.getAttribute ? node.getAttribute('role') : null;
+      if ((node.tagName === 'A' && node.hasAttribute('href')) || role === 'link') {
+        linked = true;
+        break;
+      }
+    }
+    if (linked) continue;
+    var area = rect.width * rect.height;
+    if (area > bestArea) {
+      bestArea = area;
+      best = i;
+    }
+  }
+  return best;
+}`;
+
+/**
+ * The chosen element itself, in-page: `document.querySelectorAll('video')`
+ * fed through `CHOOSE_VIDEO_INDEX_FN`. Shared between the surface click
+ * (`CHOOSE_VIDEO_SCRIPT`) and `METADATA_SCRIPT`'s duration fallback, so the
+ * two cannot independently drift.
+ *
+ * One evaluation, no round trip per candidate — `visibleQuery`'s comment
+ * explains what probing elements one at a time costs a deadline shared by
+ * four provocation steps.
+ */
+const CHOOSE_VIDEO_FN = `(function () {
+  var chooseIndex = ${CHOOSE_VIDEO_INDEX_FN};
+  var videos = document.querySelectorAll('video');
+  var index = chooseIndex(videos);
+  return index === -1 ? null : videos[index];
+})`;
+
+/**
+ * Runs `CHOOSE_VIDEO_INDEX_FN` against `document.querySelectorAll('video')`
+ * and returns the chosen index (or `-1`), as a full script rather than a bare
+ * function — the index, not the element, is what a caller outside this file's
+ * own evaluation can use, since a raw DOM node cannot cross that boundary.
+ * Used by `clickChosenVideo`'s cross-origin branch (dl-55, decision 3).
+ */
+const CHOOSE_VIDEO_INDEX_SCRIPT = `(() => {
+  var chooseIndex = ${CHOOSE_VIDEO_INDEX_FN};
+  return chooseIndex(document.querySelectorAll('video'));
+})()`;
+
+/** Marks the chosen element (if any) with `VIDEO_MARK`, so the caller can click it through the locator API. */
+const CHOOSE_VIDEO_SCRIPT = `(() => {
+  var choose = ${CHOOSE_VIDEO_FN};
+  var best = choose();
+  if (!best) return false;
+  best.setAttribute(${JSON.stringify(VIDEO_MARK)}, '');
+  return true;
+})()`;
+
+const UNMARK_VIDEO_SCRIPT = `(() => {
+  var marked = document.querySelectorAll('[${VIDEO_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(VIDEO_MARK)});
+})()`;
+
 /**
  * True when a control carries an `AGE_GATE_TEXT` label **and** the page carries
  * an `AGE_MARKERS` phrase. Both, because an "I am 18" link in the footer of a
@@ -230,7 +321,11 @@ const METADATA_SCRIPT = `(() => {
     var value = el ? el.getAttribute(name) : null;
     return value && value.trim() ? value.trim() : null;
   };
-  var media = document.querySelector('video, audio');
+  // dl-55: the same chooser the surface click uses, so a related-video card's
+  // duration is never reported as the page's own. Audio is not a video and has
+  // no link-card trap, so it stays a plain fallback.
+  var chooseVideo = ${CHOOSE_VIDEO_FN};
+  var media = chooseVideo() || document.querySelector('audio');
   var duration = media && isFinite(media.duration) && media.duration > 0 ? media.duration : null;
   return {
     ogTitle: attr('meta[property="og:title"]', 'content')
@@ -420,6 +515,69 @@ async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean>
   return await clickByText(frame, AGE_GATE_TEXT, timeoutMs);
 }
 
+/**
+ * Clicks the chosen player video, never the first `<video>` in the document
+ * (dl-55). The rule is identical in every frame: visible, no link ancestor,
+ * largest area — `CHOOSE_VIDEO_INDEX_FN`, run two ways.
+ *
+ * In a scriptable frame the choice is made once, in-page, by
+ * `CHOOSE_VIDEO_FN`, and only the marked element is clicked, through the
+ * locator API. Elsewhere, `isScriptableFrame`'s policy of not running script
+ * still applies to every *other* evaluation this file does — `SCROLL_SCRIPT`,
+ * `PLAY_SCRIPT`, `dismissModal`'s scripted path — but not to this one narrow
+ * case (dl-55, decision 3): `frame.evaluate(CHOOSE_VIDEO_INDEX_SCRIPT)` reads
+ * element geometry and ancestry back as a plain index, mutates nothing, and
+ * costs one round trip regardless of frame origin, the same as the marked
+ * click does in a scriptable frame — `Locator.evaluateAll` was tried first and
+ * silently returned nothing for a string page function against a cross-origin
+ * frame in this Playwright version, which is why this is `frame.evaluate`, not
+ * a locator call. A page whose real player lives alone in a cross-origin
+ * frame, next to a same-page related-video card wired by a JS `onclick` rather
+ * than an `<a href>`, needs the largest-area rule to reach it; a
+ * first-in-document-order fallback could not tell the two apart.
+ *
+ * `force` is kept, and still with the same near-corner `position`: a
+ * legitimate layer can still sit visually over the player itself — a custom
+ * controls bar, a click-to-unmute scrim — and the chooser already keeps a
+ * related-video card from ever being the *target*, which is what made `force`
+ * dangerous before. It no longer risks a click landing on unrelated content.
+ */
+async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<void> {
+  if (scriptable) {
+    let marked = false;
+    try {
+      marked = await frame.evaluate<boolean>(CHOOSE_VIDEO_SCRIPT);
+      if (!marked) return;
+      await frame
+        .locator(`[${VIDEO_MARK}]`)
+        .first()
+        .click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
+    } catch {
+      // No qualifying video, or it went away before the click landed.
+    } finally {
+      if (marked) {
+        try {
+          await frame.evaluate(UNMARK_VIDEO_SCRIPT);
+        } catch {
+          // The click removed the frame's document, or navigated it.
+        }
+      }
+    }
+    return;
+  }
+
+  try {
+    const index = await frame.evaluate<number>(CHOOSE_VIDEO_INDEX_SCRIPT);
+    if (index < 0) return;
+    const video = frame.locator("video").nth(index);
+    if (await video.isVisible({ timeout: 150 })) {
+      await video.click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
+    }
+  } catch {
+    // No qualifying video, or it is not clickable.
+  }
+}
+
 async function provokeFrame(
   frame: Frame,
   pageOrigin: string | undefined,
@@ -447,14 +605,7 @@ async function provokeFrame(
 
   // Clicking the video surface itself is what a person would do when the player
   // has no visible chrome.
-  try {
-    const video = frame.locator("video").first();
-    if (await video.isVisible({ timeout: 150 })) {
-      await video.click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
-    }
-  } catch {
-    // No video element yet, or it is not clickable.
-  }
+  await clickChosenVideo(frame, scriptable);
 
   if (scriptable) {
     try {

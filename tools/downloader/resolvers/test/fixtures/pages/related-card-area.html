@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Related-card trap: largest area</title>
+  </head>
+  <body>
+    <h1>Related-card trap: largest area</h1>
+    <!-- Not a card: nothing links it. It is small and first in the DOM, so
+         only choosing the largest visible candidate, not the first, picks
+         the real player (dl-55). No `src` and no listener: a click landing
+         here must do nothing at all. -->
+    <video id="decoy" width="150" height="100" muted playsinline></video>
+
+    <!-- The real player: larger, second in the DOM, started only by a
+         `click` DOM event. -->
+    <video id="player" width="640" height="360" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("player").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

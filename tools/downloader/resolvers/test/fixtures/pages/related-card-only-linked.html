@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Related-card trap: no candidate</title>
+  </head>
+  <body>
+    <h1>Related-card trap: no candidate</h1>
+    <!-- The only video on the page is a card. There is no unlinked
+         candidate, so the chooser must find none and make no click at all —
+         never fall back to any video it can find (dl-55). A click that
+         landed here would bubble through the link and navigate; the target
+         must never be requested. -->
+    <a id="card-link" href="/related-card-target.html">
+      <video id="card" width="640" height="360" muted playsinline></video>
+    </a>
+  </body>
+</html>

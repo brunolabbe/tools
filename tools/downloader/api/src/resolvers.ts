@@ -217,6 +217,9 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     browser = new BrowserResolver({
       maxConcurrentBrowsers: config.maxConcurrentBrowsers,
       confirmAge: config.enableAgeConfirmation,
+      // dl-55: so a detected navigation-away is diagnosable from the service
+      // log rather than only from the error it also throws.
+      logger,
       ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
     });
     resolvers.push(named(browser));

@@ -277,17 +277,18 @@ inventing a number.
 
 ## 7. Failure modes to design for from day one
 
-| Failure             | Signal                                             | Response                                                                    |
-| ------------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
-| DRM                 | EME call / manifest UUID                           | `DRM_PROTECTED`, stop                                                       |
-| Bot challenge       | Cloudflare interstitial, 403 HTML                  | `BOT_CHALLENGE`; stealth flags help, nothing is reliable                    |
-| Geo-block           | 403 + region JSON                                  | `GEO_BLOCKED`; optional proxy                                               |
-| Login wall          | redirect to `/login`                               | `AUTH_REQUIRED`; optional operator cookie jar                               |
-| Signed URL expiry   | 403 mid-download                                   | `VARIANT_GONE` → re-probe → resume                                          |
-| Live stream         | no `ENDLIST` / `type="dynamic"`                    | require explicit `liveDurationSec`                                          |
-| Player never starts | no media requests in 20 s                          | `NO_MEDIA_FOUND`; try closing a modal and dismissing a consent banner first |
-| Age confirmation    | an over-18 interstitial where the player should be | `AGE_CONFIRMATION_REQUIRED`; `ENABLE_AGE_CONFIRMATION` confirms it          |
-| Enormous file       | 8-hour 4K manifest                                 | `SIZE_LIMIT_EXCEEDED` before downloading, from bitrate × duration           |
+| Failure                   | Signal                                                                              | Response                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DRM                       | EME call / manifest UUID                                                            | `DRM_PROTECTED`, stop                                                                                                                                                      |
+| Bot challenge             | Cloudflare interstitial, 403 HTML                                                   | `BOT_CHALLENGE`; stealth flags help, nothing is reliable                                                                                                                   |
+| Geo-block                 | 403 + region JSON                                                                   | `GEO_BLOCKED`; optional proxy                                                                                                                                              |
+| Login wall                | redirect to `/login`                                                                | `AUTH_REQUIRED`; optional operator cookie jar                                                                                                                              |
+| Signed URL expiry         | 403 mid-download                                                                    | `VARIANT_GONE` → re-probe → resume                                                                                                                                         |
+| Live stream               | no `ENDLIST` / `type="dynamic"`                                                     | require explicit `liveDurationSec`                                                                                                                                         |
+| Player never starts       | no media requests in 20 s                                                           | `NO_MEDIA_FOUND`; try closing a modal and dismissing a consent banner first                                                                                                |
+| Age confirmation          | an over-18 interstitial where the player should be                                  | `AGE_CONFIRMATION_REQUIRED`; `ENABLE_AGE_CONFIRMATION` confirms it                                                                                                         |
+| Enormous file             | 8-hour 4K manifest                                                                  | `SIZE_LIMIT_EXCEEDED` before downloading, from bitrate × duration                                                                                                          |
+| Click opens other content | a probe that succeeds with another page's stream, nothing in the response saying so | choose the player over a related-video card, and `NO_MEDIA_FOUND` with `details.reason === "navigated-away"` on any top-frame navigation away from the landing URL (dl-55) |
 
 ---
 

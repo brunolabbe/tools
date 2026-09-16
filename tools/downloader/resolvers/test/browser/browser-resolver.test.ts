@@ -14,6 +14,7 @@ import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@d
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
+import type { BrowserResolverLogger } from "../../src/resolvers/browser.ts";
 import {
   drmHlsParser,
   recordingDashParser,
@@ -258,6 +259,232 @@ describe("BrowserResolver", () => {
       expectCode(error, "NO_MEDIA_FOUND");
     },
   );
+
+  describe("the surface click chooses the player, not a related-video card (dl-55)", () => {
+    test(
+      "starts the real player and never reaches the card's own page or stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        server.requests.length = 0;
+        const result = await probe("/related-card.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+        // A click that bubbled through the card's `<a href>` would have left
+        // this page entirely; neither the card's target nor its stream is ever
+        // requested.
+        expect(server.requests).not.toContain("/related-card-target.html");
+        expect(server.requests).not.toContain("/media/related-target/master.m3u8");
+      },
+    );
+
+    test(
+      "picks the largest visible candidate, not the first in document order",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        // A first-qualifying (rather than largest) chooser would land the
+        // click on the small, listener-less decoy, and the real player would
+        // never be clicked at all.
+        const result = await probe("/related-card-area.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      },
+    );
+
+    test(
+      "makes no click, and never navigates, when the only video is a card",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/related-card-only-linked.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        // Plain absence, not the guard catching a click that navigated: a
+        // chooser that fell back to "any video" when none qualified would
+        // have clicked the card, bubbled through its `<a href>`, navigated,
+        // and requested the target page — none of which may happen.
+        expect(error.details?.["reason"]).not.toBe("navigated-away");
+        expect(server.requests).not.toContain("/related-card-target.html");
+      },
+    );
+  });
+
+  describe("a navigation away from the landing page fails NO_MEDIA_FOUND (dl-55)", () => {
+    test(
+      "a same-document navigation (history.pushState) never returns the other page's stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/guard-pushstate.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "a document navigation (location.assign) never returns the other page's stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const error = await probeError("/guard-assign.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "reports the departure to the injected logger, naming the step and both URLs",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+        const logger: BrowserResolverLogger = {
+          warn: (message, fields) => {
+            warnings.push({ message, fields });
+          },
+        };
+        const resolver = new BrowserResolver({ pool, quietMs: 1200, logger });
+        await probeError("/guard-assign.html", resolver);
+
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]?.message).toMatch(/left the landing page/i);
+        // The click that starts the navigation runs during provoke-playback,
+        // but `framenavigated` fires once the navigation itself completes,
+        // which can land either side of the stage boundary.
+        expect(["provoke-playback", "network-quiet"]).toContain(warnings[0]?.fields?.["step"]);
+        expect(String(warnings[0]?.fields?.["landingUrl"])).toBe(server.url("/guard-assign.html"));
+        expect(String(warnings[0]?.fields?.["departedTo"])).toBe(server.url("/mse.html"));
+      },
+    );
+
+    test(
+      "a redirect during load is not a departure, and the page still probes",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-redirect", resolver);
+        expect(result.title).toContain("[blob]");
+      },
+    );
+
+    test(
+      "a fragment-only change on play is not a departure, and the page still probes",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-fragment.html", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "a script redirect ~200ms after load is not a departure (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-script-redirect.html", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "a router history.replaceState ~300ms in is not a departure (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-router-rewrite.html?utm_source=newsletter", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "the landing URL is the page reached after a redirect, not the one requested (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        // A `landingUrl` wrongly set to the requested URL would flag this
+        // target's own fragment-only play as a departure — `/guard-redirect`
+        // alone cannot tell the two apart, since nothing navigates again
+        // after it (see the Log).
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-redirect-then-fragment", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+  });
+
+  describe("play-time query rewrites are not a departure, within a narrow exception (dl-55, decision 1)", () => {
+    test.each(["t", "start", "autoplay"])(
+      "adding ?%s= on play is not a departure",
+      { timeout: TEST_TIMEOUT_MS },
+      async (param) => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe(`/guard-query.html?rewrite=${param}`, resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "a query key outside the exception is still a departure",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const error = await probeError("/guard-query.html?rewrite=other", resolver);
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "a reordered query string is not a departure (dl-55, decision 5)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        // No parameter's value changes, only the order the same two appear
+        // in — the owner's answer named only t/start/autoplay as allowed to
+        // differ and said nothing about order, so this pins the current
+        // behaviour (URLSearchParams sorted before comparison) as intended
+        // rather than incidental.
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-query.html?rewrite=reorder&v=abc&list=PL1", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+  });
+
+  describe("the cross-origin chooser picks the player, not a JS-click card (dl-55, decision 3)", () => {
+    test(
+      "starts the real player in a genuinely cross-origin frame, never the card",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        server.requests.length = 0;
+        const result = await probe("/cross-origin-card.html", resolver);
+
+        // The player lives in the secondary (cross-origin) frame, so its
+        // request is made against that origin, not the primary one.
+        expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+        // A click that landed on the card would have navigated the subframe
+        // to its target — which the top-frame guard cannot even see — so the
+        // only proof this never happened is that it was never requested.
+        expect(server.requests).not.toContain("/related-card-target.html");
+      },
+    );
+  });
 
   describe("a modal over an age gate (dl-48)", () => {
     const PROMO_PATH = "/age-gate-promo.html";
