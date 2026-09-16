@@ -168,11 +168,20 @@ export function useJobs(api: ApiClient): UseJobs {
       try {
         const { job } = await api.cancelJob(id);
         mergeJob(job);
-      } catch (error) {
-        failLocally(id, AppError.from(error).toPayload());
-      } finally {
-        detach(id);
+      } catch {
+        // A cancel request that failed says nothing about the job: it is most
+        // likely still running on the server. Marking the card failed and
+        // dropping its stream hid a live download holding the client's slot
+        // (dl-65), so ask the server instead and keep following the job.
+        try {
+          const { job } = await api.getJob(id);
+          mergeJob(job);
+          if (!isTerminal(job)) return;
+        } catch (error) {
+          failLocally(id, AppError.from(error).toPayload());
+        }
       }
+      detach(id);
     },
     [api, detach, failLocally, mergeJob],
   );
