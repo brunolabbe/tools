@@ -727,3 +727,77 @@ test("a channel that drops leaves the analysis running and the last line standin
   await settle();
   expect(screen.getByRole("heading", { name: "Answered anyway" })).toBeDefined();
 });
+
+test("a cancel the server refused leaves the card following the job it could not stop", async () => {
+  // dl-65. The cancel request failed while the download kept running on the
+  // server. Before the fix the card was marked failed with the request's error
+  // and its stream dropped, so the page showed a dead job and a live one held
+  // the client's slot out of sight.
+  const downloading = job("downloading", { id: "job-1" });
+  const { fake, listeners } = await watchOneJob(downloading, [downloading]);
+  (fake.client.cancelJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
+    Promise.reject(new fake.AppError("INTERNAL", "Something went wrong on our end.")),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await settle();
+  await settle();
+
+  expect(fake.client.cancelJob).toHaveBeenCalledWith("job-1");
+  expect(screen.queryByText("Something went wrong")).toBeNull();
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
+
+  // Still attached: a frame from the server still lands on the card.
+  act(() => {
+    listeners[0]?.onEvent({
+      type: "canceled",
+      jobId: "job-1",
+      error: { code: "JOB_CANCELED", message: "The download was canceled.", retryable: false },
+      at: "2026-09-07T10:00:05.000Z",
+    });
+  });
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+});
+
+test("a cancel the server refused for a job that has since finished shows how it finished", async () => {
+  const downloading = job("downloading", { id: "job-1" });
+  const completed = job("completed", { id: "job-1" });
+  const { fake } = await watchOneJob(downloading, [downloading, completed]);
+  (fake.client.cancelJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
+    Promise.reject(new fake.AppError("INTERNAL", "Something went wrong on our end.")),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await settle();
+  await settle();
+
+  expect(screen.queryByText("Something went wrong")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+});
+
+test("a cancel the server accepted before the job stopped keeps following it to canceled", async () => {
+  // The cancel route answers before the orchestrator's abort unwinds, so a job
+  // canceled mid-probe comes back still running. Detaching on that answer
+  // closed the only stream that would carry its `canceled` frame, and the card
+  // sat on its last step until a reload.
+  const probing = job("probing", { id: "job-1" });
+  const { fake, listeners } = await watchOneJob(probing, [probing]);
+  (fake.client.cancelJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
+    Promise.resolve({ job: probing }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await settle();
+
+  act(() => {
+    listeners[0]?.onEvent({
+      type: "canceled",
+      jobId: "job-1",
+      error: { code: "JOB_CANCELED", message: "The download was canceled.", retryable: false },
+      at: "2026-09-07T10:00:05.000Z",
+    });
+  });
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(screen.getAllByText("Canceled").length).toBeGreaterThan(0);
+});

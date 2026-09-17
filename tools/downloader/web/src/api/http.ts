@@ -38,7 +38,13 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
     try {
       response = await fetch(url(path), {
         ...init,
-        headers: { "Content-Type": "application/json", ...init?.headers },
+        // Only when there is a body. Fastify answers an empty body declared as
+        // JSON with a parser error, so a bare `POST` carrying this header never
+        // reached the cancel route at all (dl-65).
+        headers: {
+          ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...init?.headers,
+        },
       });
     } catch (cause) {
       throw new AppError("UNREACHABLE", undefined, { cause });
