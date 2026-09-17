@@ -156,7 +156,7 @@ export function buildPreviewFrameArgs(
     // and an input-side seek then reopens the segment holding the seek point and
     // fetches it again: 1.3x the bytes of this form on 2-second segments and 2x
     // on 6- and 10-second ones. An output-side seek decodes forward from what
-    // probing already fetched. It loses only on 1-second segments, by 1.25x.
+    // probing already fetched. It lost only on 1 s segments, by 1.25x, and not on every fixture.
     ...(seek > 0 ? ["-ss", seek.toFixed(3)] : []),
     "-map",
     "0:v:0",

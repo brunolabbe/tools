@@ -192,7 +192,7 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
   test("returns JPEG bytes, inside the timeout, with the context replayed on every request", async () => {
     const before = server.requests.length;
     const timeoutMs = 15_000;
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const bytes = await grabPreviewFrame({
       url: `${server.origin}/index.m3u8`,
       protocol: "hls",
@@ -205,7 +205,7 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       logger: silent,
     });
 
-    expect(Date.now() - startedAt).toBeLessThan(timeoutMs);
+    expect(performance.now() - startedAt).toBeLessThan(timeoutMs);
     expect(bytes).not.toBeNull();
     expect([...(bytes as Buffer).subarray(0, 2)]).toEqual([0xff, 0xd8]);
 
@@ -291,7 +291,7 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       const { logger, debug } = recording();
       const timeoutMs = 2_000;
       try {
-        const startedAt = Date.now();
+        const startedAt = performance.now();
         const pending = grabPreviewFrame({
           url: `${server.origin}/index.m3u8?${marker}`,
           protocol: "hls",
@@ -309,7 +309,7 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
         expect(await processesWith(marker)).not.toEqual([]);
 
         const bytes = await pending;
-        const elapsedMs = Date.now() - startedAt;
+        const elapsedMs = performance.now() - startedAt;
 
         expect(bytes).toBeNull();
         expect(debug.map((entry) => entry.fields)).toContainEqual(
@@ -455,4 +455,78 @@ describe("choosePreviewVariant", () => {
     expect(choosePreviewVariant([base({ hasVideo: false })])).toBeNull();
     expect(choosePreviewVariant([])).toBeNull();
   });
+});
+
+/**
+ * Split DASH, which the Build names and which nothing above exercises: video
+ * and audio in separate adaptation sets, fragmented MP4 behind an init segment,
+ * all behind the same header gate. The grab opens the MPD alone and maps the
+ * first video stream, so it has to reach a frame without the audio set.
+ */
+describe("grabPreviewFrame against a generated split-DASH stream", () => {
+  beforeAll(async () => {
+    await generate([
+      "-hide_banner",
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      `testsrc=size=640x360:rate=15:duration=${CLIP_SECONDS}`,
+      "-f",
+      "lavfi",
+      "-i",
+      `sine=frequency=440:sample_rate=44100:duration=${CLIP_SECONDS}`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-pix_fmt",
+      "yuv420p",
+      "-g",
+      "15",
+      "-c:a",
+      "aac",
+      "-f",
+      "dash",
+      "-seg_duration",
+      "2",
+      "-adaptation_sets",
+      "id=0,streams=v id=1,streams=a",
+      // Into the same directory the gated origin serves; the DASH names
+      // (`dash.mpd`, `*.m4s`) cannot collide with the HLS ones.
+      "-init_seg_name",
+      "dash-init-$RepresentationID$.m4s",
+      "-media_seg_name",
+      "dash-chunk-$RepresentationID$-$Number%05d$.m4s",
+      path.join(fixtureDir, "dash.mpd"),
+    ]);
+  }, 30_000);
+
+  test("returns JPEG bytes, with the context replayed on the init and media segments", async () => {
+    const before = server.requests.length;
+    const bytes = await grabPreviewFrame({
+      url: `${server.origin}/dash.mpd`,
+      protocol: "dash",
+      requestContext: CONTEXT,
+      durationSec: CLIP_SECONDS,
+      ffmpegPath: FFMPEG,
+      tmpRoot,
+      timeoutMs: 15_000,
+      maxOutputBytes: 512 * 1024,
+      logger: silent,
+    });
+
+    expect(bytes).not.toBeNull();
+    expect([...(bytes as Buffer).subarray(0, 2)]).toEqual([0xff, 0xd8]);
+    const made = server.requests.slice(before);
+    expect(made.some((request) => request.url.includes("dash-init-0"))).toBe(true);
+    expect(made.some((request) => request.url.includes("dash-chunk-0-"))).toBe(true);
+    for (const request of made) {
+      expect(request.headers.referer).toBe(CONTEXT.headers["Referer"]);
+    }
+    expect(await tmpLeftovers()).toEqual([]);
+  }, 30_000);
 });

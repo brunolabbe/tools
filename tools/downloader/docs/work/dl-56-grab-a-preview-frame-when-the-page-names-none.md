@@ -278,7 +278,14 @@ that base (merged as `1806525`). Nothing here touches
 
   Output-side matches frame 0 on 6- and 10-second segments. It loses only on
   1-second segments, by 1.25x. Script:
-  `scratchpad/dl-56/measure.mjs`, not committed.
+  `scratchpad/dl-56/measure.mjs`, not committed. These ladders were 25 fps
+  with `-g 25`, 320x240 for the 6 s clip and 1280x720 for the rest, with AAC
+  audio. **The 1-second row depends on the fixture.** Gate B used a video-only
+  fixture and found input-side and output-side fetched identical bytes (1.00x).
+  I re-ran my fixture without audio and still got 1.25x (295,261 against
+  235,289). So the loss depends on how the fixture is encoded, not on audio.
+  Across both fixtures, output-side never cost more than 1.25x, and the choice
+  stands.
 
 - **`01-ARCHITECTURE.md` did not describe preview images anywhere**, so "wherever
   it describes preview images" had nothing to edit. The dl-29 paragraph is new,
@@ -391,3 +398,51 @@ server-wide `probeGate` straight after `registry.resolve`, before
 concurrent grabs are bounded per client, and each lasts at most 6 s, but nothing
 bounds them server-wide. The image fetch always had that shape. A grab is an
 ffmpeg process, which is heavier. It is reported as an open decision.
+
+## 2026-09-17 — gate findings answered
+
+Two reviewers gated `cff1440`. Gate A (agent `ad4658d782570769e`) covered
+security, egress, injection and kill/cleanup, and passed it. Gate B (agent
+`a34392b2236d95ba0`) covered the rest and returned CONCERNS: one med open
+decision and one low.
+
+- **Gate B med, the server-wide gate does not bound grabs: reproduced.**
+  `scratchpad/dl-56/measure-concurrency.mjs` (not committed) drives
+  `createApp` and the real grabber with `maxConcurrentProbes: 2`, against a
+  no-image fixture whose segments trickle. Five distinct client addresses each
+  probed once, concurrently. All five answered 200, the peak was **5**
+  concurrent ffmpeg grab processes (counted from `/proc`), and 0 were left
+  afterwards. That agrees with Gate B's 12 against a gate of 8. Not changed
+  here: it is the open decision already named at the end of the build entry.
+- **Gate B low, the 1-second `-ss` row: partly contested.** My number reproduces
+  on my fixture both with and without audio. Gate B's fixture gives 1.00x. The
+  row is now marked fixture-dependent in the build entry and in the
+  `preview-frame.ts` comment. The choice of output-side seek is unchanged, and
+  both reviewers agree with it.
+- **Gate A's suggested tests: two added, since neither hop was covered.**
+  - `frame-grab-egress.test.ts`, "a segment that redirects to a blocked
+    address: the redirect is refused too". Segments on the allowed address
+    302 to `localhost`. The first hop is served, nothing under `/localhost/` is
+    requested, and no preview results. Red with the grabber's `proxyUrl: ""`
+    (2 requests reached `/localhost/seg*`), then restored.
+  - `preview-frame.test.ts`, "grabPreviewFrame against a generated split-DASH
+    stream". ffmpeg generates DASH with separate video and audio adaptation
+    sets behind the header gate. The grab returns a JPEG, and the init and media
+    segments carry the Referer. Red with `requestContext` dropped from the args,
+    then restored. Until now nothing ran `protocol: "dash"` end to end.
+  - Gate A's `#EXT-X-KEY`, `#EXT-X-MAP` and blocked-DASH-`BaseURL` runs were
+    **not** turned into tests. They go through the same
+    `buildNetworkInputArgs`, `runFfmpeg` and egress plumbing the redirect and
+    blocked-segment tests prove, and their fixtures cost more than their
+    coverage adds.
+- **A flake in my own test, found while re-running the gates.** One full
+  `npm test -- --project downloader` run failed the trickle test with
+  `expected 1112 to be greater than or equal to 2000`. In that same run the
+  `TIMEOUT` assertion just before it passed. The timer is a 2000 ms
+  `setTimeout` started after `startedAt`, so it cannot have fired at 1112 ms.
+  I read this as the wall clock stepping, which WSL2 is known to do. That is
+  inferred, not measured. Both elapsed-time tests now use `performance.now()`,
+  which is monotonic. After that change, three isolated runs of
+  `preview-frame.test.ts` gave 15/15 each. The full suite is below.
+  Full suite after these changes: `npm run check` exit 0, and
+  `npm test -- --project downloader` 87 files, 1458 tests, all pass.

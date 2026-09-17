@@ -221,6 +221,24 @@ describe("what the ffmpeg egress proxy stops", () => {
         response.writeHead(200, { "content-type": "application/vnd.apple.mpegurl" }).end(body);
         return;
       }
+      // `/redirect.m3u8` names segments on the allowed address that answer with
+      // a 302 to the same segment on the blocked name: a hop no manifest spells.
+      if (url === "/redirect.m3u8") {
+        const body = playlist.replaceAll(
+          /^(seg\d+\.ts)$/gmu,
+          `http://127.0.0.1:${String(port)}/redirect/$1`,
+        );
+        response.writeHead(200, { "content-type": "application/vnd.apple.mpegurl" }).end(body);
+        return;
+      }
+      const redirect = /^\/redirect\/(?<name>seg\d+\.ts)$/u.exec(url);
+      if (redirect?.groups !== undefined) {
+        const name = redirect.groups["name"] as string;
+        response
+          .writeHead(302, { location: `http://localhost:${String(port)}/localhost/${name}` })
+          .end();
+        return;
+      }
       const segment = /^\/(?:127\.0\.0\.1|localhost)\/(?<name>seg\d+\.ts)$/u.exec(url);
       if (segment?.groups !== undefined) {
         void fs.readFile(path.join(clipDir, segment.groups["name"] as string)).then(
@@ -260,7 +278,9 @@ describe("what the ffmpeg egress proxy stops", () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  async function probeSegmentsOn(host: "127.0.0.1" | "localhost"): Promise<ProbeResponse> {
+  async function probeSegmentsOn(
+    host: "127.0.0.1" | "localhost" | "redirect",
+  ): Promise<ProbeResponse> {
     current = probeResult({
       sourceUrl: `http://127.0.0.1:${String(port)}/watch/${host}`,
       durationSec: CLIP_SECONDS,
@@ -299,6 +319,18 @@ describe("what the ffmpeg egress proxy stops", () => {
     // The grab ran — the manifest the probe vetted was fetched…
     expect(hits).toContain("/localhost.m3u8");
     // …and what it named next was refused at the proxy, before a socket opened.
+    expect(hits.filter((hit) => hit.startsWith("/localhost/"))).toEqual([]);
+    expect(body.probe.thumbnailPath).toBeUndefined();
+  }, 60_000);
+
+  test("a segment that redirects to a blocked address: the redirect is refused too", async () => {
+    // Suggested by the security gate (dl-56): a redirect is its own hop, and
+    // ffmpeg follows it itself, so the proxy has to see the second request.
+    const body = await probeSegmentsOn("redirect");
+    expect(hits).toContain("/redirect.m3u8");
+    // The first hop is on the allowed address and answers…
+    expect(hits.some((hit) => hit.startsWith("/redirect/seg"))).toBe(true);
+    // …and where it points is refused, so no segment is ever served.
     expect(hits.filter((hit) => hit.startsWith("/localhost/"))).toEqual([]);
     expect(body.probe.thumbnailPath).toBeUndefined();
   }, 60_000);
