@@ -24,6 +24,7 @@
     "pino": "^10.3.1"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@types/better-sqlite3": "^7.6.13"
   }
 }
