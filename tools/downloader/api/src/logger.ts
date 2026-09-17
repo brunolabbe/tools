@@ -124,14 +124,18 @@ function isRequestContext(value: unknown): value is RequestContext {
  * Returns the same reference when nothing changed, so a line with no URL in
  * it allocates nothing beyond the one `Set` passed down the call.
  *
- * **Known limitation: content reached only by re-entering a genuine cycle is
- * not redacted.** A true self-reference stops the walk at the point it
- * revisits its own ancestor, same as before — pino's own serialiser is what
- * turns that back edge into `"[Circular]"` rather than a stack overflow, and
- * this function never walks it a second time to redact what is past it. No
- * call site logs a self-referential structure with a URL inside it; this is
- * the same kind of net-for-a-call-site-nobody-has-written-yet as the
- * `requestContext` limitation below, not a live gap.
+ * **A genuine cycle's back edge is replaced with a placeholder, not walked
+ * and not returned as-is** (dl-58's gate 3 — the previous version returned
+ * the *original* object at the back edge, on the reasoning that pino's own
+ * serialiser would turn it into `"[Circular]"` one level further out. It
+ * does, but not before writing that original object's own fields verbatim
+ * at the level where the cycle closes: `{ url: "…CYCLE", self: <itself> }`
+ * logged `self: { self: "[Circular]", url: "…CYCLE" }` — the secret was in
+ * the object pino circular-marks, not past it). Returning `"[Circular]"`
+ * here, at the exact point a value would revisit its own ancestor, means
+ * nothing unredacted ever reaches pino's serialiser at all; walking the
+ * object again would only repeat content already redacted higher in the
+ * same chain, so nothing is lost by not doing it a second time.
  */
 function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unknown {
   if (typeof value === "string") {
@@ -139,7 +143,7 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
     return redacted === value ? value : redacted;
   }
   if (value === null || typeof value !== "object") return value;
-  if (ancestors.has(value)) return value;
+  if (ancestors.has(value)) return "[Circular]";
   ancestors.add(value);
   try {
     if (Array.isArray(value)) {

@@ -988,7 +988,15 @@ describe("safeFields redacts every reference to a shared object, not only the fi
     expect(serialised).not.toContain("SHARED");
   });
 
-  test("a genuine cycle still does not hang or crash the line", () => {
+  /**
+   * dl-58, gate 3, M3. The first version of this test only asserted the line
+   * survived, which passed even while the cycle's own fields leaked — pino's
+   * `"[Circular]"` marker appears one level *past* the object that closes the
+   * loop, not at it, so the object's own `url` was serialised verbatim before
+   * pino ever saw the back edge. This asserts the secret is gone, not just
+   * that something was written.
+   */
+  test("a genuine cycle does not hang, and its own fields are not leaked at the back edge", () => {
     const { logger, lines } = capturing();
     const cyclic: Record<string, unknown> = {};
     cyclic["self"] = cyclic;
@@ -996,8 +1004,19 @@ describe("safeFields redacts every reference to a shared object, not only the fi
 
     logger.info("cyclic", { cyclic });
 
-    // The line survives — the property this pins is "does not hang", not a
-    // specific shape for the truncated cycle.
     expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines[0])).not.toContain("CYCLE");
+  });
+
+  test("a two-object cycle (parent references child references parent) does not leak either object's URL", () => {
+    const { logger, lines } = capturing();
+    const parent: Record<string, unknown> = { url: "https://h.example/p?sig=PARENT" };
+    const child: Record<string, unknown> = { parent };
+    parent["child"] = child;
+
+    logger.info("parentchild", { details: parent });
+
+    expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines[0])).not.toContain("PARENT");
   });
 });

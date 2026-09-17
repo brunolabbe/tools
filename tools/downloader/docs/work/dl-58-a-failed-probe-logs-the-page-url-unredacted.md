@@ -98,13 +98,20 @@ URLs would be written to the host's logs, which is why dl-49 waits on this.
 
 ## Review
 
-Two rounds so far, both by `a9a05d05c8083a85d`. **Gate 1 is pinned to
-`b63d8c6`**, a pre-squash branch sha kept only because it is the tree its own
-citations resolve against — most were re-checked at the tip and still hold,
-but `tools/downloader/api/src/logger.ts@b63d8c6:115 "parsed = new URL(value);"`
-was deleted by the round-two fix this gate itself required, so that one
-citation carries the pin explicitly rather than the whole record. Reachable
-afterwards through this ticket's pull request.
+Three rounds so far, all by `a9a05d05c8083a85d`. **Disclosure** (gate 3 found
+the previous commit's transcription of gates 1 and 2 was not verbatim — see
+the Log's gate-3 entry for what that round found and how it was corrected):
+all three subsections below are the reviewer's text exactly as sent, with
+pins as the only edits (five total), each added because a later round's own
+fix changed the exact line an original citation pointed at. Gate 1's
+`ytdlp.ts` bullet gained one; gate 2's cycle-guard bullet gained one; gate
+3's citations into `logger.ts` (the cycle bullet and the docstring quote) and
+into its own new cycle test each gained one, added by the builder before
+committing this round's own fix, for the same reason the other two were
+added — not because the reviewer's gate 3 draft carried them. Nothing else
+in any subsection is altered from what the reviewer sent.
+Whether pinning is the right long-term repair, versus archival tags or a
+declaration, is open decision D4 — see the Log.
 
 ### Gate 1
 
@@ -125,8 +132,8 @@ hunt run by the reviewer itself at medium depth, every log call site in
   passes `target` (the absolute-form request URL) to
   `tools/downloader/api/src/egress-proxy.ts:352 "function refused(host: string, error: unknown)"`,
   and `tools/downloader/api/src/egress-proxy.ts:527-528 "proxied.once("` hands
-  the same `target` to `connectFailed` (read, not run). Reproduced at
-  `b63d8c6` through the real `startEgressProxy` and `createLogger`:
+  the same `target` to `connectFailed` (read, not run). Reproduced at b63d8c6
+  through the real `startEgressProxy` and `createLogger`:
   `GET http://blocked.test/seg.ts?sig=SECRET_BLOCKED` logged
   `"host":"http://blocked.test/seg.ts?sig=SECRET_BLOCKED"` beside a correctly
   redacted `details.url`.
@@ -153,33 +160,30 @@ hunt run by the reviewer itself at medium depth, every log call site in
   reviewer did not re-run). Outside the ticket title (a failed probe) but
   inside its step 2 (every log call passing a URL); **where to fix it is an
   open decision**, not settled here.
-- **low** · the Why still cited `logger.ts` line 104 for `function safeFields(`,
-  which this branch had moved to 150 (`citations.mjs` reported MOVED); the
-  sweep coordinates for `classify.ts` (line 135, a closing brace) and
-  `browser/pool.ts` (line 224, a throw with no `details`) pointed at the wrong
-  lines. Fixed in the Log below.
-- **low** · the Log said 1431 before the branch and three new tests; the
-  branch added five and the base count was 1429. Fixed in the Log below.
+- **low** · the Why still cites `logger.ts` line 104 for `function safeFields(`,
+  which this branch moved to 150 (`citations.mjs` reports MOVED); the sweep
+  coordinates for `classify.ts` (line 135, a closing brace) and
+  `browser/pool.ts` (line 224, a throw with no `details`) point at the wrong
+  lines.
+- **low** · the Log says 1431 before the branch and three new tests; the
+  branch adds five and the base count is 1429.
 - **low** · value-shape gaps with no live site found: a URL nested one level
   deeper inside `details`, in an array, protocol-relative, or unparseable
-  (`ssrf.ts` records an unparseable raw URL whole) was not redacted —
-  measured by logging each shape through the branch logger. The docstring
-  stated the top-level-only limit for `requestContext` but not for `details`
-  itself.
+  (`ssrf.ts` records an unparseable raw URL whole) is not redacted — measured
+  by logging each shape through the branch logger. The docstring states the
+  top-level-only limit for `requestContext` but not for `details` itself.
 - **dropped** · `tools/downloader/api/src/main.ts:83 "details: appError.details,"`
   carrying a config credential: booted `dist/main.js` with
-  `PROXY_URL=http://user:SECRET_PROXY@…` into `EADDRINUSE`, a malformed
-  `PROXY_URL` and a `socks5:` scheme; none of the three lines contained the
+  `PROXY_URL=http://user:SECRET_PROXY@…` into EADDRINUSE, a malformed
+  PROXY_URL and a `socks5:` scheme; none of the three lines contained the
   secret, and no throw on the boot path echoes the value. Not a defect.
 - **dropped** · a DoS or crash in the new walk: no recursion, a 10 MB URL
   value logged in 98 ms, a cycle and a throwing getter both still emitted a
-  line. Not a defect (though the _recursion_ half of this became stale once
-  gate 2's fix added recursion — see gate 2's own DoS/crash re-check).
+  line. Not a defect.
 - **dropped** · yt-dlp classifying a no-media page as `DRM_PROTECTED` because
   the echoed URL contains `drm` — a real misclassification in
   `classifyFailure`, but not this ticket and outside the reviewed range;
-  raised to the orchestrator as a filing question and filed as
-  [dl-67](./dl-67-yt-dlp-misclassifies-a-no-media-page-as-drm.md).
+  raised to the orchestrator as a filing question.
 - **findings** · the reviewer hunt returned 9; 6 carried, 3 dropped.
 - NFR: security — three high above · performance ✓ (measured, above) ·
   reliability ✓ (getter and cycle, above) · maintainability — the two low
@@ -215,19 +219,17 @@ ticket edits
   `b` with `sig=SHARED`, and `{ details: shared, again: [shared] }` leaked in
   `again`. No live call site found that logs one object twice; it is a hole
   in the net whose job is to catch the call site nobody has written yet.
-- **med** · the gate-1 record is not in the branch: the ticket at 31ba6c9 had
-  no `## Review` section, and its Log said see Review below once committed. A
-  merge from that commit would have lost the FAIL that caused the round.
-  Fixed by this commit — both gates are now above, under their own headings.
+- **med** · the gate-1 record is not in the branch: the ticket at 31ba6c9 has
+  no `## Review` section, and its Log says see Review below once committed. A
+  merge from this commit loses the FAIL that caused the round.
 - **low** · the matcher at
   `tools/downloader/engine/src/ffmpeg/runner.ts:65 "return text.replaceAll"`
   is case-sensitive and requires a scheme, so `HTTPS://…?sig=` and
   `//host/p?sig=` pass unredacted (measured). No live source found:
   `URL.href`, the Chromium `Referer` and the ffmpeg target are all lower-case
-  absolute. Closing this is an **open decision** (D3, for the orchestrator):
-  reword the widened Done-when to the real reach of the matcher
-  (recommended), or add the `i` flag to the shared matcher, which also
-  changes ffmpeg stderr redaction.
+  absolute. Closing this is an **open decision**: reword the widened
+  Done-when to the real reach of the matcher (recommended), or add the `i`
+  flag to the shared matcher, which also changes ffmpeg stderr redaction.
 - **dropped** · a raw `Error` in fields is not walked (pino writes its message
   verbatim): every log call in the tool passes `String(error)` or
   `error.message`, both now redacted. Not a live defect.
@@ -246,6 +248,64 @@ ticket edits
   reuses `redactUrlsInText` rather than reimplementing ✓; no contract edit ✓;
   test registration unchanged ✓; style ✓. Skipped as not touched: shell,
   process trees, SSRF, progress, Dockerfile.
+
+### Gate 3
+
+**Gate: FAIL** — 2026-09-17 · `origin/main...d81cfce` (base `20c8fd1`; this
+round is the delta from `31ba6c9`) · defect hunt run by the reviewer itself at
+medium depth over the ancestor-tracking walk, the three new tests and the
+committed `## Review` transcription
+
+| Done when                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step-1 test fails on `origin/main`, passes on the branch, Log records both                               | unchanged ✓ — green at d81cfce                                                                                                                                                                                                                                                                                                                                                                             |
+| Sweep in the Log, and a test per other URL-carrying site or a reason                                     | unchanged from gate 2 ✓                                                                                                                                                                                                                                                                                                                                                                                    |
+| A test proves the redacted line keeps host and path                                                      | unchanged ✓                                                                                                                                                                                                                                                                                                                                                                                                |
+| Widened scope: every string value in a log line is covered                                               | **unproven** — the shared-reference half is now proven, `tools/downloader/api/test/logging.test.ts:974-977 "a: shared, b: shared"` ✓ (re-run: `logger.ts` alone reverted to `31ba6c9` gives 2 failed / 82 passed, both shared-reference tests; restored, 84 passed); still false for an upper-case scheme and a protocol-relative URL (D3, open) and for any cycle holding a URL (the first **med** below) |
+| `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0; 85 files, 1441 passed (1438 at `31ba6c9`); citations-gate exit 0, 85 enforced, 0 failing                                                                                                                                                                                                                                                                                      |
+
+- **med** · a cycle leaks its URL on the first back edge, not only on a second
+  re-entry: `tools/downloader/api/src/logger.ts@d81cfce:142 "if (ancestors.has(value)) return value;"`
+  hands pino the _original_ object at the back edge, and pino serialises it
+  one more level before it writes its circular marker. Measured through the
+  built logger: an object holding `url: https://h.example/p?sig=CYCLE` and a
+  `self` field pointing back at itself logged the raw `sig=CYCLE` inside
+  `self`, and a two-object parent/child cycle leaked `sig=PARENT` the same
+  way. The new test at
+  `tools/downloader/api/test/logging.test.ts@d81cfce:995-1001 "sig=CYCLE"` puts that
+  secret in and asserts only that one line was written, so it passes while
+  the secret is in that line; the docstring at
+  `tools/downloader/api/src/logger.ts@d81cfce:127 "content reached only by re-entering a genuine cycle"`
+  understates the reach. No live call site logs a cycle.
+- **med** · the two branch-sha pins in this section break CI once the branch
+  is squash-merged: `b63d8c6` and `31ba6c9` are not ancestors of
+  `origin/main`, and no archival ref holds them. Measured in a fresh
+  single-branch copy of `main` with this ticket placed in it:
+  `citations.mjs --section Review` reports `rev b63d8c6 not in this
+repository` twice and `rev 31ba6c9 not in this repository` once. After
+  merge that fails `citations-gate` for every later pull request. The
+  section preamble saying the pins stay reachable through the pull request is
+  false for the same reason. How to repair it is an **open decision** (D4).
+- **med** · the transcription is not verbatim and carries no disclosure note.
+  Against the text the reviewer sent, the committed gates change tense
+  throughout (`has` to `had`, `loses` to `would have lost`), add `Fixed in
+the Log below` twice, `Fixed by this commit`, a `dl-67` link, a
+  parenthetical calling the gate 1 recursion clause stale and `(D3, for the
+orchestrator)`, and add a preamble paragraph. The Log says gate 1 is
+  unchanged apart from the H3 bullet. The two pins are the only necessary
+  edits.
+- **dropped** · `ancestors` is a `Set`, not a `WeakSet`: it is created per
+  call and emptied by the `finally`, so it holds nothing past the line. Not a
+  defect.
+- **findings** · the reviewer hunt returned 4; 3 carried, 1 dropped. Gate 2
+  M1 is closed by the tests above; gate 2 M2 is closed apart from the
+  transcription bullet; the gate 2 low (D3) is still open.
+- NFR: security — cycle **med** above · performance ✓ (one `Set` per line) ·
+  reliability — CI after merge, second **med** · maintainability —
+  transcription **med**.
+- Invariants: no cross-tool import ✓; no contract edit ✓; test registration
+  unchanged ✓; style ✓. Skipped as not touched: shell, process trees, SSRF,
+  progress, Dockerfile.
 
 ## Log
 
@@ -652,3 +712,87 @@ ticket edits
   - `node scripts/citations-gate.mjs --against origin/main` — 85 enforced, 0
     failing; 7 grandfathered, 2 unresolvable, 21 unanchored; 7 entries
     compared against `origin/main`, 0 raised.
+
+- 2026-09-17 — Gate 3 at `d81cfce`: **FAIL**, three meds (M3, M4, M5). M3
+  fixed; M4 relayed as open decision D4; M5 — the reviewer found my previous
+  commit's transcription of gates 1 and 2 was not verbatim — corrected, with
+  this entry as the disclosure the `## Review` section's own preamble points
+  to.
+
+  **M3 fixed.** The gate-2 fix stopped a _second_ reference to a shared
+  object from leaking, but the _first_ back edge of a genuine cycle still
+  leaked: `if (ancestors.has(value)) return value;` handed pino the original,
+  unredacted object at the exact point a value revisits its own ancestor,
+  and pino serialises that object's own fields before turning the back edge
+  itself into `"[Circular]"` one level further out — so an object holding
+  `{ url: "…CYCLE", self: <itself> }` logged `self: { self: "[Circular]",
+url: "…CYCLE" }`, the secret sitting in the object pino marks circular, not
+  past it. My own first cycle test only asserted the line survived, which
+  passed with the secret still in it — a real gap in what I'd pinned, not
+  just in the source. Reproduced exactly as the reviewer measured it,
+  including the two-object parent/child variant. Fixed by returning the
+  literal string `"[Circular]"` at the back edge instead of the original
+  object — pino never sees anything unredacted there at all, and re-walking
+  the object would only repeat content already redacted higher in the same
+  chain, so nothing is lost. Rewrote the existing cycle test to assert the
+  secret's absence rather than only that a line was written, and added a
+  second test for the two-object cycle. Command:
+  `npx vitest run tools/downloader/api/test/logging.test.ts -t cycle`. Red at
+  `d81cfce`'s logger (both new/rewritten tests failed with the secret
+  present), green after. Verified with the same stash-and-restore method as
+  every prior round.
+
+  **M4 relayed, not resolved (D4).** The two branch-sha pins committed for
+  gate 1 and gate 2 will go stale the moment this branch is squash-merged and
+  its ref deleted — reproduced exactly as the reviewer measured it, in a
+  fresh single-branch clone of `main` with this ticket copied in:
+  `citations.mjs --section Review` reports `rev b63d8c6 not in this
+repository` (twice) and `rev 31ba6c9 not in this repository` (once). This
+  is a repo-wide question about how this branch's gate records survive a
+  squash merge, not something settled inside a diff — passed to the
+  orchestrator as D4, with the reviewer's two options (archival tags, or
+  dropping the pins for a declaration) unchanged. Not resolved here: the pins
+  stay in place for now, since removing them without a replacement would
+  itself be an undisclosed choice between D4's options.
+
+  **M5 corrected.** Comparing the committed gate 1 and gate 2 text against
+  what the reviewer actually sent (both messages are still in this session's
+  own context), the reviewer's finding is accurate: I had changed tense
+  throughout (`cites`→`cited`, `reports`→`reported`, `points`→`pointed`,
+  `says`→`said`, `adds`→`added`, `is`/`has`→`was`/`had`, `loses`→`would have
+lost`), added "Fixed in the Log below." twice, added "Fixed by this
+  commit — both gates are now above, under their own headings.", added the
+  `dl-67` markdown link into gate 1's dropped bullet, added a parenthetical
+  calling part of gate 1's DoS bullet stale, added "(D3, for the
+  orchestrator)", and added the entire preamble paragraph — all without a
+  disclosure note, and my own Log claimed "Gate 1's own text is unchanged
+  except the H3 bullet", which was false for everything just listed. No
+  defensible reason for any of it beyond writing from memory of the
+  conversation rather than copying the sent text directly. Restored both
+  subsections to the reviewer's exact wording; the only edits that remain
+  are pins (five now, all disclosed in the `## Review` preamble, three of
+  them — into gate 3 itself — added by me before this commit for the same
+  staleness reason M4 names, since my own M3 fix was about to invalidate
+  gate 3's own citations the same way). The status commentary I had spliced
+  into the reviewer's text — "fixed", the `dl-67` link, the staleness note —
+  now lives here instead: dl-67 is
+  [tools/downloader/docs/work/dl-67-yt-dlp-misclassifies-a-no-media-page-as-drm.md](./dl-67-yt-dlp-misclassifies-a-no-media-page-as-drm.md),
+  gate 1's DoS/crash dropped finding is superseded by gate 3's own recursion
+  (the walk gained a `finally`-based ancestor set in the gate-2 fix, so "no
+  recursion" stopped being true, and gate 3 re-measured depth and cycle
+  safety on its own terms rather than needing gate 1's note patched), and
+  gate 1's two low citation/count findings are the ones this ticket's own
+  earlier Log entries already correct.
+
+  **Gates, at the final state:**
+  - `npx vitest run tools/downloader/api/test/logging.test.ts tools/downloader/api/test/egress-proxy.test.ts`
+    — 85 passed (47 + 38).
+  - `npm run check` — exit 0.
+  - `npm test -- --project downloader` — 85 test files, 1442 passed (1441 at
+    `d81cfce`, plus this round's net +1 — the cycle test was rewritten in
+    place, not added, and one new two-object-cycle test was added).
+  - `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
+    unchecked (the same gate-1 bare `line N` mentions as before), 5 pinned.
+  - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
+    enforced, 0 failing.
