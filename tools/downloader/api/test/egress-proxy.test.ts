@@ -16,7 +16,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { AddressResolver, ResolvedAddress } from "../src/dispatcher.ts";
 import { startEgressProxy, withoutEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
-import type { AppLogger } from "../src/logger.ts";
+import { createLogger, type AppLogger } from "../src/logger.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
@@ -1155,5 +1155,33 @@ describe("onConnectEstablished (dl-38)", () => {
 
     expect(callbacks.otherFailures).toEqual(["segments.evil.test:443"]);
     expect(callbacks.established).toEqual([]);
+  });
+});
+
+/**
+ * dl-58, H1. Every test above uses `NOOP_LOGGER` or a `recordingLogger` that
+ * captures the `fields` object directly — neither goes through the real
+ * `AppLogger`'s `safeFields`, so neither would have caught this. `refused`
+ * and `upstreamRefused` (`../src/egress-proxy.ts`) log the plain-HTTP
+ * target's absolute-form URL as a top-level `host` field, and that field
+ * carries the request's query string — unlike `details`, which the resolver
+ * sweep already covered.
+ */
+describe("what the log says happened never carries the target's query string (dl-58)", () => {
+  test("a blocked plain-HTTP target's `host` field is redacted, not just `details.url`", async () => {
+    const raw: string[] = [];
+    const logger = createLogger({ level: "debug", write: (line) => void raw.push(line) });
+    const guard = guardResolving({ "blocked.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger, resolve: resolverFor([v4("127.0.0.1")]) });
+
+    const result = await getThrough(proxy.port, "http://blocked.test/seg.ts?sig=SECRET_BLOCKED");
+    expect(result.status).toBe(403);
+
+    expect(raw.some((line) => line.includes("SECRET_BLOCKED"))).toBe(false);
+    const refused = raw.filter((line) => line.includes('"msg":"refused a subprocess fetch"'));
+    expect(refused).toHaveLength(1);
+    // Redaction, not deletion: the site is still legible.
+    expect(refused[0]).toContain("blocked.test");
+    expect(refused[0]).toContain("/seg.ts");
   });
 });

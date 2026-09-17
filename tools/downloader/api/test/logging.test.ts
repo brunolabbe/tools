@@ -808,13 +808,22 @@ describe("a failed probe never logs the page URL's credentials", () => {
 
 /**
  * dl-58, at the unit level rather than through the whole server — the
- * mechanism itself (`redactDetailsUrls`, inside `safeFields`), not just the
- * one caller of it exercised above. `egress-proxy.ts`'s `refused` and
- * `upstreamRefused` share this same `AppLogger`, so this one function covers
- * their two sites for free — proven here directly rather than by adding a
- * dedicated logging test to a file that has never had one.
+ * mechanism itself (`redactUrlsDeep`, inside `safeFields`), not just one
+ * caller of it exercised above.
+ *
+ * Widened once already (owner decision D1, after the first gate on this
+ * ticket): the original version only walked `details`, and the gate found
+ * two more leaks it missed — `egress-proxy.ts`'s top-level `host` field
+ * (`egress-proxy.test.ts`'s own dl-58 describe block covers that one through
+ * the real proxy), and a URL embedded *inside* a longer string rather than
+ * being the whole of it (H2 below). The mechanism now walks every string
+ * value in the whole `fields` object, however deeply nested, via
+ * `redactUrlsInText` — the same matcher `engine/src/ffmpeg/runner.ts` already
+ * used for ffmpeg's stderr — so `host`, `details.<key>` at any depth, and a
+ * `Referer` inside `requestContext.headers` (see the describe block below)
+ * are one mechanism, not three.
  */
-describe("safeFields redacts a URL nested in details, whatever it is named", () => {
+describe("safeFields redacts a URL wherever it appears in a log line", () => {
   test("a query string inside details.<key> is redacted; the site stays legible", () => {
     const { logger, lines } = capturing();
     logger.warn("refused a subprocess fetch", {
@@ -851,5 +860,100 @@ describe("safeFields redacts a URL nested in details, whatever it is named", () 
     logger.info("probed", { details });
 
     expect(lines[0]?.["details"]).toEqual(details);
+  });
+
+  /**
+   * H1 at the unit level (the end-to-end proof, through a real
+   * `startEgressProxy`, is `egress-proxy.test.ts`'s own dl-58 block). A
+   * top-level field named anything is covered, not only `details`.
+   */
+  test("a query string in a top-level field outside details is redacted too", () => {
+    const { logger, lines } = capturing();
+    logger.warn("refused a subprocess fetch", {
+      host: "http://blocked.test/seg.ts?sig=SECRET_BLOCKED",
+      code: "BLOCKED_TARGET",
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET_BLOCKED");
+    expect(serialised).toContain("blocked.test");
+    expect(serialised).toContain("/seg.ts");
+  });
+
+  /**
+   * H2. `ytdlp.ts`'s `classifyFailure` puts raw yt-dlp stderr in
+   * `details.stderr`, and yt-dlp echoes the failing URL mid-sentence —
+   * `ERROR: Unsupported URL: <url>` — not as the whole value of the field.
+   * The pre-D1 mechanism parsed a value whole as a URL and left an embedded
+   * one untouched; `redactUrlsInText`'s substring match does not have that
+   * gap, which is the property this pins.
+   */
+  test("a URL embedded mid-sentence in a details field is redacted, not just a whole-string one", () => {
+    const { logger, lines } = capturing();
+    logger.info("request rejected", {
+      method: "POST",
+      url: "/api/probe",
+      code: "DRM_PROTECTED",
+      status: 422,
+      details: {
+        url: "http://127.0.0.1:18081/drm/watch?v=1&sig=SECRET123",
+        exitCode: 1,
+        stderr: "ERROR: Unsupported URL: http://127.0.0.1:18081/drm/watch?v=1&sig=SECRET123\n",
+      },
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET123");
+    expect(serialised).toContain("127.0.0.1");
+    expect(serialised).toContain("/drm/watch");
+    expect(serialised).toContain("Unsupported URL");
+  });
+});
+
+/**
+ * H3. `resolvers/src/browser/request-context.ts:65`'s `??= input.pageUrl`
+ * fills `Referer` with the full page URL when a probe's capture had none, and
+ * — measured directly with a real headless Chromium via Playwright, logged in
+ * this ticket's Log rather than only asserted here — that is not the only
+ * source: Chromium's own captured `Referer`, in the ordinary case where the
+ * capture is *not* empty, carries the same full URL for a same-origin fetch
+ * under its default referrer policy. Both sources produce the identical
+ * `requestContext.headers.Referer` shape asserted below, so one test at the
+ * logger boundary covers both without a real browser in this suite —
+ * `redactRequestContext` deliberately leaves `Referer` un-redacted (needed
+ * for replay), so `probe.ts`'s `probe complete` line is what has to catch it,
+ * via the same `redactUrlsDeep` pass H1 and H2 use.
+ */
+describe("the success-path Referer never reaches 'probe complete' with its query string (dl-58, H3)", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  test("a Referer carrying the full signed page URL is redacted, host and path kept", async () => {
+    const raw: string[] = [];
+    const signedUrl = "https://referer.example/watch?v=1&sig=SECRET_REFERER";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(
+        probeResult({ requestContext: { headers: { Referer: signedUrl } } }),
+      ),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(200);
+
+    expect(raw.filter((line) => line.includes("SECRET_REFERER"))).toEqual([]);
+    const complete = raw.filter((line) => line.includes('"msg":"probe complete"'));
+    expect(complete).toHaveLength(1);
+    // Redaction, not deletion: the site is still legible.
+    expect(complete[0]).toContain("referer.example");
+    expect(complete[0]).toContain("/watch");
   });
 });
