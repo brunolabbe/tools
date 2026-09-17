@@ -54,6 +54,24 @@ export interface SizeProbe {
   contentLength(url: string): Promise<number | undefined>;
   /** A playlist body, or `undefined` when it could not be fetched. */
   text(url: string): Promise<string | undefined>;
+  /**
+   * Bytes `start`..`endInclusive` of a resource, or `undefined` when the server
+   * would not give that range. Possibly fewer than asked for, when the file ends
+   * first. Used by `mp4-header.ts` to read a progressive file's sample entries
+   * (dl-64).
+   *
+   * **Optional**, because only the fetch-backed probe can honour it safely: it
+   * has to stop reading when a server ignores `Range` and sends the whole file,
+   * and Playwright's `APIResponse` only hands over a body already read in full.
+   * A probe without it leaves codecs as the tier reported them.
+   */
+  bytes?(url: string, start: number, endInclusive: number): Promise<RangedBytes | undefined>;
+}
+
+/** What a ranged read returned, and the resource total when the answer named one. */
+export interface RangedBytes {
+  bytes: Uint8Array;
+  totalBytes: number | undefined;
 }
 
 export interface SampleOptions {
@@ -277,6 +295,98 @@ function withSize(variant: MediaVariant, bytes: number, isEstimate: boolean): Me
 }
 
 /**
+ * Requests in flight at once when every file is asked for its own size. Small,
+ * because a bare progressive ladder is one origin serving a dozen large files,
+ * and the probe path is not where to open a dozen connections to it.
+ */
+export const PER_FILE_CONCURRENCY = 4;
+
+/**
+ * `fn` over `items`, at most `limit` at a time, in input order.
+ *
+ * An item not yet started when `signal` aborts is never started, and its slot
+ * answers `fallback(item)` — work that is already in flight finishes on its own
+ * signal, which the probes here share.
+ */
+export async function mapBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+  fallback: (item: T) => R,
+  signal: AbortSignal | undefined,
+): Promise<R[]> {
+  const results: R[] = items.map((item) => fallback(item));
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      if (signal?.aborted === true) return;
+      const index = next;
+      next += 1;
+      const item = items[index] as T;
+      // oxlint-disable-next-line no-await-in-loop -- the bound is the point
+      results[index] = await fn(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** A progressive file we could ask for its own size: one URL, no size yet. */
+function isBareFile(variant: MediaVariant): boolean {
+  return (
+    variant.protocol === "progressive" &&
+    variant.filesizeBytes === undefined &&
+    (variant.audioUrl === undefined || variant.audioUrl === "")
+  );
+}
+
+/**
+ * dl-64: every bare progressive file asked for its own byte count.
+ *
+ * The reference-and-factor design above is right for a ladder that declares
+ * bitrates and wrong for a list of plain files that declares nothing: there is
+ * no declaration to correct, and a `HEAD` on each file answers the exact size
+ * rather than an estimate. A bitrate follows from that and the duration, as a
+ * measurement of the file's average rather than a manifest's ceiling — and only
+ * where no bitrate was reported, which is never overwritten.
+ *
+ * A row whose `HEAD` (and ranged fallback) fails stays exactly as it was; it
+ * does not blank the others.
+ */
+async function sizeEachFile(
+  variants: readonly MediaVariant[],
+  probe: SizeProbe,
+  options: SampleOptions,
+): Promise<MediaVariant[]> {
+  if (!variants.some(isBareFile)) return [...variants];
+  return await mapBounded(
+    variants,
+    PER_FILE_CONCURRENCY,
+    async (variant) => {
+      if (!isBareFile(variant)) return variant;
+      try {
+        const total = await probe.contentLength(variant.url);
+        if (total === undefined || !Number.isFinite(total) || total <= 0) return variant;
+        const duration = durationOf(variant, options);
+        // A reported bitrate is kept even though this one is measured: the
+        // ticket's rule is to fill what is missing, never to second-guess.
+        const reported = (variant.bitrateBps ?? 0) > 0;
+        if (reported || duration === undefined) return withSize(variant, total, false);
+        return withSize(
+          { ...variant, bitrateBps: Math.round((total * 8) / duration) },
+          total,
+          false,
+        );
+      } catch {
+        return variant;
+      }
+    },
+    (variant) => variant,
+    options.signal,
+  );
+}
+
+/**
  * Measures one rendition and rescales the ladder from what it found.
  *
  * Returns the variants untouched whenever it cannot do better than the
@@ -301,8 +411,10 @@ export async function measureVariantSizes(
           (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       )[0];
 
-    if (reference === undefined) return unchanged;
     if (options.signal?.aborted === true) return unchanged;
+    // dl-64: nothing declared a bitrate, so there is no declaration to correct —
+    // but a set of plain files does not need one. Each can simply be asked.
+    if (reference === undefined) return await sizeEachFile(variants, probe, options);
 
     const video = await measureComponent(
       reference.url,
