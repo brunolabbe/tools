@@ -234,6 +234,23 @@ class SessionSpendStop {
  * whose `#client` is private on purpose — `agent`'s seam is one call,
  * `send`, and this ticket's own `count_tokens` requirement is this script's
  * to carry, not a reason to widen that seam.
+ *
+ * **Called per attempt, immediately before that attempt's own `send`, not as
+ * one upfront pass over "every rendered prompt in the protocol."** Build step
+ * 1 reads as a single batched pass, and the first gate asked about the
+ * difference. A re-ask's exact `messages` array does not exist until the
+ * prior attempt's reply is in hand — it echoes that reply back plus the
+ * complaint (`ask.ts`'s `complaint`) — so "every rendered prompt" cannot be
+ * collected before any of them are sent without first simulating the whole
+ * conversation, which is the run itself. Per-attempt, right before that
+ * attempt's `send`, is the earliest point each prompt's final text exists,
+ * which satisfies "before any `messages` call" at the only granularity that
+ * is actually available. The spend stop does not read these counts (it reads
+ * the real `usage.inputTokens` a completed call bills, refined run over run —
+ * see `SessionSpendStop.record`): `count_tokens` here is purely what the
+ * Log's table quotes, per Build step 1's own reason for wanting it ("It is
+ * free, and it replaces this ticket's chars/4 estimates with numbers the Log
+ * can quote"), not an input to any decision this script makes.
  */
 function countTokensClient(config: ApiConfig): Anthropic | null {
   if (config.modelProvider !== "anthropic" || config.anthropicApiKey === undefined) return null;
@@ -603,25 +620,67 @@ function findsReaderCandidateCount(record: LiveRunRecord): number {
 // CLI
 // ---------------------------------------------------------------------------
 
-interface Cli {
+export interface Cli {
   outDir: string;
   maxUsd: number;
 }
 
-function parseCli(argv: readonly string[]): Cli {
+const RECOGNIZED_FLAGS = new Set(["--out", "--max-usd"]);
+
+/**
+ * Parses `--out <dir>` and `--max-usd <n>`, `--flag=value` accepted too.
+ *
+ * **Revised after the first gate.** The previous version matched only the
+ * exact token `"--max-usd"`: `--max-usd=0.01` and `--max-usd` as the last
+ * argument (no value following it) were both silently unrecognized and the
+ * loop simply moved on, leaving `maxUsd` at its default of 10 — reproduced by
+ * the gate as a session that asked for a $0.01 or a $2 cap and could spend up
+ * to $10 instead. Every token is now either a recognized flag (in one of its
+ * two spellings) or a thrown error; nothing is silently ignored, and a flag
+ * with no value throws rather than falling back to a default that looks like
+ * the one the caller asked for.
+ */
+export function parseCli(argv: readonly string[]): Cli {
   let outDir: string | undefined;
-  let maxUsd = 10;
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === "--out") {
-      outDir = argv[index + 1];
+  let maxUsd: number | undefined;
+
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index];
+    if (token === undefined) break;
+    const equals = token.indexOf("=");
+    const name = equals === -1 ? token : token.slice(0, equals);
+
+    if (!RECOGNIZED_FLAGS.has(name)) {
+      throw new Error(
+        `Unrecognized argument: ${token}\n` +
+          "Usage: node --import tsx tools/planner/api/test/live/run.ts --out <dir> [--max-usd <n>]",
+      );
+    }
+
+    let value: string;
+    if (equals !== -1) {
+      value = token.slice(equals + 1);
       index += 1;
-    } else if (arg === "--max-usd") {
-      const raw = argv[index + 1];
-      if (raw !== undefined) maxUsd = Number(raw);
-      index += 1;
+    } else {
+      const next = argv[index + 1];
+      if (next === undefined) {
+        throw new Error(`${name} requires a value`);
+      }
+      value = next;
+      index += 2;
+    }
+
+    if (name === "--out") {
+      outDir = value;
+    } else {
+      maxUsd = Number(value);
+      if (!Number.isFinite(maxUsd) || maxUsd <= 0) {
+        throw new Error(`--max-usd must be a positive number, got ${value}`);
+      }
     }
   }
+
   if (outDir === undefined) {
     throw new Error(
       "Usage: node --import tsx tools/planner/api/test/live/run.ts --out <dir> [--max-usd <n>]\n" +
@@ -629,10 +688,7 @@ function parseCli(argv: readonly string[]): Cli {
         "tools/planner/api/test/fixtures/live/ must never be reachable by the same accident.",
     );
   }
-  if (!Number.isFinite(maxUsd) || maxUsd <= 0) {
-    throw new Error(`--max-usd must be a positive number, got ${String(maxUsd)}`);
-  }
-  return { outDir, maxUsd };
+  return { outDir, maxUsd: maxUsd ?? 10 };
 }
 
 function writeRecord(outDir: string, name: string, record: LiveRunRecord): void {

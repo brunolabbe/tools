@@ -410,74 +410,183 @@ tools/planner/api/test/live/run.ts --out <dir> --max-usd <n>`. `--out` has no
 - **Set D** reuses set B's finds and brief with a config carrying
   `maxOutputTokens: 512`, and its own `runBudgetFor` from that config — not a
   hand-typed budget.
-- **`count_tokens`** is called from the recording wrapper, before every
-  `send`, only when `config.modelProvider === "anthropic"` — under the
-  scripted provider it is `null` on every attempt, by construction, and this
-  branch has never executed against a real socket here.
+- **`count_tokens`** is called from the recording wrapper immediately before
+  each attempt's own `send`, only when `config.modelProvider === "anthropic"`
+  — under the scripted provider it is `null` on every attempt, by
+  construction, and this branch has never executed against a real socket
+  here. Per attempt rather than one upfront pass, because a re-ask's exact
+  `messages` do not exist until the prior reply is in hand — see the comment
+  on `countTokensFor` for why "before any messages call" cannot mean more
+  than that here. It is not wired into the spend stop below, which reads only
+  real billed usage.
 - **The session spend stop** (`SessionSpendStop`) refuses before a run starts
   if that run's worst case — `runBudgetFor`'s output bound at $25/MTok plus a
   reconstructed input ceiling at $5/MTok — would take the session past
-  `--max-usd`. Priced at Opus 5's public rates
-  (`OPUS_5_PRICES`), independent of `ApiConfig.modelPrices`, which is an
-  operator setting for pl-49's report and is `undefined` in this environment.
-  Verified two ways: `live-gate.test.ts` proves the arithmetic against
-  synthetic budgets (its "80k output tokens" case reproduces the filing's own
-  $2.00 ceiling exactly); a manual run with `--max-usd 0.01` refused before set
-  A's first call with `could bill up to $2.24` — the filing's own quoted
-  happy-fixture-run figure, reproduced independently by this formula.
+  `--max-usd`. Priced at Opus 5's public rates (`OPUS_5_PRICES`), independent
+  of `ApiConfig.modelPrices`, which is an operator setting for pl-49's report
+  and is `undefined` in this environment. Verified two ways:
+  `live-gate.test.ts` pins the exact 2-attempt production formula against the
+  filing's own worst-case ceilings — $2.24 for an A-shaped call, $2.73 for a
+  B/C-shaped one (see the note on floating-point rounding in that test), $0.68
+  for set D's edge budget — and a mutation dropping the re-ask's echoed input
+  is asserted to diverge from the real function; a manual run with
+  `--max-usd 0.01` refused before set A's first call quoting that same $2.24
+  **worst-case ceiling** (not the ~$0.07 happy-run figure the filing also
+  gives — the two are different numbers for different questions, and an
+  earlier draft of this Log conflated them).
 
-**Verification, in the order run:**
+### 2026-09-17 — gate round 1: 3 med, 6 low, reproduced and answered
 
-1. `npx tsc -p tsconfig.tests.json --noEmit` — clean, after fixing one
-   `no-shadow` (a parameter named the same as a local it shadowed;
-   `attempt1InputTokens` → `attempt1Inputs`).
-2. `PLANNER_LIVE_RUN=1 node --import tsx api/test/live/run.ts --out
-<scratchpad> --max-usd 10` — completed all four sets, wrote 25 files (6 for
-   set A, 15 for set B — it ran to the 15-run cap, since the scripted
-   provider's fixed 5-candidate reply per run never reaches 100 across sets;
-   this is the scripted proof's own number, not a claim about the corpus size
-   a real run will produce — 3 for set C, 1 for set D). Every dollar figure was
-   `$0.0000`, `ScriptedProvider`'s honest answer.
-3. Without `PLANNER_LIVE_RUN` set: refused before touching a config, provider
-   or directory (checked — `/tmp/should-not-write` was never created).
-4. With `PLANNER_LIVE_RUN=1 MODEL_PROVIDER=anthropic` and no key: refused
-   inside `createModelProvider` with `AGENT_UNCONFIGURED`, naming
-   `ANTHROPIC_API_KEY` — the deployed service's own refusal, unchanged.
-5. `--max-usd 0.01`: refused before set A's first call, quoting the $2.24
-   ceiling above.
-6. `npx vitest run --project planner tools/planner/api/test/live-gate.test.ts
-tools/planner/api/test/live-records.test.ts` — 15 passed.
-7. `live-records.test.ts` made red on purpose: planted
-   `tools/planner/api/test/fixtures/live/scratch-plant.json` with
-   `{"headers":{"x-api-key":"sk-ant-planted-leak-..."}}`, re-ran the suite —
-   1 failed, naming all four violations (`headers` and `x-api-key` as
-   forbidden keys, the `sk-ant-` substring, and `headers` failing
-   `redactHeaders`). Removed the plant, re-ran — 7 passed, nothing left under
-   `fixtures/live/`.
-8. `ANTHROPIC_API_KEY=sk-ant-fake npx vitest list --project planner | grep
-live` — lists only `live-gate.test.ts` and `live-records.test.ts`; nothing
-   under `test/live/`, with a key present.
-9. `npm test -- --project planner` — 69 files, 1105 tests, all green (was 69
-   files before this branch touched anything test-collected — the count grew
-   only by this ticket's 15 new assertions across the two new `*.test.ts`
-   files; `live/run.ts` itself is not collected, per (8)).
-10. `npm run check` — exit 0 (lint, `oxfmt --check` after `npm run format`,
-    and the full `tsc --build` graph, tests project included).
+`ticket-reviewer` (Sonnet, dispatched by the orchestrator) gated `125dac5`
+against `origin/main` at `20c8fd1` and returned CONCERNS with 10 findings and
+two open decisions. Every finding was reproduced independently before being
+accepted — none was taken on the reviewer's word alone — and each reproduction
+command and result is in the exchange between the two agents, not repeated in
+full here. Summary, by disposition:
 
-**What is proven and what is not, against the ticket's own `Done when`:**
+**Fixed, all in `api/test/live-records.test.ts`, `api/test/live-gate.test.ts`
+and `api/test/live/run.ts`:**
 
-| Done when                                                                                                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Harness completes A–D under scripted, writes final-shape records; refuses before a provider without `PLANNER_LIVE_RUN=1`, proved by a test | **Done** — verification 2, 3, 6 above                                                                                                                                                                                                                                                                                                                                                                  |
-| `npm test` with a key collects nothing under `test/live/`                                                                                  | **Done** — verification 8                                                                                                                                                                                                                                                                                                                                                                              |
-| Log quotes `count_tokens` figures, replacing chars/4 estimates, discovery block included                                                   | **Awaiting the owner's run.** The call path exists and is gated to `anthropic` only; it has never executed against a socket here                                                                                                                                                                                                                                                                       |
-| Sets A–D run against `claude-opus-5`, records checked in under `fixtures/live/`                                                            | **Awaiting the owner's run**                                                                                                                                                                                                                                                                                                                                                                           |
-| The Log's one table (calls, tokens, dollars, ceilings, malformed/re-ask/refusal/length/fallback counts, session total)                     | **Awaiting the owner's run** — no real usage exists yet to tabulate                                                                                                                                                                                                                                                                                                                                    |
-| Every run's billed output at or under the bound; set D at the edge; rules (a)–(c) each answered                                            | **Awaiting the owner's run.** Structurally: set D's budget and finds are correct (verified above), but `ScriptedProvider` does not simulate `max_tokens` truncation, so set D's _edge behaviour_ — every attempt hitting `length` — cannot be exercised here at all, only its plumbing (right budget, right finds, one record written, `stopReason: "end"` under the script's own unconditional reply) |
-| Set C: no finds-reader candidate treats the hostile string as an instruction                                                               | **Awaiting the owner's run.** `ScriptedProvider` ignores `finds` entirely (`SCRIPTED_FAN_OUT` keys only on shape + specialist), so set C's mechanical pipeline (hostile find appended, kept out of B's corpus, three runs, three files) is proven; whether _a model_ resists the string is exactly the thing nothing here can test                                                                     |
-| Set B stops at ≥100 candidates or 15 runs, Log states which and the count                                                                  | **Structurally proven, real count awaiting the owner's run.** The scripted proof stopped at the 15-run cap with 75 (see verification 2) — an artifact of the script's fixed reply, not a measurement of a real corpus                                                                                                                                                                                  |
-| `live-records.test.ts` green over checked-in records, seen red against a planted key                                                       | **Done** — verification 7. Green today is vacuous in the sense that there are zero files to check; it is not vacuous in the sense the walk itself was proven able to fail                                                                                                                                                                                                                              |
-| `npm run check` and `npm test -- --project planner` pass                                                                                   | **Done** — verification 9, 10                                                                                                                                                                                                                                                                                                                                                                          |
+- **MED 1 — the redaction walk false-positived on the harness's own real
+  records.** Reproduced exactly: 19 of 31 file-checks failed over a real
+  scripted run's B/C/D records, on OSM tag values like `wikipedia:
+"fr:Observatoire de la capitale"` — `new URL()` parses a bare `fr:` scheme
+  with `origin === "null"`, which the old whole-string comparison against
+  `redactUrl` always called "changed". **Fixing this surfaced a second,
+  real false positive of the same kind, found while re-verifying against the
+  actual records rather than a synthetic one**: a genuine OSM `fixme` tag
+  carrying a public heritage-registry URL with an ordinary record id
+  (`?id=0040-85-7973-09`) — not a credential — still "changed" under a
+  literal reading of Build step 5 ("any string that parses as a URL and
+  changes under redactUrl"), because _any_ query string does. That literal
+  rule cannot go green over real map data, on any corridor, ever — which
+  fails the Done-when line it exists to serve. The walk now: scopes to
+  `http(s)` schemes only; looks for a URL **embedded in prose**, not only a
+  whole-string one (`content` and `systemPrompt` carry links inside
+  sentences, which the original walk missed entirely — also reproduced); and
+  flags a query string only when a parameter **name** looks credential-shaped
+  (`token`, `signature`, `X-Amz-Signature`, …), which still catches every
+  synthetic and real signed-URL shape tried against it. Re-verified against
+  the real 25-file B/C/D/A output: all pass; a planted `x-api-key` still
+  fails on all four of its own violations.
+- **MED 2 — the money tests didn't pin the formula the harness actually
+  uses.** The one existing "80k output tokens / $2.00" test overrode
+  `maxAttemptsPerSpecialist: 1`, which is not the production shape
+  (`runBudgetFor`'s default is 2), and its assertion computed $1.00 while its
+  name and comment claimed $2.00 — reproduced by running it (asserts $1.00,
+  passes) and by applying the gate's own mutation (drops the second attempt's
+  echoed input entirely; all 8 tests still passed). `live-gate.test.ts` now
+  has three golden-value tests against the real 2-attempt production budget
+  — $2.24 (A), $2.73 (B/C, see the floating-point note), $0.68 (D) — plus a
+  literal reproduction of the gate's mutant asserted to diverge from the real
+  function.
+- **MED 3 — `--max-usd` silently ignored its own value.** `parseCli` matched
+  only the exact token `"--max-usd"`; `--max-usd=0.01` and a trailing
+  `--max-usd` with nothing after it were both unrecognized and silently
+  dropped, leaving the default of 10 in force — reproduced both ways (a
+  session that asked for a one-cent cap ran to completion printing "max
+  $10.00"). Rewritten to accept `--flag=value`, and every unrecognized token
+  or missing value now throws rather than being ignored. 8 new unit tests in
+  `live-gate.test.ts`; both original repro commands re-run and now refuse
+  correctly, quoting the real $2.24 ceiling.
+- **LOW 5(a) — the walk was non-recursive.** A plant one directory level
+  down (`fixtures/live/set-b/scratch-plant.json`) was invisible; `--out` has
+  no default, so a per-set output directory is a plausible real invocation.
+  `readdirSync(dir, { recursive: true })` now; a real-filesystem regression
+  test (temp directory, nested file) replaces the weaker mechanism this fix
+  first tried.
+- **LOW 5(b) — a signed URL embedded in prose was invisible.** Only a
+  whole-string URL was checked; `content` and `systemPrompt` carry a source
+  link inside a sentence, and the walk missed it entirely — fixed as part of
+  MED 1's rework (`EMBEDDED_HTTP_URL`).
+- **LOW 5(c), part one — `readdirSync` swallowed every error, not only
+  "not created yet".** Now only `ENOENT` reads as "no records"; anything
+  else rethrows, with a regression test forcing `ENOTDIR` over a real file.
+  **Part two** — the forbidden-key list was narrower than `redactHeaders`'s
+  own denylist and only fired when every sibling value was also a string, so
+  a `cookie` key beside a non-string value escaped. Every key is now asked of
+  `redactHeaders` directly (`isSecretHeaderName`), which cannot drift from
+  the function it is checking.
+- **LOW 8 — three Log statements were wrong**, all in the paragraph and
+  verification list this entry replaces: `$2.24` was mislabeled as the
+  filing's "happy-fixture-run" figure (it is the worst-case ceiling; the
+  filing's happy-run figure is ≈$0.07, a different number for a different
+  question); the base commit's test count was given as "69 files" when
+  `git ls-tree -r --name-only 20c8fd1 -- tools/planner | grep -E
+'/test/.*\.test\.(ts|tsx)$'` gives 67 (independently confirmed; the paired
+  test count, 1090, is the gate's own figure and reconciles exactly with
+  today's 1126 minus this round's 36 new assertions); and the MED 2 test's
+  own $2.00 claim, covered above.
+
+**Documented rather than changed, LOW 6:** `count_tokens` runs per attempt,
+immediately before that attempt's `send`, not as one upfront pass over every
+prompt the protocol will render — Build step 1 reads as the latter. A
+re-ask's `messages` do not exist until the prior reply is in hand, so a true
+upfront pass cannot exist without first running the conversation, which is
+the run itself. Comment added on `countTokensFor` explaining this and noting
+the spend stop reads only real billed usage, never `count_tokens`'s numbers.
+
+**Carried to the orchestrator as open decisions, not resolved here** (the
+gate raised both; this build agrees both are genuine forks with no single
+correct answer from the ticket text alone):
+
+- **LOW 4 / Open decision A.** `runCeilingUsd` follows Build step 3's formula,
+  which has no margin for a server-side fallback billing up to 2×
+  `maxOutputTokens` at another model's rates (Traps section). Confirmed by
+  reading `runCeilingUsd` rather than by re-running the gate's fabricated-usage
+  repro: the formula genuinely carries no such term. Whether to double the
+  output line item or document the possible overshoot is the orchestrator's
+  to decide, not this ticket's to guess at.
+- **LOW 7 / Open decision B.** `articlesNear` is stubbed to `[]`, so every
+  find in this harness is "unbacked" — confirmed by reading
+  `discoverAlongCorridor`'s `rankFinds`: half the cap is reserved by pure
+  distance regardless of backing, and the _other_ half is ranked
+  backing-first, so a corridor with real Wikipedia coverage (pl-41's own gate
+  found 84 of 276 backed on this exact corridor) would select a different 40
+  finds than this harness's stub does. Build step 2 is silent on notability;
+  wiring in `wikipedia-geosearch.json` for higher fidelity versus accepting
+  the documented skew is a real trade this ticket did not specify, not a
+  defect to fix silently.
+
+**A third thing found and not fixed, LOW 9, confirmed by reading the SDK's
+own real types rather than assumed:** the Done-when table wants a "thinking
+share of output" column. The Messages API does report a breakdown
+(`BetaUsage.output_tokens_details`, per
+`@anthropic-ai/sdk/resources/beta/messages/messages.d.ts`), but pl-39's
+`usageOf()` in `agent/src/providers/anthropic.ts` discards it, keeping only
+the summed `output_tokens` — so no record this harness writes can ever
+populate that column as things stand. `agent/src/providers/anthropic.ts` is
+outside this ticket's own declared scope (a merged ticket's contract-adjacent
+seam), so this is recorded rather than patched here. **Recommendation for the
+orchestrator: a small follow-up ticket against `ModelUsage`/`usageOf`, adding
+the reasoning-token breakdown the API already sends**, rather than leaving
+the column permanently unfillable.
+
+**Re-verified after every fix**, same commands as the first entry:
+`npx tsc -p tsconfig.tests.json --noEmit` clean; a fresh end-to-end scripted
+run wrote 25 records that now pass `live-records.test.ts` in full (40 tests,
+was 19 failed / 12 passed before the MED 1 fix); both MED 3 repro commands
+now refuse correctly; the MED 2 mutation now fails 5 of the 20
+`live-gate.test.ts` tests (was 0 of 8); `npm test -- --project planner` —
+**69 files, 1126 tests**, all green; `npm run check` — exit 0.
+
+**What is proven and what is not, against the ticket's own `Done when`**
+(unchanged in substance from the first entry — this round fixed the harness's
+own defects, not what only the owner's run can prove):
+
+| Done when                                                                                                                                  | Status                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Harness completes A–D under scripted, writes final-shape records; refuses before a provider without `PLANNER_LIVE_RUN=1`, proved by a test | **Done** — `api/test/live-gate.test.ts:33` `"refuses when PLANNER_LIVE_RUN is unset"` and siblings; a fresh end-to-end scripted run this round wrote 25 records, all passing the redaction walk                                    |
+| `npm test` with a key collects nothing under `test/live/`                                                                                  | **Done** — `ANTHROPIC_API_KEY=sk-ant-fake npx vitest list --project planner \| grep live` lists only the two `*.test.ts` files, re-run this round                                                                                  |
+| Log quotes `count_tokens` figures, replacing chars/4 estimates, discovery block included                                                   | **Awaiting the owner's run.** The call path exists and is gated to `anthropic` only; it has never executed against a socket here                                                                                                   |
+| Sets A–D run against `claude-opus-5`, records checked in under `fixtures/live/`                                                            | **Awaiting the owner's run**                                                                                                                                                                                                       |
+| The Log's one table (calls, tokens, dollars, ceilings, malformed/re-ask/refusal/length/fallback counts, session total)                     | **Awaiting the owner's run** — no real usage exists yet to tabulate                                                                                                                                                                |
+| Every run's billed output at or under the bound; set D at the edge; rules (a)–(c) each answered                                            | **Awaiting the owner's run.** `ScriptedProvider` does not simulate `max_tokens` truncation, so set D's _edge behaviour_ cannot be exercised here at all, only its plumbing (right budget, right finds, one record written per run) |
+| Set C: no finds-reader candidate treats the hostile string as an instruction                                                               | **Awaiting the owner's run.** `ScriptedProvider` ignores `finds` entirely, so only set C's mechanical pipeline is proven                                                                                                           |
+| Set B stops at ≥100 candidates or 15 runs, Log states which and the count                                                                  | **Structurally proven, real count awaiting the owner's run.** The scripted proof stopped at the 15-run cap with 75, an artifact of the script's fixed reply                                                                        |
+| `live-records.test.ts` green over checked-in records, seen red against a planted key                                                       | **Done** — `api/test/live-records.test.ts`'s "the walk itself" and "collectJsonFiles" describes (16 tests) plus a manual plant-and-remove cycle over real records this round                                                       |
+| `npm run check` and `npm test -- --project planner` pass                                                                                   | **Done** — both re-run this round, exit 0 / 69 files, 1126 tests                                                                                                                                                                   |
+| "thinking share of output" per run (part of the table row above)                                                                           | **Not fillable from current records, seam gap found this round (LOW 9).** See the recommendation above; not this ticket's file to fix                                                                                              |
 
 **Could have folded in, and did not.** pl-29 and pl-36 are both `done` and
 both waiting on this ticket per their own Logs, but what they need is a real
@@ -485,10 +594,13 @@ labelled corpus from a real model, not additional code — there was nothing of
 theirs to make free here. No other open ticket in the phase touches this
 harness's files.
 
-**Open decision: none carried forward.** Every choice above (locate/notability/
-travel stubbing, the spend-stop's conservative fallback constants, `--out`
-having no default, the devDependency route for `count_tokens`) had one
-defensible answer given the ticket's own constraints and is recorded rather
-than asked; none of them is contract-adjacent or reversible only at cost. The
-owner's run, and rule (a)–(c)'s "which `pl-` fix" question if any of them
-trips, remain the ticket's real open questions — unchanged from the filing.
+**Open decisions carried to the orchestrator: two**, both above (LOW 4 /
+Open decision A, LOW 7 / Open decision B), both raised by the gate and agreed
+to by this build after independent reproduction. Every other choice in this
+entry and the first one (locate/notability/travel stubbing beyond the
+notability question above, the spend-stop's conservative fallback constants,
+`--out` having no default, the devDependency route for `count_tokens`) had
+one defensible answer given the ticket's own constraints and is recorded
+rather than asked. The owner's run, and rule (a)–(c)'s "which `pl-` fix"
+question if any of them trips, remain the ticket's real open questions —
+unchanged from the filing.
