@@ -623,6 +623,9 @@ describe("route refusals", () => {
       });
       expect(response.statusCode).toBe(404);
       expect(response.json.error.code).toBe("REVISION_NOT_FOUND");
+      // From the check against the latest, not from the restore's own
+      // defensive lookup behind it, which names no latest.
+      expect(response.json.error.details).toEqual({ revision: 2, latest: 1 });
       expectNothingReachedItinerary();
     } finally {
       await f.close();
@@ -1496,6 +1499,47 @@ describe("an edit whose client went away", () => {
       ).rejects.toMatchObject({ code: "CANCELED" });
       expect((await readView(f.harness, view.plan.id)).plan.revisions).toHaveLength(1);
       expect(vi.mocked(applyEdit)).not.toHaveBeenCalled();
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("a pin set during an edit's lookup", () => {
+  test("is carried by the revision the edit writes", async () => {
+    const f = await fixture();
+    try {
+      const view = await draft(f);
+      const base = latestOf(view.plan);
+      const pinned = itemOn(base, 0, 0);
+      const gate = { open: deferred(), entered: 0, arrived: [deferred()] };
+      f.grounding.travelGate = gate;
+
+      // A lodging to the end of day 3: one transition, so the edit awaits a
+      // lookup between its checks and its write.
+      const edited = revise(f.harness, view.plan.id, {
+        kind: "move",
+        baseRevisionId: base.id,
+        itemId: itemOn(base, 0, 1).id,
+        toDayIndex: 3,
+        toPosition: 1,
+      });
+      await gate.arrived[0]?.promise;
+      const pin = await f.harness.app.server.inject({
+        method: "POST",
+        url: planItemPinUrl(view.plan.id, pinned.id),
+        payload: { pinned: true },
+      });
+      expect(pin.statusCode).toBe(200);
+      gate.open.resolve();
+
+      const response = await edited;
+      expect(response.statusCode).toBe(200);
+      if (response.json.kind !== "revision") throw new Error("no view");
+      const revision = latestOf(response.json.view.plan);
+      expect(revision.revision).toBe(2);
+      const kept = revision.days[0]?.items.find((item) => item.candidateId === pinned.candidateId);
+      expect(kept?.pinned).toBe(true);
     } finally {
       await f.close();
     }

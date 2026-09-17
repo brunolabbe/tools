@@ -770,9 +770,10 @@ showed one open pull request, a downloader release.
   read. My first pin test stayed green with the re-read removed (M9 below). The
   test now pins at both moments, and the grounding case is the one that goes
   red.
-- **The orphan close runs before the check transaction, not inside it.**
-  `cancelRun` emits a `canceled` frame, and a rolled-back transaction cannot
-  un-send one. It is still synchronous, with no `await` before the transaction.
+- **The orphan close runs before the check transaction, not inside it**, which
+  is what step 3 already says ("Before the check"). It is not a departure. It is
+  worth keeping out of the transaction: `cancelRun` emits a `canceled` frame, and
+  a rolled-back transaction cannot un-send one.
 - **`applyEdit` runs inside the write transaction, against the latest revision
   re-read there**, not against the one read before the lookup. Step 5 lists
   `applyEdit` before the write. The pairs measured before the `await` are still
@@ -887,3 +888,26 @@ restores compared identical. Each count is failed of total:
 
 **Gates, at the end.** `npm run check` exited 0. `npm test -- --project planner`
 passed at 69 files and 1,144 tests.
+
+**2026-09-17 — the gate's findings, reproduced and repaired.** The
+ticket-reviewer reviewed `1bce511` and returned CONCERNS: one medium finding,
+one low, and a correction to this Log's framing.
+
+- **Medium: nothing tested that an edit carries a pin set during its lookup.**
+  The reviewer mutated `edit()` to call `applyEdit` on the revision read before
+  the lookup, and all 32 tests stayed green. That was the reviewer's run, and I
+  did not repeat it before writing the test. I added a test to `revisions.test.ts` that
+  holds the edit's matrix call, pins an item, opens the call, and asserts the
+  written revision keeps the pin. With the test in place, M21 fails 1 of 33 and
+  the unmutated file passes 33 of 33.
+- **Low: restore's own range check was masked.** With that check removed, the
+  restore's defensive lookup behind it raises the same code. The
+  `REVISION_NOT_FOUND` test now asserts `details` of `{ revision: 2, latest: 1 }`,
+  which only the front check produces. With the check removed (M22) it fails 1
+  of 33.
+- **Framing:** the orphan-close bullet above said it described a departure. It
+  did not, because step 3 already specifies that order, and the bullet is
+  corrected.
+- **Not acted on, and agreed with the reviewer:** its other survivor,
+  `measureEdit`'s zero-places early exit, is redundant with `measureTravel`'s
+  own skip when nothing located, so a mutation there cannot go red.
