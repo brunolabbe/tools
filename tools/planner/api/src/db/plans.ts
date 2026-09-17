@@ -23,6 +23,7 @@ import {
   candidateSchema,
   itemTravelSchema,
   planGapSchema,
+  revisionOperationSchema,
   sourceSchema,
   tripBriefSchema,
   uncheckedConstraintSchema,
@@ -33,6 +34,7 @@ import {
   type PlanGap,
   type PlanItem,
   type PlanRevision,
+  type RevisionOperation,
   type Source,
   type TripBrief,
   type UncheckedConstraint,
@@ -67,6 +69,7 @@ interface RevisionRow {
   revision: number;
   parent_revision_id: string | null;
   reason: string;
+  operation_json: string;
   gaps_json: string;
   coverage_json: string;
   reading_json: string;
@@ -190,15 +193,18 @@ export function insertCandidates(
 export function insertRevision(db: Database, revision: PlanRevision): void {
   db.prepare(
     `INSERT INTO plan_revisions
-       (id, plan_id, revision, parent_revision_id, reason, gaps_json, coverage_json,
-        reading_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, plan_id, revision, parent_revision_id, reason, operation_json, gaps_json,
+        coverage_json, reading_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     revision.id,
     revision.planId,
     revision.revision,
     revision.parentRevisionId,
     revision.reason,
+    // Explicit, never left to migration 10's DEFAULT: a writer relying on it
+    // would store `first-draft` on revision 2 and nothing would say so.
+    JSON.stringify(revision.operation),
     JSON.stringify(revision.gaps),
     JSON.stringify(revision.coverage),
     JSON.stringify(revision.reading),
@@ -295,6 +301,38 @@ export function updateItemPin(
   return result.changes > 0;
 }
 
+/**
+ * Where one placed item sits on the plan's **latest** revision: its candidate
+ * and its day, or `undefined` (pl-44).
+ *
+ * Scoped exactly the way `updateItemPin` scopes its `UPDATE` — the item walked
+ * back through its day and revision to this plan, and the revision the plan's
+ * `MAX` — and in one statement, never by trusting the item id alone. A move or
+ * a remove names an item the client is looking at; one from another plan, or
+ * from a superseded revision, is `ITEM_NOT_FOUND` for pl-22's reason.
+ */
+export function selectLatestItem(
+  db: Database,
+  input: { planId: string; itemId: string },
+): { candidateId: string; dayIndex: number } | undefined {
+  const row = db
+    .prepare(
+      `SELECT plan_items.candidate_id, plan_days.day_index
+       FROM plan_items
+       JOIN plan_days ON plan_days.id = plan_items.day_id
+       JOIN plan_revisions ON plan_revisions.id = plan_days.revision_id
+       WHERE plan_items.id = ?
+         AND plan_revisions.plan_id = ?
+         AND plan_revisions.revision = (
+           SELECT MAX(sibling.revision) FROM plan_revisions AS sibling
+           WHERE sibling.plan_id = plan_revisions.plan_id
+         )`,
+    )
+    .get(input.itemId, input.planId) as { candidate_id: string; day_index: number } | undefined;
+
+  return row === undefined ? undefined : { candidateId: row.candidate_id, dayIndex: row.day_index };
+}
+
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------
@@ -376,6 +414,9 @@ export function selectPlan(db: Database, id: string): PlanDetail | undefined {
 }
 
 const gapsSchema = z.array(planGapSchema);
+// `z.ZodType<T>` rather than the schema's inferred type: `parseOr` hands back
+// the contract's `RevisionOperation`, not zod's rendering of it.
+const operationSchema: z.ZodType<RevisionOperation> = revisionOperationSchema;
 const coverageSchema = z.array(uncheckedConstraintSchema);
 const readingSchema = z.array(sourceSchema);
 
@@ -407,10 +448,10 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     revision: row.revision,
     parentRevisionId: row.parent_revision_id,
     reason: row.reason,
-    // A literal, and true of every row that exists: nothing before pl-44 can
-    // write a revision other than a first draft. pl-44 replaces this with the
-    // stored `plan_revisions.operation_json` column and its backfill.
-    operation: { kind: "first-draft" },
+    // Migration 10's column. A row written before it reads its DEFAULT, which
+    // is `first-draft` and was true of every row then. One that does not parse
+    // is the same fatal read a corrupt gap list is.
+    operation: parseOr(operationSchema, row.operation_json, "revision", row.id),
     createdAt: row.created_at,
     days,
     gaps,

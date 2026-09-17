@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import Database from "better-sqlite3";
+import { AppError, appendRevision, latestRevision } from "@planner/contract";
+import { loadFixture } from "../../contract/test/fixtures.ts";
+import { insertRevision, selectPlan } from "../src/db/plans.ts";
+import { insertRun, selectRun } from "../src/db/runs.ts";
 import { migrate } from "../src/db/schema.ts";
+
+const NOW = "2026-08-15T12:00:00.000Z";
 
 function tables(db: Database.Database): string[] {
   const rows = db
@@ -37,6 +43,16 @@ const UNDO_MIGRATION_9 = USAGE_COLUMNS.map(
   (column) => `ALTER TABLE plan_runs DROP COLUMN ${column};`,
 ).join("\n");
 
+/**
+ * Migration 10, undone (pl-44). The index goes first; neither column is named
+ * by a trigger, so each is a plain `DROP COLUMN`.
+ */
+const UNDO_MIGRATION_10 = `
+  DROP INDEX plan_runs_one_live;
+  ALTER TABLE plan_runs DROP COLUMN kind;
+  ALTER TABLE plan_revisions DROP COLUMN operation_json;
+`;
+
 describe("migrations", () => {
   test("a fresh database arrives at the current schema", () => {
     const db = new Database(":memory:");
@@ -53,7 +69,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     db.close();
   });
 
@@ -75,11 +91,11 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     db.close();
   });
 
-  test("migrations 5 through 9 apply to a database at user_version = 4", () => {
+  test("migrations 5 through 10 apply to a database at user_version = 4", () => {
     // The case that actually happens for pl-25, pl-27 and pl-29: a deployment
     // already carrying the run tables gets the grounding cache, the measured
     // transition and the discovery coverage column added under it, with
@@ -110,6 +126,7 @@ describe("migrations", () => {
       END;
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 4;
     `);
@@ -119,7 +136,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
@@ -133,7 +150,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
 
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     db.close();
   });
@@ -146,6 +163,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 8;
     `);
@@ -159,7 +177,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     const row = db
       .prepare(`SELECT ${USAGE_COLUMNS.join(", ")} FROM plan_runs WHERE id = ?`)
@@ -191,7 +209,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -215,6 +233,7 @@ describe("migrations", () => {
     db.exec(`
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 6;
     `);
@@ -229,7 +248,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(9);
+    expect(userVersion(db)).toBe(10);
     const row = db
       .prepare("SELECT coverage_json, reading_json FROM plan_revisions WHERE id = ?")
       .get("r") as { coverage_json: string; reading_json: string };
@@ -238,6 +257,129 @@ describe("migrations", () => {
     // column existed reads back as "nothing checked", not as a NULL a reader
     // has to have an opinion about.
     expect(row.reading_json).toBe("[]");
+    db.close();
+  });
+});
+
+describe("migration 10 — operations, run kinds and one live run (pl-44)", () => {
+  const brief = loadFixture("road-trip").brief;
+
+  /** A database wound back to `user_version = 9`, holding one first draft and the run that drafted it. */
+  function atVersionNine(): Database.Database {
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec(`
+      ${UNDO_MIGRATION_10}
+      PRAGMA user_version = 9;
+    `);
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", JSON.stringify(brief), NOW, NOW);
+    db.prepare(
+      `INSERT INTO plan_revisions
+         (id, plan_id, revision, parent_revision_id, reason, gaps_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run("r1", "p", 1, null, "The first draft.", "[]", NOW);
+    db.prepare(
+      "INSERT INTO plan_runs (id, plan_id, status, started_at, finished_at) VALUES (?,?,?,?,?)",
+    ).run("run", "p", "done", NOW, NOW);
+    return db;
+  }
+
+  test("a revision and a run already there read back as a first draft and a draft, with the trigger silent", () => {
+    const db = atVersionNine();
+    expect(columns(db, "plan_revisions")).not.toContain("operation_json");
+
+    // `plan_revisions_append_only` raises on any UPDATE and would roll the
+    // migration back: that this does not throw is the trigger not firing.
+    expect(() => migrate(db)).not.toThrow();
+
+    expect(userVersion(db)).toBe(10);
+    // Through the read paths, not the raw columns: `toRevision` and `toRun`
+    // read the columns now, where pl-42 wrote literals.
+    expect(selectPlan(db, "p")?.revisions.map((each) => each.operation)).toEqual([
+      { kind: "first-draft" },
+    ]);
+    expect(selectRun(db, "run")?.kind).toBe("draft");
+    db.close();
+  });
+
+  test("a revision 2 and a re-plan run written afterwards read back their own values, not the DEFAULT", () => {
+    const db = atVersionNine();
+    migrate(db);
+
+    const plan = selectPlan(db, "p");
+    if (plan === undefined) throw new Error("no plan");
+    const operation = { kind: "restore", revision: 1 } as const;
+    const second = latestRevision(
+      appendRevision(plan, {
+        id: "r2",
+        reason: "Restored version 1.",
+        operation,
+        createdAt: NOW,
+        days: [],
+        gaps: [],
+        coverage: [],
+        reading: [],
+      }),
+    );
+    if (second === null) throw new Error("no revision 2");
+    insertRevision(db, second);
+    insertRun(db, { id: "again", planId: "p", kind: "replan", status: "queued", now: NOW });
+
+    expect(selectPlan(db, "p")?.revisions.map((each) => each.operation)).toEqual([
+      { kind: "first-draft" },
+      operation,
+    ]);
+    expect(selectRun(db, "again")?.kind).toBe("replan");
+    db.close();
+  });
+
+  test("the literals are gone: a stored operation that does not parse is a fatal read", () => {
+    const db = new Database(":memory:");
+    migrate(db);
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", JSON.stringify(brief), NOW, NOW);
+    db.prepare(
+      `INSERT INTO plan_revisions
+         (id, plan_id, revision, parent_revision_id, reason, operation_json, gaps_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run("r1", "p", 1, null, "The first draft.", '{"kind":"teleport"}', "[]", NOW);
+
+    expect(() => selectPlan(db, "p")).toThrow(AppError);
+    db.close();
+  });
+
+  test("a second live run for one plan is refused by the database, and a finished one is not counted", () => {
+    const db = atVersionNine();
+    migrate(db);
+    const insert = db.prepare(
+      "INSERT INTO plan_runs (id, plan_id, status, started_at, finished_at) VALUES (?,?,?,?,?)",
+    );
+
+    // The existing run is finished, so one live run beside it is allowed…
+    insert.run("live", "p", "fanning-out", NOW, null);
+    // …and a second live one is not, whatever wrote it.
+    expect(() => insert.run("second", "p", "queued", NOW, null)).toThrow(
+      /UNIQUE constraint failed/,
+    );
+    db.close();
+  });
+
+  test("insertRun turns that refusal into PLAN_BUSY naming the live run, never INTERNAL", () => {
+    const db = atVersionNine();
+    migrate(db);
+    insertRun(db, { id: "live", planId: "p", kind: "replan", status: "queued", now: NOW });
+
+    try {
+      insertRun(db, { id: "second", planId: "p", kind: "replan", status: "queued", now: NOW });
+      expect.unreachable("a second live run was inserted");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(AppError);
+      expect((error as AppError).code).toBe("PLAN_BUSY");
+      expect((error as AppError).details).toEqual({ run: "live" });
+    }
     db.close();
   });
 });

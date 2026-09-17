@@ -3,7 +3,7 @@ id: pl-44
 tool: planner
 title: A plan is revised over HTTP — re-plans run as jobs, edits write synchronously
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-42, pl-43]
 difficulty: hard
@@ -375,7 +375,9 @@ nothing.
 **Restore** is `restoreRevision(revisionN, { id, reason, createdAt })`, then
 the same write. It makes no grounding call and no lookup of any kind.
 `restoreRevision` stamps the operation and copies days, pins and
-`travelFromPrevious` (pl-42's trap; which pins, see _Open with the owner_).
+`travelFromPrevious` (pl-42's trap). Which pins: revision _n_'s, as stored — the
+answer to question 2 recorded in [pl-43](./pl-43-repack-named-days-and-diff.md)'s
+Log, in its entry answered on 2026-09-13.
 
 An edit emits no SSE frame and creates no run.
 
@@ -720,3 +722,168 @@ allowed and silent. What each answer asks of `api`:
    or refused through `applyEdit`, costs `api` nothing. Named through a new
    `UncheckedConstraintKind`, it reaches the view through `readPlanView`'s
    existing derivation.
+
+**2026-09-17 — built.** Branched from `origin/main` at `20c8fd1` (on the
+remote), dispatched as Opus. pl-39 and pl-41 were both `done` on that base, so
+the _Traps_ ordering held without a rebase. **Migration 10 was still next
+free:** migration 9 is the last on `origin/main`, and `gh pr list --state open`
+showed one open pull request, a downloader release.
+
+**What landed.**
+
+- `agent`: `FanOutInput.only` and `FanOutInput.note`, `AskInput.note`, the note
+  block in `userPrompt`, and `readsFinds`.
+- `api/src/runs/revise.ts`: the checks, the re-plan run, move, remove and
+  restore. `api/src/runs/reason.ts`: the caption.
+- `orchestrator.ts` now exports `moveTo`, `record`, `persist`, `recordUsage`,
+  `isCancellation` and `capacityFor`. It also gains `enqueueRun`, which holds a
+  run's cancel, failure and eviction path once for a draft and a re-plan.
+  `persist` takes the base it re-checks and the ceiling. `readPlanView` serves
+  `revisionDiffs`.
+- `db`: migration 10. `toRevision` parses `operation_json`, and `toRun` reads
+  `kind`. `insertRevision` and `insertRun` write both. `insertRun` maps the
+  `plan_runs_one_live` refusal to `PLAN_BUSY`. New queries: `selectLiveRun` and
+  `selectLatestItem`.
+- `rate-limit.ts`: `enforceRateLimit`, which the hook now calls.
+- `editLimiter`, `RATE_LIMIT_EDITS_PER_MINUTE`, and four `http-errors.ts`
+  entries: `REVISION_STALE`, `PLAN_BUSY`, `REVISION_LIMIT_REACHED` and
+  `PLAN_INFEASIBLE`, all 409.
+- The route in `routes/plans.ts`. `01-ARCHITECTURE.md` gains the table row and
+  the widened security line. oxfmt re-padded the whole configuration table,
+  because the new variable name is one character wider than the column.
+
+**What the brief had wrong, or did not say.**
+
+- **Step 6's example contradicts its own rule.** The table says
+  `with food and lodging`. The rule beside it orders by `SPECIALIST_ORDER`,
+  where lodging comes first. I built the rule, so the caption is
+  `with lodging and food`, and `reason.test.ts` says why.
+- **`REVISION_LIMIT_REACHED → 409` was not in step 2's `http-errors.ts`
+  paragraph.** pl-42 assigns that mapping to this ticket, so it landed here.
+- **An over-budget or not-applicable gap for a specialist with an item on a
+  frozen day does not survive.** `replan` drops a gap its days contradict, and
+  the frozen day still places that specialist. The test therefore names
+  `budget`, which placed nothing. This is `replan` working as pl-43 built it,
+  and it is worth knowing for pl-45's rendering.
+- **A pin set during the fan-out cannot prove step 6.1's re-read.** Step 4.4
+  reads the plan after the fan-out, so a pin set before then is already in that
+  read. My first pin test stayed green with the re-read removed (M9 below). The
+  test now pins at both moments, and the grounding case is the one that goes
+  red.
+- **The orphan close runs before the check transaction, not inside it.**
+  `cancelRun` emits a `canceled` frame, and a rolled-back transaction cannot
+  un-send one. It is still synchronous, with no `await` before the transaction.
+- **`applyEdit` runs inside the write transaction, against the latest revision
+  re-read there**, not against the one read before the lookup. Step 5 lists
+  `applyEdit` before the write. The pairs measured before the `await` are still
+  the pairs it asks about, because only a pin changes a revision in place and a
+  pin moves nothing. Without this, a pin set during an edit's lookup would be
+  silently dropped from the edit's revision. A `PLAN_INFEASIBLE` thrown there
+  rolls the transaction back.
+- **`persist` now asserts a base on the first draft too**, `null`. It is
+  unreachable in the same way the re-plan's check is.
+- **`orchestrator.ts` was already 669 lines on the base**, so "keeps it from
+  growing past 600" no longer described it. It is 718 now. The growth is
+  `enqueueRun` (the draft's catch and eviction, moved rather than copied) and
+  `persist`'s checks.
+
+**Not measured, and said so.**
+
+- **The request-socket abort.** The route aborts the edit's signal on
+  `reply.raw` `close` when the reply has not finished. `app.inject` has no socket
+  to close, so the wiring itself is untested. What is tested is `revisePlan`
+  with an aborted signal, which writes nothing.
+- **A `PLAN_INFEASIBLE` from `replan` failing the run with its details
+  untouched** goes through the shared catch in `enqueueRun`. It is not in
+  _Done when_, and I wrote no test for it.
+- The image gate and the e2e suite do not run locally. `api/package.json` is
+  unchanged, so the `Dockerfile` is too.
+
+**Fold-in.** Four pieces were free and are on this branch:
+
+- The stale _Open with the owner_ pointer in step 5, replaced with the pl-43 Log
+  answer, by the owner's decision on 2026-09-17.
+- `tools/planner/.env.example` gains `RATE_LIMIT_EDITS_PER_MINUTE`.
+- The rate-limit sentence in `docs/02-DEPLOYMENT.md`, which this change made
+  stale.
+- Two comments in `api/test/plan-view.test.ts` that said no route appends a
+  revision.
+
+I saw nothing else this branch made free.
+
+**Three merged gate records cite lines this branch moves or removes.**
+`node scripts/citations-gate.mjs --against origin/main` failed on all three,
+and passes now, at 84 enforced and 0 failing.
+
+- **pl-42's record** cited the `toRevision` literal comment this ticket was
+  told to delete. It is now pinned to `20c8fd1`, the base, where the line still
+  reads as cited. The same record already pins `runs.ts` the same way.
+- **pl-49's record** cited two migrations tests that moved down by 17 lines. It
+  is repointed to their current lines.
+- **dl-57's record** cites a line of `docs/02-DEPLOYMENT.md` below the paragraph
+  I edited. I kept that paragraph's line count unchanged rather than editing a
+  downloader ticket, since touching a `tools/downloader/` path would put this
+  branch in the downloader's changelog.
+
+### Verification
+
+**Cost of a run, measured once.** `npx vitest run tools/planner/api/test/runs.test.ts`
+took 2.14 s for 16 tests. `npx vitest run tools/planner/api` took 4.06 s for 399
+tests, with 9 of them failing on the stale `user_version` expectations this
+ticket then moved. Each change below was run against its own file.
+
+**Narrowest specs, green:**
+
+| File                          | Tests |
+| ----------------------------- | ----- |
+| `agent/test/fan-out.test.ts`  | 23    |
+| `agent/test/prompt.test.ts`   | 19    |
+| `api/test/migrations.test.ts` | 14    |
+| `api/test/schema.test.ts`     | 13    |
+| `api/test/plan-view.test.ts`  | 13    |
+| `api/test/revisions.test.ts`  | 32    |
+| `api/test/reason.test.ts`     | 8     |
+| `api/test/config.test.ts`     | 28    |
+
+**Twenty mutations**, each applied alone by a scratch script that runs that
+file, restores the source from a backup and compares it byte for byte. All
+restores compared identical. Each count is failed of total:
+
+| Mutation                                                        | File       | Failed  |
+| --------------------------------------------------------------- | ---------- | ------- |
+| M1 `only` ignored                                               | fan-out    | 5 of 23 |
+| M2 the note not rendered                                        | fan-out    | 1 of 23 |
+| M3 the busy check removed from the checks                       | revisions  | 2 of 31 |
+| M4 the orphan sweep removed                                     | revisions  | 1 of 31 |
+| M5 a same-day `toPosition` not adjusted                         | revisions  | 1 of 31 |
+| M6 the stale check removed                                      | revisions  | 1 of 31 |
+| M7 the pool read back after inserting                           | revisions  | 1 of 32 |
+| M8 the whole pool measured                                      | revisions  | 2 of 31 |
+| M9 the pre-compose re-read removed                              | revisions  | 1 of 32 |
+| M10 the zero-specialist roster frame not recorded               | revisions  | 2 of 31 |
+| M11 discovery run regardless of `readsFinds`                    | revisions  | 1 of 31 |
+| M12 `diffs: []`                                                 | revisions  | 1 of 31 |
+| M13 `PLAN_INFEASIBLE` unmapped                                  | revisions  | 1 of 31 |
+| M14 a re-plan spends the edits bucket                           | revisions  | 2 of 31 |
+| M15 the operation left to the DEFAULT                           | migrations | 1 of 14 |
+| M16 `kind` read as a literal                                    | migrations | 1 of 14 |
+| M17 the one-live refusal not mapped                             | migrations | 1 of 14 |
+| M18 the edit's re-check and `persist`'s base check both removed | revisions  | 1 of 31 |
+| M19 the caption ignores `SPECIALIST_ORDER`                      | reason     | 1 of 8  |
+| M20 the base's gaps not carried                                 | revisions  | 1 of 31 |
+
+- **M7 and M9 stayed green on their first run**, at 31 of 31. M7's test
+  compared the pool against a slice of itself, and it passed whenever the new
+  run's UUID sorted after the draft's. It now asserts fan-out order, which id
+  order cannot produce, because `food` sorts before `lodging`. M9 is the pin
+  finding above. After both repairs, M7 and M9 each failed 1 of 32, and the
+  unmutated file passed 32 of 32.
+- **M3 fails 2, not 3.** With the check gone, two re-plans issued together are
+  still one 202 and one `PLAN_BUSY`, because `plan_runs_one_live` refuses the
+  second insert. That is the backstop doing its job. The two tests that go red
+  are a restore and a remove against a live run, which insert no run.
+- **M18 removes two checks** because either one alone still refuses the second
+  concurrent move: the edit's own re-check, and `persist`'s base assertion.
+
+**Gates, at the end.** `npm run check` exited 0. `npm test -- --project planner`
+passed at 69 files and 1,144 tests.

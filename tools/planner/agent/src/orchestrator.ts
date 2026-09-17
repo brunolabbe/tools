@@ -57,7 +57,7 @@ import { askSpecialist, type CandidateProposal } from "./ask.ts";
 import { applyBudget, rosterGaps, type RunBudget } from "./budget.ts";
 import type { Find } from "./grounding.ts";
 import type { ModelProvider, ModelReply } from "./provider.ts";
-import { rosterFor, type RosterEntry } from "./roster.ts";
+import { rosterFor, type RosterDecision, type RosterEntry } from "./roster.ts";
 import { candidateCeiling, SPECIALIST_DEFINITIONS, type TripCapacity } from "./specialists.ts";
 
 // ---------------------------------------------------------------------------
@@ -117,6 +117,30 @@ export interface FanOutInput {
    * contract. Nothing here reads a clock or a price; it only adds.
    */
   onUsage?: ((usage: RunUsage) => void) | undefined;
+  /**
+   * Run only these specialists — a re-plan's named set (pl-44). `undefined` is
+   * the whole roster, which is every first draft.
+   *
+   * **The roster is still `rosterFor(brief)`**, so whether a specialist applies
+   * stays a pure function of the brief; this only narrows what is reported and
+   * run. A named specialist the roster says is not applicable is not run and
+   * keeps its `specialist-not-applicable` gap with the roster's own sentence —
+   * it is not refused, because that sentence is true and the checkbox that
+   * named it is an ordinary one. **Gaps and the `roster` frame cover the named
+   * set only**: an unnamed specialist's gap belongs to the revision being
+   * re-planned, and the caller carries it forward.
+   *
+   * The budget cap applies to the named set as it applies to a roster, from the
+   * back of `SPECIALIST_ORDER`. `[]` reports `total: 0`, sends nothing and
+   * returns empty.
+   */
+  only?: readonly Specialist[] | undefined;
+  /**
+   * What the traveller wrote about this change (a re-plan's `note`, pl-44).
+   * Rendered into every running specialist's **user** message as quoted
+   * context, never into the system prompt — see `userPrompt`.
+   */
+  note?: string | null | undefined;
 }
 
 /**
@@ -217,7 +241,7 @@ export interface FanOutResult {
 export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
   const shape = readyShape(input.brief);
 
-  const roster = rosterFor(input.brief);
+  const roster = named(rosterFor(input.brief), input.only);
   const budgeted = applyBudget(roster, input.budget);
   const total = budgeted.running.length;
 
@@ -259,6 +283,7 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
           capacity: input.capacity,
           budget: input.budget,
           finds: input.finds,
+          note: input.note,
           signal: input.signal,
         });
         done += 1;
@@ -342,6 +367,20 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
     },
     rejected,
     usage,
+  };
+}
+
+/**
+ * The roster narrowed to a named set, or the roster itself when nothing is
+ * named. Filtered rather than rebuilt, so both halves keep `SPECIALIST_ORDER`
+ * and every entry keeps the sentence `rosterFor` gave it.
+ */
+function named(roster: RosterDecision, only: readonly Specialist[] | undefined): RosterDecision {
+  if (only === undefined) return roster;
+  const wanted = new Set(only);
+  return {
+    running: roster.running.filter((entry) => wanted.has(entry.specialist)),
+    notApplicable: roster.notApplicable.filter((entry) => wanted.has(entry.specialist)),
   };
 }
 

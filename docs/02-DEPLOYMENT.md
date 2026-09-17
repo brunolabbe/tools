@@ -351,8 +351,8 @@ preference:
   [`### A real model behind the planner`](#a-real-model-behind-the-planner).
 
 Rate limiting is per-client the same way the downloader's is:
-`RATE_LIMIT_RUNS_PER_MINUTE` (default 5, on `POST /api/plans`) is keyed on
-`request.ip`, and [`compose.planner.prod.yaml`](../compose.planner.prod.yaml)
+`RATE_LIMIT_RUNS_PER_MINUTE` (default 5, drafts and re-plans) and
+`RATE_LIMIT_EDITS_PER_MINUTE` (default 30, edits) are keyed on `request.ip`, and [`compose.planner.prod.yaml`](../compose.planner.prod.yaml)
 sets `TRUST_PROXY` to the same `edge` subnet the downloader's line names, so
 behind `cloudflared` that means the visitor rather than the tunnel. Until pl-38
 it did not — `ApiConfig` had no trust field at all, so every client shared one

@@ -52,6 +52,7 @@ import {
   canRunTransition,
   isAnswered,
   latestRevision,
+  MAX_REVISIONS_PER_PLAN,
   missingRequiredSlots,
   TERMINAL_RUN_STATUSES,
   type Plan,
@@ -67,6 +68,7 @@ import {
   compose,
   dayCapacity,
   NOTHING_MEASURED,
+  revisionDiffs,
   tripSpan,
   uncheckedForRevision,
 } from "@planner/itinerary";
@@ -150,7 +152,7 @@ export function runBudgetFor(config: ApiConfig): RunBudget {
  * the numbers behind an appetite answer live in `limits.ts` and the fan-out
  * takes them as a required argument, so this layer is the one that knows both.
  */
-function capacityFor(brief: TripBrief): TripCapacity {
+export function capacityFor(brief: TripBrief): TripCapacity {
   if (!isAnswered(brief.dates)) {
     throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
   }
@@ -200,27 +202,89 @@ export function startRun(context: AppContext, intakeId: string): Run {
       brief,
       now: timestamp,
     });
-    return insertRun(context.db, { id: runId, planId, status: "queued", now: timestamp });
+    return insertRun(context.db, {
+      id: runId,
+      planId,
+      kind: "draft",
+      status: "queued",
+      now: timestamp,
+    });
   })();
+
+  enqueueRun(context, { runId, planId }, async (signal, spent) => {
+    await execute(context, { runId, planId, brief }, signal, spent);
+  });
+
+  return run;
+}
+
+/** What a run has spent so far, kept current by the fan-out as each reply lands (pl-49). */
+export interface Spent {
+  usage: RunUsage;
+}
+
+/**
+ * Put a run on the queue, and own how it ends: a cancellation, a failure, and
+ * the housekeeping after either. A first draft and a re-plan (pl-44) both go
+ * through here, so the two cannot disagree about what a canceled run writes.
+ *
+ * `work` does the run's own steps and reaches `done` itself. Whatever it
+ * throws lands in the catch below, which is the whole of the error path.
+ */
+export function enqueueRun(
+  context: AppContext,
+  ids: { runId: string; planId: string },
+  work: (signal: AbortSignal, spent: Spent) => Promise<void>,
+): void {
+  const { runId, planId } = ids;
 
   context.runs.enqueue({
     runId,
     run: async (signal) => {
+      // Held out here rather than read off the fan-out's result because a
+      // canceled run never gets a result: the cancellation rethrows, and the
+      // replies that finished before it were billed all the same. Empty until
+      // the fan-out starts, which is true of a run canceled during discovery —
+      // it asked no model anything.
+      const spent: Spent = { usage: emptyRunUsage() };
       try {
-        await execute(context, { runId, planId, brief }, signal);
+        await work(signal, spent);
+      } catch (error: unknown) {
+        // A cancellation is not a failure and it is not a gap. pl-5 rethrows it
+        // out of the fan-out rather than recording one, so that a canceled draft
+        // cannot be mistaken for a completed one with holes; catching it here to
+        // write a revision anyway would undo exactly that.
+        if (isCancellation(error, signal)) {
+          // A canceled run wrote no revision, and it still spent what its
+          // finished replies cost. That is the case pl-49 exists for as much as
+          // the others.
+          recordUsage(context, runId, spent.usage);
+          const canceled = new AppError("JOB_CANCELED");
+          if (moveTo(context, runId, "canceled", canceled)) {
+            context.events.canceled(runId, canceled.toPayload());
+          }
+          return;
+        }
+
+        const failure = AppError.from(error);
+        context.logger.error("run failed", { run: runId, plan: planId, code: failure.code });
+        recordUsage(context, runId, spent.usage);
+        if (moveTo(context, runId, "failed", failure)) {
+          context.events.failed(runId, failure.toPayload());
+        }
       } finally {
         // The grounding cache's other sweep — the first is on boot (pl-25).
-        // Here rather than inside `execute` because it is true of a run however
-        // it ended, including a canceled one, and because it is housekeeping
-        // rather than part of drafting a plan.
+        // Here rather than inside `work` because it is true of a run however it
+        // ended, including a canceled one, and because it is housekeeping rather
+        // than part of drafting a plan.
         //
         // Skipped while shutting down: the queue cancels what is in flight and
         // the database closes behind it, and a failed DELETE would turn a run
         // that finished into a logged task rejection.
         //
         // And guarded even so, though it is worth being exact about what that
-        // buys. The run row is already committed by the time `execute` returns,
-        // and the queue catches a rejected task and releases its slot — so an
+        // buys. The run row is already written by the time `work` returns, and
+        // the queue catches a rejected task and releases its slot — so an
         // unguarded `SQLITE_BUSY` here does **not** lose the plan or leave the
         // queue wedged. What it does is reject the task, which `onTaskError`
         // logs at error level as "run task rejected": a spurious line blaming
@@ -246,8 +310,6 @@ export function startRun(context: AppContext, intakeId: string): Run {
       }
     },
   });
-
-  return run;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +325,7 @@ export function startRun(context: AppContext, intakeId: string): Run {
  * rather than thrown, because failing a run because we mis-sequenced our own
  * bookkeeping would lose a plan the user is otherwise about to get.
  */
-function moveTo(
+export function moveTo(
   context: AppContext,
   runId: string,
   to: RunStatus,
@@ -293,165 +355,139 @@ interface RunInput {
   brief: TripBrief;
 }
 
-async function execute(context: AppContext, input: RunInput, signal: AbortSignal): Promise<void> {
+async function execute(
+  context: AppContext,
+  input: RunInput,
+  signal: AbortSignal,
+  spent: Spent,
+): Promise<void> {
   const { runId, planId, brief } = input;
 
-  // What the run has spent so far, kept current by the fan-out as each reply
-  // lands (pl-49). Held out here rather than read off the fan-out's result
-  // because a canceled run never gets a result: the cancellation rethrows, and
-  // the replies that finished before it were billed all the same. Empty until
-  // the fan-out starts, which is true of a run canceled during discovery — it
-  // asked no model anything.
-  let usage: RunUsage = emptyRunUsage();
+  // One budget for the whole run's grounding, discovery and measuring alike
+  // (pl-29) — `MAX_GROUNDING_CALLS` is a run-level ceiling (§9), and a
+  // discovery pass with its own separate allowance would let one run spend
+  // twice what an operator configured. `groundingForRun` is called once and
+  // the same `RunGrounding` is handed to both passes below, so `refused`
+  // tallies across both rather than resetting between them.
+  const grounding = groundingForRun(
+    context.grounding,
+    groundingBudget(context.config.maxGroundingCalls),
+  );
+  const logger = context.logger.child({ run: runId });
 
-  try {
-    // One budget for the whole run's grounding, discovery and measuring alike
-    // (pl-29) — `MAX_GROUNDING_CALLS` is a run-level ceiling (§9), and a
-    // discovery pass with its own separate allowance would let one run spend
-    // twice what an operator configured. `groundingForRun` is called once and
-    // the same `RunGrounding` is handed to both passes below, so `refused`
-    // tallies across both rather than resetting between them.
-    const grounding = groundingForRun(
-      context.grounding,
-      groundingBudget(context.config.maxGroundingCalls),
-    );
-    const logger = context.logger.child({ run: runId });
+  // --- Discovery, before the fan-out (pl-29, §5's 2026-08-22 amendment).
+  //
+  // Entered only when the brief actually names both ends of a corridor —
+  // the same _never fake progress_ argument `RUN_TRANSITIONS`'s note makes
+  // about the fan-out's own `grounding` edge, applied one state earlier.
+  const discovering = hasCorridor(brief);
+  if (!moveTo(context, runId, discovering ? "grounding" : "fanning-out")) return;
 
-    // --- Discovery, before the fan-out (pl-29, §5's 2026-08-22 amendment).
-    //
-    // Entered only when the brief actually names both ends of a corridor —
-    // the same _never fake progress_ argument `RUN_TRANSITIONS`'s note makes
-    // about the fan-out's own `grounding` edge, applied one state earlier.
-    const discovering = hasCorridor(brief);
-    if (!moveTo(context, runId, discovering ? "grounding" : "fanning-out")) return;
+  const discovered = discovering
+    ? await discoverAlongCorridor({
+        brief,
+        provider: grounding,
+        logger,
+        signal,
+        onProgress: (event) => {
+          record(context, runId, event);
+        },
+      })
+    : { finds: [], coverage: [], reading: [] };
 
-    const discovered = discovering
-      ? await discoverAlongCorridor({
-          brief,
+  if (discovering && !moveTo(context, runId, "fanning-out")) return;
+
+  const result = await runFanOut({
+    brief,
+    capacity: capacityFor(brief),
+    provider: context.model,
+    budget: runBudgetFor(context.config),
+    finds: discovered.finds,
+    runId,
+    signal,
+    onProgress: (event) => {
+      record(context, runId, event);
+    },
+    onUsage: (next) => {
+      spent.usage = next;
+    },
+  });
+
+  // --- Grounding, between the fan-out and the composer (pl-27).
+  //
+  // The state is entered only when there is something to measure, and the
+  // `fanning-out → composing` edge stays legal for exactly that: emitting a
+  // state the run spends no time in, to make a diagram come true, is _never
+  // fake progress_ broken for decoration (see `RUN_TRANSITIONS`).
+  const places = runPlaces(result.candidates);
+  if (places.all.length > 0 && !moveTo(context, runId, "grounding")) return;
+
+  const measured =
+    places.all.length === 0
+      ? { candidates: [...result.candidates], travel: NOTHING_MEASURED }
+      : await measureTravel({
+          candidates: result.candidates,
+          places,
+          // The same shared `RunGrounding` discovery used above: a hit costs
+          // nothing, a miss claims a call against the one budget the whole
+          // run carries, and a refusal makes none.
           provider: grounding,
+          // What the trip already knew, for the places a model named without
+          // saying where they are — pl-37. `undefined` for a brief that
+          // declined its destination, which grounds exactly as before.
+          trip: tripContextFor(brief),
           logger,
           signal,
           onProgress: (event) => {
             record(context, runId, event);
           },
-        })
-      : { finds: [], coverage: [], reading: [] };
+        });
 
-    if (discovering && !moveTo(context, runId, "fanning-out")) return;
+  const composedAt = context.now();
+  const timestamp = composedAt.toISOString();
 
-    const result = await runFanOut({
-      brief,
-      capacity: capacityFor(brief),
-      provider: context.model,
-      budget: runBudgetFor(context.config),
-      finds: discovered.finds,
-      runId,
-      signal,
-      onProgress: (event) => {
-        record(context, runId, event);
-      },
-      onUsage: (next) => {
-        usage = next;
-      },
-    });
+  // Written after grounding, not before: the places the pass located now
+  // carry their coordinates, and a candidate stored before that would have
+  // to be re-read and re-written to gain them.
+  insertCandidates(context.db, {
+    planId,
+    runId,
+    candidates: measured.candidates,
+    now: timestamp,
+  });
 
-    // --- Grounding, between the fan-out and the composer (pl-27).
-    //
-    // The state is entered only when there is something to measure, and the
-    // `fanning-out → composing` edge stays legal for exactly that: emitting a
-    // state the run spends no time in, to make a diagram come true, is _never
-    // fake progress_ broken for decoration (see `RUN_TRANSITIONS`).
-    const places = runPlaces(result.candidates);
-    if (places.all.length > 0 && !moveTo(context, runId, "grounding")) return;
+  if (!moveTo(context, runId, "composing")) return;
 
-    const measured =
-      places.all.length === 0
-        ? { candidates: [...result.candidates], travel: NOTHING_MEASURED }
-        : await measureTravel({
-            candidates: result.candidates,
-            places,
-            // The same shared `RunGrounding` discovery used above: a hit costs
-            // nothing, a miss claims a call against the one budget the whole
-            // run carries, and a refusal makes none.
-            provider: grounding,
-            // What the trip already knew, for the places a model named without
-            // saying where they are — pl-37. `undefined` for a brief that
-            // declined its destination, which grounds exactly as before.
-            trip: tripContextFor(brief),
-            logger,
-            signal,
-            onProgress: (event) => {
-              record(context, runId, event);
-            },
-          });
+  const composed = compose({
+    brief,
+    candidates: measured.candidates,
+    travel: measured.travel,
+    gaps: result.gaps,
+    // What the discovery pass already decided, before this composer ever
+    // saw a candidate — see `ComposeInput.coverage`'s own note on why this
+    // rides through rather than being derived.
+    coverage: discovered.coverage,
+    // Same rule, different kind of evidence: `coverage` is what could not be
+    // checked, `reading` is what was found and is worth reading. Neither is
+    // derivable from a stored revision, so both ride through.
+    reading: discovered.reading,
+    revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
+    now: composedAt,
+  });
 
-    const composedAt = context.now();
-    const timestamp = composedAt.toISOString();
+  // `unchecked` is deliberately not persisted here, and pl-27 did not change
+  // that: what a plan did not *check* is a derivation from the revision, and
+  // `uncheckedForRevision` reads it back off the days on every read. What is
+  // persisted is the *evidence* underneath it — each item's measured
+  // transition — because a cache row expires and a plan still has to be able
+  // to say what its days were packed against. A first draft builds on nothing,
+  // so `null` is the base `persist` re-checks.
+  const revisionId = persist(context, planId, composed.revision, timestamp, null);
 
-    // Written after grounding, not before: the places the pass located now
-    // carry their coordinates, and a candidate stored before that would have
-    // to be re-read and re-written to gain them.
-    insertCandidates(context.db, {
-      planId,
-      runId,
-      candidates: measured.candidates,
-      now: timestamp,
-    });
-
-    if (!moveTo(context, runId, "composing")) return;
-
-    const composed = compose({
-      brief,
-      candidates: measured.candidates,
-      travel: measured.travel,
-      gaps: result.gaps,
-      // What the discovery pass already decided, before this composer ever
-      // saw a candidate — see `ComposeInput.coverage`'s own note on why this
-      // rides through rather than being derived.
-      coverage: discovered.coverage,
-      // Same rule, different kind of evidence: `coverage` is what could not be
-      // checked, `reading` is what was found and is worth reading. Neither is
-      // derivable from a stored revision, so both ride through.
-      reading: discovered.reading,
-      revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
-      now: composedAt,
-    });
-
-    // `unchecked` is deliberately not persisted here, and pl-27 did not change
-    // that: what a plan did not *check* is a derivation from the revision, and
-    // `uncheckedForRevision` reads it back off the days on every read. What is
-    // persisted is the *evidence* underneath it — each item's measured
-    // transition — because a cache row expires and a plan still has to be able
-    // to say what its days were packed against.
-    const revisionId = persist(context, planId, composed.revision, timestamp);
-
-    // Before the status moves, so a reader that sees `done` sees what it cost.
-    recordUsage(context, runId, usage);
-    if (!moveTo(context, runId, "done")) return;
-    context.events.done(runId, planId, revisionId);
-  } catch (error: unknown) {
-    // A cancellation is not a failure and it is not a gap. pl-5 rethrows it out
-    // of the fan-out rather than recording one, so that a canceled draft cannot
-    // be mistaken for a completed one with holes; catching it here to write a
-    // revision anyway would undo exactly that.
-    if (isCancellation(error, signal)) {
-      // A canceled run wrote no revision, and it still spent what its finished
-      // replies cost. That is the case pl-49 exists for as much as the others.
-      recordUsage(context, runId, usage);
-      const canceled = new AppError("JOB_CANCELED");
-      if (moveTo(context, runId, "canceled", canceled)) {
-        context.events.canceled(runId, canceled.toPayload());
-      }
-      return;
-    }
-
-    const failure = AppError.from(error);
-    context.logger.error("run failed", { run: runId, plan: planId, code: failure.code });
-    recordUsage(context, runId, usage);
-    if (moveTo(context, runId, "failed", failure)) {
-      context.events.failed(runId, failure.toPayload());
-    }
-  }
+  // Before the status moves, so a reader that sees `done` sees what it cost.
+  recordUsage(context, runId, spent.usage);
+  if (!moveTo(context, runId, "done")) return;
+  context.events.done(runId, planId, revisionId);
 }
 
 /**
@@ -464,7 +500,7 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
  * on to whatever state it was already reaching. The line carries the run id
  * and the error, never the counts' context — nothing a traveller wrote.
  */
-function recordUsage(context: AppContext, runId: string, usage: RunUsage): void {
+export function recordUsage(context: AppContext, runId: string, usage: RunUsage): void {
   try {
     updateRunUsage(context.db, { id: runId, model: context.model.model, usage });
   } catch (error: unknown) {
@@ -483,7 +519,7 @@ function recordUsage(context: AppContext, runId: string, usage: RunUsage): void 
  * the run id and the timestamp are added by the hub, which is the one place in
  * the tool that reads a clock for a frame.
  */
-function record(context: AppContext, runId: string, event: RunProgress): void {
+export function record(context: AppContext, runId: string, event: RunProgress): void {
   switch (event.type) {
     case "roster":
       // Knowable before the first request goes out, which is what lets the UI
@@ -516,17 +552,34 @@ function record(context: AppContext, runId: string, event: RunProgress): void {
  * accepting them, so this cannot produce an orphan; the database's
  * `UNIQUE (plan_id, revision)` refuses the one thing it could still get wrong,
  * which is two concurrent runs both drafting revision 1.
+ *
+ * **It re-checks the chain inside its own transaction (pl-44)**: that the
+ * latest revision is still `base` — `null` for a first draft — and that the
+ * plan is under `MAX_REVISIONS_PER_PLAN`. While the one-writer rule holds both
+ * are unreachable, and they are asserted defensively the way the appended
+ * revision's appearance is, with the codes a request would have been refused
+ * with.
  */
-function persist(
+export function persist(
   context: AppContext,
   planId: string,
   next: Parameters<typeof appendRevision>[1],
   now: string,
+  base: string | null,
 ): string {
   return context.db.transaction((): string => {
     const plan = selectPlan(context.db, planId);
     if (plan === undefined) {
       throw new AppError("PLAN_NOT_FOUND", undefined, { details: { plan: planId } });
+    }
+    const latest = latestRevision(plan)?.id ?? null;
+    if (latest !== base) {
+      throw new AppError("REVISION_STALE", undefined, { details: { base, latest } });
+    }
+    if (plan.revisions.length >= MAX_REVISIONS_PER_PLAN) {
+      throw new AppError("REVISION_LIMIT_REACHED", undefined, {
+        details: { limit: MAX_REVISIONS_PER_PLAN },
+      });
     }
 
     const appended = appendRevision(plan, next);
@@ -548,7 +601,7 @@ function persist(
  * agree: the signal, the typed code the queue aborts with, and a bare
  * `AbortError` from anything that only speaks DOM.
  */
-function isCancellation(error: unknown, signal: AbortSignal): boolean {
+export function isCancellation(error: unknown, signal: AbortSignal): boolean {
   if (signal.aborted) return true;
   if (error instanceof AppError) return error.code === "CANCELED" || error.code === "JOB_CANCELED";
   return error instanceof Error && error.name === "AbortError";
@@ -597,13 +650,9 @@ export function readPlanView(context: AppContext, id: string): PlanView {
       revision === null
         ? []
         : uncheckedForRevision({ brief: plan.brief, candidates: plan.candidates, revision }),
-    // Empty, and true of every plan the API can write: one diff per revision
-    // after the first, and no route appends a second revision before pl-44.
-    // A test that appends one by hand (`supersedeDraft` in
-    // `api/test/plan-view.test.ts`) reads an empty list too, and asserts
-    // nothing about it. pl-44 replaces this with `revisionDiffs` from
-    // `@planner/itinerary` (pl-43).
-    diffs: [],
+    // Derived on every read and never stored (pl-42): one diff per revision
+    // after the first, paired by `parentRevisionId`, oldest first.
+    diffs: revisionDiffs(plan.revisions),
   };
 }
 

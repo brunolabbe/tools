@@ -39,8 +39,10 @@ export interface AppContext {
   runs: RunQueue;
   /** One run in, N SSE subscribers out. Also the only place a frame's clock is read. */
   events: RunEventHub;
-  /** Per-client admission control on starting a run. */
+  /** Per-client admission control on starting a run: a first draft or a re-plan. */
   runLimiter: RateLimiter;
+  /** Per-client admission control on a move, a remove or a restore (pl-44). */
+  editLimiter: RateLimiter;
   startedAt: Date;
   /** Injected in tests so anything time-dependent is assertable. */
   now: () => Date;

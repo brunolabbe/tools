@@ -386,6 +386,35 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE plan_runs ADD COLUMN output_tokens INTEGER;
   ALTER TABLE plan_runs ADD COLUMN fallback_calls INTEGER;
   `,
+
+  // 10 — what made a revision, what a run is producing, and one writer per
+  // plan (pl-44).
+  //
+  // `operation_json` is JSON by migration 2's rule: read whole, validated
+  // against the contract's operation schema on the way out, never filtered on.
+  // `kind` is plain text with no CHECK, for `status`'s reason — the legal
+  // values are `RUN_KINDS` in @planner/contract.
+  //
+  // **The backfill is a column DEFAULT, and it cannot be an UPDATE.**
+  // `plan_revisions_append_only` raises on any UPDATE of `plan_revisions`, so
+  // an `UPDATE … SET operation_json` would abort this migration and refuse the
+  // boot. Every row that exists before this migration is a first draft made by
+  // a draft run, because nothing could write anything else, so the defaults are
+  // true of all of them — the same shape migrations 7 and 8 used. **The
+  // DEFAULT is for old rows only**: `insertRevision` and `insertRun` write both
+  // columns explicitly, and a test reads a revision 2 back to prove it.
+  //
+  // `plan_runs_one_live` is the chain's one-writer rule from below, the way
+  // `UNIQUE (plan_id, revision)` backs `appendRevision`: at most one run per
+  // plan may be unfinished. `finished_at` is set by `updateRunStatus` exactly
+  // when a status is terminal, so this predicate and `TERMINAL_RUN_STATUSES`
+  // agree by construction. Every plan has exactly one run before this
+  // migration, so creating it cannot fail on existing data.
+  `
+  ALTER TABLE plan_revisions ADD COLUMN operation_json TEXT NOT NULL DEFAULT '{"kind":"first-draft"}';
+  ALTER TABLE plan_runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'draft';
+  CREATE UNIQUE INDEX plan_runs_one_live ON plan_runs (plan_id) WHERE finished_at IS NULL;
+  `,
 ];
 
 export function migrate(db: Database): void {

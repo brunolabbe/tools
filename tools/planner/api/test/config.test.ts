@@ -282,4 +282,17 @@ describe("loadApiConfig", () => {
     // `TRUST_PROXY` line both expect.
     expect(loadApiConfig({}, { TRUST_PROXY: "172.30.42.0/24" }).trustProxy).toBe("172.30.42.0/24");
   });
+
+  test("the edits bucket defaults to 30, reads RATE_LIMIT_EDITS_PER_MINUTE, and zero disables it (pl-44)", () => {
+    // A second bucket beside the runs one, not a copy of its number: a person
+    // rearranging a day makes several edits a minute, and 5 would refuse them.
+    expect(loadApiConfig({}, {}).rateLimitEditsPerMinute).toBe(30);
+    expect(loadApiConfig({}, {}).rateLimitRunsPerMinute).toBe(5);
+    expect(loadApiConfig({}, { RATE_LIMIT_EDITS_PER_MINUTE: "12" }).rateLimitEditsPerMinute).toBe(
+      12,
+    );
+    expect(loadApiConfig({}, { RATE_LIMIT_EDITS_PER_MINUTE: "0" }).rateLimitEditsPerMinute).toBe(0);
+    // Its own variable, not its sibling's.
+    expect(loadApiConfig({}, { RATE_LIMIT_RUNS_PER_MINUTE: "1" }).rateLimitEditsPerMinute).toBe(30);
+  });
 });

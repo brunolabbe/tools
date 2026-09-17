@@ -267,6 +267,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     runs,
     events,
     runLimiter: new RateLimiter({ perMinute: config.rateLimitRunsPerMinute }),
+    editLimiter: new RateLimiter({ perMinute: config.rateLimitEditsPerMinute }),
     startedAt: now(),
     now,
     isShuttingDown: () => shuttingDown,
