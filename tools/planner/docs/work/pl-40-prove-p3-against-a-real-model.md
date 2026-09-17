@@ -296,6 +296,53 @@ answers `[]` by design. Use the captured payload through the adapter's parser.
 Calling a live Overpass would make the grounding half vary between runs, and that
 is the variable this ticket holds still.
 
+## Review
+
+### Gate 1 — 2026-09-17 · `20c8fd1...125dac5` · defect hunt by the reviewer at medium
+
+**Gate: CONCERNS.** Sent to the builder and answered in round 1; recorded in the Log entry "gate round 1". It found three med issues: the redaction walk failed on the harness's own B/C/D records, the tests did not pin the 2-attempt ceiling arithmetic, and `--max-usd=0.01` silently became $10. It also found six lows and two open decisions. Returned 9 findings: 9 carried, 0 dropped from the carried set, plus 2 dropped by the reviewer (console and bare Error in an operator CLI under test/; corridor input being charged to all five specialists, which is conservative).
+
+### Gate 2 — 2026-09-17 · `20c8fd1...6813a9e` · defect hunt by the reviewer at medium
+
+**Gate: PASS.** Reviewed on Opus; the builder ran Sonnet. Lines that only the owner's run can satisfy are marked awaiting, and that is not a finding.
+
+| Done when                                                                 | Proof                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Harness completes A–D under scripted and writes final-shape records       | **verified**: scripted run at 6813a9e wrote 25 files; the walk over them gave 40 passed                                                                                                                                                                |
+| Refuses before a provider without `PLANNER_LIVE_RUN=1`, proved by a test  | `api/test/live-gate.test.ts:34 "expect(() => assertLiveRunConsent({})).toThrow"` ✓; order at `api/test/live/run.ts:709 "assertLiveRunConsent(process.env);"` before `api/test/live/run.ts:721 "const provider = createModelProvider(config, logger);"` |
+| `npm test` with a key collects nothing under `test/live/`                 | **verified**: `vitest list --project planner` with a fake key and consent set listed nothing under `test/live/`; an explicit path gave "No test files found"                                                                                           |
+| Log quotes `count_tokens` figures                                         | awaiting owner run (needs an authenticated key)                                                                                                                                                                                                        |
+| Sets A–D run against `claude-opus-5`, records checked in                  | awaiting owner run                                                                                                                                                                                                                                     |
+| One Log table per set, session total                                      | awaiting owner run                                                                                                                                                                                                                                     |
+| Billed output within bound, set D at the edge, rules (a)–(c) answered     | awaiting owner run; ceiling pinned at `api/test/live-gate.test.ts:73 "toBeCloseTo(2.0 + 0.23915, 5)"`                                                                                                                                                  |
+| Set C resists the hostile name                                            | awaiting owner run                                                                                                                                                                                                                                     |
+| Set B stops at ≥ 100 candidates or 15 runs                                | stop logic `api/test/live/run.ts:766 "while (setBCandidates < MIN_SET_B_CANDIDATES"` verified under scripted (75 candidates / 15 runs); real count awaiting owner run                                                                                  |
+| `live-records.test.ts` green over checked-in records, seen red on a plant | red **verified** (nested plant: 1 failed, violations named); green over records awaiting owner run; recursion at `api/test/live-records.test.ts:373 "expect(collectJsonFiles(dir)).toEqual"` ✓                                                         |
+| `npm run check` and `npm test -- --project planner` pass                  | **verified**: check exit 0; 69 files / 1126 tests (base 20c8fd1: 67 / 1090)                                                                                                                                                                            |
+
+- **fixed · MED 1**: the walk passes the harness's own records (25 files, 40 passed). Covered by `api/test/live-records.test.ts:273 "does NOT flag a public record id in a query string"`.
+- **fixed · MED 2**: the 2-attempt ceiling is pinned. The gate's mutant now fails 5 of 20, as `api/test/live-gate.test.ts:139 "toBeCloseTo(1.01958, 4)"` asserts.
+- **fixed · MED 3**: `api/test/live-gate.test.ts:153 "--max-usd=0.01"` and `api/test/live-gate.test.ts:163 "with no following value throws rather than silently keeping the default"` pass; the CLI runs reproduce the refusals.
+- **low · open decision A**: a server-side fallback can take the session past `--max-usd` by up to one run. Fabricated fallback-sized usage billed $4.02 against a $3 cap. Build step 3's ceiling formula leaves fallbacks out, so this is the orchestrator's call.
+- **low · open decision B**: `api/test/live/run.ts:370 "articlesNear: async () => answered([])"` changes which 40 finds survive the notability-first ranking. The orchestrator's call.
+- **low · open decision C**: the walk flags only credential-shaped query parameter names (`api/test/live-records.test.ts:101 "SECRET_QUERY_PARAM_NAMES ="`), not "any URL that changes under redactUrl" as Build step 5 words it. The literal rule is red on a real OSM `fixme` URL. The denylist misses a planted `X-Goog-Signature`, `hdnts` and `password`. The orchestrator's call.
+- **low**: `count_tokens` runs per attempt just before each send, not up front. A re-ask's prompt does not exist earlier, and the spend stop never reads the counts. Documented in `run.ts`; accepted.
+- **low**: the "thinking share of output" column cannot be filled from these records, because pl-39's usage mapping drops the SDK's `output_tokens_details`. Outside this ticket's files; follow-up recommended in the Log.
+- **findings**: the gate-2 hunt returned 5: 5 carried (3 open decisions, 2 low), 0 dropped. The three `fixed` lines are gate 1's.
+- NFR: security ✓ (walk re-proved red with a nested plant) · performance n/a · reliability ✓ (spend stop re-proved at mid-set B and C with fabricated usage; fallback caveat above) · maintainability ✓
+
+**One citation in the section above was corrected at the reviewer's own
+request, not by the builder unilaterally.** `node scripts/citations.mjs
+tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md --section
+Review --require-anchors --require-distinct-anchors` first failed on the MED
+3 bullet's second anchor: the reviewer's own quoted fragment included a `"`
+character, which the parser cut short at `--max-usd`, and that shorter
+fragment starts 12 lines in `api/test/live-gate.test.ts` (every test title in
+the `parseCli` suite mentions the flag). The reviewer re-anchored it to line
+163's quote-free test title and asked that only that one citation be
+replaced; nothing else in the section was touched by the builder. Re-run
+after the fix: 12 verified, 0 moved, 0 unanchored, exit 0.
+
 ## Log
 
 ### 2026-09-13 — filed
