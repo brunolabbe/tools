@@ -78,6 +78,29 @@ video, no play button, no matching text.
   (fixture test file:line noted in the Log).
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+### Gate 1 — ticket-reviewer (agent `a17a6bc218906c464`)
+
+**Gate: PASS** — 2026-09-17 · `origin/main...HEAD` (base `20c8fd1`, tip `7d801d6`) · defect hunt at medium, run directly (no `code-review` dispatch — subagent tool constraints)
+
+| Done when                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The reproduction above returns the stream, same-origin and cross-origin                                       | proven — same-origin `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:762 "shadow-player.html"`; cross-origin `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:778 "cross-origin-shadow.html"`. Re-run at `7d801d6`: 4 passed, 45 skipped (49)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Reverting the shadow-piercing candidate walk reddens both new tests (fixture test file:line noted in the Log) | proven — reverted `ALL_VIDEOS_FN` to a plain `querySelectorAll('video')` body, rebuilt, reran: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:762 "shadow-player.html"` and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:778 "cross-origin-shadow.html"` both went red (`NO_MEDIA_FOUND`), matching the Log's own mutation table; the two extra tests behaved exactly as documented there too (`tools/downloader/resolvers/test/browser/browser-resolver.test.ts:794 "cross-origin-shadow-order.html"` red, `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:807 "shadow-card.html"` green). Restored via `git status --porcelain` (clean) + a rebuild before continuing |
+| `npm run check` and `npm test -- --project downloader` pass                                                   | proven — `npm run check` exit 0; `npm test -- --project downloader`: 85 files, 1433 tests, exit 0 (matches the Log exactly)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+- **low** · `UNMARK_VIDEO_SCRIPT`'s shadow-piercing walk (`provoke.ts` around the `UNMARK_VIDEO_SCRIPT` definition) has no fixture, as the Log says — but the mechanism it guards is real, not merely unobservable. Isolated repro (outside the suite): mark a shadow-root video, run the OLD `document.querySelectorAll('[data-downloader-video]')`-based unmark (a no-op inside a shadow root), then mark a second, different shadow-root video (simulating `provokePlayback`'s second pass choosing a new "best" candidate) — `page.locator('[data-downloader-video]').first()` then resolves to the STALE first mark, not the intended one. That is dl-55's original click-misdirection bug, in a two-pass shape. The shipped (fixed) code already prevents this; only the regression test is missing. A suite-level fixture would need the "best" candidate to move between shadow roots between `provokePlayback`'s two passes — buildable, not attempted since it is not a live defect.
+- **measured, not a finding** — the Log's own open question ("fold in or file"): built a scratch fixture, a shadow-root `<video>` whose media loads only via `.play()`, with no click listener at all. Probed it on this branch (temporary test appended to `browser-resolver.test.ts`, then reverted): the resolver throws `AppError NO_MEDIA_FOUND` — it does **not** find the media. Command: `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "shadow-root media that only loads on play"`. `PLAY_SCRIPT` and `METADATA_SCRIPT`'s `document.querySelector('audio')` fallback both stop at shadow roots, unchanged by this ticket, exactly as the Log says. I'm sending this measurement to the orchestrator as the open decision it already is — not resolving it here.
+- **findings** · own hunt at medium returned 1; 1 carried, 0 dropped.
+- NFR: security n/a (no URL/header logging touched) · performance ✓ — measured a ~5000-element page with 30 shadow roots (one nested 3 levels): the `ALL_VIDEOS_FN`-shaped walk costs ~0.93ms per call, negligible against the probe's second-and-minute budgets · reliability ✓ · maintainability ✓.
+
+Transcribed by the builder from the reviewer's message. The only change is
+that each short `browser-resolver.test.ts:<line>` citation now carries its
+full repo-relative path, so `citations.mjs` can resolve it. The low stays
+open as a coverage gap. The builder reproduced its mechanism (see Log) and
+agrees it is not a live defect.
+
 ## Log
 
 **2026-09-15 — filed** from dl-55's round-3 gate, which found and reproduced
@@ -118,9 +141,14 @@ The premise holds.
      used `document.querySelectorAll('[data-downloader-video]')`. It now
      clears the mark from every candidate `ALL_VIDEOS_FN` returns. Clicking
      still uses the locator `[data-downloader-video]`, which already pierces
-     shadow roots. **No test covers this.** A stale mark on a video that the
-     next pass also chooses changes nothing these fixtures can observe, so the
-     change stands on reading the code alone.
+     shadow roots. **No test in the suite covers this.** A stale mark on a
+     video that the next pass also chooses changes nothing these fixtures can
+     observe. The gate below showed the stale mark can send a click to the
+     wrong video once the second pass chooses a different one. I reproduced
+     that outside the suite with `scratchpad/dl-61/stale-mark.mjs`. It marks
+     one shadow-root video, clears marks, then marks another. With the old
+     unmark, `locator('[data-downloader-video]').first()` resolved to the first
+     video, `A`. With the new one it resolved to the second, `B`.
 
 **Tests.** They are at the end of
 `resolvers/test/browser/browser-resolver.test.ts`, not next to dl-55's block
