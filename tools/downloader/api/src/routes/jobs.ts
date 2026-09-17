@@ -164,15 +164,19 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
       context.store.transition(id, "canceled", { error: reason }, context.now().toISOString());
       context.events.status(id, "canceled");
       context.events.canceled(id, reason);
-      // A no-op for a job that never started — `removeJob` only ever removes
-      // directories that exist — but calling it keeps this branch symmetric
-      // with the running-job path above.
+      // A no-op for a job that never started — `Storage.removeJob` is
+      // `fs.rm(..., { force: true })`, which does not error on a missing
+      // directory — but calling it keeps this branch symmetric with the one
+      // the orchestrator runs itself for a canceled *running* job
+      // (`jobs/orchestrator.ts`).
       await context.engine.removeJob(id).catch(() => undefined);
     }
 
-    // The orchestrator writes the terminal state when the abort unwinds, so the
-    // job returned here may still show its previous status. That is honest:
-    // the SSE stream carries the transition when it happens.
+    // For outcome "running" only: the orchestrator writes the terminal state
+    // when the abort unwinds, so the job returned here may still show its
+    // previous status. That is honest: the SSE stream carries the transition
+    // when it happens. The other two outcomes above already wrote "canceled"
+    // before this line runs.
     const body: JobResponse = { job: context.store.get(id) };
     return await reply.send(body);
   });

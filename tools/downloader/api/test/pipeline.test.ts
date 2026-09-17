@@ -337,9 +337,9 @@ describe("the preview a job keeps", () => {
       expect(served.rawPayload.equals(PNG)).toBe(true);
     } finally {
       await image.close();
-      // **Close both databases before unlinking anything.** This is the only
-      // test in the suite backed by a real SQLite file rather than `:memory:`,
-      // and it is the only one that has to say this out loud.
+      // **Close both databases before unlinking anything.** This is the first
+      // (dl-59 added a second, at the end of this file) test backed by a real
+      // SQLite file rather than `:memory:`, and it is the one that has to say this out loud.
       //
       // The second app is still up here: `afterEach` is what disposes it, and
       // `afterEach` runs *after* this `finally`. Measured on Linux by counting
@@ -891,5 +891,71 @@ describe("concurrency", () => {
     }
     // A browser probe costs ~300 MB, so this cap is a memory bound.
     expect(peak).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("cancellation survives a restart (dl-59)", () => {
+  test("a restart over a real database reports a canceled wait-line job as canceled, not the interrupted-restart INTERNAL", async () => {
+    // Done-when 3, proven by an actual restart rather than only by
+    // `store.unfinished()` excluding the row: two apps over one database and
+    // one storage directory, the same shape as "a restart does not lose the
+    // preview of a job whose file survived it" above — see that test's
+    // `finally` for why both databases close before anything is unlinked.
+    const dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-dl59-db-"));
+    const databasePath = path.join(dbDir, "jobs.sqlite");
+    let releaseFirst: (() => void) | undefined;
+    const blockedFirst = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let first: Harness | undefined;
+    try {
+      first = await createHarness({
+        resolver: new StubResolver(async () => {
+          await blockedFirst;
+          return probeResult();
+        }),
+        config: { databasePath, maxConcurrentJobs: 1, maxJobsPerClient: 0 },
+      });
+      await createJob(first);
+      const second = await createJob(first, { url: `${SOURCE_URL}/2` });
+      await waitFor(
+        () => (first as Harness).app.context.queue.waiting,
+        (n) => n === 1,
+        { label: "second job to be waiting" },
+      );
+
+      const canceled = await first.app.server.inject({
+        method: "POST",
+        url: ROUTES.cancelJob(second.id),
+      });
+      expect(canceled.statusCode).toBe(200);
+
+      // Down, releasing the first job's resolver first so nothing is left
+      // blocked mid-flight when the process "dies".
+      releaseFirst?.();
+      await first.app.shutdown();
+
+      // Up again on the same database — a restart, not a fresh boot.
+      harness = await createHarness({
+        config: { databasePath, storageDir: first.storageRoot },
+        engineOptions: { storageRoot: first.storageRoot },
+      });
+
+      const afterRestart = readJob(harness, second.id);
+      expect(afterRestart.status).toBe("canceled");
+      expect(afterRestart.error?.code).toBe("JOB_CANCELED");
+      // The false description this bug produced, ruled out by name: a
+      // canceled-while-waiting job must never come back as the restart's
+      // own "was running" story.
+      expect(afterRestart.error?.message).not.toContain(
+        "restarted while this download was running",
+      );
+    } finally {
+      releaseFirst?.();
+      await harness?.app.shutdown();
+      await first?.app.shutdown();
+      if (first !== undefined) await fs.rm(first.storageRoot, { recursive: true, force: true });
+      await fs.rm(dbDir, { recursive: true, force: true });
+    }
   });
 });

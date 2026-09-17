@@ -87,8 +87,6 @@ on cancellation.
   to `"canceled"`, `events.status`/`events.canceled`, and `engine.removeJob`
   (verified a no-op for a job that never started — `Storage.removeJob` is
   `fs.rm(..., { force: true })`, which does not error on a missing directory).
-  The ticket's brief said `api/src/queue.ts` and `api/src/routes/jobs.ts`; the
-  actual path is `api/src/jobs/queue.ts` — a stale path, not a wrong premise.
   Reproduced red first: two new tests in `api/test/pipeline.test.ts`
   ("cancelling a job that cannot start yet reaches canceled, not stuck at
   queued" and "…that is not first in line still reaches canceled") both failed
@@ -102,3 +100,29 @@ on cancellation.
   of already-specified work this branch made free, folded in rather than left.
   `npm run check` and `npm test -- --project downloader` (85 files, 1431
   tests) both green.
+- 2026-09-17 — Gate (below) found four things this entry corrects:
+  (1) the restart Done-when line was proven only indirectly, through
+  `store.unfinished()`, and never by an actual restart — added
+  `"a restart over a real database reports a canceled wait-line job as
+canceled, not the interrupted-restart INTERNAL"` at the end of
+  `api/test/pipeline.test.ts`, file-backed (`databasePath`, two `createHarness`
+  calls over one SQLite file, the same shape as "a restart does not lose the
+  preview of a job whose file survived it" above it in the same file),
+  reproduced red against the source reverted to `20c8fd1`
+  (`failed`/`INTERNAL`/"the server restarted while this download was
+  running") and green at the fix; (2) the citations gate
+  (`node scripts/citations-gate.mjs --against origin/main`) went red because
+  the assertions added to `api/test/per-client-caps.test.ts` and the
+  `CancelOutcome` doc block added above `JobQueue` in
+  `api/src/jobs/queue.ts` moved four lines dl-51's own record cites —
+  repointed those four citations to their new lines (the orchestrator's
+  call, made itself rather than the reviewer's alternative of pinning them or
+  restructuring the diff to avoid the move, on the grounds that a repoint is
+  routine, reversible, and the same repair dl-61 made in this batch); (3) two
+  comments in `routes/jobs.ts` misdescribed which code path they meant, fixed
+  in place; (4) this entry previously claimed the ticket's own brief named a
+  stale path (`api/src/queue.ts`) — it did not; the brief already says
+  `api/src/jobs/queue.ts`, and the wrong path was mine, not the ticket's.
+  Also exported `CancelOutcome` alongside `JobQueue` from `api/src/index.ts`
+  so an external caller could name the type the interface's method returns,
+  even though none exists today.
