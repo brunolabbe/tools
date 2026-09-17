@@ -9,7 +9,7 @@
  * fails minutes later on a queue worker, so that line is asserted directly.
  */
 
-import { REDACTED, ROUTES } from "@downloader/contract";
+import { AppError, REDACTED, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, RequestContext } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
@@ -711,5 +711,145 @@ describe("redactLoggedUrl", () => {
   test("a path that merely looks like the route is not treated as one", () => {
     // `startsWith` on a prefix ending in `/` cannot match `/api/filesomething`.
     expect(redactLoggedUrl("/api/filesomething")).toBe("/api/filesomething");
+  });
+});
+
+/**
+ * dl-58. A failed probe's `AppError` routinely carries the page URL, query
+ * string included, as `details.url` — `resolvers/src/registry.ts`'s
+ * `NO_MEDIA_FOUND` and `resolvers/src/resolvers/ytdlp.ts`'s
+ * `classifyFailure` both set it unredacted — and the error handler in
+ * `server.ts` copies `details` into its log line as-is, on both branches: a
+ * 4xx logs "request rejected" at `info`, a 5xx logs "request failed" at
+ * `error`. A signed page URL is as sensitive as a cookie, per the root
+ * `CLAUDE.md`, so that credential must never reach either line.
+ */
+describe("a failed probe never logs the page URL's credentials", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  /**
+   * Both cases use a terminal code, not `NO_MEDIA_FOUND` — that one is a
+   * fall-through, so with the real direct tier also registered (required for
+   * the app to boot at all, see `assertUsable`) the chain would move on to it
+   * and reach real DNS; `probe-outcomes.test.ts` documents the same
+   * constraint. Registry-level chain exhaustion is covered with no real tier
+   * involved in `resolvers/test/registry.test.ts`.
+   */
+  test("a 5xx: the error handler's 'request failed' line", async () => {
+    // `ytdlp.ts`'s `classifyFailure` throws exactly this shape for
+    // `TLS_VERIFICATION_FAILED` — `details: { url: url.href, ... }`,
+    // unredacted — which is one of the sweep's sites; this stub reproduces it
+    // without a real subprocess.
+    const raw: string[] = [];
+    const signedUrl = "https://cdn.example/watch?v=1&sig=SECRET123";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(async () => {
+        throw new AppError("TLS_VERIFICATION_FAILED", undefined, {
+          details: { url: signedUrl },
+        });
+      }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(502);
+
+    // Not one line, anywhere, at any level.
+    expect(raw.filter((line) => line.includes("SECRET123"))).toEqual([]);
+
+    // And the line is genuinely there, with the site that failed still
+    // legible — this is redaction, not deletion.
+    const failed = raw.filter((line) => line.includes('"msg":"request failed"'));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toContain("cdn.example");
+    expect(failed[0]).toContain("/watch");
+  });
+
+  test("a 4xx: the error handler's 'request rejected' line — the ticket's own reproduction", async () => {
+    // The exact shape the ticket reproduced against `createLogger` directly:
+    // `NO_MEDIA_FOUND`, 422, `details: { url, attempts }`. Reproduced here
+    // through the real Fastify server, closing the gap the ticket's own
+    // reproduction left open ("that run exercised the logger, not a request
+    // through Fastify").
+    const raw: string[] = [];
+    const signedUrl = "https://cdn.example/watch?v=1&sig=SECRET123";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(async () => {
+        throw new AppError("AUTH_REQUIRED", undefined, {
+          details: { url: signedUrl },
+        });
+      }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(422);
+
+    expect(raw.filter((line) => line.includes("SECRET123"))).toEqual([]);
+    const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toContain("cdn.example");
+    expect(rejected[0]).toContain("/watch");
+  });
+});
+
+/**
+ * dl-58, at the unit level rather than through the whole server — the
+ * mechanism itself (`redactDetailsUrls`, inside `safeFields`), not just the
+ * one caller of it exercised above. `egress-proxy.ts`'s `refused` and
+ * `upstreamRefused` share this same `AppLogger`, so this one function covers
+ * their two sites for free — proven here directly rather than by adding a
+ * dedicated logging test to a file that has never had one.
+ */
+describe("safeFields redacts a URL nested in details, whatever it is named", () => {
+  test("a query string inside details.<key> is redacted; the site stays legible", () => {
+    const { logger, lines } = capturing();
+    logger.warn("refused a subprocess fetch", {
+      host: "cdn.example",
+      code: "BLOCKED_TARGET",
+      details: {
+        url: "https://cdn.example/watch?v=1&sig=SECRET123",
+        manifestUrl: "https://cdn.example/m.m3u8?sig=OTHER-SECRET",
+      },
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET123");
+    expect(serialised).not.toContain("OTHER-SECRET");
+    // Redaction, not deletion: the site is still legible.
+    expect(serialised).toContain("cdn.example");
+    expect(serialised).toContain("/watch");
+    expect(serialised).toContain("/m.m3u8");
+  });
+
+  test("a relative path in details is left alone — it is not a credential", () => {
+    const { logger, lines } = capturing();
+    logger.info("probed", { details: { path: "/api/probe", note: "not a url at all" } });
+
+    expect(lines[0]?.["details"]).toEqual({ path: "/api/probe", note: "not a url at all" });
+  });
+
+  test("non-URL details are untouched: numbers, arrays, nested objects", () => {
+    const { logger, lines } = capturing();
+    const details = {
+      attempts: [{ resolver: "stub", code: "NO_MEDIA_FOUND", durationMs: 12 }],
+      retryAfterSec: 10,
+    };
+    logger.info("probed", { details });
+
+    expect(lines[0]?.["details"]).toEqual(details);
   });
 });

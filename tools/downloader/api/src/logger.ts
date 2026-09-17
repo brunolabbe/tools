@@ -20,12 +20,23 @@
  * cannot leak a session cookie; pino's own `redact` paths then catch header
  * bags that arrive under some other shape. Captured headers routinely carry
  * live credentials and this is the layer that finally writes bytes somewhere.
+ *
+ * A third shape gets the same treatment (dl-58): `details.<key>` values that
+ * are themselves absolute `http(s)` URLs. A resolver's own `AppError` routinely
+ * sets `details.url` to the page or media URL it was working on, unredacted —
+ * `resolvers/src/registry.ts` and `resolvers/src/resolvers/ytdlp.ts` both do —
+ * and a signed URL's query string is as sensitive as a cookie. This is the
+ * single mechanism that covers every one of those call sites, and every
+ * caller of `AppLogger` that forwards an `AppError`'s `details` verbatim
+ * (`server.ts`'s error handler, `egress-proxy.ts`'s two), without touching
+ * each site that builds one.
  */
 
 import os from "node:os";
 import process from "node:process";
 import { redactRequestContext, REDACTED } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
+import { redactUrl } from "@webtools/core";
 import pino from "pino";
 import type { DestinationStream, Logger as PinoLogger } from "pino";
 import type { Logger } from "@downloader/engine";
@@ -81,15 +92,49 @@ function isRequestContext(value: unknown): value is RequestContext {
 }
 
 /**
+ * Redacts every string in `details` that parses whole as an absolute
+ * `http(s)` URL, via `redactUrl` — origin and path survive, the query string
+ * does not. Deliberately a value-shaped check rather than a key-name one
+ * (`url`, `manifestUrl`, whatever a resolver called it): the sweep behind
+ * dl-58 found the field named `url` at every site, but naming it here would
+ * make the net exactly as narrow as the thing it is meant to catch call sites
+ * forgetting.
+ *
+ * A relative path such as `/api/probe` fails `new URL()` and is returned
+ * unchanged, which is what keeps this from fighting `redactLoggedUrl`'s own
+ * job on the top-level `url` field — that field never reaches this function
+ * in the first place, since it is not nested under `details`.
+ */
+function redactDetailsUrls(details: unknown): unknown {
+  if (details === null || typeof details !== "object" || Array.isArray(details)) return details;
+  let out: Record<string, unknown> | undefined;
+  for (const [key, value] of Object.entries(details as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      continue;
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+    out ??= { ...(details as Record<string, unknown>) };
+    out[key] = redactUrl(value);
+  }
+  return out ?? details;
+}
+
+/**
  * Redacts on the way out rather than trusting call sites.
  *
  * A `requestContext` field is the one shape that reliably holds credentials, so
  * it is recognised structurally: a caller that forgets to redact still cannot
- * leak one through this logger.
+ * leak one through this logger. A `details` field gets the same treatment for
+ * its own shape — see `redactDetailsUrls` — because `AppError.details` is
+ * exactly as call-site-dependent as a `RequestContext` was.
  *
  * **Known limitation: top level only.** This walks `fields` one level deep and
- * matches the literal key `requestContext`. A context nested under another key
- * (`{ details: { requestContext } }`) or inside an array
+ * matches the literal keys `requestContext` and `details`. A context nested
+ * under another key (`{ details: { requestContext } }`) or inside an array
  * (`{ items: [{ headers: { Cookie } }] }`) is *not* redacted, and neither is
  * caught by `REDACT_PATHS` above, whose case-sensitivity is described there. Both
  * are pinned as known limitations in `logging.test.ts`, so widening this function
@@ -99,7 +144,8 @@ function isRequestContext(value: unknown): value is RequestContext {
  * all of them were enumerated when this note was written — so the gap is in the
  * safety net rather than in live behaviour. It is documented because a net whose
  * edges are unmarked is one a future call site falls through silently, and this
- * one is deliberately the thing call sites are told to rely on.
+ * one is deliberately the thing call sites are told to rely on. Every call site
+ * that passes `details` also passes it at the top level, for the same reason.
  */
 function safeFields(
   fields: Record<string, unknown> | undefined,
@@ -110,6 +156,12 @@ function safeFields(
     if (key === "requestContext" && isRequestContext(value)) {
       out ??= { ...fields };
       out[key] = redactRequestContext(value);
+    } else if (key === "details") {
+      const redacted = redactDetailsUrls(value);
+      if (redacted !== value) {
+        out ??= { ...fields };
+        out[key] = redacted;
+      }
     }
   }
   return out ?? fields;
