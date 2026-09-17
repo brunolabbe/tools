@@ -149,6 +149,39 @@ const UNMARK_CLOSE_SCRIPT = `(() => {
 const VIDEO_MARK = "data-downloader-video";
 
 /**
+ * Every `<video>` in the document, open shadow roots included, in
+ * **Playwright's own locator match order** (dl-61).
+ *
+ * `document.querySelectorAll('video')` stops at a shadow root, and a custom
+ * `<video-player>` web component keeps its player in one; the locator API
+ * this chooser replaced pierced open roots by default. Closed roots are
+ * invisible to both, so there is nothing to match there.
+ *
+ * The order is not tree order, and it has to match the locator's: the
+ * cross-origin branch of `clickChosenVideo` clicks
+ * `frame.locator("video").nth(index)` with an index into this list.
+ * Measured against Playwright 1.62's CSS engine, which takes one root's own
+ * `querySelectorAll` matches first and only then descends into the shadow
+ * roots of that root's elements, in document order, recursively — for light
+ * `L1`, host `h1` (shadow `S1a`, nested host `N1`, `S1b`), light `L2`, the
+ * locator yields `L1 L2 S1a S1b N1`, where tree order would be
+ * `L1 S1a N1 S1b L2`. This walk reproduces the former.
+ */
+const ALL_VIDEOS_FN = `function () {
+  var out = [];
+  var walk = function (root) {
+    var videos = root.querySelectorAll('video');
+    for (var i = 0; i < videos.length; i++) out.push(videos[i]);
+    var all = root.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      if (all[j].shadowRoot) walk(all[j].shadowRoot);
+    }
+  };
+  walk(document);
+  return out;
+}`;
+
+/**
  * Scans a list of `<video>` elements and returns the index of the one a
  * person would call "the player": visible, no `a[href]` or `[role='link']`
  * ancestor, and — among those — the largest rendered area. `-1` when none
@@ -163,12 +196,23 @@ const VIDEO_MARK = "data-downloader-video";
  * itself, so the identical rule runs two ways without drifting apart: as the
  * body of `CHOOSE_VIDEO_FN` below, and as `CHOOSE_VIDEO_INDEX_SCRIPT`, run
  * through `frame.evaluate` regardless of frame origin (dl-55, decision 3) —
- * both wrap this same function around one `document.querySelectorAll('video')`
- * call; only what the caller does with the result differs.
+ * both wrap this same function around one `ALL_VIDEOS_FN` call; only what the
+ * caller does with the result differs.
+ *
+ * **The link check crosses shadow boundaries** (dl-61): once shadow-root
+ * videos are candidates, a card component rendered inside an `<a href>` in the
+ * light DOM holds its `<video>` in a shadow root whose `parentElement` chain
+ * stops at the root. A composed `click` still bubbles to that link, so the
+ * walk steps from a shadow root to its host.
  */
 const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
   var best = -1;
   var bestArea = 0;
+  var up = function (node) {
+    if (node.parentElement) return node.parentElement;
+    var parent = node.parentNode;
+    return parent && parent.host ? parent.host : null;
+  };
   for (var i = 0; i < videos.length; i++) {
     var el = videos[i];
     var rect = el.getBoundingClientRect();
@@ -176,7 +220,7 @@ const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
     var style = getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none') continue;
     var linked = false;
-    for (var node = el.parentElement; node; node = node.parentElement) {
+    for (var node = up(el); node; node = up(node)) {
       var role = node.getAttribute ? node.getAttribute('role') : null;
       if ((node.tagName === 'A' && node.hasAttribute('href')) || role === 'link') {
         linked = true;
@@ -194,8 +238,7 @@ const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
 }`;
 
 /**
- * The chosen element itself, in-page: `document.querySelectorAll('video')`
- * fed through `CHOOSE_VIDEO_INDEX_FN`. Shared between the surface click
+ * The chosen element itself, in-page: `ALL_VIDEOS_FN`'s candidates fed through `CHOOSE_VIDEO_INDEX_FN`. Shared between the surface click
  * (`CHOOSE_VIDEO_SCRIPT`) and `METADATA_SCRIPT`'s duration fallback, so the
  * two cannot independently drift.
  *
@@ -205,21 +248,21 @@ const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
  */
 const CHOOSE_VIDEO_FN = `(function () {
   var chooseIndex = ${CHOOSE_VIDEO_INDEX_FN};
-  var videos = document.querySelectorAll('video');
+  var videos = (${ALL_VIDEOS_FN})();
   var index = chooseIndex(videos);
   return index === -1 ? null : videos[index];
 })`;
 
 /**
- * Runs `CHOOSE_VIDEO_INDEX_FN` against `document.querySelectorAll('video')`
- * and returns the chosen index (or `-1`), as a full script rather than a bare
+ * Runs `CHOOSE_VIDEO_INDEX_FN` against `ALL_VIDEOS_FN`'s candidates and
+ * returns the chosen index (or `-1`), as a full script rather than a bare
  * function — the index, not the element, is what a caller outside this file's
  * own evaluation can use, since a raw DOM node cannot cross that boundary.
  * Used by `clickChosenVideo`'s cross-origin branch (dl-55, decision 3).
  */
 const CHOOSE_VIDEO_INDEX_SCRIPT = `(() => {
   var chooseIndex = ${CHOOSE_VIDEO_INDEX_FN};
-  return chooseIndex(document.querySelectorAll('video'));
+  return chooseIndex((${ALL_VIDEOS_FN})());
 })()`;
 
 /** Marks the chosen element (if any) with `VIDEO_MARK`, so the caller can click it through the locator API. */
@@ -231,8 +274,10 @@ const CHOOSE_VIDEO_SCRIPT = `(() => {
   return true;
 })()`;
 
+// The mark is only ever set on a candidate, and a candidate may sit in a shadow
+// root that `document.querySelectorAll` cannot see into (dl-61).
 const UNMARK_VIDEO_SCRIPT = `(() => {
-  var marked = document.querySelectorAll('[${VIDEO_MARK}]');
+  var marked = (${ALL_VIDEOS_FN})();
   for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(VIDEO_MARK)});
 })()`;
 

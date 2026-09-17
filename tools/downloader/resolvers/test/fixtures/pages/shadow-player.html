@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-root player</title>
+  </head>
+  <body>
+    <h1>Shadow-root player</h1>
+    <!-- The page's only video lives inside an open shadow root, the shape of a
+         custom `<video-player>` web component. No light-DOM video, no play
+         button, no matching text: only a surface click that pierces the
+         shadow root can start it (dl-61). -->
+    <div id="host"></div>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var root = document.getElementById("host").attachShadow({ mode: "open" });
+        root.innerHTML = '<video id="sv" width="640" height="360" muted playsinline></video>';
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        // `click` only, never `play`: `PLAY_SCRIPT`'s blanket `.play()` must
+        // not be able to stand in for the surface click.
+        root.getElementById("sv").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>
