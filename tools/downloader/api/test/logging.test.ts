@@ -957,3 +957,47 @@ describe("the success-path Referer never reaches 'probe complete' with its query
     expect(complete[0]).toContain("/watch");
   });
 });
+
+/**
+ * dl-58, gate 2, M1. `redactUrlsDeep`'s first cut tracked every object ever
+ * visited anywhere in the line, not only the current chain — so a *second*
+ * reference to a shared, non-cyclic object read as "already handled" and was
+ * written raw. No live call site logs one object twice, which is exactly why
+ * this belongs in the net rather than in a real reproduction: the shape is
+ * legitimate (a caller building `{ a: probe, b: probe }` is not a bug) and
+ * nothing here should depend on nobody ever writing it.
+ */
+describe("safeFields redacts every reference to a shared object, not only the first", () => {
+  test("two fields pointing at the same object are both redacted", () => {
+    const { logger, lines } = capturing();
+    const shared = { url: "https://h.example/p?sig=SHARED" };
+    logger.info("dag", { a: shared, b: shared });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SHARED");
+    expect(serialised).toContain("h.example");
+    expect(serialised).toContain("/p");
+  });
+
+  test("a shared object reached through details and through an array is redacted both times", () => {
+    const { logger, lines } = capturing();
+    const shared = { url: "https://h.example/p?sig=SHARED" };
+    logger.info("dag2", { details: shared, again: [shared] });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SHARED");
+  });
+
+  test("a genuine cycle still does not hang or crash the line", () => {
+    const { logger, lines } = capturing();
+    const cyclic: Record<string, unknown> = {};
+    cyclic["self"] = cyclic;
+    cyclic["url"] = "https://h.example/p?sig=CYCLE";
+
+    logger.info("cyclic", { cyclic });
+
+    // The line survives — the property this pins is "does not hang", not a
+    // specific shape for the truncated cycle.
+    expect(lines).toHaveLength(1);
+  });
+});

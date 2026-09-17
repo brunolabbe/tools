@@ -110,40 +110,60 @@ function isRequestContext(value: unknown): value is RequestContext {
  * parse (dl-58's first cut, before the gate found two more leaks it missed)
  * left that case, and `host`, and `Referer`, all uncovered.
  *
- * Cycle-safe (a `WeakSet` of visited objects) because this now walks
- * everything, including fields the old `details`-only version never reached —
- * a self-referential value must not hang the line it is trying to protect.
- * Returns the same reference when nothing changed, so a line with no URL in it
- * allocates nothing.
+ * Cycle-safe via `ancestors`, the set of objects on the path from the root to
+ * here — not every object seen anywhere in the line. **That distinction is
+ * load-bearing** (dl-58's gate 2): a `WeakSet` of everything visited, tried
+ * first, returned the *original, unredacted* value for a second reference to
+ * a shared but non-cyclic object — `{ a: shared, b: shared }` redacted `a`
+ * and left `b` raw, since `b` looked like a repeat of something already
+ * handled. Tracking only the current chain and removing an object once its
+ * subtree is done (`finally`) tells the two cases apart: a true cycle
+ * revisits an object that is still its own ancestor, a shared reference
+ * revisits one whose subtree already finished and was removed.
+ *
+ * Returns the same reference when nothing changed, so a line with no URL in
+ * it allocates nothing beyond the one `Set` passed down the call.
+ *
+ * **Known limitation: content reached only by re-entering a genuine cycle is
+ * not redacted.** A true self-reference stops the walk at the point it
+ * revisits its own ancestor, same as before — pino's own serialiser is what
+ * turns that back edge into `"[Circular]"` rather than a stack overflow, and
+ * this function never walks it a second time to redact what is past it. No
+ * call site logs a self-referential structure with a URL inside it; this is
+ * the same kind of net-for-a-call-site-nobody-has-written-yet as the
+ * `requestContext` limitation below, not a live gap.
  */
-function redactUrlsDeep(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unknown {
   if (typeof value === "string") {
     const redacted = redactUrlsInText(value);
     return redacted === value ? value : redacted;
   }
   if (value === null || typeof value !== "object") return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
-
-  if (Array.isArray(value)) {
-    let changed = false;
-    const out = value.map((entry) => {
-      const redacted = redactUrlsDeep(entry, seen);
-      if (redacted !== entry) changed = true;
-      return redacted;
-    });
-    return changed ? out : value;
-  }
-
-  let out: Record<string, unknown> | undefined;
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    const redacted = redactUrlsDeep(entry, seen);
-    if (redacted !== entry) {
-      out ??= { ...(value as Record<string, unknown>) };
-      out[key] = redacted;
+  if (ancestors.has(value)) return value;
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      let changed = false;
+      const out = value.map((entry) => {
+        const redacted = redactUrlsDeep(entry, ancestors);
+        if (redacted !== entry) changed = true;
+        return redacted;
+      });
+      return changed ? out : value;
     }
+
+    let out: Record<string, unknown> | undefined;
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      const redacted = redactUrlsDeep(entry, ancestors);
+      if (redacted !== entry) {
+        out ??= { ...(value as Record<string, unknown>) };
+        out[key] = redacted;
+      }
+    }
+    return out ?? value;
+  } finally {
+    ancestors.delete(value);
   }
-  return out ?? value;
 }
 
 /**

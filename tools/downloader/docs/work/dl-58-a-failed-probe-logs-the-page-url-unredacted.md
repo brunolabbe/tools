@@ -96,6 +96,157 @@ URLs would be written to the host's logs, which is why dl-49 waits on this.
 - `npm run check`, `npm test -- --project downloader` and
   `node scripts/citations-gate.mjs --against origin/main` are green.
 
+## Review
+
+Two rounds so far, both by `a9a05d05c8083a85d`. **Gate 1 is pinned to
+`b63d8c6`**, a pre-squash branch sha kept only because it is the tree its own
+citations resolve against — most were re-checked at the tip and still hold,
+but `tools/downloader/api/src/logger.ts@b63d8c6:115 "parsed = new URL(value);"`
+was deleted by the round-two fix this gate itself required, so that one
+citation carries the pin explicitly rather than the whole record. Reachable
+afterwards through this ticket's pull request.
+
+### Gate 1
+
+**Gate: FAIL** — 2026-09-17 · `origin/main...b63d8c6` (base `20c8fd1`) · defect
+hunt run by the reviewer itself at medium depth, every log call site in
+`tools/downloader/{api,engine,resolvers}/src` enumerated
+
+| Done when                                                                  | Proof                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step-1 test fails on `origin/main`, passes on the branch, Log records both | `tools/downloader/api/test/logging.test.ts:771-772 "expect(failed).toHaveLength(1)"` and `tools/downloader/api/test/logging.test.ts:802-803 "expect(rejected).toHaveLength(1)"` ✓ — re-run: `logger.ts` alone reverted to `origin/main` gives 3 failed / 37 passed, the `request failed` line carrying `sig=SECRET123`; restored, 40 passed |
+| Sweep in the Log, and a test per other URL-carrying site or a reason       | **unproven** — the sweep misses three live paths (the three **high** below), and the Log claim that the `safeFields` unit test covers `egress-proxy.ts` is false for the `host` field on the same line                                                                                                                                      |
+| A test proves the redacted line keeps host and path                        | `tools/downloader/api/test/logging.test.ts:771-774 "const failed = raw.filter"` ✓, `tools/downloader/api/test/logging.test.ts:802-805 "const rejected = raw.filter"` ✓                                                                                                                                                                      |
+| `npm run check` and `npm test -- --project downloader` green               | **verified** — check exit 0; 85 files, 1434 passed; base 1429 (`logging.test.ts` 35 at base, 40 at tip, no other test file in the diff, no assertion removed)                                                                                                                                                                               |
+
+- **high** · `egress-proxy.ts` logs the full plain-HTTP target, query string
+  included, as the top-level `host` field, which the new code never looks at:
+  `tools/downloader/api/src/egress-proxy.ts:472-474 "await guard.assertAllowed(target);"`
+  passes `target` (the absolute-form request URL) to
+  `tools/downloader/api/src/egress-proxy.ts:352 "function refused(host: string, error: unknown)"`,
+  and `tools/downloader/api/src/egress-proxy.ts:527-528 "proxied.once("` hands
+  the same `target` to `connectFailed` (read, not run). Reproduced at
+  `b63d8c6` through the real `startEgressProxy` and `createLogger`:
+  `GET http://blocked.test/seg.ts?sig=SECRET_BLOCKED` logged
+  `"host":"http://blocked.test/seg.ts?sig=SECRET_BLOCKED"` beside a correctly
+  redacted `details.url`.
+- **high** · `tools/downloader/resolvers/src/resolvers/ytdlp.ts:906 "stderr: stderr.slice(-500)"`
+  puts raw yt-dlp stderr in `details`, and yt-dlp echoes the URL mid-sentence
+  (`ERROR: Unsupported URL: http://…?sig=…`, measured with yt-dlp 2025.09.26
+  against a local server). `tools/downloader/api/src/logger.ts@b63d8c6:115 "parsed = new URL(value);"`
+  redacts only a value that parses whole. Reproduced with the real
+  `YtDlpResolver` and the branch logger: a URL containing `drm` classifies
+  `DRM_PROTECTED` (terminal, so it reaches `request rejected`) and the line
+  carries `sig=SECRET123` in `details.stderr`. Conditional on the yt-dlp tier
+  being enabled and the URL text matching a terminal marker.
+- **high** · the page URL, query string included, reaches the `probe complete`
+  line at `info` on a successful browser probe:
+  `tools/downloader/api/src/routes/probe.ts:255 "requestContext: probe.requestContext,"`
+  logs the request context, and `redactRequestContext` keeps `Referer`
+  verbatim. Two sources, both measured:
+  `tools/downloader/resolvers/src/browser/request-context.ts:65 "??= input.pageUrl;"`
+  fills it with the full page URL when the capture had none (reviewer, real
+  `buildRequestContext` and `createLogger`); and Chromium itself sends the
+  full page URL as the captured `Referer` of a same-origin media fetch under
+  its default referrer policy (builder, real headless Chromium through
+  Playwright, page `/watch?v=1&sig=SECRET_PAGE` with a same-origin `<video>`,
+  reviewer did not re-run). Outside the ticket title (a failed probe) but
+  inside its step 2 (every log call passing a URL); **where to fix it is an
+  open decision**, not settled here.
+- **low** · the Why still cited `logger.ts` line 104 for `function safeFields(`,
+  which this branch had moved to 150 (`citations.mjs` reported MOVED); the
+  sweep coordinates for `classify.ts` (line 135, a closing brace) and
+  `browser/pool.ts` (line 224, a throw with no `details`) pointed at the wrong
+  lines. Fixed in the Log below.
+- **low** · the Log said 1431 before the branch and three new tests; the
+  branch added five and the base count was 1429. Fixed in the Log below.
+- **low** · value-shape gaps with no live site found: a URL nested one level
+  deeper inside `details`, in an array, protocol-relative, or unparseable
+  (`ssrf.ts` records an unparseable raw URL whole) was not redacted —
+  measured by logging each shape through the branch logger. The docstring
+  stated the top-level-only limit for `requestContext` but not for `details`
+  itself.
+- **dropped** · `tools/downloader/api/src/main.ts:83 "details: appError.details,"`
+  carrying a config credential: booted `dist/main.js` with
+  `PROXY_URL=http://user:SECRET_PROXY@…` into `EADDRINUSE`, a malformed
+  `PROXY_URL` and a `socks5:` scheme; none of the three lines contained the
+  secret, and no throw on the boot path echoes the value. Not a defect.
+- **dropped** · a DoS or crash in the new walk: no recursion, a 10 MB URL
+  value logged in 98 ms, a cycle and a throwing getter both still emitted a
+  line. Not a defect (though the _recursion_ half of this became stale once
+  gate 2's fix added recursion — see gate 2's own DoS/crash re-check).
+- **dropped** · yt-dlp classifying a no-media page as `DRM_PROTECTED` because
+  the echoed URL contains `drm` — a real misclassification in
+  `classifyFailure`, but not this ticket and outside the reviewed range;
+  raised to the orchestrator as a filing question and filed as
+  [dl-67](./dl-67-yt-dlp-misclassifies-a-no-media-page-as-drm.md).
+- **findings** · the reviewer hunt returned 9; 6 carried, 3 dropped.
+- NFR: security — three high above · performance ✓ (measured, above) ·
+  reliability ✓ (getter and cycle, above) · maintainability — the two low
+  citation and count bullets.
+- Invariants: no cross-tool import ✓; reuses `redactUrl` from `@webtools/core`
+  rather than reimplementing ✓, but not the text matcher `redactUrlsInText`
+  that `engine/src/ffmpeg/runner.ts` already has for exactly the embedded
+  case; `@webtools/core` already declared in `api/package.json` ✓; no
+  contract edit ✓; style ✓. Skipped as not touched: shell, process trees,
+  SSRF, progress, test registration, Dockerfile.
+
+### Gate 2
+
+**Gate: FAIL** — 2026-09-17 · `origin/main...31ba6c9` (base `20c8fd1`; this
+round is the delta from `b63d8c6`) · defect hunt run by the reviewer itself at
+medium depth over the new walk in `logger.ts`, the four new tests and the
+ticket edits
+
+| Done when                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step-1 test fails on `origin/main`, passes on the branch, Log records both                               | unchanged from gate 1 ✓ — still green at 31ba6c9 (`logging.test.ts` 43 passed)                                                                                                                                                                                                                                                                                                                                                                       |
+| Sweep in the Log, and a test per other URL-carrying site or a reason                                     | H1 `tools/downloader/api/test/egress-proxy.test.ts:1181-1182 "expect(refused).toHaveLength(1)"` ✓, H2 `tools/downloader/api/test/logging.test.ts:896-908 "DRM_PROTECTED"` ✓, H3 `tools/downloader/api/test/logging.test.ts:937-954 "referer.example/watch?v=1&sig=SECRET_REFERER"` ✓ — re-run: `logger.ts` alone reverted to `b63d8c6` gives 4 failed / 77 passed across the two files, one per high plus the H1 unit companion; restored, 81 passed |
+| A test proves the redacted line keeps host and path                                                      | gate 1 rows still hold; each new high test also asserts host and path ✓                                                                                                                                                                                                                                                                                                                                                                              |
+| Widened scope: every string value in a log line is covered, H1–H3 each red at `b63d8c6` and green after  | **unproven** — the H1–H3 half is proven above, but every string value is false as measured: the second occurrence of a shared (non-cyclic) object is written unredacted, and so are an upper-case `HTTPS://` and a protocol-relative `//host/p?sig=`                                                                                                                                                                                                 |
+| `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0; 85 files, 1438 passed (1434 at `b63d8c6`, 1429 at base); citations-gate exit 0, 84 enforced, 0 failing                                                                                                                                                                                                                                                                                                                  |
+
+- **med** · the cycle guard fails open on a shared reference:
+  `tools/downloader/api/src/logger.ts@31ba6c9:125 "if (seen.has(value)) return value;"`
+  returns the _original_ object for any object already visited anywhere in the
+  line, not only an ancestor. Measured through the built logger:
+  `log.info(m, { a: shared, b: shared })` with
+  `shared = { url: https://h.example/p?sig=SHARED }` wrote `a` redacted and
+  `b` with `sig=SHARED`, and `{ details: shared, again: [shared] }` leaked in
+  `again`. No live call site found that logs one object twice; it is a hole
+  in the net whose job is to catch the call site nobody has written yet.
+- **med** · the gate-1 record is not in the branch: the ticket at 31ba6c9 had
+  no `## Review` section, and its Log said see Review below once committed. A
+  merge from that commit would have lost the FAIL that caused the round.
+  Fixed by this commit — both gates are now above, under their own headings.
+- **low** · the matcher at
+  `tools/downloader/engine/src/ffmpeg/runner.ts:65 "return text.replaceAll"`
+  is case-sensitive and requires a scheme, so `HTTPS://…?sig=` and
+  `//host/p?sig=` pass unredacted (measured). No live source found:
+  `URL.href`, the Chromium `Referer` and the ffmpeg target are all lower-case
+  absolute. Closing this is an **open decision** (D3, for the orchestrator):
+  reword the widened Done-when to the real reach of the matcher
+  (recommended), or add the `i` flag to the shared matcher, which also
+  changes ffmpeg stderr redaction.
+- **dropped** · a raw `Error` in fields is not walked (pino writes its message
+  verbatim): every log call in the tool passes `String(error)` or
+  `error.message`, both now redacted. Not a live defect.
+- **dropped** · deep nesting: a 20,000-level object raises inside the walk,
+  `emit` catches it and writes the line with `fieldsDropped: true`. The line
+  survives; not a defect.
+- **dropped** · the `@downloader/engine` value import: already under
+  `dependencies` in `api/package.json` and shipped by the image; `runner.ts`
+  is byte-identical to `origin/main`. Not a finding.
+- **findings** · the reviewer hunt returned 6; 3 carried, 3 dropped. Gate 1
+  highs are closed by the tests above; L1 and L2 are corrected in the Log.
+- NFR: security — two med above · performance — a walk of every field on
+  every line, accepted by the owner under D1 · reliability ✓ (cycle, depth,
+  getter) · maintainability ✓.
+- Invariants: no cross-tool import ✓ (`@downloader/engine` is the same tool);
+  reuses `redactUrlsInText` rather than reimplementing ✓; no contract edit ✓;
+  test registration unchanged ✓; style ✓. Skipped as not touched: shell,
+  process trees, SSRF, progress, Dockerfile.
+
 ## Log
 
 - 2026-09-13 — Filed on the owner's instruction instead of being fixed on the
@@ -437,3 +588,67 @@ URLs would be written to the host's logs, which is why dl-49 waits on this.
     failing; 7 grandfathered, 2 unresolvable, 21 unanchored; 7 entries
     compared against `origin/main`, 0 raised.
   - `dl-67` (filed for Q3): `npm run status -- --show dl-67` parses cleanly.
+
+- 2026-09-17 — Gate 2 at `31ba6c9`: **FAIL**, two meds (M1, M2) and a low (L)
+  carrying an open decision (D3). Both committed above under `## Review`, each
+  in its own subsection, per the reviewer's request and `records.md`'s rule
+  against overwriting an earlier gate.
+
+  **M1 fixed.** `redactUrlsDeep`'s cycle guard tracked every object visited
+  anywhere in the line (a `WeakSet`), not only the objects on the current
+  path from the root — so a _second_, non-cyclic reference to a shared object
+  read as "already handled" and was returned raw. Reproduced exactly as the
+  reviewer measured it: `logger.info("dag", { a: shared, b: shared })` wrote
+  `a` redacted and `b` with `sig=SHARED` intact. Fixed by tracking ancestors
+  only — add an object to the set before recursing into it, remove it in a
+  `finally` once its subtree is done — which tells a true cycle (revisits an
+  object still on the current path) apart from a shared reference (revisits
+  one whose subtree already finished). Re-run of the reviewer's exact repro
+  after the fix: both `a` and `b` redacted, and a `{ details: shared, again:
+[shared] }` shape redacts in both places too. A genuine self-reference
+  still does not hang — verified live, and pinned as a unit test — though a
+  URL reachable _only_ by re-entering the cycle is still not redacted on that
+  second visit (documented as a known limitation in `logger.ts`, matching how
+  `requestContext`'s own structural-pass limitation is documented; no live
+  call site produces this shape).
+
+  Command: `npx vitest run tools/downloader/api/test/logging.test.ts -t "shared object"`.
+  Red at `31ba6c9`'s logger (2 of 3 new tests failed, the cycle one passed
+  since M1 never touched cycle-safety itself), green after. Verified with the
+  same stash-and-restore method as gate 1's fixes — never by reverting a test.
+
+  **M2 fixed**, by committing this `## Review` section. Gate 1's own text is
+  unchanged except the H3 bullet the reviewer had already told me to swap in,
+  and its `logger.ts:115` citation — the one piece of gate 1's evidence that
+  the round-two fix itself deleted — is pinned to `b63d8c6`, per
+  `.claude/skills/orchestrate-tickets/reference/records.md`'s rule ("reach
+  for a pin when the citation was true of some commit in this repository"):
+  confirmed non-empty with
+  `git log --all --oneline -S'parsed = new URL(value);' -- tools/downloader/api/src/logger.ts`
+  (two commits: `b63d8c6` added it, `31ba6c9` removed it), so a pin is the
+  right repair, not a declaration. Gate 2's own new citations
+  (`logger.ts@31ba6c9:125`) are pinned the same way, since gate 2 itself will
+  go stale the moment a gate 3 touches those lines again.
+
+  Command: `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors` — exit 0, 18 verified, 3
+  unchecked (bare `line N` mentions in the gate-1 low bullet about the
+  ticket's own now-fixed stale citations, which name no file on purpose and
+  are not meant to resolve).
+
+  **L / D3 not resolved here.** The matcher's case-sensitivity and
+  scheme-requirement gap is real and the widened Done-when overstates what it
+  covers; the reviewer named it an open decision for the orchestrator (reword
+  the Done-when, or widen the matcher with a cost to ffmpeg's own stderr
+  redaction too), and it is relayed as such rather than settled in this
+  commit.
+
+  **Gates, at the final state:**
+  - `npx vitest run tools/downloader/api/test/logging.test.ts tools/downloader/api/test/egress-proxy.test.ts`
+    — 84 passed (46 + 38).
+  - `npm run check` — exit 0.
+  - `npm test -- --project downloader` — 85 test files, 1441 passed (1438 at
+    `31ba6c9`, plus this round's 3 new M1 tests).
+  - `node scripts/citations-gate.mjs --against origin/main` — 85 enforced, 0
+    failing; 7 grandfathered, 2 unresolvable, 21 unanchored; 7 entries
+    compared against `origin/main`, 0 raised.
