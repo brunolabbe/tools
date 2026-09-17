@@ -709,6 +709,16 @@ export type { FfmpegProgressSnapshot, JobProgressContext } from "./ffmpeg/progre
 export { FfmpegProgressParser, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.ts";
 export { isTlsVerificationFailure, runFfmpeg } from "./ffmpeg/runner.ts";
+export type { PreviewFrameOptions } from "./ffmpeg/preview-frame.ts";
+export {
+  buildPreviewFrameArgs,
+  choosePreviewVariant,
+  grabPreviewFrame,
+  PREVIEW_FRAME_MAX_EDGE_PX,
+  PREVIEW_SEEK_CAP_SEC,
+  PREVIEW_SEEK_FRACTION,
+  previewSeekSec,
+} from "./ffmpeg/preview-frame.ts";
 
 export type { DashDownloadOptions } from "./download/dash.ts";
 export { downloadDash } from "./download/dash.ts";

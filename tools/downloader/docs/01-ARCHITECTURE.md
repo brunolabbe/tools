@@ -124,6 +124,30 @@ failure as progress.
 unguessable random bytes, never the job id. Job ids appear in logs and URLs; the
 download capability must not be inferable from them.
 
+**Preview images are fetched here, at probe time, and served by token (dl-29).**
+A resolver's `thumbnailUrl` is attacker-influenced, so the browser is never
+pointed at it: the API fetches it through the SSRF-checked fetch, replaying the
+probe's `RequestContext`, and serves the bytes from `/api/thumbnail/:token`. It
+happens in-line, right after the probe, because that is the only moment the
+source's credentials are in hand. It is bounded at 4 s and 512 KB, and every
+failure is simply no preview.
+
+**When the source names no image at all, one frame is grabbed from the stream
+instead (dl-56).** The stream is the one source every successful probe has. One
+ffmpeg invocation (`grabPreviewFrame` in the engine) reads the cheapest
+rendition with video, seeks a tenth in (at most 3 s), and writes one JPEG, at most
+256 px on its longer edge. It goes out through the **ffmpeg egress proxy** with
+TLS verification on, exactly like a download, because the segments and keys a
+manifest names are URLs only that proxy ever vets. It is never attempted after a
+named image failed, never for a live stream, and never retried against another
+rendition. What it costs: one ffmpeg process per probe or job re-probe whose
+source names no image, which is every probe the direct tier answers (it never
+reads an image). The grab is bounded at 6 s, including the process-tree kill, and
+at the same 512 KB. Measured through the terminating proxy, a whole probe that
+grabbed took 0.38–0.50 s against a real CDN and under 0.11 s against the
+generated fixture. On HLS it fetches the playlist and the first two segments,
+the same as frame 0 would, on 6- and 10-second segments.
+
 **Fail loudly with typed codes.** Every failure maps to one `ErrorCode` in
 `contract/src/errors.ts`. No layer invents its own strings — that is what makes the UI
 able to say something useful instead of "something went wrong".

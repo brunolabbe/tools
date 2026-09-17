@@ -201,6 +201,10 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     engine,
     startGc: false,
     logger: createLogger({ level: "silent" }),
+    // No ffmpeg, like the rest of this harness: the stub engine's "binary" is
+    // node, and `probeResult()` names no image, so the real grab would spawn it
+    // on nearly every probe here. A test about the grab passes its own (dl-56).
+    grabFrame: async () => null,
     ...options,
     config: {
       databasePath: ":memory:",

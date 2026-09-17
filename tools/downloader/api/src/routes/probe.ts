@@ -236,6 +236,10 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
           fetchImpl: context.guardedFetch,
           store: context.thumbnails,
           logger: context.logger,
+          // dl-56: a frame from the stream when the source names no image, on
+          // the client's own cancellation so a closed tab stops the ffmpeg too.
+          grabFrame: context.grabFrame,
+          signal: controller.signal,
         });
         // A bare probe has no job and so no `out/` directory to keep a copy
         // beside; the in-memory store is the whole of its retention. Only the
@@ -252,6 +256,9 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
           variants: probe.variants.length,
           drm: probe.drm.protected,
           preview: thumbnailPath !== null,
+          // dl-56: which of the two sources it came from, so how often the
+          // frame grab fires is a count over this line rather than a guess.
+          previewSource: captured?.source ?? null,
           requestContext: probe.requestContext,
         });
         recordProbeOutcome(context, {

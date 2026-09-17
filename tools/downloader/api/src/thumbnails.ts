@@ -1,6 +1,25 @@
 /**
  * Preview images: fetched at probe time, served by token, held in two places.
  *
+ * ## Where the image comes from (dl-29, then dl-56)
+ *
+ * An image the source names, first and nearly always: an `og:image`, or
+ * yt-dlp's `thumbnail`. **Only when the source names none at all**, a single
+ * frame grabbed from the probe's own stream, through `grabFrame`. The stream is
+ * the one source every successful probe has, and a page with no image markup
+ * otherwise renders no preview however well the video resolved.
+ *
+ * dl-29 ruled frame grabbing out as "a different and much larger feature". What
+ * would have made it larger is not what this does: it is one ffmpeg invocation
+ * per probe, never one per rendition; in-line and bounded like the image fetch,
+ * never an asynchronous grab that would need a contract change to announce a
+ * preview later; never after a named image failed, which would stack two
+ * bounded costs on one probe; never for a live stream; and never retried
+ * against another rendition, since a frame from a stream the probe did not rank
+ * is worse than no picture. The grab goes out through the **ffmpeg egress
+ * proxy**, because every segment and key a manifest names is a URL no SSRF sweep
+ * here has seen — see `createFrameGrabber`.
+ *
  * ## Why the bytes come through this service at all
  *
  * `ProbeResult.thumbnailUrl` is a `<meta property="og:image">` on a page a user
@@ -65,8 +84,9 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { ProbeResult, RequestContext } from "@downloader/contract";
-import { assertRealPathInside } from "@downloader/engine";
+import { assertRealPathInside, choosePreviewVariant, grabPreviewFrame } from "@downloader/engine";
 import type { Storage } from "@downloader/engine";
+import type { MediaVariant } from "@downloader/contract";
 import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
@@ -101,6 +121,26 @@ const MAX_THUMBNAIL_BYTES = 512 * 1024;
  * probe's own budget has already been mostly spent by the time we get here.
  */
 const THUMBNAIL_FETCH_TIMEOUT_MS = 4_000;
+
+/**
+ * The frame grab's ceiling, including the process-tree kill — past it the grab
+ * is `null` and the probe answers without a preview.
+ *
+ * Measured, not chosen from the brief (dl-56's Log has the runs). Against a real
+ * CDN's 634-second HLS title, a whole probe that grabbed through this wiring —
+ * the terminating ffmpeg egress proxy included — took 0.38–0.50 s on the lowest
+ * rung, the one `choosePreviewVariant` picks. Directly, with no proxy, the grab
+ * took 0.23–0.27 s on that rung and 0.44–0.49 s on the 1080p one. Against the
+ * generated fixture, under 0.11 s. Six seconds is twelve times the slowest of
+ * those, for a CDN further away or colder than the one measured.
+ *
+ * Its relationship to `probeTimeoutMs` (45 s by default) is the same as
+ * `THUMBNAIL_FETCH_TIMEOUT_MS`'s, and the two never stack: the grab runs only
+ * when the source named no image, so no image fetch was attempted. A probe that
+ * spent its whole resolution budget finishes at most this much later, and the
+ * reproduction's own 22.8 s probe would have finished in under 29 s.
+ */
+const FRAME_GRAB_TIMEOUT_MS = 6_000;
 
 /**
  * Comfortably above `PROBE_CACHE_TTL_CEILING_MS` (60 s).
@@ -206,7 +246,25 @@ export interface CapturedThumbnail {
   /** `/api/thumbnail/<token>` — what `thumbnailPath` has always meant. */
   path: string;
   thumbnail: StoredThumbnail;
+  /**
+   * `page` for an image the source named, `frame` for one grabbed from the
+   * stream (dl-56). Log-only: nothing a client receives carries it.
+   */
+  source: "page" | "frame";
 }
+
+/** What a frame grab is asked for. The variant is already chosen. */
+export interface FrameGrabRequest {
+  probe: ProbeResult;
+  variant: MediaVariant;
+  signal?: AbortSignal | undefined;
+}
+
+/**
+ * Grabs one frame and returns JPEG bytes, or `null`. May throw; the caller
+ * treats a throw exactly like `null`.
+ */
+export type FrameGrabber = (request: FrameGrabRequest) => Promise<Buffer | null>;
 
 export interface CaptureThumbnailOptions {
   probe: ProbeResult;
@@ -216,11 +274,19 @@ export interface CaptureThumbnailOptions {
   logger: AppLogger;
   timeoutMs?: number;
   maxBytes?: number;
+  /**
+   * The fallback for a probe whose source names no image (dl-56). Absent means
+   * no fallback, which is what every caller had before it.
+   */
+  grabFrame?: FrameGrabber | undefined;
+  /** The caller's cancellation, handed to `grabFrame`. */
+  signal?: AbortSignal | undefined;
 }
 
 /**
  * Fetches the probe's preview image and returns it, or `null` if anything at
- * all went wrong.
+ * all went wrong. When the source names no image, grabs a frame instead, if a
+ * `grabFrame` was given — see `captureFrame`.
  *
  * **Never throws.** Timeout, 404, oversized body, wrong content type, blocked
  * address, malformed URL — every one of them means "no preview", and the probe
@@ -238,7 +304,10 @@ export async function captureThumbnail(
   // `probe.thumbnailUrl` directly, so `ssrf.ts` stays the one place that knows
   // which URLs a probe causes us to fetch.
   const [url] = urlsInProbeResult(probe).bestEffort;
-  if (url === undefined) return null;
+  // Only when there is no image URL at all. A named image that then fails
+  // below stays no preview: that page did name one, and a grab after a failed
+  // fetch would stack two bounded costs on one probe.
+  if (url === undefined) return await captureFrame(options, maxBytes);
 
   try {
     // Belt and braces with `guardedFetch`, which runs this same check on hop 0.
@@ -279,7 +348,7 @@ export async function captureThumbnail(
 
     const thumbnail: StoredThumbnail = { contentType, bytes };
     const token = store.put(thumbnail);
-    return { token, path: ROUTES.thumbnail(token), thumbnail };
+    return { token, path: ROUTES.thumbnail(token), thumbnail, source: "page" };
   } catch (error) {
     // Deliberately swallowed, at `debug`: a blocked address here is a page
     // being hostile about its *preview*, which says nothing about whether the
@@ -289,6 +358,105 @@ export async function captureThumbnail(
     });
     return null;
   }
+}
+
+/** JPEG's start-of-image marker, `FF D8 FF`. */
+function isJpeg(bytes: Buffer): boolean {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+/**
+ * The stream fallback: one frame from the probe's cheapest video rendition.
+ *
+ * Held to the same rules as a fetched image — the content-type allowlist
+ * (`image/jpeg`, and the bytes must be one), the same byte cap, the same store —
+ * and like every path in `captureThumbnail` it never throws: a grab that
+ * returns `null`, throws, or hands back something that is not a JPEG is logged
+ * at `debug` and is no preview.
+ */
+async function captureFrame(
+  options: CaptureThumbnailOptions,
+  maxBytes: number,
+): Promise<CapturedThumbnail | null> {
+  const { probe, store, logger, grabFrame } = options;
+  if (grabFrame === undefined) return null;
+  // A live variant can be a moving window with no stable frame, and a live
+  // probe is already on its own path (`LIVE_STREAM_UNSUPPORTED`).
+  if (probe.isLive) return null;
+  const variant = choosePreviewVariant(probe.variants);
+  if (variant === null) return null;
+
+  try {
+    const bytes = await grabFrame({
+      probe,
+      variant,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    if (bytes === null) {
+      logger.debug("no preview frame: the grab produced none");
+      return null;
+    }
+    const contentType = "image/jpeg";
+    if (!ALLOWED_CONTENT_TYPES.has(contentType) || !isJpeg(bytes)) {
+      logger.debug("no preview frame: not a JPEG", { bytes: bytes.length });
+      return null;
+    }
+    if (bytes.length > maxBytes) {
+      logger.debug("no preview frame: larger than the cap", { maxBytes });
+      return null;
+    }
+    const thumbnail: StoredThumbnail = { contentType, bytes };
+    const token = store.put(thumbnail);
+    return { token, path: ROUTES.thumbnail(token), thumbnail, source: "frame" };
+  } catch (error) {
+    logger.debug("no preview frame: the grab failed", {
+      reason: error instanceof AppError ? error.code : String(error),
+    });
+    return null;
+  }
+}
+
+export interface FrameGrabberOptions {
+  ffmpegPath: string;
+  /**
+   * **`ffmpegEgress.proxyUrl`, and nothing else.** The segments, init segments
+   * and keys a manifest names were never in the probe's SSRF sweep; this proxy
+   * is the only check that sees them. Leaving it unset passes every test that
+   * does not look and reopens dl-11.
+   */
+  proxyUrl: string;
+  /** `ffmpegEgress.tlsCaFile` — the other half of the same pair. */
+  tlsCaFile?: string | undefined;
+  tlsVerify: boolean;
+  /** The storage `tmp/` root. */
+  tmpRoot: string;
+  logger: AppLogger;
+  timeoutMs?: number;
+  maxBytes?: number;
+}
+
+/**
+ * The production `FrameGrabber`: the engine's ffmpeg grab, given the same
+ * egress, trust store and TLS verification a download gets, and the probe's
+ * `RequestContext` replayed on every request.
+ */
+export function createFrameGrabber(options: FrameGrabberOptions): FrameGrabber {
+  return async ({ probe, variant, signal }) =>
+    await grabPreviewFrame({
+      url: variant.url,
+      protocol: variant.protocol,
+      requestContext: probe.requestContext,
+      durationSec: variant.durationSec ?? probe.durationSec ?? null,
+      ffmpegPath: options.ffmpegPath,
+      proxyUrl: options.proxyUrl,
+      tlsVerify: options.tlsVerify,
+      ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
+      tmpRoot: options.tmpRoot,
+      timeoutMs: options.timeoutMs ?? FRAME_GRAB_TIMEOUT_MS,
+      maxOutputBytes: options.maxBytes ?? MAX_THUMBNAIL_BYTES,
+      signal,
+      logger: options.logger,
+    });
 }
 
 /**

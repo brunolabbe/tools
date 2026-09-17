@@ -42,7 +42,7 @@ import { probeForClient } from "../probe-out.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 import { captureThumbnail, persistThumbnail, withThumbnailPath } from "../thumbnails.ts";
-import type { CapturedThumbnail, ThumbnailStore } from "../thumbnails.ts";
+import type { CapturedThumbnail, FrameGrabber, ThumbnailStore } from "../thumbnails.ts";
 import type { JobEventHub } from "./events.ts";
 import { createFileToken } from "./tokens.ts";
 import { chooseVariant } from "./variant-selection.ts";
@@ -68,6 +68,12 @@ export interface OrchestratorOptions {
   thumbnails: ThumbnailStore;
   /** The redirect-re-checking fetch the preview capture uses. */
   fetchImpl: GuardedFetch;
+  /**
+   * The frame grab for a source that names no image (dl-56). Optional so a test
+   * that builds an orchestrator by hand gets no ffmpeg; `server.ts` always
+   * passes one.
+   */
+  grabFrame?: FrameGrabber | undefined;
   now?: () => Date;
 }
 
@@ -245,6 +251,10 @@ export class JobOrchestrator {
       fetchImpl: this.#options.fetchImpl,
       store: this.#options.thumbnails,
       logger: log,
+      // dl-56: the same fallback the probe route has, on the job's own signal
+      // so a cancel stops the grab's ffmpeg with everything else.
+      grabFrame: this.#options.grabFrame,
+      signal,
     });
     const thumbnailPath = captured?.path ?? null;
 

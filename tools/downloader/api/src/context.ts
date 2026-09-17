@@ -20,7 +20,7 @@ import type { JobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import type { PerClientConcurrencyGate } from "./per-client-gate.ts";
 import type { SsrfGuard } from "./ssrf.ts";
-import type { ThumbnailStore } from "./thumbnails.ts";
+import type { FrameGrabber, ThumbnailStore } from "./thumbnails.ts";
 
 export interface AppContext {
   config: ApiConfig;
@@ -73,6 +73,12 @@ export interface AppContext {
    * not `globalThis.fetch`.
    */
   guardedFetch: GuardedFetch;
+  /**
+   * Grabs a preview frame from a probe's stream when its source names no image
+   * (dl-56). Built once at boot on `ffmpegEgress` — the ffmpeg egress proxy and
+   * its trust store — so every grab goes out the way a download does.
+   */
+  grabFrame: FrameGrabber;
   orchestrator: JobOrchestrator;
   /**
    * Token buckets, one per client-facing endpoint. Since dl-46 that is every

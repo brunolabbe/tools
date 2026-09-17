@@ -3,7 +3,7 @@ id: dl-56
 tool: downloader
 title: A probe whose page names no preview image gets one frame grabbed from its chosen stream
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [dl-55]
 difficulty: hard
@@ -213,3 +213,181 @@ this ticket it confirmed the code facts: `captureThumbnail`'s early return, the
 thumbnail constants, `runFfmpeg`'s options, `PROGRESS_ARGS`, `ffmpegEgress` and
 the `probeTimeoutMs` default. It also confirmed that `depends_on: [dl-55]` is
 justified by the text. It raised nothing against this ticket's Build.
+
+## 2026-09-17 — built
+
+Branch `dl-56-grab-a-preview-frame` off `origin/main` at `20c8fd1`. dl-55 is in
+that base (merged as `1806525`). Nothing here touches
+`resolvers/src/browser/provoke.ts`, so there is no overlap with dl-61.
+
+**What landed, by Build step.**
+
+1. **The grab**, `engine/src/ffmpeg/preview-frame.ts`, exported from the engine.
+   `grabPreviewFrame` returns JPEG bytes or `null`. It runs one `runFfmpeg` with
+   `buildNetworkInputArgs` (the `RequestContext`, `tlsVerify` and `tlsCaFile`
+   replayed, `reconnect` off), `-map 0:v:0 -an -sn -dn -frames:v 1`, a scale to
+   at most 256 px on the longer edge (never up), and `-f mjpeg` into a fresh
+   `preview-<uuid>/` directory under the storage `tmp/` root. That directory is
+   removed in a `finally`. `PROGRESS_ARGS` stay in, because `runFfmpeg` enforces
+   `maxOutputBytes` off the progress stream. The file size is checked again after
+   exit, and the bytes must start `FF D8`. `TIMEOUT`, `SIZE_LIMIT_EXCEEDED`,
+   `DOWNLOAD_FAILED` and `TLS_VERIFICATION_FAILED` return `null` at `debug`.
+   `JOB_CANCELED` and a binary that will not start are thrown, since neither is a
+   fact about the stream. `choosePreviewVariant` picks the lowest declared
+   `bitrateBps` among variants with video. With no bitrates it keeps the probe's
+   order (the first with video). It returns one variant and never retries another.
+2. **The fallback**, `api/src/thumbnails.ts`. `captureThumbnail` takes optional
+   `grabFrame` and `signal`. With no `bestEffort` URL it calls `captureFrame`,
+   which returns `null` for a live probe or no video variant. Otherwise it calls
+   the grab and holds the answer to `image/jpeg`, a JPEG signature and
+   `MAX_THUMBNAIL_BYTES`, then `store.put`s it. `CapturedThumbnail` gained a
+   log-only `source: "page" | "frame"`. `createFrameGrabber` is the production
+   grabber. The header now says where images come from and why this is not
+   dl-29's "much larger feature".
+3. **Wiring.** `server.ts` builds `grabFrame` once, after the engine, from
+   `ffmpegEgress.proxyUrl`, `ffmpegEgress.tlsCaFile`,
+   `!config.ffmpegAllowUnverifiedTls`, `engine.config.ffmpegPath` and
+   `engine.storage.tmpRoot`. It goes on `AppContext.grabFrame` and
+   `OrchestratorOptions.grabFrame`. `CreateAppOptions.grabFrame` overrides it for
+   tests. `routes/probe.ts` passes it with the request's abort signal and logs
+   `previewSource`. `jobs/orchestrator.ts` passes it with the job's signal.
+4. **The budget.** `FRAME_GRAB_TIMEOUT_MS = 6_000`, beside
+   `THUMBNAIL_FETCH_TIMEOUT_MS`. Its comment states the relationship to
+   `probeTimeoutMs` and that it never stacks with the image fetch.
+5. **Tests.** See the verification section below.
+6. **Docs.** `docs/01-ARCHITECTURE.md` gains two "Key decisions" paragraphs:
+   preview images (dl-29) and the frame grab (dl-56), with its cost.
+
+**What the brief had wrong, or did not know.**
+
+- **"Use an input-side `-ss`" is the more expensive placement here.** The Trap
+  said to measure first, so I did, and the result reversed the Build line. The
+  HLS demuxer fetches the first two segments while it probes streams. An
+  input-side seek then reopens the segment that holds the seek point, and it
+  fetches that segment again. `-ss` is output-side. The measurement used
+  generated `libx264` ladders on loopback. The seek was `min(3 s, 10%)`, and
+  "bytes" means bytes the origin served:
+
+  | Ladder                     | output-side (built) | input-side   | frame 0   |
+  | -------------------------- | ------------------- | ------------ | --------- |
+  | 6 s clip, 2 s segs (0.6 s) | 138,753             | 277,309 (2x) | 138,753   |
+  | 60 s, 1 s segs             | 343,013             | **275,521**  | 138,281   |
+  | 60 s, 2 s segs             | 410,981             | 547,845      | 274,117   |
+  | 120 s, 6 s segs            | 819,977             | 1,639,281    | 819,977   |
+  | 60 s, 10 s segs            | 1,364,416           | 2,728,544    | 1,364,416 |
+
+  Output-side matches frame 0 on 6- and 10-second segments. It loses only on
+  1-second segments, by 1.25x. Script:
+  `scratchpad/dl-56/measure.mjs`, not committed.
+
+- **`01-ARCHITECTURE.md` did not describe preview images anywhere**, so "wherever
+  it describes preview images" had nothing to edit. The dl-29 paragraph is new,
+  and the dl-56 paragraph goes beside it.
+- **"Most pages do name an image" does not hold for the direct tier.** No code
+  in the direct resolver sets `thumbnailUrl`. Only the browser tier (`og:image`)
+  and yt-dlp (`thumbnail`) do. So **every probe the direct tier answers now
+  grabs**, and so does every job re-probe of one. Across the e2e suites, run
+  locally with `LOG_LEVEL` temporarily set to `info` (not committed):
+  `e2e:downloader` had 7 passed and 1 `probe complete` line, with
+  `previewSource: "frame"`. `e2e:downloader:sniffer` had 1 passed and 1
+  `probe complete`, with `previewSource: "page"`. Each suite also runs one job.
+  Its re-probe logs at `debug` and was not counted. By the code path, the direct
+  suite's job grabs a second time and the sniffer's does not. So the fallback
+  fired on 1 of the 2 logged probes, and by inference on 2 of the 4 captures.
+- **The test harness now defaults `grabFrame` to `async () => null`**
+  (`api/test/helpers.ts`). The stub engine's ffmpeg is `process.execPath`, and
+  `probeResult()` names no image. Without that default, most harness probes would
+  have spawned node with ffmpeg arguments.
+
+**The timeout constant, measured before it was chosen.**
+
+- **Fixture:** under 0.11 s for a whole `POST /api/probe` that grabbed, through
+  the real wiring with the terminating proxy (5 runs, 78–108 ms). The grab alone,
+  directly, took 65–335 ms across the ladders above.
+- **Real stream, not the reproduction page.** The ticket keeps that page out of
+  the repo and this dispatch was never told it, so it was **not** measured. The
+  real measurement is Mux's public HLS test title (`test-streams.mux.dev`,
+  634 s, served from a CDN). Directly: 0.23–0.27 s on the 240p rung, which the
+  picker takes, and 0.44–0.49 s on 1080p (5 runs each). Through `createApp`, with
+  a terminating ffmpeg egress proxy, a whole probe that grabbed took 0.38–0.50 s
+  (5 runs). The frame decoded and looked right (the title card, 256x147).
+- **6 s** is twelve times the slowest of those. It never stacks with
+  `THUMBNAIL_FETCH_TIMEOUT_MS`, because one probe runs one or the other.
+  Scripts: `measure-real.mjs` and `measure-api.mjs`, not committed.
+
+**Verification.**
+
+- `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`: 14 tests,
+  all pass. The fixture is a gated HLS origin that 403s any request without the
+  Referer, Cookie and UA. The tests cover JPEG bytes inside the timeout with the
+  context on every request, `.ts` included; the 640x360 frame scaled to 256x144;
+  no context giving `null` with `DOWNLOAD_FAILED`; `maxOutputBytes: 100` giving
+  `null`; and a canceled caller throwing `JOB_CANCELED`. They also cover the
+  argv: seek placement and cap, `-tls_verify 1` and `-ca_file`, headers before
+  `-i`, one input only. Four tests cover `choosePreviewVariant`.
+  **The bound**: segments trickle one byte per 50 ms, and `timeoutMs` is 2 s. The
+  test waits 750 ms and finds the ffmpeg process by a UUID marker in its argv,
+  read from `/proc`. That is the positive control. It then asserts `null`,
+  `TIMEOUT`, 2000 ms ≤ elapsed < 6000 ms, no process with the marker, and no
+  `preview-*` directory left. It is Linux-only (`skipIf`), because it reads
+  `/proc`.
+- `npx vitest run tools/downloader/api/test/thumbnails.test.ts`: 31 tests
+  (21 before, 10 new), all pass. The new ones: one grab from the cheapest video
+  rung, stored as `image/jpeg`; no grab when the image loads; no grab when the
+  image 404s; no grab for a live probe; no grab without video; `null`, a throw, a
+  non-JPEG or an oversized answer is no preview; served by
+  `/api/thumbnail/:token` as `image/jpeg`; a failing grab's response equals
+  `probeForClient(withThumbnailPath(probe, null))`; a job's re-probe gets its
+  path from the grab; `previewSource` is `frame` / `null` / `page`.
+- `npx vitest run tools/downloader/api/test/frame-grab-egress.test.ts`: 3 tests,
+  all pass. A stand-in ffmpeg records its env and argv through the real
+  `createApp`, with interception on. `http_proxy` equals `ffmpegProxyUrl`, which
+  differs from `egressProxyUrl`. `-ca_file` equals the engine's `tlsCaFile`. The
+  headers carry the cookie. With a real ffmpeg, a manifest on `127.0.0.1` whose
+  segments are on `localhost` (same socket, not exempt) gives no preview and
+  **zero requests** under `/localhost/`. The same manifest with its segments on
+  `127.0.0.1` gives a JPEG served as `image/jpeg`.
+- **Each proof turned red on its own, with every edit reverted afterwards** from
+  a saved copy, then compared:
+  - Omitting `requestContext` from the args turned 4 engine tests red.
+  - Passing `timeoutMs: undefined` to `runFfmpeg` made the trickle test time out
+    at 30 s.
+  - Removing **both** byte-cap layers turned the cap test red. Removing either
+    layer alone left it green, because the two layers are independent.
+  - Making the `isLive` check a no-op turned the live test red.
+  - Unwiring `grabFrame` in `routes/probe.ts` and `jobs/orchestrator.ts` turned
+    the 4 route tests red.
+  - Grabbing after a 404 turned the fails-to-fetch test red.
+  - In `server.ts`, `proxyUrl: tierProxy.url` turned only the wiring test red.
+    `proxyUrl: ""` turned the wiring test and the blocked-address test red, with
+    2 requests to `/localhost/seg*`.
+  - `pgrep -a ffmpeg` afterwards: none left.
+- `npm run check`: exit 0. `npm test -- --project downloader`: 87 files, 1456
+  tests, all pass. `npx vitest run packages/core/test/spawn-safety.test.ts
+packages/core/test/image-closure.test.ts`: 11 pass.
+  `npm run e2e:downloader` (7 passed) and `npm run e2e:downloader:sniffer`
+  (1 passed) both ran locally, with the new code.
+- **Citations.** This branch moves lines in `orchestrator.ts`, `server.ts`,
+  `routes/probe.ts` and `thumbnails.ts`. Before the fix,
+  `node scripts/citations-gate.mjs --against origin/main` failed 5 records:
+  dl-18, dl-32, dl-45, dl-57 and dl-60. Each moved citation is now pinned to
+  `@20c8fd1`, the base these lines were true of and a commit on `main`. After the
+  pins the gate reports 84 enforced, 0 failing, exit 0.
+
+**Not proven here, and what does prove it.** The container was not built. This
+changes what the image runs at probe time: an ffmpeg process per probe whose
+source names no image, reading `tmp/` under `STORAGE_DIR`. The downloader's
+image gate in CI is the proof of that. The e2e suites ran locally, and CI's run
+remains the one of record.
+
+**Fold-in: none.** The closest candidate is making the image fetch honour the
+caller's abort signal, now that `captureThumbnail` receives one. No ticket
+specifies that, and it would change a tested path's behaviour, so it was not
+folded in.
+
+**Left for the orchestrator, not settled here.** `routes/probe.ts` releases the
+server-wide `probeGate` straight after `registry.resolve`, before
+`captureThumbnail`. The per-client probe slot is held through the capture. So
+concurrent grabs are bounded per client, and each lasts at most 6 s, but nothing
+bounds them server-wide. The image fetch always had that shape. A grab is an
+ffmpeg process, which is heavier. It is reported as an open decision.
