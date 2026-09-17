@@ -3,7 +3,7 @@ id: dl-63
 tool: downloader
 title: The SSRF guard admits several native IPv6 special-purpose ranges
 kind: fix
-status: needs-decision
+status: ready
 milestone: M5
 depends_on: []
 ---
@@ -111,10 +111,12 @@ either. The command and its output are reproducible with the script left at
 `/tmp/claude-1000/.../scratchpad/dl-63/measure.mjs` (not checked in; the
 transcript above is the record).
 
-## The open decision
+## The decision
 
-**Which ranges should the guard block?** All are IPv6-native (no embedded
-IPv4, so dl-60's fix does not touch any of them). Three shapes:
+**dl-63: which native IPv6 ranges should the URL guard block?** All are
+IPv6-native (no embedded IPv4, so dl-60's fix does not touch any of them).
+Asked of the repository owner with `AskUserQuestion` on 2026-09-17, as the
+three shapes below.
 
 **(a) Block every range IANA marks not globally reachable, exactly.** That
 means adding `100::/64`, `100:0:0:1::/64`, `2001:2::/48`, `2001:db8::/32`,
@@ -157,23 +159,62 @@ would over-block are not plausible media origins. This has not been checked
 against real traffic; that is the caveat the option costs, named rather than
 buried in the choice.
 
-Whichever option is chosen, `fec0::/10` and `2001:10::/28`
-(terminated, no current legitimate use per the registry) are straightforward
-additions under any of the three and are not really in question — the live
-decision is what to do with `2001::/23` and the two very new/edge entries
-(`100:0:0:1::/64`, `2001:10::/28`).
+**Chosen: (c), by the repository owner, on 2026-09-17 — matching this
+ticket's own recommendation, which overrode nobody.** The cost named above is
+carried forward rather than discovered later: the seven reachable
+sub-allocations inside `2001::/23` (PCP, TURN and DNS-SD anycast, AMT,
+AS112-v6, ORCHIDv2, Drone Remote ID) are refused too, unverified against real
+media traffic, and a new IANA allocation outside `2001::/23` still needs a
+manual addition here — this option carries the same registry-drift
+obligation option (a) has for everything _outside_ `2001::/23`, just none of
+the nesting complexity inside it.
+
+**What (c) includes, resolved rather than left to infer.** The two paragraphs
+above this one disagree with each other on `2001:10::/28`: one says
+"`fec0::/10` and `2001:10::/28` ... are straightforward additions under any
+of the three and are not really in question", the other calls
+`2001:10::/28` one of "the two very new/edge entries" the live decision is
+about. **That was ambiguous before an option was chosen, and is flagged
+here rather than quietly resolved** — but choosing (c) makes it moot: `2001:10::/28`'s second hextet (`0x0010` = 16) falls inside `2001::/23`
+(hextet range `0x0000`–`0x01FF`), so blocking `2001::/23` "as a whole" with
+no carve-outs blocks it structurally, regardless of which sentence above was
+meant. `2001:2::/48` is inside `2001::/23` the same way (hextet `0x0002`).
+`100:0:0:1::/64` is not a sub-range of anything else measured here (its top
+hextet is `0100`, wholly outside `2001::/23`), so it needs its own explicit
+entry — included under (c) because the recommendation's own words are "it
+closes every measured gap in one pass", and `100:0:0:1::/64` is a measured
+gap (row 2 of the table above). So (c), as chosen, blocks every bold
+"allowed" row in the measurement table above, with `2001::/23` collapsing
+three of those rows (`2001:2::/48`, `2001:10::/28`, and the general space
+itself) into one rule.
 
 ## Build
 
-Blocked on the decision above.
+`isBlockedV6` in `tools/downloader/api/src/ssrf.ts` gains flat native-IPv6
+ranges, alongside the existing unique-local/link-local/multicast rules — no
+carve-outs, per (c):
+
+- `100::/64` (Discard-Only)
+- `100:0:0:1::/64` (Dummy IPv6 Prefix, RFC 9780)
+- `2001::/23` (IETF Protocol Assignments, blocked as a whole — this alone
+  covers `2001:2::/48` Benchmarking, `2001:10::/28` deprecated ORCHID, and the
+  seven reachable sub-allocations named above, all refused)
+- `2001:db8::/32` (Documentation)
+- `3fff::/20` (Documentation)
+- `5f00::/16` (Segment Routing, SRv6 SIDs)
+- `fec0::/10` (Site-Local, deprecated, RFC 3879)
 
 ## Done when
 
-Written once an option is chosen. Whichever it is, acceptance must include: a
-unit table over every range added to `isBlockedV6` (a public neighbour stays
-allowed, the range itself is blocked), a regression on the `2001::/23`
-carve-outs if option (a) or (b) is taken, and a note in the Log naming which
-option was chosen and by whom.
+- A unit table over every range added to `isBlockedV6` under (c) — `100::/64`,
+  `100:0:0:1::/64`, `2001::/23`, `2001:db8::/32`, `3fff::/20`, `5f00::/16`,
+  `fec0::/10` — proving a public neighbour of each stays allowed and the range
+  itself is blocked.
+- A regression proving the seven previously-reachable `2001::/23`
+  sub-allocations (`2001:1::1`, `2001:1::2`, `2001:1::3`, `2001:3::1`,
+  `2001:4:112::1`, `2001:20::1`, `2001:30::1`) are now blocked too, since (c)
+  takes no carve-outs — the accepted over-block, proven rather than assumed.
+- `npm run check` and `npm test -- --project downloader` green.
 
 ## Log
 
@@ -191,3 +232,14 @@ option was chosen and by whom.
   address, because this container has no IPv6 route at all (`ip -6 addr show`
   lists only `::1/128`), so that result is about the sandbox, not about any of
   these ranges; not claimed as evidence either way.
+- 2026-09-17 — Owner chose **(c)** via `AskUserQuestion`, matching this
+  ticket's own recommendation (nobody's recommendation was overridden). Moved
+  to `ready`. Rewrote the decision section to resolve which ranges (c) covers:
+  every bold "allowed" row in the measurement table, since `2001:10::/28` and
+  `2001:2::/48` are structurally sub-ranges of `2001::/23` and the
+  recommendation's own words are "closes every measured gap in one pass".
+  Flagged rather than silently resolved: the ticket's own decision text had
+  two sentences that disagreed about whether `2001:10::/28` was settled or
+  still open, which choosing (c) makes moot. `Build` and `Done when` rewritten
+  to name the concrete ranges and the regression on the seven over-blocked
+  reachable sub-allocations.
