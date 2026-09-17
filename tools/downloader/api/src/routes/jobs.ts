@@ -149,15 +149,24 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
       return await reply.send(body);
     }
 
-    const stopped = context.queue.cancel(id);
-    if (!stopped) {
-      // In the store as non-terminal but not in the queue: the process
-      // restarted while it was running, so nothing is actually working on it.
-      // Mark it canceled here rather than leaving a permanent zombie.
+    const outcome = context.queue.cancel(id);
+    if (outcome !== "running") {
+      // Neither of these paths ever reaches the orchestrator, so nothing else
+      // will write the terminal state:
+      // - "not-found": in the store as non-terminal but not in the queue —
+      //   the process restarted while it was running, so nothing is actually
+      //   working on it. Mark it canceled here rather than leaving a
+      //   permanent zombie.
+      // - "waiting": `run()` is never invoked for a job still in the wait
+      //   line (dl-59), so the orchestrator never unwinds and never calls
+      //   `store.transition` itself.
       const reason = new AppError("JOB_CANCELED").toPayload();
       context.store.transition(id, "canceled", { error: reason }, context.now().toISOString());
       context.events.status(id, "canceled");
       context.events.canceled(id, reason);
+      // A no-op for a job that never started — `removeJob` only ever removes
+      // directories that exist — but calling it keeps this branch symmetric
+      // with the running-job path above.
       await context.engine.removeJob(id).catch(() => undefined);
     }
 

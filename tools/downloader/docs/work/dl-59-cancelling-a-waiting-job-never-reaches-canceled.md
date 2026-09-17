@@ -3,7 +3,7 @@ id: dl-59
 tool: downloader
 title: Cancelling a still-queued job never moves its row past "queued"
 kind: fix
-status: ready
+status: done
 milestone: M5
 depends_on: []
 difficulty: standard
@@ -79,3 +79,26 @@ on cancellation.
   admission caps, and `onSettle` (dl-51) already gives a future fix here a
   clean signal to release per-client state from; this ticket is only about the
   store transition and the client-visible status.
+- 2026-09-17 — Fixed. `InProcessJobQueue.cancel` now returns a
+  `"running" | "waiting" | "not-found"` `CancelOutcome` instead of a boolean
+  (`api/src/jobs/queue.ts`), so `routes/jobs.ts`'s cancel handler can tell a
+  waiting job apart from a running one. `"waiting"` now takes the same branch
+  `"not-found"` already did: a typed `JOB_CANCELED` error, `store.transition`
+  to `"canceled"`, `events.status`/`events.canceled`, and `engine.removeJob`
+  (verified a no-op for a job that never started — `Storage.removeJob` is
+  `fs.rm(..., { force: true })`, which does not error on a missing directory).
+  The ticket's brief said `api/src/queue.ts` and `api/src/routes/jobs.ts`; the
+  actual path is `api/src/jobs/queue.ts` — a stale path, not a wrong premise.
+  Reproduced red first: two new tests in `api/test/pipeline.test.ts`
+  ("cancelling a job that cannot start yet reaches canceled, not stuck at
+  queued" and "…that is not first in line still reaches canceled") both failed
+  with `expected 'queued' to be 'canceled'` against the unfixed source, then
+  passed after the fix — full run in the report to the dispatcher, not
+  reproduced here. Also updated the boolean-returning assertions in
+  `api/test/queue-and-shutdown.test.ts` to the new three-way outcome, and added
+  the two missing assertions (response body and store row both reach
+  `"canceled"`) to the existing dl-51 test in `api/test/per-client-caps.test.ts`
+  that exercised this exact path but never checked job status — a small piece
+  of already-specified work this branch made free, folded in rather than left.
+  `npm run check` and `npm test -- --project downloader` (85 files, 1431
+  tests) both green.

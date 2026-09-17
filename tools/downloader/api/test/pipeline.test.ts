@@ -755,6 +755,106 @@ describe("cancellation", () => {
     });
     expect(response.statusCode).toBe(404);
   });
+
+  // dl-59: `run()` is never invoked for a job still in the wait line, so the
+  // orchestrator never unwinds and never writes the terminal state itself —
+  // unlike the running-job case above, the cancel route has to do it directly.
+  test("cancelling a job that cannot start yet reaches canceled, not stuck at queued", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const blockedFirst = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    harness = await createHarness({
+      resolver: new StubResolver(async () => {
+        await blockedFirst;
+        return probeResult();
+      }),
+      // One running slot, so the second job sits in the wait line rather than
+      // running — no other client cap in the way of admitting it.
+      config: { maxConcurrentJobs: 1, maxJobsPerClient: 0 },
+    });
+
+    try {
+      const first = await createJob(harness);
+      const second = await createJob(harness, { url: `${SOURCE_URL}/2` });
+      await waitFor(
+        () => (harness as Harness).app.context.queue.waiting,
+        (n) => n === 1,
+        { label: "second job to be waiting" },
+      );
+
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.cancelJob(second.id),
+      });
+      expect(response.statusCode).toBe(200);
+      // The response body itself, not a stale "queued" snapshot.
+      expect((response.json() as JobResponse).job.status).toBe("canceled");
+
+      const stored = readJob(harness, second.id);
+      expect(stored.status).toBe("canceled");
+      expect(stored.error?.code).toBe("JOB_CANCELED");
+
+      // A restart must not treat a canceled-while-waiting job as one that was
+      // mid-flight when the process died.
+      expect(harness.app.context.store.unfinished().map((job) => job.id)).not.toContain(second.id);
+
+      releaseFirst?.();
+      const finishedFirst = await runToTerminal(harness, first.id);
+      expect(finishedFirst.status).toBe("completed");
+    } finally {
+      // An assertion failing above must not leave the blocked resolver
+      // dangling forever — that turns a red test into a hung `afterEach`.
+      releaseFirst?.();
+    }
+  });
+
+  // Position in the wait line must not matter: this cancels the job behind
+  // the front of the line, not the only one waiting.
+  test("cancelling a waiting job that is not first in line still reaches canceled", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const blockedFirst = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    harness = await createHarness({
+      resolver: new StubResolver(async () => {
+        await blockedFirst;
+        return probeResult();
+      }),
+      config: { maxConcurrentJobs: 1, maxJobsPerClient: 0 },
+    });
+
+    try {
+      const first = await createJob(harness);
+      const second = await createJob(harness, { url: `${SOURCE_URL}/2` });
+      const third = await createJob(harness, { url: `${SOURCE_URL}/3` });
+      await waitFor(
+        () => (harness as Harness).app.context.queue.waiting,
+        (n) => n === 2,
+        { label: "two jobs waiting" },
+      );
+
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.cancelJob(third.id),
+      });
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as JobResponse).job.status).toBe("canceled");
+      expect(readJob(harness, third.id).status).toBe("canceled");
+      // The job ahead of it in the line is untouched.
+      expect(readJob(harness, second.id).status).toBe("queued");
+
+      releaseFirst?.();
+      const finishedFirst = await runToTerminal(harness, first.id);
+      expect(finishedFirst.status).toBe("completed");
+      const finishedSecond = await runToTerminal(harness, second.id);
+      expect(finishedSecond.status).toBe("completed");
+    } finally {
+      releaseFirst?.();
+    }
+  });
 });
 
 describe("concurrency", () => {

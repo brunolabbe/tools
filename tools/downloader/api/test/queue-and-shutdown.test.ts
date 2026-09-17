@@ -230,7 +230,7 @@ describe("InProcessJobQueue", () => {
       },
     });
 
-    expect(queue.cancel("second")).toBe(true);
+    expect(queue.cancel("second")).toBe("waiting");
     await blocker;
     await queue.close();
     expect(ran).toEqual(["first"]);
@@ -261,7 +261,7 @@ describe("InProcessJobQueue", () => {
     });
 
     await hasStarted;
-    expect(queue.cancel("job")).toBe(true);
+    expect(queue.cancel("job")).toBe("running");
     await finished;
     // A typed reason survives every layer that re-wraps an abort, so the
     // orchestrator does not have to guess why it was stopped.
@@ -270,10 +270,10 @@ describe("InProcessJobQueue", () => {
     await queue.close();
   });
 
-  test("cancelling an unknown job is false, not an error", () => {
+  test("cancelling an unknown job is not-found, not an error", () => {
     const queue = new InProcessJobQueue({ concurrency: 1 });
     // A job that finished a millisecond ago is legitimately absent.
-    expect(queue.cancel("never-existed")).toBe(false);
+    expect(queue.cancel("never-existed")).toBe("not-found");
   });
 
   test("after close it refuses new work", async () => {
@@ -352,7 +352,7 @@ describe("InProcessJobQueue", () => {
         },
       });
 
-      expect(queue.cancel("second")).toBe(true);
+      expect(queue.cancel("second")).toBe("waiting");
       // Synchronous, unlike the running-task case: `cancel` calls `onSettle`
       // itself before returning, because a waiting task never reaches `run`.
       // A count, not a boolean — a duplicate call here would leave a caller's
@@ -390,7 +390,7 @@ describe("InProcessJobQueue", () => {
       });
 
       await hasStarted;
-      expect(queue.cancel("job")).toBe(true);
+      expect(queue.cancel("job")).toBe("running");
       await finished;
       expect(settles).toBe(1);
       await queue.close();
