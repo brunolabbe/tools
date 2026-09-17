@@ -69,6 +69,56 @@ on cancellation.
   `reconcileInterruptedJobs` never sees a `"queued"` row for it.
 - `npm run check` and `npm test -- --project downloader` are green.
 
+## Review
+
+### Gate 2 — re-check of the gate 1 findings
+
+**Gate: PASS** — 2026-09-17 · `483ca7d...c70dd8a` (tip `c70dd8a`; branch range `20c8fd1...c70dd8a`) · narrow re-check of F1–F5 only, scoped by the orchestrator; no fresh defect hunt · reviewer: Opus
+
+| Done when                                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test cancels a job that cannot start and the store row reaches canceled                                                | `tools/downloader/api/test/pipeline.test.ts:796 "expect(stored.status).toBe("` ✓ · `tools/downloader/api/test/pipeline.test.ts:845 "expect(readJob(harness, third.id).status)"` ✓                                                                                                                                                                                                                                                                                                                                                |
+| The cancel response body reports canceled, not stale queued                                                              | `tools/downloader/api/test/per-client-caps.test.ts:393 "(canceled.json() as JobResponse).job.status"` ✓ — the identical lines in pipeline.test.ts (793, 844) cannot carry a distinct anchor; the reviewer mutated each and each failed                                                                                                                                                                                                                                                                                           |
+| A restart after cancelling a still-queued job does not report INTERNAL; reconcileInterruptedJobs never sees a queued row | `tools/downloader/api/test/pipeline.test.ts:945 "expect(afterRestart.status).toBe("` ✓ · `tools/downloader/api/test/pipeline.test.ts:946 "expect(afterRestart.error?.code).toBe("` ✓ — a real restart over a file-backed database; reviewer re-ran it: exit 0 at `c70dd8a`, exit 1 `expected 'failed' to be 'canceled'` at line 945 with `queue.ts` and `routes/jobs.ts` at `20c8fd1`. Second clause also `tools/downloader/api/test/pipeline.test.ts:801 "store.unfinished().map((job) => job.id)).not.toContain(second.id)"` ✓ |
+| `npm run check` and `npm test -- --project downloader` green                                                             | **verified** — at `c70dd8a`: check exit 0; downloader 85 files / 1432 tests, exit 0, against 1429 at `20c8fd1` (+2 cancellation specs, +1 restart spec); `node scripts/citations-gate.mjs --against origin/main` exit 0 — 84 enforced, 0 failing; 85 enforced, 0 failing with this section inserted, measured by the reviewer                                                                                                                                                                                                    |
+
+- **resolved** · F1 (med) — restart spec added at the end of pipeline.test.ts; red→green reproduced by the reviewer as above. The Log now records the earlier substitution.
+- **resolved** · F2 (med) — dl-51's four moved citations repointed; citations gate exit 0 at `c70dd8a` (exit 1 at `483ca7d`). Remedy (a), repoint, was the orchestrator's call, recorded in dl-51's Log.
+- **resolved** · F3 (low) — `tools/downloader/api/src/routes/jobs.ts:167 "A no-op for a job that never started"` now names the orchestrator's path, and `tools/downloader/api/src/routes/jobs.ts:175 "For outcome"` scopes the stale-status note to a running job.
+- **resolved** · F4 (low) — the false sentence about the brief's path is removed and the correction logged.
+- **resolved** · F5 (low) — `tools/downloader/api/src/index.ts:37 "CancelOutcome, InProcessQueueOptions"`.
+- **findings** · re-check of 5 carried findings: 5 resolved, 0 new, 0 dropped. No fresh hunt this round.
+- NFR: unchanged from gate 1.
+
+### Gate 1
+
+**Gate: FAIL** — 2026-09-17 · `20c8fd1...483ca7d` (tip `483ca7d`) · defect hunt run in-context by the reviewer (Opus), medium depth
+
+| Done when                                                                                                                | Proof at `483ca7d`                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test cancels a job that cannot start and the store row reaches canceled                                                | pipeline.test.ts lines 796 and 845 ✓                                                                                                                                                                                                  |
+| The cancel response body reports canceled, not stale queued                                                              | per-client-caps.test.ts line 393 ✓                                                                                                                                                                                                    |
+| A restart after cancelling a still-queued job does not report INTERNAL; reconcileInterruptedJobs never sees a queued row | **unproven** — second clause proven by the `store.unfinished()` assertion at pipeline.test.ts line 801; the first clause, a restart, was never run, though the existing file-backed restart spec at line 305 showed it costs one test |
+| `npm run check` and `npm test -- --project downloader` green                                                             | **verified** — check exit 0; downloader 85 files / 1431 tests vs 1429 at `20c8fd1`; test diffs tighten booleans to outcomes, none deleted                                                                                             |
+
+- **med** (F1) · the restart Done-when line was replaced by an `unfinished()` assertion without the Log saying so. A scratch spec (tmpdir sqlite, cancel the waiting job, shutdown, reopen) read `canceled JOB_CANCELED` at `483ca7d` and `failed INTERNAL The server restarted while this download was running.` with the source reverted, in 525 ms.
+- **med** (F2) · `node scripts/citations-gate.mjs --against origin/main` exited 1 at `483ca7d` (0 at `20c8fd1`): 4 moved citations in dl-51's record, from the assertions inserted mid-test in per-client-caps.test.ts and the `CancelOutcome` block inserted in queue.ts. ci.yml's check job runs this gate. Remedy was an open decision (repoint, pin or restructure).
+- **low** (F3) · in `api/src/routes/jobs.ts` at `483ca7d`, the comment at line 168 named a running-job path above that is not in the handler (it is in orchestrator.ts), and the comment at line 173 held only for outcome running.
+- **low** (F4) · the Log said the brief named `api/src/queue.ts`; the brief says `api/src/jobs/queue.ts`.
+- **low** (F5) · `api/src/index.ts` line 37 at `483ca7d` exported `JobQueue` without the `CancelOutcome` type its method returns. No external consumer.
+- **dropped** · race between `queue.cancel` returning waiting and `store.transition`: none. The handler has no await between them and `tools/downloader/api/src/jobs/queue.ts:114 "const [removed] = this.#waiting.splice(index, 1);"` is synchronous; seven interleavings of the first job finishing around the cancel never produced a canceled row whose resolver or engine then ran.
+- **dropped** · a repeat cancel answers 200 with the canceled row unchanged (updatedAt equal), and a job that moved waiting→running before the cancel reaches canceled through the orchestrator. Measured; not defects.
+- **dropped** · `engine.removeJob` on a never-started job: run against a real `Storage`, resolves with no warning and leaves the tree unchanged.
+- **findings** · hunt returned 8; 5 carried, 3 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ (race measured) · maintainability — the comment and Log lows above.
+
+**Transcription disclosure:** both subsections above (Gate 2 and Gate 1) were
+drafted by the reviewer (`ticket-reviewer`, agent `afcd56ac89c6f3864`, Opus) and
+relayed to me by message; I committed them verbatim. Nothing altered or dropped
+from either subsection's text — the only change from what was sent is `npx
+oxfmt`'s table-cell padding, which touches whitespace only. This note itself is
+mine, not the reviewer's.
+
 ## Log
 
 - 2026-09-14 — Filed from dl-51's build. Reproduced on `origin/main` at
