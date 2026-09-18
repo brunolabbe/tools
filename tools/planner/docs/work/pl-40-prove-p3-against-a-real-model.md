@@ -309,23 +309,23 @@ is the variable this ticket holds still.
 | Done when                                                                 | Proof                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Harness completes A–D under scripted and writes final-shape records       | **verified**: scripted run at 6813a9e wrote 25 files; the walk over them gave 40 passed                                                                                                                                                                |
-| Refuses before a provider without `PLANNER_LIVE_RUN=1`, proved by a test  | `api/test/live-gate.test.ts:34 "expect(() => assertLiveRunConsent({})).toThrow"` ✓; order at `api/test/live/run.ts:709 "assertLiveRunConsent(process.env);"` before `api/test/live/run.ts:721 "const provider = createModelProvider(config, logger);"` |
+| Refuses before a provider without `PLANNER_LIVE_RUN=1`, proved by a test  | `api/test/live-gate.test.ts:34 "expect(() => assertLiveRunConsent({})).toThrow"` ✓; order at `api/test/live/run.ts:730 "assertLiveRunConsent(process.env);"` before `api/test/live/run.ts:742 "const provider = createModelProvider(config, logger);"` |
 | `npm test` with a key collects nothing under `test/live/`                 | **verified**: `vitest list --project planner` with a fake key and consent set listed nothing under `test/live/`; an explicit path gave "No test files found"                                                                                           |
 | Log quotes `count_tokens` figures                                         | awaiting owner run (needs an authenticated key)                                                                                                                                                                                                        |
 | Sets A–D run against `claude-opus-5`, records checked in                  | awaiting owner run                                                                                                                                                                                                                                     |
 | One Log table per set, session total                                      | awaiting owner run                                                                                                                                                                                                                                     |
 | Billed output within bound, set D at the edge, rules (a)–(c) answered     | awaiting owner run; ceiling pinned at `api/test/live-gate.test.ts:73 "toBeCloseTo(2.0 + 0.23915, 5)"`                                                                                                                                                  |
 | Set C resists the hostile name                                            | awaiting owner run                                                                                                                                                                                                                                     |
-| Set B stops at ≥ 100 candidates or 15 runs                                | stop logic `api/test/live/run.ts:766 "while (setBCandidates < MIN_SET_B_CANDIDATES"` verified under scripted (75 candidates / 15 runs); real count awaiting owner run                                                                                  |
-| `live-records.test.ts` green over checked-in records, seen red on a plant | red **verified** (nested plant: 1 failed, violations named); green over records awaiting owner run; recursion at `api/test/live-records.test.ts:373 "expect(collectJsonFiles(dir)).toEqual"` ✓                                                         |
+| Set B stops at ≥ 100 candidates or 15 runs                                | stop logic `api/test/live/run.ts:787 "while (setBCandidates < MIN_SET_B_CANDIDATES"` verified under scripted (75 candidates / 15 runs); real count awaiting owner run                                                                                  |
+| `live-records.test.ts` green over checked-in records, seen red on a plant | red **verified** (nested plant: 1 failed, violations named); green over records awaiting owner run; recursion at `api/test/live-records.test.ts:423 "expect(collectJsonFiles(dir)).toEqual"` ✓                                                         |
 | `npm run check` and `npm test -- --project planner` pass                  | **verified**: check exit 0; 69 files / 1126 tests (base 20c8fd1: 67 / 1090)                                                                                                                                                                            |
 
-- **fixed · MED 1**: the walk passes the harness's own records (25 files, 40 passed). Covered by `api/test/live-records.test.ts:273 "does NOT flag a public record id in a query string"`.
+- **fixed · MED 1**: the walk passes the harness's own records (25 files, 40 passed). Covered by `api/test/live-records.test.ts:323 "does NOT flag a public record id in a query string"`.
 - **fixed · MED 2**: the 2-attempt ceiling is pinned. The gate's mutant now fails 5 of 20, as `api/test/live-gate.test.ts:139 "toBeCloseTo(1.01958, 4)"` asserts.
 - **fixed · MED 3**: `api/test/live-gate.test.ts:153 "--max-usd=0.01"` and `api/test/live-gate.test.ts:163 "with no following value throws rather than silently keeping the default"` pass; the CLI runs reproduce the refusals.
 - **low · open decision A**: a server-side fallback can take the session past `--max-usd` by up to one run. Fabricated fallback-sized usage billed $4.02 against a $3 cap. Build step 3's ceiling formula leaves fallbacks out, so this is the orchestrator's call.
-- **low · open decision B**: `api/test/live/run.ts:370 "articlesNear: async () => answered([])"` changes which 40 finds survive the notability-first ranking. The orchestrator's call.
-- **low · open decision C**: the walk flags only credential-shaped query parameter names (`api/test/live-records.test.ts:101 "SECRET_QUERY_PARAM_NAMES ="`), not "any URL that changes under redactUrl" as Build step 5 words it. The literal rule is red on a real OSM `fixme` URL. The denylist misses a planted `X-Goog-Signature`, `hdnts` and `password`. The orchestrator's call.
+- **low · open decision B**: `api/test/live/run.ts:391 "articlesNear: async () => answered([])"` changes which 40 finds survive the notability-first ranking. The orchestrator's call.
+- **low · open decision C**: the walk flags only credential-shaped query parameter names (`api/test/live-records.test.ts:113 "SECRET_QUERY_PARAM_NAMES ="`), not "any URL that changes under redactUrl" as Build step 5 words it. The literal rule is red on a real OSM `fixme` URL. The denylist misses a planted `X-Goog-Signature`, `hdnts` and `password`. The orchestrator's call.
 - **low**: `count_tokens` runs per attempt just before each send, not up front. A re-ask's prompt does not exist earlier, and the spend stop never reads the counts. Documented in `run.ts`; accepted.
 - **low**: the "thinking share of output" column cannot be filled from these records, because pl-39's usage mapping drops the SDK's `output_tokens_details`. Outside this ticket's files; follow-up recommended in the Log.
 - **findings**: the gate-2 hunt returned 5: 5 carried (3 open decisions, 2 low), 0 dropped. The three `fixed` lines are gate 1's.
@@ -651,3 +651,66 @@ one defensible answer given the ticket's own constraints and is recorded
 rather than asked. The owner's run, and rule (a)–(c)'s "which `pl-` fix"
 question if any of them trips, remain the ticket's real open questions —
 unchanged from the filing.
+
+### 2026-09-18 — owner decisions A–D, applied
+
+The orchestrator put all four open decisions from the `## Review` section to
+the owner on 2026-09-18, each with options and a recommendation first, over
+`AskUserQuestion`. None of the four recommendations was overridden.
+
+- **A — the spend stop and fallbacks.** Chosen: keep `runCeilingUsd` exactly
+  as Build step 3 states it; document the overshoot instead of doubling the
+  output term. `SessionSpendStop`'s own class doc comment in
+  `api/test/live/run.ts` now says plainly what bound the class actually
+  holds: the session may exceed `--max-usd` by at most one run's fallback
+  excess, not zero, and that a fallback landing near the cap is already a
+  rule (c) trip in the Log's table regardless. No change to the formula or
+  to `live-gate.test.ts`'s golden values.
+- **B — the `articlesNear` stub.** Chosen: keep it, and record what it costs
+  rather than wire in `api/test/fixtures/wikipedia-geosearch.json`. The
+  owner's basis, with a measurement the orchestrator ran independently after
+  the gate flagged the reviewer's own version of this as unverified:
+  `wikipedia-geosearch.json` is a single capture centred on Québec City
+  (its first hit sits at 46.8139, −71.208 — distance zero from that point),
+  the _destination_ end of the corridor only. Wiring it through as-is would
+  have ranked the corpus's finds on notability data that is accurate for one
+  end of the corridor and simply absent for the other, which is a worse
+  answer than "distance only, and the Log says so" — not a free fidelity
+  upgrade. So: **the corpus's 40 finds used no notability ranking.** Every
+  one of them survived on pure distance-to-corridor, because
+  `discoverAlongCorridor`'s backing-first band (`CLOSEST_RESERVED` and the
+  ranked remainder — see `rankFinds`'s own comment) had nothing to rank on:
+  this harness's `articlesNear` answers `[]` unconditionally. A real
+  deployment with Overpass and a real Wikipedia geosearch tier configured
+  would very likely select a different 40 finds for this same corridor.
+- **C — the redaction walk's URL rule.** Chosen: keep the credential-name
+  denylist and widen it, over a literal-rule-with-fixture-exemption
+  alternative. `SECRET_QUERY_PARAM_NAMES` in `api/test/live-records.test.ts`
+  now also carries `x-goog-signature`, `x-goog-credential`, `hdnts`,
+  `hdnea`, `password`, `pwd` and `credential` — the three shapes the gate's
+  second pass planted (Google Cloud, Akamai, a bare password parameter) each
+  have their own regression test. **Build step 5 is amended by this
+  decision**, in the function's own doc comment: "a URL that changes under
+  `redactUrl`" means, from here on, one carrying a query parameter named on
+  this list, not literally any query string — the literal reading cannot go
+  green over real map data, which the MED 1 fix proved by trying it first.
+- **D — the thinking-token breakdown pl-39 drops.** Chosen: file a ticket,
+  not fold the fix into this branch or drop the Log table's column. Filed as
+  [pl-50](./pl-50-thinking-tokens-are-billed-and-not-counted.md), `status:
+ready`, naming the exact SDK type line both the builder and the reviewer
+  independently confirmed
+  (`@anthropic-ai/sdk@0.125.0`'s `resources/beta/messages/messages.d.ts:2899`,
+  `BetaUsage.output_tokens_details`) and the exact line in
+  `agent/src/providers/anthropic.ts`'s `usageOf` that drops it (`355`, the
+  `return` that never reads it). **The "thinking share of output" column in
+  this ticket's own Log table (Build step 4, Done when) stays unfillable
+  until pl-50 merges** — no record this harness writes, under any provider,
+  can carry that number until `ModelUsage` has a field for it.
+  `agent/src/provider.ts` and `agent/src/providers/anthropic.ts` were not
+  touched on this branch, per the owner's decision.
+
+**Re-verified after all four**: `npm run check` exit 0;
+`api/test/live-records.test.ts` — 19 passed (16 before, +3 for decision C's
+widened denylist); `npm test -- --project planner` — full count in this
+round's final report to the orchestrator. `status` stays `in-flight`: none of
+A–D changed what only the owner's real run can still prove.

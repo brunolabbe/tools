@@ -92,14 +92,26 @@ function httpUrl(value: string): URL | null {
  * "any query string" rule (Build step 5's literal wording, tried first) is
  * therefore not a usable acceptance test: it never goes green over real map
  * data, on any corridor, forever — which fails the ticket's own
- * `live-records.test.ts` Done-when line rather than serving it. This narrows
- * the check to the shape a signed URL actually has — the query carries the
- * credential itself, under one of these names — which the positive control
- * below (`?X-Amz-Signature=`) and the gate's own repro (`?token=secret`)
- * both still catch.
+ * `live-records.test.ts` Done-when line rather than serving it.
+ *
+ * **This narrowing is the owner's decision, 2026-09-18 (pl-40's Open
+ * decision C), not the builder's alone.** Two options went to the owner: this
+ * denylist, kept and widened as new signed-URL shapes are found, or the
+ * literal rule with a carve-out for URLs already present in
+ * `overpass-nearby.json`. The owner took the denylist, on the basis both the
+ * builder and the gate recommended it: a denylist can always be widened
+ * cheaply the next time a real capture needs it; a carve-out tied to one
+ * fixture cannot generalise to the next corridor's own set of public,
+ * non-secret query strings. **Build step 5 is amended by this decision**: "a
+ * URL that changes under redactUrl" now means, specifically, one carrying a
+ * query parameter named on this list — not literally any query string.
+ * Names below the AWS row were added after the gate's second pass planted
+ * three shapes this list did not yet catch: Google Cloud's signed-URL
+ * parameters, Akamai's token-auth parameters, and a bare `password`/`pwd`/
+ * `credential` — each has its own regression test below.
  */
 const SECRET_QUERY_PARAM_NAMES =
-  /^(token|signature|sig|auth|authorization|session|key|secret|apikey|api[-_]?key|access[-_]?token|x-amz-signature|x-amz-credential|x-amz-security-token)$/i;
+  /^(token|signature|sig|auth|authorization|session|key|secret|apikey|api[-_]?key|access[-_]?token|x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|x-goog-credential|hdnts|hdnea|password|pwd|credential)$/i;
 
 function hasSecretLookingQueryParam(url: URL): boolean {
   for (const name of url.searchParams.keys()) {
@@ -256,6 +268,44 @@ describe("the walk itself — proved able to fail, over synthetic records", () =
     );
     expect(violations).toHaveLength(1);
     expect(violations[0]).toContain("credential-shaped query parameter");
+  });
+
+  // The gate's second pass planted three shapes the denylist above did not
+  // yet catch, over the fully re-verified fixed build — the owner's decision
+  // (2026-09-18, pl-40's Open decision C) was to widen the list rather than
+  // fall back to Build step 5's literal "any query string", and these three
+  // are that widening's own regression tests.
+  test("catches a Google Cloud Storage-style signed URL", () => {
+    const violations: string[] = [];
+    walk(
+      {
+        url: "https://storage.googleapis.com/bucket/key?X-Goog-Signature=abc&X-Goog-Credential=xyz",
+      },
+      "synthetic",
+      violations,
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("credential-shaped query parameter");
+  });
+
+  test("catches an Akamai token-auth URL (hdnts/hdnea)", () => {
+    const violations: string[] = [];
+    walk(
+      { url: "https://cdn.example.invalid/video.m3u8?hdnts=exp=1234~acl=/*~hmac=abc" },
+      "synthetic",
+      violations,
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("credential-shaped query parameter");
+  });
+
+  test("catches a bare password/pwd/credential query parameter", () => {
+    for (const name of ["password", "pwd", "credential"]) {
+      const violations: string[] = [];
+      walk({ url: `https://fixtures.invalid/login?${name}=hunter2` }, "synthetic", violations);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain("credential-shaped query parameter");
+    }
   });
 
   test("catches a signed URL embedded in prose, the shape a reply's content or a system prompt carries one in", () => {

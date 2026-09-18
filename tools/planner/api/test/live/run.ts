@@ -186,6 +186,27 @@ export function observedUsd(usage: RunUsage): number {
   );
 }
 
+/**
+ * Refuses to start the *next* run once its own worst case would take the
+ * session past `--max-usd` — but a run already in flight when a fallback
+ * fires can still land the session past the cap by that one run's excess.
+ *
+ * **Owner's decision, 2026-09-18 (pl-40's Open decision A).** `runCeilingUsd`
+ * follows Build step 3's formula, which has no margin for a server-side
+ * fallback billing up to 2× `maxOutputTokens` at another model's rates (see
+ * the Traps section) — `assertRoomFor` below is computed *before* a run
+ * starts, from `runBudgetFor`'s bound, and a fallback is something only the
+ * run itself can report. Two options went to the owner: double the output
+ * term here so the ceiling already covers a fallback, or leave the formula
+ * as Build step 3 states it and document the possible one-run overshoot.
+ * The owner took the second, on the basis both the builder and the gate
+ * recommended: doubling would refuse most real runs far earlier than they
+ * need, for a case rule (c) below already surfaces on its own — any call a
+ * fallback served is a rule (c) trip in the Log's table, named by model and
+ * by the pl- ticket it would file, whether or not the session also ran over
+ * budget. **The bound this class actually holds is: the session may exceed
+ * `--max-usd` by at most one run's fallback excess**, not zero.
+ */
 class SessionSpendStop {
   #spentUsd = 0;
   readonly #maxUsd: number;
