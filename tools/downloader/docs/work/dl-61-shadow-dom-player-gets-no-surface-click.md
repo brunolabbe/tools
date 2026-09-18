@@ -193,3 +193,13 @@ directory, run once): 7 files, 144 tests, all passing.
 `npm run check`: exit 0. `node scripts/citations-gate.mjs --against
 origin/main`: 84 enforced, 0 failing, 0 raised. `npm run format` was run after
 the markdown edits.
+
+**2026-09-17 — the open question is filed, not folded in.** The owner chose to
+file the `PLAY_SCRIPT` / `METADATA_SCRIPT` audio gap the gate measured rather
+than widen this branch:
+[dl-68](./dl-68-play-and-metadata-scripts-stop-at-shadow-roots.md), filed on
+this branch, carrying the gate's own measurement verbatim. The gate's one low —
+`UNMARK_VIDEO_SCRIPT`'s fix has no regression test — stays here: the finding is
+in the Review section above, and the mechanism, reproduced by the builder and
+again by the reviewer, is in this Log. It is a coverage gap, not a live defect,
+and no ticket is filed for it.
