@@ -3512,3 +3512,219 @@ refs/heads/history-twenty-second-session`, `reset: moving to 0947440`, then
   pl-40-live-harness` here shows both the local and the `origin` ref at
   `c13afe5`, one commit ahead of `0947440` — matching, not merely
   consistent with, the orchestrator's own end-state check.
+
+## Twenty-third session — 2026-09-17/18
+
+**Written by Claude Sonnet 5, dispatched as a records-only builder for this
+step, transcribing the orchestrating session's own account of a batch it ran
+(orchestrated by Claude Opus 5, 1M context), with no gate on this branch —
+scoped to this file alone.** Five pull requests were read with `gh pr view <n>
+--json …`, never by eye: #269 (`dl-58`), #263 (`dl-59`), #265 (`dl-61`), #267
+(`dl-56`), and #262 (the `dl-63`/`dl-66` decisions record). Each ticket's
+committed `## Review` and Log were read with `git show <branch>:<ticket>`
+after fetching all five branches locally, `dl-67` and `dl-68` (filed mid-batch)
+included. `npm run status -- --ready` was re-run on this branch's own base
+(`origin/main` at `20c8fd1`). **This row is stacked on PR #268
+(`history-twenty-second-session`), not on `main`**, because #268 was still
+open when this dispatch started — its own row is the twenty-second, and this
+one has to read after it.
+
+**Independently reproduced here, not merely relayed:**
+
+- Every branch tip matches the account exactly (`git rev-parse`, fetched
+  locally): `dl-58` → `4bc2871`, `dl-59` → `7bed832`, `dl-61` → `224ea35`,
+  `dl-56` → `6035bca`, the decisions branch → `515dc30`.
+- `dl-58`'s six gate rounds, verdicts and shas match its own committed
+  `## Review` exactly: FAIL at `b63d8c6`, FAIL at `31ba6c9`, FAIL at
+  `d81cfce`, FAIL at `29aaacd`, CONCERNS at `6f17db4`, PASS at `ed4ece4`.
+  Frontmatter at the tip: `status: done`, `difficulty: standard`.
+- `dl-59`'s two gate rounds match: FAIL at `483ca7d`, PASS at `c70dd8a`
+  (labelled "Gate 2 — re-check of the gate 1 findings" in the ticket's own
+  text). `status: done`, `difficulty: standard`.
+- `dl-61` carries no `difficulty` field at all, confirming it inherited Opus
+  rather than being rated, and one gate round — PASS, reviewed at `7d801d6`;
+  its current tip (`224ea35`) is one commit past that, filing `dl-68`.
+  `status: done`.
+- `dl-56`'s frontmatter carries `difficulty: hard`. Its `## Review` shows
+  Gate A: PASS (reviewed at `cff1440`, redirect-hop and split-DASH coverage
+  reconfirmed at `4c13032`) and Gate B: CONCERNS (`4c13032`) → a follow-up
+  PASS (`4479b6d...c887152`) once the owner's server-wide concurrency cap
+  was built — matching the account's "Gate A PASS; Gate B CONCERNS then
+  PASS." `status: done`.
+- The disputed seek-placement finding, quoted from `dl-56`'s own Log: "the
+  Log's `-ss` placement table's 1-second-segment row … did not reproduce on
+  my original fixture (640x360@15fps, g=15, video-only: 1.00x, no
+  difference). Re-running with the builder's exact fixture (1280x720@25fps,
+  g=25, both with and without audio) reproduced their numbers exactly
+  (1.245x and 1.255x)." The reviewer's own fixture was the coarser one, as
+  the account states, and the Log records both reviewers as agreeing the
+  output-side choice is unaffected either way.
+- `dl-58`'s gate 2 carries the med finding item 1 below describes, word for
+  word close enough to check: "the gate-1 record is not in the branch: the
+  ticket at 31ba6c9 has no `## Review` section … A merge from this commit
+  loses the FAIL that caused the round" — the round the account attributes
+  to the orchestrator's own hold instruction.
+- `.claude/skills/orchestrate-tickets/SKILL.md:224 "that nothing is committed"`
+  carries no carve-out anywhere near it for a gate record that is itself only
+  reachable through a commit — confirming the gap item 1 names.
+- `dispatching.md`'s "Tell the reviewer to send a `## Review` block for the
+  builder to commit verbatim" instruction lives as prose at line 171, under
+  its own heading, and is absent from the "So make gate 1 look like gate 4"
+  bullet list at line 288 — confirming where the rule does and does not
+  live. Which literal prompt text `dl-56`'s two gates actually received is
+  not checked here; only the reference page's own structure is.
+- `records.md`'s documented formatter failure (its item 4) names "gate
+  tables" specifically ("oxfmt rewrapping gate tables broke a
+  self-referential row twice"), which is narrower than the prose-bullet case
+  item 5 below describes — confirming that gap too.
+- Both `dl-58` (`engine/src/index.ts`, the `runFfmpeg` export line) and
+  `dl-56` (the same file, ten lines inserted immediately after) touch that
+  file on adjacent lines over `origin/main` — confirmed by diffing each
+  branch against `origin/main` directly, not taken on the account's word.
+- The subagent-token arithmetic re-adds to **3,007,314** from the eleven
+  per-agent figures below, checked with a plain calculation rather than
+  trusted from the account — matching the account's own sum exactly.
+- `.claude/agents/builder.md` — the file behind this dispatch's own system
+  prompt — never mentions `CLAUDE.md`'s "Handing back" section or the
+  `# Done` heading anywhere across its 296 lines (`grep -n` finds nothing);
+  `.claude/skills/orchestrate-tickets/SKILL.md:312 "Close the batch with"`
+  states the rule instead. So a subagent whose instructions are
+  drawn only from `builder.md` has no textual source, inside that file, for
+  the prohibition it is nonetheless expected to follow.
+- `SKILL.md`'s step 12 is one sentence — "Append this session's row to
+  `reference/history.md`, in the schema that page fixes" — naming no state
+  for two sessions appending at once, and this page's own sessions are
+  numbered by ordinal ("Twenty-second", "Twenty-third", …), which is exactly
+  what collides if two are written from the same base at the same time.
+- Every one of #269, #263, #265, #267 and #262 is still **OPEN**, unmerged
+  (`gh pr view --json state`), as the account states.
+
+**Orchestrator-reported, not verified here:** the agent and dispatch counts
+beyond what each PR body itself states, every sideways wake, the exact count
+of builder rounds and which were the orchestrator's fault beyond the two
+mechanisms checked above, the framing that Gate A's findings arrived as
+narrative-only until the builder noticed at close-out (the ticket today
+carries a committed `### Gate A` section, so only the end state is checked
+here, not the intermediate one), and the `dl-68` quote-requoting detail — the
+committed file already reads `"open"`, and no earlier single-quoted revision
+exists anywhere in that branch's own history to diff against, so this dispatch
+can neither confirm nor refute it from the tree alone.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from ready to a gated PR, plus one records-only ticket shipped without a gate: `dl-58` (`standard`) → **#269**, tip `4bc2871`, six gate rounds. `dl-59` (`standard`) → **#263**, tip `7bed832`, two gate rounds. `dl-61` (unrated, inherited Opus) → **#265**, tip `224ea35`, one gate round. `dl-56` (`hard`) → **#267**, tip `6035bca`, two reviewers, three rounds total (Gate A once, Gate B twice). The `dl-63`/`dl-66` decisions, recorded by a builder with no gate → **#262**, tip `515dc30`. Two further tickets filed mid-batch, not built: `dl-67` (yt-dlp misclassifies a no-media page as DRM, found by `dl-58`'s gate) and `dl-68` (play/metadata scripts stop at shadow roots, measured by `dl-61`'s gate). All five PRs **open**, none merged, as of this row |
+| `agents` / `dispatches` | **11** distinct agents, orchestrator-reported: 1 seam-mapper; 1 records-only decisions builder; `dl-58` builder and gate; `dl-59` builder and gate; `dl-61` builder and gate; `dl-56` builder and two gates (A and B). **21** total: 11 spawns plus 10 orchestrator messages. Agent-to-agent messages between builders and reviewers were numerous and were **not** counted — reported as such rather than guessed at |
+| `builder rounds` | **Not tallied to one number here** (orchestrator-reported per ticket): `dl-58` six, `dl-59` three, `dl-56` four, `dl-61` three (two after its gate). **2 attributed to the orchestrator's own fault**, both checked above: (1) a hold instruction with no carve-out for the gate record itself, which `dl-58`'s own gate 2 then raised as a med finding, costing a round on the orchestrator's own instruction; (2) a `dl-56` gate prompt that never asked for a commit-ready `## Review` section, unlike `dl-58` and `dl-59`'s prompts — checked here against where the instruction lives in `dispatching.md`, not against the literal prompt text itself, which this dispatch never saw |
+| `gates` | **12 rounds across 5 reviewer dispatches; all but the final confirming round of each ticket returned findings.** `dl-58`: FAIL ×4 → CONCERNS → PASS. `dl-59`: FAIL → PASS. `dl-61`: PASS (one round, one low). `dl-56` Gate A: PASS (one round). `dl-56` Gate B: CONCERNS → PASS |
+| `wrong findings` | **1 refuted, and it reached no commit.** `dl-56` Gate B's claim that the seek-placement table's 1-second row did not reproduce was itself wrong — its own fixture was coarser than the builder's; re-run with the builder's exact parameters, it reproduced the builder's numbers exactly, confirmed above from the ticket's own Log. A second disputed item went the other way, and did reach a commit: `dl-58`'s builder challenged a one-word transcription finding; the reviewer checked its own saved draft against the sent text and the wording stood, closed in gate 5's "verified" bullet (word-diffed) |
+| `subagent tokens` | **3,007,314** total, re-added here from the last-observed per-agent figures and matching the account's own sum exactly: seam-mapper 67,687 · decisions builder 126,137 · `dl-58` builder 735,973 · `dl-58` gate 301,674 · `dl-59` builder 226,789 · `dl-59` gate 164,324 · `dl-61` builder 154,913 · `dl-61` gate 218,770 · `dl-56` builder 468,567 · `dl-56` gate A 240,624 · `dl-56` gate B 301,856. Several agents' final turns ended in `SendMessage` with no reported usage block, so this is a floor, not a count — the account's own caveat, not contradicted here. Excludes cache reads |
+| `cost` | **≈ $54.73** — an arithmetic conversion of the total above at the page's 2026-09-02 rate of $0.0182/1k, not billed. That rate is **16 days stale** as of this row |
+
+**Model pairing, confirmed in each PR's own body, not taken on the account's
+word.** `dl-58` (`difficulty: standard`): "Attribution. Builder: Claude Sonnet
+5. Gate (all six rounds): dispatched as Claude Opus." `dl-59`
+(`difficulty: standard`): "Built by Sonnet 5 (dispatched as builder). Gated
+by Opus (dispatched as `ticket-reviewer`)." `dl-61` (no `difficulty` field):
+"Built by Claude Opus 5 (1M context). Gated by `ticket-reviewer`, dispatched
+as Sonnet." `dl-56` (`difficulty: hard`): "Built by Claude Opus 5 (1M
+context); both gates dispatched as Claude Sonnet." All four match the
+skill's own `standard`/`hard`/inherit rows in `builder.md`.
+
+**Owner decisions, confirmed in the PR bodies that name them.** `dl-58`
+carries four: D1(a) logger-wide substring redaction, D2 fix the success-path
+`Referer` inside this ticket rather than file it separately, D3(b) a
+case-insensitive URL matcher (which also protects ffmpeg's own stderr
+redaction, proven with its own tests), D4(b) drop branch-sha pins from the
+gate record in favour of prose plus evidence declarations, since a pin to a
+branch-only commit cannot survive this repo's squash-merge-and-delete-branch
+flow — the same failure mode `records.md`'s pinning section and the
+twenty-first session's row both already document, now designed around rather
+than repaired again. `dl-56` carries one: a server-wide cap on concurrent
+frame grabs (`MAX_CONCURRENT_FRAME_GRABS`, defaulting to
+`MAX_CONCURRENT_JOBS`), overriding the builder's own recommendation to leave
+the gap and file a ticket to measure it under load, and matching Gate B's and
+the orchestrator's inclination instead.
+
+**Seam overlap.** `tools/downloader/engine/src/index.ts` is the batch's only
+cross-branch collision: `dl-58` rewrites the `runFfmpeg` export line to add
+`redactUrlsInText`, and `dl-56` inserts ten new export lines immediately
+after that same line. Neither branch carries the other as an ancestor, so
+whichever of #269 and #267 merges second is the one that needs a rebase —
+confirmed by diffing both branches against `origin/main` directly, not taken
+on the account's word.
+
+### What the skill got wrong
+
+Seven items. Items 1 (both halves), 4, 5 and the `# Done` half of item 3 are
+checked here against the pages and tickets they name; items 2, 6 and 7, and
+the narrative-findings half of item 3, are the orchestrator's own account and
+are reported rather than independently checked.
+
+1. **Two mechanisms cost a round each, and both are structural rather than a
+   one-off mistake — see the bullets above for each.**
+   - **A hold instruction with no carve-out for the gate record itself.**
+     When `dl-58`'s gate 1 raised decisions for the owner, the orchestrator
+     told the builder to commit and push nothing, and never carved out the
+     gate record. The record went uncommitted, and gate 2 then raised it as
+     a med finding — a round spent on the orchestrator's own instruction.
+     The "Independently reproduced" bullets above cite the guidance in
+     question, which has no exception for the gate record — exactly the
+     thing that must be committed regardless of whether a decision is
+     still open.
+   - **A gate prompt that never asked for a commit-ready section.** The
+     `dl-56` gate prompts asked for findings in full but, unlike the `dl-58`
+     and `dl-59` prompts, never said to return a `## Review` section as text
+     for the builder to commit. Gate A sent narrative findings only, so its
+     record was missing from the ticket until the builder noticed at
+     close-out (orchestrator-reported; the ticket today carries the record,
+     so only the repaired end state is checked here).
+     `dispatching.md` carries the rule in prose, at its own heading; the
+     "so make gate 1 look like gate 4" bullet checklist does not repeat it.
+2. **The orchestrator never asked its agents for this field at dispatch**,
+   which the schema explicitly requires (see "Why the last field is
+   mandatory," above the seventh session's row). The items here are the
+   orchestrator's own observations plus what agents volunteered unprompted;
+   a session that asked at dispatch time would likely have more. Not
+   checked here — this dispatch has no view of the dispatch prompts used.
+3. **`# Done` reached reports to the orchestrator twice** — the decisions
+   recorder and `dl-58`'s builder, orchestrator-reported — which `SKILL.md`
+   forbids for subagents (it says so at `CLAUDE.md:259 "Handing back"`,
+   which `SKILL.md` inherits). Checked here:
+   `.claude/agents/builder.md` does not carry that rule at all — it never
+   mentions `CLAUDE.md`, "Handing back," or a `# Done` heading anywhere
+   across its 296 lines.
+   The "Independently reproduced" bullets above cite where `SKILL.md` states
+   the rule instead, but a builder's own agent file is silent on it, so a
+   subagent that had read only its own instructions would have no way to
+   know the heading is forbidden to it.
+4. **Step 12 has no guidance for a concurrent session writing the same
+   file.** Confirmed against `SKILL.md`'s own step 12, which is one
+   sentence naming no state for two sessions appending at once. PR #268 was
+   open on `history.md` while this row was being written, which is why this
+   PR is stacked on #268 and marked draft rather than opened against `main`.
+   The skill numbers rows by ordinal ("Twenty-second," "Twenty-third," …),
+   which is exactly the scheme that collides if two sessions both compute
+   their own ordinal from the same base.
+5. **oxfmt split a citation's coordinate from its quoted anchor across a
+   line wrap, in prose.** `records.md` documents that failure for gate
+   tables only (its item 4, quoted above); `dl-58`'s builder hit the same
+   failure in a prose bullet — the "two words of the transcription" note in
+   its own gate 6 names "the `oxfmt` line-wrap that forced it" — and
+   repaired it by hand rather than fighting the formatter.
+6. **"Verbatim" versus the formatter, a second shape.**
+   Orchestrator-reported: in `dl-68`, `npm run format` re-quoted a string
+   *inside* a quoted reproduction block (`'open'` → `"open"`). The reviewer
+   judged it formatting, not content. `dispatching.md`'s verbatim discussion
+   covers self-citation — a reviewer's own sent text against what the
+   builder commits — not a formatter rewriting a quotation's punctuation
+   after the fact. Not independently checked: the committed file already
+   reads `"open"`, and this branch's own history carries no earlier
+   single-quoted revision to diff against.
+7. **Evidence for "do not cap the gate count," with a number.** `dl-58` ran
+   six rounds and five returned findings, including two credential leaks (a
+   shared object, then a cycle's own back edge) that only appeared *after*
+   the first three highs were fixed — confirmed above from the ticket's own
+   gate 2 and gate 3 sections. It cost `dl-58`'s builder and gate together
+   **1,037,647** subagent tokens (735,973 + 301,674, re-added here), about
+   34.5% of the whole batch's 3,007,314. A three-gate cap would have stopped
+   at gate 3, before either credential leak surfaced, and shipped one.
