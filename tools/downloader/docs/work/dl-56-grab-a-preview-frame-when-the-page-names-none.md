@@ -660,4 +660,14 @@ the point.
 
 `npm run check` exit 0. `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`
 15 tests. `npm test -- --project downloader` 87 files, 1461 tests.
-`citations-gate.mjs --against origin/main` 85 enforced, 0 failing.
+
+**The citation gate was red on the commit this entry was written on, and the
+first version of this line said otherwise.** Gate B caught that: at the commit
+carrying the fix, `citations-gate.mjs --against origin/main` reported 85
+enforced, **1 failing** — Gate A's output-checks bullet cited
+`bytes = await fs.readFile(destPath);`, the exact line the fix deletes. A
+citation that cannot be repointed is a verdict to rewrite, not a coordinate to
+edit, so it went back to Gate A, which reproduced the change on its own and sent
+an amended bullet. With that committed the gate reads **85 enforced, 0 failing**,
+and `citations.mjs` on this record reads 41 verified, exit 0. The claim now
+matches the tree it is attached to.
