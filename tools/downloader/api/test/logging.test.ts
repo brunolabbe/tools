@@ -1006,6 +1006,9 @@ describe("safeFields redacts every reference to a shared object, not only the fi
 
     expect(lines).toHaveLength(1);
     expect(JSON.stringify(lines[0])).not.toContain("CYCLE");
+    // Redaction, not deletion: pins that the line still has content, so this
+    // is not passing because the whole field was dropped.
+    expect(JSON.stringify(lines[0])).toContain("h.example");
   });
 
   test("a two-object cycle (parent references child references parent) does not leak either object's URL", () => {
@@ -1018,5 +1021,6 @@ describe("safeFields redacts every reference to a shared object, not only the fi
 
     expect(lines).toHaveLength(1);
     expect(JSON.stringify(lines[0])).not.toContain("PARENT");
+    expect(JSON.stringify(lines[0])).toContain("h.example");
   });
 });

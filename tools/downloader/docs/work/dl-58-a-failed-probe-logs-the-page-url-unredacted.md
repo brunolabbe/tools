@@ -85,33 +85,67 @@ URLs would be written to the host's logs, which is why dl-49 waits on this.
 - A test proves the redacted line still carries the host and path, so the log
   still says which site failed.
 - **Widened by the owner's decision on D1/D2, 2026-09-17**: scope is not
-  limited to `details` or to the page URL a failed probe was working on. Every
-  string value in a log line is covered — a top-level field such as
-  `egress-proxy.ts`'s `host` (H1), a URL embedded mid-sentence rather than
-  being the whole of a field's value (H2), and the success-path `Referer` that
-  reaches `probe complete` on a probe that _succeeded_ (H3, not only a failed
-  one — the ticket's title undersells its own step 2, which already said
-  "every log call passing a URL"). Each of H1, H2 and H3 has its own test,
-  red at the gate's commit (`b63d8c6`)'s logger and green after.
+  limited to `details` or to the page URL a failed probe was working on. A
+  top-level field such as `egress-proxy.ts`'s `host` (H1), a URL embedded
+  mid-sentence rather than being the whole of a field's value (H2), and the
+  success-path `Referer` that reaches `probe complete` on a probe that
+  _succeeded_ (H3, not only a failed one — the ticket's title undersells its
+  own step 2, which already said "every log call passing a URL") are all
+  covered. Each of H1, H2 and H3 has its own test, red at the gate's commit
+  (`b63d8c6`)'s logger and green after.
+- **Reworded by the owner's decision on D3, 2026-09-18** (superseding the
+  line above's implied "every string value"): the shared matcher covers a
+  lower- **or** upper-case `http(s)://` URL, anywhere in a string, however
+  deeply nested in the fields object — not literally every string value
+  regardless of shape. A protocol-relative URL (`//host/path`, no scheme at
+  all) is still not matched; no known caller in this tool produces one, and
+  the owner's D3 answer (case-insensitivity, not a scheme-optional match) does
+  not close that gap. See the Log for the measurement this rewording is based
+  on and for D3's answer in full.
 - `npm run check`, `npm test -- --project downloader` and
   `node scripts/citations-gate.mjs --against origin/main` are green.
 
 ## Review
 
-Three rounds so far, all by `a9a05d05c8083a85d`. **Disclosure** (gate 3 found
-the previous commit's transcription of gates 1 and 2 was not verbatim — see
+Four rounds so far, all by `a9a05d05c8083a85d`. **Disclosure** (gate 3 found
+the round-two commit's transcription of gates 1 and 2 was not verbatim — see
 the Log's gate-3 entry for what that round found and how it was corrected):
-all three subsections below are the reviewer's text exactly as sent, with
-pins as the only edits (five total), each added because a later round's own
-fix changed the exact line an original citation pointed at. Gate 1's
-`ytdlp.ts` bullet gained one; gate 2's cycle-guard bullet gained one; gate
-3's citations into `logger.ts` (the cycle bullet and the docstring quote) and
-into its own new cycle test each gained one, added by the builder before
-committing this round's own fix, for the same reason the other two were
-added — not because the reviewer's gate 3 draft carried them. Nothing else
-in any subsection is altered from what the reviewer sent.
-Whether pinning is the right long-term repair, versus archival tags or a
-declaration, is open decision D4 — see the Log.
+all four subsections below are the reviewer's text exactly as sent. The only
+edits anywhere are to citation coordinates, never to a finding's own words —
+either a bare line number moved to match where content that is still
+genuinely present now sits (`runner.ts`'s matcher, `logging.test.ts`'s cycle
+test), or, where a fix deleted the exact text a citation quoted, the citation
+stayed as written and is excused by the declaration below it names.
+
+**Owner decision D4: no branch-sha pins in this record.** An earlier draft of
+this section pinned five citations to `b63d8c6`, `31ba6c9` and `d81cfce` —
+none of which are ancestors of `origin/main`, so each pin would have gone
+unresolvable the moment this branch was squash-merged and its ref deleted,
+breaking `citations-gate` for every later pull request (measured at gate 3,
+in a fresh single-branch clone of `main` with this ticket copied in). The
+owner chose prose over archival tags — declared here rather than tagged,
+against `records.md`'s own default ("reach for a pin when the citation was
+true of some commit in this repository"), on the reasoning that a pin's
+whole value is resolving against a real tree, and none of `b63d8c6`,
+`31ba6c9` or `d81cfce` is one after this branch lands. Each gate's header
+already names the commit it reviewed, in prose, which is what a pin's header
+disclosure would have said anyway.
+
+<!-- citations: evidence tools/downloader/api/src/logger.ts:115, tools/downloader/api/src/logger.ts:125, tools/downloader/api/src/logger.ts:142, tools/downloader/api/src/logger.ts:127 -->
+
+The four citations that declaration excuses quote text a later round's own
+fix deleted outright — line 115 (gate 1, the `parses whole` check the D1
+rewrite replaced), line 125 (gate 2, the `seen`-based cycle guard the M1 fix
+replaced), and lines 142 and 127 (gate 3, the back-edge return and its
+docstring, both replaced by the M3 fix) — all four in `api/src/logger.ts`.
+The file
+has since been rewritten around each of those four lines too, so what stands
+at that exact line number today is unrelated text, not a later version of
+the same statement — there is nowhere in the current tree to repoint any of
+them without changing what they say. Each is quoted as evidence for a
+finding about code that no longer exists in this shape; repointing it to
+wherever similar reasoning now lives would misrepresent what the reviewer
+actually read at the time.
 
 ### Gate 1
 
@@ -140,7 +174,7 @@ hunt run by the reviewer itself at medium depth, every log call site in
 - **high** · `tools/downloader/resolvers/src/resolvers/ytdlp.ts:906 "stderr: stderr.slice(-500)"`
   puts raw yt-dlp stderr in `details`, and yt-dlp echoes the URL mid-sentence
   (`ERROR: Unsupported URL: http://…?sig=…`, measured with yt-dlp 2025.09.26
-  against a local server). `tools/downloader/api/src/logger.ts@b63d8c6:115 "parsed = new URL(value);"`
+  against a local server). `tools/downloader/api/src/logger.ts:115 "parsed = new URL(value);"`
   redacts only a value that parses whole. Reproduced with the real
   `YtDlpResolver` and the branch logger: a URL containing `drm` classifies
   `DRM_PROTECTED` (terminal, so it reaches `request rejected`) and the line
@@ -211,7 +245,7 @@ ticket edits
 | `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0; 85 files, 1438 passed (1434 at `b63d8c6`, 1429 at base); citations-gate exit 0, 84 enforced, 0 failing                                                                                                                                                                                                                                                                                                                  |
 
 - **med** · the cycle guard fails open on a shared reference:
-  `tools/downloader/api/src/logger.ts@31ba6c9:125 "if (seen.has(value)) return value;"`
+  `tools/downloader/api/src/logger.ts:125 "if (seen.has(value)) return value;"`
   returns the _original_ object for any object already visited anywhere in the
   line, not only an ancestor. Measured through the built logger:
   `log.info(m, { a: shared, b: shared })` with
@@ -223,7 +257,7 @@ ticket edits
   no `## Review` section, and its Log says see Review below once committed. A
   merge from this commit loses the FAIL that caused the round.
 - **low** · the matcher at
-  `tools/downloader/engine/src/ffmpeg/runner.ts:65 "return text.replaceAll"`
+  `tools/downloader/engine/src/ffmpeg/runner.ts:71 "return text.replaceAll"`
   is case-sensitive and requires a scheme, so `HTTPS://…?sig=` and
   `//host/p?sig=` pass unredacted (measured). No live source found:
   `URL.href`, the Chromium `Referer` and the ffmpeg target are all lower-case
@@ -265,17 +299,17 @@ committed `## Review` transcription
 | `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0; 85 files, 1441 passed (1438 at `31ba6c9`); citations-gate exit 0, 85 enforced, 0 failing                                                                                                                                                                                                                                                                                      |
 
 - **med** · a cycle leaks its URL on the first back edge, not only on a second
-  re-entry: `tools/downloader/api/src/logger.ts@d81cfce:142 "if (ancestors.has(value)) return value;"`
+  re-entry: `tools/downloader/api/src/logger.ts:142 "if (ancestors.has(value)) return value;"`
   hands pino the _original_ object at the back edge, and pino serialises it
   one more level before it writes its circular marker. Measured through the
   built logger: an object holding `url: https://h.example/p?sig=CYCLE` and a
   `self` field pointing back at itself logged the raw `sig=CYCLE` inside
   `self`, and a two-object parent/child cycle leaked `sig=PARENT` the same
   way. The new test at
-  `tools/downloader/api/test/logging.test.ts@d81cfce:995-1001 "sig=CYCLE"` puts that
+  `tools/downloader/api/test/logging.test.ts:1003 "sig=CYCLE"` puts that
   secret in and asserts only that one line was written, so it passes while
   the secret is in that line; the docstring at
-  `tools/downloader/api/src/logger.ts@d81cfce:127 "content reached only by re-entering a genuine cycle"`
+  `tools/downloader/api/src/logger.ts:127 "content reached only by re-entering a genuine cycle"`
   understates the reach. No live call site logs a cycle.
 - **med** · the two branch-sha pins in this section break CI once the branch
   is squash-merged: `b63d8c6` and `31ba6c9` are not ancestors of
@@ -292,7 +326,7 @@ repository` twice and `rev 31ba6c9 not in this repository` once. After
 the Log below` twice, `Fixed by this commit`, a `dl-67` link, a
   parenthetical calling the gate 1 recursion clause stale and `(D3, for the
 orchestrator)`, and add a preamble paragraph. The Log says gate 1 is
-  unchanged apart from the H3 bullet. The two pins are the only necessary
+  unchanged except the H3 bullet. The two pins are the only necessary
   edits.
 - **dropped** · `ancestors` is a `Set`, not a `WeakSet`: it is created per
   call and emptied by the `finally`, so it holds nothing past the line. Not a
@@ -796,3 +830,149 @@ lost`), added "Fixed in the Log below." twice, added "Fixed by this
     unchecked (the same gate-1 bare `line N` mentions as before), 5 pinned.
   - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
     enforced, 0 failing.
+
+- 2026-09-18 — Owner's decisions on D3 and D4, relayed by the orchestrator
+  (options framed by the reviewer and the builder, the owner overrode both
+  recommendations both times):
+  - **D3: (b), add the `i` flag to `redactUrlsInText`.** Overrode both the
+    reviewer's and the builder's recommendation of (a) (reword the
+    Done-when). Accepted knowingly: this function is shared with
+    `engine/src/ffmpeg/runner.ts`'s own consumer (ffmpeg's stderr), so
+    widening it there too was part of the decision, not a side effect
+    discovered after.
+  - **D4: (b), drop the branch-sha pins.** Overrode the reviewer's
+    recommendation of (a) (archive tags); the owner declined the tag push.
+    Matches the reviewer's own second option: name the reviewed commit in
+    each gate's header as prose (already true — every gate header already
+    names `origin/main...<sha>`), and declare the citations whose lines a
+    later commit deleted as evidence.
+
+  **D3 implemented.** `redactUrlsInText`'s regex gained the `i` flag
+  (`/https?:\/\/\S+/giu`). `new URL()` already normalises an upper-case
+  scheme on its own, so nothing about the _replacement_ changed — only which
+  substrings the matcher recognises as a URL in the first place. Protected
+  the second consumer explicitly, per the owner's own framing of the
+  decision: added `tools/downloader/engine/test/redact-urls-in-text.test.ts`
+  (7 cases: lower-case baseline, upper-case, mixed-case, no-query, two URLs
+  in one line, the protocol-relative gap pinned as a known limitation, and a
+  no-URL passthrough) and a new case in `ffmpeg-runner.test.ts` proving an
+  upper-case scheme in ffmpeg's own stderr is redacted through the real
+  `onStderrLine` callback, not just the direct function. Both red at the
+  pre-D3 flags (`gu`), green after — verified by toggling the regex's flags
+  in place and re-running, then restoring. `npx vitest run
+tools/downloader/engine` — 174 passed (the full engine project, not just
+  the two new/touched files, since D3 explicitly asked to prove the second
+  consumer was not broken or weakened). Reworded the widened Done-when line
+  to say what the matcher covers after the flag (case-insensitive, still
+  scheme-required) rather than "every string value", and recorded the
+  protocol-relative gap as a known gap with no live source, per the owner's
+  own instruction.
+
+  **This shift required touching `engine/src/ffmpeg/runner.ts` again**,
+  which is exactly the file I had earlier gone out of my way to leave
+  byte-identical to `origin/main` (dl-58's first build round) to avoid
+  breaking other tickets' pinned citations into it. This time the touch is
+  unavoidable — D3 names this exact function. Kept the docstring addition
+  short (5 lines) rather than the 10-line first draft, to minimise
+  collateral, but any addition at all still shifts every line below it.
+  Citations-gate confirmed the damage before I could guess wrong about its
+  size: `docs/work/repo-34-the-windows-only-code-paths-nothing-asserts.md`
+  (3 citations) and `tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md`
+  (1 citation) both broke, none of them anything to do with dl-58's own
+  fix — `killProcessTree`'s call site, `onAbort`, the size-cap write, and the
+  classifier's `&&`. Repaired by pinning each to `20c8fd1` (this branch's
+  base, a real `origin/main` commit that survives independently of this
+  branch — not a branch-only sha like the ones D4 just removed from this
+  ticket's own record), with a one-line note in each foreign ticket saying
+  dl-58 moved the lines and why `20c8fd1` was chosen. This is normal
+  citation maintenance under `records.md`'s own rule ("your own fix moves
+  the lines"), not scope creep: whoever's commit moves a line owns repairing
+  the citations it broke, regardless of which ticket wrote them.
+  `node scripts/citations-gate.mjs --against origin/main` confirmed both
+  fixed (0 failing) before this commit.
+
+  **D4 implemented.** Removed all five branch-sha pins from this ticket's
+  own `## Review` section (`logger.ts@b63d8c6:115`, `logger.ts@31ba6c9:125`,
+  `logger.ts@d81cfce:142`, `logger.ts@d81cfce:127`,
+  `logging.test.ts@d81cfce:995-1001`). Two of the five had content that
+  simply _moved_ — `runner.ts`'s matcher line (65→71, from this same D3
+  round) and the cycle test's `sig=CYCLE` line (995-1001→1003, from an
+  earlier low-2 fix) — both still genuinely present, so those got a plain
+  line-number update, no declaration needed. The other four quote text a
+  later round's own fix deleted outright, so those keep their original,
+  now-wrong-looking coordinates and are excused by one
+  `<!-- citations: evidence ... -->` declaration in the `## Review`
+  preamble, naming all four — legitimate under `records.md`'s own rule that
+  a citation which is a finding's own evidence must stay as written even
+  when it reads as moved or gone, because repointing it would misrepresent
+  what the reviewer actually read. Added a paragraph to the preamble
+  explaining the departure from `records.md`'s pin-first default and why:
+  none of `b63d8c6`, `31ba6c9` or `d81cfce` will be an ancestor of
+  `origin/main` after this branch squash-merges and its ref is deleted, so a
+  pin to any of them would have gone from `ok` to `unresolvable` at that
+  moment, for every future `citations-gate` run touching this file — which
+  is exactly what gate 3 measured happening to the five pins the previous
+  round added. `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors` — exit 0, 4 declared
+  evidence, 0 pinned (down from 5).
+
+  **First pass at the declaration broke on an ambiguous bare filename** —
+  caught by running the checker rather than assuming the new preamble
+  prose was safe: the explanatory paragraph named the four excused
+  citations as bare `logger.ts:NNN` (no path prefix), which matches three
+  tracked files (`api`, `engine` and `planner` each have one) and reports
+  `unresolvable` for exactly that reason — the same category of mistake as
+  round two's stray import line, a different mechanism (ambiguous filename
+  vs. line-shift) producing the same lesson: run the check, do not reason
+  about whether an edit to prose near citations is safe. Fixed by describing
+  the four lines without a bracketed `file:line` token at all, since the
+  qualified citations three lines above already name the file.
+
+  **The orchestrator asked whether a fresh single-branch clone of `main`,
+  with this ticket copied in, now passes `citations.mjs` the way gate 3
+  measured the pin failure.** Literally, no — `exit 3, 9 unresolvable, 1
+moved` — but not for the reason that check was designed to catch. Every
+  one of those failures is a citation into `logging.test.ts` or
+  `egress-proxy.test.ts` content this _branch_ added (new tests, new
+  describe blocks); `main` does not have them yet because this branch has
+  not merged, which is true of any branch that adds a test and cites it,
+  pinned or not, and resolves itself the moment the branch lands. That is a
+  different failure mode from gate 3's, which was specifically about a
+  pin naming a commit no tree will ever contain again — `git merge-base
+--is-ancestor b63d8c6 origin/main` will still fail after this branch
+  merges, since squash-merge never places the individual branch commits
+  onto `main`, only their combined diff as one new commit. The question a
+  fresh clone can answer is "are there any surviving pins", and in this
+  ticket's own `## Review` section there are none: `grep -n
+'@[0-9a-f]\{7,40\}' <this ticket>` matches only inside the Log, as
+  historical narrative about pins that were since removed, never inside a
+  gate record. The two `@20c8fd1` pins this round actually added live in the
+  _foreign_ tickets it repaired, `repo-34` and `dl-19` — and `20c8fd1` is on
+  `main` today, so those need no merge to resolve, confirmed directly in the
+  same fresh clone (`repo-34`'s three citations and `dl-19`'s one both `ok`;
+  `dl-19` also has three pre-existing, unrelated `da81902`-pinned citations
+  already failing before this round touched the file, not something this
+  round introduced or is responsible for). The real proof that this ticket's
+  own record will survive the squash merge is that `citations.mjs` already
+  passes clean (`exit 0`) against this branch's own working tree, which is
+  byte-for-byte what `main` will hold immediately after the merge.
+
+  **Gates, at the final state:**
+  - `npx vitest run tools/downloader/engine/test/redact-urls-in-text.test.ts
+tools/downloader/engine/test/ffmpeg-runner.test.ts` — 12 passed.
+  - `npx vitest run tools/downloader/engine` — 174 passed (full project).
+  - `npx vitest run tools/downloader/api/test/logging.test.ts
+tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
+  - `npm run check` — exit 0.
+  - `npm test -- --project downloader` — 86 test files, 1450 passed (1442 at
+    `29aaacd`, plus this round's 8 new engine tests). One run mid-round
+    reported `mirror-failover.test.ts` (dl-47, unrelated to this ticket, and
+    unmodified by it) failing with a `DOWNLOAD_FAILED` timing error; isolated
+    and re-run 4 times afterward, 5/5 passing every time — a flake under
+    full-suite parallel load, not a regression. The clean full run recorded
+    here is the one that counts.
+  - `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors` — exit 0, 21 verified, 3
+    unchecked, 4 evidence, 0 pinned.
+  - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
+    enforced, 0 failing (includes the `repo-34` and `dl-19` repairs).
