@@ -3296,3 +3296,219 @@ figure on this page **exclude cache reads**, which dwarf it and are
 effectively the whole bill (see the schema section, above); and it is still
 missing two gate agents' unreported final rounds, per the original row's own
 caveat, so `4,240,242` is a floor rather than a count.
+
+## Twenty-second session — 2026-09-17/18
+
+**Written by Claude Sonnet 5, dispatched as a records-only builder for this
+step, transcribing the orchestrating session's own account of a batch it ran
+(orchestrated by Claude Opus 5, 1M context), with no gate on this branch —
+scoped to this file alone.** Two pull requests were read with `gh pr view <n>
+--json …`, never by eye: #264 (`pl-44`) and #266 (`pl-40`). Each ticket's
+committed `## Review` and Log were read with `git show <branch>:<ticket>`
+after fetching both branches locally, `pl-50`'s filed ticket included.
+`npm run status -- --ready` was re-run on this branch's own base
+(`origin/main` at `20c8fd1`). CI conclusions were read per sha with
+`gh run list --branch <b> --limit 6 --json workflowName,status,conclusion,headSha,event`,
+checked twice, twenty minutes apart.
+
+**Independently reproduced here, not merely relayed:**
+
+- #264's three commits (`1bce511` → `5359847` → `088b11f`) and #266's four
+  (`125dac5` → `6813a9e` → `0568981` → `0947440`) match the account's shas
+  exactly, read from each PR's own `--json commits`.
+- Frontmatter at each branch tip (`git show <branch>:<ticket>`): `pl-44`
+  `status: done`, `difficulty: hard`. `pl-40` `status: in-flight`,
+  `difficulty: standard`. `pl-50`, filed on `pl-40`'s branch,
+  `status: ready`, `difficulty: standard`.
+- `pl-44`'s committed `## Review`: **PASS** at `5359847`, first pass
+  **CONCERNS** at `1bce511` (one med, one low, one Log-framing correction) —
+  matches the account's gate sequence exactly.
+- `pl-40`'s committed `## Review`: **Gate 1 CONCERNS** at `125dac5` (3 med, 6
+  low, 2 open decisions, counted directly off the labelled bullets), **Gate 2
+  PASS** at `6813a9e` — matches.
+- `pl-44`'s own Log agrees with the account's correction (a): its "dropped,
+  agreed" bullet says the orphan-close-before-the-check bullet "is not one
+  \[a departure]" because Build's own step 3 already specifies that order.
+- `pl-40`'s Log confirms the redaction-walk exchange behind the account's
+  correction (b) and owner decision C in full: gate round 1's MED 1 entry
+  describes the original reproduction, the second false positive found while
+  re-verifying the first fix, and the rework; the 2026-09-18 Log entry for
+  decision C names the gate's second-pass plants as exactly three shapes —
+  Google Cloud, Akamai, and a bare password parameter — each now covered by
+  its own regression test.
+- The stale `_Open with the owner_` cross-reference fix is in `pl-44`'s own
+  Log fold-in list, dated to the owner's 2026-09-17 decision.
+- **Owner decision B's premise, independently measured here, not only taken
+  on the account's word:** `git show origin/pl-40-live-harness:tools/planner/api/test/fixtures/wikipedia-geosearch.json`
+  parses to 426 entries, `lat` 46.734–46.892, `lon` −71.336 to −71.116 — a
+  tight radius capture around one point (46.8139, −71.208, `dist: 0`,
+  "Bibliothèque de Québec"), consistent with the account's "single capture
+  centred on Québec City" and not a Montréal–Québec corridor spread. The
+  account's exact quoted phrase for the gate's own caveat — "if it covers the
+  corridor, which I have not verified" — does not appear verbatim in the
+  committed ticket; the committed record's own wording for open decision B is
+  narrower ("changes which 40 finds survive the notability-first ranking …
+  The orchestrator's call"), consistent with the account's substance but not
+  a verbatim source for the quote.
+- CI at #264's tip (`088b11f`): `CI`, `pr-title`, `planner`, `security` all
+  `success`. CI at #266's tip (`0947440`), re-checked twice: `pr-title`,
+  `security`, `planner` and `downloader` all `success`; **`CI` itself was
+  still `in_progress` at both checks** — unresolved as this row is written,
+  which is the account's own claim and is not settled further here.
+- The subagent-token arithmetic below re-adds correctly from the five
+  per-agent figures, checked with a plain calculation rather than trusted
+  from the account.
+- `SKILL.md`'s steps 10–12 and its "After a merge" section, cited for items 2
+  and 5 below, read as the account states at `20c8fd1`.
+
+**Orchestrator-reported, not verified here:** the agent and dispatch counts
+beyond what each PR body itself states, every sideways wake, the attribution
+of rounds to orchestrator fault versus structure, and the framing of the
+gate's own caveat behind item 1 below (the substance is confirmed in the
+committed record; the exact wording is not, per the bullet above).
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2** taken from ready to a gated PR: `pl-44` (`hard`) → **#264**, branch `pl-44-replan-run-and-edits`, `1bce511` build → `5359847` repair → `088b11f` gate record, `status: done`, all four PR workflows green at `088b11f`. `pl-40` (`standard`) → **#266**, branch `pl-40-live-harness`, `125dac5` → `6813a9e` (gate-1 repairs) → `0568981` (gate record) → `0947440` (owner decisions A–D, files `pl-50`), `status: in-flight` **by design** — no agent here holds an Anthropic key, so the harness merges in-flight and the owner's own paid run against `claude-opus-5` is what moves it to `done`. One further ticket filed on `pl-40`'s branch: `pl-50` (the thinking-token breakdown pl-39's usage mapping drops), `status: ready`, not built. `npm run status -- --ready` on this branch's own base (`20c8fd1`) lists both `pl-44` and `pl-40` |
+| `agents` / `dispatches` | **5** agents, orchestrator-reported: 1 seam-mapper (inherited model, no explicit `model` at dispatch); `pl-44` builder (`opus`); `pl-40` builder (`sonnet`); `pl-44` gate (`ticket-reviewer`, `sonnet`); `pl-40` gate (`ticket-reviewer`, `opus`) — both pairings confirmed in their own PR bodies. **5 spawns**, plus **2 `SendMessage` resumes** (one per builder, each carrying decisions and conditional ship authority). Sideways builder↔reviewer wakes **not tallied exactly**; at least 4 occurred (each gate's findings→builder, the builder's reply→reviewer, the final `## Review`→builder, plus one further wake on `pl-40` for a citation correction — confirmed in the ticket's own text, see below) |
+| `builder rounds` | **7 total, 0 attributable to orchestrator error.** `pl-44`: 3 (build, gate repair, gate record — the third round also opened the PR). `pl-40`: 4 (build, gate-1 repairs, gate record, owner decisions + ship). The two ship rounds are the skill's own default (step 9, "The builder opens the PR"); `pl-40`'s decision round is structural, since the owner's answers could not exist before the gate raised the questions they answer |
+| `gates` | **2 agents, 4 rounds, every round returned findings.** `pl-44`: CONCERNS at `1bce511` (1 med, 1 low, 1 Log correction) → PASS at `5359847`, record `088b11f`. `pl-40`: CONCERNS at `125dac5` (3 med, 6 low, 2 open decisions) → PASS at `6813a9e`, record `0568981` |
+| `wrong findings` | **0 refuted, 0 reached a commit wrong.** Two corrections recorded instead, both confirmed above: (a) `pl-44`'s own Log first called the orphan-run close a "departure from the brief"; the gate read Build step 3 and found it already specifies that order, so the Log was corrected, not the code. (b) `pl-40`'s gate found the redaction walk false-positived on the harness's own records; the builder's fix surfaced a second false-positive shape the gate had not hit; the gate's second pass then planted three signed-URL/credential shapes (Google Cloud, Akamai, a bare password parameter) the fix still missed — which became owner decision C |
+| `subagent tokens` | **1,626,625** total, last observed per agent: seam-mapper **124,836** (19 tool uses) · `pl-44` builder **479,029** · `pl-40` builder **539,188** · `pl-44` gate **296,234** · `pl-40` gate **187,338**. Re-added here: builders **1,018,217 (62.6%)** · gates **483,572 (29.7%)** · intake **124,836 (7.7%)** — the account's own split, and it checks out exactly |
+| `cost` | **≈ $29.60** — an arithmetic conversion of the total above at the page's 2026-09-02 rate of $0.0182/1k, not billed. That rate is **16 days stale**, over two weeks, as of this row |
+
+**Model pairing, recorded at dispatch, confirmed in both PR bodies.**
+`pl-44` (`difficulty: hard`) built by `builder` dispatched as `opus`, gated
+by `ticket-reviewer` dispatched as `sonnet` — matching the skill's `hard`
+row. `pl-40` (`difficulty: standard`) built as `sonnet`, gated as `opus` —
+matching the skill's `standard` row.
+
+**Owner decisions, four, all through `AskUserQuestion`, options with the
+recommendation first, none overridden — confirmed in `pl-40`'s own Log entry
+dated 2026-09-18:** **A**, keep the spend-stop formula as Build step 3 states
+it, document the one-run fallback overshoot rather than double the term.
+**B**, keep the `articlesNear` stub rather than wire in
+`wikipedia-geosearch.json` — independently measured here (above) to be a
+single capture at the corridor's destination end only. **C**, keep the
+credential-shaped-query-parameter denylist, widen it with `X-Goog-Signature`,
+`X-Goog-Credential`, `hdnts`, `hdnea`, `password`, `pwd` and `credential`,
+each with its own regression test. **D**, file `pl-50` rather than fold the
+`ModelUsage`/`usageOf` fix into `pl-40` — `pl-40`'s Log says the "thinking
+share of output" column stays unfillable until `pl-50` merges.
+
+### What the skill got wrong
+
+Seven items. Items 1–6 are the orchestrator's account; items 2, 4 and 5 are
+checked here against the pages they name, and the rest are reported. Item 6
+is checked and found **false** for this session, not merely confirmed — see
+"What this row's verification added," below. Item 7 is this dispatch's own
+defect, reproduced here from `git reflog` rather than taken on the
+orchestrator's word.
+
+1. **A gate's recommendation can rest on an unverified premise, with no row
+   for it in `SKILL.md`'s Relaying table.** Orchestrator-reported: the
+   `pl-40` gate recommended wiring `wikipedia-geosearch.json` through
+   `articlesNear` conditioned on an unverified premise about corridor
+   coverage; the orchestrator measured it false (see above) before it
+   reached the owner. Proposed rule: a gate prompt must say that a
+   recommendation whose condition is unmeasured is not a recommendation —
+   measure it, or name it as blocking and hand the decision up unrecommended.
+2. **The loop has no state for a ticket that merges deliberately
+   unfinished.** Confirmed against `SKILL.md`'s own loop, read at `20c8fd1`:
+   step 10 says hold every worktree "until the ticket is finished", and step
+   11 says check the merge landed what it was supposed to; neither names a
+   ticket whose `status` merges as `in-flight` on purpose. `pl-40` merges
+   exactly that way. Also worth
+   naming: `--ready` will not re-offer an `in-flight` ticket, confirmed by
+   this row's own `--ready` run above listing `pl-44` and `pl-40` and no
+   third planner ticket in that state — so the follow-up depends on the
+   owner remembering to run the owner's key against it.
+3. **Step 12's own row is unbudgeted work in the shared checkout.**
+   Orchestrator-reported and consistent with this dispatch's own experience:
+   appending to `history.md` means editing a tracked file the repo's
+   worktree convention forbids touching in `/workspaces/tools`, so the row
+   is its own builder, worktree, PR and merge — a whole dispatch
+   `sizing.md` never counts. This dispatch is that cost.
+4. **The `standard` row's gate is the expensive half, and the page implies
+   the opposite.** Checked against this session's own figures: the Opus gate
+   on the Sonnet-built `pl-40` cost **187,338**, against the Sonnet gate on
+   the Opus-built `pl-44`'s **296,234**, with both gates at two rounds
+   (CONCERNS → PASS). So here the pairing table's more expensive builder
+   model produced the cheaper gate — one measurement, not a rule, and
+   consistent with the account's framing.
+5. **`## After a merge` gives the orchestrator the pre-merge look, but a
+   batch that ends before CI finishes has no owner for the rest of it.**
+   Confirmed against `SKILL.md`'s own "After a merge" section, read at
+   `20c8fd1`: it asks for one `gh run list --json` look per branch about to
+   land, naming the sha — and this row's own re-check (above) is exactly
+   that shape, run on a PR (`#266`) whose CI was still `in_progress` at both
+   looks. The skill does not say whether the look belongs to the shipping
+   builder (discouraged by
+   the no-polling convention) or leaves the batch's `# Done` carrying an
+   unresolved check.
+6. **The commit trailer named Opus on both branches, including the
+   Sonnet-built one — reported as confirmed, and found false here.** See
+   "What this row's verification added," below.
+7. **Concurrent agents share one branch namespace and one ref store, and
+   nothing in the skill says so.** This dispatch's own worktree setup
+   collided with the live `pl-40` builder's, on a ref rather than a file.
+   Reproduced from `git reflog show history-twenty-second-session`, which
+   *is* `pl-40`'s reflog because the two branches were briefly one ref,
+   oldest to newest: `branch: Created from origin/main`, `pl-40`'s four
+   commits, `branch: Reset to origin/main`,
+   `Branch: renamed refs/heads/pl-40-live-harness to
+refs/heads/history-twenty-second-session`, `reset: moving to 0947440`, then
+   back to `20c8fd1`. This dispatch's setup step took a branch name
+   (`pl-40-live-harness`) straight from stale context instead of naming its
+   own work, and the rename that fixed the mistake hit the shared local ref a
+   sibling worktree had checked out mid-repair. Nothing was lost only because
+   `pl-40`'s builder read its own reflog before acting rather than assuming,
+   and because all four of its commits already existed on
+   `origin/pl-40-live-harness` — confirmed here, `pl-40-live-harness` and
+   `origin/pl-40-live-harness` are both `c13afe5` now, one commit ahead of
+   `0947440`, and PR #266 is unaffected. **Had those commits been local
+   only — the ordinary state for most of a build, and `pl-44`'s own state for
+   most of this batch — the reset would have taken them, and the branch that
+   lost them would have looked exactly like a branch that had never
+   committed.** `concurrency.md` reasons about file collisions between two
+   builders; `worktree-hygiene.md` reasons about holding and releasing a
+   worktree; neither covers a setup step that reuses or renames an existing
+   branch. The two builders here were dispatched against different tickets
+   and different files — the seam map was correct — and they still
+   collided, on a ref neither of them chose carelessly. Proposed rules, both
+   cheap: a builder's setup must fail rather than reuse or rename an
+   existing branch name, and a records-only dispatch should be told its
+   branch name rather than left to pick one from context.
+
+### What this row's verification added
+
+- **Item 6 does not hold for `pl-40`.** `git log origin/pl-40-live-harness -4
+  --format='%(trailers:key=Co-Authored-By,valueonly)'` returns
+  `Claude Sonnet 5 <noreply@anthropic.com>` on all four commits — not Opus.
+  `pl-44`'s three commits (`git log origin/pl-44-replan-run-and-edits -3`)
+  carry `Claude Opus 5 (1M context) <noreply@anthropic.com>`, as the account
+  states. So the trailer matched each builder's **own** dispatched
+  model here, not a single value inherited once per session tree from the
+  orchestrator — the opposite of what `SKILL.md`'s worked mechanism and this
+  row's own attribution instructions describe. This dispatch's own
+  attribution reminder names `Claude Sonnet 5` for its commits, consistent
+  with the `pl-40` builder's trailer and not with the "inherited from the
+  orchestrator" claim; the 2026-09-06 Haiku-signed-Opus measurement the skill
+  cites is not reproduced or contradicted here, so the mechanism may depend
+  on how a subagent is dispatched (backgrounded versus a direct `model`
+  parameter) rather than being uniform. Recorded as a live counter-example,
+  not a resolution.
+- **Owner decision B's premise is independently confirmed, not only
+  orchestrator-reported** (see the bullet above): the fixture is a single
+  426-entry radius capture centred at Québec City, not a corridor.
+- **The account's exact quoted phrasing for the gate's caveat in item 1 does
+  not appear in the committed ticket.** The substance — an unmeasured
+  condition behind a recommendation — is confirmed; the sentence is not, and
+  may be from the live exchange rather than the committed summary.
+- **Item 7's ref collision is reproduced from `git reflog`, not taken on the
+  orchestrator's relay.** `git reflog show history-twenty-second-session` in
+  this worktree returns the same eight-entry sequence the orchestrator
+  quotes, oldest to newest ending at `20c8fd1`; and `git show-ref | grep
+  pl-40-live-harness` here shows both the local and the `origin` ref at
+  `c13afe5`, one commit ahead of `0947440` — matching, not merely
+  consistent with, the orchestrator's own end-state check.
