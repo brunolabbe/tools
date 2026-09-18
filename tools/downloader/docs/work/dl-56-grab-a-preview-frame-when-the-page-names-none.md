@@ -232,6 +232,20 @@ _Transcribed by the builder (Opus 5) from the reviewer's message. Two changes, b
 
 _Transcribed by the builder (Opus 5) from the reviewer's message. The reviewer wrote the `server.ts` call four lines higher, where it was before the frame-grab cap was built above it, and the trickle test one line lower than it is; both coordinates are repointed here so the check resolves. Nothing else changed, nothing dropped, and no anchor text touched. `npm run format` reflowed the table padding._
 
+**Gate B follow-up: PASS** — 2026-09-18 · `4479b6d...c887152` · narrow re-gate on the frame-grab concurrency cap only, not a full re-sweep
+
+The original Gate B's sole med finding (no server-wide bound on concurrent frame grabs) is closed. The owner chose option (c) — a server-wide cap on grabs alone — through `AskUserQuestion`. Verified independently:
+
+- `api/test/thumbnails.test.ts:721 "past the cap the grab is skipped rather than queued, and the inner grabber never runs"` ✓, `:750 "a slot is released even when the grab throws"` ✓, `:768 "concurrent probes past the cap answer without a preview, and none waits for a slot"` ✓ — all reproduced passing (34/34 in the file).
+- **Reproduced by mutation**: making `api/src/thumbnails.ts:438 "export function limitFrameGrabs("` pass its grabber straight through (skip the gate) turns exactly the 1st and 3rd tests above red; unwrapping the grabber in `downloader/api/src/server.ts:405 "const frameGrabGate = new ConcurrencyGate(config.maxConcurrentFrameGrabs);"` (bypassing `limitFrameGrabs`) turns exactly the 3rd red. Both restored and confirmed clean.
+- **Re-ran the concurrency script that found the original finding, unchanged**: peak concurrent real ffmpeg grabs is now bounded to the configured `maxConcurrentFrameGrabs` (2 by default, matching `maxConcurrentJobs`) regardless of how many distinct clients probe at once (tested at 12); raising the cap to 8 raises the observed peak to 8. The gate is config-driven, not hardcoded, and every simulated client still receives a 200 — the cap only removes the preview, never the answer.
+- **Skip-not-queue confirmed as the correct, non-discretionary choice**: `ConcurrencyGate` (`packages/core/src/rate-limit.ts:211 "A counting semaphore that refuses rather than queues."`) is the same primitive every other concurrency cap in this codebase already uses; its own documented policy is refuse-immediately. Building a queue here would have meant new machinery for a decorative image rather than reuse of the repo's standard answer. This did not need to go to the owner.
+- `npm run check` exit 0; `npm test -- --project downloader` → 87 files, 1461 tests, all pass (self-run, matches the build entry). Citations: `citations.mjs --section Review --require-anchors --require-distinct-anchors` → 32 verified, exit 0; `citations-gate.mjs --against origin/main` → 85 enforced, 0 failing (both self-run, matching).
+
+No findings remain open from the original Gate B review. The earlier low finding is unaffected by this round and stays settled as recorded above.
+
+_Transcribed by the builder (Opus 5) from the reviewer's message. Five coordinates were two or one lines off against the tip — the three new tests, the `server.ts` gate line and the `rate-limit.ts` sentence — and each is repointed to the line its own quoted anchor is on, so the check resolves. No anchor text, no verdict and no other word changed, and nothing was dropped. `npm run format` may reflow the spacing._
+
 ## Log
 
 **2026-09-13 — filed** from the owner's report that one page produced no
