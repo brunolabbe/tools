@@ -565,3 +565,99 @@ origin/main`: 85 enforced, 0 failing.
   `server.ts` call and five in `thumbnails.test.ts`. Each is repointed to the
   line its own anchor text is on now, which the section's disclosure note
   records; no anchor text and no verdict changed.
+
+## 2026-09-18 — the Windows failure, instrumented; and a TOCTOU in the byte cap
+
+Two things the pull request turned up, both answered by the owner on 2026-09-18
+through `AskUserQuestion` in the orchestrator's session.
+
+### The split-DASH test fails on CI's Windows leg, and nothing said why
+
+`test (windows-latest, informational)` in CI run 35344753896, at `6035bca`:
+`preview-frame.test.ts` ran 15 tests, 1 failed, 1 skipped —
+`grabPreviewFrame against a generated split-DASH stream` with
+`AssertionError: expected null not to be null`. The leg is `continue-on-error`,
+so the workflow still reads green; the PR's check rollup is where it shows.
+
+**What that log establishes.** The other 13 tests passed on Windows, the
+skipped one being the Linux-only trickle test — so the HLS grabs, which spawn
+real ffmpeg and fetch real segments, work there. The fixture's `beforeAll` did
+not throw, so ffmpeg's DASH **muxer** ran and the fixture exists; the failure is
+at grab time. Reading `.github/workflows/ci.yml`: the Linux leg installs the
+distribution ffmpeg and points `FFMPEG_PATH` at it, and Windows has no such
+step, so the two legs run different ffmpeg builds. This is also the only test in
+the repo that makes ffmpeg demux a real `.mpd`, which is why nothing else on any
+branch notices.
+
+**What it does not establish, and I did not guess.** A `null` is the same answer
+whether the win32 `ffmpeg-static` build lacks the DASH demuxer (it is a
+build-time option, needing libxml2, where the muxer is not), or the Windows
+muxer wrote different segment templates and ffmpeg was refused a protocol or
+given a 404. Locally both builds I can reach — the distribution ffmpeg and the
+Linux `ffmpeg-static` — carry `--enable-libxml2` and list the `dash` demuxer,
+and the MPD generated here carries bare relative templates
+(`initialization="dash-init-$RepresentationID$.m4s"`, no `BaseURL`). **I could
+not check the win32 binary**: downloading it was refused by this session's
+tooling twice, and I stopped rather than find another way around.
+
+**So the test now says why, and the leg stays failing rather than skipped.** The
+grab already logs its failure code and ffmpeg's redacted stderr tail at `debug`;
+the test was discarding both. It now records them and puts them, with the
+platform, the ffmpeg path and every URL the fixture origin was asked for, into
+the assertion message. Verified locally by pointing the grab at a missing
+manifest: the message carries `HTTP error 404 Not Found`,
+`Error opening input: Server returned 404 Not Found` and the input URL, each
+already redacted by `runFfmpeg`.
+
+**What the next Windows run will mean**, so the reading is fixed before the
+evidence arrives rather than after:
+
+- `Unknown input format` or a dash-demuxer complaint → the win32
+  `ffmpeg-static` build cannot demux DASH, which is a fact about that binary
+  rather than about this branch's code.
+- A refused protocol, or a requested URL that is an absolute Windows path →
+  the Windows DASH muxer wrote different segment templates, which makes the
+  fixture Linux-shaped and the test the thing to fix.
+- A 404 with bare relative names → something else again, and the requested-URL
+  list in the message is where to start.
+
+Until that run lands, **no conclusion is recorded here**, and the Done-when line
+about DASH stands proven on Linux only.
+
+### CodeQL: a file-system race between the byte cap and the read
+
+GitHub's default code-scanning setup (a different check from this repo's own
+`codeql` job, which passed) raised **"Potential file system race condition,
+High — The file may have changed since it was checked"** against
+`engine/src/ffmpeg/preview-frame.ts`, where `fs.stat(destPath)` gated the cap
+and `fs.readFile(destPath)` then re-opened the same name. Two lookups of a path
+are two chances to get different files, and a cap that measures one and returns
+another is not a cap. The owner chose to fix it here rather than file or dismiss
+it.
+
+**The fix:** open the path once with `fs.open`, `stat()` the handle, and read
+through that same handle, closing in a `finally`. The read is
+`handle.read(buffer, 0, stat.size, 0)` rather than `readFile()`, so it takes
+exactly the bytes that were measured — the cap bounds what reaches memory even
+if something were appending. Behaviour is unchanged: over the cap still logs
+`no preview frame: larger than the cap` with the same fields and returns `null`,
+and a missing file still falls into the same `catch`.
+
+**What it changes while ffmpeg is still writing: nothing, because that cannot
+happen here.** `runFfmpeg` has resolved before this code runs, so the process
+has exited and the file is final. If it somehow were not, the handle read now
+returns at most the measured size, and a short read leaves a truncated file that
+the `FF D8` check refuses — where the old `readFile` would have returned
+whatever length the second lookup found.
+
+**The two cap layers still hold, re-proved after the change.** Disabling
+`runFfmpeg`'s progress-stream cap alone leaves the over-cap test green — the
+handle check catches it. Disabling both turns it red
+(`expected Buffer[...] to be null`). Same result as before the change, which is
+the point.
+
+### Gates
+
+`npm run check` exit 0. `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`
+15 tests. `npm test -- --project downloader` 87 files, 1461 tests.
+`citations-gate.mjs --against origin/main` 85 enforced, 0 failing.

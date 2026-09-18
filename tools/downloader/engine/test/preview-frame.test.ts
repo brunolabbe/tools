@@ -507,6 +507,13 @@ describe("grabPreviewFrame against a generated split-DASH stream", () => {
 
   test("returns JPEG bytes, with the context replayed on the init and media segments", async () => {
     const before = server.requests.length;
+    // Recorded rather than silenced, because this test failed on CI's Windows
+    // leg with nothing but `expected null not to be null` — which is the same
+    // sentence whether ffmpeg could not read the manifest, was refused a
+    // protocol, or got a 404, and those are three different faults. The grab
+    // logs its reason and ffmpeg's redacted stderr tail at debug; both go into
+    // the failure message below, with what the origin was actually asked for.
+    const { logger, debug } = recording();
     const bytes = await grabPreviewFrame({
       url: `${server.origin}/dash.mpd`,
       protocol: "dash",
@@ -516,10 +523,20 @@ describe("grabPreviewFrame against a generated split-DASH stream", () => {
       tmpRoot,
       timeoutMs: 15_000,
       maxOutputBytes: 512 * 1024,
-      logger: silent,
+      logger,
     });
 
-    expect(bytes).not.toBeNull();
+    const evidence = JSON.stringify(
+      {
+        platform: process.platform,
+        ffmpegPath: FFMPEG,
+        grabSaid: debug,
+        requested: server.requests.slice(before).map((request) => request.url),
+      },
+      null,
+      2,
+    );
+    expect(bytes, `the grab produced no frame. ${evidence}`).not.toBeNull();
     expect([...(bytes as Buffer).subarray(0, 2)]).toEqual([0xff, 0xd8]);
     const made = server.requests.slice(before);
     expect(made.some((request) => request.url.includes("dash-init-0"))).toBe(true);

@@ -233,17 +233,35 @@ export async function grabPreviewFrame(options: PreviewFrameOptions): Promise<Bu
 
     let bytes: Buffer;
     try {
-      // Checked again here rather than trusted to the progress stream: a single
-      // frame can be written and flushed between two progress reports.
-      const stat = await fs.stat(destPath);
-      if (stat.size > options.maxOutputBytes) {
-        logger.debug("no preview frame: larger than the cap", {
-          bytes: stat.size,
-          maxBytes: options.maxOutputBytes,
-        });
-        return null;
+      // **One handle, opened once, measured and read through.** A `stat` on the
+      // path followed by a `readFile` of the path is two lookups of a name, and
+      // what answers the second is not necessarily what answered the first —
+      // the file-system race CodeQL flags, and a cap that measures one file and
+      // returns another is not a cap. `fstat` here asks the open description,
+      // so the size checked and the bytes read are the same file.
+      //
+      // Checked at all rather than trusted to the progress stream, because a
+      // single frame can be written and flushed between two progress reports.
+      const handle = await fs.open(destPath, "r");
+      try {
+        const stat = await handle.stat();
+        if (stat.size > options.maxOutputBytes) {
+          logger.debug("no preview frame: larger than the cap", {
+            bytes: stat.size,
+            maxBytes: options.maxOutputBytes,
+          });
+          return null;
+        }
+        // Exactly the bytes that were measured, from the same description, so
+        // the cap bounds what reaches memory even if something were still
+        // appending. ffmpeg has already exited here, so a short read means a
+        // truncated file, which the JPEG check below then refuses.
+        const buffer = Buffer.alloc(stat.size);
+        const { bytesRead } = await handle.read(buffer, 0, stat.size, 0);
+        bytes = bytesRead === stat.size ? buffer : buffer.subarray(0, bytesRead);
+      } finally {
+        await handle.close();
       }
-      bytes = await fs.readFile(destPath);
     } catch {
       // Exit 0 with no file: a stream whose video never decoded a frame.
       logger.debug("no preview frame: ffmpeg exited without writing one");
