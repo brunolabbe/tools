@@ -100,6 +100,12 @@ export interface AppContext {
   /** Global cap on simultaneous probes, which no per-IP limit can provide. */
   probeGate: ConcurrencyGate;
   /**
+   * Global cap on simultaneous preview-frame grabs (dl-56). Separate from
+   * `probeGate` because the probe gate is released before the capture runs, so
+   * it never bounded the ffmpeg a grab spawns. See `limitFrameGrabs`.
+   */
+  frameGrabGate: ConcurrencyGate;
+  /**
    * Per-client caps on jobs and probes in flight (running and waiting
    * counted together for jobs; see dl-51). Keyed the same way as
    * `rateLimits.jobs` / `rateLimits.probe` — `clientKey(request.ip)` — so

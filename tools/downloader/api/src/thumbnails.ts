@@ -89,6 +89,7 @@ import type { Storage } from "@downloader/engine";
 import type { MediaVariant } from "@downloader/contract";
 import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { AppLogger } from "./logger.ts";
+import type { ConcurrencyGate } from "@webtools/core/rate-limit";
 import type { SsrfGuard } from "./ssrf.ts";
 import { urlsInProbeResult } from "./ssrf.ts";
 
@@ -414,6 +415,45 @@ async function captureFrame(
     });
     return null;
   }
+}
+
+/**
+ * Bounds how many grabs run at once, across every client (dl-56).
+ *
+ * **The probe gate cannot do this job.** `routes/probe.ts` releases it as soon
+ * as the resolver returns, before the capture — measured on the branch that
+ * added the grab: twelve clients probing at once produced twelve concurrent
+ * ffmpeg processes against a `maxConcurrentProbes` of eight. The per-client cap
+ * bounds one caller and says nothing about a flood spread across addresses,
+ * which is the case a server-wide cap exists for.
+ *
+ * **Full means no preview, never a wait.** Every other way a preview fails
+ * here ends the same way, the probe is answered as soon as the resolver
+ * returns, and a queue would hold that answer for a decorative image. The cost
+ * is visible: a burst past the cap loses previews rather than slowing probes.
+ *
+ * Wrapped around whichever grabber `server.ts` ended up with, injected ones
+ * included, so a test exercises the same gate production does.
+ */
+export function limitFrameGrabs(
+  grab: FrameGrabber,
+  gate: ConcurrencyGate,
+  logger: AppLogger,
+): FrameGrabber {
+  return async (request) => {
+    const release = gate.tryAcquire();
+    if (release === null) {
+      logger.debug("no preview frame: already grabbing as many as this server allows", {
+        limit: gate.limit,
+      });
+      return null;
+    }
+    try {
+      return await grab(request);
+    } finally {
+      release();
+    }
+  };
 }
 
 export interface FrameGrabberOptions {

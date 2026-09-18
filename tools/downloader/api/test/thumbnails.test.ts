@@ -26,8 +26,10 @@ import { createLogger } from "../src/logger.ts";
 import { probeForClient } from "../src/probe-out.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
+import { ConcurrencyGate } from "@webtools/core/rate-limit";
 import {
   captureThumbnail,
+  limitFrameGrabs,
   persistThumbnail,
   readPersistedThumbnail,
   ThumbnailStore,
@@ -678,5 +680,126 @@ describe("the frame fallback, when the source names no image (dl-56)", () => {
 
       expect(sources).toEqual(["frame", null, "page"]);
     });
+  });
+});
+
+/**
+ * dl-56's open decision, answered by the owner on 2026-09-17: grabs get their
+ * own server-wide cap. Measured before it existed — twelve clients probing at
+ * once produced twelve concurrent ffmpeg grabs against a `maxConcurrentProbes`
+ * of eight — because `probeGate` is released before the capture runs.
+ */
+describe("the server-wide cap on frame grabs (dl-56)", () => {
+  /** A grab that parks until released, so several can be in flight at once. */
+  function blockingGrab(): {
+    grab: FrameGrabber;
+    started: number;
+    inFlight: () => number;
+    release: () => void;
+  } {
+    let started = 0;
+    let inFlight = 0;
+    const waiters: (() => void)[] = [];
+    return {
+      get started() {
+        return started;
+      },
+      inFlight: () => inFlight,
+      release: () => {
+        for (const resume of waiters.splice(0)) resume();
+      },
+      grab: async () => {
+        started += 1;
+        inFlight += 1;
+        await new Promise<void>((resolve) => waiters.push(resolve));
+        inFlight -= 1;
+        return FRAME;
+      },
+    };
+  }
+
+  test("past the cap the grab is skipped rather than queued, and the inner grabber never runs", async () => {
+    const inner = blockingGrab();
+    const gate = new ConcurrencyGate(2);
+    const limited = limitFrameGrabs(inner.grab, gate, logger);
+    const probe = ladder();
+    const request = {
+      probe,
+      variant: probe.variants[2] as NonNullable<(typeof probe.variants)[0]>,
+    };
+
+    const pending = Array.from({ length: 5 }, async () => await limited(request));
+    // The two that acquired are parked inside the inner grabber; the other
+    // three must already have answered null rather than be waiting for a slot.
+    await waitFor(
+      () => inner.inFlight(),
+      (count) => count === 2,
+      { label: "two grabs in flight" },
+    );
+    expect(gate.inFlight).toBe(2);
+    inner.release();
+    const results = await Promise.all(pending);
+
+    expect(inner.started).toBe(2);
+    expect(results.filter((bytes) => bytes !== null)).toHaveLength(2);
+    expect(results.filter((bytes) => bytes === null)).toHaveLength(3);
+    // Released on the way out, so the next probe is not refused forever.
+    expect(gate.inFlight).toBe(0);
+  });
+
+  test("a slot is released even when the grab throws", async () => {
+    const gate = new ConcurrencyGate(1);
+    const limited = limitFrameGrabs(
+      async () => {
+        throw new AppError("TIMEOUT");
+      },
+      gate,
+      logger,
+    );
+    const probe = ladder();
+    const request = {
+      probe,
+      variant: probe.variants[0] as NonNullable<(typeof probe.variants)[0]>,
+    };
+    await expect(limited(request)).rejects.toMatchObject({ code: "TIMEOUT" });
+    expect(gate.inFlight).toBe(0);
+  });
+
+  test("concurrent probes past the cap answer without a preview, and none waits for a slot", async () => {
+    const inner = blockingGrab();
+    const harness = await createHarness({
+      resolver: new StubResolver(ladder()),
+      grabFrame: inner.grab,
+      config: { maxConcurrentFrameGrabs: 1 },
+    });
+    try {
+      expect(harness.app.context.frameGrabGate.limit).toBe(1);
+      const responses = Array.from({ length: 3 }, async () =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        }),
+      );
+      // Two of the three probes must answer while the first grab is still
+      // parked. Without the cap all three would be inside the grabber.
+      await waitFor(
+        () => inner.inFlight(),
+        (count) => count === 1,
+        { label: "one grab in flight" },
+      );
+      inner.release();
+
+      const bodies = (await Promise.all(responses)).map(
+        (response) => (response.json() as ProbeResponse).probe.thumbnailPath,
+      );
+      expect(inner.started).toBe(1);
+      expect(bodies.filter((path) => path !== undefined)).toHaveLength(1);
+      expect(bodies.filter((path) => path === undefined)).toHaveLength(2);
+      expect(harness.app.context.frameGrabGate.inFlight).toBe(0);
+    } finally {
+      inner.release();
+      await harness.dispose();
+    }
   });
 });

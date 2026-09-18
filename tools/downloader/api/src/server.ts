@@ -44,7 +44,7 @@ import { registerProbeRoute } from "./routes/probe.ts";
 import { registerThumbnailRoute } from "./routes/thumbnail.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
-import { createFrameGrabber, ThumbnailStore } from "./thumbnails.ts";
+import { createFrameGrabber, limitFrameGrabs, ThumbnailStore } from "./thumbnails.ts";
 import type { FrameGrabber } from "./thumbnails.ts";
 import { createTlsInterception } from "./tls-interception.ts";
 import { TlsRejectionLog } from "./tls-rejections.ts";
@@ -399,16 +399,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // none of which the probe's SSRF sweep saw, and this proxy is the only check
   // that does. Never `tierProxy` directly — with interception on, that is the
   // wrong proxy for ffmpeg and the wrong root for its `-ca_file`.
-  const grabFrame =
+  // dl-56's open decision, answered by the owner on 2026-09-17: grabs get their
+  // own server-wide cap, sized apart from `probeGate`. The probe gate is
+  // released before the capture runs, so it never bounded this.
+  const frameGrabGate = new ConcurrencyGate(config.maxConcurrentFrameGrabs);
+  const grabFrame = limitFrameGrabs(
     options.grabFrame ??
-    createFrameGrabber({
-      ffmpegPath: engine.config.ffmpegPath,
-      proxyUrl: ffmpegEgress.proxyUrl,
-      ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
-      tlsVerify: !config.ffmpegAllowUnverifiedTls,
-      tmpRoot: engine.storage.tmpRoot,
-      logger,
-    });
+      createFrameGrabber({
+        ffmpegPath: engine.config.ffmpegPath,
+        proxyUrl: ffmpegEgress.proxyUrl,
+        ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
+        tlsVerify: !config.ffmpegAllowUnverifiedTls,
+        tmpRoot: engine.storage.tmpRoot,
+        logger,
+      }),
+    frameGrabGate,
+    logger,
+  );
 
   const db = new Database(config.databasePath);
   migrate(db);
@@ -516,6 +523,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       }),
     },
     probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
+    frameGrabGate,
     jobClientGate: new PerClientConcurrencyGate(config.maxJobsPerClient),
     probeClientGate: new PerClientConcurrencyGate(config.maxProbesPerClient),
     now,
