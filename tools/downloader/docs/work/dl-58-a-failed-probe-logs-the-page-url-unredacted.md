@@ -107,10 +107,12 @@ URLs would be written to the host's logs, which is why dl-49 waits on this.
 
 ## Review
 
-Four rounds so far, all by `a9a05d05c8083a85d`. **Disclosure** (gate 3 found
+Five rounds so far, all by `a9a05d05c8083a85d`. **Disclosure** (gate 3 found
 the round-two commit's transcription of gates 1 and 2 was not verbatim — see
-the Log's gate-3 entry for what that round found and how it was corrected):
-all four subsections below are the reviewer's text exactly as sent. The only
+the Log's gate-3 entry for what that round found and how it was corrected;
+gate 5 then found gate 4 itself had gone uncommitted entirely, fixed in this
+same commit): all five subsections below are the reviewer's text exactly as
+sent, gate 3's one dated correction above marked as such. The only
 edits anywhere are to citation coordinates, never to a finding's own words —
 either a bare line number moved to match where content that is still
 genuinely present now sits (`runner.ts`'s matcher, `logging.test.ts`'s cycle
@@ -310,7 +312,13 @@ committed `## Review` transcription
   secret in and asserts only that one line was written, so it passes while
   the secret is in that line; the docstring at
   `tools/downloader/api/src/logger.ts:127 "content reached only by re-entering a genuine cycle"`
-  understates the reach. No live call site logs a cycle.
+  understates the reach. No live call site logs a cycle. **[Gate 5 note, not
+  in the reviewer's original text: the citation still resolves to the same
+  `sig=CYCLE` line, but a low-2 fix after this gate added a host-survival
+  assertion to that same test, so "asserts only that one line was written"
+  describes the test as it stood at gate 3, not as it stands now. The
+  citation is not a declared-evidence case — it still passes — so it keeps
+  its plain coordinate; this sentence is the correction gate 5 asked for.]**
 - **med** · the two branch-sha pins in this section break CI once the branch
   is squash-merged: `b63d8c6` and `31ba6c9` are not ancestors of
   `origin/main`, and no archival ref holds them. Measured in a fresh
@@ -340,6 +348,101 @@ orchestrator)`, and add a preamble paragraph. The Log says gate 1 is
 - Invariants: no cross-tool import ✓; no contract edit ✓; test registration
   unchanged ✓; style ✓. Skipped as not touched: shell, process trees, SSRF,
   progress, Dockerfile.
+
+### Gate 4
+
+**Gate: FAIL** — 2026-09-17 · `origin/main...29aaacd` (base `20c8fd1`; this
+round is the delta from `d81cfce`) · defect hunt run by the reviewer itself at
+medium depth over the back-edge placeholder, the two cycle tests and the
+re-transcribed `## Review`
+
+| Done when                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step-1 test fails on `origin/main`, passes on the branch, Log records both                               | unchanged ✓ — green at 29aaacd                                                                                                                                                                                                                                                                                                                                                      |
+| Sweep in the Log, and a test per other URL-carrying site or a reason                                     | unchanged ✓                                                                                                                                                                                                                                                                                                                                                                         |
+| A test proves the redacted line keeps host and path                                                      | unchanged ✓                                                                                                                                                                                                                                                                                                                                                                         |
+| Widened scope: every string value in a log line is covered                                               | **unproven** — shared references and cycles now proven: `tools/downloader/api/test/logging.test.ts:1013-1020 "sig=PARENT"` ✓ and the rewritten self-cycle test beside it (re-run: `logger.ts` alone reverted to `d81cfce` gives 2 failed / 83 passed, both cycle tests; restored, 85 passed). Still false for an upper-case scheme and a protocol-relative URL until D3 is answered |
+| `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0; 85 files, 1442 passed (1441 at `d81cfce`); citations-gate exit 0, 85 enforced, 0 failing                                                                                                                                                                                                                                                               |
+
+- **med** · gate 3 M4 still open: the section now carries five branch-sha
+  pins, the three new ones to `d81cfce`, which is no more reachable from
+  `main` than `b63d8c6` or `31ba6c9`. The repair is open decision D4; the
+  builder left the pins in place rather than choose, which is right.
+- **low** · the transcription is verbatim apart from the disclosed pins and
+  one undisclosed word: gate 3 quotes the builder Log as `unchanged except
+the H3 bullet` and the committed text reads `unchanged apart from the H3
+bullet`, while the preamble says nothing else was altered. Word-diffed
+  against the sent text.
+- **low** · both cycle tests assert only that the secret is absent and one
+  line exists; a line written as `fieldsDropped: true` would also pass them.
+  A companion asserting the host survives would pin redaction rather than
+  deletion, as every other new test here does. Measured the live output is
+  correct: `{ url: https://h.example/p?[redacted], self: [Circular] }`.
+- **dropped** · replacing the back edge with a string makes a cycle with no
+  URL in it allocate a copy; one object per cyclic value per line. Not a
+  defect.
+- **findings** · the reviewer hunt returned 3; 2 carried, 1 dropped, plus
+  gate 3 M4 carried forward. Gate 3 M3 and M5 are closed.
+- NFR: security ✓ (no leak shape found in the walk) · performance ✓ ·
+  reliability — CI after merge, the **med** above · maintainability — the
+  two **low** above.
+- Invariants: no cross-tool import ✓; no contract edit ✓; test registration
+  unchanged ✓; style ✓. Skipped as not touched: shell, process trees, SSRF,
+  progress, Dockerfile.
+
+### Gate 5
+
+**Gate: CONCERNS** — 2026-09-18 · `origin/main...6f17db4` (base `20c8fd1`;
+this round is the delta from `29aaacd`, and includes ede8965, the
+foreign-citation repair) · scoped by the orchestrator to the new ground: the
+`i` flag at both consumers, the reworded acceptance line, the evidence
+declarations, and the two lows held from gate 4
+
+| Done when                                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step-1 test, the sweep with a test per site, host and path kept                                                                       | unchanged from gates 1 to 4 ✓, not re-swept                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Reworded scope: a lower- or upper-case `http(s)://` URL anywhere in a string, however nested; a protocol-relative URL still unmatched | `tools/downloader/engine/test/redact-urls-in-text.test.ts:21 "redacts an upper-case scheme the same way"` ✓, `tools/downloader/engine/test/redact-urls-in-text.test.ts:43 "known gap: a protocol-relative URL is not matched"` ✓, and through the real spawn path `tools/downloader/engine/test/ffmpeg-runner.test.ts:110-124 "onStderrLine: (line) => seen.push(line),"` ✓ — re-run: `tools/downloader/engine/src/ffmpeg/runner.ts:71 "replaceAll(/https?:"` toggled back to `gu` gives 5 failed / 169 passed in the engine project; restored, 174 passed. The line matches what the matcher does, measured against the built function on eleven shapes |
+| `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green                              | **verified** — check exit 0; 86 files, 1450 passed (1442 at `29aaacd`); engine project 174 passed; citations-gate exit 0, 85 enforced, 0 failing, including the repo-34 and dl-19 repairs; `citations.mjs` on this ticket exit 0, 4 evidence, 0 pinned. The flake the Log names did not recur here                                                                                                                                                                                                                                                                                                                                                       |
+
+- **med** · gate 4 is missing from the record and the preamble miscounts:
+  the section says four rounds and all four subsections below, and only
+  `### Gate 1`, `### Gate 2` and `### Gate 3` are there. Gate 4 was sent and
+  is not committed — the same shape as gate 2's own finding about gate 1,
+  and a merge from this commit loses the round that closed the cycle leak
+  and the transcription.
+- **low** · a repointed citation now contradicts its own bullet: gate 3's
+  cycle finding cites the same
+  `tools/downloader/api/test/logging.test.ts:1003 "sig=CYCLE"` quoted above
+  and says that test asserts only that one line was written, which was true
+  at d81cfce; the test at that coordinate today also asserts the secret is
+  absent and the host survives. The anchor still resolves, so nothing
+  fails — a reader following it sees the opposite of the claim. Recommend
+  naming it in the evidence declaration beside the other four, as historical
+  evidence rather than a live coordinate; keeping it and adding a clause
+  saying the test was rewritten afterwards is also defensible.
+- **verified** · the two lows gate 4 held are closed: the word `except` is
+  restored (word-diffed against the sent text — gates 1 to 3 now differ only
+  in citation coordinates and, in gate 1, the H3 bullet agreed at gate 2),
+  and both cycle tests carry a host companion (`logging.test.ts` lines 1011
+  and 1024, qualified elsewhere in this record).
+- **dropped** · the `i` flag widening ffmpeg's own stderr redaction: measured
+  on eleven shapes through the built function. Nothing that was redacted
+  before stops being; what is new is upper- and mixed-case schemes, and
+  `redactUrl` normalises the scheme and host case in what it writes back,
+  which it already did for lower-case input. The engine project passes 174
+  with the flag and fails 5 without it.
+- **dropped** · the fresh single-branch check of `main` still exits 3, as
+  the builder reported. Every failure is a citation into a test line this
+  branch adds, which `main` cannot hold until it merges; that is true of any
+  branch citing its own new tests. No pin remains in any gate record, and
+  the two `@20c8fd1` pins added to repo-34 and dl-19 name a commit on `main`
+  today. Not a defect.
+- **findings** · the reviewer hunt returned 4; 2 carried, 2 dropped.
+- NFR: security ✓ · performance ✓ · reliability ✓ · maintainability — the
+  record itself, the **med** and **low** above.
+- Invariants: no cross-tool import ✓; no contract edit ✓; the new engine
+  test file is registered and runs in the project's 174 ✓; style ✓. Skipped
+  as not touched: shell, process trees, SSRF, progress, Dockerfile.
 
 ## Log
 
@@ -976,3 +1079,97 @@ tools/downloader/api/test/egress-proxy.test.ts` — 85 passed.
     unchecked, 4 evidence, 0 pinned.
   - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
     enforced, 0 failing (includes the `repo-34` and `dl-19` repairs).
+
+- 2026-09-18 — Orchestrator confirmed, measured rather than judged, that
+  bundling the `repo-34` repair (`ede8965`) onto this branch is correct and
+  does not need its own pull request: `release-please-config.json`'s
+  `packages` list is exactly `["tools/downloader", "tools/planner"]`, and
+  `docs/work/repo-34-…md` is outside both — attribution is by path, so a
+  commit touching only that path reaches no tool's changelog at all,
+  regardless of what else is in the same PR. `docs` is also `hidden: true`
+  in that config, which would have suppressed it a second way even if the
+  path had matched. The reason this rides along is **not** that a one-line
+  citation pin is small — the same repair to a file under `tools/planner/`
+  would still need its own PR, however small, because _that_ path does have
+  a changelog to collide with. `dl-19`'s repair raises nothing for the
+  opposite reason: it is inside `tools/downloader`, the same tool this PR
+  is already for.
+
+  **The clone answer, restated in D4's own terms**, per the orchestrator:
+  a citation into a test line _this branch itself adds_ is not yet on `main`
+  because the branch has not merged — it resolves the moment it does, since
+  the merge brings the cited line with it. A pin to a branch-only commit
+  never resolves on `main`, merged or not, because a squash merge places the
+  branch's _diff_ on `main` as one new commit, never the individual commits
+  the pin named. The first is a timing gap that closes itself; the second is
+  permanent. D4 was about the second kind only, and dropping the pins in
+  favour of prose and declarations is what makes this ticket's own record
+  immune to it regardless of when the branch merges.
+
+- 2026-09-18 — Gate 5 at `6f17db4`: **CONCERNS**, one med and one low, both
+  about the record rather than the code. D3 and D4 held without dispute; both
+  gate-4 lows stayed closed. No source or test file changed this round —
+  this entry and its commit are documentation-only.
+
+  **Med, and it is the same mistake gate 2 caught for gate 1, on me a second
+  time: Gate 4's text was never committed.** I had drafted it, referenced it
+  in the round-4 Log entry, and then genuinely never appended the `### Gate
+4` block itself — the preamble still said "four rounds… all four
+  subsections below" while `grep -n "^### Gate"` returned only 1, 2 and 3.
+  Fixed: `### Gate 4` is now committed verbatim (the text quoted in this
+  ticket's own round-4 exchange), `### Gate 5` follows it, and the preamble
+  says five. I do not have a better account of how this happened than
+  carelessness — the text existed, in this exact conversation, and I did
+  not carry it to the file. Worth naming as its own failure mode alongside
+  M5's "wrote from memory instead of copying": this one is "confirmed I had
+  the text, then skipped the step of writing it."
+
+  **Low, closed with a disclosed, citation-only edit — not a content
+  change.** Gate 3's cycle bullet cites
+  `logging.test.ts:1003 "sig=CYCLE"` and says that test "asserts only that
+  one line was written"; the low-2 fix (gate 4's round) added a host
+  assertion to that same test, so the claim is now stale even though the
+  citation itself still resolves correctly (verified: it is `ok`, not
+  `moved` or `unresolvable`, so it could not have been added to the
+  evidence declaration — `records.md`'s own rule is that a declaration
+  excusing a citation that does not fail is refused outright, "because the
+  citation now passes"). Took the reviewer's second offered remedy: left
+  gate 3's coordinate exactly as sent, and added one bracketed sentence
+  after it, explicitly marked `[Gate 5 note, not in the reviewer's original
+text: …]`, saying what changed and why the citation still resolves. This
+  is the same category of edit the disclosure at the top of `## Review`
+  already covers in spirit (declarations correcting drift) but is a new
+  mechanism — a marked inline correction — so it is named here rather than
+  folded silently into "the only edits are citation coordinates."
+
+  **A second, purely mechanical citations failure, caught before it reached
+  a commit: oxfmt's own line-wrap broke two anchors it had not touched
+  before.** Writing gate 5's low bullet with the full qualified path
+  (`tools/downloader/api/test/logging.test.ts:1003 "sig=CYCLE"`) at that
+  paragraph's specific width made `oxfmt` wrap the line _between_ the
+  coordinate and its quoted fragment — exactly the failure mode
+  `records.md` names ("oxfmt rewrapping gate tables broke a
+  self-referential row twice"), here in prose rather than a table. Using
+  the bare filename instead (`logging.test.ts:1003`, to fit before the
+  wrap point) traded that failure for a different one: two tracked files
+  share that bare name (`api` and `planner`), so it became `ambiguous`.
+  Neither is a finding about the record's content — both are citation
+  mechanics — so the fix was mechanical too: reworded the sentence to
+  reuse the fully qualified citation already sitting a few lines above in
+  the same bullet ("the same `tools/downloader/…/logging.test.ts:1003
+"sig=CYCLE"` quoted above") rather than repeating it at a width that
+  wraps badly. Re-ran `citations.mjs` after every attempt rather than
+  guessing which fix would hold.
+
+  **Gates, at the final state:**
+  - `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors` — exit 0, 23 verified, 7
+    unchecked, 4 evidence, 0 pinned, 0 unanchored, 0 moved, 0 unresolvable.
+  - `node scripts/citations-gate.mjs --against origin/main` — exit 0, 85
+    enforced, 0 failing.
+  - `npm run check` — exit 0.
+  - No test suite re-run this round: `git status --short` shows only this
+    ticket file changed, and the previous round's suite runs
+    (engine 174/174, `logging.test.ts` + `egress-proxy.test.ts` 85/85, full
+    downloader 1450/1450) already cover every source and test file this
+    round leaves untouched.
