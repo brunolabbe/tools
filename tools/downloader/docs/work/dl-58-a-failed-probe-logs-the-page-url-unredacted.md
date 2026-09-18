@@ -444,6 +444,46 @@ declarations, and the two lows held from gate 4
   test file is registered and runs in the project's 174 ✓; style ✓. Skipped
   as not touched: shell, process trees, SSRF, progress, Dockerfile.
 
+### Gate 6
+
+**Gate: PASS** — 2026-09-18 · `origin/main...ed4ece4` (base `20c8fd1`; this
+round is the delta from `6f17db4`, documentation only — the diff names one
+file, this ticket) · scoped to what gate 5 left open: the missing record,
+the round count and the repointed citation
+
+| Done when                                                                                                | Proof                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Step-1 test, the sweep with a test per site, host and path kept, and the reworded D3 scope               | unchanged from gates 1 to 5 ✓ — no source or test file differs from 6f17db4, so gate 5 runs stand (engine 174, api suites 85, downloader 86 files / 1450)                                  |
+| `npm run check`, `npm test -- --project downloader` and `citations-gate.mjs --against origin/main` green | **verified** — check exit 0 at this commit; citations-gate exit 0, 85 enforced, 0 failing; `citations.mjs` on this ticket exit 0, 23 verified, 4 evidence, 0 pinned, 0 moved, 0 unanchored |
+
+- **low** · two words of the transcription are still the builder writing,
+  against a preamble that says only citation coordinates were edited: the
+  second low in gate 4 reads `would also pass them` where the reviewer sent
+  `would also pass`, and the verified bullet in gate 5 carries a paraphrase
+  of the citation the reviewer wrote rather than the citation itself (the
+  same two coordinates, 1011 and 1024; the account from the builder names
+  the `oxfmt` line-wrap that forced it). Neither changes a finding.
+  Recorded rather than repaired: another commit to fix two words would cost
+  more than it buys.
+- **verified** · the med from gate 5 is closed: `### Gate 4` and `### Gate
+5` are both in the record, the preamble says five rounds, and gates 4 and
+  5 are otherwise the text of the reviewer word for word (word-diffed).
+- **verified** · the low from gate 5 is closed by the second of the two
+  offered remedies, and the reasoning for not using the declaration is
+  right: the citation resolves `ok`, and a declaration excusing a citation
+  that is not failing is refused. The added sentence is marked as a gate 5
+  note that is not in the original text of the reviewer, which is the
+  disclosure this record has been short of twice.
+- **findings** · the reviewer hunt returned 3; 1 carried, 2 closed, 0
+  dropped.
+- NFR: security ✓ · performance ✓ · reliability ✓ · maintainability ✓.
+- Invariants: documentation only this round; nothing else to walk.
+
+**Nothing in this ticket is unproven or unverified, and no finding above
+`low` stands. This record needs one more commit — gate 6 itself — and no
+gate after it: a transcription of text the reviewer wrote, with the suites
+unchanged, has nothing left to review.**
+
 ## Log
 
 - 2026-09-13 — Filed on the owner's instruction instead of being fixed on the
