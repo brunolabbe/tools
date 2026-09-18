@@ -1,5 +1,5 @@
 /**
- * The plan's HTTP surface: start a run, read the document, stop a run.
+ * The plan's HTTP surface: start a run, read the document, revise it, stop a run.
  *
  * Thin, like the intake's: parse the path, parse the body with the contract's
  * own schema, hand it to `runs/orchestrator.ts`, send what comes back. Every
@@ -15,15 +15,18 @@ import {
   createPlanRequestSchema,
   AppError,
   pinItemRequestSchema,
+  reviseRequestSchema,
   ROUTES,
   type CreatePlanRequest,
   type PinItemRequest,
   type PlanListResponse,
+  type ReviseRequest,
 } from "@planner/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
-import { createRateLimitHook } from "../rate-limit.ts";
+import { createRateLimitHook, enforceRateLimit } from "../rate-limit.ts";
 import { cancelRun, listPlans, pinItem, readPlanView, startRun } from "../runs/orchestrator.ts";
+import { revisePlan } from "../runs/revise.ts";
 
 interface IdParams {
   id: string;
@@ -45,6 +48,17 @@ function parsePin(body: unknown): PinItemRequest {
   const parsed = pinItemRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw new AppError("INVALID_ANSWER", "Pinning an item is told whether it is pinned or not.");
+  }
+  return parsed.data;
+}
+
+function parseRevise(body: unknown): ReviseRequest {
+  const parsed = reviseRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new AppError(
+      "INVALID_ANSWER",
+      "A revision names what it does — re-plan, move, remove or restore — and the version it builds on.",
+    );
   }
   return parsed.data;
 }
@@ -80,6 +94,40 @@ export function registerPlanRoutes(app: FastifyInstance, context: AppContext): v
     return await reply.send(
       pinItem(context, { planId: request.params.id, itemId: request.params.itemId, pinned }),
     );
+  });
+
+  // pl-44. Rate limited after the body is parsed rather than in an `onRequest`
+  // hook, because the body's kind picks the bucket: a re-plan holds a queue
+  // slot and spends a draft's allowance, with or without specialists; an edit
+  // takes no slot and spends the edits bucket. Before any database read either
+  // way, so a refused request stays cheap.
+  app.post<{ Params: IdParams }>(ROUTES.planRevisions, async (request, reply) => {
+    const revise = parseRevise(request.body);
+    enforceRateLimit(
+      request,
+      reply,
+      revise.kind === "replan"
+        ? { limiter: context.runLimiter, logger: context.logger, scope: "plans" }
+        : { limiter: context.editLimiter, logger: context.logger, scope: "edits" },
+    );
+
+    // An edit's lookup takes this signal, so a client that goes away before the
+    // answer stops the lookup and the edit writes nothing.
+    const controller = new AbortController();
+    const abandon = (): void => {
+      if (!reply.raw.writableFinished) controller.abort(new AppError("CANCELED"));
+    };
+    reply.raw.once("close", abandon);
+    try {
+      const response = await revisePlan(context, {
+        planId: request.params.id,
+        request: revise,
+        signal: controller.signal,
+      });
+      return await reply.code(response.kind === "run" ? 202 : 200).send(response);
+    } finally {
+      reply.raw.off("close", abandon);
+    }
   });
 
   app.post<{ Params: IdParams }>(ROUTES.runCancel, async (request, reply) => {

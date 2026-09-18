@@ -3,7 +3,7 @@ id: pl-44
 tool: planner
 title: A plan is revised over HTTP — re-plans run as jobs, edits write synchronously
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-42, pl-43]
 difficulty: hard
@@ -375,7 +375,9 @@ nothing.
 **Restore** is `restoreRevision(revisionN, { id, reason, createdAt })`, then
 the same write. It makes no grounding call and no lookup of any kind.
 `restoreRevision` stamps the operation and copies days, pins and
-`travelFromPrevious` (pl-42's trap; which pins, see _Open with the owner_).
+`travelFromPrevious` (pl-42's trap). Which pins: revision _n_'s, as stored — the
+answer to question 2 recorded in [pl-43](./pl-43-repack-named-days-and-diff.md)'s
+Log, in its entry answered on 2026-09-13.
 
 An edit emits no SSE frame and creates no run.
 
@@ -655,6 +657,56 @@ first-draft` and `kind: draft`.
   image gate and the e2e suite still do not run locally, so say so rather than
   reporting green.
 
+## Review
+
+**Gate: PASS** — 2026-09-17, defect hunt run by the reviewer itself at code-review's medium depth. First pass reviewed base 20c8fd1 against tip 1bce511; a repair commit followed at 5359847 (direct child of 1bce511).
+
+First pass on 1bce511 was CONCERNS: one med, one low, one Log-framing correction, nothing high, no acceptance line unproven. All three were reproduced and repaired at 5359847, and the repair is itself reproduced below. Re-run at 5359847: `npm run check` exit 0; `npm test -- --project planner` 69 files, 1,145 tests; `node scripts/citations-gate.mjs --against origin/main` 84 enforced, 0 failing, 0 raised against origin/main.
+
+| Done when                                                                                                                                                                                            | Proof                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route refusal: unparseable body, `INVALID_ANSWER`, nothing reaches itinerary                                                                                                                         | `api/test/revisions.test.ts:394 "an unparseable body is INVALID_ANSWER"` ✓                                                                                                                                                                          |
+| Route refusal: plan not found, `PLAN_NOT_FOUND`, 404                                                                                                                                                 | `api/test/revisions.test.ts:407 "a plan that does not exist is PLAN_NOT_FOUND"` ✓                                                                                                                                                                   |
+| Route refusal: live run, `PLAN_BUSY`, 409, `details.run` names it; a busy first draft too                                                                                                            | `api/test/revisions.test.ts:423 "a live run on the plan is PLAN_BUSY"`, `:457 "a plan whose first draft is still running is PLAN_BUSY"` ✓                                                                                                           |
+| Route refusal: stale base, `REVISION_STALE`, 409, not retryable                                                                                                                                      | `api/test/revisions.test.ts:481 "a base that is not the latest is REVISION_STALE"` ✓                                                                                                                                                                |
+| Route refusal: day/position out of range, `INVALID_ANSWER`                                                                                                                                           | `api/test/revisions.test.ts:515 "a day past the plan's count"` ✓                                                                                                                                                                                    |
+| Route refusal: unknown or superseded item, `ITEM_NOT_FOUND`                                                                                                                                          | `api/test/revisions.test.ts:582 "an unknown item, and an item from a superseded revision"` ✓                                                                                                                                                        |
+| Route refusal: restore of a missing version, `REVISION_NOT_FOUND`                                                                                                                                    | `api/test/revisions.test.ts:614 "a restore of a version the plan does not have"` ✓                                                                                                                                                                  |
+| Route refusal: revision ceiling, `REVISION_LIMIT_REACHED`, 409                                                                                                                                       | `api/test/revisions.test.ts:635 "the revision ceiling is REVISION_LIMIT_REACHED"` ✓                                                                                                                                                                 |
+| None of the refusals reach `itinerary`                                                                                                                                                               | `api/test/revisions.test.ts:354 "function expectNothingReachedItinerary"`, asserted in every refusal test above ✓                                                                                                                                   |
+| Busy is race-free: two re-plans land one 202 and one `PLAN_BUSY`                                                                                                                                     | `api/test/revisions.test.ts:675 "two re-plans issued together land one 202"` ✓                                                                                                                                                                      |
+| A second live run is refused by the database directly                                                                                                                                                | `api/test/migrations.test.ts:354 "a second live run for one plan is refused by the database"` ✓                                                                                                                                                     |
+| A live-by-status orphan is closed out and the next request proceeds                                                                                                                                  | `api/test/revisions.test.ts:712 "a live-by-status run the queue does not know is closed out"` ✓                                                                                                                                                     |
+| Two concurrent moves land one revision and one `REVISION_STALE`                                                                                                                                      | `api/test/revisions.test.ts:743 "two concurrent moves land one revision"` ✓                                                                                                                                                                         |
+| A re-plan with named specialists: asks only them, stores under its run, appends to the pool, records asked/ran                                                                                       | `api/test/revisions.test.ts:791 "asks only them, stores their candidates under its run"` ✓                                                                                                                                                          |
+| Not-applicable/over-budget specialist keeps its gap, caption leaves it out, unnamed gaps carry                                                                                                       | `api/test/revisions.test.ts:853 "a named specialist that is not applicable, or over budget"` ✓                                                                                                                                                      |
+| Zero-specialist re-plan: no model call, `roster` frame `total: 0`, `rosterSize` reads 0, `queued to composing`                                                                                       | `api/test/revisions.test.ts:909 "asks no model, reports a roster of 0"` ✓                                                                                                                                                                           |
+| Re-plan with something to measure goes `queued, grounding, composing` in order                                                                                                                       | `api/test/revisions.test.ts:948 "when the slice has something to measure"` ✓                                                                                                                                                                        |
+| A pin set while a re-plan runs is honoured by the revision it writes, both moments                                                                                                                   | `api/test/revisions.test.ts:981 "is honoured by the revision it writes, pinned"` ✓                                                                                                                                                                  |
+| The note reaches every running specialist's user message, never a system prompt, and an injection string arrives quoted as data                                                                      | `agent/test/fan-out.test.ts:406 "reaches every running specialist's user message"`, `agent/test/prompt.test.ts:314 "an injection string arrives quoted as data"` ✓                                                                                  |
+| `only`: subset runs, not-applicable name not run, budget drops from the back, `[]` runs nothing at `total: 0`                                                                                        | `agent/test/fan-out.test.ts:334 "runs only the named specialists"`, `:358 "keeps the roster's own sentence"`, `:374 "drops from the back of SPECIALIST_ORDER"`, `:388 "an empty set reports total 0"` ✓                                             |
+| Discovery: named `food` on a corridor calls `nearby`; naming only `lodging` never asks                                                                                                               | `api/test/revisions.test.ts:1033 "re-runs it, and the revision carries what it found"`, `:1061 "naming only lodging never asks"` ✓                                                                                                                  |
+| The measuring pass is asked only about `replanPool`'s places, never a frozen day's                                                                                                                   | `api/test/revisions.test.ts:1086 "never a frozen day's"` ✓                                                                                                                                                                                          |
+| A canceled re-plan writes no revision, ends `canceled`, in-flight requests saw the abort                                                                                                             | `api/test/revisions.test.ts:1115 "its in-flight requests saw the abort"` ✓                                                                                                                                                                          |
+| A move answers 200, names candidate/day, grounding hears only its pairs; a remove likewise                                                                                                           | `api/test/revisions.test.ts:1151 "grounding hears only its pairs"`, `:1194 "a remove answers 200"` ✓                                                                                                                                                |
+| A budget-refused lookup records `over-budget`; an asked-and-unknown one records `not-established`                                                                                                    | `api/test/revisions.test.ts:1239 "a lookup the budget refused records over-budget"`, `:1265 "records not-established"` ✓                                                                                                                            |
+| A move that breaks a day answers `PLAN_INFEASIBLE` with `compose`'s findings, writes nothing                                                                                                         | `api/test/revisions.test.ts:1291 "answers PLAN_INFEASIBLE with compose's findings"` ✓                                                                                                                                                               |
+| A restore answers 200, zero grounding calls, `restoreRevision`'s revision                                                                                                                            | `api/test/revisions.test.ts:1317 "with no grounding call"` ✓                                                                                                                                                                                        |
+| `PlanView.diffs` equals `revisionDiffs`, empty on one revision                                                                                                                                       | `api/test/revisions.test.ts:1346 "is revisionDiffs over the stored revisions"` ✓                                                                                                                                                                    |
+| Migration 10: reads back `first-draft`/`draft`, trigger silent, revision 2 reads its own operation, literals gone                                                                                    | `api/test/migrations.test.ts:289 "with the trigger silent"`, `:307 "not the DEFAULT"`, `:338 "the literals are gone"` ✓                                                                                                                             |
+| `insertRun` maps the one-live refusal to `PLAN_BUSY`, never `INTERNAL`                                                                                                                               | `api/test/migrations.test.ts:370 "never INTERNAL"` ✓                                                                                                                                                                                                |
+| Rate limiting: re-plans (with/without specialists) spend the runs bucket; edits spend the edits bucket and leave the runs bucket alone; each 429s with `Retry-After` past its burst                  | `api/test/revisions.test.ts:1389 "spend the bucket POST /api/plans spends"`, `:1440 "leave the runs bucket untouched"` ✓                                                                                                                            |
+| `RATE_LIMIT_EDITS_PER_MINUTE`: default 30, reads the env var, zero disables                                                                                                                          | `tools/planner/api/test/config.test.ts:286 "and zero disables it"` ✓                                                                                                                                                                                |
+| `reason`: one unit test per branch, a scattered day set, the longest title                                                                                                                           | `api/test/reason.test.ts:17 "names the days and who ran"`, `:39 "a scattered day set is written"`, `:75 "fits the schema's bound"` ✓                                                                                                                |
+| Gates: `npm run check` and `npm test -- --project planner` pass; `api` gains no workspace dependency, `Dockerfile` unchanged; image gate and e2e not run locally, said so rather than reported green | verified — `npm run check` exit 0; `npm test -- --project planner` 69 files, 1,145 tests; comparing the diff stat shows no `Dockerfile`/`package.json` change; **unproven (gate)** for the image build and e2e suite, disclosed rather than claimed |
+
+- **med, repaired** - `applyEdit` runs inside the write transaction against the revision re-read there, not the one read before the edit's async lookup — a real, deliberate departure from Build's literal step order (step 5 lists `applyEdit` as its own step, before the write). Reverting it to the pre-lookup revision left all 32 tests green on 1bce511, meaning the scenario the departure exists for — a pin set during an edit's lookup being kept rather than dropped — had no test. Repaired at 5359847 with `api/test/revisions.test.ts:1509 "is carried by the revision the edit writes"`, which holds the edit's matrix call, pins mid-lookup, and asserts the pin survives; reproduced independently — with the revert applied, this test alone fails (1 of 33), and the unmutated tree is 33 of 33.
+- **low, repaired** - Restore's own range check (`revise.ts`, `request.revision > latest.revision` to `REVISION_NOT_FOUND`) was masked by `restore()`'s downstream defensive "unreachable" lookup, which independently throws the same code because revisions are dense from 1 — removing the front check alone changed nothing observable. Repaired at 5359847: the refusal test now also asserts `error.details` equals `{ revision: 2, latest: 1 }`, a shape only the front check produces (`api/test/revisions.test.ts:614 "a restore of a version the plan does not have"`, its `details` assertion two lines below). Reproduced independently — disabling the front check now fails this one test with the details mismatch shown.
+- **dropped, agreed** - the orphan-close-before-the-check-transaction bullet in the Log described itself as a departure from Build; Build's own step 3 ("Before the check, a live-by-status run ... is closed out") already specifies that order, so it is not one. Corrected in the Log rather than in code; not a defect.
+- **dropped, agreed, no severity** - `measureEdit`'s zero-places early exit (`revise.ts`) is redundant with `measureTravel`'s own skip when nothing locates (`travel.ts`, `order.length === 0`) — a mutation removing it cannot go red, and the Log now records it as not acted on.
+- **findings** - code-review at medium (the reviewer's own defect hunt, run itself, to that depth) plus a full mutation sweep of `revise.ts`'s guard conditionals and `db/plans.ts`'s `selectLatestItem` scoping: 2 carried (the med and the low above, both since repaired), 2 dropped (the framing correction, and the harmless redundant early exit) — both agreed with the builder rather than unilaterally settled.
+- NFR: security ✓ (no new network/URL code; no credentials or user text in new log lines; note is user-message-only and injection-quoted, proven by test) - performance n/a - reliability ✓ (busy/stale re-checks proven race-free by direct mutation of both the app-level check and the database index, separately and together) - maintainability ✓ (above).
+
 ## Log
 
 **2026-09-13 — filed**, groomed against pl-42 and pl-43 as corrected and filed
@@ -720,3 +772,205 @@ allowed and silent. What each answer asks of `api`:
    or refused through `applyEdit`, costs `api` nothing. Named through a new
    `UncheckedConstraintKind`, it reaches the view through `readPlanView`'s
    existing derivation.
+
+**2026-09-17 — built.** Branched from `origin/main` at `20c8fd1` (on the
+remote), dispatched as Opus. pl-39 and pl-41 were both `done` on that base, so
+the _Traps_ ordering held without a rebase. **Migration 10 was still next
+free:** migration 9 is the last on `origin/main`, and `gh pr list --state open`
+showed one open pull request, a downloader release.
+
+**What landed.**
+
+- `agent`: `FanOutInput.only` and `FanOutInput.note`, `AskInput.note`, the note
+  block in `userPrompt`, and `readsFinds`.
+- `api/src/runs/revise.ts`: the checks, the re-plan run, move, remove and
+  restore. `api/src/runs/reason.ts`: the caption.
+- `orchestrator.ts` now exports `moveTo`, `record`, `persist`, `recordUsage`,
+  `isCancellation` and `capacityFor`. It also gains `enqueueRun`, which holds a
+  run's cancel, failure and eviction path once for a draft and a re-plan.
+  `persist` takes the base it re-checks and the ceiling. `readPlanView` serves
+  `revisionDiffs`.
+- `db`: migration 10. `toRevision` parses `operation_json`, and `toRun` reads
+  `kind`. `insertRevision` and `insertRun` write both. `insertRun` maps the
+  `plan_runs_one_live` refusal to `PLAN_BUSY`. New queries: `selectLiveRun` and
+  `selectLatestItem`.
+- `rate-limit.ts`: `enforceRateLimit`, which the hook now calls.
+- `editLimiter`, `RATE_LIMIT_EDITS_PER_MINUTE`, and four `http-errors.ts`
+  entries: `REVISION_STALE`, `PLAN_BUSY`, `REVISION_LIMIT_REACHED` and
+  `PLAN_INFEASIBLE`, all 409.
+- The route in `routes/plans.ts`. `01-ARCHITECTURE.md` gains the table row and
+  the widened security line. oxfmt re-padded the whole configuration table,
+  because the new variable name is one character wider than the column.
+
+**What the brief had wrong, or did not say.**
+
+- **Step 6's example contradicts its own rule.** The table says
+  `with food and lodging`. The rule beside it orders by `SPECIALIST_ORDER`,
+  where lodging comes first. I built the rule, so the caption is
+  `with lodging and food`, and `reason.test.ts` says why.
+- **`REVISION_LIMIT_REACHED → 409` was not in step 2's `http-errors.ts`
+  paragraph.** pl-42 assigns that mapping to this ticket, so it landed here.
+- **An over-budget or not-applicable gap for a specialist with an item on a
+  frozen day does not survive.** `replan` drops a gap its days contradict, and
+  the frozen day still places that specialist. The test therefore names
+  `budget`, which placed nothing. This is `replan` working as pl-43 built it,
+  and it is worth knowing for pl-45's rendering.
+- **A pin set during the fan-out cannot prove step 6.1's re-read.** Step 4.4
+  reads the plan after the fan-out, so a pin set before then is already in that
+  read. My first pin test stayed green with the re-read removed (M9 below). The
+  test now pins at both moments, and the grounding case is the one that goes
+  red.
+- **The orphan close runs before the check transaction, not inside it**, which
+  is what step 3 already says ("Before the check"). It is not a departure. It is
+  worth keeping out of the transaction: `cancelRun` emits a `canceled` frame, and
+  a rolled-back transaction cannot un-send one.
+- **`applyEdit` runs inside the write transaction, against the latest revision
+  re-read there**, not against the one read before the lookup. Step 5 lists
+  `applyEdit` before the write. The pairs measured before the `await` are still
+  the pairs it asks about, because only a pin changes a revision in place and a
+  pin moves nothing. Without this, a pin set during an edit's lookup would be
+  silently dropped from the edit's revision. A `PLAN_INFEASIBLE` thrown there
+  rolls the transaction back.
+- **`persist` now asserts a base on the first draft too**, `null`. It is
+  unreachable in the same way the re-plan's check is.
+- **`orchestrator.ts` was already 669 lines on the base**, so "keeps it from
+  growing past 600" no longer described it. It is 718 now. The growth is
+  `enqueueRun` (the draft's catch and eviction, moved rather than copied) and
+  `persist`'s checks.
+
+**Not measured, and said so.**
+
+- **The request-socket abort.** The route aborts the edit's signal on
+  `reply.raw` `close` when the reply has not finished. `app.inject` has no socket
+  to close, so the wiring itself is untested. What is tested is `revisePlan`
+  with an aborted signal, which writes nothing.
+- **A `PLAN_INFEASIBLE` from `replan` failing the run with its details
+  untouched** goes through the shared catch in `enqueueRun`. It is not in
+  _Done when_, and I wrote no test for it.
+- The image gate and the e2e suite do not run locally. `api/package.json` is
+  unchanged, so the `Dockerfile` is too.
+
+**Fold-in.** Four pieces were free and are on this branch:
+
+- The stale _Open with the owner_ pointer in step 5, replaced with the pl-43 Log
+  answer, by the owner's decision on 2026-09-17.
+- `tools/planner/.env.example` gains `RATE_LIMIT_EDITS_PER_MINUTE`.
+- The rate-limit sentence in `docs/02-DEPLOYMENT.md`, which this change made
+  stale.
+- Two comments in `api/test/plan-view.test.ts` that said no route appends a
+  revision.
+
+I saw nothing else this branch made free.
+
+**Three merged gate records cite lines this branch moves or removes.**
+`node scripts/citations-gate.mjs --against origin/main` failed on all three,
+and passes now, at 84 enforced and 0 failing.
+
+- **pl-42's record** cited the `toRevision` literal comment this ticket was
+  told to delete. It is now pinned to `20c8fd1`, the base, where the line still
+  reads as cited. The same record already pins `runs.ts` the same way.
+- **pl-49's record** cited two migrations tests that moved down by 17 lines. It
+  is repointed to their current lines.
+- **dl-57's record** cites a line of `docs/02-DEPLOYMENT.md` below the paragraph
+  I edited. I kept that paragraph's line count unchanged rather than editing a
+  downloader ticket, since touching a `tools/downloader/` path would put this
+  branch in the downloader's changelog.
+
+### Verification
+
+**Cost of a run, measured once.** `npx vitest run tools/planner/api/test/runs.test.ts`
+took 2.14 s for 16 tests. `npx vitest run tools/planner/api` took 4.06 s for 399
+tests, with 9 of them failing on the stale `user_version` expectations this
+ticket then moved. Each change below was run against its own file.
+
+**Narrowest specs, green:**
+
+| File                          | Tests |
+| ----------------------------- | ----- |
+| `agent/test/fan-out.test.ts`  | 23    |
+| `agent/test/prompt.test.ts`   | 19    |
+| `api/test/migrations.test.ts` | 14    |
+| `api/test/schema.test.ts`     | 13    |
+| `api/test/plan-view.test.ts`  | 13    |
+| `api/test/revisions.test.ts`  | 32    |
+| `api/test/reason.test.ts`     | 8     |
+| `api/test/config.test.ts`     | 28    |
+
+**Twenty mutations**, each applied alone by a scratch script that runs that
+file, restores the source from a backup and compares it byte for byte. All
+restores compared identical. Each count is failed of total:
+
+| Mutation                                                        | File       | Failed  |
+| --------------------------------------------------------------- | ---------- | ------- |
+| M1 `only` ignored                                               | fan-out    | 5 of 23 |
+| M2 the note not rendered                                        | fan-out    | 1 of 23 |
+| M3 the busy check removed from the checks                       | revisions  | 2 of 31 |
+| M4 the orphan sweep removed                                     | revisions  | 1 of 31 |
+| M5 a same-day `toPosition` not adjusted                         | revisions  | 1 of 31 |
+| M6 the stale check removed                                      | revisions  | 1 of 31 |
+| M7 the pool read back after inserting                           | revisions  | 1 of 32 |
+| M8 the whole pool measured                                      | revisions  | 2 of 31 |
+| M9 the pre-compose re-read removed                              | revisions  | 1 of 32 |
+| M10 the zero-specialist roster frame not recorded               | revisions  | 2 of 31 |
+| M11 discovery run regardless of `readsFinds`                    | revisions  | 1 of 31 |
+| M12 `diffs: []`                                                 | revisions  | 1 of 31 |
+| M13 `PLAN_INFEASIBLE` unmapped                                  | revisions  | 1 of 31 |
+| M14 a re-plan spends the edits bucket                           | revisions  | 2 of 31 |
+| M15 the operation left to the DEFAULT                           | migrations | 1 of 14 |
+| M16 `kind` read as a literal                                    | migrations | 1 of 14 |
+| M17 the one-live refusal not mapped                             | migrations | 1 of 14 |
+| M18 the edit's re-check and `persist`'s base check both removed | revisions  | 1 of 31 |
+| M19 the caption ignores `SPECIALIST_ORDER`                      | reason     | 1 of 8  |
+| M20 the base's gaps not carried                                 | revisions  | 1 of 31 |
+
+- **M7 and M9 stayed green on their first run**, at 31 of 31. M7's test
+  compared the pool against a slice of itself, and it passed whenever the new
+  run's UUID sorted after the draft's. It now asserts fan-out order, which id
+  order cannot produce, because `food` sorts before `lodging`. M9 is the pin
+  finding above. After both repairs, M7 and M9 each failed 1 of 32, and the
+  unmutated file passed 32 of 32.
+- **M3 fails 2, not 3.** With the check gone, two re-plans issued together are
+  still one 202 and one `PLAN_BUSY`, because `plan_runs_one_live` refuses the
+  second insert. That is the backstop doing its job. The two tests that go red
+  are a restore and a remove against a live run, which insert no run.
+- **M18 removes two checks** because either one alone still refuses the second
+  concurrent move: the edit's own re-check, and `persist`'s base assertion.
+
+**Gates, at the end.** `npm run check` exited 0. `npm test -- --project planner`
+passed at 69 files and 1,144 tests.
+
+**2026-09-17 — the gate's findings, reproduced and repaired.** The
+ticket-reviewer reviewed `1bce511` and returned CONCERNS: one medium finding,
+one low, and a correction to this Log's framing.
+
+- **Medium: nothing tested that an edit carries a pin set during its lookup.**
+  The reviewer mutated `edit()` to call `applyEdit` on the revision read before
+  the lookup, and all 32 tests stayed green. That was the reviewer's run, and I
+  did not repeat it before writing the test. I added a test to `revisions.test.ts` that
+  holds the edit's matrix call, pins an item, opens the call, and asserts the
+  written revision keeps the pin. With the test in place, M21 fails 1 of 33 and
+  the unmutated file passes 33 of 33.
+- **Low: restore's own range check was masked.** With that check removed, the
+  restore's defensive lookup behind it raises the same code. The
+  `REVISION_NOT_FOUND` test now asserts `details` of `{ revision: 2, latest: 1 }`,
+  which only the front check produces. With the check removed (M22) it fails 1
+  of 33.
+- **Framing:** the orphan-close bullet above said it described a departure. It
+  did not, because step 3 already specifies that order, and the bullet is
+  corrected.
+- **Not acted on, and agreed with the reviewer:** its other survivor,
+  `measureEdit`'s zero-places early exit, is redundant with `measureTravel`'s
+  own skip when nothing located, so a mutation there cannot go red.
+
+**2026-09-17 — gated, PASS at `5359847`.** `## Review` above is the reviewer's
+text, with two changes:
+
+- One citation is qualified to `tools/planner/api/test/config.test.ts:286`.
+  The bare `api/test/config.test.ts` also matches the downloader's file, so
+  `node scripts/citations.mjs <this ticket> --section Review --require-anchors --require-distinct-anchors`
+  reported it as unresolvable (47 of 48).
+- `npm run format` padded the table's separator row.
+
+After both, that command reports 48 verified and exits 0, and
+`node scripts/citations-gate.mjs --against origin/main` reports 85 enforced and
+0 failing.

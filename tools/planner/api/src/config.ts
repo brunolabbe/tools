@@ -262,6 +262,18 @@ export interface ApiConfig {
    */
   rateLimitRunsPerMinute: number;
   /**
+   * Move, remove and restore one client may make per minute (pl-44).
+   *
+   * A second bucket beside the runs one, because an edit is a different cost.
+   * It takes no queue slot, and a person rearranging a day makes several a
+   * minute, which the runs bucket's 5 would refuse. It is not free either: each
+   * edit appends a revision and can spend a few grounding calls, and unmetered
+   * the revision ceiling would be the only bound — per plan, not per client.
+   * A re-plan is not an edit and spends from `rateLimitRunsPerMinute`. Zero
+   * disables it, as its sibling's does.
+   */
+  rateLimitEditsPerMinute: number;
+  /**
    * Whether `X-Forwarded-For` may name the client.
    *
    * Off by default, and that default is load-bearing rather than conservative:
@@ -334,6 +346,7 @@ export const API_DEFAULTS = {
   maxSpecialists: 5,
   maxConcurrentRuns: 2,
   rateLimitRunsPerMinute: 5,
+  rateLimitEditsPerMinute: 30,
   logLevel: "info",
 } as const satisfies Partial<Record<string, unknown>>;
 
@@ -615,6 +628,9 @@ export function loadApiConfig(
     rateLimitRunsPerMinute:
       overrides.rateLimitRunsPerMinute ??
       int(env["RATE_LIMIT_RUNS_PER_MINUTE"], API_DEFAULTS.rateLimitRunsPerMinute, { min: 0 }),
+    rateLimitEditsPerMinute:
+      overrides.rateLimitEditsPerMinute ??
+      int(env["RATE_LIMIT_EDITS_PER_MINUTE"], API_DEFAULTS.rateLimitEditsPerMinute, { min: 0 }),
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from.

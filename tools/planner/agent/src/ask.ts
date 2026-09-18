@@ -89,6 +89,8 @@ export interface AskInput {
   budget: RunBudget;
   /** What a corridor discovery pass found, for the specialists that read it (pl-29). */
   finds?: readonly Find[] | undefined;
+  /** What the traveller wrote about a re-plan, for the user message only (pl-44). */
+  note?: string | null | undefined;
   signal?: AbortSignal | undefined;
 }
 
@@ -139,7 +141,7 @@ export async function askSpecialist(input: AskInput): Promise<AskResult> {
     finds: input.finds,
   });
 
-  const messages: ModelMessage[] = [{ role: "user", content: userPrompt(input.brief) }];
+  const messages: ModelMessage[] = [{ role: "user", content: userPrompt(input.brief, input.note) }];
   const replies: ModelReply[] = [];
   const attempts = Math.max(1, Math.trunc(input.budget.maxAttemptsPerSpecialist));
   let lastDetail = "the reply never parsed";

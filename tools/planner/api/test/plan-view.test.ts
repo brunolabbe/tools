@@ -60,8 +60,8 @@ async function draftedPlan(harness: RunHarness): Promise<string> {
 /**
  * Append a second revision, so the first one is superseded.
  *
- * Re-plan is Phase 4 and no route appends a revision yet, so this does what the
- * orchestrator's `persist` does — `appendRevision` for the number and the
+ * Written straight to the store rather than through the revisions route (pl-44),
+ * because pinning is what this suite is about. It does what `persist` does — `appendRevision` for the number and the
  * parent, `insertRevision` for the rows — and copies the draft it supersedes
  * item for item with fresh ids and the same candidates. What the copy contains
  * does not matter; that the older revision's item ids stop being the ones
@@ -77,7 +77,6 @@ function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
     id: randomUUID(),
     reason: "A second draft, so the first is no longer the one being read.",
     // A copy of the draft it supersedes, which is what a restore is (pl-42).
-    // Read back, `toRevision` reports `first-draft` until pl-44 stores the column.
     operation: { kind: "restore", revision: previous.revision },
     createdAt: NOW.toISOString(),
     gaps: previous.gaps,
