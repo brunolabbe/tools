@@ -53,12 +53,13 @@ let server: FixtureServer;
 /** Paths whose response is trickled a byte at a time, for the timeout tests. */
 const trickled = new Set<string>();
 
-function generate(args: string[]): Promise<void> {
+function generate(args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(FFMPEG, args, {
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
+      ...(cwd === undefined ? {} : { cwd }),
     });
     let stderr = "";
     child.stderr?.setEncoding("utf8");
@@ -465,44 +466,71 @@ describe("choosePreviewVariant", () => {
  */
 describe("grabPreviewFrame against a generated split-DASH stream", () => {
   beforeAll(async () => {
-    await generate([
-      "-hide_banner",
-      "-nostdin",
-      "-loglevel",
-      "error",
-      "-y",
-      "-f",
-      "lavfi",
-      "-i",
-      `testsrc=size=640x360:rate=15:duration=${CLIP_SECONDS}`,
-      "-f",
-      "lavfi",
-      "-i",
-      `sine=frequency=440:sample_rate=44100:duration=${CLIP_SECONDS}`,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-pix_fmt",
-      "yuv420p",
-      "-g",
-      "15",
-      "-c:a",
-      "aac",
-      "-f",
-      "dash",
-      "-seg_duration",
-      "2",
-      "-adaptation_sets",
-      "id=0,streams=v id=1,streams=a",
-      // Into the same directory the gated origin serves; the DASH names
-      // (`dash.mpd`, `*.m4s`) cannot collide with the HLS ones.
-      "-init_seg_name",
-      "dash-init-$RepresentationID$.m4s",
-      "-media_seg_name",
-      "dash-chunk-$RepresentationID$-$Number%05d$.m4s",
-      path.join(fixtureDir, "dash.mpd"),
-    ]);
+    // **Generated from inside the served directory, with a bare output name.**
+    // With an absolute `…\dash.mpd`, the win32 build wrote its segments
+    // somewhere other than the directory that manifest sits in: CI run
+    // 35404674345 showed ffmpeg asking the origin for `/dash-init-0.m4s`, the
+    // name its own MPD carries, and getting a 404 because no such file was in
+    // the fixture directory. The MPD, the demuxer and the grab were all correct;
+    // only the muxer's idea of where to put the files was not. Running with
+    // `cwd` at the directory and naming the manifest relatively leaves nothing
+    // for a platform to disagree about.
+    await generate(
+      [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        `testsrc=size=640x360:rate=15:duration=${CLIP_SECONDS}`,
+        "-f",
+        "lavfi",
+        "-i",
+        `sine=frequency=440:sample_rate=44100:duration=${CLIP_SECONDS}`,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-g",
+        "15",
+        "-c:a",
+        "aac",
+        "-f",
+        "dash",
+        "-seg_duration",
+        "2",
+        "-adaptation_sets",
+        "id=0,streams=v id=1,streams=a",
+        // Into the same directory the gated origin serves; the DASH names
+        // (`dash.mpd`, `*.m4s`) cannot collide with the HLS ones.
+        "-init_seg_name",
+        "dash-init-$RepresentationID$.m4s",
+        "-media_seg_name",
+        "dash-chunk-$RepresentationID$-$Number%05d$.m4s",
+        "dash.mpd",
+      ],
+      fixtureDir,
+    );
+
+    // The fixture's own assumption, asserted rather than trusted: whatever the
+    // muxer wrote, the file its MPD names has to be one the origin can serve.
+    // Without this, a muxer that writes elsewhere fails later as an unexplained
+    // `null` from the grab — which is exactly how this cost a CI round.
+    const mpd = await fs.readFile(path.join(fixtureDir, "dash.mpd"), "utf8");
+    const template = /initialization="(?<name>[^"]+)"/u.exec(mpd)?.groups?.["name"];
+    const named = (template ?? "").replaceAll("$RepresentationID$", "0");
+    const present = await fs.readdir(fixtureDir);
+    if (named.length === 0 || !present.includes(named)) {
+      throw new Error(
+        `the generated MPD names "${named}", which the fixture directory does not hold. ` +
+          `It holds: ${present.join(", ")}`,
+      );
+    }
   }, 30_000);
 
   test("returns JPEG bytes, with the context replayed on the init and media segments", async () => {
