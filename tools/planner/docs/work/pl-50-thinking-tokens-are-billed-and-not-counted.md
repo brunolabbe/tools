@@ -20,8 +20,11 @@ writes, on any run, with any key — not because pl-40 is missing a
 measurement, but because the seam it reads from throws the number away before
 pl-40 ever sees it.
 
-**The API reports it.** `@anthropic-ai/sdk@0.125.0`'s
-`resources/beta/messages/messages.d.ts:2899` declares, on `BetaUsage`:
+**The API reports it.** `BetaUsage.output_tokens_details`, declared in
+`@anthropic-ai/sdk` 0.125.0 at `resources/beta/messages/messages.d.ts` line
+2899 (prose, not a `file:line` citation — the package lives in `node_modules`,
+which `scripts/citations.mjs` cannot resolve, the same way it cannot resolve a
+citation into an unmerged sibling branch):
 
 ```ts
 output_tokens_details: BetaOutputTokensDetails | null;
