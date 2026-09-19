@@ -124,6 +124,32 @@ failure as progress.
 unguessable random bytes, never the job id. Job ids appear in logs and URLs; the
 download capability must not be inferable from them.
 
+**Preview images are fetched here, at probe time, and served by token (dl-29).**
+A resolver's `thumbnailUrl` is attacker-influenced, so the browser is never
+pointed at it: the API fetches it through the SSRF-checked fetch, replaying the
+probe's `RequestContext`, and serves the bytes from `/api/thumbnail/:token`. It
+happens in-line, right after the probe, because that is the only moment the
+source's credentials are in hand. It is bounded at 4 s and 512 KB, and every
+failure is simply no preview.
+
+**When the source names no image at all, one frame is grabbed from the stream
+instead (dl-56).** The stream is the one source every successful probe has. One
+ffmpeg invocation (`grabPreviewFrame` in the engine) reads the cheapest
+rendition with video, seeks a tenth in (at most 3 s), and writes one JPEG, at most
+256 px on its longer edge. It goes out through the **ffmpeg egress proxy** with
+TLS verification on, exactly like a download, because the segments and keys a
+manifest names are URLs only that proxy ever vets. It is never attempted after a
+named image failed, never for a live stream, and never retried against another
+rendition. What it costs: one ffmpeg process per probe or job re-probe whose
+source names no image, which is every probe the direct tier answers (it never
+reads an image) — bounded server-wide by `MAX_CONCURRENT_FRAME_GRABS`, its own
+cap, because the probe gate is released before the grab runs. Past that cap a
+probe simply answers with no preview. The grab is bounded at 6 s, including the process-tree kill, and
+at the same 512 KB. Measured through the terminating proxy, a whole probe that
+grabbed took 0.38–0.50 s against a real CDN and under 0.11 s against the
+generated fixture. On HLS it fetches the playlist and the first two segments,
+the same as frame 0 would, on 6- and 10-second segments.
+
 **Fail loudly with typed codes.** Every failure maps to one `ErrorCode` in
 `contract/src/errors.ts`. No layer invents its own strings — that is what makes the UI
 able to say something useful instead of "something went wrong".
@@ -154,6 +180,7 @@ and their defaults.
 | `MAX_CONCURRENT_BROWSERS`     | `2`          | ~300 MB each                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_JOBS_PER_CLIENT`         | `2`          | jobs one client may have running _and_ waiting at once — bounds who holds a slot, where `RATE_LIMIT_JOBS_PER_MINUTE` only bounds how fast one is claimed. Counted in flight, not per minute, so CGNAT and shared offices wait rather than get locked out (`dl-51`). `0` disables it                                                                                                                                                                                                                                                                                                                                |
 | `MAX_QUEUED_JOBS`             | `8`          | jobs allowed to be waiting at once, across every client — bounds the queue itself, which a per-client cap cannot: many client keys, each under its own cap, could otherwise still queue without limit. Past it, a new job is refused rather than accepted to wait up to `JOB_TIMEOUT_MS`. Defaults to `4 × MAX_CONCURRENT_JOBS`. `0` disables it (`dl-51`)                                                                                                                                                                                                                                                         |
+| `MAX_CONCURRENT_FRAME_GRABS`  | `2`          | preview-frame grabs in flight at once, server-wide — its own cap rather than a share of `MAX_CONCURRENT_PROBES`, because the probe gate is released before the grab runs and so never bounded it (measured: 12 grabs against a cap of 8). Defaults to `MAX_CONCURRENT_JOBS`, the other cap on concurrent ffmpegs. Past it the grab is skipped and the probe answers with no preview; there is no queue and no disabled value (`dl-56`)                                                                                                                                                                             |
 | `MAX_PROBES_PER_CLIENT`       | `2`          | the same cap as `MAX_JOBS_PER_CLIENT`, for probes against `MAX_CONCURRENT_PROBES`. `0` disables it (`dl-51`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_FILE_SIZE_MB`            | `4096`       | checked _before_ download, from bitrate × duration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `FILE_RETENTION_HOURS`        | `6`          | GC deadline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |

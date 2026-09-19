@@ -172,7 +172,7 @@ the ones a round happens to touch.
 - **#3 (low) — "the Why describes the fixture rather than the product" is
   false.** The reviewer rendered the wire transient — `status` frame applied,
   `progress` frame not yet — and the card does show "39 MB" beside the "Fetching
-  fresh stream links" hint. `tools/downloader/api/src/jobs/orchestrator.ts:197-200 "Resetting the stored snapshot is not enough on its own"` names that window in its
+  fresh stream links" hint. `tools/downloader/api/src/jobs/orchestrator.ts@20c8fd1:197-200 "Resetting the stored snapshot is not enough on its own"` names that window in its
   own comment. Only the `attempts: 2` beside those bytes is unreachable, and
   nothing in that test reads it. **Corrected in the Log.**
 - **#4 (low) — misclassified fixture shape.** dl-15's gate-3 shape is _a fixture

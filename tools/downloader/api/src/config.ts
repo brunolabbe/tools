@@ -63,6 +63,22 @@ export interface ApiConfig {
    * disables it. Same CGNAT caveat as `maxJobsPerClient`.
    */
   maxProbesPerClient: number;
+  /**
+   * Preview-frame grabs allowed to be in flight at once, across all clients
+   * (dl-56). **Its own cap rather than a share of `maxConcurrentProbes`**,
+   * because the grab runs *after* the probe gate has been released — the probe
+   * is answered as soon as the resolver returns, and the grab is the only work
+   * left. Measured before it existed: twelve clients probing at once produced
+   * twelve concurrent ffmpeg grabs against a `maxConcurrentProbes` of eight.
+   *
+   * Defaults to `maxConcurrentJobs`, the other cap on how many ffmpegs this
+   * service runs at once, because a grab costs what a download stage costs
+   * while it lasts. Past it, the grab is skipped and the probe answers without
+   * a preview, the same as every other way a preview can fail. There is no
+   * queue and no "disabled" value: waiting would hold the probe's own response
+   * for a decorative image, and the cap is the whole point.
+   */
+  maxConcurrentFrameGrabs: number;
   /** Budget for one resolution chain, across every tier it tries. */
   probeTimeoutMs: number;
   /** Ceiling on a single ffmpeg invocation. */
@@ -458,6 +474,9 @@ export function loadApiConfig(
     maxProbesPerClient:
       overrides.maxProbesPerClient ??
       int(env["MAX_PROBES_PER_CLIENT"], API_DEFAULTS.maxProbesPerClient, { min: 0, max: 64 }),
+    maxConcurrentFrameGrabs:
+      overrides.maxConcurrentFrameGrabs ??
+      int(env["MAX_CONCURRENT_FRAME_GRABS"], maxConcurrentJobs, { min: 1, max: 64 }),
     probeTimeoutMs:
       overrides.probeTimeoutMs ?? int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs),
     stageTimeoutMs:

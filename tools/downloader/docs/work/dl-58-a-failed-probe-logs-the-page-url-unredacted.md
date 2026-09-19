@@ -184,7 +184,7 @@ hunt run by the reviewer itself at medium depth, every log call site in
   being enabled and the URL text matching a terminal marker.
 - **high** · the page URL, query string included, reaches the `probe complete`
   line at `info` on a successful browser probe:
-  `tools/downloader/api/src/routes/probe.ts:255 "requestContext: probe.requestContext,"`
+  `tools/downloader/api/src/routes/probe.ts@fb15bc9:255 "requestContext: probe.requestContext,"`
   logs the request context, and `redactRequestContext` keeps `Referer`
   verbatim. Two sources, both measured:
   `tools/downloader/resolvers/src/browser/request-context.ts:65 "??= input.pageUrl;"`

@@ -3,7 +3,7 @@ id: dl-56
 tool: downloader
 title: A probe whose page names no preview image gets one frame grabbed from its chosen stream
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [dl-55]
 difficulty: hard
@@ -180,9 +180,71 @@ Chosen from options, after the table above was measured:
   page) are in the Log.
 - `thumbnails.ts`'s header and `docs/01-ARCHITECTURE.md` describe the frame
   source.
+- **Added 2026-09-18, from the owner's answer to the open decision below.**
+  Grabs are bounded server-wide by a cap of their own, configurable, defaulted
+  and documented in `.env.example` and `docs/01-ARCHITECTURE.md`; past it the
+  grab is skipped rather than queued. A test fails without the cap, and the
+  concurrency script that found the gap reports no more than the cap.
 - `npm run check` and `npm test -- --project downloader` pass. This changes
   what the container runs at probe time, so say that the downloader's e2e and
   image gates in CI are the proof a local run does not supply.
+
+## Review
+
+**Gate B: CONCERNS** — 2026-09-17 · `origin/main...HEAD`, reviewed at `4c13032` · defect hunt run directly by the reviewer (Sonnet), medium depth, scoped to everything but Gate A's egress/protocol/injection/kill-cleanup track (agent `ad4658d782570769e`, reported separately, PASS)
+
+| Done when                                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A probe whose source names no image and whose stream has video returns a `thumbnailPath` that serves an `image/jpeg` frame  | `engine/test/preview-frame.test.ts:193 "returns JPEG bytes, inside the timeout, with the context replayed on every request"` ✓, `api/test/thumbnails.test.ts:486 "one grab, from the cheapest rendition with video, stored as image/jpeg"` ✓                                                                                                                                                                                                                                                                                                                                                                       |
+| The grab is not attempted when an image URL exists, when that image fails, or for a live probe                              | `api/test/thumbnails.test.ts:502 "an image URL that loads is used, and nothing is grabbed"` ✓, `:513 "an image URL that fails to fetch stays no preview, and nothing is grabbed"` ✓, `:526 "a live probe grabs nothing"` ✓                                                                                                                                                                                                                                                                                                                                                                                         |
+| The grab runs through the ffmpeg egress proxy with the probe's `RequestContext` replayed                                    | `engine/test/preview-frame.test.ts:404 "the context's headers are input options, ahead of the input"` ✓, `api/test/frame-grab-egress.test.ts:111 "the ffmpeg egress proxy and its root, never the tiers' proxy, with the context replayed"` ✓ — reproduced by mutation: reverting `engine/src/ffmpeg/preview-frame.ts:143 "requestContext: options.requestContext,"` to `undefined` turns 4 engine tests red; reverting `downloader/api/src/server.ts:408 "createFrameGrabber({"`'s `proxyUrl` argument to `""` turns the wiring test and the blocked-address test red, with 2 requests reaching `/localhost/seg*` |
+| A grab that times out, fails, or exceeds the cap costs the probe nothing but its bounded time, and leaves no process behind | **verified, Linux-gating-leg only** — `engine/test/preview-frame.test.ts:286 "a stream that trickles is cut off at the timeout, and its ffmpeg is gone when the grab returns"` is `skipIf` on non-Linux; explicitly skipped, not silently passing, on the informational `windows-latest` leg, which does not gate the merge                                                                                                                                                                                                                                                                                        |
+| The grab's timeout constant and its measured costs (fixture and one real page) are in the Log                               | present; "one real page" was substituted with a public CDN title, disclosed in the Log as a consequence of the ticket's own site-secrecy rule — reasonable, not a defect                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `thumbnails.ts`'s header and `docs/01-ARCHITECTURE.md` describe the frame source                                            | ✓ — every claim in the two new architecture paragraphs checked against code and confirmed accurate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `npm run check` and `npm test -- --project downloader` pass; e2e/image gates are CI's job                                   | reproduced — `npm run check` exit 0; `npm test -- --project downloader` → 87 files, 1458 tests, all pass; e2e and the image gate correctly left `unproven (gate)`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
+- **med · open decision, not resolved here** — `api/src/routes/probe.ts:183 "const release = context.probeGate.tryAcquire();"` releases the server-wide gate before `:233 "const captured = await captureThumbnail({"` runs. Reproduced twice independently: I measured 12 concurrent real ffmpeg grabs against a configured `maxConcurrentProbes` of 8 (12 distinct clients); the builder independently reproduced the same mechanism with `maxConcurrentProbes: 2` and 5 clients, getting 5 concurrent grabs, none left afterwards. The per-client cap bounds one client; nothing bounds the server. This goes to the orchestrator as an open decision with the options the builder is presenting alongside mine.
+- **low, settled** — the Log's `-ss` placement table's 1-second-segment row (input-side cheaper by 1.25x) did not reproduce on my original fixture (640x360@15fps, g=15, video-only: 1.00x, no difference). Re-running with the builder's exact fixture (1280x720@25fps, g=25, both with and without audio) reproduced their numbers exactly (1.245x and 1.255x). Settled: the effect is fixture-dependent (resolution/frame-rate/GOP), not audio-dependent as I'd first guessed; the output-side choice is unaffected and both reviewers agree with it. The Log and the `preview-frame.ts:159 "It lost only on 1 s segments"` comment now say so.
+- **verified** — the re-probe's grab is used, not wasted: `api/src/jobs/orchestrator.ts:265 "store.patch(jobId, { variant, variantId: variant.id, thumbnailPath }"` feeds `#persist`, proven by `api/test/thumbnails.test.ts:632 "a job's re-probe takes its preview from the grab too"`. The doubled ffmpeg cost per direct-tier job is real but not new in shape — it is dl-44's existing "always re-probe" cost, now paid by a heavier process. Folded into the open decision above, not counted separately.
+- **verified** — output-side seek past the real stream's end (probe-reported duration longer than the actual media) fails cleanly: ffmpeg exits 0 in ~90ms, writes nothing, `grabPreviewFrame` returns `null`.
+- **verified** — citations: `node scripts/citations-gate.mjs --against origin/main` → 84 enforced, 0 failing. All 5 pinned tickets (dl-18, dl-32, dl-45, dl-57, dl-60) diffed programmatically against `origin/main`: only the `@20c8fd1` pin and table repadding changed, never verdict or anchor text; dl-60's 34 lines are 17 pin insertions.
+- **verified** — `image-closure`: no new workspace dependency (exports added to an already-depended-upon `@downloader/engine`); `npx vitest run packages/core/test/image-closure.test.ts` → 11 pass.
+- **findings** — defect hunt run directly (medium depth, scope excluding Gate A's track) returned 2 items; both carried above, both resolved through reproduction with the builder. 0 dropped.
+- NFR: security — out of scope (Gate A, PASS) · performance — the open decision above is the only cost concern found · reliability — "no process left behind," "fails cleanly past EOF," and "the two cap layers are independent" each independently reproduced ✓ · maintainability — architecture doc and header comment checked accurate against code ✓.
+
+_Transcribed by the builder (Opus 5) from the reviewer's message. Two changes, both so the citation check can resolve the text, and neither changes a verdict. The `server.ts` citation gained a `downloader/` prefix, because the shorter path also matches the planner's file. The seek-comment citation in `preview-frame.ts` gained its quoted anchor. Nothing was dropped. One more coordinate moved afterwards: the `server.ts` citation, and the five into `thumbnails.test.ts`, moved when the frame-grab cap was built above them, so each is repointed to the line its own quoted anchor is on now rather than pinned to a branch commit that will not survive the squash. No anchor text changed. `npm run format` reflowed the table padding._
+
+**Gate A: PASS** — 2026-09-17 · `origin/main...HEAD`, reviewed at `cff1440` (redirect-hop and split-DASH coverage confirmed again at `4c13032`) · defect hunt run directly by the reviewer (Sonnet), scoped to the frame grab's egress proxy, protocol whitelist, argument construction, header redaction, kill/cleanup and output-size checks (agent `a34392b2236d95ba0` covered everything else, reported separately, CONCERNS)
+
+| Done when                                                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The grab runs through the ffmpeg egress proxy with the probe's `RequestContext` replayed                                    | `downloader/api/src/server.ts:408 "createFrameGrabber({"` wires `proxyUrl: ffmpegEgress.proxyUrl` (never `tierProxy`), reproduced by mutation: reverting that argument to `""` turns `api/test/frame-grab-egress.test.ts:317 "segments on a blocked address: no preview, and not one request reaches it"` red — 2 requests reach `/localhost/seg*` — then restored; positive control at `:306 "segments on an allowed address: the grab produces a frame (the control)"` ✓ |
+| A grab that times out, fails, or exceeds the cap costs the probe nothing but its bounded time, and leaves no process behind | `engine/test/preview-frame.test.ts:286 "is cut off at the timeout, and its ffmpeg is gone when the grab returns"` ✓ (Linux-gating leg); extended myself, not in the shipped suite: a connection that accepts but sends nothing (killed at the bound, no orphan ffmpeg, no leftover temp dir) and a genuine mid-flight `abort()` fired 500 ms into a live run (rejects `JOB_CANCELED` at ~533 ms, clean) — both reproduced against real ffmpeg, not committed               |
+
+- **Egress, enumerated, not sampled.** Six sub-resource hop types, each refused when the target is `localhost` (blocked by name, same socket as the allowed `127.0.0.1` literal) and reached when it's the allowed literal: manifest→segment (`api/test/frame-grab-egress.test.ts:306 "segments on an allowed address: the grab produces a frame (the control)"` and `:317 "segments on a blocked address: no preview, and not one request reaches it"`, the shipped control/negative pair) ✓; a 302 redirect on a segment to a blocked host, now shipped at `:326 "a segment that redirects to a blocked address: the redirect is refused too"` ✓; `#EXT-X-KEY`, `#EXT-X-MAP` and a DASH `BaseURL` on a blocked host — reproduced by me against real fixtures (AES-128 HLS, fMP4 HLS, a hand-written MPD), not committed as tests: same `engine/src/ffmpeg/args.ts`/`engine/src/ffmpeg/runner.ts` plumbing the shipped tests already prove. Split DASH itself (not a blocked-host case, but the first thing to exercise `protocol: "dash"` end to end) is now shipped at `engine/test/preview-frame.test.ts:536 "returns JPEG bytes, with the context replayed on the init and media segments"` ✓.
+- **verified** · protocol escapes against real ffmpeg 6.1.1, not in the shipped suite: `file://` as a segment URI is refused by `-protocol_whitelist`, which omits it (`engine/src/ffmpeg/args.ts:62 "export const REMOTE_PROTOCOL_WHITELIST"`, comment at `:52 "is deliberately absent"`); `tcp://`, `udp://` and `concat:file://` as segment URIs are refused by ffmpeg's own HLS demuxer before it even attempts to open a socket, even when explicitly added to the whitelist to isolate the mechanism — defense in depth beyond what this code sets. `subfile:`/`crypto+file:` not independently run; inferred from the same demuxer-level gate, not reproduced.
+- **verified** · argument injection: `url` is the single argv element immediately after `-i` (`engine/test/preview-frame.test.ts:359 "args[input + 1]).toBe("` asserts the position), `runFfmpeg` spawns an array with `engine/src/ffmpeg/runner.ts:140 "shell: false,"`, and `packages/core/test/spawn-safety.test.ts` still passes (11/11, reran). Reproduced directly with real ffmpeg: a URL starting with `-` (`-rtbufsize 1`) is opened as a filename, never parsed as a flag.
+- **verified** · header replay: CRLF is stripped before the `-headers` blob by shared, unmodified code — `engine/src/text.ts:18 "export function stripControlChars(value: string): string {"`, `:22 "isControlCodePoint(code)) continue;"` — already asserted by `engine/test/ffmpeg-args.test.ts` (a `\r\nX-Injected:` value collapses to one line). Reproduced live: a failing grab against a URL carrying a query-string token shows `[redacted]` in every debug line and the failure's stderr detail (`engine/src/ffmpeg/runner.ts:70 "export function redactUrlsInText(text: string): string {"`); grepped the full output, the literal secret never appears.
+- **verified** · output checks: the previous check raced `fs.stat` and `fs.readFile` on the same path — two separate lookups, so what was measured needn't be what was read (CodeQL's finding, and a real race, not just noise). Now `engine/src/ffmpeg/preview-frame.ts:245 "const handle = await fs.open(destPath,"` opens `destPath` once; `:247 "await handle.stat();"` and `:248 "if (stat.size > options.maxOutputBytes) {"` measure and gate that same open file description before any bytes are read — an oversized file is still rejected without a buffer ever being allocated. `:260 "const { bytesRead } = await handle.read(buffer, 0, stat.size, 0);"` then reads exactly the bytes just measured, through the same handle, and `:263 "await handle.close();"` releases it in a `finally` on every path. I reproduced the two-cap-layer independence myself on this code: disabling `runFfmpeg`'s progress-stream cap alone leaves the shipped over-cap test green (this handle check alone catches it); disabling both turns it red. The shipped over-cap test passes unchanged. _(Amended by the reviewer at `cf86ecb`, replacing the bullet written at `cff1440`, whose cited `readFile` line the fix removed.)_
+- **dropped** — none.
+- **findings** — defect hunt (scoped to this track) returned 0; nothing to carry.
+- NFR: security ✓ (this is the security gate) · performance — out of scope (Gate B) · reliability ✓ (kill/cleanup above) · maintainability — out of scope (Gate B).
+
+_Transcribed by the builder (Opus 5) from the reviewer's message. The reviewer wrote the `server.ts` call four lines higher, where it was before the frame-grab cap was built above it, and the trickle test one line lower than it is; both coordinates are repointed here so the check resolves. Nothing else changed, nothing dropped, and no anchor text touched. `npm run format` reflowed the table padding._
+
+**Gate B follow-up: PASS** — 2026-09-18 · `4479b6d...c887152` · narrow re-gate on the frame-grab concurrency cap only, not a full re-sweep
+
+The original Gate B's sole med finding (no server-wide bound on concurrent frame grabs) is closed. The owner chose option (c) — a server-wide cap on grabs alone — through `AskUserQuestion`. Verified independently:
+
+- `api/test/thumbnails.test.ts:721 "past the cap the grab is skipped rather than queued, and the inner grabber never runs"` ✓, `:750 "a slot is released even when the grab throws"` ✓, `:768 "concurrent probes past the cap answer without a preview, and none waits for a slot"` ✓ — all reproduced passing (34/34 in the file).
+- **Reproduced by mutation**: making `api/src/thumbnails.ts:438 "export function limitFrameGrabs("` pass its grabber straight through (skip the gate) turns exactly the 1st and 3rd tests above red; unwrapping the grabber in `downloader/api/src/server.ts:405 "const frameGrabGate = new ConcurrencyGate(config.maxConcurrentFrameGrabs);"` (bypassing `limitFrameGrabs`) turns exactly the 3rd red. Both restored and confirmed clean.
+- **Re-ran the concurrency script that found the original finding, unchanged**: peak concurrent real ffmpeg grabs is now bounded to the configured `maxConcurrentFrameGrabs` (2 by default, matching `maxConcurrentJobs`) regardless of how many distinct clients probe at once (tested at 12); raising the cap to 8 raises the observed peak to 8. The gate is config-driven, not hardcoded, and every simulated client still receives a 200 — the cap only removes the preview, never the answer.
+- **Skip-not-queue confirmed as the correct, non-discretionary choice**: `ConcurrencyGate` (`packages/core/src/rate-limit.ts:211 "A counting semaphore that refuses rather than queues."`) is the same primitive every other concurrency cap in this codebase already uses; its own documented policy is refuse-immediately. Building a queue here would have meant new machinery for a decorative image rather than reuse of the repo's standard answer. This did not need to go to the owner.
+- `npm run check` exit 0; `npm test -- --project downloader` → 87 files, 1461 tests, all pass (self-run, matches the build entry). Citations: `citations.mjs --section Review --require-anchors --require-distinct-anchors` → 32 verified, exit 0; `citations-gate.mjs --against origin/main` → 85 enforced, 0 failing (both self-run, matching).
+
+No findings remain open from the original Gate B review. The earlier low finding is unaffected by this round and stays settled as recorded above.
+
+_Transcribed by the builder (Opus 5) from the reviewer's message. Five coordinates were two or one lines off against the tip — the three new tests, the `server.ts` gate line and the `rate-limit.ts` sentence — and each is repointed to the line its own quoted anchor is on, so the check resolves. No anchor text, no verdict and no other word changed, and nothing was dropped. `npm run format` may reflow the spacing._
 
 ## Log
 
@@ -213,3 +275,528 @@ this ticket it confirmed the code facts: `captureThumbnail`'s early return, the
 thumbnail constants, `runFfmpeg`'s options, `PROGRESS_ARGS`, `ffmpegEgress` and
 the `probeTimeoutMs` default. It also confirmed that `depends_on: [dl-55]` is
 justified by the text. It raised nothing against this ticket's Build.
+
+## 2026-09-17 — built
+
+Branch `dl-56-grab-a-preview-frame` off `origin/main` at `20c8fd1`. dl-55 is in
+that base (merged as `1806525`). Nothing here touches
+`resolvers/src/browser/provoke.ts`, so there is no overlap with dl-61.
+
+**What landed, by Build step.**
+
+1. **The grab**, `engine/src/ffmpeg/preview-frame.ts`, exported from the engine.
+   `grabPreviewFrame` returns JPEG bytes or `null`. It runs one `runFfmpeg` with
+   `buildNetworkInputArgs` (the `RequestContext`, `tlsVerify` and `tlsCaFile`
+   replayed, `reconnect` off), `-map 0:v:0 -an -sn -dn -frames:v 1`, a scale to
+   at most 256 px on the longer edge (never up), and `-f mjpeg` into a fresh
+   `preview-<uuid>/` directory under the storage `tmp/` root. That directory is
+   removed in a `finally`. `PROGRESS_ARGS` stay in, because `runFfmpeg` enforces
+   `maxOutputBytes` off the progress stream. The file size is checked again after
+   exit, and the bytes must start `FF D8`. `TIMEOUT`, `SIZE_LIMIT_EXCEEDED`,
+   `DOWNLOAD_FAILED` and `TLS_VERIFICATION_FAILED` return `null` at `debug`.
+   `JOB_CANCELED` and a binary that will not start are thrown, since neither is a
+   fact about the stream. `choosePreviewVariant` picks the lowest declared
+   `bitrateBps` among variants with video. With no bitrates it keeps the probe's
+   order (the first with video). It returns one variant and never retries another.
+2. **The fallback**, `api/src/thumbnails.ts`. `captureThumbnail` takes optional
+   `grabFrame` and `signal`. With no `bestEffort` URL it calls `captureFrame`,
+   which returns `null` for a live probe or no video variant. Otherwise it calls
+   the grab and holds the answer to `image/jpeg`, a JPEG signature and
+   `MAX_THUMBNAIL_BYTES`, then `store.put`s it. `CapturedThumbnail` gained a
+   log-only `source: "page" | "frame"`. `createFrameGrabber` is the production
+   grabber. The header now says where images come from and why this is not
+   dl-29's "much larger feature".
+3. **Wiring.** `server.ts` builds `grabFrame` once, after the engine, from
+   `ffmpegEgress.proxyUrl`, `ffmpegEgress.tlsCaFile`,
+   `!config.ffmpegAllowUnverifiedTls`, `engine.config.ffmpegPath` and
+   `engine.storage.tmpRoot`. It goes on `AppContext.grabFrame` and
+   `OrchestratorOptions.grabFrame`. `CreateAppOptions.grabFrame` overrides it for
+   tests. `routes/probe.ts` passes it with the request's abort signal and logs
+   `previewSource`. `jobs/orchestrator.ts` passes it with the job's signal.
+4. **The budget.** `FRAME_GRAB_TIMEOUT_MS = 6_000`, beside
+   `THUMBNAIL_FETCH_TIMEOUT_MS`. Its comment states the relationship to
+   `probeTimeoutMs` and that it never stacks with the image fetch.
+5. **Tests.** See the verification section below.
+6. **Docs.** `docs/01-ARCHITECTURE.md` gains two "Key decisions" paragraphs:
+   preview images (dl-29) and the frame grab (dl-56), with its cost.
+
+**What the brief had wrong, or did not know.**
+
+- **"Use an input-side `-ss`" is the more expensive placement here.** The Trap
+  said to measure first, so I did, and the result reversed the Build line. The
+  HLS demuxer fetches the first two segments while it probes streams. An
+  input-side seek then reopens the segment that holds the seek point, and it
+  fetches that segment again. `-ss` is output-side. The measurement used
+  generated `libx264` ladders on loopback. The seek was `min(3 s, 10%)`, and
+  "bytes" means bytes the origin served:
+
+  | Ladder                     | output-side (built) | input-side   | frame 0   |
+  | -------------------------- | ------------------- | ------------ | --------- |
+  | 6 s clip, 2 s segs (0.6 s) | 138,753             | 277,309 (2x) | 138,753   |
+  | 60 s, 1 s segs             | 343,013             | **275,521**  | 138,281   |
+  | 60 s, 2 s segs             | 410,981             | 547,845      | 274,117   |
+  | 120 s, 6 s segs            | 819,977             | 1,639,281    | 819,977   |
+  | 60 s, 10 s segs            | 1,364,416           | 2,728,544    | 1,364,416 |
+
+  Output-side matches frame 0 on 6- and 10-second segments. It loses only on
+  1-second segments, by 1.25x. Script:
+  `scratchpad/dl-56/measure.mjs`, not committed. These ladders were 25 fps
+  with `-g 25`, 320x240 for the 6 s clip and 1280x720 for the rest, with AAC
+  audio. **The 1-second row depends on the fixture.** Gate B used a video-only
+  fixture and found input-side and output-side fetched identical bytes (1.00x).
+  I re-ran my fixture without audio and still got 1.25x (295,261 against
+  235,289). So the loss depends on how the fixture is encoded, not on audio.
+  Across both fixtures, output-side never cost more than 1.25x, and the choice
+  stands.
+
+- **`01-ARCHITECTURE.md` did not describe preview images anywhere**, so "wherever
+  it describes preview images" had nothing to edit. The dl-29 paragraph is new,
+  and the dl-56 paragraph goes beside it.
+- **"Most pages do name an image" does not hold for the direct tier.** No code
+  in the direct resolver sets `thumbnailUrl`. Only the browser tier (`og:image`)
+  and yt-dlp (`thumbnail`) do. So **every probe the direct tier answers now
+  grabs**, and so does every job re-probe of one. Across the e2e suites, run
+  locally with `LOG_LEVEL` temporarily set to `info` (not committed):
+  `e2e:downloader` had 7 passed and 1 `probe complete` line, with
+  `previewSource: "frame"`. `e2e:downloader:sniffer` had 1 passed and 1
+  `probe complete`, with `previewSource: "page"`. Each suite also runs one job.
+  Its re-probe logs at `debug` and was not counted. By the code path, the direct
+  suite's job grabs a second time and the sniffer's does not. So the fallback
+  fired on 1 of the 2 logged probes, and by inference on 2 of the 4 captures.
+- **The test harness now defaults `grabFrame` to `async () => null`**
+  (`api/test/helpers.ts`). The stub engine's ffmpeg is `process.execPath`, and
+  `probeResult()` names no image. Without that default, most harness probes would
+  have spawned node with ffmpeg arguments.
+
+**The timeout constant, measured before it was chosen.**
+
+- **Fixture:** under 0.11 s for a whole `POST /api/probe` that grabbed, through
+  the real wiring with the terminating proxy (5 runs, 78–108 ms). The grab alone,
+  directly, took 65–335 ms across the ladders above.
+- **Real stream, not the reproduction page.** The ticket keeps that page out of
+  the repo and this dispatch was never told it, so it was **not** measured. The
+  real measurement is Mux's public HLS test title (`test-streams.mux.dev`,
+  634 s, served from a CDN). Directly: 0.23–0.27 s on the 240p rung, which the
+  picker takes, and 0.44–0.49 s on 1080p (5 runs each). Through `createApp`, with
+  a terminating ffmpeg egress proxy, a whole probe that grabbed took 0.38–0.50 s
+  (5 runs). The frame decoded and looked right (the title card, 256x147).
+- **6 s** is twelve times the slowest of those. It never stacks with
+  `THUMBNAIL_FETCH_TIMEOUT_MS`, because one probe runs one or the other.
+  Scripts: `measure-real.mjs` and `measure-api.mjs`, not committed.
+
+**Verification.**
+
+- `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`: 14 tests,
+  all pass. The fixture is a gated HLS origin that 403s any request without the
+  Referer, Cookie and UA. The tests cover JPEG bytes inside the timeout with the
+  context on every request, `.ts` included; the 640x360 frame scaled to 256x144;
+  no context giving `null` with `DOWNLOAD_FAILED`; `maxOutputBytes: 100` giving
+  `null`; and a canceled caller throwing `JOB_CANCELED`. They also cover the
+  argv: seek placement and cap, `-tls_verify 1` and `-ca_file`, headers before
+  `-i`, one input only. Four tests cover `choosePreviewVariant`.
+  **The bound**: segments trickle one byte per 50 ms, and `timeoutMs` is 2 s. The
+  test waits 750 ms and finds the ffmpeg process by a UUID marker in its argv,
+  read from `/proc`. That is the positive control. It then asserts `null`,
+  `TIMEOUT`, 2000 ms ≤ elapsed < 6000 ms, no process with the marker, and no
+  `preview-*` directory left. It is Linux-only (`skipIf`), because it reads
+  `/proc`.
+- `npx vitest run tools/downloader/api/test/thumbnails.test.ts`: 31 tests
+  (21 before, 10 new), all pass. The new ones: one grab from the cheapest video
+  rung, stored as `image/jpeg`; no grab when the image loads; no grab when the
+  image 404s; no grab for a live probe; no grab without video; `null`, a throw, a
+  non-JPEG or an oversized answer is no preview; served by
+  `/api/thumbnail/:token` as `image/jpeg`; a failing grab's response equals
+  `probeForClient(withThumbnailPath(probe, null))`; a job's re-probe gets its
+  path from the grab; `previewSource` is `frame` / `null` / `page`.
+- `npx vitest run tools/downloader/api/test/frame-grab-egress.test.ts`: 3 tests,
+  all pass. A stand-in ffmpeg records its env and argv through the real
+  `createApp`, with interception on. `http_proxy` equals `ffmpegProxyUrl`, which
+  differs from `egressProxyUrl`. `-ca_file` equals the engine's `tlsCaFile`. The
+  headers carry the cookie. With a real ffmpeg, a manifest on `127.0.0.1` whose
+  segments are on `localhost` (same socket, not exempt) gives no preview and
+  **zero requests** under `/localhost/`. The same manifest with its segments on
+  `127.0.0.1` gives a JPEG served as `image/jpeg`.
+- **Each proof turned red on its own, with every edit reverted afterwards** from
+  a saved copy, then compared:
+  - Omitting `requestContext` from the args turned 4 engine tests red.
+  - Passing `timeoutMs: undefined` to `runFfmpeg` made the trickle test time out
+    at 30 s.
+  - Removing **both** byte-cap layers turned the cap test red. Removing either
+    layer alone left it green, because the two layers are independent.
+  - Making the `isLive` check a no-op turned the live test red.
+  - Unwiring `grabFrame` in `routes/probe.ts` and `jobs/orchestrator.ts` turned
+    the 4 route tests red.
+  - Grabbing after a 404 turned the fails-to-fetch test red.
+  - In `server.ts`, `proxyUrl: tierProxy.url` turned only the wiring test red.
+    `proxyUrl: ""` turned the wiring test and the blocked-address test red, with
+    2 requests to `/localhost/seg*`.
+  - `pgrep -a ffmpeg` afterwards: none left.
+- `npm run check`: exit 0. `npm test -- --project downloader`: 87 files, 1456
+  tests, all pass. `npx vitest run packages/core/test/spawn-safety.test.ts
+packages/core/test/image-closure.test.ts`: 11 pass.
+  `npm run e2e:downloader` (7 passed) and `npm run e2e:downloader:sniffer`
+  (1 passed) both ran locally, with the new code.
+- **Citations.** This branch moves lines in `orchestrator.ts`, `server.ts`,
+  `routes/probe.ts` and `thumbnails.ts`. Before the fix,
+  `node scripts/citations-gate.mjs --against origin/main` failed 5 records:
+  dl-18, dl-32, dl-45, dl-57 and dl-60. Each moved citation is now pinned to
+  `@20c8fd1`, the base these lines were true of and a commit on `main`. After the
+  pins the gate reports 84 enforced, 0 failing, exit 0.
+
+**Not proven here, and what does prove it.** The container was not built. This
+changes what the image runs at probe time: an ffmpeg process per probe whose
+source names no image, reading `tmp/` under `STORAGE_DIR`. The downloader's
+image gate in CI is the proof of that. The e2e suites ran locally, and CI's run
+remains the one of record.
+
+**Fold-in: none.** The closest candidate is making the image fetch honour the
+caller's abort signal, now that `captureThumbnail` receives one. No ticket
+specifies that, and it would change a tested path's behaviour, so it was not
+folded in.
+
+**Left for the orchestrator, not settled here — answered on 2026-09-17, and
+built in the entry below.** `routes/probe.ts` releases the
+server-wide `probeGate` straight after `registry.resolve`, before
+`captureThumbnail`. The per-client probe slot is held through the capture. So
+concurrent grabs are bounded per client, and each lasts at most 6 s, but nothing
+bounds them server-wide. The image fetch always had that shape. A grab is an
+ffmpeg process, which is heavier. It is reported as an open decision.
+
+## 2026-09-17 — gate findings answered
+
+Two reviewers gated `cff1440`. Gate A (agent `ad4658d782570769e`) covered
+security, egress, injection and kill/cleanup, and passed it. Gate B (agent
+`a34392b2236d95ba0`) covered the rest and returned CONCERNS: one med open
+decision and one low.
+
+- **Gate B med, the server-wide gate does not bound grabs: reproduced.**
+  `scratchpad/dl-56/measure-concurrency.mjs` (not committed) drives
+  `createApp` and the real grabber with `maxConcurrentProbes: 2`, against a
+  no-image fixture whose segments trickle. Five distinct client addresses each
+  probed once, concurrently. All five answered 200, the peak was **5**
+  concurrent ffmpeg grab processes (counted from `/proc`), and 0 were left
+  afterwards. That agrees with Gate B's 12 against a gate of 8. Not changed
+  here: it is the open decision already named at the end of the build entry.
+- **Gate B low, the 1-second `-ss` row: partly contested.** My number reproduces
+  on my fixture both with and without audio. Gate B's fixture gives 1.00x. The
+  row is now marked fixture-dependent in the build entry and in the
+  `preview-frame.ts` comment. The choice of output-side seek is unchanged, and
+  both reviewers agree with it.
+- **Gate A's suggested tests: two added, since neither hop was covered.**
+  - `frame-grab-egress.test.ts`, "a segment that redirects to a blocked
+    address: the redirect is refused too". Segments on the allowed address
+    302 to `localhost`. The first hop is served, nothing under `/localhost/` is
+    requested, and no preview results. Red with the grabber's `proxyUrl: ""`
+    (2 requests reached `/localhost/seg*`), then restored.
+  - `preview-frame.test.ts`, "grabPreviewFrame against a generated split-DASH
+    stream". ffmpeg generates DASH with separate video and audio adaptation
+    sets behind the header gate. The grab returns a JPEG, and the init and media
+    segments carry the Referer. Red with `requestContext` dropped from the args,
+    then restored. Until now nothing ran `protocol: "dash"` end to end.
+  - Gate A's `#EXT-X-KEY`, `#EXT-X-MAP` and blocked-DASH-`BaseURL` runs were
+    **not** turned into tests. They go through the same
+    `buildNetworkInputArgs`, `runFfmpeg` and egress plumbing the redirect and
+    blocked-segment tests prove, and their fixtures cost more than their
+    coverage adds.
+- **A flake in my own test, found while re-running the gates.** One full
+  `npm test -- --project downloader` run failed the trickle test with
+  `expected 1112 to be greater than or equal to 2000`. In that same run the
+  `TIMEOUT` assertion just before it passed. The timer is a 2000 ms
+  `setTimeout` started after `startedAt`, so it cannot have fired at 1112 ms.
+  I read this as the wall clock stepping, which WSL2 is known to do. That is
+  inferred, not measured. Both elapsed-time tests now use `performance.now()`,
+  which is monotonic. After that change, three isolated runs of
+  `preview-frame.test.ts` gave 15/15 each. The full suite is below.
+  Full suite after these changes: `npm run check` exit 0, and
+  `npm test -- --project downloader` 87 files, 1458 tests, all pass.
+
+## 2026-09-18 — the open decision, answered and built
+
+**The owner chose a server-wide cap on grabs alone**, through
+`AskUserQuestion` in the orchestrator's session on 2026-09-17, from the three
+options this branch and Gate B put up. **It overrode my own recommendation**,
+which was to leave the gap and file a ticket to measure it under load; it
+matched Gate B's and the orchestrator's inclination. The reasoning given to the
+owner: a grab is bounded at 6 s and nothing waits on it, so a cap of its own
+costs the image-fetch path nothing, where holding `probeGate` through the
+capture would make every probe hold a slot for a decorative image.
+
+**What it cost, and what it bought.**
+
+- `maxConcurrentFrameGrabs` in `api/src/config.ts`, from
+  `MAX_CONCURRENT_FRAME_GRABS`, **defaulting to `maxConcurrentJobs`** — the
+  other cap on how many ffmpegs this service runs at once, and 2 out of the
+  box. Minimum 1, maximum 64, and **no value that disables it**: a cap that can
+  be turned off is the state this entry exists to end. Documented in
+  `.env.example` and in `docs/01-ARCHITECTURE.md`'s configuration table.
+- `limitFrameGrabs(grab, gate, logger)` in `api/src/thumbnails.ts` wraps
+  whichever grabber `server.ts` ends up with — an injected one included, so a
+  test exercises the same gate production does. `server.ts` builds one
+  `ConcurrencyGate` and puts it on `AppContext.frameGrabGate`.
+- **Full means no preview, never a wait**, and this is not a choice I made
+  quietly: every other way a preview fails here ends the same way, the probe is
+  answered as soon as the resolver returns, and a queue would hold that answer
+  for a decorative image. A burst past the cap loses previews rather than
+  slowing probes, which is the cost this records.
+
+**Proof.**
+
+- `api/test/thumbnails.test.ts` gains three tests: five concurrent calls
+  against a gate of 2 start the inner grabber exactly twice and answer `null`
+  three times, with nothing waiting; a slot is released when the grab throws;
+  and three concurrent probes through the real route, with
+  `maxConcurrentFrameGrabs: 1`, produce one preview and two probes that answer
+  without one.
+- **Red without the cap, in two mutations, both restored.** Making
+  `limitFrameGrabs` pass its grabber straight through reddens the first and the
+  third. Unwrapping the grabber in `server.ts` alone reddens the third, which
+  is the one that goes through the wiring.
+- **The script that found the gap now reports the cap.**
+  `scratchpad/dl-56/measure-concurrency.mjs`, unchanged from the run in the
+  gate entry: five clients probing a trickling no-image fixture at once, peak
+  concurrent ffmpeg grabs **2** (it was 5), none left afterwards, and all five
+  probes still answered 200. Raising the cap to 8 in the same script puts the
+  peak back to 5, so the script can still see what it saw before.
+- `npm run check` exits 0. `npm test -- --project downloader`: 87 files, 1461
+  tests, all pass (1458 + 3). `node scripts/citations.mjs` on this record's
+  Review section: 15 verified, exit 0. `citations-gate.mjs --against
+origin/main`: 85 enforced, 0 failing.
+- Gate B's Review cites six lines that this entry's code moved — the
+  `server.ts` call and five in `thumbnails.test.ts`. Each is repointed to the
+  line its own anchor text is on now, which the section's disclosure note
+  records; no anchor text and no verdict changed.
+
+## 2026-09-18 — the Windows failure, instrumented; and a TOCTOU in the byte cap
+
+Two things the pull request turned up, both answered by the owner on 2026-09-18
+through `AskUserQuestion` in the orchestrator's session.
+
+### The split-DASH test fails on CI's Windows leg, and nothing said why
+
+`test (windows-latest, informational)` in CI run 35344753896, at `6035bca`:
+`preview-frame.test.ts` ran 15 tests, 1 failed, 1 skipped —
+`grabPreviewFrame against a generated split-DASH stream` with
+`AssertionError: expected null not to be null`. The leg is `continue-on-error`,
+so the workflow still reads green; the PR's check rollup is where it shows.
+
+**What that log establishes.** The other 13 tests passed on Windows, the
+skipped one being the Linux-only trickle test — so the HLS grabs, which spawn
+real ffmpeg and fetch real segments, work there. The fixture's `beforeAll` did
+not throw, so ffmpeg's DASH **muxer** ran and the fixture exists; the failure is
+at grab time. Reading `.github/workflows/ci.yml`: the Linux leg installs the
+distribution ffmpeg and points `FFMPEG_PATH` at it, and Windows has no such
+step, so the two legs run different ffmpeg builds. This is also the only test in
+the repo that makes ffmpeg demux a real `.mpd`, which is why nothing else on any
+branch notices.
+
+**What it does not establish, and I did not guess.** A `null` is the same answer
+whether the win32 `ffmpeg-static` build lacks the DASH demuxer (it is a
+build-time option, needing libxml2, where the muxer is not), or the Windows
+muxer wrote different segment templates and ffmpeg was refused a protocol or
+given a 404. Locally both builds I can reach — the distribution ffmpeg and the
+Linux `ffmpeg-static` — carry `--enable-libxml2` and list the `dash` demuxer,
+and the MPD generated here carries bare relative templates
+(`initialization="dash-init-$RepresentationID$.m4s"`, no `BaseURL`). **I could
+not check the win32 binary**: downloading it was refused by this session's
+tooling twice, and I stopped rather than find another way around.
+
+**So the test now says why, and the leg stays failing rather than skipped.** The
+grab already logs its failure code and ffmpeg's redacted stderr tail at `debug`;
+the test was discarding both. It now records them and puts them, with the
+platform, the ffmpeg path and every URL the fixture origin was asked for, into
+the assertion message. Verified locally by pointing the grab at a missing
+manifest: the message carries `HTTP error 404 Not Found`,
+`Error opening input: Server returned 404 Not Found` and the input URL, each
+already redacted by `runFfmpeg`.
+
+**What the next Windows run will mean**, so the reading is fixed before the
+evidence arrives rather than after:
+
+- `Unknown input format` or a dash-demuxer complaint → the win32
+  `ffmpeg-static` build cannot demux DASH, which is a fact about that binary
+  rather than about this branch's code.
+- A refused protocol, or a requested URL that is an absolute Windows path →
+  the Windows DASH muxer wrote different segment templates, which makes the
+  fixture Linux-shaped and the test the thing to fix.
+- A 404 with bare relative names → something else again, and the requested-URL
+  list in the message is where to start.
+
+Until that run lands, **no conclusion is recorded here**, and the Done-when line
+about DASH stands proven on Linux only.
+
+### CodeQL: a file-system race between the byte cap and the read
+
+GitHub's default code-scanning setup (a different check from this repo's own
+`codeql` job, which passed) raised **"Potential file system race condition,
+High — The file may have changed since it was checked"** against
+`engine/src/ffmpeg/preview-frame.ts`, where `fs.stat(destPath)` gated the cap
+and `fs.readFile(destPath)` then re-opened the same name. Two lookups of a path
+are two chances to get different files, and a cap that measures one and returns
+another is not a cap. The owner chose to fix it here rather than file or dismiss
+it.
+
+**The fix:** open the path once with `fs.open`, `stat()` the handle, and read
+through that same handle, closing in a `finally`. The read is
+`handle.read(buffer, 0, stat.size, 0)` rather than `readFile()`, so it takes
+exactly the bytes that were measured — the cap bounds what reaches memory even
+if something were appending. Behaviour is unchanged: over the cap still logs
+`no preview frame: larger than the cap` with the same fields and returns `null`,
+and a missing file still falls into the same `catch`.
+
+**What it changes while ffmpeg is still writing: nothing, because that cannot
+happen here.** `runFfmpeg` has resolved before this code runs, so the process
+has exited and the file is final. If it somehow were not, the handle read now
+returns at most the measured size, and a short read leaves a truncated file that
+the `FF D8` check refuses — where the old `readFile` would have returned
+whatever length the second lookup found.
+
+**The two cap layers still hold, re-proved after the change.** Disabling
+`runFfmpeg`'s progress-stream cap alone leaves the over-cap test green — the
+handle check catches it. Disabling both turns it red
+(`expected Buffer[...] to be null`). Same result as before the change, which is
+the point.
+
+### Gates
+
+`npm run check` exit 0. `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`
+15 tests. `npm test -- --project downloader` 87 files, 1461 tests.
+
+**The citation gate was red on the commit this entry was written on, and the
+first version of this line said otherwise.** Gate B caught that: at the commit
+carrying the fix, `citations-gate.mjs --against origin/main` reported 85
+enforced, **1 failing** — Gate A's output-checks bullet cited
+`bytes = await fs.readFile(destPath);`, the exact line the fix deletes. A
+citation that cannot be repointed is a verdict to rewrite, not a coordinate to
+edit, so it went back to Gate A, which reproduced the change on its own and sent
+an amended bullet. With that committed the gate reads **85 enforced, 0 failing**,
+and `citations.mjs` on this record reads 41 verified, exit 0. The claim now
+matches the tree it is attached to.
+
+## 2026-09-18 — the Windows run answered it: the fixture, not the grab
+
+CI run 35404674345, at `21b052f`, failed the split-DASH test on
+`windows-latest` and — because of the instrumentation in the entry above — said
+why. Quoted from the assertion message: `"platform": "win32"`, ffmpeg at
+`node_modules\ffmpeg-static\ffmpeg.exe`, `"requested": ["/dash.mpd",
+"/dash-init-0.m4s"]`, and ffmpeg's own `HTTP error 404 Not Found`,
+`[dash] Failed to open an initialization section`,
+`[dash] Error when loading first fragment of playlist`.
+
+**That kills the first hypothesis and confirms the second.** The win32
+`ffmpeg-static` build **does** carry the DASH demuxer: it fetched the MPD,
+parsed it, resolved the initialization template and asked the origin for the
+file. The grab then returned `null` cleanly on an unreachable init segment,
+which is the behaviour it should have. What was wrong is the fixture: the file
+the MPD names was not in the directory the origin serves.
+
+**What the Windows muxer actually did with the files is inferred, not seen.**
+The evidence shows the MPD naming `dash-init-0.m4s` — the same bare template as
+on Linux — and the origin having nothing under that name to serve. It does not
+show the directory listing, so "it wrote them somewhere else" and "it wrote them
+under another name" are both consistent with what CI printed. The repair is
+chosen to survive either.
+
+**The repair, and it is test-only.** The fixture is now generated with `cwd` at
+the served directory and a bare `dash.mpd` as the output name, instead of an
+absolute `<dir>/dash.mpd`. Whatever a platform's muxer does with the manifest's
+directory, the process's own working directory is the directory the origin
+serves, so the segments land where they are read from. Nothing in the product
+changed.
+
+**And the fixture now asserts its own assumption.** After generation the
+`beforeAll` reads the MPD, expands the `initialization` template, and fails
+loudly if that file is not in the directory — naming what was expected and
+listing what is there. That is what turns a future platform difference into a
+sentence instead of another round of `expected null not to be null`, and on
+Windows it will also settle the inference above: the listing says whether the
+files are missing or differently named.
+
+**Proved both ways on Linux, with the edits reverted afterwards.**
+
+- Deleting `dash-init-0.m4s` **before** the guard: `beforeAll` fails with
+  `the generated MPD names "dash-init-0.m4s", which the fixture directory does
+not hold. It holds: dash-chunk-0-00001.m4s, …, dash-init-1.m4s, dash.mpd, …`.
+  So the guard bites, and it prints the evidence the Windows run lacked.
+- Deleting it **after** the guard, so the grab meets the same 404 Windows met:
+  the test fails with `the grab produced no frame`, carrying
+  `"requested": ["/dash-init-0.m4s"]` and ffmpeg's
+  `Failed to open an initialization section` — **the same signature CI printed
+  on Windows**, reproduced locally. So the test still fails for the right
+  reason, and the diagnosis is not just a reading of someone else's log.
+- Unmutated, `preview-frame.test.ts` is 15 tests, all passing.
+
+**What this does not prove.** I cannot run Windows here, so "generating from
+inside the directory fixes the Windows leg" is the most likely repair rather
+than a measured one. The next Windows run is the check, and if it fails again
+the new guard names the directory's contents, which is the one fact this round
+lacked. The Done-when line about DASH remains proven on Linux only until then.
+
+**Also from that run: CodeQL passes.** The handle-based read in the entry above
+cleared the default code-scanning alert on #267.
+
+### Gates
+
+`npm run check` exit 0. `npx vitest run tools/downloader/engine/test/preview-frame.test.ts`
+15 tests. `npm test -- --project downloader` 87 files, 1461 tests.
+`citations-gate.mjs --against origin/main` 85 enforced, 0 failing —
+`citations.mjs` on this record's Review sections reads 41 verified, exit 0.
+
+Getting there took six repointings, all inside `preview-frame.test.ts` and all
+**coordinate-only**: the fixture repair added lines above them, so five moved by
+one line (`:192`, `:285` twice, `:358`, `:403`) and the split-DASH test moved
+from `:508` to `:536`. Every anchor text is unchanged and still unique, no
+verdict was touched, and both gates were told which of their citations moved.
+
+## 2026-09-19 — brought up to date with main, by merge
+
+The rest of the batch merged first — dl-59 (#263), dl-61 (#265), dl-58 (#269)
+and two docs pull requests — and #267 conflicted with `main` at `fb15bc9`.
+**Merged, not rebased**, because the gate records here cite this branch's own
+commits and a rebase would have rewritten every one of them.
+
+**What the merge required: one conflict, resolved by keeping both sides.** In
+`engine/src/index.ts`, dl-58 had widened the runner's export to
+`isTlsVerificationFailure, redactUrlsInText, runFfmpeg`, and this branch adds the
+preview-frame export block directly below the same line. The resolution keeps
+dl-58's line as it landed on `main` and this branch's block after it, unchanged.
+Nothing else conflicted, and no behaviour changed in either direction to make it
+fit.
+
+**What dl-58 changed underneath the grab, checked rather than assumed.**
+
+- `redactUrlsInText` in `engine/src/ffmpeg/runner.ts` is now case-insensitive.
+  The grab's stderr lines already go through it, so they are redacted at least
+  as thoroughly as before; nothing in this branch depended on the old,
+  case-sensitive match.
+- `api/src/logger.ts` now redacts every URL substring in every string field of
+  every line. The grab's `debug` lines and the `previewSource` field on
+  `probe complete` pass through it. `previewSource` is `page`, `frame` or `null`
+  and carries no URL. No test on this branch asserts a logged URL verbatim, so
+  **nothing changed** — the specs below are the measurement, not this sentence.
+- Re-running an already-redacted stderr tail through the logger's pass is
+  idempotent: a URL with its query already stripped has nothing more to lose.
+
+**Specs after the merge.** `npm run check` exit 0. The whole engine project plus
+this branch's two API spec files: 18 files, 227 tests. `npm test -- --project
+downloader`: 88 files, 1489 tests — up from 1461 by what the other three tickets
+added.
+
+**Citations, which the merge moved in both directions.**
+
+- In this record, Gate A's two `runner.ts` citations moved because dl-58 added
+  six comment lines above them: `shell: false,` from `:134` to `:140`, and
+  `redactUrlsInText`'s declaration from `:64` to `:70`. Anchor text and verdict
+  unchanged; coordinate-only, like the repointings before.
+- **In dl-58's own record**, a citation of `routes/probe.ts:255`
+  (`requestContext: probe.requestContext,`) moved to `:262` — because _this_
+  branch added lines above it in the probe route. That is another ticket's
+  merged gate record, so it is **pinned** to `@fb15bc9`, the `main` commit it
+  was true of, rather than repointed into this branch's lines, the same repair
+  this branch made to dl-18, dl-32, dl-45, dl-57 and dl-60 at its start.
+- One false alarm worth recording, because it will recur: run in the middle of
+  the merge, before the resolved file was staged, the gate also failed dl-45
+  with `ambiguous — 3 tracked files match`, listing `engine/src/index.ts` three
+  times. That was the unmerged index's three conflict stages, not a citation
+  problem, and it vanished once the resolution was staged.
+- After all of that: `citations-gate.mjs --against origin/main` 90 enforced,
+  0 failing.

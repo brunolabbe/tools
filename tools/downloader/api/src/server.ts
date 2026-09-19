@@ -44,7 +44,8 @@ import { registerProbeRoute } from "./routes/probe.ts";
 import { registerThumbnailRoute } from "./routes/thumbnail.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
-import { ThumbnailStore } from "./thumbnails.ts";
+import { createFrameGrabber, limitFrameGrabs, ThumbnailStore } from "./thumbnails.ts";
+import type { FrameGrabber } from "./thumbnails.ts";
 import { createTlsInterception } from "./tls-interception.ts";
 import { TlsRejectionLog } from "./tls-rejections.ts";
 import { ROUTES } from "@downloader/contract";
@@ -57,6 +58,11 @@ export interface CreateAppOptions {
   now?: () => Date;
   /** Skips the retention timer. Tests do not want a background sweep running. */
   startGc?: boolean;
+  /**
+   * Injected in tests. Overrides the ffmpeg frame grab built from
+   `ffmpegEgress` (dl-56), which a stub engine has no binary to run.
+   */
+  grabFrame?: FrameGrabber;
 }
 
 export interface App {
@@ -388,6 +394,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     });
   await engine.init();
 
+  // dl-56. **The same `ffmpegEgress` pair the engine was handed above**, for
+  // the same reason: a grab opens every segment and key the manifest names,
+  // none of which the probe's SSRF sweep saw, and this proxy is the only check
+  // that does. Never `tierProxy` directly — with interception on, that is the
+  // wrong proxy for ffmpeg and the wrong root for its `-ca_file`.
+  // dl-56's open decision, answered by the owner on 2026-09-17: grabs get their
+  // own server-wide cap, sized apart from `probeGate`. The probe gate is
+  // released before the capture runs, so it never bounded this.
+  const frameGrabGate = new ConcurrencyGate(config.maxConcurrentFrameGrabs);
+  const grabFrame = limitFrameGrabs(
+    options.grabFrame ??
+      createFrameGrabber({
+        ffmpegPath: engine.config.ffmpegPath,
+        proxyUrl: ffmpegEgress.proxyUrl,
+        ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
+        tlsVerify: !config.ffmpegAllowUnverifiedTls,
+        tmpRoot: engine.storage.tmpRoot,
+        logger,
+      }),
+    frameGrabGate,
+    logger,
+  );
+
   const db = new Database(config.databasePath);
   migrate(db);
   const store = new JobStore(db);
@@ -447,6 +476,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // the source's credentials are in hand to fetch it with. See `thumbnails.ts`.
     thumbnails,
     fetchImpl: guardedFetch,
+    grabFrame,
     now,
   });
 
@@ -468,6 +498,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     probeStages,
     thumbnails,
     guardedFetch,
+    grabFrame,
     orchestrator,
     rateLimits: {
       probe: new RateLimiter({
@@ -492,6 +523,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       }),
     },
     probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
+    frameGrabGate,
     jobClientGate: new PerClientConcurrencyGate(config.maxJobsPerClient),
     probeClientGate: new PerClientConcurrencyGate(config.maxProbesPerClient),
     now,

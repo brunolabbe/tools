@@ -17,21 +17,34 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import nodePath from "node:path";
-import { AppError } from "@downloader/contract";
-import type { ProbeResult } from "@downloader/contract";
+import { AppError, ROUTES } from "@downloader/contract";
+import type { Job, JobResponse, ProbeResponse, ProbeResult } from "@downloader/contract";
 import { Storage } from "@downloader/engine";
 import { afterEach, describe, expect, test } from "vitest";
 import { createGuardedFetch } from "../src/guarded-fetch.ts";
 import { createLogger } from "../src/logger.ts";
+import { probeForClient } from "../src/probe-out.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
+import { ConcurrencyGate } from "@webtools/core/rate-limit";
 import {
   captureThumbnail,
+  limitFrameGrabs,
   persistThumbnail,
   readPersistedThumbnail,
   ThumbnailStore,
+  withThumbnailPath,
 } from "../src/thumbnails.ts";
-import { probeResult } from "./helpers.ts";
+import type { CapturedThumbnail, FrameGrabber, FrameGrabRequest } from "../src/thumbnails.ts";
+import {
+  createHarness,
+  probeResult,
+  SOURCE_URL,
+  StubResolver,
+  variant,
+  waitFor,
+} from "./helpers.ts";
+import type { Harness } from "./helpers.ts";
 
 const logger = createLogger({ level: "silent" });
 
@@ -410,5 +423,383 @@ describe("the copy that goes on disk", () => {
         thumbnail: { contentType: "image/svg+xml", bytes: GIF },
       }),
     ).rejects.toMatchObject({ code: "INTERNAL" });
+  });
+});
+
+/**
+ * dl-56: a frame grabbed from the stream, for a source that names no image.
+ *
+ * The grab is injected here, so these are about *when* it is asked and what
+ * becomes of its answer. That it really runs ffmpeg, with the context replayed
+ * and bounded in time, is `engine/test/preview-frame.test.ts`; that it goes out
+ * through the ffmpeg egress proxy is `frame-grab-egress.test.ts`.
+ */
+
+/** Starts `FF D8 FF`, which is all the fallback checks; decoding is ffmpeg's side. */
+const FRAME = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
+
+function spyGrab(answer: () => Promise<Buffer | null> = async () => FRAME): {
+  grab: FrameGrabber;
+  calls: FrameGrabRequest[];
+} {
+  const calls: FrameGrabRequest[] = [];
+  return {
+    calls,
+    grab: async (request) => {
+      calls.push(request);
+      return await answer();
+    },
+  };
+}
+
+/** A ladder in no particular order, with an audio-only rung cheaper than any video. */
+function ladder(): ProbeResult {
+  return probeResult({
+    variants: [
+      variant({ id: "1080p", bitrateBps: 5_000_000 }),
+      variant({ id: "audio", hasVideo: false, bitrateBps: 64_000 }),
+      variant({ id: "240p", bitrateBps: 300_000 }),
+    ],
+  });
+}
+
+describe("the frame fallback, when the source names no image (dl-56)", () => {
+  async function captureWith(
+    probe: ProbeResult,
+    grab: FrameGrabber,
+    signal?: AbortSignal,
+  ): Promise<{ captured: CapturedThumbnail | null; store: ThumbnailStore }> {
+    const guard = permissiveGuard();
+    const store = new ThumbnailStore();
+    const captured = await captureThumbnail({
+      probe,
+      guard,
+      fetchImpl: createGuardedFetch(guard),
+      store,
+      logger,
+      grabFrame: grab,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    return { captured, store };
+  }
+
+  test("no image URL at all: one grab, from the cheapest rendition with video, stored as image/jpeg", async () => {
+    const { grab, calls } = spyGrab();
+    const probe = ladder();
+    const controller = new AbortController();
+    const { captured, store } = await captureWith(probe, grab, controller.signal);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.variant.id).toBe("240p");
+    expect(calls[0]?.probe).toBe(probe);
+    expect(calls[0]?.signal).toBe(controller.signal);
+
+    expect(captured?.source).toBe("frame");
+    expect(captured?.path).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+    expect(store.get(captured?.token ?? "")).toEqual({ contentType: "image/jpeg", bytes: FRAME });
+  });
+
+  test("an image URL that loads is used, and nothing is grabbed", async () => {
+    fixture = await startFixture(() => ({ contentType: "image/gif" }));
+    const { grab, calls } = spyGrab();
+    const { captured } = await captureWith(
+      { ...ladder(), thumbnailUrl: `${fixture.origin}/og.gif` },
+      grab,
+    );
+    expect(captured?.source).toBe("page");
+    expect(calls).toEqual([]);
+  });
+
+  test("an image URL that fails to fetch stays no preview, and nothing is grabbed", async () => {
+    fixture = await startFixture(() => ({ status: 404, contentType: "text/plain" }));
+    const { grab, calls } = spyGrab();
+    const { captured, store } = await captureWith(
+      { ...ladder(), thumbnailUrl: `${fixture.origin}/gone.jpg` },
+      grab,
+    );
+    expect(fixture.requests.map((request) => request.path)).toEqual(["/gone.jpg"]);
+    expect(captured).toBeNull();
+    expect(calls).toEqual([]);
+    expect(store.size).toBe(0);
+  });
+
+  test("a live probe grabs nothing", async () => {
+    const { grab, calls } = spyGrab();
+    const { captured } = await captureWith({ ...ladder(), isLive: true }, grab);
+    expect(captured).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("a probe with no rendition that has video grabs nothing", async () => {
+    const { grab, calls } = spyGrab();
+    const { captured } = await captureWith(
+      probeResult({ variants: [variant({ id: "audio", hasVideo: false })] }),
+      grab,
+    );
+    expect(captured).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("a grab that answers null, throws, or hands back a non-JPEG or an oversized one is no preview", async () => {
+    const answers: (() => Promise<Buffer | null>)[] = [
+      async () => null,
+      async () => {
+        throw new AppError("TIMEOUT");
+      },
+      async () => {
+        throw new Error("spawn failed");
+      },
+      async () => GIF,
+      async () => Buffer.concat([FRAME, Buffer.alloc(512 * 1024)]),
+    ];
+    for (const answer of answers) {
+      const { grab, calls } = spyGrab(answer);
+      // oxlint-disable-next-line no-await-in-loop
+      const { captured, store } = await captureWith(ladder(), grab);
+      expect(calls).toHaveLength(1);
+      expect(captured).toBeNull();
+      expect(store.size).toBe(0);
+    }
+  });
+
+  describe("through the routes", () => {
+    let harness: Harness | undefined;
+
+    afterEach(async () => {
+      await harness?.dispose();
+      harness = undefined;
+    });
+
+    test("a grabbed frame is served by /api/thumbnail/:token as image/jpeg", async () => {
+      const { grab, calls } = spyGrab();
+      harness = await createHarness({ resolver: new StubResolver(ladder()), grabFrame: grab });
+
+      const body = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as ProbeResponse;
+      expect(calls).toHaveLength(1);
+      expect(body.probe.thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+
+      const served = await harness.app.server.inject({
+        method: "GET",
+        url: body.probe.thumbnailPath ?? "",
+      });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers["content-type"]).toBe("image/jpeg");
+      expect(served.rawPayload.equals(FRAME)).toBe(true);
+    });
+
+    test("a grab that throws or answers null leaves the response exactly as with no preview", async () => {
+      const probe = ladder();
+      const expected = probeForClient(withThumbnailPath(probe, null));
+      const failing: FrameGrabber[] = [
+        async () => null,
+        async () => {
+          throw new AppError("DOWNLOAD_FAILED");
+        },
+      ];
+      for (const grab of failing) {
+        let called = 0;
+        // oxlint-disable-next-line no-await-in-loop
+        harness = await createHarness({
+          resolver: new StubResolver(probe),
+          grabFrame: async (request) => {
+            called += 1;
+            return await grab(request);
+          },
+        });
+        // oxlint-disable-next-line no-await-in-loop
+        const response = await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        });
+        expect(called).toBe(1);
+        expect(response.statusCode).toBe(200);
+        const body = response.json() as ProbeResponse;
+        expect(body).toEqual({ probe: expected, cached: false });
+        expect(body.probe.thumbnailPath).toBeUndefined();
+        // oxlint-disable-next-line no-await-in-loop
+        await harness.dispose();
+        harness = undefined;
+      }
+    });
+
+    test("a job's re-probe takes its preview from the grab too", async () => {
+      const { grab, calls } = spyGrab();
+      harness = await createHarness({ resolver: new StubResolver(ladder()), grabFrame: grab });
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.jobs,
+        payload: { url: SOURCE_URL },
+      });
+      const { id } = (response.json() as JobResponse).job;
+      const finished = await waitFor(
+        () => harness?.app.context.store.get(id) as Job,
+        (job) => job.status === "completed" || job.status === "failed",
+        { label: "job to finish" },
+      );
+      expect(finished.status).toBe("completed");
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      // The job's own signal, so a cancel reaches the grab's ffmpeg.
+      expect(calls.at(-1)?.signal).toBeInstanceOf(AbortSignal);
+      expect(finished.thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+    });
+
+    test("the probe complete line says where the preview came from", async () => {
+      const sources: unknown[] = [];
+      const lineFor = async (probe: ProbeResult, grab: FrameGrabber): Promise<void> => {
+        const raw: string[] = [];
+        harness = await createHarness({
+          logger: createLogger({ level: "info", write: (line) => void raw.push(line) }),
+          resolver: new StubResolver(probe),
+          grabFrame: grab,
+        });
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        });
+        const complete = raw.filter((line) => line.includes('"msg":"probe complete"'));
+        expect(complete).toHaveLength(1);
+        sources.push(
+          (JSON.parse(complete[0] ?? "{}") as { previewSource?: unknown }).previewSource,
+        );
+        await harness.dispose();
+        harness = undefined;
+      };
+
+      await lineFor(ladder(), async () => FRAME);
+      await lineFor(ladder(), async () => null);
+      fixture = await startFixture(() => ({ contentType: "image/gif" }));
+      await lineFor({ ...ladder(), thumbnailUrl: `${fixture.origin}/og.gif` }, async () => FRAME);
+
+      expect(sources).toEqual(["frame", null, "page"]);
+    });
+  });
+});
+
+/**
+ * dl-56's open decision, answered by the owner on 2026-09-17: grabs get their
+ * own server-wide cap. Measured before it existed — twelve clients probing at
+ * once produced twelve concurrent ffmpeg grabs against a `maxConcurrentProbes`
+ * of eight — because `probeGate` is released before the capture runs.
+ */
+describe("the server-wide cap on frame grabs (dl-56)", () => {
+  /** A grab that parks until released, so several can be in flight at once. */
+  function blockingGrab(): {
+    grab: FrameGrabber;
+    started: number;
+    inFlight: () => number;
+    release: () => void;
+  } {
+    let started = 0;
+    let inFlight = 0;
+    const waiters: (() => void)[] = [];
+    return {
+      get started() {
+        return started;
+      },
+      inFlight: () => inFlight,
+      release: () => {
+        for (const resume of waiters.splice(0)) resume();
+      },
+      grab: async () => {
+        started += 1;
+        inFlight += 1;
+        await new Promise<void>((resolve) => waiters.push(resolve));
+        inFlight -= 1;
+        return FRAME;
+      },
+    };
+  }
+
+  test("past the cap the grab is skipped rather than queued, and the inner grabber never runs", async () => {
+    const inner = blockingGrab();
+    const gate = new ConcurrencyGate(2);
+    const limited = limitFrameGrabs(inner.grab, gate, logger);
+    const probe = ladder();
+    const request = {
+      probe,
+      variant: probe.variants[2] as NonNullable<(typeof probe.variants)[0]>,
+    };
+
+    const pending = Array.from({ length: 5 }, async () => await limited(request));
+    // The two that acquired are parked inside the inner grabber; the other
+    // three must already have answered null rather than be waiting for a slot.
+    await waitFor(
+      () => inner.inFlight(),
+      (count) => count === 2,
+      { label: "two grabs in flight" },
+    );
+    expect(gate.inFlight).toBe(2);
+    inner.release();
+    const results = await Promise.all(pending);
+
+    expect(inner.started).toBe(2);
+    expect(results.filter((bytes) => bytes !== null)).toHaveLength(2);
+    expect(results.filter((bytes) => bytes === null)).toHaveLength(3);
+    // Released on the way out, so the next probe is not refused forever.
+    expect(gate.inFlight).toBe(0);
+  });
+
+  test("a slot is released even when the grab throws", async () => {
+    const gate = new ConcurrencyGate(1);
+    const limited = limitFrameGrabs(
+      async () => {
+        throw new AppError("TIMEOUT");
+      },
+      gate,
+      logger,
+    );
+    const probe = ladder();
+    const request = {
+      probe,
+      variant: probe.variants[0] as NonNullable<(typeof probe.variants)[0]>,
+    };
+    await expect(limited(request)).rejects.toMatchObject({ code: "TIMEOUT" });
+    expect(gate.inFlight).toBe(0);
+  });
+
+  test("concurrent probes past the cap answer without a preview, and none waits for a slot", async () => {
+    const inner = blockingGrab();
+    const harness = await createHarness({
+      resolver: new StubResolver(ladder()),
+      grabFrame: inner.grab,
+      config: { maxConcurrentFrameGrabs: 1 },
+    });
+    try {
+      expect(harness.app.context.frameGrabGate.limit).toBe(1);
+      const responses = Array.from({ length: 3 }, async () =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        }),
+      );
+      // Two of the three probes must answer while the first grab is still
+      // parked. Without the cap all three would be inside the grabber.
+      await waitFor(
+        () => inner.inFlight(),
+        (count) => count === 1,
+        { label: "one grab in flight" },
+      );
+      inner.release();
+
+      const bodies = (await Promise.all(responses)).map(
+        (response) => (response.json() as ProbeResponse).probe.thumbnailPath,
+      );
+      expect(inner.started).toBe(1);
+      expect(bodies.filter((path) => path !== undefined)).toHaveLength(1);
+      expect(bodies.filter((path) => path === undefined)).toHaveLength(2);
+      expect(harness.app.context.frameGrabGate.inFlight).toBe(0);
+    } finally {
+      inner.release();
+      await harness.dispose();
+    }
   });
 });
