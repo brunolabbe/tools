@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-root card inside a link</title>
+  </head>
+  <body>
+    <h1>Shadow-root card inside a link</h1>
+    <!-- A related-video card component: its `<video>` lives in an open shadow
+         root, and the component sits inside a light-DOM `<a href>`. The
+         video's own `parentElement` chain ends at the shadow root, so only a
+         link check that steps from the root to its host sees the link. The
+         card is larger than the player, so area alone would pick it (dl-61). -->
+    <a href="/related-card-target.html"><div id="card"></div></a>
+
+    <!-- The real player: light DOM, smaller, started only by `click`. -->
+    <video id="player" width="480" height="270" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var root = document.getElementById("card").attachShadow({ mode: "open" });
+        root.innerHTML = '<video width="800" height="450" muted playsinline></video>';
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("player").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

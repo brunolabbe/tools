@@ -748,3 +748,66 @@ describe("stage narration", () => {
     },
   );
 });
+
+describe("the surface click reaches a player inside an open shadow root (dl-61)", () => {
+  test(
+    "starts a shadow-root player when the page is probed directly",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      // The page's only video is inside an open shadow root and starts only
+      // on `click`: a chooser that sees light-DOM videos alone never clicks.
+      const result = await probe("/shadow-player.html", resolver);
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+
+  test(
+    "starts a shadow-root player inside a genuinely cross-origin frame",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      // The same page, embedded from the secondary origin: the index branch of
+      // `clickChosenVideo`, not the marked-element one.
+      const result = await probe("/cross-origin-shadow.html", resolver);
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+
+  test(
+    "indexes candidates in the locator's own order, so a cross-origin click lands on the chosen one",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      // The shadow host precedes a small light-DOM decoy. A candidate list in
+      // tree order would hand `locator("video").nth()` the player's tree
+      // position, which in the locator's order is the decoy.
+      const result = await probe("/cross-origin-shadow-order.html", resolver);
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+    },
+  );
+
+  test(
+    "never clicks a shadow-root card whose host sits inside a link",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      const result = await probe("/shadow-card.html", resolver);
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).not.toContain("/related-card-target.html");
+    },
+  );
+});
