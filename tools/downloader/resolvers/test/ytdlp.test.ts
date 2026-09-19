@@ -1077,16 +1077,52 @@ describe("a marker inside the request URL's own text (dl-67)", () => {
     ).rejects.toMatchObject({ code: "DRM_PROTECTED" });
   });
 
-  test("masks one encoding variant: a percent-escape yt-dlp decodes before echoing", async () => {
-    // The request URL's path carries the marker only in percent-encoded form
-    // (`d%72m`, decoding to `drm`); the fixture stands in for a backend that
-    // un-escapes the URL before printing it, which `maskRequestUrl` tries via
-    // `decodeURI`. This is the "at least one variant" the ticket's Done-when
-    // asks to be proven, not a claim that every encoding is covered — see
-    // `maskRequestUrl`'s own docblock for what is deliberately left out.
-    const percentEncoded = new URL("https://media.example.org/d%72m/watch?v=1&sig=SECRET123");
+  test("masks the encoding variant real yt-dlp actually produces: an unreserved escape decodes, a reserved one does not", async () => {
+    // Real yt-dlp 2025.09.26 decodes a percent-escape in the URL it echoes
+    // only when the escaped byte is unreserved (RFC 3986 §6.2.2.2) — measured
+    // 2026-09-19, see `fake-ytdlp.mjs`'s `unsupported-echo-unreserved-decode`
+    // case for the exact command and output. `%41 %7e %2d %5f %2e %64` here
+    // are all unreserved and decode (`a=%64rm` becomes `a=drm`, which is
+    // where the marker actually surfaces); `%2f %3F %20` do not. An earlier
+    // draft of this test used `decodeURI`, which decodes `%20` too and so
+    // modelled a transform the real binary does not perform — this is the
+    // "at least one variant" the ticket's Done-when asks to be proven, not a
+    // claim that every encoding is covered; see `maskRequestUrl`'s own
+    // docblock for what is deliberately left out.
+    const mixedEscapes = new URL(
+      "https://media.example.org/%41%7e%2d%5f%2e/%2f%3F%20/x?a=%64rm&b=%2F&sig=SECRET123",
+    );
     await expect(
-      fakeResolver("unsupported-echo-decoded").resolve(percentEncoded, options()),
+      fakeResolver("unsupported-echo-unreserved-decode").resolve(mixedEscapes, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+
+  test("the exact-href form is load-bearing: an unescaped echo beside an unrelated encoded value", async () => {
+    // A gate finding: without a distinguishing case, the exact-`href`
+    // candidate is redundant with `decodeUnreservedEscapes(href)` whenever
+    // the URL has no percent-escapes to decode. This URL has one (`%41`,
+    // unrelated to the marker), and yt-dlp's raw, undecoded echo
+    // (`unsupported-echo`) means only the *exact* href candidate matches —
+    // the decoded candidate would turn `%41` into `A` and no longer equal
+    // what actually appears in stderr, and `redactUrl`'s form drops the
+    // query outright. Dropping the exact-href candidate makes this
+    // misclassify as DRM_PROTECTED.
+    const url = new URL("https://media.example.org/drm/watch?v=1&pad=%41&sig=SECRET123");
+    await expect(fakeResolver("unsupported-echo").resolve(url, options())).rejects.toMatchObject({
+      code: "NO_MEDIA_FOUND",
+    });
+  });
+
+  test("stripping the URL does not fuse the text on either side into an accidental marker", async () => {
+    // A gate finding: `"dr" + "<url>" + "m"` with the URL removed and the
+    // pieces rejoined by the empty string reads as "drm" — a marker that was
+    // never in the URL or in yt-dlp's diagnosis, only in what stripping left
+    // behind. `maskRequestUrl` rejoins with a single space instead, so this
+    // must NOT classify as DRM_PROTECTED even though the raw stderr's outer
+    // text is "dr" and "m".
+    const plainUrl = new URL("https://media.example.org/watch?v=1&sig=SECRET123");
+    await expect(
+      fakeResolver("adjacent-text-fusion").resolve(plainUrl, options()),
     ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
   });
 });

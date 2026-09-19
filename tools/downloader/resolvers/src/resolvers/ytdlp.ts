@@ -888,6 +888,29 @@ function killTree(child: ChildProcess): void {
 }
 
 /**
+ * yt-dlp 2025.09.26 decodes a percent-escape in the URL it echoes back only
+ * when the escaped byte is an *unreserved* character (`A`-`Z`, `a`-`z`,
+ * `0`-`9`, `-`, `.`, `_`, `~` — RFC 3986 §6.2.2.2's normalisation) and leaves
+ * every other escape as given.
+ *
+ * **Measured, not assumed**: against the real binary, 2026-09-19, a loopback
+ * page whose path was `/%41%7e%2d%5f%2e/%c3%a9/%2f%3F%20/x` and whose query
+ * was `?a=%64rm&b=%2F` came back in `Unsupported URL: …` as
+ * `/A~-_./%c3%a9/%2f%3F%20/x?a=drm&b=%2F` — every unreserved escape decoded
+ * (`%41`→`A`, `%64`→`d`), every reserved or multi-byte one (`%2f`, `%3F`,
+ * `%20`, `%c3%a9`) left alone. `decodeURI` disagrees with this on exactly
+ * those cases (it also decodes `%20` and multi-byte UTF-8 escapes), which is
+ * why this is its own function rather than a built-in.
+ */
+function decodeUnreservedEscapes(text: string): string {
+  return text.replaceAll(/%[0-9A-Fa-f]{2}/gu, (escape) => {
+    const byte = Number.parseInt(escape.slice(1), 16);
+    const char = String.fromCharCode(byte);
+    return /^[A-Za-z0-9\-._~]$/u.test(char) ? char : escape;
+  });
+}
+
+/**
  * dl-67: yt-dlp echoes the caller's own request URL back in several
  * diagnostic lines (`Unsupported URL: <url>` chief among them), and
  * `classifyFailure` matches its source-fact markers against the whole of
@@ -903,31 +926,32 @@ function killTree(child: ChildProcess): void {
  * call already knows.
  *
  * **The cost that comes with it**: a marker inside the URL survives this if
- * yt-dlp echoes the URL in an encoding this does not also try. Tried, in
- * order: the exact request URL, its `redactUrl` form (in case a caller
- * upstream of here already redacted it into stderr), a trailing-slash
- * toggle, and both `decodeURI` and `encodeURI` of it — decoding because a
- * Python backend commonly un-escapes percent sequences for a human-readable
- * log line (proven with a test: dl-67's `ytdlp.test.ts`), encoding for the
- * reverse. Anything outside those five forms — a different percent-encoding
- * normalisation, a case fold on a punycode host, a query re-ordering by an
- * intermediate redirect — is not tried and is a known gap, not an oversight.
+ * yt-dlp echoes the URL in an encoding this does not also try. Tried: the
+ * exact request URL and its `redactUrl` form — the two forms the owner's
+ * decision names by name — plus `decodeUnreservedEscapes` of it, which is
+ * yt-dlp's own measured percent-normalisation (see that function's
+ * docblock). An earlier draft of this function also tried a trailing-slash
+ * toggle and `decodeURI`/`encodeURI`; a gate found all three either dead
+ * against real yt-dlp (mutation testing killed nothing when they were
+ * removed) or actively wrong (`decodeURI` decodes escapes yt-dlp does not),
+ * so they were dropped rather than kept as untested insurance. Anything
+ * outside these three forms — a case fold on a punycode host, a query
+ * re-ordering by an intermediate redirect, a yt-dlp version that
+ * normalises differently — is not tried and is a known gap, not an
+ * oversight.
+ *
+ * Joined back with a single space, not the empty string: stripping a
+ * substring with nothing in its place can fuse the text on either side of it
+ * into a new, accidental marker (`"dr" + "" + "m"` reading as `"drm"`) that
+ * was never in either the URL or yt-dlp's diagnosis.
  */
 function maskRequestUrl(stderr: string, url: URL): string {
   const href = url.href;
-  const candidates = new Set<string>([href, redactUrl(href)]);
-  candidates.add(href.endsWith("/") ? href.slice(0, -1) : `${href}/`);
-  for (const transform of [decodeURI, encodeURI]) {
-    try {
-      candidates.add(transform(href));
-    } catch {
-      // A malformed percent-escape sequence; skip this variant rather than throw.
-    }
-  }
+  const candidates = new Set<string>([href, redactUrl(href), decodeUnreservedEscapes(href)]);
 
   let masked = stderr;
   for (const candidate of candidates) {
-    if (candidate.length > 0) masked = masked.split(candidate).join("");
+    if (candidate.length > 0) masked = masked.split(candidate).join(" ");
   }
   return masked;
 }
