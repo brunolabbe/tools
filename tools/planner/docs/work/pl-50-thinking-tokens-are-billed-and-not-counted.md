@@ -146,6 +146,24 @@ model seam rather than into anything pl-40 owns.
 - Re-run at `7f3aa55`: `npm run check` exit 0; `npm test -- --project planner` 71 files / 1185 tests (one test added over gate 1); `npm run build` exit 0 before the suite.
 - NFR: unchanged from gate 1.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-19 · `c1e2772...2a67b76` (the med-3 remedy, owner decision A, and the pl-52 filing), re-read against `origin/main...2a67b76` · same reviewer, medium depth.
+
+| Gate-3 check                                            | Settled by                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mixed-null run asserted                                 | `tools/planner/agent/test/fan-out-usage.test.ts:214 "sums to 1390, not null"`, `tools/planner/agent/test/fan-out-usage.test.ts:223 "opposite order sum the same way"` and `tools/planner/agent/test/fan-out-usage.test.ts:242 "two replies that both report no breakdown stay null"` ✓                                                                                                                                                                        |
+| red under a null-poisoning sum                          | mutating only `tools/planner/agent/src/orchestrator.ts:226 "thinkingTokens: add(total.thinkingTokens"` to go null once any reply is null: 3 of 9 red in that file ✓                                                                                                                                                                                                                                                                                           |
+| red under a 0-filling sum                               | the same line as `(total ?? 0) + (reply ?? 0)`: 2 of 9 red, the both-null case among them ✓                                                                                                                                                                                                                                                                                                                                                                   |
+| every doc mention says lower bound                      | grep of `thinkingTokens` in planner source, tests excluded: `tools/planner/agent/src/provider.ts:81 "is a lower bound on what this reply"`, `tools/planner/agent/src/provider.ts:99 "a lower bound, not a guaranteed total"`, `tools/planner/agent/src/orchestrator.ts:166 "A lower bound over the replies that reported"`, `tools/planner/agent/src/providers/anthropic.ts:354 "is a lower bound on this reply"`; no other doc comment describes the field ✓ |
+| pl-52 says what the column holds, claims no measurement | `tools/planner/docs/work/pl-52-thinking-tokens-in-the-cost-report.md:29 "a lower bound over the"`; its Build leaves the report caveat to whatever pl-40 measures, and keeps the column out of the priced kinds ✓                                                                                                                                                                                                                                              |
+| med 3 from gate 1                                       | closed by the owner decision A, documented and tested as above ✓                                                                                                                                                                                                                                                                                                                                                                                              |
+
+- **findings** · repair diff read in full (7 files); 0 returned, 0 carried, 0 dropped.
+- The builder re-pointed 7 gate-1 and gate-2 coordinates this round moved, including one anchor whose sentence was rewritten; disclosed in its Log, and `node scripts/citations.mjs` over this section resolves every one.
+- Re-run at `2a67b76`: `npm run build` exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0, 90 enforced, 0 failing; `npm run check` exit 0; `npm test -- --project planner` 71 files / 1189 tests, green.
+- NFR: unchanged from gate 1.
+
 ## Log
 
 ### 2026-09-18 — filed
@@ -434,3 +452,28 @@ orchestrator's instruction.
 Verified: `npm run check` — exit 0; `node scripts/citations-gate.mjs
 --against origin/main` — 90 enforced, 0 failing; `npm test -- --project
 planner` — 71 files, 1189 tests (was 1185 at gate 2), all passing.
+
+### 2026-09-19 — gate round 3: PASS, `## Review`'s Gate 3 committed
+
+The gate re-ran its own four checks independently at `2a67b76` — mutating
+only the `thinkingTokens` line inside `addReplyUsage` (not the shared
+`add()`) to null-poison (3 of 9 red) and to zero-fill (2 of 9 red, the
+both-null case among them); grepping every `thinkingTokens` doc mention
+across planner source with tests excluded and finding "lower bound" at all
+four; reading pl-52 for the same claim and its no-measurement stance; and
+`npm run build`, the citations gate, `npm run check` and the planner suite,
+each once. No new finding, nothing carried, nothing dropped. **Verdict:
+PASS.**
+
+**Every citation in the Gate 3 section was re-resolved against this tree
+before committing**, the same discipline as gate 1 and gate 2 — all 9
+inline anchors (`fan-out-usage.test.ts:214/223/242`, `orchestrator.ts:226`,
+`provider.ts:81/99`, `orchestrator.ts:166`, `anthropic.ts:354`, `pl-52.md:29`)
+matched exactly what the gate sent. `node scripts/citations.mjs
+tools/planner/docs/work/pl-50-thinking-tokens-are-billed-and-not-counted.md
+--section Review --require-anchors --require-distinct-anchors`: 26 verified,
+0 moved, exit 0 — matching the gate's own count. Nothing in the section
+above differs from the gate's text.
+
+pl-50 is gated PASS as of this commit. pl-52 remains filed and unbuilt,
+blocked on pl-40 per its own frontmatter.
