@@ -23,7 +23,7 @@ import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { AppError } from "@downloader/contract";
+import { AppError, redactUrl } from "@downloader/contract";
 import type {
   DrmInfo,
   MediaVariant,
@@ -888,6 +888,51 @@ function killTree(child: ChildProcess): void {
 }
 
 /**
+ * dl-67: yt-dlp echoes the caller's own request URL back in several
+ * diagnostic lines (`Unsupported URL: <url>` chief among them), and
+ * `classifyFailure` matches its source-fact markers against the whole of
+ * stderr. Left alone, a marker word occurring in the URL's own text — a path
+ * segment, a query value, a base64 signature — reads as a fact yt-dlp
+ * diagnosed about the source, when it was never in yt-dlp's diagnosis at all.
+ *
+ * **Chosen 2026-09-19, by the owner: mask the request URL, not yt-dlp's
+ * message catalogue.** The rejected alternative was to strip known echoing
+ * lines (`Unsupported URL: <url>` and siblings) instead of the URL itself;
+ * that depends on yt-dlp's undocumented, version-specific set of messages
+ * that quote the input back, where this depends only on the one URL this
+ * call already knows.
+ *
+ * **The cost that comes with it**: a marker inside the URL survives this if
+ * yt-dlp echoes the URL in an encoding this does not also try. Tried, in
+ * order: the exact request URL, its `redactUrl` form (in case a caller
+ * upstream of here already redacted it into stderr), a trailing-slash
+ * toggle, and both `decodeURI` and `encodeURI` of it — decoding because a
+ * Python backend commonly un-escapes percent sequences for a human-readable
+ * log line (proven with a test: dl-67's `ytdlp.test.ts`), encoding for the
+ * reverse. Anything outside those five forms — a different percent-encoding
+ * normalisation, a case fold on a punycode host, a query re-ordering by an
+ * intermediate redirect — is not tried and is a known gap, not an oversight.
+ */
+function maskRequestUrl(stderr: string, url: URL): string {
+  const href = url.href;
+  const candidates = new Set<string>([href, redactUrl(href)]);
+  candidates.add(href.endsWith("/") ? href.slice(0, -1) : `${href}/`);
+  for (const transform of [decodeURI, encodeURI]) {
+    try {
+      candidates.add(transform(href));
+    } catch {
+      // A malformed percent-escape sequence; skip this variant rather than throw.
+    }
+  }
+
+  let masked = stderr;
+  for (const candidate of candidates) {
+    if (candidate.length > 0) masked = masked.split(candidate).join("");
+  }
+  return masked;
+}
+
+/**
  * Maps yt-dlp's stderr to the taxonomy. The default is `NO_MEDIA_FOUND` on
  * purpose: an extractor that broke overnight must degrade this source to the
  * browser sniffer, not fail the request.
@@ -900,9 +945,13 @@ function killTree(child: ChildProcess): void {
  * points at the source, invites a retry, and hides the setting. Stopping the
  * chain here is a behaviour change on top of the copy: `registry.ts` falls
  * through on `NO_MEDIA_FOUND` and on nothing else.
+ *
+ * **The source-fact markers are matched against `maskRequestUrl`'s output,
+ * not raw stderr** (dl-67) — see that function's docblock for why and for
+ * what it does not cover.
  */
 function classifyFailure(stderr: string, code: number, url: URL): AppError {
-  const text = stderr.toLowerCase();
+  const text = maskRequestUrl(stderr, url).toLowerCase();
   const details = { url: url.href, exitCode: code, stderr: stderr.slice(-500) };
 
   // First, ahead of the four source-fact branches below, because a handshake

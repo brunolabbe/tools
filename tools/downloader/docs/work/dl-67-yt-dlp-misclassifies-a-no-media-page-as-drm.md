@@ -3,7 +3,7 @@ id: dl-67
 tool: downloader
 title: An echoed URL containing "drm" makes yt-dlp's stderr classify as DRM_PROTECTED
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -91,19 +91,35 @@ can appear by chance rather than by the operator's or attacker's design.
 
 ## Build
 
-Not scoped here — the owner asked for the reproduction to be recorded, not the
-fix. Two shapes worth weighing when this is picked up, neither chosen:
+**Question**: which shape fixes `classifyFailure`'s marker match reading the
+caller's own request URL as a fact about the source?
 
-- Strip the echoed command/URL from `stderr` before matching markers against
-  it — yt-dlp's `Unsupported URL: <url>` (and similar lines that echo the
-  input) are the ones known to carry it; matching against the tail after any
-  such echo would need the exact set of yt-dlp messages that quote it back,
-  which is undocumented and versioned by the yt-dlp release.
-- Match markers against everything _except_ whichever substring exactly
-  reproduces the request URL (or its redacted form) — cheaper to reason about
-  than yt-dlp's message catalogue, but a marker inside the _path_ survives
-  this if the path text differs even slightly from the submitted URL's
-  encoding.
+**Options**:
+
+1. Mask the request URL: match markers against stderr minus any substring
+   that exactly equals the request URL or its redacted form.
+2. Strip yt-dlp's echo lines, such as `Unsupported URL: <url>`, before
+   matching.
+3. Hold dl-67 — file the fix separately, ship nothing here.
+
+**Chosen: (1), mask the request URL** — the owner, 2026-09-19. Reason: it does
+not depend on yt-dlp's undocumented, version-specific catalogue of echoing
+messages, where (2) does.
+
+**The cost that comes with (1), carried into `Done when` below**: a marker
+inside the URL's path survives the mask if yt-dlp echoes the URL in a
+different encoding from the one submitted. Implemented as `maskRequestUrl` in
+`resolvers/src/resolvers/ytdlp.ts`, which strips five forms of the request
+URL from stderr before marker matching: the exact `url.href`, its `redactUrl`
+form, a trailing-slash toggle, and both `decodeURI` and `encodeURI` of it. The
+`decodeURI` variant is the one proven with a test — a Python backend that
+un-escapes percent sequences before printing a diagnostic line is the
+realistic direction (an already-encoded `URL.href` is the canonical form on
+the way in; a backend re-encoding it further on the way out is not something
+this build found a case for). Anything outside those five forms — a different
+percent-encoding normalisation, a case fold on a punycode host, a query
+re-ordering by an intermediate redirect — is a known, disclosed gap, not an
+oversight.
 
 ## Done when
 
@@ -122,3 +138,29 @@ fix. Two shapes worth weighing when this is picked up, neither chosen:
   [dl-58](./dl-58-a-failed-probe-logs-the-page-url-unredacted.md), whose gate
   surfaced this as a dropped finding (real defect, out of that ticket's
   range). Not fixed here.
+- 2026-09-19 — Owner chose Build option (1), mask the request URL; recorded
+  above. Fixed in `resolvers/src/resolvers/ytdlp.ts`: a new `maskRequestUrl`
+  strips the request URL (exact, `redactUrl` form, trailing-slash toggle,
+  `decodeURI`, `encodeURI`) from stderr before `classifyFailure` lowercases it
+  and matches source-fact markers. Three tests added at the end of
+  `resolvers/test/ytdlp.test.ts`, plus two new fake-binary modes
+  (`unsupported-echo`, `unsupported-echo-decoded`) and one existing mode
+  extended (`drm-and-url-echo`) in `fake-ytdlp.mjs`: the reproduction (a
+  `drm`-containing request URL no longer forces `DRM_PROTECTED` — proven red
+  against `origin/main` by temporarily reverting `ytdlp.ts` to the
+  `origin/main` copy and re-running just the new tests: 2 of 3 failed there,
+  the third — a genuine diagnosis alongside the echoed URL still winning —
+  does not depend on the fix and passed both before and after, as expected),
+  a check that a genuine marker elsewhere in stderr still classifies correctly
+  when the URL also happens to carry the word, and the one encoding variant
+  the ticket's Done-when asks to be proven (a percent-escaped marker in the
+  URL's path, decoded before yt-dlp echoes it back).
+  **The ticket's Build section had two shapes "weighed", not chosen**; this
+  entry replaces that with the owner's actual decision and its cost, in the
+  ticket's own question/options/choice form, per the dispatch instruction.
+  **Fold-in considered and declined**: nothing else in `ytdlp.ts` reads
+  unmasked stderr for a classification decision, so there was no adjacent
+  free work to fold in.
+  Verification: `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts`
+  — 63/63 passed (60 pre-existing + 3 new) with the fix; `npm run check`
+  green; `npm test -- --project downloader` — 86 files, 1460/1460 passed.

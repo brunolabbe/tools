@@ -1045,3 +1045,48 @@ describe("an extractor that reports fps as JSON null", () => {
     expect(probeResultSchema.safeParse(mapped).error).toBeUndefined();
   });
 });
+
+/**
+ * dl-67. `classifyFailure` used to match its source-fact markers against the
+ * whole of stderr, including whatever URL yt-dlp echoed back in its own
+ * diagnostic line — so a marker word occurring in the *request URL's own
+ * text* (a path segment, a query value, a signature) read as a fact yt-dlp
+ * diagnosed about the source. Reproduced here with the real spawn path
+ * against the fixture binary, not a live install, per this file's existing
+ * pattern.
+ */
+describe("a marker inside the request URL's own text (dl-67)", () => {
+  const SOURCE_WITH_DRM = new URL("https://media.example.org/drm/watch?v=1&sig=SECRET123");
+
+  test("does not classify as DRM_PROTECTED on origin/main: fails there, passes fixed", async () => {
+    // yt-dlp's actual stderr here is "Unsupported URL: <the URL we gave it>";
+    // it never inspected the page. Before the fix, `text.includes("drm")`
+    // matched the echoed URL's path and returned the terminal, non-retryable
+    // DRM_PROTECTED instead of the ordinary NO_MEDIA_FOUND fallthrough.
+    await expect(
+      fakeResolver("unsupported-echo").resolve(SOURCE_WITH_DRM, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+
+  test("a genuine diagnosis elsewhere in stderr still wins, even when the URL also carries the word", async () => {
+    // Masking only the exact URL substring must not swallow a real DRM
+    // mention that sits outside it — the marker check still runs against
+    // everything else in stderr.
+    await expect(
+      fakeResolver("drm-and-url-echo").resolve(SOURCE_WITH_DRM, options()),
+    ).rejects.toMatchObject({ code: "DRM_PROTECTED" });
+  });
+
+  test("masks one encoding variant: a percent-escape yt-dlp decodes before echoing", async () => {
+    // The request URL's path carries the marker only in percent-encoded form
+    // (`d%72m`, decoding to `drm`); the fixture stands in for a backend that
+    // un-escapes the URL before printing it, which `maskRequestUrl` tries via
+    // `decodeURI`. This is the "at least one variant" the ticket's Done-when
+    // asks to be proven, not a claim that every encoding is covered — see
+    // `maskRequestUrl`'s own docblock for what is deliberately left out.
+    const percentEncoded = new URL("https://media.example.org/d%72m/watch?v=1&sig=SECRET123");
+    await expect(
+      fakeResolver("unsupported-echo-decoded").resolve(percentEncoded, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+});

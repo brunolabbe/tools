@@ -20,8 +20,39 @@ switch (mode) {
     process.exitCode = 1;
     break;
   }
+  // dl-67. Echoes back whatever URL the resolver actually passed on argv —
+  // the last argument — verbatim, the way yt-dlp's real "Unsupported URL"
+  // line does. Lets a test put a source-fact marker (`drm`, …) in the request
+  // URL's own text and assert it is not read as a fact about the page.
+  case "unsupported-echo": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(`ERROR: Unsupported URL: ${requestUrl}\n`);
+    process.exitCode = 1;
+    break;
+  }
+  // dl-67. Same shape, but decodes the URL's percent-escapes before echoing
+  // it — proving a backend that un-escapes for a human-readable log line
+  // (measured of Python's `urllib`-based logging elsewhere in this fixture)
+  // is one of the encodings `maskRequestUrl` also tries.
+  case "unsupported-echo-decoded": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(`ERROR: Unsupported URL: ${decodeURI(requestUrl)}\n`);
+    process.exitCode = 1;
+    break;
+  }
   case "drm": {
     process.stderr.write("ERROR: [brightcove] 6301234567001: This video is DRM protected\n");
+    process.exitCode = 1;
+    break;
+  }
+  // dl-67. A genuine DRM diagnosis *and* an echoed request URL in the same
+  // stderr, so a test can prove masking the URL substring does not also
+  // swallow a real marker that sits outside it.
+  case "drm-and-url-echo": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(
+      `ERROR: [brightcove] 6301234567001: This video is DRM protected\nERROR: Unsupported URL: ${requestUrl}\n`,
+    );
     process.exitCode = 1;
     break;
   }
