@@ -162,6 +162,22 @@ export interface RunUsage {
   cacheWriteTokens: number | null;
   outputTokens: number | null;
   /**
+   * How much of `outputTokens` was internal reasoning, where some reply said
+   * (pl-50). **A lower bound over the replies that reported a breakdown, not
+   * a guaranteed total for the run** — decided by the owner (2026-09-19,
+   * option A of three put to them) over nulling the sum once coverage is
+   * incomplete, or carrying a separate coverage count. `addReplyUsage` sums
+   * past a `null` the same way it always has, so a run with one reply that
+   * reported no breakdown and one that reported 1390 reads `1390`, identical
+   * to a run whose only thinking was 1390 — the two are not told apart. It is
+   * **also** not proven to cover the same attempts `outputTokens` does within
+   * any one reply that took a refusal fallback — see `ModelUsage`'s own doc
+   * comment for that, separate layer. Both gaps are unmeasured until pl-40's
+   * funded run reports how often a mixed-null run or a multi-attempt,
+   * thinking-enabled reply actually occurs.
+   */
+  thinkingTokens: number | null;
+  /**
    * Replies a model other than the configured one served — a refusal fallback.
    * Their tokens are in the totals above, billed at that other model's rates,
    * which is why a report pricing the totals at one rate calls itself
@@ -183,6 +199,7 @@ export function emptyRunUsage(): RunUsage {
     cacheReadTokens: null,
     cacheWriteTokens: null,
     outputTokens: null,
+    thinkingTokens: null,
     fallbackCalls: 0,
   };
 }
@@ -206,6 +223,7 @@ export function addReplyUsage(
     cacheReadTokens: add(total.cacheReadTokens, reply.usage.cacheReadTokens),
     cacheWriteTokens: add(total.cacheWriteTokens, reply.usage.cacheWriteTokens),
     outputTokens: add(total.outputTokens, reply.usage.outputTokens),
+    thinkingTokens: add(total.thinkingTokens, reply.usage.thinkingTokens),
     fallbackCalls:
       total.fallbackCalls +
       (reply.servedModel !== undefined && reply.servedModel !== configuredModel ? 1 : 0),

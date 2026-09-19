@@ -23,7 +23,13 @@ import {
 } from "./helpers/runs.ts";
 
 /** What one reply bills in these tests. Four different numbers, so a swapped column shows. */
-const PER_REPLY = { inputTokens: 100, cacheReadTokens: 30, cacheWriteTokens: 7, outputTokens: 50 };
+const PER_REPLY = {
+  inputTokens: 100,
+  cacheReadTokens: 30,
+  cacheWriteTokens: 7,
+  outputTokens: 50,
+  thinkingTokens: null,
+};
 
 interface UsageRow {
   model: string | null;

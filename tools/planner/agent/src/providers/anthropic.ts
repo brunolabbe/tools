@@ -333,6 +333,27 @@ function stopReasonOf(message: BetaMessage): ModelReply["stopReason"] {
  *
  * A cache kind no attempt reported stays `null` rather than becoming zero —
  * the SDK types both as nullable, and "the API did not say" is not "none".
+ *
+ * **`thinkingTokens` cannot follow that same per-attempt sum, because the API
+ * does not offer it per attempt (pl-50).** `output_tokens_details` is declared
+ * on `BetaUsage` — the top-level `usage` this function receives — and is
+ * absent from every member of `BetaIterationsUsage`
+ * (`BetaMessageIterationUsage`, `BetaCompactionIterationUsage`,
+ * `BetaAdvisorMessageIterationUsage`, `BetaFallbackMessageIterationUsage`),
+ * confirmed by reading all four in `@anthropic-ai/sdk@0.125.0`'s own types,
+ * not assumed from pl-50's own prose (whose Build step 2 asked for the same
+ * per-iteration sum the other kinds get, which the SDK cannot supply). So
+ * this is read once, from `usage` itself, never from `attempts`. Whether that
+ * top-level figure spans every attempt or only the one that produced the
+ * final message is, for this field, **not stated by the SDK** — the other
+ * kinds' "covers only the serving attempt" reading rests on the hand-written
+ * `fallbackServed` fixture's own note, not on a type-level guarantee, and no
+ * fixture pairs a fallback with a thinking breakdown to check it against.
+ * Either way, no per-iteration entry ever carries this breakdown, so a
+ * declined attempt's thinking cannot be told apart from the serving one's —
+ * **the `thinkingTokens` this returns is a lower bound on this reply's real
+ * thinking, not a guaranteed total**, unmeasured until a real multi-attempt,
+ * thinking-enabled reply is captured (pl-40).
  */
 function usageOf(usage: BetaUsage): ModelUsage {
   const attempts =
@@ -352,5 +373,6 @@ function usageOf(usage: BetaUsage): ModelUsage {
     }
     outputTokens += attempt.output_tokens;
   }
-  return { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens };
+  const thinkingTokens = usage.output_tokens_details?.thinking_tokens ?? null;
+  return { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens, thinkingTokens };
 }
