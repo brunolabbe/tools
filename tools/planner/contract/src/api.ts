@@ -10,7 +10,8 @@
  */
 
 import { z } from "zod";
-import type { TripBrief } from "./brief.ts";
+import { tripBudgetSchema, tripDatesSchema } from "./brief.ts";
+import type { TripBrief, TripBudget, TripDates } from "./brief.ts";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
 import type { Specialist } from "./candidate.ts";
@@ -335,6 +336,13 @@ export const pinItemRequestSchema = z.object({
  * - a plan that does not exist is `PLAN_NOT_FOUND`;
  * - core's `NOT_FOUND` is a URL that matched no route, and is none of these.
  *
+ * **`brief` names new values only** (pl-47): the dates, the budget or both, at
+ * least one. The server reads the other end of each change off the base
+ * revision's brief, and derives the days it re-packs; neither is the client's
+ * to say. A value equal to the current one is legal, as restoring the latest
+ * is. Dates past the intake's rules are `INVALID_DATES`, and a shorter trip
+ * that would drop a pinned item is `PLAN_INFEASIBLE`, both before any run.
+ *
  * The caption (`PlanRevision.reason`) is written by the server from the
  * operation. Nothing here carries one, and a `note` is not one.
  */
@@ -354,7 +362,8 @@ export type ReviseRequest =
       toPosition: number;
     }
   | { kind: "remove"; baseRevisionId: string; itemId: string }
-  | { kind: "restore"; baseRevisionId: string; revision: number };
+  | { kind: "restore"; baseRevisionId: string; revision: number }
+  | { kind: "brief"; baseRevisionId: string; dates?: TripDates; budget?: TripBudget };
 
 const baseRevisionIdSchema = z.string().min(1);
 const itemIdSchema = z.string().min(1);
@@ -376,14 +385,24 @@ export const reviseRequestSchema = z.discriminatedUnion("kind", [
     itemId: itemIdSchema,
   }),
   restoreOperationSchema.extend({ baseRevisionId: baseRevisionIdSchema }),
+  z
+    .object({
+      kind: z.literal("brief"),
+      baseRevisionId: baseRevisionIdSchema,
+      dates: tripDatesSchema.exactOptional(),
+      budget: tripBudgetSchema.exactOptional(),
+    })
+    .refine((request) => request.dates !== undefined || request.budget !== undefined, {
+      message: "A brief edit names new dates, a new budget or both.",
+    }),
 ]) satisfies z.ZodType<ReviseRequest>;
 
 /**
  * What revising answers with, discriminated so a caller cannot read an edit's
  * view out of a re-plan's answer.
  *
- * - **`run`, answered 202, for `replan`.** Every re-plan is a run, one naming
- *   no specialists included: re-packed days have new transitions, which means
+ * - **`run`, answered 202, for `replan` and `brief`.** Every re-plan is a run,
+ *   one naming no specialists included, and so is every brief edit (pl-47): re-packed days have new transitions, which means
  *   grounding lookups, which belong in something that can report them and be
  *   canceled. Its progress is on `ROUTES.runEvents`, as a first draft's is.
  * - **`revision`, answered 200, for `move`, `remove` and `restore`.** The edits

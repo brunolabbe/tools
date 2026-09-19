@@ -92,6 +92,8 @@ export interface RevisionOverrides {
   reason?: string;
   /** Defaults to `first-draft` for revision 1 and `restore` of 1 otherwise. */
   operation?: RevisionOperation;
+  /** The brief this revision was built from (pl-47). Defaults to `brief()`. */
+  brief?: TripBrief;
 }
 
 /**
@@ -121,10 +123,12 @@ export function revision(
     operation:
       overrides.operation ??
       (number === 1 ? { kind: "first-draft" } : { kind: "restore", revision: 1 }),
+    brief: overrides.brief ?? brief(),
     createdAt: CREATED,
     days,
     gaps,
     coverage,
+    deadlines: [],
     reading,
   };
 }

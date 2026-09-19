@@ -3,7 +3,7 @@ id: pl-47
 tool: planner
 title: A plan's dates and budget can be edited — each version keeps its brief, and the day count follows
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-42, pl-43, pl-44]
 difficulty: hard
@@ -421,3 +421,168 @@ answers above. Facts checked against the code at `origin/main` `d3fca5e`:
   something has to give."
 - **`web` has no per-kind label for unchecked entries**, so a new kind needs no
   change there to compile.
+
+**2026-09-19 — built.** Branched from `origin/main` at `fb15bc9` (on the
+remote), dispatched as Opus. pl-42, pl-43 and pl-44 were merged on that base
+with the shapes this brief names, so nothing here follows a different landing.
+**Migration 11 was the next free number**: pl-44 took 10, and
+`gh pr list --state open` showed no open planner pull request but a release.
+
+**What landed.**
+
+- `contract`: `PlanRevision.brief` and `PlanRevision.deadlines`, both in
+  `NewRevision`'s `Pick`; the `brief` member of `RevisionOperation` and of
+  `ReviseRequest`, each with its refine; `booking-deadline-passed` in
+  `UNCHECKED_CONSTRAINTS`; `currentBrief`. `PlanDetail.brief`'s doc comment now
+  says it is the first draft's.
+- `itinerary`: `brief-edit.ts` (`briefEditSlice`, `reviseBrief`, `droppedPins`,
+  `droppedPinsRefusal`) and `deadlines.ts` (`deadlinesFor`,
+  `carriedDeadlines`). `replan`'s body is now `repack`, which takes the slice
+  apart from the operation it stamps, and `replan` and `reviseBrief` both call
+  it. `compose` stamps its brief and `[]`; `applyEdit` and `replan` carry
+  `previous.deadlines` for the items still placed; `restoreRevision` copies the
+  target's brief and deadlines. `uncheckedForRevision` takes no brief and
+  appends `deadlines` after `coverage`.
+- `api`: migration 11; `toRevision` falls back to `plans.brief_json` on `NULL`
+  and `insertRevision` writes both columns on every row; the `brief` route
+  checks and run in `runs/revise.ts`; `reason.ts`'s brief captions; a brief
+  edit spends the runs bucket. The re-plan run and the edits read the base
+  revision's brief, never `plan.brief`.
+- **`orchestrator.ts` changed in one hunk**, `readPlanView`'s call to
+  `uncheckedForRevision`, which lost its `brief` argument. pl-50 also edits that
+  file; the two touch different functions.
+- Docs: the rules file and both sentences in `tools/planner/CLAUDE.md` name both
+  stored kinds and their shared reason; `01-ARCHITECTURE.md`'s rate-limit bullet
+  says a brief edit spends the runs bucket.
+
+**What the brief had wrong, or did not say.**
+
+- **Step 3.5's per-day row says "Changed the budget" for a change nobody made.**
+  "Budget, or day count under a per-day one → `Changed the budget, and re-packed
+every day.`" would caption a dates-only edit under a `per-day` budget as a
+  budget change. I built the rule the other rows follow: the subject is what the
+  user changed, the action is what the tool did. That case reads `Changed the
+dates, and re-packed every day.`, or `…, dropped days 7–8, and re-packed the
+rest.` when it is shorter. Every other row of the table is reproduced word for
+  word, and `reason.test.ts` says why the one differs.
+- **`droppedPinsRefusal(items)` cannot name an item from a pin alone.** A
+  `PinnedPlacement` carries a candidate id, and pl-48 renders each finding's
+  `detail` as the sentence naming the item. So it takes the candidates too,
+  `droppedPinsRefusal(dropped, candidates)`, and `briefEditSlice` takes
+  `candidates` for the same reason. The detail reads `“<title>” is pinned to day
+4, which the new dates drop. Unpin it to shorten the trip.`, one finding per
+  pin. `PLAN_INFEASIBLE`'s own copy needed no re-wording.
+- **An empty slice would still have measured.** `replanPool` over no days
+  returns every unplaced candidate, because nothing is frozen away from it. A
+  shift or a shortening re-packs nothing, so the run measures nothing when the
+  slice is empty, and goes `queued → composing`.
+- **"A budget change" is the request naming a budget, not the value moving.**
+  I built it as written: a budget sent equal to the current one still re-packs
+  every day. Its diff is empty only when the re-pack reproduces the days, which
+  a plan hand-edited since its last pack need not. An equal dates edit with no
+  budget re-packs nothing and its diff is empty, and a test says so. pl-48
+  already sends only the slots that changed, which is where this matters.
+- **The draft's budget is `unknown`, not a band.** The budget question is not
+  asked before a draft, so a first edit's `budget.from` is `{ state: "unknown" }`
+  on every plan the API has made. The trap test asserts `budget-band` appearing
+  after a band edit, since there was none to disappear.
+- **`deadlines` is bounded at one entry**, beside the kind refine. Step 2.2.5
+  writes one entry naming every item, and a second would be a second sentence
+  about the same moment.
+- **A revision now weighs about 1.1 KiB more.** Each carries its brief: 994 to
+  1,242 bytes of JSON across the six fixtures. A scratch script that composes
+  each fixture, appends 49 restores with a `replan` operation, and validates the
+  plan and the view printed `city-and-culture … revisions=50 diffs-empty=130020`
+  and `multi-city … revisions=50 diffs-empty=129429`. pl-42 measured the same
+  column at 74,910 and 83,490 bytes. So the 50-revision ceiling's "under
+  100 KiB" is now about 127 KiB with empty diffs; `MAX_REVISIONS_PER_PLAN`'s
+  comment says so. I did not re-run pl-42's worst-diff column.
+
+**Fold-in.**
+
+- **The revision-ceiling test in `revisions.test.ts` is flaky on `origin/main`.**
+  It makes fifty restores. On `fb15bc9` unmodified, two full planner runs gave it
+  3,067 ms and then 5,299 ms, the second a timeout at vitest's 5 s. It now has a
+  15 s timeout, on its closing line so that no cited line moves.
+- The architecture's rate-limit bullet, stale the moment a brief edit became a
+  run.
+- **Four merged gate records cite lines this branch moves.**
+  `node scripts/citations-gate.mjs --against origin/main` failed on pl-42, pl-43,
+  pl-44 and pl-49. Each citation is repointed to the line its anchor now sits on.
+  None of them was deleted. Two new test titles first repeated a cited anchor
+  (`with the trigger silent`, `fits the schema's bound`), which the
+  distinct-anchor rule refuses; they were renamed rather than the old records
+  touched.
+
+I saw nothing else this branch made free.
+
+**Not measured, and said so.**
+
+- The e2e suite and the image gate do not run locally. `api/package.json` is
+  unchanged, since `@planner/intake` was already a dependency, so the
+  `Dockerfile` is too.
+- **Grounding over an edit's added days asked one place.** The scripted draft
+  leaves one candidate unplaced, so the longer-trip test's pool is one
+  candidate; it asserts that pool is non-empty and smaller than the plan's, and
+  that grounding heard exactly its places.
+
+### Verification
+
+**Narrowest specs, green:**
+
+| File                                          | Tests |
+| --------------------------------------------- | ----- |
+| `contract/test/brief-edit.test.ts` (new)      | 22    |
+| `contract/test/plan.test.ts`                  | 35    |
+| `itinerary/test/brief-edit.test.ts` (new)     | 19    |
+| `itinerary/test/first-draft-baseline.test.ts` | 27    |
+| `api/test/brief-edits.test.ts` (new)          | 14    |
+| `api/test/migrations.test.ts`                 | 17    |
+| `api/test/reason.test.ts`                     | 17    |
+| `api/test/revisions.test.ts`                  | 33    |
+
+**The first-draft baseline was not rewritten.** It predates both fields, so the
+comparison drops `brief` and `deadlines` from each result, key order otherwise
+unchanged, and a new block asserts `compose` stamps the case's brief and `[]`.
+
+**Twenty-eight mutations**, each applied alone by a scratch script that
+rebuilds the mutated package, runs the named files, restores the source and
+compares it byte for byte. Every restore compared identical. Each count is failed
+of total. They ran before the last two edits, a doc comment in `plan.ts` and the
+equal-values test.
+
+| Mutation                                                     | Failed       |
+| ------------------------------------------------------------ | ------------ |
+| M1 a day-count change under per-day re-packs only added days | 2 of 18      |
+| M2 a budget change does not re-pack every day                | 1 of 18      |
+| M3 per-day re-packs every day on any dates edit              | 1 of 18      |
+| M4 `briefEditSlice` does not refuse a dropped pin            | 2 of 32      |
+| M5 kept days not re-dated                                    | 2 of 18      |
+| M6 `reviseBrief` stores no deadlines                         | 5 of 18      |
+| M7 `carriedDeadlines` does not narrow                        | 2 of 18      |
+| M8 `replan` drops deadlines                                  | 1 of 18      |
+| M9 `restoreRevision` drops deadlines                         | 1 of 18      |
+| M10 `uncheckedForRevision` omits deadlines                   | 1 of 18      |
+| M11 `toRevision` always reads the plan's brief               | 6 of 31      |
+| M12 `insertRevision` leaves `brief_json` NULL                | 6 of 31      |
+| M13 the route skips `validateAnswer`                         | 3 of 14      |
+| M14 the route skips the dropped-pin check                    | 1 of 14      |
+| M15 a re-plan reads `plan.brief`                             | 1 of 14      |
+| M16 an edit stamps `plan.brief`                              | 1 of 14      |
+| M17 a brief edit spends the edits bucket                     | 1 of 14      |
+| M18 the run measures the whole pool                          | 1 of 14      |
+| M19 no re-read before composing                              | 1 of 14      |
+| M20 the per-day caption names the budget                     | 1 of 17      |
+| M21–M25 each contract refine removed, one at a time          | 1 of 22 each |
+| M26 `currentBrief` reads `plan.brief`                        | 1 of 22      |
+| M27 `compose` stamps a different brief                       | 13 of 27     |
+| M28 `deadlines` bounded at 9 rather than 1                   | 1 of 22      |
+
+**M16 was never run without its test.** While writing the list I saw that
+nothing did a move or a remove after an edit over HTTP, so no test could see
+M16, and I added "a remove after an edit keeps the edited brief" before the
+first mutation run. That M16 would have survived is reasoning, not a run.
+
+**Gates, at the end.** `npm run check` exited 0. `npm test -- --project planner`
+passed at 74 files and 1,264 tests. `node scripts/citations-gate.mjs --against origin/main`
+reports 89 enforced and 0 failing.

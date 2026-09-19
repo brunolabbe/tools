@@ -70,10 +70,12 @@ function draft(id: string, createdAt: string, days: PlanDay[] = []): NewRevision
     id,
     reason: "First draft",
     operation: { kind: "first-draft" },
+    brief: emptyBrief(),
     createdAt,
     days,
     gaps: [],
     coverage: [],
+    deadlines: [],
     reading: [],
   };
 }
@@ -193,10 +195,12 @@ describe("the revision schema", () => {
     parentRevisionId: null,
     reason: "First draft",
     operation: { kind: "first-draft" as const },
+    brief: emptyBrief(),
     createdAt: "2026-08-15T10:05:00.000Z",
     days: [],
     gaps: [],
     coverage: [],
+    deadlines: [],
     reading: [],
   };
 
@@ -273,10 +277,12 @@ describe("the operation a revision records", () => {
     revision: 2,
     parentRevisionId: "rev-1",
     reason: "Re-planned day 2",
+    brief: emptyBrief(),
     createdAt: "2026-08-16T10:05:00.000Z",
     days: [],
     gaps: [],
     coverage: [],
+    deadlines: [],
     reading: [],
   };
   const replan = { kind: "replan" as const, days: [0, 2], specialists: ["lodging"], note: null };

@@ -46,6 +46,7 @@ import {
 } from "@planner/contract";
 import { packedDayOf, refuseHardFindings } from "./compose.ts";
 import { critique, isHard, type CriticFinding } from "./critic.ts";
+import { carriedDeadlines } from "./deadlines.ts";
 import { rekeyDays, type UnkeyedDay } from "./ids.ts";
 import {
   assertCandidatesKnown,
@@ -234,7 +235,8 @@ export function editTransitions(
  *
  * `gaps`, `coverage` and `reading` are carried from `previous` untouched, and
  * `gapsFor` does not run: a specialist whose last item the user removed has not
- * "found nothing that fitted".
+ * "found nothing that fitted". `deadlines` is carried for the items still
+ * placed, and dropped when none is (pl-47).
  */
 export function applyEdit(input: EditInput): EditResult {
   const { brief, previous, operation } = input;
@@ -277,19 +279,26 @@ export function applyEdit(input: EditInput): EditResult {
   refuseHardFindings(findings);
 
   const coverage = [...structuredClone(previous.coverage)];
+  const deadlines = carriedDeadlines(previous.deadlines, days);
 
   return {
     revision: {
       id: input.revision.id,
       reason: input.revision.reason,
       operation: { ...operation },
+      brief: structuredClone(brief),
       createdAt: input.revision.createdAt,
       days,
       gaps: [...structuredClone(previous.gaps)],
       coverage,
+      deadlines,
       reading: [...structuredClone(previous.reading)],
     },
-    unchecked: [...uncheckedFor({ brief, dates, candidates: input.candidates, days }), ...coverage],
+    unchecked: [
+      ...uncheckedFor({ brief, dates, candidates: input.candidates, days }),
+      ...coverage,
+      ...deadlines,
+    ],
     findings: findings.filter((finding) => !isHard(finding)),
   };
 }

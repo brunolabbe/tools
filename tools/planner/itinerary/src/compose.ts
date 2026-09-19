@@ -200,10 +200,15 @@ export function compose(input: ComposeInput): ComposeResult {
       id: input.revision.id,
       reason: input.revision.reason,
       operation: { kind: "first-draft" },
+      brief: structuredClone(brief),
       createdAt: input.revision.createdAt,
       days,
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packing.packed)],
       coverage,
+      // Nothing on a first draft can be late: the packer refuses a candidate
+      // whose lead time has passed unless it is pinned, and nothing is pinned
+      // yet. The entry is a dates edit's to write (pl-47).
+      deadlines: [],
       reading,
     },
     // Derived from what was placed, not from the pack — so a reader of the

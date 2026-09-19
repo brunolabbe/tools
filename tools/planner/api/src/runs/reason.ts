@@ -37,7 +37,18 @@ export type ReasonInput =
     }
   | { kind: "move"; title: string; fromDayIndex: number; toDayIndex: number }
   | { kind: "remove"; title: string; fromDayIndex: number }
-  | { kind: "restore"; revision: number };
+  | { kind: "restore"; revision: number }
+  | {
+      kind: "brief";
+      /** Which slots the edit changed. At least one. */
+      dates: boolean;
+      budget: boolean;
+      /** The base revision's day count, and the edited one's. */
+      before: number;
+      after: number;
+      /** The slice was every day: a budget change, or a new day count under a per-day budget. */
+      everyDay: boolean;
+    };
 
 /** `a`, `a and b`, `a, b and c`. */
 function joined(parts: readonly string[]): string {
@@ -89,5 +100,43 @@ export function revisionReason(input: ReasonInput): string {
       return `Removed “${input.title}” from day ${String(input.fromDayIndex + 1)}.`;
     case "restore":
       return `Restored version ${String(input.revision)}.`;
+    case "brief":
+      return briefReason(input);
   }
+}
+
+/** Day indexes `from` to `to`, exclusive, for `dayList`. */
+function range(from: number, to: number): number[] {
+  return Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
+}
+
+/**
+ * A brief edit's caption (pl-47): what the user changed, then what the tool
+ * did with it. No date and no amount — formatting either is the page's job,
+ * and the operation carries both ends.
+ *
+ * The subject names only what was changed. A new day count under a `per-day`
+ * budget re-packs every day although the budget slot did not move, and the
+ * caption says "Changed the dates, and re-packed every day" for it rather than
+ * claiming a budget change nobody made.
+ */
+function briefReason(input: Extract<ReasonInput, { kind: "brief" }>): string {
+  const subject =
+    input.dates && input.budget
+      ? "the dates and the budget"
+      : input.dates
+        ? "the dates"
+        : "the budget";
+  const dropped = range(input.after, input.before);
+
+  if (input.everyDay) {
+    return dropped.length > 0
+      ? `Changed ${subject}, dropped ${dayList(dropped)}, and re-packed the rest.`
+      : `Changed ${subject}, and re-packed every day.`;
+  }
+  if (input.after > input.before) {
+    return `Changed ${subject}, and planned ${dayList(range(input.before, input.after))}.`;
+  }
+  if (dropped.length > 0) return `Changed ${subject}, and dropped ${dayList(dropped)}.`;
+  return `Changed ${subject}.`;
 }

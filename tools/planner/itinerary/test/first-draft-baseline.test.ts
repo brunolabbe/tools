@@ -13,13 +13,40 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { composeEveryCase } from "./first-draft-cases.ts";
+import type { ComposeResult } from "../src/compose.ts";
+import { composeEveryCase, firstDraftCases } from "./first-draft-cases.ts";
 
 const BASELINE: Record<string, unknown> = JSON.parse(
   readFileSync(new URL("./fixtures/first-draft-baseline.json", import.meta.url), "utf8"),
 ) as Record<string, unknown>;
 
-const RESULTS = composeEveryCase();
+const COMPOSED = composeEveryCase();
+const CASES = firstDraftCases();
+
+/**
+ * The result without the two fields pl-47 added to every revision, which the
+ * baseline predates: `brief` and `deadlines`. Removed rather than the baseline
+ * rewritten, because a baseline rewritten by the tree under test proves nothing
+ * about that tree; the key order of everything left is unchanged, and the two
+ * fields are asserted on their own below.
+ */
+function withoutPl47Fields(result: ComposeResult): unknown {
+  const revision: Partial<ComposeResult["revision"]> = { ...result.revision };
+  delete revision.brief;
+  delete revision.deadlines;
+  return { ...result, revision };
+}
+
+const RESULTS = Object.fromEntries(
+  Object.entries(COMPOSED).map(([name, result]) => [name, withoutPl47Fields(result)]),
+);
+
+describe("compose stamps the fields the baseline predates (pl-47)", () => {
+  test.each(Object.keys(COMPOSED))("%s", (name) => {
+    expect(COMPOSED[name]?.revision.brief).toEqual(CASES[name]?.brief);
+    expect(COMPOSED[name]?.revision.deadlines).toEqual([]);
+  });
+});
 
 describe("compose's first drafts match the pre-pl-43 baseline", () => {
   test("the baseline and the cases name the same thirteen inputs", () => {

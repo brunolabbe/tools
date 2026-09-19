@@ -13,9 +13,11 @@ import {
   type PlanRevision,
   type RevisionOperation,
   type Source,
+  type TripBrief,
   type UncheckedConstraint,
 } from "@planner/contract";
 import { NOTHING_MEASURED, type TravelTable } from "../src/travel.ts";
+import { briefFor } from "./helpers.ts";
 
 /** One item on a hand-built day. A bare string is a candidate id with every default. */
 export interface ItemSpec {
@@ -41,6 +43,9 @@ export function revisionOf(spec: {
   gaps?: PlanGap[];
   coverage?: UncheckedConstraint[];
   reading?: Source[];
+  /** Defaults to `briefFor({})`, whose four days `dateOf` dates. */
+  brief?: TripBrief;
+  deadlines?: UncheckedConstraint[];
 }): PlanRevision {
   const parentRevisionId = spec.parentRevisionId ?? null;
   const revision = spec.revision ?? (parentRevisionId === null ? 1 : 2);
@@ -54,6 +59,7 @@ export function revisionOf(spec: {
     parentRevisionId,
     reason: "A revision built by hand for a test.",
     operation,
+    brief: spec.brief ?? briefFor({}),
     createdAt: "2027-01-01T00:00:00.000Z",
     days: spec.days.map((items, dayIndex): PlanDay => ({
       id: `${spec.id}-day-${dayIndex}`,
@@ -75,6 +81,7 @@ export function revisionOf(spec: {
     })),
     gaps: spec.gaps ?? [],
     coverage: spec.coverage ?? [],
+    deadlines: spec.deadlines ?? [],
     reading: spec.reading ?? [],
   };
 }

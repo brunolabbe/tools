@@ -28,7 +28,9 @@
  * It is deliberately **not** stored. The list is a function of the brief, the
  * candidates and which of them were placed, so it is derived from the revision
  * being read — see `uncheckedForRevision`. Storing it would let a stored list
- * disagree with the days it is printed beside.
+ * disagree with the days it is printed beside. The two exceptions are
+ * `coverage` and `booking-deadline-passed`, and they share one reason: a fact
+ * from outside the process, or from a clock, cannot be re-derived on read.
  */
 
 import { z } from "zod";
@@ -148,6 +150,25 @@ export const UNCHECKED_CONSTRAINTS = [
    * would.
    */
   "coverage",
+  /**
+   * A placed item whose booking lead time was longer than the time left before
+   * departure, **when the dates were last edited** (pl-47). `candidateIds`
+   * names the items.
+   *
+   * The name is the packer's exclusion reason for the same fact. The packer
+   * refuses such a candidate unless it is pinned; this is the other half —
+   * one already on a day the edit did not re-pack, kept there by the owner's
+   * decision of 2026-09-13 (keep the item, and say so).
+   *
+   * **Stored, not derived**, on `PlanRevision.deadlines`, and the second kind
+   * that is — for the reason `coverage` is, reached from a clock rather than a
+   * backend: it is a fact about the moment of the edit. "Is there still time to
+   * book this" depends on today, and `uncheckedForRevision` reads no clock, so
+   * the edit that moved the dates answers it once with the `now` it was given
+   * and the revision keeps the answer. It does not go in `coverage`, whose name
+   * and whose note are about a thin corridor.
+   */
+  "booking-deadline-passed",
 ] as const;
 
 export type UncheckedConstraintKind = (typeof UNCHECKED_CONSTRAINTS)[number];

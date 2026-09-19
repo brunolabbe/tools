@@ -57,7 +57,7 @@ function parseRevise(body: unknown): ReviseRequest {
   if (!parsed.success) {
     throw new AppError(
       "INVALID_ANSWER",
-      "A revision names what it does — re-plan, move, remove or restore — and the version it builds on.",
+      "A revision names what it does — re-plan, move, remove, restore or change the dates or budget — and the version it builds on.",
     );
   }
   return parsed.data;
@@ -106,7 +106,8 @@ export function registerPlanRoutes(app: FastifyInstance, context: AppContext): v
     enforceRateLimit(
       request,
       reply,
-      revise.kind === "replan"
+      // A brief edit is a run too (pl-47), and spends what a re-plan spends.
+      revise.kind === "replan" || revise.kind === "brief"
         ? { limiter: context.runLimiter, logger: context.logger, scope: "plans" }
         : { limiter: context.editLimiter, logger: context.logger, scope: "edits" },
     );

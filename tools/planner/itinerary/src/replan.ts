@@ -52,6 +52,7 @@ import {
 } from "./compose.ts";
 import { isHard } from "./critic.ts";
 import { tripSpan, type TripSpan } from "./dates.ts";
+import { carriedDeadlines } from "./deadlines.ts";
 import { rekeyDays } from "./ids.ts";
 import { MAX_CRITIC_ROUNDS } from "./limits.ts";
 import type { PackedItem } from "./pack.ts";
@@ -141,9 +142,48 @@ export function replanPool(input: {
  * `replanPool`).
  */
 export function replan(input: ReplanInput): ComposeResult {
+  const { operation, ...rest } = input;
+  return repack({
+    ...rest,
+    slice: operation.days,
+    operation: {
+      kind: "replan",
+      days: [...operation.days],
+      specialists: [...operation.specialists],
+      note: operation.note,
+    },
+    // What the last dates edit found stays true of the items still placed:
+    // nothing here moved the departure (pl-47).
+    deadlines: (days) => carriedDeadlines(input.previous.deadlines, days),
+  });
+}
+
+/**
+ * What `repack` is told: a re-plan's input with the slice taken apart from the
+ * operation it stamps (pl-47).
+ *
+ * A re-plan's slice is its operation's `days`; a brief edit's is derived from
+ * the change, and its operation is a different member. One packing path for
+ * both is the point — two that agree today are how two views of one plan start
+ * disagreeing.
+ */
+export interface RepackInput extends Omit<ReplanInput, "operation"> {
+  /** The days to re-pack, ascending. Possibly empty: then every day is frozen. */
+  slice: readonly number[];
+  /** Stamped onto the revision as given. Never read. */
+  operation: Exclude<RevisionOperation, { kind: "first-draft" | "move" | "remove" | "restore" }>;
+  /** The revision's `deadlines`, from its final days. */
+  deadlines: (days: readonly PlanDay[]) => UncheckedConstraint[];
+}
+
+/**
+ * Re-pack `slice` of `previous` and freeze the rest — `replan`'s body, shared
+ * with `reviseBrief`. Not exported from the package.
+ */
+export function repack(input: RepackInput): ComposeResult {
   const { brief, previous } = input;
   const dates = draftableDates(brief);
-  const days = input.operation.days;
+  const days = input.slice;
   const named = new Set(days);
 
   const pool = replanPool({ candidates: input.candidates, previous, days });
@@ -189,21 +229,19 @@ export function replan(input: ReplanInput): ComposeResult {
 
   const coverage = [...structuredClone(input.coverage ?? previous.coverage)];
   const reading = [...structuredClone(input.reading ?? previous.reading)];
+  const deadlines = input.deadlines(planDays);
 
   return {
     revision: {
       id: input.revision.id,
       reason: input.revision.reason,
-      operation: {
-        kind: "replan",
-        days: [...input.operation.days],
-        specialists: [...input.operation.specialists],
-        note: input.operation.note,
-      },
+      operation: structuredClone(input.operation),
+      brief: structuredClone(brief),
       createdAt: input.revision.createdAt,
       days: planDays,
       gaps: mergeGaps(input.gaps ?? [], gapsFor(input.candidates, packing.packed), planDays, byId),
       coverage,
+      deadlines,
       reading,
     },
     // Over the whole days: the list is a derivation of what the revision holds,
@@ -211,6 +249,7 @@ export function replan(input: ReplanInput): ComposeResult {
     unchecked: [
       ...uncheckedFor({ brief, dates, candidates: input.candidates, days: planDays }),
       ...coverage,
+      ...deadlines,
     ],
     findings: packing.findings.filter((finding) => !isHard(finding)),
     excluded: packing.excluded,

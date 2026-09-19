@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "vitest";
 import {
+  emptyBrief,
   MAX_CANDIDATE_TITLE_CHARS,
   MAX_PLAN_DAYS,
   MAX_REVISION_REASON_CHARS,
@@ -99,13 +100,103 @@ describe("revisionReason", () => {
         parentRevisionId: "r1",
         reason,
         operation: { kind: "restore", revision: 1 },
+        brief: emptyBrief(),
         createdAt: "2026-08-15T12:00:00.000Z",
         days: [],
         gaps: [],
         coverage: [],
+        deadlines: [],
         reading: [],
       };
       expect(planRevisionSchema.safeParse(revision).success).toBe(true);
     }
+  });
+});
+
+describe("a brief edit's caption (pl-47)", () => {
+  // Step 3.5's table, with one row read as its subject rather than its words:
+  // see the last case.
+  const rows: [string, ReasonInput, string][] = [
+    [
+      "dates, longer",
+      { kind: "brief", dates: true, budget: false, before: 8, after: 10, everyDay: false },
+      "Changed the dates, and planned days 9–10.",
+    ],
+    [
+      "dates, shorter",
+      { kind: "brief", dates: true, budget: false, before: 8, after: 6, everyDay: false },
+      "Changed the dates, and dropped days 7–8.",
+    ],
+    [
+      "dates, same length",
+      { kind: "brief", dates: true, budget: false, before: 8, after: 8, everyDay: false },
+      "Changed the dates.",
+    ],
+    [
+      "budget",
+      { kind: "brief", dates: false, budget: true, before: 8, after: 8, everyDay: true },
+      "Changed the budget, and re-packed every day.",
+    ],
+    [
+      "dates and budget",
+      { kind: "brief", dates: true, budget: true, before: 8, after: 10, everyDay: true },
+      "Changed the dates and the budget, and re-packed every day.",
+    ],
+    [
+      "dates shorter and budget",
+      { kind: "brief", dates: true, budget: true, before: 8, after: 6, everyDay: true },
+      "Changed the dates and the budget, dropped days 7–8, and re-packed the rest.",
+    ],
+    [
+      "one day more",
+      { kind: "brief", dates: true, budget: false, before: 5, after: 6, everyDay: false },
+      "Changed the dates, and planned day 6.",
+    ],
+  ];
+
+  test.for(rows)("%s", ([, input, caption]) => {
+    expect(revisionReason(input)).toBe(caption);
+  });
+
+  test("a new day count under a per-day budget says the dates changed, not the budget", () => {
+    // The table's row reads "Changed the budget, and re-packed every day." for
+    // this case. The budget slot did not change, and a caption that says it did
+    // is a false sentence under the diff; so the subject is what was changed,
+    // and the action is what the ceiling moving made the tool do.
+    expect(
+      revisionReason({
+        kind: "brief",
+        dates: true,
+        budget: false,
+        before: 8,
+        after: 10,
+        everyDay: true,
+      }),
+    ).toBe("Changed the dates, and re-packed every day.");
+    expect(
+      revisionReason({
+        kind: "brief",
+        dates: true,
+        budget: false,
+        before: 8,
+        after: 6,
+        everyDay: true,
+      }),
+    ).toBe("Changed the dates, dropped days 7–8, and re-packed the rest.");
+  });
+
+  test("the longest is within MAX_REVISION_REASON_CHARS", () => {
+    const longest = revisionReason({
+      kind: "brief",
+      dates: true,
+      budget: true,
+      before: MAX_PLAN_DAYS,
+      after: 1,
+      everyDay: true,
+    });
+    expect(longest).toBe(
+      "Changed the dates and the budget, dropped days 2–60, and re-packed the rest.",
+    );
+    expect(longest.length).toBeLessThanOrEqual(MAX_REVISION_REASON_CHARS);
   });
 });

@@ -664,7 +664,7 @@ describe("route refusals", () => {
     } finally {
       await f.close();
     }
-  });
+  }, 15_000); // Fifty restores took 5.3 s in a full planner run on origin/main: pl-47 Log.
 });
 
 // ---------------------------------------------------------------------------
