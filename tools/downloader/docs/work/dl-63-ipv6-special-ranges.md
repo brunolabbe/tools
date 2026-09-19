@@ -216,6 +216,20 @@ carve-outs, per (c):
   takes no carve-outs — the accepted over-block, proven rather than assumed.
 - `npm run check` and `npm test -- --project downloader` green.
 
+## Review
+
+**Gate: PASS** — 2026-09-19 · `origin/main...1a502348816d545aae3ca1656d29163e7de03c78` · reviewer's own defect hunt, medium depth (subagent, no `code-review` tool)
+
+| Done when                                                                                                                                        | Proof                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A unit table over every range added to `isBlockedV6` under (c), proving a public neighbour of each stays allowed and the range itself is blocked | proven — `tools/downloader/api/test/native-ipv6-ranges.test.ts:108 "address past each edge is not"` ✓ (14/14 pass at the reviewed commit `1a50234`; 13/14 fail, 1 pass against `origin/main`'s `ssrf.ts`, reproduced) |
+| A regression proving the seven previously-reachable `2001::/23` sub-allocations are now blocked too                                              | proven — `tools/downloader/api/test/native-ipv6-ranges.test.ts:148 "reachable allocations inside 2001::/23 are refused too"` ✓                                                                                        |
+| `npm run check` and `npm test -- --project downloader` green                                                                                     | verified — `npm run check` exit 0; `npx vitest run --project downloader`: 87 files / 1471 tests passed                                                                                                                |
+
+- **low** · at the reviewed commit `1a502348816d545aae3ca1656d29163e7de03c78`, the `fec0::/10` row's test comment and the ticket's own Log claimed `fc00::/6` was refused end to end. `fe00::/9` (IANA "Reserved by IETF", between unique-local and link-local) is not in `BLOCKED_V6` and stays allowed — reproduced: `isBlockedAddress("fe00::1")` returned `false` against that commit's built `ssrf.ts`. Not an acceptance-line failure: `fe00::/9` was never one of option (c)'s seven named ranges and was never measured against the registry in this ticket, so this was a documentation-accuracy issue, not a code defect. **Fixed at `ac1131c`**: `tools/downloader/api/test/native-ipv6-ranges.test.ts:132 "not join them: fe00::/9 lies between"` and the corresponding ticket Log entry now describe the actual coverage; the renamed test at `tools/downloader/api/test/native-ipv6-ranges.test.ts:130 "fe80:: to the top of the space is refused end to end"` still asserts the same 14/14-passing set. Whether `fe00::/9` itself should be measured and blocked is an open decision, correctly left to the orchestrator rather than settled here.
+- **findings** · own defect hunt returned 1; 1 carried, 0 dropped.
+- NFR: security ✓ (the seven named ranges are exclusively and correctly blocked; dl-60's transition/embedded-IPv4 checks run first but occupy disjoint address space, verified by reading `embeddedV4`/`isRefusedTransitionRange`'s fixed patterns against the seven new prefixes) · performance n/a (`BLOCKED_V6.some()` over 10 fixed entries) · reliability n/a · maintainability — the one low finding above, now fixed; otherwise the flat-table shape matches `BLOCKED_V4`'s existing style.
+
 ## Log
 
 - 2026-09-15 — Filed off `origin/main` `49515ba` (dl-60's fix `cbfdbba` is an
