@@ -811,3 +811,23 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
     },
   );
 });
+
+describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (dl-68)", () => {
+  test(
+    "starts a shadow-root player with no click listener at all",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      // The page's only video is inside an open shadow root and starts only
+      // when something calls `.play()` on it: a chooser that stops at the
+      // shadow boundary never finds it to call `.play()` on, so the `play`
+      // listener never fires and `start()` never runs (dl-61's gate).
+      const result = await probe("/shadow-player-play-only.html", resolver);
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+});

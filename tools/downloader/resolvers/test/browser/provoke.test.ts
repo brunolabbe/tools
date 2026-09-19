@@ -51,3 +51,28 @@ describe("readMetadata's duration fallback (dl-55)", () => {
     expect(durationSec).toBe(942);
   });
 });
+
+describe("readMetadata's audio fallback reaches a shadow root (dl-68)", () => {
+  test("reads a shadow-root <audio>'s duration when there is no video at all", async () => {
+    const durationSec = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/shadow-audio-duration.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          return (await readMetadata(page)).durationSec;
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    // No `<video>` on the page, so `CHOOSE_VIDEO_FN` returns null and
+    // `document.querySelector('audio')` would find nothing — the shadow-root
+    // `<audio>` is only reachable through the same shadow-piercing walk.
+    expect(durationSec).toBe(217);
+  });
+});
