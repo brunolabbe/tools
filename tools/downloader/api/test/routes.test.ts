@@ -12,7 +12,6 @@ import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition, parseRange } from "../src/routes/files.ts";
 import { statusForCode, toErrorResponse } from "../src/http-errors.ts";
-import { createLogger } from "../src/logger.ts";
 import type { HealthResponse } from "../src/routes/health.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
@@ -924,8 +923,13 @@ describe("error mapping", () => {
  */
 describe("a request Fastify itself refuses is BAD_REQUEST, not INTERNAL", () => {
   // Reuses the file-level `harness` and its top-level `afterEach` disposal —
-  // a second declaration here would shadow it.
+  // a second declaration here would shadow it. `createLogger` is loaded
+  // dynamically rather than added to this file's top-of-file imports: a new
+  // static import there shifts every later line number, which is exactly what
+  // `dl-32-the-job-list-has-no-caller.md`'s gate record resolves its own
+  // citations into this file against.
   test("POST .../cancel with an empty declared-JSON body: 400, logged at info", async () => {
+    const { createLogger } = await import("../src/logger.ts");
     const raw: string[] = [];
     harness = await createHarness({
       logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
@@ -943,9 +947,15 @@ describe("a request Fastify itself refuses is BAD_REQUEST, not INTERNAL", () => 
     const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
     expect(rejected).toHaveLength(1);
     expect(rejected[0]).toContain('"level":"info"');
+    // The log line's own `code` field, not just the response body's — a
+    // second, independent `AppError.from` in `registerErrorHandling` used to
+    // leave this at `INTERNAL` while the response above already said
+    // `BAD_REQUEST` (dl-66).
+    expect(rejected[0]).toContain('"code":"BAD_REQUEST"');
   });
 
   test("POST /api/jobs with malformed JSON: 400, logged at info", async () => {
+    const { createLogger } = await import("../src/logger.ts");
     const raw: string[] = [];
     harness = await createHarness({
       logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
@@ -964,5 +974,6 @@ describe("a request Fastify itself refuses is BAD_REQUEST, not INTERNAL", () => 
     const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
     expect(rejected).toHaveLength(1);
     expect(rejected[0]).toContain('"level":"info"');
+    expect(rejected[0]).toContain('"code":"BAD_REQUEST"');
   });
 });

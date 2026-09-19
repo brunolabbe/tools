@@ -79,11 +79,12 @@ orchestrator's recommendation.** Costs carried forward:
 - **Lands after dl-58** (satisfied — dl-58 merged as #269). The stated reason
   was wrong: `git show fb15bc9 --stat` shows dl-58's diff never touches
   `server.ts` or `http-errors.ts` — it is `logger.ts`, the ffmpeg runner and
-  their tests. The actual fix here lives entirely in `toErrorResponse`
-  (`http-errors.ts`), which `registerErrorHandling` already calls without
-  needing to change; `server.ts` is untouched by this ticket. `depends_on`
-  left as `[dl-58]` since it is satisfied either way and reordering the field
-  is not worth a second edit.
+  their tests. `depends_on` left as `[dl-58]` since it is satisfied either way
+  and reordering the field is not worth a second edit. (The first build round
+  believed the fix lived entirely in `toErrorResponse` with no `server.ts`
+  edit; the review gate found that `registerErrorHandling` computes its own
+  second `AppError` for its log line, so `server.ts` **is** genuinely touched
+  by this ticket after all — see the Log.)
 
 ## Build
 
@@ -97,9 +98,15 @@ orchestrator's recommendation.** Costs carried forward:
    `allowRetry: false` — the same shape as `INVALID_URL`).
 4. In `toErrorResponse` (`api/src/http-errors.ts`), before `AppError.from`:
    map an error carrying a Fastify `statusCode` in the 4xx range to a
-   `BAD_REQUEST` `AppError`; keep `INTERNAL` for everything else. Rebase onto
-   dl-58's landed change to `registerErrorHandling` in `server.ts` rather than
-   editing it independently.
+   `BAD_REQUEST` `AppError`; keep `INTERNAL` for everything else. **Also
+   check `server.ts`'s `registerErrorHandling`**: it computes its own
+   `AppError.from(error)` for the fields it logs, separately from the one
+   `toErrorResponse` builds for the response — if that second computation is
+   not widened the same way, the response says `BAD_REQUEST` and the log
+   still says `INTERNAL` for the identical request, which is the ticket's own
+   `Why` in miniature. Have `toErrorResponse` hand its `AppError` back to the
+   caller so there is only one computation, and read `server.ts`'s copy from
+   that rather than calling `AppError.from` a second time.
 5. Check whether the planner's API (`tools/planner/api/src/server.ts` and
    `http-errors.ts`) has the same Fastify-body-parse gap. If it does, file a
    `pl-` ticket for it rather than fixing it here — this branch stays
@@ -187,3 +194,52 @@ application/json` and no body answers 400 `BAD_REQUEST`, and logs at
   `npm test -- --project core` (5 files, 23 passed — the packages project;
   it is named `core` in `vitest.config.ts`, not `packages`). `npm run check`
   exits 0 (lint, `oxfmt --check`, `tsc --build` across every project).
+
+- 2026-09-19 — First gate: **CONCERNS**, two `med`, three `low`, one open
+  decision. Both `med`s reproduced and fixed:
+  - **`registerErrorHandling` logged the wrong code.** It computed its own
+    `AppError.from(error)` for the log line, separately from the `AppError`
+    `toErrorResponse` built for the response — so a widened `BAD_REQUEST`
+    reached the client while the log still said `INTERNAL` for the same
+    request, which is half of this ticket's own `Why` left standing.
+    `toErrorResponse` now returns the `AppError` it built alongside `status`
+    and `body`, and `server.ts` reads that instead of calling `AppError.from`
+    a second time. Both new integration tests gained a
+    `expect(rejected[0]).toContain('"code":"BAD_REQUEST"')` line, confirmed
+    red against the pre-fix code before the fix landed. This makes `server.ts`
+    genuinely touched by this ticket, correcting what the first build round
+    (and the premise-correction note above) believed — updated in place
+    rather than left to contradict the Log.
+  - **The citations gate broke a merged record.** `node
+scripts/citations-gate.mjs --against origin/main` failed
+    `dl-32-the-job-list-has-no-caller.md` — 9 anchors into
+    `api/test/routes.test.ts` moved by the exact number of lines a new
+    top-of-file `import { createLogger }` added. Fixed by not adding a
+    top-of-file import at all: the two integration tests load `createLogger`
+    with `await import("../src/logger.ts")`, a pattern already used elsewhere
+    in this suite (`thumbnails.test.ts`, `vite-config.test.ts`). Separately,
+    rebased this branch onto `origin/main` (`4463431`, was `fb15bc9`) — dl-56
+    had landed in between and touched `server.ts` and `helpers.ts` well above
+    where this ticket's own edits sit, so gating against the stale base was
+    itself part of what the gate's first run was measuring. Re-ran
+    `citations-gate.mjs` after both fixes: `90 enforced, 0 failing`.
+  - **`low`: pl-51 needs a reproduction**, not "confirmed by reading" — the
+    reviewer supplied one (`POST /api/intakes` empty-JSON, `POST /api/plans`
+    malformed-JSON, both 500 `INTERNAL` at `43d2e5e`); added to pl-51 with
+    the exact commands and output rather than restated as this ticket's own
+    claim, since it is the reviewer's measurement to attribute.
+  - **`low`: the width of the widened rule is an open decision**, forwarded
+    by the reviewer to the orchestrator (every non-`AppError` error carrying a
+    4xx `statusCode` becomes `BAD_REQUEST`, so `@fastify/static`'s own 412/416
+    and Fastify's own 413/415 lose their more specific status). Not resolved
+    here — the code and its comments are left as the reviewer measured them
+    pending that answer, rather than narrowed or widened on this branch's own
+    judgement.
+  - **`low`: stale comments** — deferred with the width decision above, since
+    narrowing the comment now and having the width decision widen the rule
+    back would just be a second edit to the same sentence.
+
+  Re-ran after both fixes: `routes.test.ts` 44/44 (with the two new `code`
+  assertions passing), `npm test -- --project downloader` unchanged at 1461,
+  `npm run check` exit 0, `citations-gate.mjs --against origin/main` 0
+  failing.

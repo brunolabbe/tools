@@ -128,12 +128,38 @@ function isUnparsedClientRequestError(error: unknown): boolean {
   return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
 }
 
-export function toErrorResponse(error: unknown): { status: number; body: ErrorResponse } {
-  const appError = isUnparsedClientRequestError(error)
+/**
+ * The one place that decides what `AppError` a failure *is*. `toErrorResponse`
+ * below hands its answer back to the caller precisely so nothing needs to call
+ * this a second time — `server.ts`'s `registerErrorHandling` used to call
+ * `AppError.from` on its own for its log line, which put the widened
+ * `BAD_REQUEST` in the response but left the log reporting `INTERNAL` for the
+ * same request (dl-66) — exactly the "log reads as a server fault" failure
+ * this ticket exists to fix, just moved from the response to the line an
+ * operator actually reads.
+ */
+function toAppError(error: unknown): AppError {
+  return isUnparsedClientRequestError(error)
     ? new AppError("BAD_REQUEST", undefined, { cause: error })
     : AppError.from(error);
+}
+
+/**
+ * `appError` rides along on the return value precisely so a caller that also
+ * needs to log the failure — `registerErrorHandling` in `server.ts` is the
+ * one — reads it from here rather than computing its own with a second
+ * `AppError.from`/`toAppError` call. Two independent computations of "what
+ * `AppError` is this" is exactly how the response and the log line disagreed
+ * about a `BAD_REQUEST`'s code (dl-66).
+ */
+export function toErrorResponse(error: unknown): {
+  status: number;
+  body: ErrorResponse;
+  appError: AppError;
+} {
+  const appError = toAppError(error);
   // An INTERNAL is by definition something we did not anticipate, so its
   // message is whatever a library happened to throw. Never echo that.
   const payload = toPublicPayload(appError, { safeMessage: appError.code === "INTERNAL" });
-  return { status: statusForCode(appError.code), body: { error: payload } };
+  return { status: statusForCode(appError.code), body: { error: payload }, appError };
 }
