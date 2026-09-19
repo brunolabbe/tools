@@ -666,3 +666,18 @@ unanchored. It now reads `contract/src/plan.ts:69 "under 100 KiB"`, the text
 already on that line. This is a mechanical anchor qualification, made on the
 coordinator's instruction, and it changes no verdict, row or severity. pl-44's
 record carries the same kind of change.
+
+**2026-09-19 — rebased onto `2e5bd9f`**, after pl-46 (#276), pl-50 (#274) and
+the rest of that batch merged, so this branch lands last. One conflict, in
+pl-49's citation table, where pl-50 and this branch had repointed the same two
+citations: pl-50's landed version was kept and repointed on top of it. Three
+citations moved and were repointed, coordinates only, with no verdict, row,
+severity or wording touched:
+
+- **pl-46's record** cites `tools/planner/CLAUDE.md` for the e2e spec count.
+  The two lines this branch adds above it move that text from 181 to 183.
+- **pl-49's record** cites two migration tests, which migration 11's tests move
+  from 149 and 158 to 156 and 165.
+
+After them `node scripts/citations-gate.mjs --against origin/main` reports 97
+enforced and 0 failing.
