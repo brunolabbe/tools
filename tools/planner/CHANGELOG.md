@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunolabbe/tools/compare/planner-v0.6.0...planner-v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **planner:** prove P3 against a real model with an offline-gated live harness (pl-40) ([#266](https://github.com/brunolabbe/tools/issues/266)) ([a4ad365](https://github.com/brunolabbe/tools/commit/a4ad36565bb234a7f5f20bbf0917983725844d8a))
+* **planner:** revise a plan over HTTP — re-plans run as jobs, edits write synchronously (pl-44) ([#264](https://github.com/brunolabbe/tools/issues/264)) ([b63b2bb](https://github.com/brunolabbe/tools/commit/b63b2bba158d4612c3348f0a16be23f7c1066f18))
+
 ## [0.6.0](https://github.com/brunolabbe/tools/compare/planner-v0.5.1...planner-v0.6.0) (2026-09-16)
 
 
