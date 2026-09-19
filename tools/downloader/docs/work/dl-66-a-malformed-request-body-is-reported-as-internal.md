@@ -3,7 +3,7 @@ id: dl-66
 tool: downloader
 title: A request whose body Fastify cannot parse is reported as `INTERNAL` 500
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-58]
 difficulty: standard
@@ -76,8 +76,14 @@ orchestrator's recommendation.** Costs carried forward:
   PR** — one tool per PR, per the root `CLAUDE.md`. Not measured here; `Build`
   below asks the builder to check it, and if the gap is real it is a ticket
   to file for the planner, not a change to make in this branch.
-- **Lands after dl-58.** Both edit `registerErrorHandling` in
-  `api/src/server.ts`; added to `depends_on`.
+- **Lands after dl-58** (satisfied — dl-58 merged as #269). The stated reason
+  was wrong: `git show fb15bc9 --stat` shows dl-58's diff never touches
+  `server.ts` or `http-errors.ts` — it is `logger.ts`, the ffmpeg runner and
+  their tests. The actual fix here lives entirely in `toErrorResponse`
+  (`http-errors.ts`), which `registerErrorHandling` already calls without
+  needing to change; `server.ts` is untouched by this ticket. `depends_on`
+  left as `[dl-58]` since it is satisfied either way and reordering the field
+  is not worth a second edit.
 
 ## Build
 
@@ -127,3 +133,57 @@ application/json` and no body answers 400 `BAD_REQUEST`, and logs at
   `web/src/lib/error-presentation.ts` are the two tables that actually break,
   and the planner's `api`/`web` build clean. `Build` rewritten to name the
   concrete files and steps; `Done when` names `BAD_REQUEST` explicitly.
+- 2026-09-19 — Built. `BAD_REQUEST` (400) added to `CORE_ERROR_CODES` and
+  `CORE_ERROR_MESSAGES` in `packages/core/src/errors.ts`; `STATUS_BY_CODE` in
+  `tools/downloader/api/src/http-errors.ts` and `ERROR_PRESENTATION` in
+  `tools/downloader/web/src/lib/error-presentation.ts` each gained an entry.
+  `toErrorResponse` (`http-errors.ts`) now maps any error carrying a numeric
+  `statusCode` in `[400, 500)` that is not already an `AppError` to
+  `BAD_REQUEST` before falling through to `AppError.from`; `INTERNAL` is
+  unchanged for anything with a 5xx or missing `statusCode`. **Corrected the
+  ticket's own dependency reasoning**: it said dl-66 lands after dl-58 because
+  "both edit `registerErrorHandling` in `api/src/server.ts`" — checked with
+  `git show fb15bc9 --stat` (dl-58, #269), which never touches `server.ts` or
+  `http-errors.ts` (it is `logger.ts`, the ffmpeg runner and their tests). The
+  dependency was still satisfied (dl-58 had merged) but the stated reason was
+  wrong; the actual fix lives entirely in `toErrorResponse`, which
+  `registerErrorHandling` already calls unchanged. `server.ts` is untouched by
+  this branch. Left `depends_on: [dl-58]` as-is since it is satisfied either
+  way.
+
+  Checked the planner for the same gap per Build step 5 (own read of
+  `tools/planner/api/src/http-errors.ts` and `server.ts`, not inferred): its
+  `toErrorResponse` is `AppError.from(error)` with no Fastify-`statusCode`
+  branch either, and its `STATUS_BY_CODE` is a `Partial` that falls back to
+  500 for anything unmapped — the identical bug. Filed
+  [pl-51](../../planner/docs/work/pl-51-a-malformed-request-body-is-reported-as-internal.md)
+  rather than fixing it here (one tool per PR, and `tools/planner/web` has no
+  `error-presentation.ts` to touch — confirmed by search — so pl-51 is
+  `api`-only).
+
+  Fold-in considered and declined: `STATUS_BY_CODE` here is an exhaustive
+  `Record<ErrorCode, number>`, so nothing about this change makes the
+  planner's `Partial` table exhaustive for free — that would be a second,
+  larger decision (whether the planner's table should be exhaustive at all)
+  that this ticket did not open and pl-51 does not need answered to fix its
+  own gap.
+
+  Tests: `routes.test.ts` gained a unit case for `toErrorResponse` on a
+  Fastify-shaped 4xx error and a 5xx boundary case, plus an integration
+  describe block reproducing the ticket's own two `Done when` lines through
+  `createHarness`/`inject` with a captured logger (asserts the response body,
+  the status, and that `request rejected` — not `request failed` — is the one
+  line written, at `info`). `error-presentation.test.ts`'s existing
+  exhaustiveness check covers the new code with no edit. `mock-api.test.ts`'s
+  "every ErrorCode is demonstrable" needed one line: `BAD_REQUEST` joins
+  `NOT_FOUND`/`THUMBNAIL_NOT_FOUND` in `notReachableInTheMock`, since the mock
+  client calls typed functions directly and has no wire body to fail to
+  parse.
+
+  Ran narrowest first: `npx vitest run tools/downloader/api/test/routes.test.ts`
+  (44 passed), then `tools/downloader/web/test/error-presentation.test.ts` +
+  `error-panel.test.tsx` (22 passed), then `npm test -- --project downloader`
+  (86 files, 1461 passed — up from 1457 before this branch), then
+  `npm test -- --project core` (5 files, 23 passed — the packages project;
+  it is named `core` in `vitest.config.ts`, not `packages`). `npm run check`
+  exits 0 (lint, `oxfmt --check`, `tsc --build` across every project).

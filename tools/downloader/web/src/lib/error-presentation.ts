@@ -40,6 +40,17 @@ export interface ErrorPresentationEntry {
 }
 
 export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
+  // Fastify refused the request body before any route saw it — empty when
+  // JSON was declared, malformed JSON, or an unsupported media type. The UI
+  // never sends a request shaped like that itself, so a user only sees this
+  // through version skew or a hand-crafted request — same tone and shape as
+  // `INVALID_URL`, since both name the request as the problem.
+  BAD_REQUEST: {
+    title: "That request could not be understood",
+    detail: "The request was malformed. Reload the page and try again.",
+    tone: "input",
+    allowRetry: false,
+  },
   INVALID_URL: {
     title: "That address will not work",
     detail: "Paste the full page address, starting with http:// or https://.",

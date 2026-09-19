@@ -12,6 +12,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition, parseRange } from "../src/routes/files.ts";
 import { statusForCode, toErrorResponse } from "../src/http-errors.ts";
+import { createLogger } from "../src/logger.ts";
 import type { HealthResponse } from "../src/routes/health.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
@@ -885,5 +886,83 @@ describe("error mapping", () => {
     expect(status).toBe(500);
     expect(body.error.code).toBe("INTERNAL");
     expect(body.error.message).not.toContain("is not a function");
+  });
+
+  /**
+   * dl-66. Fastify's own content-type parser rejects a body it cannot parse
+   * before any route handler runs, and the error it throws carries a
+   * `statusCode` rather than being an `AppError` — `AppError.from` used to
+   * turn that into `INTERNAL`, reporting a client's malformed request as a
+   * server fault.
+   */
+  test("an unparsed Fastify body error becomes BAD_REQUEST, not INTERNAL", () => {
+    expect(statusForCode("BAD_REQUEST")).toBe(400);
+
+    const fastifyError = Object.assign(
+      new Error("Body cannot be empty when content-type is set to 'application/json'"),
+      { statusCode: 400, code: "FST_ERR_CTP_EMPTY_JSON_BODY" },
+    );
+    const { status, body } = toErrorResponse(fastifyError);
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("BAD_REQUEST");
+    // The safe catalog message, never Fastify's own — consistent with how
+    // INTERNAL is handled above.
+    expect(body.error.message).not.toContain("content-type");
+  });
+
+  test("a Fastify-shaped 5xx statusCode still becomes INTERNAL", () => {
+    const fastifyError = Object.assign(new Error("boom"), { statusCode: 500 });
+    const { status, body } = toErrorResponse(fastifyError);
+    expect(status).toBe(500);
+    expect(body.error.code).toBe("INTERNAL");
+  });
+});
+
+/**
+ * dl-66's own reproduction, through the real Fastify pipeline rather than a
+ * mock error shape — closing the gap the ticket's `Done when` names directly.
+ */
+describe("a request Fastify itself refuses is BAD_REQUEST, not INTERNAL", () => {
+  // Reuses the file-level `harness` and its top-level `afterEach` disposal —
+  // a second declaration here would shadow it.
+  test("POST .../cancel with an empty declared-JSON body: 400, logged at info", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.cancelJob("does-not-exist"),
+      headers: { "content-type": "application/json" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    expect(raw.some((line) => line.includes('"msg":"request failed"'))).toBe(false);
+    const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toContain('"level":"info"');
+  });
+
+  test("POST /api/jobs with malformed JSON: 400, logged at info", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      headers: { "content-type": "application/json" },
+      payload: "{not valid json",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    expect(raw.some((line) => line.includes('"msg":"request failed"'))).toBe(false);
+    const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toContain('"level":"info"');
   });
 });

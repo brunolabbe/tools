@@ -12,6 +12,7 @@ import { AppError, DEFAULT_ERROR_MESSAGES } from "@downloader/contract";
 import type { AppErrorPayload, ErrorCode, ErrorResponse } from "@downloader/contract";
 
 const STATUS_BY_CODE: Record<ErrorCode, number> = {
+  BAD_REQUEST: 400,
   INVALID_URL: 400,
   BLOCKED_TARGET: 403,
   // The *source* was unreachable, not us. 502 says "the upstream failed",
@@ -110,8 +111,27 @@ export function toPublicPayload(error: AppError, { safeMessage = false } = {}): 
   };
 }
 
+/**
+ * A body Fastify's own content-type parser refused — empty JSON, malformed
+ * JSON, an unsupported media type, a body over the configured cap — never
+ * reaches a route handler, so it can never be an `AppError`. It does carry the
+ * `statusCode` fastify-error's constructor set (dl-66): 4xx, because the
+ * client's request is what is wrong. Anything else with a numeric `statusCode`
+ * in that range is treated the same way rather than enumerating fastify's
+ * error codes one by one, since the diagnosis — "the request itself could not
+ * be understood" — holds for all of them and `BAD_REQUEST`'s copy is already
+ * generic enough to say so.
+ */
+function isUnparsedClientRequestError(error: unknown): boolean {
+  if (error instanceof AppError) return false;
+  const statusCode = (error as { statusCode?: unknown } | null)?.statusCode;
+  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
+}
+
 export function toErrorResponse(error: unknown): { status: number; body: ErrorResponse } {
-  const appError = AppError.from(error);
+  const appError = isUnparsedClientRequestError(error)
+    ? new AppError("BAD_REQUEST", undefined, { cause: error })
+    : AppError.from(error);
   // An INTERNAL is by definition something we did not anticipate, so its
   // message is whatever a library happened to throw. Never echo that.
   const payload = toPublicPayload(appError, { safeMessage: appError.code === "INTERNAL" });

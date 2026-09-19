@@ -19,6 +19,16 @@
 
 export const CORE_ERROR_CODES = [
   // --- Input / reachability ---
+  /**
+   * The request itself could not be understood — a body Fastify's own
+   * content-type parser rejected (empty when JSON was declared, malformed
+   * JSON, unsupported media type) before any route handler saw it. Distinct
+   * from `INVALID_URL`: that names one field's value being wrong, this names
+   * the request failing to parse at all. About the transport, not any tool's
+   * domain, which is why it lives here rather than being re-worded onto a
+   * domain code at the call site.
+   */
+  "BAD_REQUEST",
   /** Not a URL, or a scheme we refuse (file:, data:, ftp:). */
   "INVALID_URL",
   /** Blocked by the SSRF guard: private IP, loopback, link-local, or denied host. */
@@ -89,6 +99,7 @@ export type CoreErrorCode = (typeof CORE_ERROR_CODES)[number];
  * own catalog rather than editing these.
  */
 export const CORE_ERROR_MESSAGES: Readonly<Record<CoreErrorCode, string>> = {
+  BAD_REQUEST: "The request could not be understood.",
   INVALID_URL: "That does not look like a valid web address.",
   BLOCKED_TARGET: "That address points somewhere this service is not allowed to reach.",
   UNREACHABLE: "The site could not be reached.",
