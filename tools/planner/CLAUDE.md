@@ -178,8 +178,8 @@ every saved answer under that id silently becomes an answer to something else.
 `validateTree` runs as a test, not at boot: a malformed tree is a review
 mistake, not a reason to refuse to start.
 
-**The e2e suite reads the screen; it never names a question**, and **it is four
-specs over two paths on purpose.** Because the tree is content, a spec that types
+**The e2e suite reads the screen; it never names a question**, and **it is five
+specs over three paths on purpose.** Because the tree is content, a spec that types
 into `#field-road-trip.drive-appetite` turns a content edit into a red build. The
 reasoning, and why the reload is usually the seam a spec earns its place by
 crossing, is in [`.claude/rules/planner-e2e.md`](../../.claude/rules/planner-e2e.md).

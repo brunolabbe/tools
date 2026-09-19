@@ -29,19 +29,16 @@
  * sees what a user sees, so "no revision was appended" is read off the page's
  * own "Version 1 of 1" line — a spec that queried SQLite would be an integration
  * test wearing a browser.
+ *
+ * `draftAPlan` and `reopenFromTheList` moved to `plan-walk.ts` with pl-46,
+ * which needs the same walk to reach a plan to revise. Nothing about them
+ * changed — see the note at the top of that file for why it is shared rather
+ * than copied.
  */
 
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { answerThroughCore, CHECKPOINT, startATrip } from "./intake-walk.ts";
-
-/**
- * A run against the scripted provider is fast, and it is not instant: seven
- * specialists, a compose and a critic pass. Waiting on the finished state to
- * render is the browser's equivalent of the API suite's `runToCompletion`, which
- * polls the store because the SSE hub is not a replay log.
- */
-const RUN_TIMEOUT = 60_000;
+import { draftAPlan, reopenFromTheList } from "./plan-walk.ts";
 
 /** The item's pin button, found by the item's own title rather than by index. */
 function pinButton(page: Page, title: string): Locator {
@@ -49,53 +46,6 @@ function pinButton(page: Page, title: string): Locator {
     .locator("li.item")
     .filter({ has: page.getByRole("heading", { name: title }) })
     .locator("button.pin");
-}
-
-/**
- * Draft a plan from a fresh intake and open it, returning what the page called
- * it.
- *
- * The title is read rather than named: it is derived from the brief, so writing
- * it down here would be the tree's content copied into a spec — the mistake
- * `intake-walk.ts` exists to avoid.
- */
-async function draftAPlan(page: Page): Promise<string> {
-  await startATrip(page);
-  await answerThroughCore(page);
-  await expect(page.getByRole("heading", { name: CHECKPOINT })).toBeVisible();
-
-  await page.getByRole("button", { name: "Draft a plan" }).click();
-
-  // The run's own screen, and then its finished state. Not a fixed duration:
-  // "Done" is rendered when the run says so, and a sleep would be either flaky
-  // or slow depending on the runner.
-  await expect(page.getByRole("heading", { name: "Done", exact: true })).toBeVisible({
-    timeout: RUN_TIMEOUT,
-  });
-  await page.getByRole("button", { name: "Read the plan" }).click();
-
-  const plan = page.locator("section.panel.plan");
-  await expect(plan).toBeVisible();
-  return (await plan.getByRole("heading").first().innerText()).trim();
-}
-
-/**
- * Get back to a plan after a reload.
- *
- * A reload does not land on the plan: which plan is being read is component
- * state and deliberately not remembered — pl-10 stops at the list and the
- * document, and restoring one would only be guessing at what someone wanted to
- * see. Which *intake* was open is remembered, so a reload mid-wizard comes back
- * to the wizard, and the way out to the list is the crumb a user would click.
- */
-async function reopenFromTheList(page: Page, title: string): Promise<void> {
-  await page.reload();
-
-  const crumb = page.getByRole("button", { name: "← All trips" });
-  if ((await crumb.count()) > 0) await crumb.click();
-
-  await page.locator("ul.plans button.link").filter({ hasText: title }).first().click();
-  await expect(page.locator("section.panel.plan")).toBeVisible();
 }
 
 test("a pin survives a reload, and appends no revision", async ({ page }) => {
