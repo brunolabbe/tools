@@ -29,34 +29,51 @@ export interface RateLimitHookOptions {
 }
 
 /**
- * A Fastify `onRequest` hook. Runs before the body is parsed, so a refused
- * request costs almost nothing — which is the point when the thing being
- * refused is expensive.
+ * Spend one request from `limiter` for this client, or refuse it.
  *
  * `RateLimit-*` are the IETF draft header names; `Retry-After` is the one every
  * HTTP client already understands, and is what the UI reads.
+ *
+ * **Factored out of the hook for pl-44**, and the hook below is now only this
+ * called at `onRequest`. `POST /api/plans/:id/revisions` needs the same check
+ * after its body is parsed, because the body's `kind` is what picks the bucket
+ * — a re-plan spends from the runs bucket and an edit from the edits bucket —
+ * and an `onRequest` hook runs before there is a body to read. One function,
+ * so the two call sites cannot drift on a header, the code or the log line.
+ */
+export function enforceRateLimit(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: RateLimitHookOptions,
+): void {
+  const { limiter, logger, scope } = options;
+  if (!limiter.enabled) return;
+
+  const key = clientKey(request.ip);
+  const decision = limiter.check(key);
+
+  reply.header("RateLimit-Limit", String(decision.limit));
+  reply.header("RateLimit-Remaining", String(decision.remaining));
+  reply.header("RateLimit-Reset", String(decision.resetSec));
+
+  if (decision.allowed) return;
+
+  reply.header("Retry-After", String(decision.retryAfterSec));
+  logger.warn("rate limited", { scope, key, retryAfterSec: decision.retryAfterSec });
+  throw new AppError("RATE_LIMITED", undefined, {
+    details: { scope, retryAfterSec: decision.retryAfterSec },
+  });
+}
+
+/**
+ * A Fastify `onRequest` hook. Runs before the body is parsed, so a refused
+ * request costs almost nothing — which is the point when the thing being
+ * refused is expensive.
  */
 export function createRateLimitHook(
   options: RateLimitHookOptions,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  const { limiter, logger, scope } = options;
-
   return async function rateLimit(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    if (!limiter.enabled) return;
-
-    const key = clientKey(request.ip);
-    const decision = limiter.check(key);
-
-    reply.header("RateLimit-Limit", String(decision.limit));
-    reply.header("RateLimit-Remaining", String(decision.remaining));
-    reply.header("RateLimit-Reset", String(decision.resetSec));
-
-    if (decision.allowed) return;
-
-    reply.header("Retry-After", String(decision.retryAfterSec));
-    logger.warn("rate limited", { scope, key, retryAfterSec: decision.retryAfterSec });
-    throw new AppError("RATE_LIMITED", undefined, {
-      details: { scope, retryAfterSec: decision.retryAfterSec },
-    });
+    enforceRateLimit(request, reply, options);
   };
 }

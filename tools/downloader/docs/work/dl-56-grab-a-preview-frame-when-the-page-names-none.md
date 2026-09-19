@@ -223,8 +223,8 @@ _Transcribed by the builder (Opus 5) from the reviewer's message. Two changes, b
 
 - **Egress, enumerated, not sampled.** Six sub-resource hop types, each refused when the target is `localhost` (blocked by name, same socket as the allowed `127.0.0.1` literal) and reached when it's the allowed literal: manifest→segment (`api/test/frame-grab-egress.test.ts:306 "segments on an allowed address: the grab produces a frame (the control)"` and `:317 "segments on a blocked address: no preview, and not one request reaches it"`, the shipped control/negative pair) ✓; a 302 redirect on a segment to a blocked host, now shipped at `:326 "a segment that redirects to a blocked address: the redirect is refused too"` ✓; `#EXT-X-KEY`, `#EXT-X-MAP` and a DASH `BaseURL` on a blocked host — reproduced by me against real fixtures (AES-128 HLS, fMP4 HLS, a hand-written MPD), not committed as tests: same `engine/src/ffmpeg/args.ts`/`engine/src/ffmpeg/runner.ts` plumbing the shipped tests already prove. Split DASH itself (not a blocked-host case, but the first thing to exercise `protocol: "dash"` end to end) is now shipped at `engine/test/preview-frame.test.ts:536 "returns JPEG bytes, with the context replayed on the init and media segments"` ✓.
 - **verified** · protocol escapes against real ffmpeg 6.1.1, not in the shipped suite: `file://` as a segment URI is refused by `-protocol_whitelist`, which omits it (`engine/src/ffmpeg/args.ts:62 "export const REMOTE_PROTOCOL_WHITELIST"`, comment at `:52 "is deliberately absent"`); `tcp://`, `udp://` and `concat:file://` as segment URIs are refused by ffmpeg's own HLS demuxer before it even attempts to open a socket, even when explicitly added to the whitelist to isolate the mechanism — defense in depth beyond what this code sets. `subfile:`/`crypto+file:` not independently run; inferred from the same demuxer-level gate, not reproduced.
-- **verified** · argument injection: `url` is the single argv element immediately after `-i` (`engine/test/preview-frame.test.ts:359 "args[input + 1]).toBe("` asserts the position), `runFfmpeg` spawns an array with `engine/src/ffmpeg/runner.ts:134 "shell: false,"`, and `packages/core/test/spawn-safety.test.ts` still passes (11/11, reran). Reproduced directly with real ffmpeg: a URL starting with `-` (`-rtbufsize 1`) is opened as a filename, never parsed as a flag.
-- **verified** · header replay: CRLF is stripped before the `-headers` blob by shared, unmodified code — `engine/src/text.ts:18 "export function stripControlChars(value: string): string {"`, `:22 "isControlCodePoint(code)) continue;"` — already asserted by `engine/test/ffmpeg-args.test.ts` (a `\r\nX-Injected:` value collapses to one line). Reproduced live: a failing grab against a URL carrying a query-string token shows `[redacted]` in every debug line and the failure's stderr detail (`engine/src/ffmpeg/runner.ts:64 "export function redactUrlsInText(text: string): string {"`); grepped the full output, the literal secret never appears.
+- **verified** · argument injection: `url` is the single argv element immediately after `-i` (`engine/test/preview-frame.test.ts:359 "args[input + 1]).toBe("` asserts the position), `runFfmpeg` spawns an array with `engine/src/ffmpeg/runner.ts:140 "shell: false,"`, and `packages/core/test/spawn-safety.test.ts` still passes (11/11, reran). Reproduced directly with real ffmpeg: a URL starting with `-` (`-rtbufsize 1`) is opened as a filename, never parsed as a flag.
+- **verified** · header replay: CRLF is stripped before the `-headers` blob by shared, unmodified code — `engine/src/text.ts:18 "export function stripControlChars(value: string): string {"`, `:22 "isControlCodePoint(code)) continue;"` — already asserted by `engine/test/ffmpeg-args.test.ts` (a `\r\nX-Injected:` value collapses to one line). Reproduced live: a failing grab against a URL carrying a query-string token shows `[redacted]` in every debug line and the failure's stderr detail (`engine/src/ffmpeg/runner.ts:70 "export function redactUrlsInText(text: string): string {"`); grepped the full output, the literal secret never appears.
 - **verified** · output checks: the previous check raced `fs.stat` and `fs.readFile` on the same path — two separate lookups, so what was measured needn't be what was read (CodeQL's finding, and a real race, not just noise). Now `engine/src/ffmpeg/preview-frame.ts:245 "const handle = await fs.open(destPath,"` opens `destPath` once; `:247 "await handle.stat();"` and `:248 "if (stat.size > options.maxOutputBytes) {"` measure and gate that same open file description before any bytes are read — an oversized file is still rejected without a buffer ever being allocated. `:260 "const { bytesRead } = await handle.read(buffer, 0, stat.size, 0);"` then reads exactly the bytes just measured, through the same handle, and `:263 "await handle.close();"` releases it in a `finally` on every path. I reproduced the two-cap-layer independence myself on this code: disabling `runFfmpeg`'s progress-stream cap alone leaves the shipped over-cap test green (this handle check alone catches it); disabling both turns it red. The shipped over-cap test passes unchanged. _(Amended by the reviewer at `cf86ecb`, replacing the bullet written at `cff1440`, whose cited `readFile` line the fix removed.)_
 - **dropped** — none.
 - **findings** — defect hunt (scoped to this track) returned 0; nothing to carry.
@@ -746,3 +746,57 @@ Getting there took six repointings, all inside `preview-frame.test.ts` and all
 one line (`:192`, `:285` twice, `:358`, `:403`) and the split-DASH test moved
 from `:508` to `:536`. Every anchor text is unchanged and still unique, no
 verdict was touched, and both gates were told which of their citations moved.
+
+## 2026-09-19 — brought up to date with main, by merge
+
+The rest of the batch merged first — dl-59 (#263), dl-61 (#265), dl-58 (#269)
+and two docs pull requests — and #267 conflicted with `main` at `fb15bc9`.
+**Merged, not rebased**, because the gate records here cite this branch's own
+commits and a rebase would have rewritten every one of them.
+
+**What the merge required: one conflict, resolved by keeping both sides.** In
+`engine/src/index.ts`, dl-58 had widened the runner's export to
+`isTlsVerificationFailure, redactUrlsInText, runFfmpeg`, and this branch adds the
+preview-frame export block directly below the same line. The resolution keeps
+dl-58's line as it landed on `main` and this branch's block after it, unchanged.
+Nothing else conflicted, and no behaviour changed in either direction to make it
+fit.
+
+**What dl-58 changed underneath the grab, checked rather than assumed.**
+
+- `redactUrlsInText` in `engine/src/ffmpeg/runner.ts` is now case-insensitive.
+  The grab's stderr lines already go through it, so they are redacted at least
+  as thoroughly as before; nothing in this branch depended on the old,
+  case-sensitive match.
+- `api/src/logger.ts` now redacts every URL substring in every string field of
+  every line. The grab's `debug` lines and the `previewSource` field on
+  `probe complete` pass through it. `previewSource` is `page`, `frame` or `null`
+  and carries no URL. No test on this branch asserts a logged URL verbatim, so
+  **nothing changed** — the specs below are the measurement, not this sentence.
+- Re-running an already-redacted stderr tail through the logger's pass is
+  idempotent: a URL with its query already stripped has nothing more to lose.
+
+**Specs after the merge.** `npm run check` exit 0. The whole engine project plus
+this branch's two API spec files: 18 files, 227 tests. `npm test -- --project
+downloader`: 88 files, 1489 tests — up from 1461 by what the other three tickets
+added.
+
+**Citations, which the merge moved in both directions.**
+
+- In this record, Gate A's two `runner.ts` citations moved because dl-58 added
+  six comment lines above them: `shell: false,` from `:134` to `:140`, and
+  `redactUrlsInText`'s declaration from `:64` to `:70`. Anchor text and verdict
+  unchanged; coordinate-only, like the repointings before.
+- **In dl-58's own record**, a citation of `routes/probe.ts:255`
+  (`requestContext: probe.requestContext,`) moved to `:262` — because _this_
+  branch added lines above it in the probe route. That is another ticket's
+  merged gate record, so it is **pinned** to `@fb15bc9`, the `main` commit it
+  was true of, rather than repointed into this branch's lines, the same repair
+  this branch made to dl-18, dl-32, dl-45, dl-57 and dl-60 at its start.
+- One false alarm worth recording, because it will recur: run in the middle of
+  the merge, before the resolved file was staged, the gate also failed dl-45
+  with `ambiguous — 3 tracked files match`, listing `engine/src/index.ts` three
+  times. That was the unmerged index's three conflict stages, not a citation
+  problem, and it vanished once the resolution was staged.
+- After all of that: `citations-gate.mjs --against origin/main` 90 enforced,
+  0 failing.

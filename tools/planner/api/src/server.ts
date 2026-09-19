@@ -69,8 +69,15 @@ const MAX_BODY_BYTES = 64 * 1024;
  * shape of an honest answer. `AGENT_UNCONFIGURED` rather than `INTERNAL`,
  * because the planner's taxonomy has a code for exactly this and its own
  * definition names the case.
+ *
+ * **Exported for pl-40's live harness.** `api/test/live/run.ts` proves sets
+ * A–D against whatever `MODEL_PROVIDER` names by building the provider through
+ * this exact factory rather than constructing one by hand — a hand-built
+ * client would prove a configuration nobody deploys. Nothing above the seam
+ * changes; this is the one function in the tool that already knew how, and the
+ * harness needed a way to call it from outside this file.
  */
-function createModelProvider(config: ApiConfig, logger: AppLogger): ModelProvider {
+export function createModelProvider(config: ApiConfig, logger: AppLogger): ModelProvider {
   switch (config.modelProvider) {
     case "scripted":
       return new ScriptedProvider();
@@ -267,6 +274,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     runs,
     events,
     runLimiter: new RateLimiter({ perMinute: config.rateLimitRunsPerMinute }),
+    editLimiter: new RateLimiter({ perMinute: config.rateLimitEditsPerMinute }),
     startedAt: now(),
     now,
     isShuttingDown: () => shuttingDown,

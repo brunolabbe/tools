@@ -59,19 +59,20 @@ function resolveWithin(pathname: string): string | undefined {
 }
 
 /**
- * The parent page for dl-55, decision 3's cross-origin chooser fixture:
- * an `<iframe>` pointing at the *secondary* origin, injected at request time
- * since a static file cannot know an ephemeral port in advance.
+ * The parent page for a cross-origin chooser fixture (dl-55, decision 3;
+ * dl-61): an `<iframe>` pointing at `innerPath` on the *secondary* origin,
+ * injected at request time since a static file cannot know an ephemeral port
+ * in advance.
  */
-function crossOriginCardHtml(secondaryOrigin: string): string {
+function crossOriginFrameHtml(secondaryOrigin: string, innerPath: string, title: string): string {
   return `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8" /><title>Cross-origin card: outer</title></head>
+  <head><meta charset="utf-8" /><title>${title}: outer</title></head>
   <body>
-    <h1>Cross-origin card: outer</h1>
+    <h1>${title}: outer</h1>
     <iframe
       id="embed"
-      src="${secondaryOrigin}/cross-origin-card-inner.html"
+      src="${secondaryOrigin}${innerPath}"
       width="640"
       height="360"
       title="Embedded"
@@ -80,6 +81,19 @@ function crossOriginCardHtml(secondaryOrigin: string): string {
 </html>
 `;
 }
+
+/** Outer pages that embed a secondary-origin fixture, keyed by the path that serves them. */
+const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> = {
+  "/cross-origin-card.html": {
+    innerPath: "/cross-origin-card-inner.html",
+    title: "Cross-origin card",
+  },
+  "/cross-origin-shadow.html": { innerPath: "/shadow-player.html", title: "Cross-origin shadow" },
+  "/cross-origin-shadow-order.html": {
+    innerPath: "/shadow-player-order.html",
+    title: "Cross-origin shadow order",
+  },
+};
 
 /** Shared by both origins: same static root, same redirect/beacon rules. */
 function makeHandler(
@@ -124,8 +138,14 @@ function makeHandler(
 
       // dl-55, decision 3: a genuinely cross-origin frame, not same-origin by
       // convention — the port is injected at request time.
-      if (pathname === "/cross-origin-card.html") {
-        const body = crossOriginCardHtml(secondaryOrigin());
+      // dl-61 reuses the same shape for a player inside an open shadow root.
+      const crossOriginFrame = CROSS_ORIGIN_FRAMES[pathname];
+      if (crossOriginFrame !== undefined) {
+        const body = crossOriginFrameHtml(
+          secondaryOrigin(),
+          crossOriginFrame.innerPath,
+          crossOriginFrame.title,
+        );
         response.writeHead(200, {
           "content-type": "text/html; charset=utf-8",
           "content-length": String(Buffer.byteLength(body)),

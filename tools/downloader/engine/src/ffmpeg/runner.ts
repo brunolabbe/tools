@@ -60,9 +60,15 @@ const DEFAULT_STDERR_TAIL_BYTES = 4096;
 /**
  * ffmpeg echoes input URLs in its diagnostics, and a signed URL's query string
  * is a credential. Keep the shape, drop the secret.
+ *
+ * Case-insensitive (dl-58, D3): also reused by `api/src/logger.ts` for every
+ * logged string, and a caller there need not have lower-cased its URL first.
+ * `new URL()` already normalises an upper-case scheme; this only widens which
+ * substring the matcher recognises. A scheme-less `//host/path` still is not
+ * matched — no known caller produces one, and closing that is undecided.
  */
 export function redactUrlsInText(text: string): string {
-  return text.replaceAll(/https?:\/\/\S+/gu, (match) => redactUrl(match));
+  return text.replaceAll(/https?:\/\/\S+/giu, (match) => redactUrl(match));
 }
 
 function tail(text: string, maxBytes: number): string {

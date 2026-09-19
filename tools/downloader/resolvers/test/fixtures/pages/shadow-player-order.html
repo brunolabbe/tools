@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-root player, ahead of a light-DOM decoy</title>
+  </head>
+  <body>
+    <h1>Shadow-root player, ahead of a light-DOM decoy</h1>
+    <!-- The player's host comes first in the document; a small, listener-less
+         light-DOM decoy comes after it. Tree order puts the player at 0, but
+         Playwright's locator lists every light-DOM match before descending
+         into shadow roots, so its `nth(0)` is the decoy. Embedded cross-origin,
+         where the click goes through `locator("video").nth(index)`, only a
+         candidate list in the locator's own order lands on the player (dl-61). -->
+    <div id="host"></div>
+    <video id="decoy" width="150" height="100" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var root = document.getElementById("host").attachShadow({ mode: "open" });
+        root.innerHTML = '<video id="sv" width="640" height="360" muted playsinline></video>';
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        root.getElementById("sv").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

@@ -15,9 +15,11 @@
  */
 
 import {
+  AppError,
   errorPayloadSchema,
   type AppErrorPayload,
   type Run,
+  type RunKind,
   type RunStatus,
 } from "@planner/contract";
 import type { RunUsage } from "@planner/agent";
@@ -26,6 +28,7 @@ import type { Database } from "better-sqlite3";
 interface RunRow {
   id: string;
   plan_id: string;
+  kind: string;
   status: string;
   roster_size: number | null;
   specialists_done: number;
@@ -38,9 +41,10 @@ function toRun(row: RunRow): Run {
   return {
     id: row.id,
     planId: row.plan_id,
-    // A literal, and true of every row that exists: nothing before pl-44 starts
-    // a re-plan. pl-44 replaces this with the stored `plan_runs.kind` column.
-    kind: "draft",
+    // Cast rather than validated, for `status`'s reason just below: the only
+    // writer is `insertRun`, which takes a `RunKind`, and migration 10's
+    // DEFAULT is `draft`, which every row written before it was.
+    kind: row.kind as RunKind,
     // Cast rather than validated: the only writer is `updateRunStatus` below,
     // which takes a `RunStatus`, and a row that somehow held something else
     // would be a corruption no read path could sensibly recover from.
@@ -64,21 +68,43 @@ function readError(raw: string | null): AppErrorPayload | null {
   }
 }
 
+/**
+ * Write a new run, which is live until `updateRunStatus` finishes it.
+ *
+ * `kind` is written explicitly rather than left to migration 10's DEFAULT: a
+ * writer relying on the DEFAULT would store `draft` on a re-plan, and nothing
+ * would say so.
+ *
+ * **A second live run for one plan is refused by the database** —
+ * `plan_runs_one_live`, migration 10 — and that refusal is `PLAN_BUSY`, never
+ * `INTERNAL`. It is the backstop under `api`'s own check, so it holds against
+ * a writer that forgot to make one.
+ */
 export function insertRun(
   db: Database,
-  run: { id: string; planId: string; status: RunStatus; now: string },
+  run: { id: string; planId: string; kind: RunKind; status: RunStatus; now: string },
 ): Run {
-  db.prepare(
-    `INSERT INTO plan_runs
-       (id, plan_id, status, roster_size, specialists_done, error_json, started_at, finished_at)
-     VALUES (?, ?, ?, NULL, 0, NULL, ?, NULL)`,
-  ).run(run.id, run.planId, run.status, run.now);
+  try {
+    db.prepare(
+      `INSERT INTO plan_runs
+         (id, plan_id, kind, status, roster_size, specialists_done, error_json, started_at, finished_at)
+       VALUES (?, ?, ?, ?, NULL, 0, NULL, ?, NULL)`,
+    ).run(run.id, run.planId, run.kind, run.status, run.now);
+  } catch (error: unknown) {
+    if (isOneLiveViolation(error)) {
+      const live = selectLiveRun(db, run.planId);
+      throw new AppError("PLAN_BUSY", undefined, {
+        details: live === undefined ? {} : { run: live.id },
+        cause: error,
+      });
+    }
+    throw error;
+  }
 
   return {
     id: run.id,
     planId: run.planId,
-    // `toRun`'s literal, for the same reason; pl-44 takes the kind as input.
-    kind: "draft",
+    kind: run.kind,
     status: run.status,
     rosterSize: null,
     specialistsDone: 0,
@@ -91,6 +117,32 @@ export function insertRun(
 export function selectRun(db: Database, id: string): Run | undefined {
   const row = db.prepare("SELECT * FROM plan_runs WHERE id = ?").get(id) as RunRow | undefined;
   return row === undefined ? undefined : toRun(row);
+}
+
+/**
+ * The plan's unfinished run, if it has one.
+ *
+ * "Unfinished" is `finished_at IS NULL`, the same predicate
+ * `plan_runs_one_live` is written over, so there is at most one row to find —
+ * and the busy check and the index cannot disagree about what live means.
+ */
+export function selectLiveRun(db: Database, planId: string): Run | undefined {
+  const row = db
+    .prepare("SELECT * FROM plan_runs WHERE plan_id = ? AND finished_at IS NULL")
+    .get(planId) as RunRow | undefined;
+  return row === undefined ? undefined : toRun(row);
+}
+
+/**
+ * Whether an insert failed on `plan_runs_one_live` rather than on anything
+ * else. A partial unique index reports the column it covers, so the message is
+ * `plan_runs.plan_id`; the primary key reports `plan_runs.id`, which is a bug
+ * and stays one.
+ */
+function isOneLiveViolation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === "SQLITE_CONSTRAINT_UNIQUE" && error.message.includes("plan_runs.plan_id");
 }
 
 /**

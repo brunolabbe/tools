@@ -33,15 +33,20 @@ export interface QueuedTask {
   onSettle?: () => void;
 }
 
+/**
+ * Where `cancel` found the job, so a caller can tell "the orchestrator will
+ * unwind and write the terminal state itself" (`"running"`) apart from the
+ * two cases where nothing else ever will: `"waiting"`, whose `run()` is never
+ * invoked at all, and `"not-found"`, which is not an error — a job that
+ * finished a millisecond ago is legitimately absent.
+ */
+export type CancelOutcome = "running" | "waiting" | "not-found";
+
 export interface JobQueue {
   /** Rejects new work once `close()` has begun. */
   enqueue(task: QueuedTask): void;
-  /**
-   * Cancels a job whether it is waiting or running. Returns false when the job
-   * is not in the queue at all — which the caller must not treat as an error,
-   * since a job that finished a millisecond ago is legitimately absent.
-   */
-  cancel(jobId: string): boolean;
+  /** Cancels a job whether it is waiting or running; see `CancelOutcome`. */
+  cancel(jobId: string): CancelOutcome;
   has(jobId: string): boolean;
   readonly running: number;
   readonly waiting: number;
@@ -96,23 +101,23 @@ export class InProcessJobQueue implements JobQueue {
     this.#pump();
   }
 
-  cancel(jobId: string): boolean {
+  cancel(jobId: string): CancelOutcome {
     const running = this.#running.get(jobId);
     if (running !== undefined) {
       // A typed reason survives every layer that re-wraps an abort, so the
       // orchestrator sees JOB_CANCELED rather than having to guess.
       running.controller.abort(new AppError("JOB_CANCELED"));
-      return true;
+      return "running";
     }
     const index = this.#waiting.findIndex((entry) => entry.task.jobId === jobId);
-    if (index === -1) return false;
+    if (index === -1) return "not-found";
     const [removed] = this.#waiting.splice(index, 1);
     removed?.controller.abort(new AppError("JOB_CANCELED"));
     // `run` will never be called for this entry, so its own settle path (in
     // `#pump`, below) will never fire. This is the only place that can tell a
     // caller it is done.
     removed?.task.onSettle?.();
-    return true;
+    return "waiting";
   }
 
   async close(): Promise<void> {

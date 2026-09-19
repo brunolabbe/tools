@@ -27,6 +27,16 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // fault for a stale link.
   REVISION_NOT_FOUND: 404,
   JOB_NOT_FOUND: 404,
+  // The request is well formed and conflicts with the document's current
+  // state, which is not the caller's malformed input (pl-44). A stale base and
+  // a plan another write holds; the ceiling, which pl-42 settled as 409; and a
+  // day the user's own edit overfilled — until a synchronous move, that code
+  // was only ever raised inside a run, and without this entry it reported a
+  // server fault. `PLAN_BUSY`'s retryability is the catalog's, not this table's.
+  REVISION_STALE: 409,
+  PLAN_BUSY: 409,
+  REVISION_LIMIT_REACHED: 409,
+  PLAN_INFEASIBLE: 409,
   CONTEXT_LIMIT: 413,
   RATE_LIMITED: 429,
   JOB_CANCELED: 499,

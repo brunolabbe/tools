@@ -708,7 +708,7 @@ export { buildTaskkillArgs, killProcessTree } from "./ffmpeg/kill.ts";
 export type { FfmpegProgressSnapshot, JobProgressContext } from "./ffmpeg/progress.ts";
 export { FfmpegProgressParser, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.ts";
-export { isTlsVerificationFailure, runFfmpeg } from "./ffmpeg/runner.ts";
+export { isTlsVerificationFailure, redactUrlsInText, runFfmpeg } from "./ffmpeg/runner.ts";
 export type { PreviewFrameOptions } from "./ffmpeg/preview-frame.ts";
 export {
   buildPreviewFrameArgs,

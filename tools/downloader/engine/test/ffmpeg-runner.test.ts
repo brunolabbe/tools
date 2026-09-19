@@ -98,3 +98,28 @@ describe("a failure that says a certificate was refused", () => {
     expect(result.exitCode).toBe(0);
   });
 });
+
+/**
+ * dl-58, owner decision D3. `onStderrLine` redacts every line through
+ * `redactUrlsInText` before handing it to the caller. This is the second
+ * consumer D3's case-insensitivity change had to keep working: proof through
+ * the real spawn path, not just the direct unit test in
+ * `redact-urls-in-text.test.ts`.
+ */
+describe("onStderrLine redacts what ffmpeg echoes, case included (D3)", () => {
+  test("an upper-case scheme in ffmpeg's own stderr is redacted like a lower-case one", async () => {
+    const seen: string[] = [];
+    await runFfmpeg({
+      ...emitting(["https://cdn.example/seg.ts?sig=lower", "HTTPS://cdn.example/seg.ts?sig=UPPER"]),
+      failureCode: "DOWNLOAD_FAILED",
+      onStderrLine: (line) => seen.push(line),
+    }).catch(() => null); // The stand-in always exits 1; only the lines matter here.
+
+    expect(seen).toEqual([
+      "https://cdn.example/seg.ts?[redacted]",
+      "https://cdn.example/seg.ts?[redacted]",
+    ]);
+    expect(seen.join("\n")).not.toContain("lower");
+    expect(seen.join("\n")).not.toContain("UPPER");
+  });
+});

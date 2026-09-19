@@ -388,6 +388,10 @@ describe("job admission (dl-51)", () => {
         url: ROUTES.cancelJob(second.job.id),
       });
       expect(canceled.statusCode).toBe(200);
+      // dl-59: the response and the store row both reach "canceled" — not a
+      // stale "queued" snapshot the client-gate release alone would not catch.
+      expect((canceled.json() as JobResponse).job.status).toBe("canceled");
+      expect(harness.app.context.store.get(second.job.id).status).toBe("canceled");
 
       // Queue-level cancellation of a waiting task is synchronous (see
       // `queue-and-shutdown.test.ts`'s `onSettle` suite), so this needs no
