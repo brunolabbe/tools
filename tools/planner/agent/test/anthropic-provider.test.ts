@@ -570,3 +570,21 @@ async function sentSchema(): Promise<unknown> {
 function schemaFor(schema: z.ZodType): unknown {
   return betaZodOutputFormat(schema).schema;
 }
+
+describe("thinkingTokens against an explicit null (pl-50, gate LOW 5)", () => {
+  // Every other "no breakdown" case in this file is an absent
+  // `output_tokens_details` key. The SDK also declares the field as
+  // `BetaOutputTokensDetails | null` — an explicit `null`, not just
+  // "missing" — so this pins that shape too, appended here rather than
+  // spliced into an earlier describe so no already-merged citation moves.
+  test("output_tokens_details: null is thinkingTokens: null, the same as an absent key", async () => {
+    const ordinary = fixture("ordinary");
+    const body = structuredClone(ordinary.body) as { usage: Record<string, unknown> };
+    body.usage["output_tokens_details"] = null;
+
+    const { fetch } = answering({ ...ordinary, body });
+    const reply = await provider(fetch).send(REQUEST);
+
+    expect(reply.usage.thinkingTokens).toBeNull();
+  });
+});

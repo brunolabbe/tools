@@ -72,10 +72,15 @@ export interface ModelRequest {
  *
  * **`thinkingTokens` is a subset of `outputTokens`, not a fifth kind billed
  * apart (pl-50).** Thinking is billed as ordinary output — `outputTokens`
- * already includes it — so this field exists only to say how much of that
- * total was spent thinking, for a report that wants the split. A backend
- * that does not report the breakdown leaves it `null` the same way it would
- * any other unreported kind.
+ * already includes it. **Within a single reply that took several attempts
+ * (a refusal fallback), the two fields are not proven to cover the same
+ * ground**: `outputTokens` is summed across every attempt, while
+ * `thinkingTokens` is read once, from the top-level reply's own breakdown —
+ * see `usageOf`'s doc comment in `providers/anthropic.ts` for why, and for
+ * what the SDK does and does not state about which attempts that top-level
+ * figure spans. Unmeasured until a real multi-attempt, thinking-enabled
+ * reply is captured (pl-40). A backend that does not report the breakdown
+ * leaves it `null` the same way it would any other unreported kind.
  */
 export interface ModelUsage {
   /** Uncached input only. */

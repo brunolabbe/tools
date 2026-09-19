@@ -732,3 +732,28 @@ it through for free, proved by re-running under `MODEL_PROVIDER=scripted`
 null`, no other key changed. **Still awaiting the owner's real run** to put a
 non-null number in that column; this only removes the seam gap that made it
 structurally unfillable.
+
+**Two corrections pl-50's gate found, recorded here since this entry is new
+rather than shipped history:**
+
+- **The decision-D entry above cites the wrong line.** It calls
+  `resources/beta/messages/messages.d.ts:2899` the location of
+  `BetaUsage.output_tokens_details`. That line is `BetaMessageDeltaUsage`'s
+  own copy of the same field name (a streaming-delta type, never read here);
+  `BetaUsage`'s is at line 4298. Left as written above, since it is shipped
+  history and the ticket format does not rewrite an entry after the fact —
+  corrected here instead.
+- **The multi-iteration scope of `thinkingTokens` is unmeasured, not
+  decided.** `usageOf` sums `outputTokens` across every attempt in
+  `usage.iterations` but reads `thinkingTokens` once, from the top-level
+  `usage.output_tokens_details` — the only place the SDK's types declare that
+  field at all (confirmed by reading all four `BetaIterationsUsage` member
+  types; none of them carries it). Whether that top-level figure spans every
+  attempt or only the one that produced the final message is **not stated
+  anywhere in `@anthropic-ai/sdk@0.125.0`'s types** — the "serving attempt
+  only" reading pl-49 documented for the other kinds rests on the
+  hand-written `fallbackServed` fixture's own `_note` (itself citing the
+  platform docs, not the SDK's types) and on inference, not on a type-level
+  guarantee for this field specifically. No fixture here combines a fallback
+  with a thinking breakdown, so this stays unmeasured until the owner's real
+  run produces a reply that both fell back and thought.

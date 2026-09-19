@@ -343,11 +343,16 @@ function stopReasonOf(message: BetaMessage): ModelReply["stopReason"] {
  * confirmed by reading all four in `@anthropic-ai/sdk@0.125.0`'s own types,
  * not assumed from pl-50's own prose (whose Build step 2 asked for the same
  * per-iteration sum the other kinds get, which the SDK cannot supply). So
- * this is read once, from `usage` itself, never from `attempts`: it carries
- * the same "top-level covers only the serving attempt" caveat the other kinds
- * only have when a fallback occurred, except here there is no richer source
- * to fall back to — a declined attempt's thinking, if any, is simply not
- * reported anywhere the SDK's types can reach.
+ * this is read once, from `usage` itself, never from `attempts`. Whether that
+ * top-level figure spans every attempt or only the one that produced the
+ * final message is, for this field, **not stated by the SDK** — the other
+ * kinds' "covers only the serving attempt" reading rests on the hand-written
+ * `fallbackServed` fixture's own note, not on a type-level guarantee, and no
+ * fixture pairs a fallback with a thinking breakdown to check it against.
+ * Either way, no per-iteration entry ever carries this breakdown, so a
+ * declined attempt's thinking cannot be told apart from the serving one's —
+ * unmeasured until a real multi-attempt, thinking-enabled reply is captured
+ * (pl-40).
  */
 function usageOf(usage: BetaUsage): ModelUsage {
   const attempts =

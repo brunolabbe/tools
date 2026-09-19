@@ -127,7 +127,7 @@ summed the same way `output_tokens` already is." Reading
 ticket's prose, per its own instruction) found two things wrong with that:
 
 1. **The field is named `thinking_tokens`, not `reasoning_tokens`** —
-   `BetaOutputTokensDetails` (`node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.d.ts:2998-3007`)
+   `BetaOutputTokensDetails` (`node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.d.ts:2998-3010`)
    declares exactly one field, `thinking_tokens: number`. The ticket's prose
    guessed a name from the doc comment's own wording ("internal reasoning")
    rather than the declared key, which is the exact trap its own parenthetical
@@ -153,6 +153,23 @@ pl-39 was already following the real shape, even though pl-39's `usageOf`
 never read it and pl-40's gate read the ticket's own citation line (2899, which
 is actually `BetaMessageDeltaUsage`'s field, a streaming-delta type not used
 here) rather than the field's real host type.
+
+**Unmeasured, found by this ticket's own gate (MED 2): what the top-level
+`thinkingTokens` figure covers, within a reply that took several attempts, is
+not stated by the SDK.** `outputTokens` is summed across every entry in
+`usage.iterations`, on the documented basis that the top-level `output_tokens`
+covers only the attempt that produced the final message (pl-49, resting on
+the hand-written `fallbackServed` fixture's own `_note`, which in turn cites
+the platform docs — not a guarantee in the SDK's types). `thinkingTokens` is
+read once, from that same top-level object, because no per-iteration entry
+ever carries a breakdown at all — so within one reply, the two fields are not
+proven to describe the same attempts. No fixture combines a fallback with a
+thinking breakdown, and the SDK's own comments say only that `thinking_tokens`
+is "always ≤ `output_tokens`" and that a `compaction` entry's tokens are
+excluded from the top level — nothing about a `fallback_message` entry's
+thinking. `provider.ts`'s and `orchestrator.ts`'s doc comments now say this
+plainly rather than asserting a scope the types do not state; pl-40's funded
+run is where a real answer can be measured.
 
 **Build steps 1–4 done as specified, corrected as above:**
 

@@ -161,7 +161,13 @@ export interface RunUsage {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
   outputTokens: number | null;
-  /** How much of `outputTokens` was internal reasoning, where some reply said (pl-50). */
+  /**
+   * How much of `outputTokens` was internal reasoning, where some reply said
+   * (pl-50). **Not proven to cover the same attempts `outputTokens` does**
+   * within a reply that took a refusal fallback — see `ModelUsage`'s own doc
+   * comment. Unmeasured until pl-40's funded run captures a real reply that
+   * both thought and fell back.
+   */
   thinkingTokens: number | null;
   /**
    * Replies a model other than the configured one served — a refusal fallback.
