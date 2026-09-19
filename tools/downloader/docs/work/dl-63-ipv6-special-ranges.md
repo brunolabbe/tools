@@ -279,9 +279,11 @@ carve-outs, per (c):
     the neighbour, but the address it lists, `64:ff9b::808:808`, is in
     `64:ff9b::/96`. The comment was corrected in the same edit. (2) `fec0::/10`
     has no allowed neighbour. Link-local sits directly below it and multicast
-    directly above, so `fc00::/6` is now refused end to end, and the "public
-    neighbour" that Done when asks for is the nearest allowed address instead,
-    `fbff:ffff:…`. A separate test asserts that contiguity. (3) `100::/64` has a
+    directly above, so everything from `fe80::` to the top of the address space
+    is refused, and a separate test asserts that contiguity. The allowed address
+    its row uses instead is `fbff:ffff:…`, which is below unique-local. This
+    entry first said `fc00::/6` was refused end to end. That was wrong, and the
+    gate caught it (see below). (3) `100::/64` has a
     blocked range directly above it (the dummy prefix), so its upper neighbour
     is `100:0:0:2::`. The neighbours of `100::/64`, `100:0:0:1::/64`,
     `5f00::/16` and `3fff::/20` sit in IETF-reserved or unallocated space, not
@@ -301,3 +303,16 @@ carve-outs, per (c):
     because the table was inserted above it. The line number in dl-57 was
     updated and nothing else was touched. After that the gate reported
     `89 enforced, 0 failing`, exit 0.
+- 2026-09-19 — Gate 1 (ticket-reviewer) passed with one low finding, which
+  reproduced here. `fe00::/9` (IANA "Reserved by IETF") lies between
+  unique-local and link-local and is not in `BLOCKED_V6`. Checked against the
+  built `dist/ssrf.js`: `isBlockedAddress` returns `false` for `fe00::`,
+  `fe00::1` and `fe7f:ffff:…:ffff`, and `true` for `fdff:ffff:…:ffff` and
+  `fe80::`. So the claim this Log and the test comment made, that `fc00::/6` is
+  refused end to end, was false. Both now describe the actual coverage: from
+  `fe80::` up is contiguous, and unique-local stands alone. The test was renamed
+  to match. Its assertions did not change, because every address it listed was
+  already correct. `fe00::/9` itself was not blocked here, because it is not
+  one of option (c)'s named ranges and was never measured against the registry.
+  Whether to block it is left as an open decision for the orchestrator. It is
+  not settled here.

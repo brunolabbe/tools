@@ -86,9 +86,9 @@ const RANGES: readonly RangeCase[] = [
   {
     range: "fec0::/10 (Site-Local, deprecated by RFC 3879)",
     inside: ["fec0::", "fec0::1", "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
-    // Both edges touch other blocked ranges — link-local below, multicast above
-    // — so fc00::/6 is refused end to end. The nearest allowed address is below
-    // unique-local; the contiguity is asserted in its own test.
+    // Both edges touch other blocked ranges — link-local below, multicast above.
+    // The allowed address used is below unique-local; fe00::/9 is nearer, but it
+    // is unblocked and undecided (dl-63 Log), so no test pins it either way.
     outside: ["fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
   },
 ];
@@ -127,9 +127,9 @@ describe("native IPv6 special-purpose ranges (dl-63)", () => {
     }
   });
 
-  test("fc00::/6 is refused end to end, and the address below it is not", () => {
-    // Unique-local, link-local and site-local now meet with no gap, and
-    // multicast follows: the boundaries between them must stay closed.
+  test("fe80:: to the top of the space is refused end to end, as is unique-local", () => {
+    // Link-local, site-local and multicast meet with no gap. Unique-local does
+    // not join them: fe00::/9 lies between it and link-local, and is not listed.
     for (const address of [
       "fc00::",
       "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
