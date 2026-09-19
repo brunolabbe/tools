@@ -3887,3 +3887,47 @@ with no reported usage block. At the page's 2026-09-02 rate of $0.0182/1k,
 that re-prices the batch at **≈ $62.28**, an arithmetic conversion, not
 billed, of a rate that is now **16 days stale**, same as the rate this row's
 original `cost` field used.
+
+## Twenty-fourth session — 2026-09-19
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **7** taken from `ready` to a gated PR: `dl-63` → #273, `pl-50` → #274, `dl-68` → #275, `pl-46` → #276, `dl-67` → #277, `dl-66` → #278, `pl-47` → #279. `dl-50` held (needs the owner's firewall for live siteverify). Six follow-ups filed on the branches that found them: `dl-69`, `dl-70`, `pl-51`, `pl-52`, `repo-49` |
+| `agents` / `dispatches` | **15** agents (1 seam-mapper, 7 builders, 7 reviewers) / **36** from the orchestrator (15 spawns, 21 `SendMessage`, 6 of those resumes after a session usage limit killed every running agent at once). Builder↔reviewer wakes are not counted |
+| `builder rounds` | **~23** across 7 builders, of which **1** was the orchestrator's fault: `dl-67`'s dead `redactUrl` mask form existed only because the orchestrator's own question wording ("the request URL or its redacted form") read as a requirement, and removing it cost a round. `pl-47`'s measurement round was deliberate (measure before asking) and is not counted as a fault |
+| `gates` | **18** passes across 7 reviewers; the first pass on **every** ticket returned findings (`pl-47`'s were informational plus an open decision). `pl-50` gate 1 was FAIL |
+| `wrong findings` | **0** reached a commit. One gate corrected its own count ("7 false clashes" → 14 lines, with `pl-21` reclassified); `pl-46` low 3 was accepted as defence in depth after the builder's measurement showed the mutation fails earlier |
+| `subagent tokens` | **3,407,252**, a floor: two agents' last reports predate their final rounds (the `dl-66` reviewer at 129,856, the `pl-46` builder at 251,952) |
+| `cost` | ≈ **$62.01** at the page's 2026-09-02 rate of $0.0182/1k, an arithmetic conversion that is now 17 days stale, not a bill |
+
+### Per agent
+
+| PR | Model | Agent | Task | Tokens |
+| --- | --- | --- | --- | --- |
+| — | inherit (opus) | seam-mapper | 8 candidates, read from `origin/main` | 81,377 |
+| #273 | opus | builder | `dl-63`, then `dl-70` filed | 123,277 |
+| #273 | sonnet | ticket-reviewer | `dl-63`, PASS | 141,497 |
+| #278 | sonnet | builder | `dl-66`, `pl-51` and `repo-49` filed; killed by the session limit, resumed | 388,269 |
+| #278 | opus | ticket-reviewer | `dl-66`, 3 passes, PASS | 129,856 (stale) |
+| #277 | sonnet | builder | `dl-67`, killed by the session limit, resumed | 278,428 |
+| #277 | opus | ticket-reviewer | `dl-67`, 4 passes, PASS; killed and resumed | 175,701 |
+| #275 | sonnet | builder | `dl-68`, `dl-69` filed; killed, resumed to open the PR | 260,690 |
+| #275 | opus | ticket-reviewer | `dl-68`, 3 passes, PASS | 122,547 |
+| #276 | sonnet | builder | `pl-46` | 251,952 (stale) |
+| #276 | opus | ticket-reviewer | `pl-46`, 2 passes; CONCERNS until CI e2e, which then passed | 154,848 |
+| #279 | opus | builder | `pl-47`, plus a worst-diff view-size measurement | 491,199 |
+| #279 | sonnet | ticket-reviewer | `pl-47`, PASS; killed while composing, resumed | 241,414 |
+| #274 | sonnet | builder | `pl-50`, `pl-52` filed; killed mid-edit, resumed | 379,700 |
+| #274 | opus | ticket-reviewer | `pl-50`, 3 gates (FAIL, CONCERNS, PASS) | 186,497 |
+
+Every builder/gate pair ran on different models, with each half as dispatched, per _Which model built it_.
+
+### What the skill got wrong
+
+1. **Step 1's intake read a stale tree.** `npm run status -- --ready` reads the working tree, and the shared checkout was 5 commits behind `origin/main`. It listed `dl-58`, `dl-59` and `dl-61` as ready after all three had merged. `git fetch` moves refs, not files. Intake has to read ticket state out of `origin/main` (`git show origin/main:<path>`), and the seam-mapper prompt has to say so.
+2. **Nobody told the builders to run the citations gate.** `.claude/agents/builder.md` never mentions `citations-gate.mjs` (0 occurrences, measured). `npm run check` does not run it, but CI's `check` job does. Five of seven branches (`dl-66`, `dl-67`, `dl-68`, `pl-50`, `pl-47`) reported green to the orchestrator while CI would have gone red, and each cost a gate finding and a round. Put the command in `builder.md`'s gate list.
+3. **Branches that pass alone can break `main` together, and step 11 cannot see it.** Every PR was green on its own. A scratch merge of the whole batch, then `citations-gate.mjs`, showed that `pl-47` adds two lines above a `tools/planner/CLAUDE.md` line cited in `pl-46`'s committed Review. Whichever merged second would have landed `main` red with no git conflict. The per-branch `gh run list` look in _After a merge_ cannot catch this. Add a pre-merge step: merge every open batch branch in a scratch worktree and run the citations gate. Then draft whichever PR has to go last (#279 here).
+4. **Concurrent follow-up filings need pre-assigned ids.** Four builders filed tickets in the same hour. The orchestrator ran `next-id.mjs` once and handed out `dl-69`, `dl-70`, `pl-52` and `repo-49`, and nothing collided, but the skill does not say to. `next-id.mjs` also reports false clashes (`repo-49`).
+5. **The skill sets no concurrency ceiling.** Fourteen agents running at once hit the session usage limit, and every agent died mid-step. The branches survived because each builder had pushed or held clean worktrees, but six resumes each reloaded a full transcript.
+6. **An orchestrator's option wording becomes a requirement.** The phrase "or its redacted form" in a question to the owner was carried into the ticket as scope, and both agents then argued to keep dead code because of it. This is a costume of the _relayed option_ row that points the other way: the orchestrator's own words, relayed down.
+7. **A cross-tool filing leaks into a changelog, and the fold-in rule does not warn about it.** `dl-66`'s branch filed `pl-51` under `tools/planner/` in a `fix(downloader)` PR, so it will put a downloader line in the planner's changelog, as #248 already did. The owner accepted it this time. The builder prompt should say that a ticket for another tool is filed in its own `docs` PR.
