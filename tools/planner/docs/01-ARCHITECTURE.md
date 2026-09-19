@@ -316,7 +316,8 @@ something surprising.
   one: without it, one endpoint turns an open form into someone else's bill.
 - **Rate-limit run creation and revision per client.** A plan run is expensive
   enough to be a trivial DoS vector, and a re-plan is a run, so it spends the
-  same bucket a first draft does. Moves, removes and restores take no queue
+  same bucket a first draft does; so does a dates or budget edit, which is a
+  re-plan run (pl-47). Moves, removes and restores take no queue
   slot and spend a bucket of their own; unmetered, the per-plan revision
   ceiling would be their only bound (pl-44).
 - **No booking, no payments, no logged-in sessions on travel sites** — §8, and

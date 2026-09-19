@@ -415,6 +415,28 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE plan_runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'draft';
   CREATE UNIQUE INDEX plan_runs_one_live ON plan_runs (plan_id) WHERE finished_at IS NULL;
   `,
+
+  // 11 — the brief each revision was built from, and what its dates left too
+  // little time to book (pl-47).
+  //
+  // A version can change the dates and the budget, so `plans.brief_json` stops
+  // being the brief of every revision. Both columns are JSON by migration 2's
+  // rule: read whole, validated on the way out, never filtered on.
+  //
+  // **`brief_json` is nullable, and NULL means `plans.brief_json`.** Every row
+  // written before this migration was built from the plan's snapshot, but a
+  // column DEFAULT cannot read another table, and the backfill cannot be an
+  // UPDATE: `plan_revisions_append_only` refuses every one (migration 10's
+  // note). So the read falls back, and `insertRevision` writes the column on
+  // every row — a writer relying on the NULL would attach the first draft's
+  // brief to a dates edit and nothing would say so.
+  //
+  // `deadlines_json` defaults to `'[]'`, which is true of every older row:
+  // nothing could edit dates before this migration.
+  `
+  ALTER TABLE plan_revisions ADD COLUMN brief_json TEXT;
+  ALTER TABLE plan_revisions ADD COLUMN deadlines_json TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function migrate(db: Database): void {

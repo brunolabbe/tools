@@ -78,9 +78,11 @@ function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
     reason: "A second draft, so the first is no longer the one being read.",
     // A copy of the draft it supersedes, which is what a restore is (pl-42).
     operation: { kind: "restore", revision: previous.revision },
+    brief: previous.brief,
     createdAt: NOW.toISOString(),
     gaps: previous.gaps,
     coverage: previous.coverage,
+    deadlines: previous.deadlines,
     reading: previous.reading,
     days: previous.days.map((day) => ({
       ...day,

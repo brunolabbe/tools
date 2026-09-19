@@ -32,8 +32,8 @@
 import { z } from "zod";
 import { candidateSchema, sourceSchema, SPECIALISTS } from "./candidate.ts";
 import type { Candidate, Source, Specialist } from "./candidate.ts";
-import { tripBriefSchema } from "./brief.ts";
-import type { TripBrief } from "./brief.ts";
+import { slotSchema, tripBriefSchema, tripBudgetSchema, tripDatesSchema } from "./brief.ts";
+import type { Slot, TripBrief, TripBudget, TripDates } from "./brief.ts";
 import { itemTravelSchema } from "./travel.ts";
 import type { ItemTravel } from "./travel.ts";
 import { uncheckedConstraintSchema } from "./unchecked.ts";
@@ -69,7 +69,9 @@ export const MAX_REVISION_NOTE_CHARS = 500;
  * checked-in trip fixture is under 100 KiB (96.4 KiB for the largest,
  * `multi-city`, with worst-case diffs), while a revision at the schema's own
  * maximum of 60 days × 12 items is ~0.15 MiB, and 50 of those is ~14 MiB before
- * candidates or the brief. The owner chose 50 over 20 and 100.
+ * candidates or the brief. The owner chose 50 over 20 and 100. **Since pl-47
+ * every revision carries its own brief**, about 1.0–1.2 KiB for those fixtures,
+ * so the same view with empty diffs now measures 127 KiB at 50 (pl-47's Log).
  *
  * A revise request that would append revision 51 is refused with
  * `REVISION_LIMIT_REACHED`. `api` enforces it (pl-44); nothing here does,
@@ -302,6 +304,18 @@ export const planGapSchema = z.object({
  *   still what those days were packed against. `revision` must be earlier than
  *   the revision the restore produces; the schema can only check `>= 1`, and
  *   the rest is `api`'s.
+ * - **`brief`** — the dates, the budget or both changed on this version's brief
+ *   (pl-47), and the plan re-packed what that change reached. **Each change
+ *   carries both ends**, so a stored operation reads on its own, as `move`'s
+ *   `fromDayIndex` does. `dates.from` is a value because `dates` is a required
+ *   slot and every stored revision has one; `budget.from` is a slot because a
+ *   budget may have been declined or never asked. **`to` is always a value**:
+ *   clearing a budget back to declined is not an edit this operation offers.
+ *   At least one of the two is non-null. **`days` is derived and stored, never
+ *   requested** — the days this edit re-packed, ascending and possibly empty —
+ *   because "which days did this revision touch" has to be answerable from the
+ *   revision itself. Days a shorter trip dropped are not in it; they are gone,
+ *   and `diffRevisions` reports what was on them as `removed`.
  */
 export type RevisionOperation =
   | { kind: "first-draft" }
@@ -323,7 +337,14 @@ export type RevisionOperation =
       toPosition: number;
     }
   | { kind: "remove"; candidateId: string; fromDayIndex: number }
-  | { kind: "restore"; revision: number };
+  | { kind: "restore"; revision: number }
+  | {
+      kind: "brief";
+      dates: { from: TripDates; to: TripDates } | null;
+      budget: { from: Slot<TripBudget>; to: TripBudget } | null;
+      /** The days this edit re-packed, ascending. Possibly empty. */
+      days: number[];
+    };
 
 const dayIndexSchema = z
   .number()
@@ -382,12 +403,35 @@ export const restoreOperationSchema = z.object({
   revision: z.number().int().min(1),
 });
 
+// A re-plan's two checks without its `min(1)`: a dates edit that only re-dates
+// or shortens re-packs nothing, and says so with `[]`.
+const briefDaysSchema = z
+  .array(dayIndexSchema)
+  .refine((days) => new Set(days).size === days.length, {
+    message: "A brief edit names each day it re-packed once.",
+  })
+  .refine((days) => days.every((day, index) => (days[index - 1] ?? day) <= day), {
+    message: "A brief edit names the days it re-packed in ascending order.",
+  });
+
+export const briefOperationSchema = z
+  .object({
+    kind: z.literal("brief"),
+    dates: z.object({ from: tripDatesSchema, to: tripDatesSchema }).nullable(),
+    budget: z.object({ from: slotSchema(tripBudgetSchema), to: tripBudgetSchema }).nullable(),
+    days: briefDaysSchema,
+  })
+  .refine((operation) => operation.dates !== null || operation.budget !== null, {
+    message: "A brief edit changes the dates, the budget or both.",
+  });
+
 export const revisionOperationSchema = z.discriminatedUnion("kind", [
   firstDraftOperationSchema,
   replanOperationSchema,
   moveOperationSchema,
   removeOperationSchema,
   restoreOperationSchema,
+  briefOperationSchema,
 ]) satisfies z.ZodType<RevisionOperation>;
 
 // ---------------------------------------------------------------------------
@@ -420,6 +464,19 @@ export interface PlanRevision {
    * sentence about. `first-draft` if and only if this is revision 1.
    */
   operation: RevisionOperation;
+  /**
+   * The brief this revision was built from (pl-47).
+   *
+   * **Per revision, because a version can change the dates and the budget.**
+   * "Why is there no lodging in here?" has to be answered against the brief a
+   * version was built from, and once one version can change it, a single copy
+   * on the plan answers that only for whichever version wrote it last —
+   * restoring version 1 would show its days under version 3's dates. So every
+   * writer stamps it: `compose` the brief it composed from, a brief edit the
+   * edited one, and every other writer the brief it was given, which is its
+   * base's. `currentBrief` below is the rule for "the brief as it stands now".
+   */
+  brief: TripBrief;
   createdAt: string;
   days: PlanDay[];
   /** What this draft could not cover, and why. Empty is a real and good answer. */
@@ -442,6 +499,29 @@ export interface PlanRevision {
    * something on the map.
    */
   coverage: UncheckedConstraint[];
+  /**
+   * Placed items whose booking lead time was longer than the time left before
+   * departure, **when the dates were last edited** (pl-47).
+   *
+   * **Stored, for `coverage`'s reason from another direction.** Every kind
+   * `uncheckedFor` derives is a pure function of the brief, the candidates and
+   * the days, and it reads no clock. This one is a fact about a moment: moving
+   * a departure earlier leaves less time to book than an item needs, and
+   * whether that is still true tomorrow depends on tomorrow. Re-deriving it on
+   * read would need a clock in a function that promises it has none, and would
+   * change answer at midnight under a plan nobody touched. So a brief edit
+   * works it out once, with the `now` it was given, and the revision keeps it.
+   *
+   * Holds only `booking-deadline-passed`, at most one entry, naming every such
+   * item. Later writers carry it: a re-plan and an edit keep it for the items
+   * still placed and drop it when none is, and a restore copies its target's.
+   * `uncheckedForRevision` appends it after `coverage`.
+   *
+   * Empty is the ordinary answer: the packer already refuses a candidate whose
+   * lead time has passed unless it is pinned, so an entry appears when an edit
+   * moved a departure earlier under items it did not re-pack.
+   */
+  deadlines: UncheckedConstraint[];
   /**
    * Editorial context about the route itself, rather than about any one place
    * on it — a Wikivoyage entry for a region the corridor crosses (pl-33).
@@ -471,6 +551,7 @@ export const planRevisionSchema = z
     parentRevisionId: z.string().min(1).nullable(),
     reason: z.string().trim().min(1).max(MAX_REVISION_REASON_CHARS),
     operation: revisionOperationSchema,
+    brief: tripBriefSchema,
     createdAt: z.iso.datetime(),
     days: z.array(planDaySchema).max(MAX_PLAN_DAYS),
     gaps: z.array(planGapSchema).max(SPECIALISTS.length),
@@ -479,6 +560,16 @@ export const planRevisionSchema = z
     // the discovery pass builds the list and this schema just says what one
     // entry looks like.
     coverage: z.array(uncheckedConstraintSchema),
+    // One kind, and one entry naming every item: a second entry would be a
+    // second sentence about the same moment.
+    deadlines: z
+      .array(
+        uncheckedConstraintSchema.refine((entry) => entry.kind === "booking-deadline-passed", {
+          message: "A revision's deadlines hold only booking-deadline-passed.",
+          path: ["kind"],
+        }),
+      )
+      .max(1),
     // Bounded: one lookup per corridor endpoint is the shape, and a stored
     // list that can grow without limit is a row that can stop fitting.
     reading: z.array(sourceSchema).max(MAX_REVISION_READING),
@@ -643,7 +734,14 @@ export const planSchema = z.object({
  * The whole document: the brief it came from, every candidate proposed for it,
  * and every revision made of them.
  *
- * **`brief` is a snapshot, not a reference.** The intake stays editable after a
+ * **`brief` is the first draft's brief**, and since pl-47 not necessarily the
+ * one any later version was built from: a version can change the dates and the
+ * budget, so each revision carries its own as `PlanRevision.brief`. Read
+ * `currentBrief` for the brief as it stands, and a revision's own for the brief
+ * that revision was built from. This one stays because a plan whose first run
+ * has not finished has no revision to carry one, and `startRun` writes it.
+ *
+ * **It is a snapshot, not a reference.** The intake stays editable after a
  * plan is drafted — refining is somewhere a user comes back to — so the live
  * brief drifts from the one this plan was actually built against. Storing the
  * brief with the plan is what lets the UI answer "why is there no lodging in
@@ -708,10 +806,34 @@ export function pinnedCandidateIds(revision: PlanRevision): string[] {
     .map((item) => item.candidateId);
 }
 
+/**
+ * The brief as it stands: the latest revision's, or the first draft's snapshot
+ * for a plan with no revision yet (pl-47).
+ *
+ * **Never `plan.brief` for this.** It is the right answer on every plan until
+ * one of its versions edits the dates or the budget, and the wrong one after,
+ * which is the kind of bug that reads correctly on every plan that exists when
+ * it ships. Here rather than in a caller because `api` builds the next
+ * revision from it and `web` seeds its controls from it, and the two must not
+ * disagree — the exception `appendRevision` takes, for the same reason.
+ */
+export function currentBrief(plan: PlanDetail): TripBrief {
+  return latestRevision(plan)?.brief ?? plan.brief;
+}
+
 /** What `appendRevision` needs told; everything else it derives from the plan. */
 export type NewRevision = Pick<
   PlanRevision,
-  "id" | "reason" | "operation" | "createdAt" | "days" | "gaps" | "coverage" | "reading"
+  | "id"
+  | "reason"
+  | "operation"
+  | "brief"
+  | "createdAt"
+  | "days"
+  | "gaps"
+  | "coverage"
+  | "deadlines"
+  | "reading"
 >;
 
 /**

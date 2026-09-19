@@ -27,7 +27,12 @@
  * 4. `REVISION_LIMIT_REACHED` at `MAX_REVISIONS_PER_PLAN`;
  * 5. per kind: a day past the base's count or a position past the destination
  *    is `INVALID_ANSWER`, an item not on the latest revision `ITEM_NOT_FOUND`,
- *    a restore of a version the plan does not have `REVISION_NOT_FOUND`.
+ *    a restore of a version the plan does not have `REVISION_NOT_FOUND`; for a
+ *    brief edit (pl-47), dates the intake would refuse `INVALID_DATES`, then a
+ *    shorter trip that would drop a pinned item `PLAN_INFEASIBLE`.
+ *
+ * A brief edit is a run, as a re-plan is: it resizes the base to the new dates,
+ * re-packs what the change reached, and asks no model anything.
  *
  * ## One writer on the chain, without a race
  *
@@ -52,9 +57,12 @@ import { randomUUID } from "node:crypto";
 import { groundingBudget, readsFinds, runFanOut, type FanOutResult } from "@planner/agent";
 import {
   AppError,
+  isAnswered,
   latestRevision,
   MAX_REVISIONS_PER_PLAN,
+  slot,
   type Candidate,
+  type QuestionNode,
   type PlanDetail,
   type PlanGap,
   type PlanRevision,
@@ -65,13 +73,20 @@ import {
   type Run,
   type TripBrief,
 } from "@planner/contract";
+import { QUESTION_TREE, validateAnswer } from "@planner/intake";
 import {
   applyEdit,
+  briefEditSlice,
+  droppedPins,
+  droppedPinsRefusal,
   editTransitions,
   NOTHING_MEASURED,
   replan,
   replanPool,
   restoreRevision,
+  reviseBrief,
+  tripSpan,
+  type BriefChange,
   type EditOperation,
   type TravelTable,
 } from "@planner/itinerary";
@@ -97,13 +112,16 @@ import { measureTravel, runPlaces } from "./travel.ts";
 
 type ReplanOperation = Extract<RevisionOperation, { kind: "replan" }>;
 
+/** A brief edit as checked: both ends of each change. The run derives the days it re-packs. */
+type BriefEdit = { kind: "brief" } & BriefChange;
+
 /** What the checks found, for the step that acts on them. */
 interface Admitted {
   plan: PlanDetail;
   /** The latest revision, which is the request's base. */
   latest: PlanRevision;
   /** The operation the revision will store, with the item resolved to its candidate and day. */
-  operation: Exclude<RevisionOperation, { kind: "first-draft" }>;
+  operation: Exclude<RevisionOperation, { kind: "first-draft" | "brief" }> | BriefEdit;
 }
 
 export async function revisePlan(
@@ -116,6 +134,8 @@ export async function revisePlan(
   switch (request.kind) {
     case "replan":
       return { kind: "run", run: startReplan(context, planId, request) };
+    case "brief":
+      return { kind: "run", run: startBriefEdit(context, planId, request) };
     case "restore":
       return { kind: "revision", view: restore(context, planId, request) };
     case "move":
@@ -244,7 +264,65 @@ function admit(context: AppContext, planId: string, request: ReviseRequest): Adm
       }
       return { plan, latest, operation: { kind: "restore", revision: request.revision } };
     }
+
+    case "brief":
+      return { plan, latest, operation: admitBriefEdit(context, plan, latest, request) };
   }
+}
+
+/**
+ * The brief edit's own checks (pl-47), after the shared ones, in order: the
+ * dates by the intake's rules, the budget by its schema alone, then a pin on a
+ * day the new dates drop — synchronously, so a refusal knowable now never
+ * arrives after a 202.
+ */
+function admitBriefEdit(
+  context: AppContext,
+  plan: PlanDetail,
+  latest: PlanRevision,
+  request: Extract<ReviseRequest, { kind: "brief" }>,
+): BriefEdit {
+  const from = latest.brief;
+  // `uncheckedForRevision`'s guard, and the same sentence: a stored revision
+  // always has dates, because `startRun` refuses a brief without them.
+  if (!isAnswered(from.dates)) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
+  }
+
+  if (request.dates !== undefined) {
+    validateAnswer(
+      datesQuestion(),
+      { state: "answered", value: { kind: "dates", value: request.dates } },
+      context.now(),
+    );
+  }
+  // A budget needs nothing past the schema: `validateAnswer`'s `budget` case
+  // says the schema is the whole check, and the route has already parsed it.
+
+  if (request.dates !== undefined) {
+    const dropped = droppedPins(latest, tripSpan(request.dates).dayCount);
+    if (dropped.length > 0) throw droppedPinsRefusal(dropped, plan.candidates);
+  }
+
+  return {
+    kind: "brief",
+    dates: request.dates === undefined ? null : { from: from.dates.value, to: request.dates },
+    budget: request.budget === undefined ? null : { from: from.budget, to: request.budget },
+  };
+}
+
+/**
+ * The tree's dates question, found by what it fills and never by its id: the
+ * tree is content, and an id is not what this check is about.
+ */
+function datesQuestion(): QuestionNode {
+  const node = QUESTION_TREE.nodes.find(
+    (each) => each.fills.scope === "core" && each.fills.slot === "dates",
+  );
+  if (node === undefined) {
+    throw new AppError("INTERNAL", "The question tree has no question for the trip's dates.");
+  }
+  return node;
 }
 
 function refuseIfBusy(context: AppContext, planId: string): void {
@@ -328,7 +406,7 @@ async function edit(
   const pairs = editTransitions(latest, editing);
   const named = new Set(pairs.flatMap((pair) => [pair.fromCandidateId, pair.toCandidateId]));
   const candidates = plan.candidates.filter((candidate) => named.has(candidate.id));
-  const travel = await measureEdit(context, plan.brief, candidates, signal);
+  const travel = await measureEdit(context, latest.brief, candidates, signal);
 
   // A request whose socket closed during the lookup writes nothing.
   if (signal.aborted) throw new AppError("CANCELED");
@@ -362,7 +440,7 @@ async function edit(
     }
 
     const { revision } = applyEdit({
-      brief: current.brief,
+      brief: previous.brief,
       candidates: current.candidates,
       previous,
       operation: editing,
@@ -421,9 +499,10 @@ function startReplan(
   const { run, brief, operation } = context.db.transaction(() => {
     const admitted = admit(context, planId, request);
     return {
-      // The plan's snapshot, never `readIntake`: the intake stays editable, and
-      // this is what every revision of this plan was built against.
-      brief: admitted.plan.brief,
+      // The base revision's, never `readIntake` and never `plan.brief`: the
+      // intake stays editable, and the plan's snapshot is the first draft's,
+      // which a dates or budget edit has since left behind (pl-47).
+      brief: admitted.latest.brief,
       operation: admitted.operation as ReplanOperation,
       run: insertRun(context.db, {
         id: runId,
@@ -640,4 +719,168 @@ function readLatest(
     });
   }
   return { plan, latest };
+}
+
+// ---------------------------------------------------------------------------
+// Brief edits (pl-47)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check, insert the run and enqueue it, as `startReplan` does. A brief edit
+ * spends the runs bucket and is a `replan` run: added and re-packed days need
+ * grounding, and pl-42 made every re-plan a run for exactly that reason.
+ */
+function startBriefEdit(
+  context: AppContext,
+  planId: string,
+  request: Extract<ReviseRequest, { kind: "brief" }>,
+): Run {
+  const runId = randomUUID();
+  const timestamp = context.now().toISOString();
+
+  const { run, brief, change } = context.db.transaction(() => {
+    const admitted = admit(context, planId, request);
+    const briefEdit = admitted.operation as BriefEdit;
+    return {
+      // The base revision's brief with the edited slots answered. Never
+      // `plan.brief`, which is the first draft's.
+      brief: {
+        ...structuredClone(admitted.latest.brief),
+        ...(briefEdit.dates === null ? {} : { dates: slot.answered(briefEdit.dates.to) }),
+        ...(briefEdit.budget === null ? {} : { budget: slot.answered(briefEdit.budget.to) }),
+      },
+      change: { dates: briefEdit.dates, budget: briefEdit.budget },
+      run: insertRun(context.db, {
+        id: runId,
+        planId,
+        kind: "replan",
+        status: "queued",
+        now: timestamp,
+      }),
+    };
+  })();
+
+  enqueueRun(context, { runId, planId }, async (signal, spent) => {
+    await executeBriefEdit(
+      context,
+      { runId, planId, brief, change, base: request.baseRevisionId },
+      signal,
+      spent,
+    );
+  });
+
+  return run;
+}
+
+interface BriefEditJob {
+  runId: string;
+  planId: string;
+  /** The edited brief. */
+  brief: TripBrief;
+  change: BriefChange;
+  /** The revision the request built on, which `persist` checks is still the latest. */
+  base: string;
+}
+
+/**
+ * The brief edit's run. No specialist is named and nothing is discovered, so
+ * no model is asked anything: a budget cut draws on the pool the plan already
+ * has, and asking for new lodging after one is a re-plan naming `lodging`.
+ *
+ * ```
+ * queued ─┬─► grounding (measure) ─► composing ─► done
+ *         └─► composing                             nothing in the slice to measure
+ * ```
+ */
+async function executeBriefEdit(
+  context: AppContext,
+  job: BriefEditJob,
+  signal: AbortSignal,
+  spent: Spent,
+): Promise<void> {
+  const { runId, planId, brief, change, base } = job;
+  const logger = context.logger.child({ run: runId });
+
+  // Nobody is running, and that is decided: `roster_size = 0`, not `null`.
+  record(context, runId, { type: "roster", running: [], droppedForBudget: [], total: 0 });
+
+  // --- Measure what the slice may place, over the resized revision, and
+  // nothing else. `reviseBrief` resizes and slices the same way, so the table
+  // and the days agree by construction. Kept days keep their stored travel.
+  const before = readLatest(context, planId, base);
+  const { resized, slice } = briefEditSlice({
+    previous: before.latest,
+    brief,
+    change,
+    candidates: before.plan.candidates,
+  });
+  // An empty slice re-packs nothing, so nothing it could place is worth a
+  // lookup — `replanPool` over no days would still offer every unplaced one.
+  const measurable =
+    slice.length === 0
+      ? []
+      : replanPool({ candidates: before.plan.candidates, previous: resized, days: slice });
+  const places = runPlaces(measurable);
+  if (places.all.length > 0 && !moveTo(context, runId, "grounding")) return;
+  const measured =
+    places.all.length === 0
+      ? { candidates: measurable, travel: NOTHING_MEASURED }
+      : await measureTravel({
+          candidates: measurable,
+          places,
+          provider: groundingForRun(
+            context.grounding,
+            groundingBudget(context.config.maxGroundingCalls),
+          ),
+          trip: tripContextFor(brief),
+          logger,
+          signal,
+          onProgress: (event) => {
+            record(context, runId, event);
+          },
+        });
+  const located = new Map(measured.candidates.map((candidate) => [candidate.id, candidate]));
+  const locate = (candidate: Candidate): Candidate => located.get(candidate.id) ?? candidate;
+
+  // --- Compose. No `await` from here to the write.
+  const composedAt = context.now();
+  const timestamp = composedAt.toISOString();
+
+  // Re-read: a pin set while grounding measured is on that revision in place
+  // (pl-22). On a day the new dates drop, `reviseBrief` refuses it, and the
+  // run fails with `PLAN_INFEASIBLE` and its findings.
+  const { plan, latest } = readLatest(context, planId, base);
+
+  if (!moveTo(context, runId, "composing")) return;
+
+  const composed = reviseBrief({
+    brief,
+    candidates: plan.candidates.map(locate),
+    previous: latest,
+    change,
+    travel: measured.travel,
+    // Verbatim: nothing re-ran, and evidence persists until something re-asks.
+    gaps: latest.gaps,
+    coverage: latest.coverage,
+    reading: latest.reading,
+    revision: {
+      id: `${runId}-1`,
+      reason: revisionReason({
+        kind: "brief",
+        dates: change.dates !== null,
+        budget: change.budget !== null,
+        before: latest.days.length,
+        after: resized.days.length,
+        everyDay: slice.length === resized.days.length,
+      }),
+      createdAt: timestamp,
+    },
+    now: composedAt,
+  });
+
+  const revisionId = persist(context, planId, composed.revision, timestamp, base);
+
+  recordUsage(context, runId, spent.usage);
+  if (!moveTo(context, runId, "done")) return;
+  context.events.done(runId, planId, revisionId);
 }

@@ -40,6 +40,11 @@
  * // Restore revision n as a new revision.
  * const revision = restoreRevision(target, {...})
  *
+ * // Edit the dates or the budget (pl-47): measure over the resized slice, then re-pack it.
+ * const { resized, slice } = briefEditSlice({ previous, brief, change, candidates })
+ * const pool = replanPool({ candidates, previous: resized, days: slice })
+ * const { revision } = reviseBrief({ brief, candidates, previous, change, travel, revision: {...}, now })
+ *
  * // On every read: one diff per revision after the first.
  * const diffs = revisionDiffs(plan.revisions)
  * ```
@@ -66,6 +71,16 @@ export {
   type TransitionPair,
 } from "./edit.ts";
 export { restoreRevision } from "./restore.ts";
+export {
+  briefEditSlice,
+  droppedPins,
+  droppedPinsRefusal,
+  reviseBrief,
+  PIN_ON_DROPPED_DAY,
+  type BriefChange,
+  type BriefEditSlice,
+  type ReviseBriefInput,
+} from "./brief-edit.ts";
 export { diffRevisions, revisionDiffs } from "./diff.ts";
 export {
   critique,

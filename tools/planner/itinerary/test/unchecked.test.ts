@@ -169,7 +169,6 @@ describe("uncheckedForRevision", () => {
 
     expect(
       uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       }),
@@ -198,7 +197,7 @@ describe("uncheckedForRevision", () => {
 
     expect(composed.unchecked).toContainEqual(thin);
     expect(
-      uncheckedForRevision({ brief, candidates: plan.candidates, revision: revisionOf(plan) }),
+      uncheckedForRevision({ candidates: plan.candidates, revision: revisionOf(plan) }),
     ).toContainEqual(thin);
   });
 
@@ -211,7 +210,6 @@ describe("uncheckedForRevision", () => {
     const { plan } = planWith(brief, [candidate({ specialist: "activities" })]);
 
     const kinds = uncheckedForRevision({
-      brief,
       candidates: plan.candidates,
       revision: revisionOf(plan),
     }).map((constraint) => constraint.kind);
@@ -234,7 +232,6 @@ describe("uncheckedForRevision", () => {
       expect(plan.revisions.at(-1)?.days[0]?.items).toHaveLength(3);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -255,7 +252,6 @@ describe("uncheckedForRevision", () => {
       const { plan, composed } = planWith(brief, [first, second, third], travel);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -270,7 +266,6 @@ describe("uncheckedForRevision", () => {
       const { plan, composed } = planWith(brief, threeThings(), NOTHING_MEASURED);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -304,7 +299,6 @@ describe("uncheckedForRevision", () => {
       expect(days[1]?.items).toHaveLength(2);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -322,7 +316,6 @@ describe("uncheckedForRevision", () => {
       const { plan } = planWith(brief, threeThings(), measuredEverywhere());
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -346,7 +339,6 @@ describe("uncheckedForRevision", () => {
       const { plan, composed } = planWith(brief, [first, second, third], travel);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -369,7 +361,6 @@ describe("uncheckedForRevision", () => {
       const { plan, composed } = planWith(brief, [first, second, third], travel);
 
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -413,7 +404,6 @@ describe("uncheckedForRevision", () => {
       ).not.toBeNull();
       expect(
         uncheckedForRevision({
-          brief,
           candidates: measured.plan.candidates,
           revision: revisionOf(measured.plan),
         }).map((each) => each.kind),
@@ -422,7 +412,6 @@ describe("uncheckedForRevision", () => {
       // Unmeasured, it is named — plan-wide here, because the bed's arrival is
       // the only pair there was.
       const derived = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       });
@@ -446,7 +435,6 @@ describe("uncheckedForRevision", () => {
       const { plan } = planWith(brief, threeThings(), measuredEverywhere());
 
       const kinds = uncheckedForRevision({
-        brief,
         candidates: plan.candidates,
         revision: revisionOf(plan),
       }).map((each) => each.kind);
@@ -465,7 +453,6 @@ describe("uncheckedForRevision", () => {
     ]);
 
     const derived = uncheckedForRevision({
-      brief,
       candidates: plan.candidates,
       revision: revisionOf(plan),
     });
@@ -484,7 +471,6 @@ describe("uncheckedForRevision", () => {
     const { plan, composed } = planWith(brief, [vague]);
 
     const derived = uncheckedForRevision({
-      brief,
       candidates: plan.candidates,
       revision: revisionOf(plan),
     });
@@ -524,7 +510,7 @@ describe("uncheckedForRevision", () => {
     const { plan, composed } = planWith(brief, candidates);
 
     expect(
-      uncheckedForRevision({ brief, candidates: plan.candidates, revision: revisionOf(plan) }),
+      uncheckedForRevision({ candidates: plan.candidates, revision: revisionOf(plan) }),
     ).toEqual(composed.unchecked);
   });
 
@@ -543,7 +529,6 @@ describe("uncheckedForRevision", () => {
     ]);
 
     const derived = uncheckedForRevision({
-      brief,
       candidates: plan.candidates,
       revision: revisionOf(plan),
     });
@@ -565,8 +550,8 @@ describe("uncheckedForRevision", () => {
     ]);
     const revision = revisionOf(plan);
 
-    const first = uncheckedForRevision({ brief, candidates: plan.candidates, revision });
-    const second = uncheckedForRevision({ brief, candidates: plan.candidates, revision });
+    const first = uncheckedForRevision({ candidates: plan.candidates, revision });
+    const second = uncheckedForRevision({ candidates: plan.candidates, revision });
 
     expect(second).toEqual(first);
   });

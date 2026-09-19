@@ -647,9 +647,7 @@ export function readPlanView(context: AppContext, id: string): PlanView {
   return {
     plan,
     unchecked:
-      revision === null
-        ? []
-        : uncheckedForRevision({ brief: plan.brief, candidates: plan.candidates, revision }),
+      revision === null ? [] : uncheckedForRevision({ candidates: plan.candidates, revision }),
     // Derived on every read and never stored (pl-42): one diff per revision
     // after the first, paired by `parentRevisionId`, oldest first.
     diffs: revisionDiffs(plan.revisions),
