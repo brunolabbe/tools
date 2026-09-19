@@ -42,13 +42,16 @@ repo-wide search — so this ticket is `api`-only).
 1. In `tools/planner/api/src/http-errors.ts`, add a helper that recognises an
    error carrying a numeric Fastify `statusCode` in the 4xx range and is not
    already an `AppError`, matching dl-66's `isClientRequestStatusError` in
-   `tools/downloader/api/src/http-errors.ts`. **Copy dl-66's decision A** on
-   how wide that rule reaches (its `## The width decision`): do not narrow it
-   to Fastify's own `FST_ERR_CTP_*` family here either, even though the
-   planner has no `@fastify/static`-shaped second source measured yet — the
-   owner's answer was about the rule's shape, not about what the downloader
-   happens to have mounted, and a planner-specific narrowing would be a second,
-   unresolved question this ticket does not need to open.
+   `tools/downloader/api/src/http-errors.ts`. **Default to dl-66's decision A**
+   on how wide that rule reaches (its `## The width decision`) — do not narrow
+   it to Fastify's own `FST_ERR_CTP_*` family by default — **but confirm with
+   the owner when this ticket is picked up, with the planner's own measured
+   before/after table**, rather than assuming A carries over unasked: the
+   planner has no `@fastify/static`-shaped second source measured yet, and its
+   width may turn out to differ from the downloader's. See the 2026-09-19 Log
+   entry for the question and the owner's answer on _this_ point (default to
+   A, confirm later) — that answer is about how to leave this ticket, not a
+   second, standing decision that A itself binds the planner.
 2. In `toErrorResponse`, map such an error to `new AppError("BAD_REQUEST",
 undefined, { cause: error })` before falling through to `AppError.from`.
 3. Add `BAD_REQUEST: 400` to `STATUS_BY_CODE`.
@@ -113,3 +116,16 @@ understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   ticket's own test suite. dl-66's width decision (A: keep the rule as
   written) is copied into this ticket's Build step 1 rather than re-decided
   here.
+- 2026-09-19 — **dl-66's review gate flagged that Build step 1 extended an
+  owner decision made for one tool to a second one** (the wording above
+  asserted the owner's dl-66 answer, option A, also binds the planner). Sent
+  to the owner via `AskUserQuestion`, with two options: default to A and
+  confirm with the owner when this ticket is picked up (the reviewer's
+  recommendation and the orchestrator's), or treat A as already binding the
+  planner with no further confirmation needed. **The owner chose the first**
+  — default to A, but confirm with the owner when pl-51 is picked up, with
+  the planner's own measured before/after table, since the planner has no
+  `@fastify/static` and its width may differ from the downloader's. Build
+  step 1 reworded accordingly: it now names this as a default rather than a
+  standing decision, and points a future builder at this Log entry rather
+  than at dl-66's decision alone.
