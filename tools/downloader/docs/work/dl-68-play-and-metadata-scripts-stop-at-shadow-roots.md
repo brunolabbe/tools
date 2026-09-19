@@ -182,6 +182,18 @@ above is quoted as run.)
 - **findings** · 4 returned; 2 carried (both repaired), 2 dropped.
 - NFR: security n/a (no URL, header or subprocess change) · performance: one more `querySelectorAll('*')` walk per frame in `PLAY_SCRIPT` and one in the metadata fallback, the same cost `CHOOSE_VIDEO_FN` already pays · reliability ✓ · maintainability: above.
 
+Transcribed by the builder from the reviewer's message, verbatim with one
+exception: the "Reverting each half..." row's second citation quoted the
+fragment `chooseVideo() || (` at that same line 398 in the reviewer's
+message, but a bare `||` inside a markdown table cell is not committable
+as-is — the table
+structure mangles it even inside backticks (confirmed: it rendered as
+`"chooseVideo() |     | ("`, padded and no longer resolvable). Repointed to
+`"var media = chooseVideo()"`, the anchor dl-55's own record already uses for
+this exact line: same line number (398), still unique in the file, same fact
+proven. No verdict, finding or line number changed. The reviewer reviewed and
+accepted this swap before the section was committed.
+
 ## Log
 
 **2026-09-17 — filed** from dl-61's gate, which measured this while checking
