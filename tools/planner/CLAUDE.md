@@ -150,8 +150,10 @@ the process" and two names for one activity is a distinction the UI would have
 to explain for nothing. `queued → grounding → fanning-out` is the discovery
 half; `fanning-out → grounding → composing` is pl-27's.
 
-**`coverage` names a corridor the ground was thin along**, and it is the one
-`UncheckedConstraintKind` that is stored rather than derived. Every other entry
+**`coverage` names a corridor the ground was thin along**, and it is one of the
+two `UncheckedConstraintKind`s that are stored rather than derived; the other is
+`booking-deadline-passed` (pl-47), and they share one reason: a fact from
+outside, or from a clock, cannot be re-derived on read. Every other entry
 `uncheckedFor` computes is a pure function of the brief, the candidates and the
 days a stored revision holds; a thin corridor is not — it is a live backend's
 answer to a query that ran once, upstream of any candidate, so it rides on
@@ -215,7 +217,9 @@ than an admitted hole — the repo's _never fake progress_ rule, in this domain.
 **Name what you did not check, not only what you did not cover.** A packed plan
 looks equally finished whether every constraint was enforced or three were skipped
 for want of data, so every plan carries an `UncheckedConstraint` list — derived
-rather than stored save for `coverage` above, and keyed on
+rather than stored save for `coverage` above and `booking-deadline-passed`, which
+a dates edit reads off a clock (pl-47): a fact from outside, or from a clock,
+cannot be re-derived on read. It is keyed on
 `uncheckedConstraintKey` rather than on the kind, since a kind is not a unique
 key. **Say what happened to this plan, never what is true
 of the phase.**

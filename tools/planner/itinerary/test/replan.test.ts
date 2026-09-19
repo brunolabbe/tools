@@ -150,7 +150,7 @@ describe("frozen days", () => {
 
     const revision = appended(previous, result.revision);
     expect(() => planRevisionSchema.parse(revision)).not.toThrow();
-    expect(result.unchecked).toEqual(uncheckedForRevision({ brief: BRIEF, candidates, revision }));
+    expect(result.unchecked).toEqual(uncheckedForRevision({ candidates, revision }));
   });
 
   test("a per-day finding on a frozen day is discarded, even a hard one", () => {

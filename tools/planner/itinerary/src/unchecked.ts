@@ -399,13 +399,20 @@ export function uncheckedFor(input: {
  * through exactly as `compose` first attached it, which is what makes this
  * function and `compose`'s own returned `unchecked` agree on the plan the run
  * just built as well as on one read back a week later.
+ *
+ * **`revision.deadlines` is appended after it**, for the same reason reached
+ * from a clock (pl-47): whether an item can still be booked in time depends on
+ * the day it is asked, and this function reads no clock.
  */
 export function uncheckedForRevision(input: {
-  brief: TripBrief;
   candidates: readonly Candidate[];
   revision: PlanRevision;
 }): UncheckedConstraint[] {
-  const { brief, candidates, revision } = input;
+  const { candidates, revision } = input;
+  // The revision's own brief, never one passed beside it (pl-47): the obvious
+  // one to pass was `plan.brief`, which is the first draft's, and wrong for
+  // every revision after a dates or budget edit.
+  const { brief } = revision;
 
   // The same guard `compose` makes, and the same sentence: a brief with no
   // dates has no days, so there was never a plan to say anything about. A
@@ -417,5 +424,6 @@ export function uncheckedForRevision(input: {
   return [
     ...uncheckedFor({ brief, dates: brief.dates.value, candidates, days: revision.days }),
     ...revision.coverage,
+    ...revision.deadlines,
   ];
 }
