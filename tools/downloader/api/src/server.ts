@@ -620,8 +620,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
  */
 function registerErrorHandling(server: FastifyInstance, context: AppContext): void {
   server.setErrorHandler((error, request, reply) => {
-    const { status, body } = toErrorResponse(error);
-    const appError = AppError.from(error);
+    // One computation of "what `AppError` is this", shared by the response and
+    // the log line below — a second, independent `AppError.from(error)` here
+    // used to widen the response to `BAD_REQUEST` while the log still reported
+    // `INTERNAL` for the identical request (dl-66).
+    const { status, body, appError } = toErrorResponse(error);
 
     // 5xx is ours; 4xx is theirs. Logging the two at the same level makes the
     // log useless for spotting real problems.
