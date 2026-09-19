@@ -3,7 +3,7 @@ id: pl-46
 tool: planner
 title: Revising a plan is proven through a browser, across the reload
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-44, pl-45]
 difficulty: standard
@@ -122,3 +122,80 @@ open question about where the browser proof belongs. Checked at filing, at
   locally.
 - `.claude/rules/planner-e2e.md` counts "four specs over two paths on purpose".
 - The `e2e` job in `planner.yml` is the only place the suite runs in CI.
+
+**2026-09-19 — built (dispatched as Sonnet).** Branched from `origin/main` at
+`02ab751`. pl-44 and pl-45 were both `done` on that base, so nothing here
+needed a rebase.
+
+**What landed.**
+
+- `e2e/plan-walk.ts`: `draftAPlan`, `reopenFromTheList` and `RUN_TIMEOUT`,
+  lifted out of `pin.spec.ts` unchanged (moved, not rewritten) since two specs
+  now need them. `pin.spec.ts` imports them instead of defining its own copy.
+- `e2e/revise.spec.ts`: one spec, one walk — draft, a zero-specialist re-plan
+  of day 1, a move, a reload, a restore of version 1, and a second reload.
+  Every value (the moved item's title, its day, the version count) is read off
+  the page; nothing is written down from the intake tree or the scripted
+  provider's script.
+- `.claude/rules/planner-e2e.md` and `tools/planner/CLAUDE.md`'s summary now
+  count five specs over three paths, naming revision as the third and the
+  seams it crosses (a re-plan's run over SSE, an edit's synchronous write).
+
+**What the brief did not say, found by actually running the spec.** The Build
+section's step 3 says "move an item … to another day" with no guidance on
+_which_ day. A fixed destination (`toDayIndex = fromDayIndex === 0 ? 1 : 0`)
+failed the very first time it ran, against a real `PLAN_INFEASIBLE`: the
+scripted provider's road-trip brief packs most days close to
+`itinerary/limits.ts`'s pace ceiling, so day 2 already held enough activity
+that the moved item overfilled it. `.claude/rules/planner-unchecked-constraints.md`
+and pl-44's own `PLAN_INFEASIBLE` mapping are both working as built — this is
+the spec choosing an unsafe move, not a defect. Fixed by reading every day's
+item count off the page first and moving to whichever day (other than the
+source) currently holds the fewest — the emptiest day is the one a real user
+would also reach for, and it happens to line up with this brief's last two
+days, which the packer leaves empty on a five-night, six-day trip.
+
+**Fold-in considered and declined.** Nothing else already-specified turned up
+free while building this — the ticket's own instruction to update the rules
+file and its summary is folded into the same commit rather than left as a
+second step, but that is this ticket's own Build item 4, not a fold-in.
+
+**Verification.**
+
+- `npx playwright test -c tools/planner/playwright.config.ts e2e/revise.spec.ts --reporter=list`
+  (equivalent to `npm run e2e:planner -- e2e/revise.spec.ts`): **1 passed**,
+  3.0s.
+- The full suite together, to prove `pin.spec.ts`'s extraction did not move
+  anything it depends on: `npm run e2e:planner`: **5 passed** — 2
+  `intake.spec.ts`, 2 `pin.spec.ts`, 1 `revise.spec.ts`.
+- **The reload is the assertion, shown red.** A scratch mutation of
+  `api/src/runs/revise.ts`'s `edit()` skipped the `persist(...)` call and
+  fabricated the response from `appendRevision` in memory instead of
+  re-reading the database, the way a regression that fakes success without
+  writing would look. `revise.spec.ts` passed every assertion through the
+  move — the crumb read "Version 3 of 3", the item's new day, and the diff
+  naming it moved, all against the fabricated response — and failed only at
+  the first reload, still expecting "Version 3 of 3" and reading back
+  "Version 2 of 2 · Re-packed day 1 from what was already proposed." Reverted
+  immediately after (confirmed byte-identical to the pre-mutation file); the
+  unmutated spec is green again above.
+- `npm run check`: exit 0. `npm test -- --project planner`: 71 files, 1,184
+  tests, none failing. This branch adds no `.test.ts` file — `revise.spec.ts`
+  runs only under Playwright — so this count is unchanged by anything here;
+  it is quoted to show the rest of the suite is undisturbed, not as evidence
+  of new coverage.
+
+**Not run, and said so rather than reported green: `npm run e2e:install`
+itself.** It shells out to `playwright install --with-deps chromium`, which
+needs `sudo` for the OS package half and failed on it in this container
+(no terminal for a password prompt). The Chromium binary Playwright needs was
+already present at `/ms-playwright` — this container's own devcontainer setup,
+not this session's doing — so `npx playwright test` ran directly against it.
+A worktree without that binary already unpacked would need the install step
+to actually reach the network for the browser download, which this container
+also cannot do; that gap is the sandbox's, not this branch's, and is the same
+one `pl-45`'s Log names for its own missing `@anthropic-ai/sdk` packages.
+`.github/workflows/planner.yml`'s `e2e` job runs `npm run e2e:install` on a
+runner with no such restriction, so CI is the place this ran for real —
+verify with `gh pr checks` once the pull request is open, per this ticket's
+own `Done when`.
