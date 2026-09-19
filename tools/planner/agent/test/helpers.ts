@@ -81,7 +81,13 @@ export class FakeProvider implements ModelProvider {
         return {
           content: turn.content,
           stopReason: "end",
-          usage: { inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 200 },
+          usage: {
+            inputTokens: 100,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            outputTokens: 200,
+            thinkingTokens: 20,
+          },
         };
     }
   }

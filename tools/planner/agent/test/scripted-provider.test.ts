@@ -45,6 +45,7 @@ describe("the scripted provider", () => {
       cacheReadTokens: null,
       cacheWriteTokens: null,
       outputTokens: null,
+      thinkingTokens: null,
     });
     expect(reply.stopReason).toBe("end");
   });

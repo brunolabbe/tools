@@ -243,7 +243,8 @@ maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
 - Sets A–D have run against `claude-opus-5`, and their records are checked in
   under `api/test/fixtures/live/`.
 - The Log carries one table covering every set. Per run it gives:
-  - calls, input, output, thinking share of output, and cache reads
+  - calls, input, output, thinking share of output (`ModelUsage.thinkingTokens`,
+    fillable as of pl-50), and cache reads
   - dollars, and the reconstructed ceiling
   - malformed replies, re-asks, refusals, `length` stops, and fallbacks
 
@@ -714,3 +715,73 @@ ready`, naming the exact SDK type line both the builder and the reviewer
 widened denylist); `npm test -- --project planner` — full count in this
 round's final report to the orchestrator. `status` stays `in-flight`: none of
 A–D changed what only the owner's real run can still prove.
+
+### 2026-09-19 — pl-50 landed: the "thinking share of output" column is fillable
+
+`ModelUsage.thinkingTokens` now exists (`agent/src/provider.ts`), `usageOf` in
+`agent/src/providers/anthropic.ts` populates it from the top-level
+`usage.output_tokens_details.thinking_tokens` (not summed across `iterations`
+— the per-iteration usage types in `@anthropic-ai/sdk@0.125.0` do not carry
+that breakdown at all, only the top-level `BetaUsage` does; confirmed by
+reading `BetaMessageIterationUsage`, `BetaCompactionIterationUsage`,
+`BetaAdvisorMessageIterationUsage` and `BetaFallbackMessageIterationUsage`,
+none of which declare it), and this harness's `RecordedAttempt.usage` carries
+it through for free, proved by re-running under `MODEL_PROVIDER=scripted`
+(`PLANNER_LIVE_RUN=1 node --import tsx api/test/live/run.ts --out <dir>
+--max-usd 10`): every attempt's `usage` object now has `"thinkingTokens":
+null`, no other key changed. **Still awaiting the owner's real run** to put a
+non-null number in that column; this only removes the seam gap that made it
+structurally unfillable.
+
+**Two corrections pl-50's gate found, recorded here since this entry is new
+rather than shipped history:**
+
+- **The decision-D entry above cites the wrong line.** It calls
+  `resources/beta/messages/messages.d.ts:2899` the location of
+  `BetaUsage.output_tokens_details`. That line is `BetaMessageDeltaUsage`'s
+  own copy of the same field name (a streaming-delta type, never read here);
+  `BetaUsage`'s is at line 4298. Left as written above, since it is shipped
+  history and the ticket format does not rewrite an entry after the fact —
+  corrected here instead.
+- **The multi-iteration scope of `thinkingTokens` is unmeasured, not
+  decided.** `usageOf` sums `outputTokens` across every attempt in
+  `usage.iterations` but reads `thinkingTokens` once, from the top-level
+  `usage.output_tokens_details` — the only place the SDK's types declare that
+  field at all (confirmed by reading all four `BetaIterationsUsage` member
+  types; none of them carries it). Whether that top-level figure spans every
+  attempt or only the one that produced the final message is **not stated
+  anywhere in `@anthropic-ai/sdk@0.125.0`'s types** — the "serving attempt
+  only" reading pl-49 documented for the other kinds rests on the
+  hand-written `fallbackServed` fixture's own `_note` (itself citing the
+  platform docs, not the SDK's types) and on inference, not on a type-level
+  guarantee for this field specifically. No fixture here combines a fallback
+  with a thinking breakdown, so this stays unmeasured until the owner's real
+  run produces a reply that both fell back and thought.
+
+### 2026-09-19 — owner decision A: `RunUsage.thinkingTokens` is a documented lower bound
+
+The owner answered pl-50's second open decision (the gate's med 3): keep
+`addReplyUsage` summing past a `null` reply the way it always has, and
+document the result as a lower bound over the replies that reported a
+breakdown, rather than nulling the sum once coverage is incomplete or
+carrying a separate coverage count. `ModelUsage`, `RunUsage` and `usageOf`'s
+doc comments now say so in those words.
+
+**This funded run is where both of pl-50's unmeasured gaps get a real
+answer, and they are two different questions:**
+
+- **How often does a run mix a reply with no thinking breakdown and one
+  with a breakdown?** Every reply from one provider should, in principle,
+  report the same way — adaptive thinking is on for every specialist call
+  the same way — so a mixed run would mean either a specialist call that
+  genuinely produced no reasoning tokens, or an inconsistency in what the
+  API reports call to call. Either is worth knowing before trusting
+  `RunUsage.thinkingTokens` as a report figure.
+- **How often does a reply itself take several attempts (a refusal
+  fallback) while also thinking?** That is the multi-iteration scope
+  question above, unrelated to decision A's cross-reply summing — a single
+  reply's own `thinkingTokens` could already be a lower bound before it
+  ever reaches `addReplyUsage`.
+
+Sets A–D's real run should report both counts in its Log table, beside the
+thinking-share figure the column can now finally carry (pl-50 landed).

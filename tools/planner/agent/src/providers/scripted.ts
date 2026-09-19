@@ -100,6 +100,12 @@ function reply(content: string): ModelReply {
   return {
     content,
     stopReason: "end",
-    usage: { inputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, outputTokens: null },
+    usage: {
+      inputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      outputTokens: null,
+      thinkingTokens: null,
+    },
   };
 }
