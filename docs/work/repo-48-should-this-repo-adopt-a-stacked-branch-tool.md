@@ -51,20 +51,80 @@ lines for a preview-frame module. Confirmed directly:
   confirmed by diffing each branch against `origin/main` directly, not taken
   on the account's word."
 
-**One thing in the prompt that prompted this filing did not survive that
-check, and is corrected here rather than carried forward as fact:** the claim
-that "the intake seam map predicted this collision before either builder was
-dispatched." Nothing in the tree supports that framing. A seam map's raw
-output is never committed anywhere in this repo — recorded as a repeated,
-deliberate gap across several sessions in `history.md` ("The seam map is
-committed nowhere," said more than once about different batches) — so whether
-_this_ batch's seam map flagged this specific pair before dispatch cannot be
-checked from the tree at all; it can only be taken on the orchestrating
-session's own word, and that session's account is not reachable from here.
-What _is_ independently confirmed is only that the collision exists between
-the two finished branches, discovered (by the history-recording session) after
-both branches already existed. Whoever picks this ticket up should not repeat
-the stronger claim without a source for it.
+**One thing in the prompt that prompted this filing was checked twice, and the
+second check reverses the first — this is the ticket's strongest finding, and
+it changes what Option 1 below has to say.** The original claim was "the
+intake seam map predicted this collision before either builder was
+dispatched." A first pass found no support for that framing anywhere in the
+tree, since a seam map's raw output is never committed in this repo, and
+left it uncorroborated. The orchestrator has since supplied the actual reason
+it cannot be corroborated, and it is the opposite of an evidence gap: **the
+seam map did not predict this collision because the collision did not exist
+yet when the seam map ran.** This is the orchestrator's own account of its
+retained session transcript, not itself in the tree — recorded here as its
+account, provenance-marked, and checked as far as the tree allows:
+
+- The orchestrator holds the seam-mapper's report from that session (never
+  committed, per the gap above) and says it flagged `dl-58` against `dl-66`
+  (`api/src/server.ts`) and, conditionally, against `dl-54` (`logger.ts`) —
+  and reported **no pair for `dl-56` with `dl-58` at all**. Unverifiable from
+  the tree; taken on the orchestrator's word.
+- What _is_ verifiable from the tree: `dl-58`'s own committed ticket
+  (`tools/downloader/docs/work/dl-58-a-failed-probe-logs-the-page-url-unredacted.md`)
+  scopes its original Build to the `api` package only ("Packages: `api` (the
+  error handler, and possibly the logger)"; its step-3 "choose the layer"
+  offers two candidates, both inside `api`) — `engine` appears nowhere in
+  that original scope. The `engine/src/index.ts` export exists only from the
+  owner's **D1(a)** decision, dated 2026-09-17 in that ticket's own Log: "Reuse
+  `engine/src/ffmpeg/runner.ts`'s existing `redactUrlsInText` matcher... It
+  stayed inside `@downloader/engine` (exported through that package's own
+  index...)". `git show fb15bc9 -- tools/downloader/engine/src/index.ts`
+  confirms the squashed `dl-58` commit's entire touch to that file is the
+  one-line export change the D1 decision describes — nothing about `engine`
+  reached that branch before D1. So the tree independently confirms the half
+  of the claim it can see: the seam this ticket is about was created by a
+  decision taken **after** dispatch, not present at intake for any seam map to
+  have seen. Whoever picks this ticket up should treat "the collision was
+  created by a post-dispatch decision" as tree-confirmed, and "the seam map's
+  matrix named these specific other pairs and not this one" as the
+  orchestrator's account, not independently checkable.
+
+**This is not a one-off.** `history.md` records the same shape twice more,
+both re-read here for what they actually say, not for a paraphrase:
+
+- **Nineteenth session (2026-09-13)**, `history.md:2672` — matches. "The
+  seam-mapper reported no file overlap, and the owner chose 'pl-39 + pl-42
+  only'... The branches as finished share two paths, neither of which the
+  briefs predicted: `tools/planner/contract/src/errors.ts` (pl-42's new codes;
+  pl-39's reworded `AGENT_UNAVAILABLE` comment, **from the owner's first pl-39
+  decision**)". Same mechanism: an intake-time seam map that ran before a
+  mid-batch decision cannot see a seam that decision goes on to create. The
+  one difference worth stating plainly: this instance was cheap, not
+  costly — the same passage records "`git merge-tree --write-tree` reports no
+  conflict, and the scratch merge passes the citation gate." A shared touch
+  is not always a collision; `dl-56`/`dl-58` is the case where it was.
+- **Seventeenth session (2026-09-12/13)**, `history.md:2511`, item 10 —
+  **does not match, and is dropped from this claim rather than folded in.**
+  That passage is about `repo-39` and `repo-35` both editing the
+  `GRANDFATHERED` list, which moved lines `repo-37`'s **already-existing**
+  citation depends on: "The seam map could not see this, because the
+  collision is a citation _into_ a shared file, not an edit _of_ one." That
+  seam existed at intake; the seam map missed it because its detection is
+  edit-based, not because a later decision created it. A different failure
+  mode of the same tool, not the same pattern as the two rows above — cited
+  here only to say so.
+
+So the count for "a decision taken after dispatch creates a seam no intake-time
+map could have seen" is **two** confirmed instances (`dl-56`/`dl-58`,
+`pl-39`/`pl-42`), one of which cost a real merge round and one of which did
+not — not three. The evaluation below should lead with this finding, ahead of
+the three tool options: **the seams that cost this repo merge rounds are, at
+least sometimes, ones a decision creates after dispatch, and neither
+intake-time mapping nor a stacking tool addresses that without a re-check
+triggered by the decision itself** (a stacking tool still needs a human or a
+map to notice the new seam before choosing to stack on it — say this plainly
+in the evaluation rather than letting the finding read as support for Option 2
+or 3).
 
 **The cost this batch actually paid is not novel, and a stacking tool would
 not close the largest part of it.** `history.md`'s Sixteenth session row
@@ -148,6 +208,18 @@ relayed claim (above); do not repeat that pattern.
      what it does _not_ solve (the citations-gate line-drift problem above,
      and any conflict a seam map does not see because it was never re-run
      mid-batch).
+   - **Fold in, rather than treat as a separate option, the refinement the
+     `dl-56`/`dl-58` and `pl-39`/`pl-42` finding above requires**: an
+     intake-time-only seam map cannot catch a seam a decision creates after
+     dispatch, so "check the seam map before dispatch" is not enough on its
+     own — the process has to also re-run (or re-check) the seam map whenever
+     an owner decision widens a branch's touched files into a package or file
+     it did not originally name, not only at intake. State this as a second
+     trigger for the same process (re-check on decision, not just at intake),
+     say plainly it adds no tool and no install, and say plainly it would not
+     have prevented `pl-39`/`pl-42`'s shared touch either — that one needed
+     noticing, and this trigger is what would have supplied the notice, not a
+     guarantee nothing is missed.
 
 3. **Evaluate option 2 — Graphite (`gt`).** Confirm, from Graphite's own
    current documentation (not from memory), whether it restacks and retargets
@@ -196,13 +268,26 @@ relayed claim (above); do not repeat that pattern.
    ordinary behaviour on a conflicted path, not of branch management, and
    nobody should adopt a stacking tool expecting either to go away.
 
-6. **End with a recommendation naming exactly one of the three options**, with
+6. **Open with the decision-creates-seams finding as the headline, ahead of
+   the three tool options**, in the evaluation's own words: at least two
+   confirmed batches (`dl-56`/`dl-58`, `pl-39`/`pl-42`, both cited above) show
+   an intake-time seam map missing a seam that an owner decision created after
+   dispatch, and state plainly that neither an intake-time-only map nor a
+   stacking tool closes that gap without a re-check triggered by the decision
+   itself — a stacking tool still needs the same notice before it can act on
+   it.
+
+7. **End with a recommendation naming exactly one of the three options**, with
    its cost stated in commands and file changes, not adjectives, and the
    costs of the two rejected options stated with the same rigor so the
    rejection is checkable rather than asserted.
 
 ## Done when
 
+- The evaluation opens with the decision-creates-seams finding (step 6 above)
+  ahead of the three tool options, naming both confirmed batches and stating
+  plainly that no option here closes that gap without a decision-triggered
+  re-check.
 - The evaluation names, for **each** of the three options, a concrete cost in
   commands or file paths (a Dockerfile line, an allowlist hostname, a `gh`
   command, an install command) — never an adjective standing alone for a cost.
@@ -265,3 +350,39 @@ as `ambiguous`, purely because its own citations name the conflicted path;
 `git add` on the conflicted file cleared it immediately. Folded into the Why
 and Build sections above as a second, independently-confirmed merge-time cost
 next to the citation-coordinate one, rather than left as a bare relay.
+
+**2026-09-19 — third round: the seam-map correction reverses, not just
+withdraws.** The coordinator relayed that it had asserted, twice, that the
+intake seam map predicted the `dl-56`/`dl-58` collision, and that this was
+wrong — the seam-mapper's retained report (held only in the orchestrator's own
+session, never committed) flagged `dl-58` against `dl-66` and conditionally
+`dl-54`, and named **no** pair for `dl-56`/`dl-58` at all, because the
+collision did not exist at intake: `dl-58`'s original Build scoped to `api`
+only, and the `engine/src/index.ts` export that collided with `dl-56` was
+created by the owner's D1(a) decision on 2026-09-17, relayed to `dl-58`'s
+builder mid-batch. Checked against the tree rather than re-transcribed:
+`dl-58`'s own committed ticket confirms the original Build never named
+`engine`, its D1(a) Log entry describes exactly the reuse-via-export decision,
+and `git show fb15bc9 -- tools/downloader/engine/src/index.ts` confirms the
+squashed commit's sole touch to that file is the one-line export change the
+decision describes — so "the collision was created by a post-dispatch
+decision" is now tree-confirmed, not just asserted; "the seam-mapper's matrix
+named these specific other pairs" remains the orchestrator's account, marked
+as such, since seam-map output is never committed here. Also checked, per the
+coordinator's second message, two further `history.md` passages it named as
+supporting evidence: the Nineteenth-session row (`history.md:2672`,
+`pl-39`/`pl-42`) is the same shape — an intake-time seam map missing a seam a
+mid-batch decision later created — though that instance never became a
+conflict (`git merge-tree` clean, citation gate clean on the scratch merge).
+The Seventeenth-session row (`history.md:2511`, item 10, `repo-39`/`repo-35`
+on the `GRANDFATHERED` list) is a **different shape** — a citation-into-a-
+shared-file seam that existed at intake and was missed because the seam map's
+detection is edit-based, not because a decision created it after dispatch —
+and is named here only to say it does not belong to this pattern; not folded
+in as a third instance. Promoted the decision-creates-seams finding to the
+evaluation's required headline (Build step 6, Done-when's first bullet) and
+folded the "re-check on decision, not just at intake" refinement into Option 1
+rather than adding a fourth option, per the coordinator's instruction to pick
+whichever reads truer and say which. Stated plainly, both above and in the new
+Build step, that a stacking tool needs the same notice before it can act and
+so does not close this gap either.
