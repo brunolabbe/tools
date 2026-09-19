@@ -122,8 +122,10 @@ gate caught it before this cost paragraph or the fixture's "measured" comment
 had been checked against anything real — see the 2026-09-19 gate Log entry.)
 Anything outside those two forms — a case fold on a punycode host, a query
 re-ordering by an intermediate redirect, a yt-dlp version that normalises
-differently, a `redactUrl` form the owner chose to drop (see the third
-decision below) — is a known, disclosed gap, not an oversight. **The exact
+differently — is a known, disclosed gap, not an oversight. A third form,
+`redactUrl(url.href)`, was tried and dropped (see the third decision below);
+it is not part of this gap, since it was never reachable through this call's
+current path and so could never have closed any part of it. **The exact
 `url.href` form is insurance against an echo path this build did not
 measure, not something the measured binary's own `Unsupported URL` line
 needs**: that line always normalises unreserved escapes, so for a URL
@@ -295,5 +297,31 @@ downloader` — 86 files, 1462/1462 passed.
   only of the two forms that remain.
   Verification: `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts`
   — 65/65 passed with `redactUrl` removed (nothing in the suite depended on
-  it, consistent with it having been dead); `npm run check` and `npm test --
-project downloader` results in the final report.
+  it, consistent with it having been dead); `npm run check` exit 0; `npm test
+-- --project downloader` — 86 files, 1462/1462 passed.
+- 2026-09-19 — Gate 4 (final) on `638dd67` found one med and three lows.
+  **Med, CI red**: this branch's `decodeUnreservedEscapes`/`maskRequestUrl`
+  addition, inserted above `classifyFailure`, moved
+  `ytdlp.ts:906 "stderr: stderr.slice(-500)"` — the line
+  [dl-58](./dl-58-a-failed-probe-logs-the-page-url-unredacted.md)'s own
+  gate record cites — down to line 983 (the docblock fix for the two lows
+  below shifted it a further two lines after the reviewer's own re-check,
+  which had measured 981; re-resolved against the tip after every edit
+  landed, not against the reviewer's earlier number). Reproduced with
+  `node scripts/citations-gate.mjs`, which failed dl-58's record as "moved".
+  dl-58's claim is still true at the new line (raw stderr still reaches
+  `details` unredacted); only the line number was stale. **Repointed
+  dl-58's record from `ytdlp.ts:906` to `ytdlp.ts:983`, changing nothing
+  else** — this is the one case the citations rule anticipates, a sibling
+  record's citation moving because this branch's own diff shifted the line
+  it points at. `node scripts/citations-gate.mjs` — 0 failing after the fix
+  (was 1 before).
+  Fixed the three lows in the same commit: the `ytdlp.ts` docblock had called
+  `redactUrl`'s justification "an earlier draft" of the Build option text,
+  when "or its redacted form" is still in the first decision's option (1) as
+  committed — reworded to say so and to state plainly that a masking form
+  that was never reachable was never a gap either, rather than listing it
+  among the disclosed gaps (the Build section's cost paragraph had the same
+  error, fixed the same way); and this Log's own last entry, above, had
+  deferred its `npm run check`/downloader-project numbers to "the final
+  report" — filled in.

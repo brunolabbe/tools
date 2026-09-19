@@ -935,12 +935,14 @@ function decodeUnreservedEscapes(text: string): string {
  * actively wrong (`decodeURI` decodes escapes yt-dlp does not); `redactUrl`'s
  * form was dropped last, by the owner, 2026-09-19 — it was never reachable
  * through this call's current path (nothing writes a redacted URL into the
- * child's own stderr) and existed only because an earlier draft of the
- * Build decision's option text said "or its redacted form", not because of
- * a measured need. Anything outside the two forms actually kept — a case
- * fold on a punycode host, a query re-ordering by an intermediate redirect,
- * a yt-dlp version that normalises differently — is not tried and is a
- * known gap, not an oversight.
+ * child's own stderr), so it could never have matched anything and was never
+ * a gap either. It existed only because the Build decision's own committed
+ * option (1) text said "match markers against stderr minus any substring
+ * that exactly equals the request URL **or its redacted form**", not because
+ * of a measured need. The two forms actually kept do have a real, disclosed
+ * gap: a case fold on a punycode host, a query re-ordering by an
+ * intermediate redirect, or a yt-dlp version that normalises differently are
+ * none of them tried.
  *
  * Joined back with a single space, not the empty string: stripping a
  * substring with nothing in its place can fuse the text on either side of it
