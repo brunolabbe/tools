@@ -1111,9 +1111,9 @@ describe("a marker inside the request URL's own text (dl-67)", () => {
     // would already strip it there. `unsupported-echo` stands in for a
     // *different*, unmeasured echo path — another yt-dlp version, or a
     // message that prints the argument before normalisation runs — where
-    // the exact-href form is the only one of the three that would still
-    // match. It is insurance against that path, not evidence the measured
-    // one needs it.
+    // the exact-href form is the only one of the two masking forms that
+    // would still match. It is insurance against that path, not evidence
+    // the measured one needs it.
     const url = new URL("https://media.example.org/drm/watch?v=1&pad=%41&sig=SECRET123");
     await expect(fakeResolver("unsupported-echo").resolve(url, options())).rejects.toMatchObject({
       code: "NO_MEDIA_FOUND",

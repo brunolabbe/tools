@@ -109,29 +109,27 @@ messages, where (2) does.
 **The cost that comes with (1), carried into `Done when` below**: a marker
 inside the URL's path survives the mask if yt-dlp echoes the URL in a
 different encoding from the one submitted. Implemented as `maskRequestUrl` in
-`resolvers/src/resolvers/ytdlp.ts`, which strips three forms of the request
-URL from stderr before marker matching: the exact `url.href` and its
-`redactUrl` form — the two the owner's decision names by name — plus
+`resolvers/src/resolvers/ytdlp.ts`, which strips two forms of the request URL
+from stderr before marker matching: the exact `url.href`, and
 `decodeUnreservedEscapes(url.href)`, a same-file function that decodes only a
 percent-escape whose byte is an RFC 3986 §6.2.2.2 unreserved character. That
-third form is **measured against the real binary**, 2025.09.26, 2026-09-19:
+second form is **measured against the real binary**, 2025.09.26, 2026-09-19:
 yt-dlp decodes exactly those escapes in the URL it echoes and leaves every
 other one — `%20`, `%2f`, `%3F`, a multi-byte UTF-8 escape — as given. (An
 earlier draft used `decodeURI`, whose behaviour is close enough to look right
 and disagrees with the real binary on exactly those cases; the ticket's own
 gate caught it before this cost paragraph or the fixture's "measured" comment
 had been checked against anything real — see the 2026-09-19 gate Log entry.)
-Anything outside those three forms — a case fold on a punycode host, a query
+Anything outside those two forms — a case fold on a punycode host, a query
 re-ordering by an intermediate redirect, a yt-dlp version that normalises
-differently — is a known, disclosed gap, not an oversight. The `redactUrl`
-form is not reachable through this call's current path (nothing writes a
-redacted URL into the child's own stderr) and is kept only because the
-owner's decision names it by name. **The exact `url.href` form is insurance
-against an echo path this build did not measure, not something the measured
-binary's own `Unsupported URL` line needs**: that line always normalises
-unreserved escapes, so for a URL carrying one, `decodeUnreservedEscapes`
-alone already matches what it actually prints — a second gate finding
-corrected a test comment that had claimed otherwise.
+differently, a `redactUrl` form the owner chose to drop (see the third
+decision below) — is a known, disclosed gap, not an oversight. **The exact
+`url.href` form is insurance against an echo path this build did not
+measure, not something the measured binary's own `Unsupported URL` line
+needs**: that line always normalises unreserved escapes, so for a URL
+carrying one, `decodeUnreservedEscapes` alone already matches what it
+actually prints — a second gate finding corrected a test comment that had
+claimed otherwise.
 
 **Second question, narrower, on top of the first**: a gate on (1) found the
 encoding-normalisation attempt inside `maskRequestUrl` used `decodeURI`,
@@ -151,12 +149,19 @@ the reviewer had recommended (1) and the owner's choice overrode neither.
 Built as `decodeUnreservedEscapes`, ahead of the owner's answer — the answer
 came after the build, not before it; see the Log.
 
-**Still open, not this ticket's to settle**: whether to keep the `redactUrl`
-form at all. It is dead against real yt-dlp on this call's current path, and
-the phrase "or its redacted form" in the first decision's own option text —
-written before either the reviewer's gate or this second question existed —
-is what made it look required. Left exactly as built, documented as dead,
-pending an answer.
+**Third question, on the `redactUrl` form left over from the first
+decision's wording**: keep it, documented as dead, or drop it?
+
+1. Drop it.
+2. Keep it, documented as dead against real yt-dlp on this call's current
+   path.
+
+**Chosen: (1), drop it** — the owner, 2026-09-19, put to them by the
+orchestrator with `AskUserQuestion`, overriding the builder's and the
+reviewer's lean toward (2). The orchestrator's question told the owner the
+form existed only because the first decision's own option text said "or its
+redacted form", not because of a measured need. Removed from
+`maskRequestUrl`, its docblock, and the now-unused `redactUrl` import.
 
 ## Done when
 
@@ -270,3 +275,25 @@ downloader` — 86 files, 1462/1462 passed.
   `redactUrl` question stays open — not this build's to settle — left
   exactly as built, documented as dead against real yt-dlp on this call's
   current path.
+- 2026-09-19 — A re-gate of `645c23b` returned one more record-accuracy med
+  and three lows, all on the ticket text rather than the code: the gate Log
+  entry above still read as if the builder, not the owner, had settled the
+  encoding-fix decision; the exact-href test's comment described an echo
+  shape the measured binary does not produce for that URL; the red-on-
+  `origin/main` count was off by one; and an earlier in-place Log edit had
+  understated what `1d4e38c` actually shipped (three forms instead of the
+  five it shipped). All four fixed in place, above.
+- 2026-09-19 — Owner answered the third Build decision (put to them by the
+  orchestrator with `AskUserQuestion`): chose (1), drop the `redactUrl` form
+  — overriding the lean toward keeping it, documented as dead, that both the
+  builder and the reviewer had. Recorded above. Removed
+  `redactUrl(url.href)` from `maskRequestUrl`'s candidate set, its mention
+  from that function's docblock, and the now-unused `redactUrl` import from
+  `resolvers/src/resolvers/ytdlp.ts`. `maskRequestUrl` now strips two forms:
+  the exact `url.href` and `decodeUnreservedEscapes(url.href)`. Reworded the
+  exact-href test's comment, which had referenced the dropped form, to speak
+  only of the two forms that remain.
+  Verification: `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts`
+  — 65/65 passed with `redactUrl` removed (nothing in the suite depended on
+  it, consistent with it having been dead); `npm run check` and `npm test --
+project downloader` results in the final report.

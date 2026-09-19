@@ -23,7 +23,7 @@ import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { AppError, redactUrl } from "@downloader/contract";
+import { AppError } from "@downloader/contract";
 import type {
   DrmInfo,
   MediaVariant,
@@ -927,18 +927,20 @@ function decodeUnreservedEscapes(text: string): string {
  *
  * **The cost that comes with it**: a marker inside the URL survives this if
  * yt-dlp echoes the URL in an encoding this does not also try. Tried: the
- * exact request URL and its `redactUrl` form — the two forms the owner's
- * decision names by name — plus `decodeUnreservedEscapes` of it, which is
- * yt-dlp's own measured percent-normalisation (see that function's
- * docblock). An earlier draft of this function also tried a trailing-slash
- * toggle and `decodeURI`/`encodeURI`; a gate found all three either dead
- * against real yt-dlp (mutation testing killed nothing when they were
- * removed) or actively wrong (`decodeURI` decodes escapes yt-dlp does not),
- * so they were dropped rather than kept as untested insurance. Anything
- * outside these three forms — a case fold on a punycode host, a query
- * re-ordering by an intermediate redirect, a yt-dlp version that
- * normalises differently — is not tried and is a known gap, not an
- * oversight.
+ * exact request URL, and `decodeUnreservedEscapes` of it, which is yt-dlp's
+ * own measured percent-normalisation (see that function's docblock). Two
+ * earlier drafts tried more forms and dropped them on measurement: a
+ * trailing-slash toggle and `decodeURI`/`encodeURI` were either dead against
+ * real yt-dlp (mutation testing killed nothing when they were removed) or
+ * actively wrong (`decodeURI` decodes escapes yt-dlp does not); `redactUrl`'s
+ * form was dropped last, by the owner, 2026-09-19 — it was never reachable
+ * through this call's current path (nothing writes a redacted URL into the
+ * child's own stderr) and existed only because an earlier draft of the
+ * Build decision's option text said "or its redacted form", not because of
+ * a measured need. Anything outside the two forms actually kept — a case
+ * fold on a punycode host, a query re-ordering by an intermediate redirect,
+ * a yt-dlp version that normalises differently — is not tried and is a
+ * known gap, not an oversight.
  *
  * Joined back with a single space, not the empty string: stripping a
  * substring with nothing in its place can fuse the text on either side of it
@@ -947,7 +949,7 @@ function decodeUnreservedEscapes(text: string): string {
  */
 function maskRequestUrl(stderr: string, url: URL): string {
   const href = url.href;
-  const candidates = new Set<string>([href, redactUrl(href), decodeUnreservedEscapes(href)]);
+  const candidates = new Set<string>([href, decodeUnreservedEscapes(href)]);
 
   let masked = stderr;
   for (const candidate of candidates) {
