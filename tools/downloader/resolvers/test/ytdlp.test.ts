@@ -1045,3 +1045,91 @@ describe("an extractor that reports fps as JSON null", () => {
     expect(probeResultSchema.safeParse(mapped).error).toBeUndefined();
   });
 });
+
+/**
+ * dl-67. `classifyFailure` used to match its source-fact markers against the
+ * whole of stderr, including whatever URL yt-dlp echoed back in its own
+ * diagnostic line — so a marker word occurring in the *request URL's own
+ * text* (a path segment, a query value, a signature) read as a fact yt-dlp
+ * diagnosed about the source. Reproduced here with the real spawn path
+ * against the fixture binary, not a live install, per this file's existing
+ * pattern.
+ */
+describe("a marker inside the request URL's own text (dl-67)", () => {
+  const SOURCE_WITH_DRM = new URL("https://media.example.org/drm/watch?v=1&sig=SECRET123");
+
+  test("does not classify as DRM_PROTECTED on origin/main: fails there, passes fixed", async () => {
+    // yt-dlp's actual stderr here is "Unsupported URL: <the URL we gave it>";
+    // it never inspected the page. Before the fix, `text.includes("drm")`
+    // matched the echoed URL's path and returned the terminal, non-retryable
+    // DRM_PROTECTED instead of the ordinary NO_MEDIA_FOUND fallthrough.
+    await expect(
+      fakeResolver("unsupported-echo").resolve(SOURCE_WITH_DRM, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+
+  test("a genuine diagnosis elsewhere in stderr still wins, even when the URL also carries the word", async () => {
+    // Masking only the exact URL substring must not swallow a real DRM
+    // mention that sits outside it — the marker check still runs against
+    // everything else in stderr.
+    await expect(
+      fakeResolver("drm-and-url-echo").resolve(SOURCE_WITH_DRM, options()),
+    ).rejects.toMatchObject({ code: "DRM_PROTECTED" });
+  });
+
+  test("masks the encoding variant real yt-dlp actually produces: an unreserved escape decodes, a reserved one does not", async () => {
+    // Real yt-dlp 2025.09.26 decodes a percent-escape in the URL it echoes
+    // only when the escaped byte is unreserved (RFC 3986 §6.2.2.2) — measured
+    // 2026-09-19, see `fake-ytdlp.mjs`'s `unsupported-echo-unreserved-decode`
+    // case for the exact command and output. `%41 %7e %2d %5f %2e %64` here
+    // are all unreserved and decode (`a=%64rm` becomes `a=drm`, which is
+    // where the marker actually surfaces); `%2f %3F %20` do not. An earlier
+    // draft of this test used `decodeURI`, which decodes `%20` too and so
+    // modelled a transform the real binary does not perform — this is the
+    // "at least one variant" the ticket's Done-when asks to be proven, not a
+    // claim that every encoding is covered; see `maskRequestUrl`'s own
+    // docblock for what is deliberately left out.
+    const mixedEscapes = new URL(
+      "https://media.example.org/%41%7e%2d%5f%2e/%2f%3F%20/x?a=%64rm&b=%2F&sig=SECRET123",
+    );
+    await expect(
+      fakeResolver("unsupported-echo-unreserved-decode").resolve(mixedEscapes, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+
+  test("the exact-href form is load-bearing: an echo path that does not normalise", async () => {
+    // A gate finding: without a distinguishing case, the exact-`href`
+    // candidate is redundant with `decodeUnreservedEscapes(href)` whenever
+    // the URL has no percent-escapes to decode. This URL has one (`%41`,
+    // unrelated to the marker).
+    //
+    // **Not a claim about the measured binary's own "Unsupported URL" line**
+    // — a second gate finding corrected an earlier version of this comment
+    // that got that wrong. Measured, real yt-dlp 2025.09.26 always
+    // normalises unreserved escapes on *that* line, so for this exact URL it
+    // echoes `pad=A`, not `pad=%41`; `decodeUnreservedEscapes(href)` alone
+    // would already strip it there. `unsupported-echo` stands in for a
+    // *different*, unmeasured echo path — another yt-dlp version, or a
+    // message that prints the argument before normalisation runs — where
+    // the exact-href form is the only one of the two masking forms that
+    // would still match. It is insurance against that path, not evidence
+    // the measured one needs it.
+    const url = new URL("https://media.example.org/drm/watch?v=1&pad=%41&sig=SECRET123");
+    await expect(fakeResolver("unsupported-echo").resolve(url, options())).rejects.toMatchObject({
+      code: "NO_MEDIA_FOUND",
+    });
+  });
+
+  test("stripping the URL does not fuse the text on either side into an accidental marker", async () => {
+    // A gate finding: `"dr" + "<url>" + "m"` with the URL removed and the
+    // pieces rejoined by the empty string reads as "drm" — a marker that was
+    // never in the URL or in yt-dlp's diagnosis, only in what stripping left
+    // behind. `maskRequestUrl` rejoins with a single space instead, so this
+    // must NOT classify as DRM_PROTECTED even though the raw stderr's outer
+    // text is "dr" and "m".
+    const plainUrl = new URL("https://media.example.org/watch?v=1&sig=SECRET123");
+    await expect(
+      fakeResolver("adjacent-text-fusion").resolve(plainUrl, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+});

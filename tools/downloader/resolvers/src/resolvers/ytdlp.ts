@@ -888,6 +888,79 @@ function killTree(child: ChildProcess): void {
 }
 
 /**
+ * yt-dlp 2025.09.26 decodes a percent-escape in the URL it echoes back only
+ * when the escaped byte is an *unreserved* character (`A`-`Z`, `a`-`z`,
+ * `0`-`9`, `-`, `.`, `_`, `~` — RFC 3986 §6.2.2.2's normalisation) and leaves
+ * every other escape as given.
+ *
+ * **Measured, not assumed**: against the real binary, 2026-09-19, a loopback
+ * page whose path was `/%41%7e%2d%5f%2e/%c3%a9/%2f%3F%20/x` and whose query
+ * was `?a=%64rm&b=%2F` came back in `Unsupported URL: …` as
+ * `/A~-_./%c3%a9/%2f%3F%20/x?a=drm&b=%2F` — every unreserved escape decoded
+ * (`%41`→`A`, `%64`→`d`), every reserved or multi-byte one (`%2f`, `%3F`,
+ * `%20`, `%c3%a9`) left alone. `decodeURI` disagrees with this on exactly
+ * those cases (it also decodes `%20` and multi-byte UTF-8 escapes), which is
+ * why this is its own function rather than a built-in.
+ */
+function decodeUnreservedEscapes(text: string): string {
+  return text.replaceAll(/%[0-9A-Fa-f]{2}/gu, (escape) => {
+    const byte = Number.parseInt(escape.slice(1), 16);
+    const char = String.fromCharCode(byte);
+    return /^[A-Za-z0-9\-._~]$/u.test(char) ? char : escape;
+  });
+}
+
+/**
+ * dl-67: yt-dlp echoes the caller's own request URL back in several
+ * diagnostic lines (`Unsupported URL: <url>` chief among them), and
+ * `classifyFailure` matches its source-fact markers against the whole of
+ * stderr. Left alone, a marker word occurring in the URL's own text — a path
+ * segment, a query value, a base64 signature — reads as a fact yt-dlp
+ * diagnosed about the source, when it was never in yt-dlp's diagnosis at all.
+ *
+ * **Chosen 2026-09-19, by the owner: mask the request URL, not yt-dlp's
+ * message catalogue.** The rejected alternative was to strip known echoing
+ * lines (`Unsupported URL: <url>` and siblings) instead of the URL itself;
+ * that depends on yt-dlp's undocumented, version-specific set of messages
+ * that quote the input back, where this depends only on the one URL this
+ * call already knows.
+ *
+ * **The cost that comes with it**: a marker inside the URL survives this if
+ * yt-dlp echoes the URL in an encoding this does not also try. Tried: the
+ * exact request URL, and `decodeUnreservedEscapes` of it, which is yt-dlp's
+ * own measured percent-normalisation (see that function's docblock). Two
+ * earlier drafts tried more forms and dropped them on measurement: a
+ * trailing-slash toggle and `decodeURI`/`encodeURI` were either dead against
+ * real yt-dlp (mutation testing killed nothing when they were removed) or
+ * actively wrong (`decodeURI` decodes escapes yt-dlp does not); `redactUrl`'s
+ * form was dropped last, by the owner, 2026-09-19 — it was never reachable
+ * through this call's current path (nothing writes a redacted URL into the
+ * child's own stderr), so it could never have matched anything and was never
+ * a gap either. It existed only because the Build decision's own committed
+ * option (1) text said "match markers against stderr minus any substring
+ * that exactly equals the request URL **or its redacted form**", not because
+ * of a measured need. The two forms actually kept do have a real, disclosed
+ * gap: a case fold on a punycode host, a query re-ordering by an
+ * intermediate redirect, or a yt-dlp version that normalises differently are
+ * none of them tried.
+ *
+ * Joined back with a single space, not the empty string: stripping a
+ * substring with nothing in its place can fuse the text on either side of it
+ * into a new, accidental marker (`"dr" + "" + "m"` reading as `"drm"`) that
+ * was never in either the URL or yt-dlp's diagnosis.
+ */
+function maskRequestUrl(stderr: string, url: URL): string {
+  const href = url.href;
+  const candidates = new Set<string>([href, decodeUnreservedEscapes(href)]);
+
+  let masked = stderr;
+  for (const candidate of candidates) {
+    if (candidate.length > 0) masked = masked.split(candidate).join(" ");
+  }
+  return masked;
+}
+
+/**
  * Maps yt-dlp's stderr to the taxonomy. The default is `NO_MEDIA_FOUND` on
  * purpose: an extractor that broke overnight must degrade this source to the
  * browser sniffer, not fail the request.
@@ -900,9 +973,13 @@ function killTree(child: ChildProcess): void {
  * points at the source, invites a retry, and hides the setting. Stopping the
  * chain here is a behaviour change on top of the copy: `registry.ts` falls
  * through on `NO_MEDIA_FOUND` and on nothing else.
+ *
+ * **The source-fact markers are matched against `maskRequestUrl`'s output,
+ * not raw stderr** (dl-67) — see that function's docblock for why and for
+ * what it does not cover.
  */
 function classifyFailure(stderr: string, code: number, url: URL): AppError {
-  const text = stderr.toLowerCase();
+  const text = maskRequestUrl(stderr, url).toLowerCase();
   const details = { url: url.href, exitCode: code, stderr: stderr.slice(-500) };
 
   // First, ahead of the four source-fact branches below, because a handshake

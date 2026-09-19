@@ -20,8 +20,62 @@ switch (mode) {
     process.exitCode = 1;
     break;
   }
+  // dl-67. Echoes back whatever URL the resolver actually passed on argv —
+  // the last argument — verbatim, the way yt-dlp's real "Unsupported URL"
+  // line does. Lets a test put a source-fact marker (`drm`, …) in the request
+  // URL's own text and assert it is not read as a fact about the page.
+  case "unsupported-echo": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(`ERROR: Unsupported URL: ${requestUrl}\n`);
+    process.exitCode = 1;
+    break;
+  }
+  // dl-67. Same shape, but percent-normalises the URL the way the real
+  // binary does before echoing it: only an escape whose byte is an
+  // unreserved character (RFC 3986 §6.2.2.2) is decoded; every other escape
+  // is left exactly as given. **Measured**, not assumed — run against
+  // `/usr/local/bin/yt-dlp` 2025.09.26 on 2026-09-19, a request for
+  // `http://127.0.0.1:PORT/%41%7e%2d%5f%2e/%c3%a9/%2f%3F%20/x?a=%64rm&b=%2F`
+  // came back in `Unsupported URL: …` as
+  // `…/A~-_./%c3%a9/%2f%3F%20/x?a=drm&b=%2F` — `%41 %7e %2d %5f %2e %64`
+  // (all unreserved) decoded, `%2f %3F %20` and the multi-byte `%c3%a9` left
+  // alone. Deliberately not `decodeURI`, which also decodes `%20` and
+  // multi-byte UTF-8 escapes and so disagrees with the real binary on
+  // exactly those cases — an earlier draft used it here and the mismatch
+  // went unnoticed until a gate reproduced this against the real binary.
+  case "unsupported-echo-unreserved-decode": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    const echoed = requestUrl.replaceAll(/%[0-9A-Fa-f]{2}/gu, (escape) => {
+      const char = String.fromCharCode(Number.parseInt(escape.slice(1), 16));
+      return /^[A-Za-z0-9\-._~]$/u.test(char) ? char : escape;
+    });
+    process.stderr.write(`ERROR: Unsupported URL: ${echoed}\n`);
+    process.exitCode = 1;
+    break;
+  }
+  // dl-67 gate finding. Text immediately abuts the URL on both sides with no
+  // separator, the way stripping-then-fusing could turn into an accidental
+  // marker ("dr" + "" + "m" reading as "drm") if the mask joined the pieces
+  // back together with the empty string instead of a space.
+  case "adjacent-text-fusion": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(`ERROR: dr${requestUrl}m is unsupported\n`);
+    process.exitCode = 1;
+    break;
+  }
   case "drm": {
     process.stderr.write("ERROR: [brightcove] 6301234567001: This video is DRM protected\n");
+    process.exitCode = 1;
+    break;
+  }
+  // dl-67. A genuine DRM diagnosis *and* an echoed request URL in the same
+  // stderr, so a test can prove masking the URL substring does not also
+  // swallow a real marker that sits outside it.
+  case "drm-and-url-echo": {
+    const requestUrl = process.argv.at(-1) ?? "";
+    process.stderr.write(
+      `ERROR: [brightcove] 6301234567001: This video is DRM protected\nERROR: Unsupported URL: ${requestUrl}\n`,
+    );
     process.exitCode = 1;
     break;
   }
