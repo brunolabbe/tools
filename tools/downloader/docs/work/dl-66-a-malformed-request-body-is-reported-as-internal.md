@@ -152,6 +152,41 @@ application/json` and no body answers 400 `BAD_REQUEST`, and logs at
 - The same for a malformed JSON body on `POST /api/jobs`.
 - `npm run check` and `npm test` are green.
 
+## Review
+
+**Gate: PASS** — 2026-09-19 · `origin/main...1c9c0d1` (base `4463431`; first gated
+at `43d2e5e` on base `fb15bc9`, re-gated at `eb81ae1`, `00e8d98` and `1c9c0d1`) ·
+defect hunt run by the reviewer at medium · reviewer opus, builder sonnet
+
+**Disclosure:** transcribed verbatim from the reviewer's report by the builder
+(Sonnet 5); no severity, row, wording or verdict altered or dropped. The one
+mechanical change: `node scripts/citations.mjs <this file> --section Review
+--require-anchors --require-distinct-anchors` reported the `registerErrorHandling`
+citation below as ambiguous, since both this tool and the planner have a
+`server.ts` under `api/src`; qualified with the `downloader/` prefix already
+used elsewhere in this tool's tickets (e.g. `dl-56`, `dl-37`) so it names one
+file. Re-run after: verified, 0 moved, 0 unresolvable, exit 0.
+
+| Done when                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empty declared-JSON `POST .../cancel` answers 400 `BAD_REQUEST`, logs at `info`, not `error` | `api/test/routes.test.ts:931 "POST .../cancel with an empty declared-JSON body: 400, logged at info"` ✓. Asserts the status, the body code, no `request failed` line, and exactly one `request rejected` line at `info` whose `code` is `BAD_REQUEST`. Went red with the new branch reverted (3 fails), with info changed to warn (2 fails), and with a second `AppError.from` for the log line (2 fails). |
+| The same for malformed JSON on `POST /api/jobs`                                              | `api/test/routes.test.ts:957 "POST /api/jobs with malformed JSON: 400, logged at info"` ✓. Went red under the same three mutations.                                                                                                                                                                                                                                                                        |
+| `npm run check` and `npm test` are green                                                     | **verified** at `00e8d98`: check exit 0; downloader 88 files / 1493 (base `4463431`: 1489, so +4, the four new tests); core 23; planner 71 / 1184. At `1c9c0d1` (docs-only on top): check exit 0, citations gate exit 0.                                                                                                                                                                                   |
+
+- **med, fixed in `eb81ae1`** · the log line reported `code=INTERNAL` for a response of `BAD_REQUEST` 400, because `registerErrorHandling` ran its own `AppError.from`. It now takes the one `AppError` from `toErrorResponse` (`downloader/api/src/server.ts:627 "const { status, body, appError } = toErrorResponse(error);"`). A second `AppError.from` put back there turns both integration tests red.
+- **med, fixed in `eb81ae1`** · `node scripts/citations-gate.mjs --against origin/main` exited 1 on dl-32 (9 citations moved by +1) after a new top-of-file import in `routes.test.ts`. The import is now dynamic inside the two tests; the gate exits 0.
+- **low, fixed in `9f7d84c`** · the core `BAD_REQUEST` doc comment and the helper (now `isClientRequestStatusError`) described body-parser errors only; `@fastify/static` 412 and 416 were measured taking the same path.
+- **low, fixed** · the brief named `server.ts`/dl-58 wrongly; `git show fb15bc9 --stat` confirms dl-58 never touched `server.ts` or `http-errors.ts`. The MED 1 fix now does touch it, and the brief says so.
+- **low, fixed** · pl-51 carried no reproduction. It now has one, re-run by the builder: planner empty or malformed JSON answers 500 `INTERNAL`, and `BAD_REQUEST` answers 500 through the `Partial` table.
+- **low, fixed in `1c9c0d1`** · repo-49 (filed here) had rename detection backwards and misread `pl-21` as a genuine clash. Both corrected against measured `git diff` output, and a third shape (a pull request and its own head branch) added.
+- **decision** · rule width: every non-`AppError` 4xx becomes `BAD_REQUEST` 400, trading 412/413/415/416 for 400. Owner chose A (keep, record the measured table) on 2026-09-19; recorded under `## The width decision`. Measured against the base: nothing regressed from a more specific code, and 404/429 are `AppError`s, unchanged.
+- **open, not this ticket** · pl-51 Build step 1 applies the owner dl-66 answer to the planner; put to the orchestrator.
+- **dropped** · a 429 or 404 collapsing into `BAD_REQUEST`: measured, both are raised as `AppError` and unchanged.
+- **dropped** · an upstream `statusCode` (undici `throwOnError`) reaching the handler: no such call in the downloader api, resolvers or engine source.
+- **dropped** · a conflict with dl-56 (`af734fe`): the branch was rebased onto `4463431` cleanly.
+- **findings** · 10 considered; 6 carried (all fixed on the branch), 1 routed as a decision (settled by the owner), 3 dropped. The pl-51 open question is a finding about a sibling brief, not this change.
+- NFR: security ✓ (catalog message, never the Fastify text; URL still redacted in the log) · performance n/a · reliability ✓ (the log and the response agree) · maintainability ✓ (comments match the measured width).
+
 ## Log
 
 - 2026-09-16 — Filed from dl-65's reproduction. dl-65 removed the one request the
