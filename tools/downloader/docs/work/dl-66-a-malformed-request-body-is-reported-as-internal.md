@@ -86,6 +86,38 @@ orchestrator's recommendation.** Costs carried forward:
   second `AppError` for its log line, so `server.ts` **is** genuinely touched
   by this ticket after all — see the Log.)
 
+## The width decision
+
+**dl-66: once the widening rule exists, how wide should it reach?** The rule
+that fixes the ticket's own reproduction — any error carrying a numeric
+Fastify `statusCode` in `[400, 500)` that is not already an `AppError` becomes
+`BAD_REQUEST` — is not narrow to the body-parser errors the ticket named. The
+review gate measured it (`downloader-probe.test.ts`, see the Log) and found it
+also reaches `@fastify/static`'s own precondition-failed (412) and
+range-not-satisfiable (416) responses, and Fastify's own body-too-large (413)
+and unsupported-media-type (415). Three options, asked of the repository owner
+with `AskUserQuestion` on 2026-09-19:
+
+A. **Keep the rule as written, and record the measured table.** Every widened
+case moves from 500 to 400 — never to a worse answer than the ticket's own
+bug produced — but four of them (412, 413, 415, 416) trade a status
+Fastify or `@fastify/static` already had right for the generic 400.
+B. **Pass the real 4xx status through**, keeping `BAD_REQUEST` as the code but
+reporting each case's actual status (412, 413, 415, 416, …) rather than
+collapsing all of them to 400.
+C. **Narrow the rule to Fastify's own `FST_ERR_CTP_*` family** — leave
+`@fastify/static`'s 412/416 and any other non-body-parser 4xx exactly as
+they were before this ticket (`INTERNAL`, 500), matching the ticket's
+original, narrower scope.
+
+**Chosen: A, by the repository owner, on 2026-09-19 — matching both the
+reviewer's and the orchestrator's recommendation. A overrode nobody.** Nothing
+further changes in the code for this: `isClientRequestStatusError` and the
+core `BAD_REQUEST` doc comment are corrected to describe this width
+accurately (they previously read as body-parser-only, which was true of the
+ticket's original reproduction and not of the code as shipped) — see the Log
+for the measured table.
+
 ## Build
 
 1. Add `BAD_REQUEST` to `CORE_ERROR_CODES` and `CORE_ERROR_MESSAGES` in
@@ -243,3 +275,59 @@ scripts/citations-gate.mjs --against origin/main` failed
   assertions passing), `npm test -- --project downloader` unchanged at 1461,
   `npm run check` exit 0, `citations-gate.mjs --against origin/main` 0
   failing.
+
+- 2026-09-19 — Owner answered the width decision (**A**, see `## The width
+decision` above) via `AskUserQuestion`, matching both the reviewer's and the
+  orchestrator's recommendation. Applied in the same round as the rest of this
+  gate's findings:
+
+  **Reproduced the reviewer's measurement independently** rather than
+  transcribing it: copied the reviewer's probe
+  (`.../scratchpad/dl-66-gate/downloader-probe.test.ts`) into
+  `tools/downloader/api/test/`, ran it (`GATE_OUT=<file> npx vitest run`)
+  against this branch's tip (`eb81ae1`, after the MED 1 fix below), deleted it
+  afterward — it is not part of this ticket's own suite. Measured table (all
+  15 named cases from the probe; before/after are `fb15bc9`/`eb81ae1`):
+
+  | Case                                          | Before                              | After                                                                          |
+  | --------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------ |
+  | empty JSON `POST .../cancel`                  | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | malformed JSON `POST /api/jobs`               | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | unsupported media type (415)                  | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | body too large (413)                          | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | bad `content-length`                          | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | `__proto__` poisoning payload                 | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | empty JSON on an unknown `/api/` route        | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | `@fastify/static` range not satisfiable (416) | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | `@fastify/static` precondition failed (412)   | 500 INTERNAL                        | 400 BAD_REQUEST                                                                |
+  | `GET /api/nope` (route miss)                  | 404 NOT_FOUND                       | 404 NOT_FOUND — unchanged                                                      |
+  | `DELETE /api/jobs` (method miss)              | 404 NOT_FOUND                       | 404 NOT_FOUND — unchanged                                                      |
+  | `@fastify/static` `..%2f` traversal           | 404 NOT_FOUND                       | 404 NOT_FOUND — unchanged                                                      |
+  | rate limit                                    | 429 RATE_LIMITED                    | 429 RATE_LIMITED — unchanged (an `AppError`, never reaches the widened branch) |
+  | malformed URL percent-encoding                | 400 (Fastify's own default handler) | 400 — unchanged (never reaches `toErrorResponse` at all)                       |
+
+  Plainly, so it cannot be missed by a later reader: **413, 415, and
+  `@fastify/static`'s 412 and 416 all answer 400 `BAD_REQUEST` now**, where
+  before this ticket they answered 500 `INTERNAL`. No case regresses to an
+  answer worse than the 500 this ticket exists to fix; four of them trade a
+  status a framework already had right for the generic 400.
+
+  **Comments corrected to describe this width** rather than only the
+  body-parser case the ticket's own reproduction started from: `http-errors.ts`'s
+  widening predicate is renamed `isClientRequestStatusError` (was
+  `isUnparsedClientRequestError` — "unparsed" was never accurate for a range or
+  precondition failure, which parse fine and fail on evaluation instead) and
+  its doc comment, and core's `BAD_REQUEST` doc comment in
+  `packages/core/src/errors.ts`, both now name `@fastify/static`'s 412/416
+  explicitly and say the rule is deliberately wide rather than
+  `FST_ERR_CTP_*`-specific. pl-51 updated to use the new name and to copy
+  decision A explicitly (its own Build step 1) rather than leave its width
+  unanswered.
+
+  Re-ran after the rename and comment changes: `npm run build` clean,
+  `routes.test.ts` 44/44, `npm test -- --project downloader` 88 files / 1493
+  passed, `npm test -- --project core` 5/23, `npm run check` exit 0,
+  `citations-gate.mjs --against origin/main` 0 failing (test counts moved from
+  the previous entry's 86/1461 because the branch was rebased onto current
+  `origin/main` in between, which is recorded above under the MED 2 fix, not
+  because of anything in this round).

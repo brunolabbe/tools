@@ -20,13 +20,21 @@
 export const CORE_ERROR_CODES = [
   // --- Input / reachability ---
   /**
-   * The request itself could not be understood — a body Fastify's own
-   * content-type parser rejected (empty when JSON was declared, malformed
-   * JSON, unsupported media type) before any route handler saw it. Distinct
-   * from `INVALID_URL`: that names one field's value being wrong, this names
-   * the request failing to parse at all. About the transport, not any tool's
-   * domain, which is why it lives here rather than being re-worded onto a
-   * domain code at the call site.
+   * The request itself could not be understood, and it is not this service's
+   * fault. The common case is a body Fastify's own content-type parser
+   * rejected before any route handler saw it (empty when JSON was declared,
+   * malformed JSON, unsupported media type, a body over the configured cap),
+   * but a tool's own web framework can raise the same shape of failure for
+   * other reasons — the downloader's `@fastify/static` plugin answers a
+   * precondition-failed or an unsatisfiable range request the same way — and
+   * a tool that widens this code to any such failure rather than enumerating
+   * every framework error one by one is not misusing it: a more specific 4xx
+   * a framework already had is traded for this one, never a worse answer than
+   * the 500 this code exists to replace. Distinct from `INVALID_URL`: that
+   * names one field's value being wrong, this names the request failing to
+   * parse or be evaluated at all. About the transport, not any tool's domain,
+   * which is why it lives here rather than being re-worded onto a domain code
+   * at the call site.
    */
   "BAD_REQUEST",
   /** Not a URL, or a scheme we refuse (file:, data:, ftp:). */
