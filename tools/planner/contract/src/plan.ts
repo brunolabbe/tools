@@ -69,9 +69,25 @@ export const MAX_REVISION_NOTE_CHARS = 500;
  * checked-in trip fixture is under 100 KiB (96.4 KiB for the largest,
  * `multi-city`, with worst-case diffs), while a revision at the schema's own
  * maximum of 60 days × 12 items is ~0.15 MiB, and 50 of those is ~14 MiB before
- * candidates or the brief. The owner chose 50 over 20 and 100. **Since pl-47
- * every revision carries its own brief**, about 1.0–1.2 KiB for those fixtures,
- * so the same view with empty diffs now measures 127 KiB at 50 (pl-47's Log).
+ * candidates or the brief. The owner chose 50 over 20 and 100.
+ *
+ * **The 100 KiB was only ever prose, and it no longer holds** (re-measured in
+ * pl-47, whose Log names the script). Nothing in the repo consumes a view's
+ * size: no response cap, no client limit, no test. Since pl-47 every revision
+ * carries its own brief, and at 50 revisions the view measures, in bytes:
+ *
+ * | fixture           | empty diffs | worst diffs | worst at fb15bc9 |
+ * | ----------------- | ----------- | ----------- | ---------------- |
+ * | road-trip         | 145,631     | 168,514     | 105,214          |
+ * | backcountry       | 105,685     | 120,924     | 64,674           |
+ * | motorised-touring | 99,836      | 115,075     | 64,175           |
+ * | city-and-culture  | 130,822     | 153,705     | 93,355           |
+ * | resort            | 116,994     | 124,589     | 68,539           |
+ * | multi-city        | 130,217     | 145,456     | 93,306           |
+ *
+ * Road-trip was already over 100 KiB before pl-47; pl-42 printed only
+ * city-and-culture and multi-city. The owner kept 50 on these numbers on
+ * 2026-09-19, over lowering it to about 30 and over storing the brief once.
  *
  * A revise request that would append revision 51 is refused with
  * `REVISION_LIMIT_REACHED`. `api` enforces it (pl-44); nothing here does,

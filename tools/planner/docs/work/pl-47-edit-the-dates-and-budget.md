@@ -72,6 +72,27 @@ Each was chosen from options:
 - **The cut: this ticket for `contract`, `itinerary` and `api`, then pl-48 for
   the page.**
 
+### Decided by the owner, 2026-09-19
+
+Asked after the build and the gate, with the measurement attached. Each was
+chosen from options, and each took the builder's and the reviewer's
+recommendation:
+
+- **The revision ceiling stays at 50, documented.** At 50 revisions the
+  worst-diff plan view measures up to 168,514 bytes (road-trip), not the
+  "under 100 KiB" pl-42 wrote, and road-trip was already at 105,214 before this
+  ticket. Nothing in the repo consumes the view's size. `MAX_REVISIONS_PER_PLAN`'s
+  comment carries the six-fixture table. The other options were lowering it to
+  about 30 and storing the brief once rather than per revision.
+- **A dates-only edit that changes the day count under a `per-day` budget is
+  captioned `Changed the dates, and re-packed every day.`**, not step 3.5's
+  `Changed the budget, …`. The table's row was wrong: it named a change nobody
+  made. The other option was the table's literal wording.
+- **A request that names a budget re-packs every day, even at the same
+  value.** An equal value can still change the plan: the reviewer re-packed
+  500 → 500 and an unplaced candidate came onto day 0. The other option was
+  comparing by value. pl-48 sends only what changed.
+
 ### Adopted rather than asked, and why
 
 - **Under a per-day budget, a change in day count is a budget edit.**
@@ -389,6 +410,29 @@ Findings, each checked by hand before it was fixed, all in the filing commit:
 - **low — `tools/planner/CLAUDE.md` has two sentences about the one stored
   kind, and step 3.6 named one.** It names both.
 
+## Review
+
+**Gate: PASS** — 2026-09-19 · `origin/main...HEAD` (fb15bc9) · code-review at medium, self-run (ticket-reviewer subagent, no Skill tool)
+
+| Done when                                                                                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Contract: `PlanRevision.brief`, `deadlines`, the `brief` operation and request, `currentBrief`, `booking-deadline-passed`, each refine's own failing test                                                       | `contract/test/brief-edit.test.ts:67 "is required, and is a whole brief"`, `:109 "either change alone is accepted, and days may be empty"`, `:171 "names at least one"`, `:225 "is the plan's snapshot while no revision exists"`, `:238 "names booking-deadline-passed"` ✓                                                                                                                                                                            |
+| Resizing: longer keeps 0..n-1, packs only added; shorter drops trailing + unpinned, reported `removed`; dropped pin throws `PLAN_INFEASIBLE`; same-length shift re-dates, moves nothing; exact→open nulls dates | `itinerary/test/brief-edit.test.ts:101 "keeps days 0..n-1 as they were, ids aside"`, `:133 "drops the trailing days and their unpinned items"`, `:150 "throws PLAN_INFEASIBLE with the pin-on-dropped-day finding"`, `:173 "re-dates every day and moves no item"`, `:193 "an exact to open change nulls every date"` ✓                                                                                                                                |
+| Budget: lower budget re-packs every day, drops dearest unpinned, never a pin; per-day longer/shorter re-packs every day, same-length moves nothing                                                              | `itinerary/test/brief-edit.test.ts:229 "drops the dearest unpinned item wherever it is, and never a pin"`, `:270 "re-packs every day, because the ceiling moved"`, `:278 "a shorter trip re-packs every day it keeps"`, `:286 "moves no item, because the ceiling did not"` ✓                                                                                                                                                                          |
+| Deadlines: earlier departure stores one entry; open stores none; later move keeps it while placed, remove drops it; restore copies target's; `uncheckedForRevision` after `coverage`                            | `itinerary/test/brief-edit.test.ts:346 "naming a frozen item whose lead time no longer fits"`, `:356 "open dates store none"`, `:362 "and a remove of it drops it"`, `:411 "a restore copies its target's, as stored, and its brief"`, `:423 "uncheckedForRevision returns it after coverage"` ✓                                                                                                                                                       |
+| Route: 202 with a `replan` run; `INVALID_DATES` for a past departure and a too-short window; `PLAN_INFEASIBLE` for a dropped pin; a spy proves no refused request starts a run                                  | `api/test/brief-edits.test.ts:230 "answers 202 with a replan run"`, `:269 "and starts no run"` (parameterised over the three `INVALID_DATES` cases, `enqueue` spy asserted not called), `:289 "would drop a pinned item is PLAN_INFEASIBLE, 409, before any run"` ✓                                                                                                                                                                                    |
+| The run: zero model requests, grounding only on the slice's pool, revision `brief`/`operation`/`reason` match step 3.5's table                                                                                  | `api/test/brief-edits.test.ts:366 "asks grounding only about the slice's pool, and writes what step 3.5 says"` (asserts `f.model.sent === 0`, grounding asked == pool, `revision.reason` literal), `:411 "re-packs every day, and measures the whole pool with no model call"` ✓                                                                                                                                                                       |
+| Migration: existing revision reads back the plan's brief and `deadlines: []`, trigger silent; a later revision reads its own                                                                                    | `api/test/migrations.test.ts:433 "an existing revision reads back the plan's brief and no deadlines, and the append-only trigger does not fire"`, `:449 "a revision written afterwards reads back its own brief, never the plan's"` ✓ — independently reproduced: built a DB at `user_version = 10` (columns absent), inserted a revision the old way, ran `migrate`, read back through `selectPlan`/`toRevision` (the real reader, not a test double) |
+| Rules file and planner `CLAUDE.md` name both stored kinds                                                                                                                                                       | verified by hand — `.claude/rules/planner-unchecked-constraints.md:62 "are the two exceptions, and they"`, `tools/planner/CLAUDE.md:154 "the other is"`, `tools/planner/CLAUDE.md:222 "It is keyed on"` ✓                                                                                                                                                                                                                                              |
+| `npm run check` and `npm test -- --project planner` pass; e2e/image not run locally                                                                                                                             | verified — reproduced independently: `check` exit 0; `--project planner` 74 files, 1,264 tests (matches the Log). e2e and image gate: **unproven (gate)** — not run, said so rather than reported green                                                                                                                                                                                                                                                |
+
+- **finding, informational, not a defect** · The "owner's list" I was asked to check the contract diff against (`PlanRevision.brief`, `.deadlines`, the `brief` `RevisionOperation`, the `brief` `ReviseRequest`, `booking-deadline-passed`) is a partial paraphrase, not the ticket's own scope. The actual diff also exports `briefOperationSchema` (the zod schema backing the `brief` `RevisionOperation` member — needed for `revisionOperationSchema`'s `satisfies z.ZodType<RevisionOperation>`) and `currentBrief` (a new function). Both are explicitly named in the ticket's own Build 1.1–1.2 and in Done-when's own first line ("`PlanRevision.brief`, `deadlines`, the brief operation and request, `currentBrief` and `booking-deadline-passed` exist with schemas and exports"). So the diff matches the ticket; it just doesn't match the shorter five-item list the orchestrator handed me. Not carried as a defect.
+- **open decision, not a verdict** · `MAX_REVISIONS_PER_PLAN`'s "under 100 KiB" rationale (`contract/src/plan.ts:69`) was always a doc comment, not an enforced bound — no test asserts a `PlanView` byte size anywhere in the repo, and pl-42's own gate record disclosed its sizing script was never checked in ("not independently re-measured"). This branch's own empty-diff figure (~127–130 KiB at 50 revisions, per the Log) already exceeds the original number by ~30%, and the _worst-diff_ column pl-42 actually sized the ceiling against (95.5–96.4 KiB) was not re-measured here. I built a throwaway worst-diff analogue (3 items/8 days, 50 revisions, non-overlapping placements forcing every item removed+added, brief attached) and measured 112,891 bytes for a thinner-than-real fixture with a smaller synthetic brief (749 B vs. the real fixtures' 994–1,242 B) — consistent with, and probably an underestimate of, what the real worst-diff column would show. Two defensible answers: (a) leave 50 as is — the number was advisory, and the comment is now honest about the new figure; (b) lower the ceiling now that the practical size is roughly 30–50% over the original design point. I recommend (a), but it's contract-adjacent (`MAX_REVISIONS_PER_PLAN` is exported) and someone could reasonably pick (b) — sending to the orchestrator, not deciding it here.
+- **measurement disagreement, unsettled** · I could not reproduce your reported near-timeout runtime for the revision-ceiling test at base `fb15bc9`. Checked out `fb15bc9` in this same worktree, rebuilt, and ran `npm test -- --project planner --reporter=verbose` twice: the test ("the revision ceiling is REVISION_LIMIT_REACHED, 409, for an edit and a re-plan alike") took 1545ms then 1540ms — nowhere near your cited 3067ms/5299ms. Isolated runs of just that test: 966ms, 969ms. This doesn't make the fix wrong — a 15s timeout on a 50-restore test is reasonable regardless — and I independently confirmed the citation-integrity claim (the diff touches only the closing `});` line, net zero line-count change, so nothing else moved). Flagging as a fact for the record, not a finding to act on: possibly machine/load-dependent, and two runs on my end can't rule your measurement in or out.
+- **dropped** · none — nothing I found was rejected as wrong or already-fixed; the three items above are informational/open/unsettled, not "found and dismissed."
+- **findings** · hunt run directly at medium depth by me (no Skill tool); 3 returned, 3 carried (0 med/high, 3 informational/open/measurement), 0 dropped.
+- NFR: security n/a (no URL/header handling touched) · performance — see the open decision above · reliability ✓ (migration's `NULL`-fallback path traced through every reader; one-writer/transaction invariants unchanged) · maintainability ✓ (`repack` is the one shared packing path for `replan` and `reviseBrief`, confirmed not re-implemented and not exported from `itinerary`'s index).
+
 ## Log
 
 **2026-09-13 — filed**, after pl-42 to pl-46 merged in #225, on the owner's
@@ -586,3 +630,31 @@ first mutation run. That M16 would have survived is reasoning, not a run.
 **Gates, at the end.** `npm run check` exited 0. `npm test -- --project planner`
 passed at 74 files and 1,264 tests. `node scripts/citations-gate.mjs --against origin/main`
 reports 89 enforced and 0 failing.
+
+**2026-09-19 — gated, PASS at `ced256c`, and the owner answered three
+questions.** `## Review` above is the ticket-reviewer's text, committed
+verbatim. Its open decision on the ceiling has since been answered: the owner
+kept 50, with the measurement below attached. The owner also took the caption
+and the budget-presence calls as built. All three are under _Decided by the
+owner, 2026-09-19_.
+
+**The worst-diff measurement.** I reconstructed pl-42 step 7's method from its
+Log in a scratch script that is not checked in. It composes each fixture with
+`NOTHING_MEASURED` and appends copies with new ids and a `replan` operation.
+It validates the plan with `planDetailSchema` and the view with
+`planViewSchema`. The worst diff is written entry by entry: every parent item
+removed, every child item added. The same file ran against both trees'
+`dist`. At fb15bc9 the empty-to-worst step matches pl-42's printed figures to
+the byte, 22,883 bytes for city-and-culture and 15,239 for multi-city. The rest
+runs about 1.2% under pl-42's figures. The reviewer re-ran the script in its own
+worktree and got identical numbers on both trees. The table is in
+`MAX_REVISIONS_PER_PLAN`'s comment. Its largest figure is road-trip, whose worst
+diff at 50 revisions is 168,514 bytes here and was already 105,214 at fb15bc9.
+pl-42 printed only two fixtures. A grep of the planner's `src`, `test` and
+`e2e` found nothing that consumes a view's size. The one `bodyLimit` caps
+request bodies.
+
+**The timeout measurement stays unsettled.** Mine was
+`npx vitest run --project planner --reporter=verbose` at fb15bc9, run twice while
+six other builders shared this 12-core machine. I did not record the load. The
+reviewer's quieter runs gave 1,545 and 1,540 ms. The 15 s timeout stays.
