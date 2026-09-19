@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-root audio duration</title>
+  </head>
+  <body>
+    <h1>Shadow-root audio duration</h1>
+    <!-- No `<video>` anywhere, so `CHOOSE_VIDEO_FN` returns null and
+         `METADATA_SCRIPT` falls through to its `<audio>` fallback. The audio
+         element lives inside an open shadow root, the shape of a custom
+         audio-player web component (dl-68). `duration` is normally
+         read-only; the script below shadows it with an own property, the
+         same trick duration-chooser.html uses, so the fallback can be driven
+         without a real decodable media resource. -->
+    <div id="host"></div>
+
+    <script>
+      (function () {
+        var root = document.getElementById("host").attachShadow({ mode: "open" });
+        root.innerHTML = '<audio id="sa"></audio>';
+        Object.defineProperty(root.getElementById("sa"), "duration", {
+          value: 217,
+          configurable: true,
+        });
+      })();
+    </script>
+  </body>
+</html>

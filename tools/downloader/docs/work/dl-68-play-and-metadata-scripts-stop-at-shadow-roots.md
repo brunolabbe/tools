@@ -3,7 +3,7 @@ id: dl-68
 tool: downloader
 title: PLAY_SCRIPT and the metadata audio fallback stop at shadow roots
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-61]
 difficulty: standard
@@ -170,3 +170,71 @@ whether dl-61's own fix was complete. The owner chose filing over folding it
 into dl-61's branch (answered 2026-09-17, options: file a `dl-` ticket, or
 fold in), matching what both the builder and the gate recommended. Not built
 against.
+
+**2026-09-19 — built** on `dl-68-shadow-root-play-metadata`, off `origin/main`
+at `fb15bc9`.
+
+**Reproduced before any fix.** Ran the reviewer's own gate command against the
+unmodified branch: `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "dl-68"`
+after adding the play-only test below — `NO_MEDIA_FOUND`, matching the gate's
+measurement exactly. The premise holds.
+
+**What changed**, all in `resolvers/src/browser/provoke.ts`. `ALL_VIDEOS_FN`
+(dl-61's shadow-piercing walk) is renamed `ALL_MEDIA_FN` and generalised to
+take a `selector` parameter instead of a body hardcoded to `'video'`, per
+Build step 1 — one walk, not two that could drift apart. Every existing call
+site now passes `'video'` explicitly (`CHOOSE_VIDEO_FN`,
+`CHOOSE_VIDEO_INDEX_SCRIPT`, `UNMARK_VIDEO_SCRIPT`), and two new call sites use
+it:
+
+- `PLAY_SCRIPT` now builds its candidate list from `ALL_MEDIA_FN('video,
+audio')` instead of `document.querySelectorAll('video, audio')`.
+- `METADATA_SCRIPT`'s duration fallback now reads
+  `(ALL_MEDIA_FN)('audio')[0] || null` instead of
+  `document.querySelector('audio')`.
+
+Order was not a concern for either caller (Build step 2): `PLAY_SCRIPT` calls
+`.play()` on everything the walk returns, and the metadata fallback takes only
+the first `<audio>`, so neither needs to agree with a locator's `nth(index)`.
+
+**Tests**, appended to the end of the two files the ticket named, so no merged
+gate record's citations moved:
+
+- `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:816`
+  ("starts a shadow-root player with no click listener at all"), fixture
+  `shadow-player-play-only.html` — the same shape as dl-61's
+  `shadow-player.html` but with a `play` listener instead of a `click`
+  listener, so only `PLAY_SCRIPT`'s walk can start it.
+- `tools/downloader/resolvers/test/browser/provoke.test.ts:56` ("reads a
+  shadow-root `<audio>`'s duration when there is no video at all"), fixture
+  `shadow-audio-duration.html` — no `<video>` at all, so `CHOOSE_VIDEO_FN`
+  returns null and the audio fallback is what is under test, the same
+  isolation `provoke.test.ts`'s existing duration test uses and the reason
+  Build step 4 named this file as the cheaper home for it.
+
+**Reverted each half on its own, rebuilt, reran, restored** (`cp` from a saved
+copy, `git status --porcelain` clean afterwards):
+
+| change reverted                                                                    | test                           | result                                                                                                                                              |
+| ---------------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PLAY_SCRIPT`'s candidate list back to `document.querySelectorAll('video, audio')` | `browser-resolver.test.ts:816` | red — `AppError NO_MEDIA_FOUND`, thrown from `classify.ts`'s `NO_MEDIA_FOUND` path, exactly as the ticket's reproduction and dl-61's gate described |
+| `METADATA_SCRIPT`'s audio fallback back to `document.querySelector('audio')`       | `provoke.test.ts:56`           | red — `durationSec` came back `null` instead of `217`                                                                                               |
+
+Both went green again once restored.
+
+**The ticket's fold-in question, answered.** dl-61's Log raised a second gap in
+the same area — a light-DOM video slotted into a shadow root that wraps the
+slot in a link — as pre-existing and out of scope for that ticket. This ticket
+does not touch that path (`CHOOSE_VIDEO_INDEX_FN`'s link check, not
+`ALL_MEDIA_FN`), so nothing here makes it free to fix; not folded in.
+
+**Gates.** `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "dl-68"`:
+1 passed, 49 skipped (50). `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts`: 2 passed. Both
+files together: 2 files, 52 passed. `npm run check`: exit 0. `npm test --
+project downloader`: 86 files, 1459 tests, exit 0 (file/test counts have grown
+since dl-61's 85/1433 from other merged tickets, not from this branch alone).
+`npm run build` run before every test invocation, since these are plain
+in-page script strings with no separate compiled fixture.
