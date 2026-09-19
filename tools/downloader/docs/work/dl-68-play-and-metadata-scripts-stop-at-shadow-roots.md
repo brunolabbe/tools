@@ -198,8 +198,12 @@ Order was not a concern for either caller (Build step 2): `PLAY_SCRIPT` calls
 `.play()` on everything the walk returns, and the metadata fallback takes only
 the first `<audio>`, so neither needs to agree with a locator's `nth(index)`.
 
-**Tests**, appended to the end of the two files the ticket named, so no merged
-gate record's citations moved:
+**Tests**, appended to the end of the two files the ticket named, so no _test_
+citation moved. **That claim originally read "so no merged gate record's
+citations moved", which was wrong**: the gate caught it. Appending tests at
+the end of a test file does not move its own line numbers, but the docstring
+lines this ticket added to `provoke.ts` did move four `provoke.ts` citations
+in dl-55's merged Review record — see "Citations repaired" below.
 
 - `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:816`
   ("starts a shadow-root player with no click listener at all"), fixture
@@ -223,18 +227,43 @@ copy, `git status --porcelain` clean afterwards):
 
 Both went green again once restored.
 
+**Citations repaired in dl-55's Review record** (gate finding, med), the same
+kind of drift dl-61's Log already repaired once. The docstring lines added to
+`provoke.ts` (the rename to `ALL_MEDIA_FN` and its two comment additions,
+including the one below repairing the reviewer's second finding) moved four
+citations there: `provoke.ts:373→386→398` (twice — the leading text of the
+line the citation quotes, `var media = chooseVideo()`, is unchanged; dl-68
+appended an `ALL_MEDIA_FN('audio')` fallback after it on the same line),
+`provoke.ts:615→628→640` and `provoke.ts:208→214→226` (both unchanged
+declarations, only their line moved). All four repointed to their current
+line with the same anchor text, following dl-61's precedent: no verdict or
+anchor text changed, only the line number and, where a "content unchanged"
+annotation was no longer accurate, a one-clause correction to what stayed
+unchanged. `node scripts/citations-gate.mjs --against origin/main`: 89
+enforced, 0 failing (was 1 failing before the repair).
+
+**Docstring correction** (gate finding, low): `ALL_MEDIA_FN`'s header claimed
+Playwright's own locator match order unconditionally; that only holds for a
+single-type selector. The reviewer measured, on Playwright 1.62.1, that a
+comma selector diverges: the walk returns all of one root's matches for every
+tag before descending into that root's shadow roots, where the locator
+interleaves tags as it descends into each root. Neither `PLAY_SCRIPT` (calls
+`.play()` on the whole list) nor the metadata fallback (takes index `0`) hands
+an index to a locator, so this is not a live defect — recorded in the
+docstring in case a future caller does.
+
 **The ticket's fold-in question, answered.** dl-61's Log raised a second gap in
 the same area — a light-DOM video slotted into a shadow root that wraps the
 slot in a link — as pre-existing and out of scope for that ticket. This ticket
 does not touch that path (`CHOOSE_VIDEO_INDEX_FN`'s link check, not
 `ALL_MEDIA_FN`), so nothing here makes it free to fix; not folded in.
 
-**Gates.** `npx vitest run
-tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "dl-68"`:
-1 passed, 49 skipped (50). `npx vitest run
-tools/downloader/resolvers/test/browser/provoke.test.ts`: 2 passed. Both
-files together: 2 files, 52 passed. `npm run check`: exit 0. `npm test --
-project downloader`: 86 files, 1459 tests, exit 0 (file/test counts have grown
-since dl-61's 85/1433 from other merged tickets, not from this branch alone).
-`npm run build` run before every test invocation, since these are plain
-in-page script strings with no separate compiled fixture.
+**Gates**, re-run after the repair round above. `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts
+tools/downloader/resolvers/test/browser/provoke.test.ts`: 2 files, 52 passed.
+`npm run check`: exit 0. `npm test -- --project downloader`: 86 files, 1459
+tests, exit 0 (file/test counts have grown since dl-61's 85/1433 from other
+merged tickets, not from this branch alone). `node scripts/citations-gate.mjs
+--against origin/main`: 89 enforced, 0 failing, 0 raised. `npm run build` run
+before every test invocation, since these are plain in-page script strings
+with no separate compiled fixture. `npm run format` after the markdown edits.
