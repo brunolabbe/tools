@@ -1097,16 +1097,23 @@ describe("a marker inside the request URL's own text (dl-67)", () => {
     ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
   });
 
-  test("the exact-href form is load-bearing: an unescaped echo beside an unrelated encoded value", async () => {
+  test("the exact-href form is load-bearing: an echo path that does not normalise", async () => {
     // A gate finding: without a distinguishing case, the exact-`href`
     // candidate is redundant with `decodeUnreservedEscapes(href)` whenever
     // the URL has no percent-escapes to decode. This URL has one (`%41`,
-    // unrelated to the marker), and yt-dlp's raw, undecoded echo
-    // (`unsupported-echo`) means only the *exact* href candidate matches —
-    // the decoded candidate would turn `%41` into `A` and no longer equal
-    // what actually appears in stderr, and `redactUrl`'s form drops the
-    // query outright. Dropping the exact-href candidate makes this
-    // misclassify as DRM_PROTECTED.
+    // unrelated to the marker).
+    //
+    // **Not a claim about the measured binary's own "Unsupported URL" line**
+    // — a second gate finding corrected an earlier version of this comment
+    // that got that wrong. Measured, real yt-dlp 2025.09.26 always
+    // normalises unreserved escapes on *that* line, so for this exact URL it
+    // echoes `pad=A`, not `pad=%41`; `decodeUnreservedEscapes(href)` alone
+    // would already strip it there. `unsupported-echo` stands in for a
+    // *different*, unmeasured echo path — another yt-dlp version, or a
+    // message that prints the argument before normalisation runs — where
+    // the exact-href form is the only one of the three that would still
+    // match. It is insurance against that path, not evidence the measured
+    // one needs it.
     const url = new URL("https://media.example.org/drm/watch?v=1&pad=%41&sig=SECRET123");
     await expect(fakeResolver("unsupported-echo").resolve(url, options())).rejects.toMatchObject({
       code: "NO_MEDIA_FOUND",

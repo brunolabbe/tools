@@ -126,7 +126,37 @@ re-ordering by an intermediate redirect, a yt-dlp version that normalises
 differently — is a known, disclosed gap, not an oversight. The `redactUrl`
 form is not reachable through this call's current path (nothing writes a
 redacted URL into the child's own stderr) and is kept only because the
-owner's decision names it by name.
+owner's decision names it by name. **The exact `url.href` form is insurance
+against an echo path this build did not measure, not something the measured
+binary's own `Unsupported URL` line needs**: that line always normalises
+unreserved escapes, so for a URL carrying one, `decodeUnreservedEscapes`
+alone already matches what it actually prints — a second gate finding
+corrected a test comment that had claimed otherwise.
+
+**Second question, narrower, on top of the first**: a gate on (1) found the
+encoding-normalisation attempt inside `maskRequestUrl` used `decodeURI`,
+which does not match what yt-dlp actually decodes. Two remedies, both inside
+the mask mechanism from the first decision — this does not reopen it:
+
+1. Model the measured decode: replace `decodeURI` with a function
+   implementing yt-dlp's real, measured behaviour (RFC 3986 §6.2.2.2
+   unreserved-escape decoding only).
+2. Keep the code as it stood and disclose the gap instead: state plainly
+   that the encoding variant is unmeasured and drop the claim that it is
+   proven.
+
+**Chosen: (1), model the measured decode** — the owner, 2026-09-19, put to
+them by the orchestrator with `AskUserQuestion`; both the orchestrator and
+the reviewer had recommended (1) and the owner's choice overrode neither.
+Built as `decodeUnreservedEscapes`, ahead of the owner's answer — the answer
+came after the build, not before it; see the Log.
+
+**Still open, not this ticket's to settle**: whether to keep the `redactUrl`
+form at all. It is dead against real yt-dlp on this call's current path, and
+the phrase "or its redacted form" in the first decision's own option text —
+written before either the reviewer's gate or this second question existed —
+is what made it look required. Left exactly as built, documented as dead,
+pending an answer.
 
 ## Done when
 
@@ -147,10 +177,12 @@ owner's decision names it by name.
   range). Not fixed here.
 - 2026-09-19 — Owner chose Build option (1), mask the request URL; recorded
   above. Fixed in `resolvers/src/resolvers/ytdlp.ts`: a new `maskRequestUrl`
-  strips the request URL (exact, `redactUrl` form, and an initial
-  `decodeURI`-based encoding variant, see the gate entry below for why that
-  variant was wrong) from stderr before `classifyFailure` lowercases it and
-  matches source-fact markers. Three tests added at the end of
+  strips five forms of the request URL from stderr before `classifyFailure`
+  lowercases it and matches source-fact markers — the exact `url.href`, its
+  `redactUrl` form, a trailing-slash toggle, and both `decodeURI` and
+  `encodeURI` of it (see the gate entry below for why three of those five
+  were wrong or dead and were later replaced). Three tests added at the end
+  of
   `resolvers/test/ytdlp.test.ts`, plus three new fake-binary modes
   (`unsupported-echo`, `unsupported-echo-decoded`, `drm-and-url-echo`) in
   `fake-ytdlp.mjs`: the reproduction (a `drm`-containing request URL no
@@ -188,20 +220,23 @@ owner's decision names it by name.
   disagreed with the real binary and the test proving it was circular
   (fixture and production both called the same JS built-in, proving nothing
   about yt-dlp). The fixture's "measured" comment was also false: nothing
-  measured that specific transform. **Fixed by the reviewer's recommended
-  remedy (a)**, not the orchestrator: replaced `decodeURI`/`encodeURI`/the
-  trailing-slash toggle with `decodeUnreservedEscapes`, a new function
-  implementing exactly the measured RFC 3986 §6.2.2.2 behaviour; reworked the
-  fixture mode (`unsupported-echo-unreserved-decode`) to model the same real
-  behaviour and cited the actual measurement command/output in its comment;
-  rewrote the encoding-variant test around a mixed reserved/unreserved-escape
-  URL matching the live measurement. This was a correction inside the
-  owner's chosen mechanism, not a live scope or contract question with two
-  defensible answers — the reviewer's own framing offered two remedies that
-  both stayed inside the mask mechanism, and (a) strictly dominated (b) (same
-  effort, an actual fix instead of a disclosed-but-avoidable gap) — so it did
-  not go to the orchestrator as an open decision despite how the gate
-  labelled it.
+  measured that specific transform. **Built the reviewer's recommended
+  remedy (a) immediately**, reasoning at the time that it was a correction
+  inside the owner's chosen mechanism rather than a live open decision, since
+  (a) looked strictly better than (b) to both the reviewer and me. **That
+  reasoning was wrong to act on, not wrong on the merits**: the reviewer's
+  own agent definition does not let a reviewer/builder pair settle an open
+  decision between them even where one option looks dominant, and it had
+  already sent this to the orchestrator as one in the same pass it sent it
+  to me. The orchestrator put it to the owner with `AskUserQuestion`; see the
+  next Log entry for the answer, which came after this build, not before it.
+  Replaced `decodeURI`/`encodeURI`/the trailing-slash toggle with
+  `decodeUnreservedEscapes`, a new function implementing exactly the
+  measured RFC 3986 §6.2.2.2 behaviour; reworked the fixture mode
+  (`unsupported-echo-unreserved-decode`) to model the same real behaviour and
+  cited the actual measurement command/output in its comment; rewrote the
+  encoding-variant test around a mixed reserved/unreserved-escape URL
+  matching the live measurement.
   The four lows were also addressed: dropped the trailing-slash toggle and
   `encodeURI` (both dead against real yt-dlp per the gate's mutation testing,
   and `encodeURI`'s own justification admitted no case existed); fixed
@@ -222,6 +257,16 @@ owner's decision names it by name.
   owner's decision names it by name.
   Verification after the fix: `npx vitest run
 tools/downloader/resolvers/test/ytdlp.test.ts` — 65/65 passed; re-ran the
-  red-on-`origin/main` check with the corrected spec (2 of 65 failed against
-  the unfixed source, as expected); `npm run check` green; `npm test --
-project downloader` — 86 files, 1462/1462 passed.
+  red-on-`origin/main` check with the corrected spec — **3 of 65 failed**
+  against the unfixed source (the reproduction, the encoding-variant test,
+  and the exact-href test), not the 2 an earlier version of this entry
+  claimed before a re-count; `npm run check` green; `npm test -- --project
+downloader` — 86 files, 1462/1462 passed.
+- 2026-09-19 — Owner answered the second Build decision (put to them by the
+  orchestrator with `AskUserQuestion`, after the fix above had already been
+  built): chose (1), model the measured decode — the same remedy the
+  reviewer recommended and the one already built, overriding neither
+  recommendation. Recorded above, next to the original mask decision. The
+  `redactUrl` question stays open — not this build's to settle — left
+  exactly as built, documented as dead against real yt-dlp on this call's
+  current path.
