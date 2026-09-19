@@ -69,6 +69,13 @@ export interface ModelRequest {
  * Every field is `null` where the provider does not report that kind — a local
  * model usually reports none, and the scripted provider reports none on
  * purpose. `null` is "nobody said", never zero.
+ *
+ * **`thinkingTokens` is a subset of `outputTokens`, not a fifth kind billed
+ * apart (pl-50).** Thinking is billed as ordinary output — `outputTokens`
+ * already includes it — so this field exists only to say how much of that
+ * total was spent thinking, for a report that wants the split. A backend
+ * that does not report the breakdown leaves it `null` the same way it would
+ * any other unreported kind.
  */
 export interface ModelUsage {
   /** Uncached input only. */
@@ -79,6 +86,8 @@ export interface ModelUsage {
   cacheWriteTokens: number | null;
   /** Output, thinking included where the model thinks. */
   outputTokens: number | null;
+  /** How much of `outputTokens` was internal reasoning, where the provider says. */
+  thinkingTokens: number | null;
 }
 
 export interface ModelReply {

@@ -243,7 +243,8 @@ maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
 - Sets A–D have run against `claude-opus-5`, and their records are checked in
   under `api/test/fixtures/live/`.
 - The Log carries one table covering every set. Per run it gives:
-  - calls, input, output, thinking share of output, and cache reads
+  - calls, input, output, thinking share of output (`ModelUsage.thinkingTokens`,
+    fillable as of pl-50), and cache reads
   - dollars, and the reconstructed ceiling
   - malformed replies, re-asks, refusals, `length` stops, and fallbacks
 
@@ -714,3 +715,20 @@ ready`, naming the exact SDK type line both the builder and the reviewer
 widened denylist); `npm test -- --project planner` — full count in this
 round's final report to the orchestrator. `status` stays `in-flight`: none of
 A–D changed what only the owner's real run can still prove.
+
+### 2026-09-19 — pl-50 landed: the "thinking share of output" column is fillable
+
+`ModelUsage.thinkingTokens` now exists (`agent/src/provider.ts`), `usageOf` in
+`agent/src/providers/anthropic.ts` populates it from the top-level
+`usage.output_tokens_details.thinking_tokens` (not summed across `iterations`
+— the per-iteration usage types in `@anthropic-ai/sdk@0.125.0` do not carry
+that breakdown at all, only the top-level `BetaUsage` does; confirmed by
+reading `BetaMessageIterationUsage`, `BetaCompactionIterationUsage`,
+`BetaAdvisorMessageIterationUsage` and `BetaFallbackMessageIterationUsage`,
+none of which declare it), and this harness's `RecordedAttempt.usage` carries
+it through for free, proved by re-running under `MODEL_PROVIDER=scripted`
+(`PLANNER_LIVE_RUN=1 node --import tsx api/test/live/run.ts --out <dir>
+--max-usd 10`): every attempt's `usage` object now has `"thinkingTokens":
+null`, no other key changed. **Still awaiting the owner's real run** to put a
+non-null number in that column; this only removes the seam gap that made it
+structurally unfillable.

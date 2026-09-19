@@ -239,6 +239,9 @@ describe("what the provider reads back", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       outputTokens: 210,
+      // The "ordinary" fixture carries no `output_tokens_details` at all —
+      // this is the "the API did not report a breakdown" case (pl-50).
+      thinkingTokens: null,
     });
     expect(reply.servedModel).toBe("claude-opus-5");
   });
@@ -257,6 +260,10 @@ describe("what the provider reads back", () => {
       cacheReadTokens: 60,
       cacheWriteTokens: 40,
       outputTokens: 1_400,
+      // The fixture's top-level `output_tokens_details.thinking_tokens` (pl-50)
+      // — read from `usage` directly, never from `iterations`, whose lone
+      // `message` entry here carries no breakdown of its own.
+      thinkingTokens: 1_390,
     });
   });
 
@@ -288,6 +295,9 @@ describe("what the provider reads back", () => {
       cacheReadTokens: 300,
       cacheWriteTokens: 30,
       outputTokens: 970,
+      // Neither the top-level `usage` nor either `iterations` entry carries a
+      // breakdown in this fixture, so thinking is "nobody said" (pl-50).
+      thinkingTokens: null,
     });
   });
 
@@ -305,6 +315,7 @@ describe("what the provider reads back", () => {
       cacheReadTokens: null,
       cacheWriteTokens: null,
       outputTokens: 210,
+      thinkingTokens: null,
     });
   });
 
@@ -355,6 +366,7 @@ describe("what the provider reads back", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       outputTokens: 970,
+      thinkingTokens: null,
     });
     expect(warnings).toEqual([
       {

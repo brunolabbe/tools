@@ -37,6 +37,7 @@ const ORDINARY: ModelUsage = {
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
   outputTokens: 200,
+  thinkingTokens: 20,
 };
 
 describe("what a fan-out spent", () => {
@@ -46,6 +47,7 @@ describe("what a fan-out spent", () => {
       cacheReadTokens: 2,
       cacheWriteTokens: 3,
       outputTokens: 4,
+      thinkingTokens: 1,
     };
     const provider = new FakeProvider({
       lodging: [{ kind: "reply", reply: { content: "", stopReason: "refusal", usage: refused } }],
@@ -68,6 +70,7 @@ describe("what a fan-out spent", () => {
       cacheReadTokens: 2,
       cacheWriteTokens: 3,
       outputTokens: ordinary * 200 + 4,
+      thinkingTokens: ordinary * 20 + 1,
       fallbackCalls: 0,
     });
   });
@@ -128,6 +131,7 @@ describe("what a fan-out spent", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       outputTokens: landed * (ORDINARY.outputTokens ?? 0),
+      thinkingTokens: landed * (ORDINARY.thinkingTokens ?? 0),
       fallbackCalls: 0,
     });
   });
@@ -163,6 +167,7 @@ describe("what a fan-out spent", () => {
       cacheReadTokens: null,
       cacheWriteTokens: null,
       outputTokens: null,
+      thinkingTokens: null,
       fallbackCalls: 0,
     });
   });

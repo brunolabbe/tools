@@ -3,7 +3,7 @@ id: pl-50
 tool: planner
 title: The API reports how many billed output tokens were thinking; the seam drops it
 kind: fix
-status: ready
+status: done
 milestone: P3
 depends_on: [pl-39, pl-49]
 difficulty: standard
@@ -117,3 +117,124 @@ The owner chose to file rather than fold in or drop the column, on the basis
 that the defect belongs to pl-39's seam and pl-40's branch does not touch it.
 No code was written here; `node scripts/next-id.mjs pl` reported `pl-50` free
 at filing.
+
+### 2026-09-19 — built
+
+**What the ticket had wrong.** Build step 2 asked for `usageOf` to read
+`output_tokens_details.reasoning_tokens` "for every attempt in `iterations`,
+summed the same way `output_tokens` already is." Reading
+`@anthropic-ai/sdk@0.125.0`'s own types directly (not assumed from the
+ticket's prose, per its own instruction) found two things wrong with that:
+
+1. **The field is named `thinking_tokens`, not `reasoning_tokens`** —
+   `BetaOutputTokensDetails` (`node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.d.ts:2998-3007`)
+   declares exactly one field, `thinking_tokens: number`. The ticket's prose
+   guessed a name from the doc comment's own wording ("internal reasoning")
+   rather than the declared key, which is the exact trap its own parenthetical
+   warned against.
+2. **`output_tokens_details` does not exist on any per-iteration entry, so it
+   cannot be summed "the same way `output_tokens` already is."** `usage.iterations`
+   is `BetaIterationsUsage`, a union of `BetaMessageIterationUsage`,
+   `BetaCompactionIterationUsage`, `BetaAdvisorMessageIterationUsage` and
+   `BetaFallbackMessageIterationUsage` — read all four in the same file, and
+   none declares `output_tokens_details`. Only the top-level `BetaUsage` (what
+   `usageOf` receives as its `usage` parameter) has it. So the field is read
+   once, from `usage` itself, never from `attempts` — see the doc comment
+   added to `usageOf` in `agent/src/providers/anthropic.ts` for the full
+   reasoning and its consequence (a declined fallback attempt's thinking, if
+   any, is not reported anywhere the SDK's types can reach — an inherent API
+   limitation, not a choice this code makes).
+
+The existing `withThinking` fixture
+(`agent/test/fixtures/anthropic-messages.json`) already had
+`output_tokens_details` on its top-level `usage` and not on its `iterations[0]`
+entry, which independently confirms this — whoever wrote that fixture during
+pl-39 was already following the real shape, even though pl-39's `usageOf`
+never read it and pl-40's gate read the ticket's own citation line (2899, which
+is actually `BetaMessageDeltaUsage`'s field, a streaming-delta type not used
+here) rather than the field's real host type.
+
+**Build steps 1–4 done as specified, corrected as above:**
+
+- `ModelUsage.thinkingTokens: number | null` added
+  (`agent/src/provider.ts`), documented as a subset of `outputTokens`, `null`
+  meaning "nobody said."
+- `usageOf` populates it from `usage.output_tokens_details?.thinking_tokens`
+  (`agent/src/providers/anthropic.ts`).
+- `RunUsage`/`emptyRunUsage`/`addReplyUsage` carry it through
+  (`agent/src/orchestrator.ts`), summed with the same `add()` helper the other
+  four fields use.
+- `ScriptedProvider`'s reply literal gets `thinkingTokens: null`
+  (`agent/src/providers/scripted.ts`).
+- Every existing `ModelUsage`/`RunUsage` literal across the test suite needed
+  the new required field added for the type to keep compiling:
+  `agent/test/{ask,fan-out-usage,helpers,scripted-provider,anthropic-provider}.ts`
+  and `api/test/run-usage.test.ts`. `fan-out-usage.test.ts`'s `ORDINARY` and
+  `refused` fixtures were given distinct non-null `thinkingTokens` (20 and 1)
+  so the "counts every reply..." and "a canceled fan-out..." tests exercise
+  real summation across a fan-out, not just null-propagation — this is the
+  case the ticket's Done-when asked for.
+- pl-40's harness needed no structural change (confirmed, not assumed): its
+  `RecordedAttempt.usage: ModelUsage` already carries the reply's `usage`
+  object verbatim. Re-ran it end to end under `MODEL_PROVIDER=scripted`
+  (`PLANNER_LIVE_RUN=1 node --import tsx api/test/live/run.ts --out <dir>
+--max-usd 10`, no network, no key) and confirmed every attempt's emitted
+  JSON now carries `"thinkingTokens": null` with no other change to the
+  output shape.
+- pl-40's Done-when line and Log updated in place
+  (`pl-40-prove-p3-against-a-real-model.md`) to name the field and record
+  that the column is now structurally fillable (still awaiting the owner's
+  real run to put a non-null number in it).
+
+**Fold-in considered and not taken.** pl-49 added a full DB column set for its
+own per-kind breakdown (`plan_runs.input_tokens`, `cache_read_tokens`,
+`cache_write_tokens`, `output_tokens`, `fallback_calls` —
+`api/src/db/schema.ts` migration, `api/src/db/runs.ts`'s `updateRunUsage`,
+read back by `api/src/cost-report.ts`). A symmetrical `thinking_tokens` column
+would be a small conceptual step from what this ticket already does, but it is
+not small in the doing: it needs a new migration entry, a new
+`updateRunUsage`/`RunUsageRow` column, a `cost-report.ts` read, and tests in
+`api/test/run-usage.test.ts` and wherever `cost-report.ts` is tested — none of
+which this ticket's Build or Done-when sections name, and it is not
+"already-specified" elsewhere either. Doing it silently would also decide a
+scope question (does the operator's cost report want a thinking-token line
+today) the ticket never raised. Left as an open decision below rather than
+folded in or done unilaterally.
+
+**Verification.** Narrowest specs first, then the full project suite:
+
+- `npx vitest run tools/planner/agent/test/anthropic-provider.test.ts
+tools/planner/agent/test/scripted-provider.test.ts
+tools/planner/agent/test/fan-out-usage.test.ts
+tools/planner/agent/test/ask.test.ts --project planner` — 4 files, 54 tests,
+  all passing.
+- `npx vitest run tools/planner/api/test/run-usage.test.ts --project planner`
+  — 1 file, 5 tests, all passing.
+- **Proved red with the fix reverted**: temporarily forced `usageOf`'s
+  `thinkingTokens` to `null` unconditionally and reran
+  `anthropic-provider.test.ts` — the "thinking blocks are dropped..." test
+  failed (`expected 1390, received null`), 1 of 32 failing; restored the fix
+  and reran clean (32/32).
+- `npm run check` — exit 0 (lint warnings are pre-existing, none in touched
+  files; format and typecheck both clean).
+- `npm test -- --project planner` — **71 files, 1184 tests**, all passing.
+  One transient timeout in `revisions.test.ts` on an earlier run (a
+  timing-sensitive test, unrelated file, not touched by this branch)
+  reproduced as a flake: failed once under full-suite load, passed in
+  isolation, passed again on a clean full-suite rerun.
+
+**Open decision for the orchestrator: does the operator's cost report want a
+`thinking_tokens` column now, or does it wait for its own ticket?** Options:
+
+1. **(Recommended) File a small follow-up ticket** for the
+   `schema.ts`/`runs.ts`/`cost-report.ts` persistence, symmetrical with
+   pl-49's. Keeps this ticket's diff to the seam it named and gives the
+   DB/reporting change its own Done-when and its own gate, the same way
+   pl-49's own column set got one.
+2. Fold it into this branch now. Cheap in isolation, but widens this ticket
+   past its own Build section and its own Done-when, on a scope question its
+   filing did not raise.
+3. Leave it unrecorded — nobody asked for the report to carry it yet, and
+   `RunUsage.thinkingTokens` is available in-process (e.g. to a caller that
+   wants it before it is ever persisted) regardless of whether the DB stores
+   it.

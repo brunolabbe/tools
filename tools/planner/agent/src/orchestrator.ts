@@ -161,6 +161,8 @@ export interface RunUsage {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
   outputTokens: number | null;
+  /** How much of `outputTokens` was internal reasoning, where some reply said (pl-50). */
+  thinkingTokens: number | null;
   /**
    * Replies a model other than the configured one served — a refusal fallback.
    * Their tokens are in the totals above, billed at that other model's rates,
@@ -183,6 +185,7 @@ export function emptyRunUsage(): RunUsage {
     cacheReadTokens: null,
     cacheWriteTokens: null,
     outputTokens: null,
+    thinkingTokens: null,
     fallbackCalls: 0,
   };
 }
@@ -206,6 +209,7 @@ export function addReplyUsage(
     cacheReadTokens: add(total.cacheReadTokens, reply.usage.cacheReadTokens),
     cacheWriteTokens: add(total.cacheWriteTokens, reply.usage.cacheWriteTokens),
     outputTokens: add(total.outputTokens, reply.usage.outputTokens),
+    thinkingTokens: add(total.thinkingTokens, reply.usage.thinkingTokens),
     fallbackCalls:
       total.fallbackCalls +
       (reply.servedModel !== undefined && reply.servedModel !== configuredModel ? 1 : 0),
