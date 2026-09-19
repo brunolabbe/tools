@@ -3,7 +3,7 @@ id: dl-63
 tool: downloader
 title: The SSRF guard admits several native IPv6 special-purpose ranges
 kind: fix
-status: ready
+status: done
 milestone: M5
 depends_on: []
 ---
@@ -216,6 +216,20 @@ carve-outs, per (c):
   takes no carve-outs — the accepted over-block, proven rather than assumed.
 - `npm run check` and `npm test -- --project downloader` green.
 
+## Review
+
+**Gate: PASS** — 2026-09-19 · `origin/main...1a502348816d545aae3ca1656d29163e7de03c78` · reviewer's own defect hunt, medium depth (subagent, no `code-review` tool)
+
+| Done when                                                                                                                                        | Proof                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A unit table over every range added to `isBlockedV6` under (c), proving a public neighbour of each stays allowed and the range itself is blocked | proven — `tools/downloader/api/test/native-ipv6-ranges.test.ts:108 "address past each edge is not"` ✓ (14/14 pass at the reviewed commit `1a50234`; 13/14 fail, 1 pass against `origin/main`'s `ssrf.ts`, reproduced) |
+| A regression proving the seven previously-reachable `2001::/23` sub-allocations are now blocked too                                              | proven — `tools/downloader/api/test/native-ipv6-ranges.test.ts:148 "reachable allocations inside 2001::/23 are refused too"` ✓                                                                                        |
+| `npm run check` and `npm test -- --project downloader` green                                                                                     | verified — `npm run check` exit 0; `npx vitest run --project downloader`: 87 files / 1471 tests passed                                                                                                                |
+
+- **low** · at the reviewed commit `1a502348816d545aae3ca1656d29163e7de03c78`, the `fec0::/10` row's test comment and the ticket's own Log claimed `fc00::/6` was refused end to end. `fe00::/9` (IANA "Reserved by IETF", between unique-local and link-local) is not in `BLOCKED_V6` and stays allowed — reproduced: `isBlockedAddress("fe00::1")` returned `false` against that commit's built `ssrf.ts`. Not an acceptance-line failure: `fe00::/9` was never one of option (c)'s seven named ranges and was never measured against the registry in this ticket, so this was a documentation-accuracy issue, not a code defect. **Fixed at `ac1131c`**: `tools/downloader/api/test/native-ipv6-ranges.test.ts:132 "not join them: fe00::/9 lies between"` and the corresponding ticket Log entry now describe the actual coverage; the renamed test at `tools/downloader/api/test/native-ipv6-ranges.test.ts:130 "fe80:: to the top of the space is refused end to end"` still asserts the same 14/14-passing set. Whether `fe00::/9` itself should be measured and blocked is an open decision, correctly left to the orchestrator rather than settled here.
+- **findings** · own defect hunt returned 1; 1 carried, 0 dropped.
+- NFR: security ✓ (the seven named ranges are exclusively and correctly blocked; dl-60's transition/embedded-IPv4 checks run first but occupy disjoint address space, verified by reading `embeddedV4`/`isRefusedTransitionRange`'s fixed patterns against the seven new prefixes) · performance n/a (`BLOCKED_V6.some()` over 10 fixed entries) · reliability n/a · maintainability — the one low finding above, now fixed; otherwise the flat-table shape matches `BLOCKED_V4`'s existing style.
+
 ## Log
 
 - 2026-09-15 — Filed off `origin/main` `49515ba` (dl-60's fix `cbfdbba` is an
@@ -243,3 +257,76 @@ carve-outs, per (c):
   still open, which choosing (c) makes moot. `Build` and `Done when` rewritten
   to name the concrete ranges and the regression on the seven over-blocked
   reachable sub-allocations.
+- 2026-09-19 — Built option (c) off `origin/main` `fb15bc9`. `isBlockedV6` in
+  `api/src/ssrf.ts` now reads one flat `BLOCKED_V6` table, the same shape as
+  `BLOCKED_V4`: the seven ranges in Build plus the three native rules it
+  already had (unique-local, link-local, multicast), folded into the table
+  rather than left as a second style beside it. No carve-outs; the transition
+  ranges and embedded-IPv4 rules from dl-60 still run first, unchanged.
+  - **Tests** are a new file, `api/test/native-ipv6-ranges.test.ts`, rather
+    than additions to `ssrf.test.ts`, following dl-60's `embedded-ipv4.test.ts`
+    and so that no gate record's line citation into either existing file moves.
+    Each range is tested at its first address, one in the middle and its last,
+    with the address just past each edge allowed. The seven over-blocked
+    allocations are asserted refused through both `isBlockedAddress` and
+    `assertAllowed`. One address per range is also checked through
+    `assertAllowed` as a bracketed literal (the lookup throws, so no DNS), through
+    `dispatcher.ts`'s `blockedLiteral`, and through a name that resolves into
+    one of the ranges.
+  - **Red run, done against the unfixed source:** with the new spec in place
+    and `ssrf.ts` untouched, 13 of 14 tests failed and the one that passed was
+    the public-address control. That is the check itself, not a substitute.
+  - **Mutation:** every new prefix length was moved by one in each direction
+    (14 mutants, script not checked in). 11 turned the spec red. The 3 that
+    stayed green are equivalent mutants, where no address can tell the two
+    apart. `100::/63` and `100:0:0:1::/63` each cover exactly the union of the
+    two adjacent /64s. `fec0::/9` is `fe80::/9`, which is link-local plus
+    site-local, already blocked by the next row.
+  - **What the brief had wrong, or left unsaid.** (1) It did not notice that
+    one of dl-60's tests asserts the opposite of (c):
+    `embedded-ipv4.test.ts`'s "the neighbours of those ranges are not caught by
+    them" allowed `2001:1::1` as Teredo's public neighbour, and that address is
+    PCP Anycast, one of the seven that (c) now refuses. The test would have gone
+    red. It now uses `2001:200::1`, the first address past `2001::/23`, and was
+    rewritten in place, keeping its line count, so dl-60's gate citations into
+    that file do not move. That test's comment also named `64:ff9b:2::/48` as
+    the neighbour, but the address it lists, `64:ff9b::808:808`, is in
+    `64:ff9b::/96`. The comment was corrected in the same edit. (2) `fec0::/10`
+    has no allowed neighbour. Link-local sits directly below it and multicast
+    directly above, so everything from `fe80::` to the top of the address space
+    is refused, and a separate test asserts that contiguity. The allowed address
+    its row uses instead is `fbff:ffff:…`, which is below unique-local. This
+    entry first said `fc00::/6` was refused end to end. That was wrong, and the
+    gate caught it (see below). (3) `100::/64` has a
+    blocked range directly above it (the dummy prefix), so its upper neighbour
+    is `100:0:0:2::`. The neighbours of `100::/64`, `100:0:0:1::/64`,
+    `5f00::/16` and `3fff::/20` sit in IETF-reserved or unallocated space, not
+    public space. They are allowed by this guard, and that is what a neighbour
+    has to show to prove a prefix length. Real public addresses are covered by
+    their own test (Google and Cloudflare DNS, and `2001:200::1`).
+  - **Not measured:** production IPv6 reachability, and whether any real media
+    host sits in one of the seven over-blocked allocations. Both are unmeasured
+    here for the reasons already given in this ticket.
+  - **Fold-in:** nothing free was found. No doc outside `docs/work/` lists the
+    native IPv6 ranges (`grep` for `fc00::/7`, `fe80::/10` and `unique-local`
+    over the tool docs, `docs/` and `.claude/` came back empty), so there was
+    no prose to bring up to date.
+  - **One citation moved, and was re-pointed:** `scripts/citations-gate.mjs
+--against origin/main` failed dl-57's gate record, whose citation of
+    `ssrf.ts:306 "That address could not be resolved."` now sits at line 338
+    because the table was inserted above it. The line number in dl-57 was
+    updated and nothing else was touched. After that the gate reported
+    `89 enforced, 0 failing`, exit 0.
+- 2026-09-19 — Gate 1 (ticket-reviewer) passed with one low finding, which
+  reproduced here. `fe00::/9` (IANA "Reserved by IETF") lies between
+  unique-local and link-local and is not in `BLOCKED_V6`. Checked against the
+  built `dist/ssrf.js`: `isBlockedAddress` returns `false` for `fe00::`,
+  `fe00::1` and `fe7f:ffff:…:ffff`, and `true` for `fdff:ffff:…:ffff` and
+  `fe80::`. So the claim this Log and the test comment made, that `fc00::/6` is
+  refused end to end, was false. Both now describe the actual coverage: from
+  `fe80::` up is contiguous, and unique-local stands alone. The test was renamed
+  to match. Its assertions did not change, because every address it listed was
+  already correct. `fe00::/9` itself was not blocked here, because it is not
+  one of option (c)'s named ranges and was never measured against the registry.
+  Whether to block it is left as an open decision for the orchestrator. It is
+  not settled here.

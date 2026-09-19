@@ -198,6 +198,42 @@ function isRefusedTransitionRange(groups: readonly number[]): boolean {
   return first === 0x0064 && second === 0xff9b && third === 0x0001; // 64:ff9b:1::/48 local-use NAT64
 }
 
+/**
+ * Native IPv6 ranges that must never be reachable: IANA's special-purpose
+ * ranges marked not globally reachable, plus the pre-registry `fec0::/10`.
+ *
+ * Flat on purpose — the owner's decision on dl-63. `2001::/23` is refused
+ * whole, which also refuses the few reachable anycast and service allocations
+ * inside it (PCP, TURN, DNS-SD, AMT, AS112-v6, ORCHIDv2, Drone Remote ID); none
+ * is a plausible media origin, and carving them out would tie this list to
+ * every future reclassification inside the block. A new special-purpose range
+ * elsewhere still has to be added here by hand.
+ */
+const BLOCKED_V6: ReadonlyArray<readonly [readonly number[], number]> = (
+  [
+    ["100::", 64], // discard-only (RFC 6666)
+    ["100:0:0:1::", 64], // dummy prefix (RFC 9780)
+    ["2001::", 23], // IETF protocol assignments, whole — no carve-outs
+    ["2001:db8::", 32], // documentation
+    ["3fff::", 20], // documentation (RFC 9637)
+    ["5f00::", 16], // segment-routing SIDs (RFC 9602)
+    ["fc00::", 7], // unique-local
+    ["fe80::", 10], // link-local
+    ["fec0::", 10], // site-local, deprecated (RFC 3879)
+    ["ff00::", 8], // multicast
+  ] as const
+).map(([network, bits]) => [v6Groups(network) ?? [], bits] as const);
+
+function inV6Prefix(groups: readonly number[], network: readonly number[], bits: number): boolean {
+  for (let index = 0; index < 8; index += 1) {
+    const take = Math.min(16, Math.max(0, bits - index * 16));
+    if (take === 0) return true;
+    const mask = (0xffff << (16 - take)) & 0xffff;
+    if (((groups[index] ?? 0) & mask) !== ((network[index] ?? 0) & mask)) return false;
+  }
+  return true;
+}
+
 function isBlockedV6(address: string): boolean {
   const groups = v6Groups(address);
   if (groups === null) return true;
@@ -208,11 +244,7 @@ function isBlockedV6(address: string): boolean {
   const embedded = embeddedV4(groups);
   if (embedded !== null) return isBlockedV4Value(embedded);
 
-  const [first = 0] = groups;
-  if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
-  if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
-  if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
-  return false;
+  return BLOCKED_V6.some(([network, bits]) => inV6Prefix(groups, network, bits));
 }
 
 /** True when this literal address must never be connected to. */
