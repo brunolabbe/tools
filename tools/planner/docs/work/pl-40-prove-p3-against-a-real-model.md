@@ -757,3 +757,31 @@ rather than shipped history:**
   guarantee for this field specifically. No fixture here combines a fallback
   with a thinking breakdown, so this stays unmeasured until the owner's real
   run produces a reply that both fell back and thought.
+
+### 2026-09-19 — owner decision A: `RunUsage.thinkingTokens` is a documented lower bound
+
+The owner answered pl-50's second open decision (the gate's med 3): keep
+`addReplyUsage` summing past a `null` reply the way it always has, and
+document the result as a lower bound over the replies that reported a
+breakdown, rather than nulling the sum once coverage is incomplete or
+carrying a separate coverage count. `ModelUsage`, `RunUsage` and `usageOf`'s
+doc comments now say so in those words.
+
+**This funded run is where both of pl-50's unmeasured gaps get a real
+answer, and they are two different questions:**
+
+- **How often does a run mix a reply with no thinking breakdown and one
+  with a breakdown?** Every reply from one provider should, in principle,
+  report the same way — adaptive thinking is on for every specialist call
+  the same way — so a mixed run would mean either a specialist call that
+  genuinely produced no reasoning tokens, or an inconsistency in what the
+  API reports call to call. Either is worth knowing before trusting
+  `RunUsage.thinkingTokens` as a report figure.
+- **How often does a reply itself take several attempts (a refusal
+  fallback) while also thinking?** That is the multi-iteration scope
+  question above, unrelated to decision A's cross-reply summing — a single
+  reply's own `thinkingTokens` could already be a lower bound before it
+  ever reaches `addReplyUsage`.
+
+Sets A–D's real run should report both counts in its Log table, beside the
+thinking-share figure the column can now finally carry (pl-50 landed).

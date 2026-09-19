@@ -351,8 +351,9 @@ function stopReasonOf(message: BetaMessage): ModelReply["stopReason"] {
  * fixture pairs a fallback with a thinking breakdown to check it against.
  * Either way, no per-iteration entry ever carries this breakdown, so a
  * declined attempt's thinking cannot be told apart from the serving one's —
- * unmeasured until a real multi-attempt, thinking-enabled reply is captured
- * (pl-40).
+ * **the `thinkingTokens` this returns is a lower bound on this reply's real
+ * thinking, not a guaranteed total**, unmeasured until a real multi-attempt,
+ * thinking-enabled reply is captured (pl-40).
  */
 function usageOf(usage: BetaUsage): ModelUsage {
   const attempts =

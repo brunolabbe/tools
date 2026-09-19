@@ -78,9 +78,12 @@ export interface ModelRequest {
  * `thinkingTokens` is read once, from the top-level reply's own breakdown —
  * see `usageOf`'s doc comment in `providers/anthropic.ts` for why, and for
  * what the SDK does and does not state about which attempts that top-level
- * figure spans. Unmeasured until a real multi-attempt, thinking-enabled
- * reply is captured (pl-40). A backend that does not report the breakdown
- * leaves it `null` the same way it would any other unreported kind.
+ * figure spans. **So `thinkingTokens` is a lower bound on what this reply
+ * actually spent thinking**, not a guaranteed total: a declined attempt's own
+ * thinking, if any, cannot be told apart from the serving one's. Unmeasured
+ * until a real multi-attempt, thinking-enabled reply is captured (pl-40). A
+ * backend that does not report the breakdown leaves it `null` the same way it
+ * would any other unreported kind.
  */
 export interface ModelUsage {
   /** Uncached input only. */
@@ -91,7 +94,10 @@ export interface ModelUsage {
   cacheWriteTokens: number | null;
   /** Output, thinking included where the model thinks. */
   outputTokens: number | null;
-  /** How much of `outputTokens` was internal reasoning, where the provider says. */
+  /**
+   * How much of `outputTokens` was internal reasoning, where the provider
+   * says — a lower bound, not a guaranteed total; see the interface doc above.
+   */
   thinkingTokens: number | null;
 }
 

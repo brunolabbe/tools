@@ -113,15 +113,15 @@ model seam rather than into anything pl-40 owns.
 
 | Done when                                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ModelUsage.thinkingTokens` exists, documented the way its siblings are, `null` when a provider does not report it                | exists and documented at `tools/planner/agent/src/provider.ts:95 "thinkingTokens: number"` and `tools/planner/agent/src/provider.ts:73 "is a subset of"` (what that doc claims: med 2); `null` when unreported at `tools/planner/agent/test/scripted-provider.test.ts:48 "thinkingTokens: null,"` ✓                                                                                                           |
+| `ModelUsage.thinkingTokens` exists, documented the way its siblings are, `null` when a provider does not report it                | exists and documented at `tools/planner/agent/src/provider.ts:101 "thinkingTokens: number"` and `tools/planner/agent/src/provider.ts:73 "is a subset of"` (what that doc claims: med 2); `null` when unreported at `tools/planner/agent/test/scripted-provider.test.ts:48 "thinkingTokens: null,"` ✓                                                                                                          |
 | Anthropic fixture tests cover `output_tokens_details` present and `null`, each asserting `thinkingTokens`                         | present: `tools/planner/agent/test/anthropic-provider.test.ts:266 "thinkingTokens: 1_390"` ✓ · null: exercised as an absent key only, `tools/planner/agent/test/anthropic-provider.test.ts:242-244 "fixture carries no"` ✓ (low 5)                                                                                                                                                                            |
 | `ScriptedProvider` usage stays `null` throughout, pinned by a test                                                                | `tools/planner/agent/test/scripted-provider.test.ts:41-49 "reports no usage rather than inventing token counts"` ✓                                                                                                                                                                                                                                                                                            |
-| `RunUsage` and `addReplyUsage` carry the field the same way the existing four do; `fan-out-usage.test.ts` gets a case             | `tools/planner/agent/test/fan-out-usage.test.ts:73 "thinkingTokens: ordinary * 20 + 1"` and `tools/planner/agent/test/fan-out-usage.test.ts:134 "landed * (ORDINARY.thinkingTokens"` ✓ — two type-valid mutations of `tools/planner/agent/src/orchestrator.ts:218 "thinkingTokens: add(total.thinkingTokens"` each turn tests red; a run that mixes a `null` reply with a counted one is not asserted (med 3) |
+| `RunUsage` and `addReplyUsage` carry the field the same way the existing four do; `fan-out-usage.test.ts` gets a case             | `tools/planner/agent/test/fan-out-usage.test.ts:80 "thinkingTokens: ordinary * 20 + 1"` and `tools/planner/agent/test/fan-out-usage.test.ts:141 "landed * (ORDINARY.thinkingTokens"` ✓ — two type-valid mutations of `tools/planner/agent/src/orchestrator.ts:226 "thinkingTokens: add(total.thinkingTokens"` each turn tests red; a run that mixes a `null` reply with a counted one is not asserted (med 3) |
 | The pl-40 harness, re-run under scripted, writes the new key (`null`) into every attempt with no other change to its output shape | **verified** — ran `api/test/live/run.ts` under `MODEL_PROVIDER=scripted` at `fb15bc9` and at the tip: 25 files each, and a key-path diff adds `.specialists[].attempts[].usage.thinkingTokens` (all `null`) and the run-level `.usage.thinkingTokens`, which row 4 requires; nothing removed                                                                                                                 |
 | `npm run check` and `npm test -- --project planner` pass                                                                          | **verified** — `check` exit 0; planner 71 files / 1184 tests at the tip and 71 / 1184 at `fb15bc9` (the branch adds assertions, not tests); the test-file diff adds keys and comments and removes or rewords no assertion. CI will still go red: high 1                                                                                                                                                       |
 
 - **high** · CI `check` fails. `node scripts/citations-gate.mjs --against origin/main` exits 1 on `tools/planner/docs/work/pl-49-what-a-run-costs.md` with 7 moved citations: the lines this branch inserts in `anthropic-provider.test.ts` and `run-usage.test.ts` slide pl-49 merged anchors to 259, 295, 140, 158, 180 and 212 (twice). Re-point them in pl-49 record, as `c70dd8a` did for dl-51.
-- **med** · Two findings, one decision (below). Within one reply, `thinkingTokens` and `outputTokens` do not cover the same attempts, yet `ModelUsage` documents the first as how much of the second was thinking. `tools/planner/agent/src/providers/anthropic.ts:373 "outputTokens += attempt.output_tokens;"` sums every `iterations` entry, while `tools/planner/agent/src/providers/anthropic.ts:375 "output_tokens_details?.thinking_tokens ?? null"` reads only the top level. The SDK (0.125.0, `resources/beta/messages/messages.d.ts`) declares `output_tokens_details` as a breakdown of the top-level `output_tokens` (line 4291 to 4298), and says `thinking_tokens` is always no more than that `output_tokens` (line 3006 to 3007). What the top-level count covers when there are several iterations is **not stated in the SDK**: its only statement is that `compaction` entries are excluded (line 4279). The serving-attempt-only reading rests on the hand-written `fallbackServed` fixture `_note`, not on the types. **Unmeasured**, and no fixture has both a fallback and a breakdown.
+- **med** · Two findings, one decision (below). Within one reply, `thinkingTokens` and `outputTokens` do not cover the same attempts, yet `ModelUsage` documents the first as how much of the second was thinking. `tools/planner/agent/src/providers/anthropic.ts:374 "outputTokens += attempt.output_tokens;"` sums every `iterations` entry, while `tools/planner/agent/src/providers/anthropic.ts:376 "output_tokens_details?.thinking_tokens ?? null"` reads only the top level. The SDK (0.125.0, `resources/beta/messages/messages.d.ts`) declares `output_tokens_details` as a breakdown of the top-level `output_tokens` (line 4291 to 4298), and says `thinking_tokens` is always no more than that `output_tokens` (line 3006 to 3007). What the top-level count covers when there are several iterations is **not stated in the SDK**: its only statement is that `compaction` entries are excluded (line 4279). The serving-attempt-only reading rests on the hand-written `fallbackServed` fixture `_note`, not on the types. **Unmeasured**, and no fixture has both a fallback and a breakdown.
 - **med** · Second finding of that mechanism. `addReplyUsage` sums past `null`: one reply at `null` and one at `1390` gives `thinkingTokens: 1390, outputTokens: 1610`, the same result as a run whose only thinking was 1390, whichever order they arrive in. Two `null` replies give `null`. Unlike the pl-49 cache kinds, a `null` here is per reply within one provider (adaptive thinking), and whether the API sends `null` or a zero for a reply that did not think is unmeasured.
 - **low** · Two findings, one mechanism: stale SDK coordinates. pl-40 Log (`tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md:701-703 "naming the exact SDK type line"`) still calls that line `BetaUsage.output_tokens_details`, but it belongs to `BetaMessageDeltaUsage`; the `BetaUsage` field is at line 4298. The branch already edits pl-40 and did not correct it. The pl-50 Log cites `BetaOutputTokensDetails` as lines 2998 to 3007, stopping before the field at line 3009.
 - **low** · No fixture sets `output_tokens_details: null`, the value the SDK actually declares; the null clause is proven through an absent key. `?.` treats both alike, and the mutation `?? 0` turns 4 tests red, so the behaviour is pinned; the test is narrower than the line.
@@ -136,7 +136,7 @@ model seam rather than into anything pl-40 owns.
 | Gate-1 finding                                         | Settled by                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | high: pl-49 citations moved                            | re-pointed in pl-49 record; `node scripts/citations-gate.mjs --against origin/main` exit 0, 89 enforced, 0 failing ✓                                                                                                                                                                                                                                                          |
-| med: thinking and output scope differ within a reply   | closed as documentation: `tools/planner/agent/src/provider.ts:75 "Within a single reply that took several attempts"`, `tools/planner/agent/src/orchestrator.ts:166 "Not proven to cover the same attempts"` and `tools/planner/agent/src/providers/anthropic.ts:348 "not stated by the SDK"` now say what is not known; recorded as unmeasured in both pl-50 and pl-40 Logs ✓ |
+| med: thinking and output scope differ within a reply   | closed as documentation: `tools/planner/agent/src/provider.ts:75 "Within a single reply that took several attempts"`, `tools/planner/agent/src/orchestrator.ts:173 "not proven to cover the same attempts"` and `tools/planner/agent/src/providers/anthropic.ts:348 "not stated by the SDK"` now say what is not known; recorded as unmeasured in both pl-50 and pl-40 Logs ✓ |
 | med: null arithmetic reports a partial sum as complete | **open** — behaviour unchanged at `7f3aa55` on purpose; the remedy is an open decision with the orchestrator (document as a lower bound, null when coverage is incomplete, or carry a coverage count)                                                                                                                                                                         |
 | low: stale SDK coordinates                             | pl-50 Log now cites 2998 to 3010; `tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md:739 "The decision-D entry above cites the wrong line"` corrects the earlier entry without rewriting it ✓                                                                                                                                                                    |
 | low: no explicit-null fixture                          | `tools/planner/agent/test/anthropic-provider.test.ts:588 "expect(reply.usage.thinkingTokens).toBeNull();"`, a new test at the end of the file; the `?? 0` mutation now turns 5 of 33 red (was 4 of 32) ✓                                                                                                                                                                      |
@@ -364,3 +364,73 @@ committing** (`sed -n '<line>p' <file>` on all 17 anchored citations,
 one at a time) rather than trusted on the gate's word — all 17 matched
 exactly, so the section above is transcribed **unchanged** from what the
 gate sent. Nothing here differs from its text.
+
+### 2026-09-19 — med 3 remedy: owner's decision A applied
+
+The owner chose **A** of three options put by `AskUserQuestion` (the gate's
+own recommendation and the orchestrator's): keep `addReplyUsage` summing
+past a `null` the same way it always has, and document
+`RunUsage.thinkingTokens` as **a lower bound over the replies that reported
+a breakdown, never a guaranteed total** — over nulling the sum once coverage
+is known incomplete (B) or carrying a separate coverage count (C).
+
+**Code: unchanged.** `add()` and `addReplyUsage` in `agent/src/orchestrator.ts`
+are exactly what they were — decision A is a documentation decision, not an
+arithmetic one.
+
+**Documentation: every doc comment that mentions `thinkingTokens` now says
+"lower bound" in those words** — checked by re-reading each one after
+writing it, not assumed:
+
+- `ModelUsage`'s own doc comment (`agent/src/provider.ts`) and its
+  `thinkingTokens` field comment.
+- `RunUsage`'s `thinkingTokens` field comment (`agent/src/orchestrator.ts`),
+  which states the decision, the date, the two rejected options, and the
+  exact mixed-run example (`null` then `1390` reads `1390`).
+- `usageOf`'s doc comment (`agent/src/providers/anthropic.ts`), for the
+  per-reply (not cross-reply) reason `thinkingTokens` can already undercount
+  before it ever reaches `addReplyUsage`.
+
+**Test: a new describe block in `agent/test/fan-out-usage.test.ts`**, calling
+`addReplyUsage`/`emptyRunUsage` directly rather than through a full
+`runFanOut` — a real fan-out bills every unscripted specialist too (each
+contributing `helpers.ts`'s own `thinkingTokens: 20`), which would make an
+exact expected total depend on the roster rather than on this decision. Four
+cases: `null` then `1390` reads `1390`; the reverse order reads the same;
+that result is indistinguishable from a run whose only reply thought 1390
+(the coverage gap decision A accepts); and two `null` replies stay `null`.
+
+**Verified red under both shapes of wrong fix**, not merely that the tests
+pass: temporarily mutated `add()` to null-poison (`sum === null || value ===
+null ? null : sum + value`) — the two mixed-order tests failed as expected
+(`expected 1390, received null`); separately mutated it to zero-fill
+(`(sum ?? 0) + (value ?? 0)`) — the two null-preserving tests failed as
+expected (`expected null, received 0`, matching the reviewer's own vocabulary
+for these two mutations). Restored the real `add()` after each and reran
+clean (9/9).
+
+**Citations repaired.** Adding `addReplyUsage`/`emptyRunUsage` to this
+file's import line, and rewriting the `RunUsage.thinkingTokens` doc comment,
+moved 7 of this ticket's own already-committed `## Review` citations
+(`provider.ts` 95→101, `fan-out-usage.test.ts` 73→80 and 134→141,
+`orchestrator.ts` 218→226, `anthropic.ts` 373→374 and 375→376) and made one
+exact-text anchor (`orchestrator.ts:166 "Not proven to cover the same
+attempts"`) unresolvable outright, since the sentence it quoted no longer
+exists verbatim. Re-pointed all seven — the last one to
+`orchestrator.ts:173 "not proven to cover the same attempts"` (lowercase,
+matching the rewritten sentence's own wording) — rather than leaving the
+gate's own record broken. `node scripts/citations.mjs
+tools/planner/docs/work/pl-50-thinking-tokens-are-billed-and-not-counted.md
+--section Review --require-anchors --require-distinct-anchors`: 17 verified,
+0 moved, exit 0, both before this repair was needed (checked, then broken by
+this round's own edits) and after.
+
+**Filed pl-52** (reserved id, not re-allocated) for the symmetrical
+`thinking_tokens` DB column this ticket's Log already flagged as a fold-in
+not taken — `depends_on: [pl-40]`, stating plainly that the column would
+hold a lower bound whose coverage is unrecorded. Not built here, per the
+orchestrator's instruction.
+
+Verified: `npm run check` — exit 0; `node scripts/citations-gate.mjs
+--against origin/main` — 90 enforced, 0 failing; `npm test -- --project
+planner` — 71 files, 1189 tests (was 1185 at gate 2), all passing.

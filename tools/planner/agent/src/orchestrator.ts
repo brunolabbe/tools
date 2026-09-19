@@ -163,10 +163,18 @@ export interface RunUsage {
   outputTokens: number | null;
   /**
    * How much of `outputTokens` was internal reasoning, where some reply said
-   * (pl-50). **Not proven to cover the same attempts `outputTokens` does**
-   * within a reply that took a refusal fallback — see `ModelUsage`'s own doc
-   * comment. Unmeasured until pl-40's funded run captures a real reply that
-   * both thought and fell back.
+   * (pl-50). **A lower bound over the replies that reported a breakdown, not
+   * a guaranteed total for the run** — decided by the owner (2026-09-19,
+   * option A of three put to them) over nulling the sum once coverage is
+   * incomplete, or carrying a separate coverage count. `addReplyUsage` sums
+   * past a `null` the same way it always has, so a run with one reply that
+   * reported no breakdown and one that reported 1390 reads `1390`, identical
+   * to a run whose only thinking was 1390 — the two are not told apart. It is
+   * **also** not proven to cover the same attempts `outputTokens` does within
+   * any one reply that took a refusal fallback — see `ModelUsage`'s own doc
+   * comment for that, separate layer. Both gaps are unmeasured until pl-40's
+   * funded run reports how often a mixed-null run or a multi-attempt,
+   * thinking-enabled reply actually occurs.
    */
   thinkingTokens: number | null;
   /**

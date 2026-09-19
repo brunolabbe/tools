@@ -10,7 +10,14 @@
 import { describe, expect, test } from "vitest";
 import { AppError } from "@planner/contract";
 import { loadFixture } from "../../contract/test/fixtures.ts";
-import { DEFAULT_RUN_BUDGET, readMarkers, runFanOut, ScriptedProvider } from "../src/index.ts";
+import {
+  addReplyUsage,
+  DEFAULT_RUN_BUDGET,
+  emptyRunUsage,
+  readMarkers,
+  runFanOut,
+  ScriptedProvider,
+} from "../src/index.ts";
 import type { ModelProvider, ModelUsage, RunUsage } from "../src/index.ts";
 import { candidates, capacityOf, content, FakeProvider } from "./helpers.ts";
 
@@ -170,5 +177,73 @@ describe("what a fan-out spent", () => {
       thinkingTokens: null,
       fallbackCalls: 0,
     });
+  });
+});
+
+// A minimal `ModelUsage`/`ModelReply` for the mixed-run describe below —
+// module scope, not a closure, since neither captures anything from a test.
+function mixedRunUsage(thinkingTokens: number | null, outputTokens: number): ModelUsage {
+  return {
+    inputTokens: 1,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    outputTokens,
+    thinkingTokens,
+  };
+}
+function mixedRunReply(thinkingTokens: number | null, outputTokens: number) {
+  return {
+    content: "",
+    stopReason: "end" as const,
+    usage: mixedRunUsage(thinkingTokens, outputTokens),
+  };
+}
+
+describe("thinkingTokens across a mixed run (pl-50, med 3, owner's decision A, 2026-09-19)", () => {
+  // Decided by the owner over nulling the sum once coverage is incomplete, or
+  // carrying a separate coverage count: `addReplyUsage` keeps summing past a
+  // `null`, so this total is a lower bound over the replies that reported a
+  // breakdown, never a guaranteed total for the run — see `RunUsage`'s own
+  // doc comment. Exercised directly against `addReplyUsage`/`emptyRunUsage`,
+  // the same functions the gate's own repro called, rather than through a
+  // full fan-out — a real fan-out bills every unscripted specialist too,
+  // which would make "exactly 1390" depend on the roster instead of on this
+  // decision.
+  const reply = mixedRunReply;
+
+  test("a reply with no breakdown followed by one that reported 1390 sums to 1390, not null", () => {
+    let total = emptyRunUsage();
+    total = addReplyUsage(total, reply(null, 210), "m");
+    total = addReplyUsage(total, reply(1_390, 1_400), "m");
+
+    expect(total.thinkingTokens).toBe(1_390);
+    expect(total.outputTokens).toBe(1_610);
+  });
+
+  test("the same two replies in the opposite order sum the same way", () => {
+    let total = emptyRunUsage();
+    total = addReplyUsage(total, reply(1_390, 1_400), "m");
+    total = addReplyUsage(total, reply(null, 210), "m");
+
+    expect(total.thinkingTokens).toBe(1_390);
+  });
+
+  test("indistinguishable from a run whose only reply thought 1390 — the coverage gap this is a lower bound for", () => {
+    let mixed = emptyRunUsage();
+    mixed = addReplyUsage(mixed, reply(null, 210), "m");
+    mixed = addReplyUsage(mixed, reply(1_390, 1_400), "m");
+
+    let singleReply = emptyRunUsage();
+    singleReply = addReplyUsage(singleReply, reply(1_390, 1_400), "m");
+
+    expect(mixed.thinkingTokens).toBe(singleReply.thinkingTokens);
+  });
+
+  test("two replies that both report no breakdown stay null", () => {
+    let total = emptyRunUsage();
+    total = addReplyUsage(total, reply(null, 210), "m");
+    total = addReplyUsage(total, reply(null, 1_400), "m");
+
+    expect(total.thinkingTokens).toBeNull();
   });
 });
