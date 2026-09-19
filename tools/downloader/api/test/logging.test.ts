@@ -9,7 +9,7 @@
  * fails minutes later on a queue worker, so that line is asserted directly.
  */
 
-import { REDACTED, ROUTES } from "@downloader/contract";
+import { AppError, REDACTED, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, RequestContext } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
@@ -711,5 +711,316 @@ describe("redactLoggedUrl", () => {
   test("a path that merely looks like the route is not treated as one", () => {
     // `startsWith` on a prefix ending in `/` cannot match `/api/filesomething`.
     expect(redactLoggedUrl("/api/filesomething")).toBe("/api/filesomething");
+  });
+});
+
+/**
+ * dl-58. A failed probe's `AppError` routinely carries the page URL, query
+ * string included, as `details.url` — `resolvers/src/registry.ts`'s
+ * `NO_MEDIA_FOUND` and `resolvers/src/resolvers/ytdlp.ts`'s
+ * `classifyFailure` both set it unredacted — and the error handler in
+ * `server.ts` copies `details` into its log line as-is, on both branches: a
+ * 4xx logs "request rejected" at `info`, a 5xx logs "request failed" at
+ * `error`. A signed page URL is as sensitive as a cookie, per the root
+ * `CLAUDE.md`, so that credential must never reach either line.
+ */
+describe("a failed probe never logs the page URL's credentials", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  /**
+   * Both cases use a terminal code, not `NO_MEDIA_FOUND` — that one is a
+   * fall-through, so with the real direct tier also registered (required for
+   * the app to boot at all, see `assertUsable`) the chain would move on to it
+   * and reach real DNS; `probe-outcomes.test.ts` documents the same
+   * constraint. Registry-level chain exhaustion is covered with no real tier
+   * involved in `resolvers/test/registry.test.ts`.
+   */
+  test("a 5xx: the error handler's 'request failed' line", async () => {
+    // `ytdlp.ts`'s `classifyFailure` throws exactly this shape for
+    // `TLS_VERIFICATION_FAILED` — `details: { url: url.href, ... }`,
+    // unredacted — which is one of the sweep's sites; this stub reproduces it
+    // without a real subprocess.
+    const raw: string[] = [];
+    const signedUrl = "https://cdn.example/watch?v=1&sig=SECRET123";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(async () => {
+        throw new AppError("TLS_VERIFICATION_FAILED", undefined, {
+          details: { url: signedUrl },
+        });
+      }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(502);
+
+    // Not one line, anywhere, at any level.
+    expect(raw.filter((line) => line.includes("SECRET123"))).toEqual([]);
+
+    // And the line is genuinely there, with the site that failed still
+    // legible — this is redaction, not deletion.
+    const failed = raw.filter((line) => line.includes('"msg":"request failed"'));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toContain("cdn.example");
+    expect(failed[0]).toContain("/watch");
+  });
+
+  test("a 4xx: the error handler's 'request rejected' line — the ticket's own reproduction", async () => {
+    // The exact shape the ticket reproduced against `createLogger` directly:
+    // `NO_MEDIA_FOUND`, 422, `details: { url, attempts }`. Reproduced here
+    // through the real Fastify server, closing the gap the ticket's own
+    // reproduction left open ("that run exercised the logger, not a request
+    // through Fastify").
+    const raw: string[] = [];
+    const signedUrl = "https://cdn.example/watch?v=1&sig=SECRET123";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(async () => {
+        throw new AppError("AUTH_REQUIRED", undefined, {
+          details: { url: signedUrl },
+        });
+      }),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(422);
+
+    expect(raw.filter((line) => line.includes("SECRET123"))).toEqual([]);
+    const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toContain("cdn.example");
+    expect(rejected[0]).toContain("/watch");
+  });
+});
+
+/**
+ * dl-58, at the unit level rather than through the whole server — the
+ * mechanism itself (`redactUrlsDeep`, inside `safeFields`), not just one
+ * caller of it exercised above.
+ *
+ * Widened once already (owner decision D1, after the first gate on this
+ * ticket): the original version only walked `details`, and the gate found
+ * two more leaks it missed — `egress-proxy.ts`'s top-level `host` field
+ * (`egress-proxy.test.ts`'s own dl-58 describe block covers that one through
+ * the real proxy), and a URL embedded *inside* a longer string rather than
+ * being the whole of it (H2 below). The mechanism now walks every string
+ * value in the whole `fields` object, however deeply nested, via
+ * `redactUrlsInText` — the same matcher `engine/src/ffmpeg/runner.ts` already
+ * used for ffmpeg's stderr — so `host`, `details.<key>` at any depth, and a
+ * `Referer` inside `requestContext.headers` (see the describe block below)
+ * are one mechanism, not three.
+ */
+describe("safeFields redacts a URL wherever it appears in a log line", () => {
+  test("a query string inside details.<key> is redacted; the site stays legible", () => {
+    const { logger, lines } = capturing();
+    logger.warn("refused a subprocess fetch", {
+      host: "cdn.example",
+      code: "BLOCKED_TARGET",
+      details: {
+        url: "https://cdn.example/watch?v=1&sig=SECRET123",
+        manifestUrl: "https://cdn.example/m.m3u8?sig=OTHER-SECRET",
+      },
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET123");
+    expect(serialised).not.toContain("OTHER-SECRET");
+    // Redaction, not deletion: the site is still legible.
+    expect(serialised).toContain("cdn.example");
+    expect(serialised).toContain("/watch");
+    expect(serialised).toContain("/m.m3u8");
+  });
+
+  test("a relative path in details is left alone — it is not a credential", () => {
+    const { logger, lines } = capturing();
+    logger.info("probed", { details: { path: "/api/probe", note: "not a url at all" } });
+
+    expect(lines[0]?.["details"]).toEqual({ path: "/api/probe", note: "not a url at all" });
+  });
+
+  test("non-URL details are untouched: numbers, arrays, nested objects", () => {
+    const { logger, lines } = capturing();
+    const details = {
+      attempts: [{ resolver: "stub", code: "NO_MEDIA_FOUND", durationMs: 12 }],
+      retryAfterSec: 10,
+    };
+    logger.info("probed", { details });
+
+    expect(lines[0]?.["details"]).toEqual(details);
+  });
+
+  /**
+   * H1 at the unit level (the end-to-end proof, through a real
+   * `startEgressProxy`, is `egress-proxy.test.ts`'s own dl-58 block). A
+   * top-level field named anything is covered, not only `details`.
+   */
+  test("a query string in a top-level field outside details is redacted too", () => {
+    const { logger, lines } = capturing();
+    logger.warn("refused a subprocess fetch", {
+      host: "http://blocked.test/seg.ts?sig=SECRET_BLOCKED",
+      code: "BLOCKED_TARGET",
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET_BLOCKED");
+    expect(serialised).toContain("blocked.test");
+    expect(serialised).toContain("/seg.ts");
+  });
+
+  /**
+   * H2. `ytdlp.ts`'s `classifyFailure` puts raw yt-dlp stderr in
+   * `details.stderr`, and yt-dlp echoes the failing URL mid-sentence —
+   * `ERROR: Unsupported URL: <url>` — not as the whole value of the field.
+   * The pre-D1 mechanism parsed a value whole as a URL and left an embedded
+   * one untouched; `redactUrlsInText`'s substring match does not have that
+   * gap, which is the property this pins.
+   */
+  test("a URL embedded mid-sentence in a details field is redacted, not just a whole-string one", () => {
+    const { logger, lines } = capturing();
+    logger.info("request rejected", {
+      method: "POST",
+      url: "/api/probe",
+      code: "DRM_PROTECTED",
+      status: 422,
+      details: {
+        url: "http://127.0.0.1:18081/drm/watch?v=1&sig=SECRET123",
+        exitCode: 1,
+        stderr: "ERROR: Unsupported URL: http://127.0.0.1:18081/drm/watch?v=1&sig=SECRET123\n",
+      },
+    });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SECRET123");
+    expect(serialised).toContain("127.0.0.1");
+    expect(serialised).toContain("/drm/watch");
+    expect(serialised).toContain("Unsupported URL");
+  });
+});
+
+/**
+ * H3. `resolvers/src/browser/request-context.ts:65`'s `??= input.pageUrl`
+ * fills `Referer` with the full page URL when a probe's capture had none, and
+ * — measured directly with a real headless Chromium via Playwright, logged in
+ * this ticket's Log rather than only asserted here — that is not the only
+ * source: Chromium's own captured `Referer`, in the ordinary case where the
+ * capture is *not* empty, carries the same full URL for a same-origin fetch
+ * under its default referrer policy. Both sources produce the identical
+ * `requestContext.headers.Referer` shape asserted below, so one test at the
+ * logger boundary covers both without a real browser in this suite —
+ * `redactRequestContext` deliberately leaves `Referer` un-redacted (needed
+ * for replay), so `probe.ts`'s `probe complete` line is what has to catch it,
+ * via the same `redactUrlsDeep` pass H1 and H2 use.
+ */
+describe("the success-path Referer never reaches 'probe complete' with its query string (dl-58, H3)", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  test("a Referer carrying the full signed page URL is redacted, host and path kept", async () => {
+    const raw: string[] = [];
+    const signedUrl = "https://referer.example/watch?v=1&sig=SECRET_REFERER";
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(
+        probeResult({ requestContext: { headers: { Referer: signedUrl } } }),
+      ),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: signedUrl },
+    });
+    expect(response.statusCode).toBe(200);
+
+    expect(raw.filter((line) => line.includes("SECRET_REFERER"))).toEqual([]);
+    const complete = raw.filter((line) => line.includes('"msg":"probe complete"'));
+    expect(complete).toHaveLength(1);
+    // Redaction, not deletion: the site is still legible.
+    expect(complete[0]).toContain("referer.example");
+    expect(complete[0]).toContain("/watch");
+  });
+});
+
+/**
+ * dl-58, gate 2, M1. `redactUrlsDeep`'s first cut tracked every object ever
+ * visited anywhere in the line, not only the current chain — so a *second*
+ * reference to a shared, non-cyclic object read as "already handled" and was
+ * written raw. No live call site logs one object twice, which is exactly why
+ * this belongs in the net rather than in a real reproduction: the shape is
+ * legitimate (a caller building `{ a: probe, b: probe }` is not a bug) and
+ * nothing here should depend on nobody ever writing it.
+ */
+describe("safeFields redacts every reference to a shared object, not only the first", () => {
+  test("two fields pointing at the same object are both redacted", () => {
+    const { logger, lines } = capturing();
+    const shared = { url: "https://h.example/p?sig=SHARED" };
+    logger.info("dag", { a: shared, b: shared });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SHARED");
+    expect(serialised).toContain("h.example");
+    expect(serialised).toContain("/p");
+  });
+
+  test("a shared object reached through details and through an array is redacted both times", () => {
+    const { logger, lines } = capturing();
+    const shared = { url: "https://h.example/p?sig=SHARED" };
+    logger.info("dag2", { details: shared, again: [shared] });
+
+    const serialised = JSON.stringify(lines[0]);
+    expect(serialised).not.toContain("SHARED");
+  });
+
+  /**
+   * dl-58, gate 3, M3. The first version of this test only asserted the line
+   * survived, which passed even while the cycle's own fields leaked — pino's
+   * `"[Circular]"` marker appears one level *past* the object that closes the
+   * loop, not at it, so the object's own `url` was serialised verbatim before
+   * pino ever saw the back edge. This asserts the secret is gone, not just
+   * that something was written.
+   */
+  test("a genuine cycle does not hang, and its own fields are not leaked at the back edge", () => {
+    const { logger, lines } = capturing();
+    const cyclic: Record<string, unknown> = {};
+    cyclic["self"] = cyclic;
+    cyclic["url"] = "https://h.example/p?sig=CYCLE";
+
+    logger.info("cyclic", { cyclic });
+
+    expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines[0])).not.toContain("CYCLE");
+    // Redaction, not deletion: pins that the line still has content, so this
+    // is not passing because the whole field was dropped.
+    expect(JSON.stringify(lines[0])).toContain("h.example");
+  });
+
+  test("a two-object cycle (parent references child references parent) does not leak either object's URL", () => {
+    const { logger, lines } = capturing();
+    const parent: Record<string, unknown> = { url: "https://h.example/p?sig=PARENT" };
+    const child: Record<string, unknown> = { parent };
+    parent["child"] = child;
+
+    logger.info("parentchild", { details: parent });
+
+    expect(lines).toHaveLength(1);
+    expect(JSON.stringify(lines[0])).not.toContain("PARENT");
+    expect(JSON.stringify(lines[0])).toContain("h.example");
   });
 });

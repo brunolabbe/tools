@@ -166,7 +166,7 @@ layer that nothing pins.
    failure mode is "an operator is not told something they typed themselves".
    Recorded here so the next person decides on the evidence rather than assuming
    it was missed.
-4. **The classifier's `&&` is untested** (`engine/src/ffmpeg/runner.ts:104 "CERTIFICATE_MENTIONED.test(stderr) && VERIFICATION_FAILED.test(stderr)"`):
+4. **The classifier's `&&` is untested** (`engine/src/ffmpeg/runner.ts@20c8fd1:104 "CERTIFICATE_MENTIONED.test(stderr) && VERIFICATION_FAILED.test(stderr)"` — pinned 2026-09-18 by dl-58, whose own fix to this file moved this line; `20c8fd1` is the `main` commit immediately before that fix landed):
    changing it to `||` keeps all tests green, so the "two halves, not a sentence
    list" design is unprotected — a `||` would classify any stderr containing the
    word "verify" as a certificate failure. — **Not fixed.** `api/test/proxied-https.test.ts:503 "the stderr classifier reads ffmpeg's real words"` tests the
