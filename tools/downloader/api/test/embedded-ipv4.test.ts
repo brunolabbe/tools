@@ -220,9 +220,9 @@ describe("isBlockedAddress judges the embedded IPv4 address, in every spelling",
   });
 
   test("the neighbours of those ranges are not caught by them", () => {
-    // 2001:1::/32 is not Teredo, 2003::/16 is not 6to4, 64:ff9b:2::/48 is not
-    // the local-use prefix: a public address in each stays allowed.
-    for (const address of ["2001:1::1", "2003::1", "2001:4860:4860::8888", "64:ff9b::808:808"]) {
+    // 2001:200::/23 is past Teredo (dl-63 took all of 2001::/23), 2003::/16 is
+    // not 6to4, 64:ff9b::/96 is not local-use: a public address in each stays.
+    for (const address of ["2001:200::1", "2003::1", "2001:4860:4860::8888", "64:ff9b::808:808"]) {
       expect(isBlockedAddress(address), address).toBe(false);
     }
   });
