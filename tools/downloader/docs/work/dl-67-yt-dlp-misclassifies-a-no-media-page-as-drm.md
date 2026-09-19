@@ -176,6 +176,57 @@ redacted form", not because of a measured need. Removed from
   marker is genuinely in yt-dlp's own diagnosis, not just in the echoed URL).
 - `npm run check` and `npm test -- --project downloader` are green.
 
+## Review
+
+### Gate 4 (final) — d68dc6c
+
+**Gate: PASS** — 2026-09-19 · `origin/main...d68dc6c` (base `fb15bc9`) · defect hunt run by the reviewer itself at medium · reviewer: Opus (builder: Sonnet)
+
+| Done when                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test reproduces this with the real spawn path and fails on `origin/main`                                 | `tools/downloader/resolvers/test/ytdlp.test.ts:1061 "does not classify as DRM_PROTECTED on origin/main"` ✓ — with `origin/main`'s `ytdlp.ts` copied over the tip's: 3 failed, 62 passed (65). The three are this test, `tools/downloader/resolvers/test/ytdlp.test.ts:1080 "masks the encoding variant real yt-dlp actually produces"`, and `tools/downloader/resolvers/test/ytdlp.test.ts:1100 "an echo path that does not normalise"`                                                                                                                                                                                                                                                           |
+| The fix passes without breaking existing marker coverage (certificate, auth, age-gate, geo, bot-challenge) | proven for the classes `classifyFailure` has: `tools/downloader/resolvers/test/ytdlp.test.ts:314 "a DRM-protected source stops the chain"`, `tools/downloader/resolvers/test/ytdlp.test.ts:326 "a login wall is AUTH_REQUIRED"`, `tools/downloader/resolvers/test/ytdlp.test.ts:332 "a region block is GEO_BLOCKED"`, `tools/downloader/resolvers/test/ytdlp.test.ts:343 "is TLS_VERIFICATION_FAILED, not the NO_MEDIA_FOUND default"`. A genuine marker next to the echoed URL: `tools/downloader/resolvers/test/ytdlp.test.ts:1071 "a genuine diagnosis elsewhere in stderr still wins"` ✓. Age-gate and bot-challenge are not yt-dlp classifications; the Log records that the brief was wrong |
+| `npm run check` and `npm test -- --project downloader` green                                               | **verified** at `d68dc6c`: `npm run check` exit 0; downloader project 86 files, 1462/1462; `ytdlp.test.ts` 65 at the tip against 60 at base; `node scripts/citations-gate.mjs` 0 failing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+- **Mechanism.** `maskRequestUrl` strips two forms of the URL: `href` and `decodeUnreservedEscapes(href)` (`tools/downloader/resolvers/src/resolvers/ytdlp.ts:954 "new Set<string>([href, decodeUnreservedEscapes(href)])"`). It rejoins what is left with a space (`tools/downloader/resolvers/src/resolvers/ytdlp.ts:958 "split(candidate).join"`). `redactUrl` is gone from the mask and from the imports. yt-dlp receives `url.href` on argv (`tools/downloader/resolvers/src/resolvers/ytdlp.ts:255 "args.push(url.href);"`).
+- **Mutations, one at a time, on `ytdlp.test.ts`**, run at `638dd67`. Between `638dd67` and `d68dc6c`, `ytdlp.ts` changed only in a docblock:
+  - drop `href` → 64/65, killed by the non-normalising-echo test;
+  - drop `decodeUnreservedEscapes` → 64/65, killed by the encoding-variant test;
+  - `join(" ")` back to `join("")` → 64/65, killed by `tools/downloader/resolvers/test/ytdlp.test.ts:1123 "does not fuse the text on either side"`.
+    Every remaining form is load-bearing.
+- **Live check.** Real `/usr/local/bin/yt-dlp` 2025.09.26 through the resolver built at `638dd67`, against a loopback no-media page. All six URLs give `NO_MEDIA_FOUND`:
+  - the ticket's own `…/drm/watch?v=1&sig=SECRET123`;
+  - `…/d%72m/watch?v=1&q=a%2Fb%20c`;
+  - `…/%41%7e%2d%5f%2e/%c3%a9/%2f%3F%20/x?a=%64rm&b=%2F`;
+  - `…/%64%52%4d/x`;
+  - `…/drm/%E2%9C%93?x=%7E`;
+  - `…/drm/watch?v=1&pad=%41&sig=SECRET123`.
+- **Record.** Build carries three decision blocks, and each names the question, the options, the choice, the owner, 2026-09-19 and its provenance:
+  - mask the URL;
+  - model the measured decode;
+  - drop `redactUrl`.
+    The Log says the measured-decode fix was built before the owner answered, and it records both later owner answers. All four record findings from gate 2 are repaired.
+- **med, resolved** · At `638dd67`, `node scripts/citations-gate.mjs` exited 1. dl-58's merged record cited `tools/downloader/resolvers/src/resolvers/ytdlp.ts@fb15bc9:906 "stderr: stderr.slice(-500)"`, and this branch had moved that line. In `d68dc6c` the builder repointed that one coordinate to the line's new position and changed nothing else in dl-58's record. The claim still holds at the new line: `tools/downloader/resolvers/src/resolvers/ytdlp.ts:983 "exitCode: code, stderr: stderr.slice(-500)"`. The gate now reports 0 failing.
+- **low, resolved** · At `638dd67`, the `maskRequestUrl` docblock called the committed option-(1) wording "an earlier draft". It was reworded in `d68dc6c`.
+- **low, resolved** · At `638dd67`, the dropped `redactUrl` form was listed as a known gap, in the docblock and in Build. It no longer is.
+- **low, resolved** · At `638dd67`, the Log's last entry deferred its check and suite numbers. It now states them.
+- **dropped** · `details.stderr` still carries the unredacted echoed URL. This predates the branch and is outside its range; it belongs to dl-58's area and is not verified here.
+- **dropped** · Over-masking was probed in gate 1 with throwaway binaries and found clean. The mask is string `split`/`join`, not a RegExp, so URL metacharacters are inert, and a genuine DRM line beside a `/drm-free/` echo still classifies `DRM_PROTECTED`. The code path is unchanged since.
+- **findings** · This gate's own hunt returned 6: 4 carried, all repaired in `d68dc6c` and re-checked there, and 2 dropped.
+- NFR: security ✓ (no new logging or spawn surface) · performance n/a (two `split`s over stderr) · reliability ✓ · maintainability ✓
+
+### Gates 1–3 — history
+
+- **Gate 1, `1d4e38c`: CONCERNS.**
+  - **med:** `decodeURI` did not model yt-dlp's echo. Measured, yt-dlp decodes only unreserved-character escapes. The test proving `decodeURI` was circular, and the fixture comment claimed a measurement that did not exist. This went to the orchestrator as an open decision; the owner chose to model the measured decode.
+  - **lows:** three dead forms (`redactUrl`, `encodeURI`, the trailing-slash toggle); `join("")` fusing the text around the URL into a marker; Done-when naming classifications that do not exist; the Log miscounting fixture modes.
+  - **findings:** 7 returned, 5 carried, 2 dropped.
+- **Gate 2, `645c23b`: CONCERNS.** The code was fixed: live and mutation checks were clean.
+  - **med:** the Log said the builder had settled the encoding decision.
+  - **lows:** the exact-href test comment described an echo that the measured binary does not produce; the red count read 2, where 3 was measured; an earlier Log entry understated the five forms `1d4e38c` shipped.
+  - **findings:** 4 returned, 4 carried, 0 dropped.
+- **Gate 3, `8231684`:** a record-only commit. All four gate-2 findings were confirmed repaired, and `npm run check` and the downloader project were green. The `redactUrl` question was still with the owner, so no verdict was issued.
+
 ## Log
 
 - 2026-09-17 — Filed on the owner's instruction, alongside
