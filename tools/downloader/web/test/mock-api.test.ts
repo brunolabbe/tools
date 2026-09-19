@@ -341,7 +341,13 @@ describe("scenario coverage", () => {
     // route the mock has no way to serve — its scenarios carry an inline
     // `data:` URI instead. A miss there reaches `Preview`'s `onError`, never
     // this transport. `api/test/routes.test.ts` is where the code is proven.
-    const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND", "THUMBNAIL_NOT_FOUND"];
+    //
+    // `BAD_REQUEST` (dl-66) joins them for the same shape of reason: it is
+    // raised by Fastify's own content-type parser before any route handler
+    // runs, on a body it could not parse at all. The mock client calls plain
+    // functions with already-typed arguments — there is no wire body for it to
+    // fail to parse. `api/test/routes.test.ts` proves this one too.
+    const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND", "THUMBNAIL_NOT_FOUND", "BAD_REQUEST"];
     for (const code of notReachableInTheMock) fromScenarios.add(code);
 
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));
