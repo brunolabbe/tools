@@ -34,7 +34,7 @@ export type { OrchestratorOptions } from "./jobs/orchestrator.ts";
 export { JobOrchestrator } from "./jobs/orchestrator.ts";
 export type { ProbeCacheOptions } from "./jobs/probe-cache.ts";
 export { ProbeCache } from "./jobs/probe-cache.ts";
-export type { InProcessQueueOptions, JobQueue, QueuedTask } from "./jobs/queue.ts";
+export type { CancelOutcome, InProcessQueueOptions, JobQueue, QueuedTask } from "./jobs/queue.ts";
 export { InProcessJobQueue } from "./jobs/queue.ts";
 export { createFileToken, isWellFormedToken, TOKEN_BYTES, tokensMatch } from "./jobs/tokens.ts";
 export type { VariantChoice } from "./jobs/variant-selection.ts";
