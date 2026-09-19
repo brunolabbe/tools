@@ -95,6 +95,25 @@ async function leastLoadedDayIndex(page: Page, exclude: number): Promise<number>
   return best;
 }
 
+/**
+ * The item is on `dayIndex`, and on no other day.
+ *
+ * Presence on the destination alone cannot tell a move from a copy — a bug
+ * that left the item on its old day too would still pass a bare
+ * `toBeVisible()` there. Every day is checked, not only the source, because a
+ * duplicate landing on a third day is exactly as wrong as one left behind.
+ */
+async function expectItemOnlyOnDay(page: Page, title: string, dayIndex: number): Promise<void> {
+  const days = dayArticles(page);
+  const count = await days.count();
+  await Promise.all(
+    Array.from({ length: count }, (_unused, index) => {
+      const heading = days.nth(index).getByRole("heading", { name: title });
+      return index === dayIndex ? expect(heading).toBeVisible() : expect(heading).toHaveCount(0);
+    }),
+  );
+}
+
 test("re-plan, move, reload, restore, reload — the plan keeps every version", async ({ page }) => {
   const title = await draftAPlan(page);
   const plan = page.locator("section.panel.plan");
@@ -134,9 +153,7 @@ test("re-plan, move, reload, restore, reload — the plan keeps every version", 
   await item.getByRole("button", { name: "Move here" }).click();
 
   await expect(plan.locator("p.crumb")).toContainText("Version 3 of 3");
-  await expect(
-    dayArticles(page).nth(toDayIndex).getByRole("heading", { name: moved }),
-  ).toBeVisible();
+  await expectItemOnlyOnDay(page, moved, toDayIndex);
 
   const diff = plan.locator("section.diff");
   await expect(diff.getByRole("heading", { level: 4, name: "Moved" })).toBeVisible();
@@ -149,9 +166,7 @@ test("re-plan, move, reload, restore, reload — the plan keeps every version", 
   await reopenFromTheList(page, title);
 
   await expect(plan.locator("p.crumb")).toContainText("Version 3 of 3");
-  await expect(
-    dayArticles(page).nth(toDayIndex).getByRole("heading", { name: moved }),
-  ).toBeVisible();
+  await expectItemOnlyOnDay(page, moved, toDayIndex);
   await expect(
     plan.locator("section.diff").getByRole("heading", { level: 4, name: "Moved" }),
   ).toBeVisible();
@@ -163,15 +178,21 @@ test("re-plan, move, reload, restore, reload — the plan keeps every version", 
   await plan.getByRole("button", { name: "Restore this version" }).click();
 
   await expect(plan.locator("p.crumb")).toContainText("Version 4 of 4");
+  await expectItemOnlyOnDay(page, moved, fromDayIndex);
+  // The restore's own revision has a diff too — it undoes the move, so it
+  // names the same item under the same heading as the move's own diff did.
   await expect(
-    dayArticles(page).nth(fromDayIndex).getByRole("heading", { name: moved }),
+    plan.locator("section.diff").getByRole("heading", { level: 4, name: "Moved" }),
   ).toBeVisible();
+  await expect(plan.locator("section.diff li", { hasText: moved })).toBeVisible();
 
   // --- Reload once more -------------------------------------------------
   await reopenFromTheList(page, title);
 
   await expect(plan.locator("p.crumb")).toContainText("Version 4 of 4");
+  await expectItemOnlyOnDay(page, moved, fromDayIndex);
   await expect(
-    dayArticles(page).nth(fromDayIndex).getByRole("heading", { name: moved }),
+    plan.locator("section.diff").getByRole("heading", { level: 4, name: "Moved" }),
   ).toBeVisible();
+  await expect(plan.locator("section.diff li", { hasText: moved })).toBeVisible();
 });

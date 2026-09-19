@@ -124,8 +124,11 @@ open question about where the browser proof belongs. Checked at filing, at
 - The `e2e` job in `planner.yml` is the only place the suite runs in CI.
 
 **2026-09-19 — built (dispatched as Sonnet).** Branched from `origin/main` at
-`02ab751`. pl-44 and pl-45 were both `done` on that base, so nothing here
-needed a rebase.
+`fb15bc9` — what `git fetch && git checkout -B ... origin/main` actually
+resolved to at the moment this session ran it, ahead of the `02ab751` this
+session's own environment snapshot showed at conversation start; corrected
+here on the gate's own finding rather than left standing. pl-44 and pl-45 were
+both `done` on that base, so nothing here needed a rebase.
 
 **What landed.**
 
@@ -199,3 +202,41 @@ one `pl-45`'s Log names for its own missing `@anthropic-ai/sdk` packages.
 runner with no such restriction, so CI is the place this ran for real —
 verify with `gh pr checks` once the pull request is open, per this ticket's
 own `Done when`.
+
+**2026-09-19 — gate round one (Opus, `b667b78`): CONCERNS, held only by the CI
+half of the e2e row (no pull request existed yet to check). Nothing above
+low.** Fixed:
+
+- **The base sha was wrong.** The Log above said `02ab751`; `git rev-parse
+b667b78^` is `fb15bc9` (#269), which is also this branch's merge-base with
+  `origin/main`. `02ab751` was this session's own environment snapshot from
+  conversation start, taken before the fetch — corrected above rather than
+  left standing.
+- **`e2e/README.md` was a third, stale copy of the suite's own count**
+  ("Four specs over two paths", no mention of `plan-walk.ts` or
+  `revise.spec.ts`, `intake-walk.ts` called "shared by both specs"). Updated
+  to five specs over three paths, with an entry for each new file.
+- **Presence-only day assertions.** Added `expectItemOnlyOnDay`, which checks
+  every day rather than only the destination, so a bug that left the item on
+  its old day (or duplicated it onto a third) fails rather than passing on
+  the destination check alone. Applied at all four points the item's day is
+  asserted: after the move, after its reload, after the restore, after its
+  reload. **Tried to reproduce the "copy instead of move" case directly**, by
+  changing `itinerary/src/edit.ts`'s `applyOperation` to keep the source day's
+  list instead of splicing the moved item out — the same one-line mutation
+  the finding described. It does not reach a silent duplicate: the compose
+  path already refuses it, and the write answers `INTERNAL` (visible in the
+  server log) rather than succeeding, so the spec fails at the existing
+  post-move crumb assertion before `expectItemOnlyOnDay` is ever reached.
+  Reverted (confirmed byte-identical). The new assertions are still worth
+  keeping — they check a real property the old ones did not — but they are
+  defense in depth here rather than the thing that closes this specific gap;
+  said plainly rather than claimed as a reproduction of what the finding
+  described.
+- **The restore's own diff.** Added an assertion, after the restore and after
+  its reload, that `section.diff` still names the moved item under "Moved" —
+  read off the page rather than assumed, and confirmed correct by running the
+  spec before writing the assertion down.
+- Re-verified: `revise.spec.ts` alone 3 of 3 (2.7–4.0s each); the full suite
+  5 of 5; `npm run check` exit 0; `npm test -- --project planner` 71 files,
+  1,184 tests, none failing.
