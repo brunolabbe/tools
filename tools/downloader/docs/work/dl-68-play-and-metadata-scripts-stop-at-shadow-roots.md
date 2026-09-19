@@ -163,6 +163,25 @@ above is quoted as run.)
 - Reverting each half reddens the test built for it (file:line in the Log).
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** · 2026-09-19 · `origin/main...6e747d1` (base `fb15bc9`; first pass at `2b5d1e3`) · defect hunt run in-context by ticket-reviewer (opus), medium depth
+
+| Done when                                                       | Proof                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The reproduction returns the stream instead of `NO_MEDIA_FOUND` | proven: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:827 "/shadow-player-play-only.html"`, which asserts the related master URL and its request                                                                                                                                                                 |
+| The duration fallback reads a shadow-root `<audio>`'s duration  | proven: `tools/downloader/resolvers/test/browser/provoke.test.ts:76 "expect(durationSec).toBe(217)"`                                                                                                                                                                                                                                 |
+| Reverting each half reddens the test built for it               | verified at `2b5d1e3`: reverting `tools/downloader/resolvers/src/browser/provoke.ts:369 "ALL_MEDIA_FN})('video, audio')"` gives NO_MEDIA_FOUND; reverting `tools/downloader/resolvers/src/browser/provoke.ts:398 "var media = chooseVideo()"` gives expected 217, received null; both rebuilt, rerun by the reviewer, restored clean |
+| `npm run check` and `npm test -- --project downloader` pass     | verified at `2b5d1e3`: check exit 0; 86 files, 1459 tests, exit 0; the test diff is additions only (+20, +25), with no existing assertion changed. The later commits touch only comments and markdown                                                                                                                                |
+
+- **med, repaired in `6e747d1`** · at `2b5d1e3`, `citations-gate.mjs --against origin/main` exited 1. The docstring lines added to `provoke.ts` moved four citations in dl-55's merged Review record, and `npm run check` does not run that gate. The citations were repointed with the anchor text unchanged, and the gate now exits 0 (89 enforced, 0 failing), re-run by the reviewer.
+- **low, repaired** · the `ALL_MEDIA_FN` docstring claimed Playwright's locator order for any selector. Measured on Playwright 1.62.1, it holds for `'video'` and for `'audio'` but not for `'video, audio'`. It is now narrowed at `tools/downloader/resolvers/src/browser/provoke.ts:153 "Playwright's own locator match order for a single-type"`. Build step 2's "already aligned" has the same gap and is left as brief text.
+- **measured, not a finding** · no ordering regression. Across 8 in-page cases (shadow host before a light audio, mixed, light-only, nested, shadow root inside a slotted element, light slotted into a shadow root, closed root, empty), the old candidate list is an exact prefix of the new one, and the audio fallback picks the same element whenever the light DOM has one. Nesting beyond depth 1 is reached, but only a scratch harness shows it; no suite test does.
+- **dropped** · the trailing `|| null` in the metadata fallback is redundant. Not a defect.
+- **dropped** · `SCROLL_SCRIPT`, `SIGNALS_SCRIPT`'s `hasPlayerElement` and `dismissModal`'s video check still query the light DOM only. They are outside this ticket's two scripts, found by reading with no effect measured, and were routed to the orchestrator as an open decision.
+- **findings** · 4 returned; 2 carried (both repaired), 2 dropped.
+- NFR: security n/a (no URL, header or subprocess change) · performance: one more `querySelectorAll('*')` walk per frame in `PLAY_SCRIPT` and one in the metadata fallback, the same cost `CHOOSE_VIDEO_FN` already pays · reliability ✓ · maintainability: above.
+
 ## Log
 
 **2026-09-17 — filed** from dl-61's gate, which measured this while checking

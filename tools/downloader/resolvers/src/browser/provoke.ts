@@ -169,15 +169,15 @@ const VIDEO_MARK = "data-downloader-video";
  * `L1 S1a N1 S1b L2`. This walk reproduces the former.
  *
  * **A comma selector does not carry that guarantee** (dl-68's gate, measured
- * against Playwright 1.62.1): `'video, audio'` walked as `[video…, audio…]`
- * per root — light matches of both tags before either descends into a shadow
- * root — where the locator interleaves `video` and `audio` inside each root
- * as it descends. `PLAY_SCRIPT` and `METADATA_SCRIPT`'s audio fallback (dl-68)
- * only ever use the returned list itself (call `.play()` on everything, or
- * take index `0`), never an index handed to a locator, so the divergence is
- * harmless today. A future caller that indexes `ALL_MEDIA_FN('video, audio')`
- * against `frame.locator('video, audio').nth(i)` would misalign, the same way
- * a tree-order walk would have for `'video'` alone.
+ * against Playwright 1.62.1): the walk still takes a root's own matches
+ * first — `querySelectorAll('video, audio')`, tags mixed in tree order —
+ * before descending into that root's shadow roots, but the locator for a
+ * comma list instead returns plain tree order across shadow boundaries, the
+ * order a tree-order walk would give. `PLAY_SCRIPT` and `METADATA_SCRIPT`'s
+ * audio fallback (dl-68) only ever use the returned list itself (call
+ * `.play()` on everything, or take index `0`), never an index handed to a
+ * locator, so the divergence is harmless today. A future caller that indexes
+ * `ALL_MEDIA_FN('video, audio')` against a locator would misalign.
  *
  * Takes a selector rather than being hardcoded to `'video'` so `PLAY_SCRIPT`
  * and `METADATA_SCRIPT`'s audio fallback (dl-68) can reuse the identical walk
