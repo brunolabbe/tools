@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunolabbe/tools/compare/downloader-v0.6.0...downloader-v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **downloader:** grab a preview frame from the stream when the page names no image (dl-56) ([#267](https://github.com/brunolabbe/tools/issues/267)) ([af734fe](https://github.com/brunolabbe/tools/commit/af734fee93f50fe91579b6c9378281f90028f907))
+
+
+### Fixes
+
+* **downloader:** fill size, bitrate, codecs and audio for bare progressive rows (dl-64) ([#259](https://github.com/brunolabbe/tools/issues/259)) ([6c0c58b](https://github.com/brunolabbe/tools/commit/6c0c58bb4380a98f6e770bc53f7ebee05365e462))
+* **downloader:** let a cancel from the UI reach the server instead of answering INTERNAL (dl-65) ([#260](https://github.com/brunolabbe/tools/issues/260)) ([20c8fd1](https://github.com/brunolabbe/tools/commit/20c8fd1e82907030072cf491797e81a52c3803b2))
+* **downloader:** let cancelling a waiting job reach canceled, not stall at queued (dl-59) ([#263](https://github.com/brunolabbe/tools/issues/263)) ([92764af](https://github.com/brunolabbe/tools/commit/92764af405e0889191e65a3afd3ea38cb3136654))
+* **downloader:** let the surface click reach a player inside an open shadow root (dl-61) ([#265](https://github.com/brunolabbe/tools/issues/265)) ([160a49b](https://github.com/brunolabbe/tools/commit/160a49b821f70782de26f54d33d86813d393a66c))
+* **downloader:** redact every logged URL, not just a failed probe's page URL (dl-58) ([#269](https://github.com/brunolabbe/tools/issues/269)) ([fb15bc9](https://github.com/brunolabbe/tools/commit/fb15bc9e12600db3fe3683803ac916b666997f0b))
+
 ## [0.6.0](https://github.com/brunolabbe/tools/compare/downloader-v0.5.0...downloader-v0.6.0) (2026-09-16)
 
 
