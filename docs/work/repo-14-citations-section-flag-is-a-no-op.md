@@ -234,7 +234,7 @@ becomes a loud error rather than the silent no-op it is now.
   **Read this ticket's Reproduction section with `--rev 91c117b`.** Two of its
   four citations drifted on this branch and now point at unrelated code while
   still resolving, which is the exact failure this script exists to catch and
-  cannot catch: `citations.mjs:226` was `const file = argv.find(…)` and is now a
+  cannot catch: `citations.mjs@fdafd1a:226` was `const file = argv.find(…)` and is now a
   `return` inside `checkCitations`; `:229` was the usage `throw` and is now
   blank. They are the finding's own evidence, so they stay as written.
 

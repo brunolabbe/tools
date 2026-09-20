@@ -326,6 +326,14 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
 
 **So make gate 1 look like gate 4.** Every gate prompt should:
 
+- **Run the thing under review on one real input and check the answer by a
+  second method, first.** Before the diff, before the tests: for a tool, the
+  real file it will be used on; for a rule, the branch it governs. Every
+  defect that mattered on 2026-09-20 was found this way and none by reading —
+  a cost script whose brief double-counted streamed responses by 86%, a
+  preflight that passed a stale sibling ref as clean, a restore that discarded
+  uncommitted work — and each of those tickets' tests were green throughout.
+  Mutation and reproduction check the tests; this checks the claim.
 - **Name what to attack.** The riskiest decision, the seam with the longest reach,
   the claim you least believe. Generic review finds generic things.
 - **Demand reproductions, not conclusions.** "Revert the fix, confirm it goes red"
@@ -456,6 +464,13 @@ dispatch is not a cap — _Name a floor for a mechanism ticket_ in
 
 The economy is in **scope**, not count. Gates 1 and 2 cost the most and found the
 least because they re-read everything from scratch.
+
+**And it is in the resume.** A later round on the same reviewer, woken by
+message with its base-tree extract kept in the ticket's scratch directory, costs
+a fraction of a fresh dispatch: four rounds on one ticket came to $19 measured
+by `agent-cost.mjs`, against $33 for one reviewer's four rounds on a larger
+diff and $26 for three on another (2026-09-20). Never dispatch a fresh reviewer
+for round two of a ticket whose round-one reviewer can be woken.
 
 Narrowing works, measurably: in the second session narrow gates averaged 75 k
 against 124 k for full ones, found fewer things, and **never found nothing.** The

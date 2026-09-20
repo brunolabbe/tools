@@ -434,6 +434,11 @@ rebuilds the defect from the brief that still describes it.
   when a builder was told to leave the page wiring to the orchestrator.
 - **PASS** — every acceptance line proven or verified, nothing above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
+- **PREFLIGHT** — a page-only `chore` with no source change, gated by
+  `scripts/preflight.mjs` exiting 0 and the orchestrator's own read, per
+  `orchestrate-tickets`' `sizing.md`. Written by the orchestrator, naming the
+  sha the check ran at; never for a ticket that touches `scripts/`, `packages/`
+  or a tool's source, which gets a reviewer (2026-09-20).
 
 `unproven (gate)` is CONCERNS rather than FAIL on purpose: the work may be
 entirely correct and the gate simply has not run yet. It is not PASS either,

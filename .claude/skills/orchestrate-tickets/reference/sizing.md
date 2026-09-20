@@ -115,7 +115,19 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the clear case: require the builder to reproduce the defect before writing it up,
   and the reproduction **is** the verification. In the second session that builder
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
-  no reviewer at all.
+  no reviewer at all. **A page-only `chore` with no source change is the other
+  case**: it ships on `scripts/preflight.mjs` exiting 0 and the orchestrator's
+  own read, and its record is a `## Review` headed `Gate: PREFLIGHT` naming the
+  sha, written by the orchestrator — the verdict `review-ticket` reserves for it.
+  Three such tickets on 2026-09-20 would each have cost an Opus round to gate
+  what a diff of prose and a mechanical check already showed.
+- **The whole-branch gate on a batch merged into one branch runs only when a
+  merge conflicted in source.** Every piece was gated on its own branch; when
+  the merges collide only on a shared `include` line or on pins, preflight, the
+  suites, the citations gate and a mutation control per merged guard are the
+  ship condition, and a further Opus read of the whole diff mostly re-derives
+  the per-branch verdicts (2026-09-20, decided by the owner at 2% of the weekly
+  budget and kept as the rule).
 
 ### Name a floor for a mechanism ticket
 
