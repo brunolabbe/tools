@@ -61,7 +61,7 @@ outlives the session that wrote it.
 | `gates` | and how many **returned findings**, which is not the same count |
 | `wrong findings` | findings that did not survive a builder's reproduction — and whether any reached a commit |
 | `subagent tokens` | the unit this page has always counted in. **Not** the whole volume a request moves: cache reads dwarf it and are essentially the entire bill |
-| `cost` | actual dollars, with the date, because rates move. The conversion measured 2026-09-02 was **$0.0182 per 1k subagent tokens**, which prices the six sessions above at roughly $16 to $73 each |
+| `cost` | actual dollars from `node scripts/agent-cost.mjs` over the batch's task output files, with the rate date the script prints beside its total. **Not a `subagent_tokens` conversion**: repo-53 retired that on 2026-09-20 because the figure excludes cache reads, 94 to 97% of the bill. Rows before repo-53 carry the old conversion, **$0.0182 per 1k subagent tokens** measured 2026-09-02, and read as floors on a different unit |
 | **`what the skill got wrong`** | **the field that earns this page.** What was missing, unperformable, or misleading. Ask every agent for it explicitly at dispatch — it does not arrive on its own |
 
 **Why the last field is mandatory.** On 2026-09-02 a single orchestrated ticket

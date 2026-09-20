@@ -24,8 +24,11 @@ tokens, but 3.9 M and 5.8 M tokens all-in for the builder and the reviewer once
 cache reads are counted, and cache reads are essentially the entire bill. So these
 numbers compare rounds against rounds honestly and say nothing directly about
 cost. The conversion measured on that ticket was **$0.0182 per 1k subagent
-tokens**, which prices the sessions in `history.md` at roughly $16 to $73 each —
-useful for a budget, and stale the moment rates move.
+tokens**, which priced the sessions in `history.md` at roughly $16 to $73 each.
+**Retired by repo-53 on 2026-09-20**: `node scripts/agent-cost.mjs` prices an
+agent from its task output file with cache reads counted, and one Opus gate
+alone came to $32.73 that way, in the range the old conversion gave for whole
+sessions. The figure stays here as the unit the earlier rows were priced in.
 
 Eleven tool calls cost more than thirty-seven. The third session reproduced this
 at four times the scale on its widest branch — 100 calls → 238 k, then **29 calls

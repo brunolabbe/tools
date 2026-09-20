@@ -118,17 +118,20 @@ not. A silent deferral is invisible to the orchestrator.
 
 ## Gates before you report
 
-- `npm run check`
-- the tool's project suite (`npm test -- --project <tool>`), and full `npm test`
-  if shared config moved. The project that covers `scripts/` is named `repo`;
-  "the `scripts` project" matches nothing (2026-09-12).
 - `npm run format` after touching any `.md` — oxfmt formats markdown here, and a
   documentation-only change can break `npm run check`
-- `node scripts/citations-gate.mjs --against origin/main` — CI's `check` job runs
-  it, and any branch that moves a line an older gate record cites fails it
-  whatever the branch's own tests say. One pull request went red on it and a
-  sibling would have (2026-09-13); nothing on this page named the script until
-  2026-09-20. Repoint or pin what you moved, per `records.md` — and sweep both
+- `node scripts/preflight.mjs --base origin/<base>` — one command, one exit bit
+  per check: `npm run check` and the project suite of every tool the diff
+  touches, the citations gate against the base, the `## Review` presence test
+  for every ticket the branch marks `done`, the title's type against the paths
+  it touches, and a `git merge-tree` probe against every other open pull
+  request head. A non-zero exit names the check (repo-51). Run full `npm test`
+  yourself if shared config moved; the project that covers `scripts/` is named
+  `repo`, and "the `scripts` project" matches nothing (2026-09-12). Before
+  2026-09-20 these were four separate rules here, and the citations gate was
+  not one of them: one pull request went red on a line an older gate record
+  cited and a sibling would have (2026-09-13). When the citations check fails,
+  repoint or pin what you moved, per `records.md` — and sweep both
   ticket roots, `docs/work/*.md` and `tools/*/docs/work/*.md`, written with the
   `*.md`, because a pathspec ending at the directory matches nothing and says
   so nowhere. The gate sees only `## Review`; an unanchored citation elsewhere

@@ -118,19 +118,19 @@ you are there.
    report to the PR thread. **The PR body names both models — which built and
    which gated** — because nothing else in the artefact does.
 
-   **Three things you check before granting the ship.** First, the record is on
-   the branch: `git show <branch>:<ticket-path> | grep '^## Review'` prints a
-   line. The stalled-exchange row below uses the same command as a stall test; it
-   is also this precondition, and `repo-29` opened a pull request carrying five
-   gate rounds and no record because nobody ran it as one (2026-09-08). Second,
-   the ship conditions include `node scripts/citations-gate.mjs --against
-   origin/main` exiting 0 — CI's `check` job runs it, and any branch that moves a
-   line an older gate record cites fails it (#228 went red on it, 2026-09-13).
-   Third, the title's type against the paths: read
-   `git diff --name-only origin/main...<branch>` for `tools/` paths, because
-   release-please routes by path, and a `feat` or `fix` title on a branch whose
-   only `tools/` paths are markdown cuts a changelog line and a version for that
-   tool where `docs` and `chore` do not (2026-09-12, 2026-09-14).
+   **One command before granting the ship:**
+   `node scripts/preflight.mjs --base origin/main` on the builder's branch, exit
+   0 as a ship condition. It is the check and the touched tools' suites, the
+   citations gate, the `## Review` presence test, the title-type-against-paths
+   test and a `git merge-tree` probe against every other open pull request head,
+   one exit bit each, and a non-zero exit names the check (repo-51). Each was a
+   rule in prose here until 2026-09-20, and each cost a round when forgotten:
+   `repo-29` opened a pull request carrying five gate rounds and no record
+   (2026-09-08); #228 went red on a line an older gate record cited
+   (2026-09-13); a `feat` title over markdown-only `tools/` paths would have cut
+   a tool's changelog and version, because release-please routes by path
+   (2026-09-12, 2026-09-14). The stalled-exchange row below uses the `## Review`
+   grep as a stall test; preflight runs it as this precondition.
 
 10. **Hold every worktree — the reviewer's as well as the builder's — until the
     ticket is finished.** "The exchange is over" cannot be evaluated: tested twice
@@ -423,11 +423,20 @@ Unasked, and whatever the batch cost. The owner had to ask for this by hand on
 and a sentence hides where the cost went, whether the model-difference rule held
 per branch, and what an interruption cost.
 
-| PR | Status | Model | Agent | Task | Tokens |
-| --- | --- | --- | --- | --- | --- |
+| PR | Status | Model | Agent | Task | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
 
 **One row per agent, not per ticket** — an agent killed and replaced is two rows,
 which is the only place the duplicated work is visible at all.
+
+- **Cost** — dollars from `node scripts/agent-cost.mjs <task-output-file>` over
+  that agent's own output file, the path a backgrounded `Agent` result hands
+  you, with the rate date the script prints beside its total. **Never a
+  conversion of `subagent_tokens`**: that figure excludes cache reads, which
+  are 94 to 97% of the bill, and the `standard` trial's first "8% saving" was
+  wrong by an order of magnitude on exactly that (repo-53, 2026-09-20).
+  `subagent_tokens` stays in the table only as the series the earlier history
+  rows are in.
 
 - **PR** — where the agent's work landed, or `—` for batch-wide work like the seam
   map. **Status** — the PR's state as you write, from

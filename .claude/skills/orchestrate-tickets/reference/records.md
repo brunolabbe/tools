@@ -205,6 +205,12 @@ discarded. So:
   - **Diff the record's section against `HEAD` before committing any edit to a
     ticket that carries one.** One command, and it is the only thing that detects
     this.
+  - **Since repo-55 both practices above are enforced by
+    `scripts/review-record.mjs` rather than followed by hand**: it finds the
+    insertion point by heading form, checks the section, restores from `HEAD`
+    on a failed check, and prints the normalised diff that is the disclosure
+    note. `review-ticket` step 8 names it. The provenance above stays as the
+    record of why it exists (2026-09-20).
   - **Verify a pin by diffing the two runs, never by comparing totals.** Measured
     on the same batch: a record pinned with `--rev` and the same record resolved
     against the working tree both reported **16/34 — identical** — while three

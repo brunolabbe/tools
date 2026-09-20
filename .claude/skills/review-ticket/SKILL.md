@@ -339,17 +339,29 @@ is the builder's alone.
    when you report, so a file you edit here goes nowhere. The builder commits it.
 
 8. **Commit the section, post the report, then say what would clear it.** This
-   step is the builder's, and it has three acts. First write the returned section
-   into the ticket above `## Log`, verbatim, in the branch's own commit, together
-   with the disclosure note — say that you transcribed it and name what you
-   altered or dropped from the reviewer's text, "nothing" included — and
-   before that commit, run `node scripts/citations.mjs <ticket> --section Review
-   --require-anchors --require-distinct-anchors` over it and fix what it says. That is the check CI is
-   about to run; catching it here costs one command, and catching it in CI costs
-   a push. Where a citation is deliberately unresolvable — a coordinate quoted as
-   the evidence of a finding — declare it with
-   `<!-- citations: evidence file.ts:120 -->` rather than repointing it, and the
-   declaration is itself an error if it excuses nothing. Second,
+   step is the builder's, and it has three acts. First, write the reviewer's
+   returned text to a file, `## Review` as its first line (or `### Gate <n>` for
+   a later gate), and run
+   `node scripts/review-record.mjs <ticket> <section-file> [--gate <n>]`. The
+   script finds the insertion point by heading form, never by a bare-text
+   search — a first review lands above `## Log`, a later gate at the end of the
+   existing `## Review` block — inserts the text verbatim, runs the formatter,
+   then runs `citations.mjs --section Review --require-anchors
+   --require-distinct-anchors` itself; on a failure it restores the ticket from
+   `git show HEAD:<ticket>` and prints the checker's own output, so fix what it
+   says and run it again. On success it prints a normalised diff between the
+   section file and what landed, ignoring table padding and rule width: paste
+   that into the Log as the disclosure note — say that you transcribed it and
+   what, if anything, differs, "nothing" included — in the same commit. That is
+   the check CI is about to run; catching it here costs one command, and
+   catching it in CI costs a push. Where a citation is deliberately
+   unresolvable — a coordinate quoted as the evidence of a finding — declare it
+   with `<!-- citations: evidence file.ts:120 -->` in the section file before
+   running the script, and the declaration is itself an error if it excuses
+   nothing. Before repo-55 this act was four hand steps, and each had failed at
+   least once: a record spliced into the middle of an earlier one, a section
+   red the moment it was committed, a record that went uncommitted, a
+   formatter rewrap that split a citation from its anchor (2026-09-20). Second,
    **post the reviewer's report to the pull request thread** — `gh pr comment
    <number> --body-file <file>` — so the transcription can be audited against
    what the reviewer actually said; if the branch has no pull request yet, that
