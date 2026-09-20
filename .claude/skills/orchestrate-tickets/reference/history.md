@@ -1308,8 +1308,8 @@ to this file alone:
    failures were Windows-only" — went to the owner as-is. `repo-31`'s filing
    (`#180`), reading each failed job's log rather than its conclusion,
    established that **all eight failures fail on the identical assertion** —
-   `scripts/test/citations.test.ts:1334` "This record exists at that rev and cited something different there",
-   reached from `scripts/test/citations.test.ts:1333` "expect(pinned.stdout).toMatch(" — one unfixed regression
+   `scripts/test/citations.test.ts@fdafd1a:1334` "This record exists at that rev and cited something different there",
+   reached from `scripts/test/citations.test.ts@fdafd1a:1333` "expect(pinned.stdout).toMatch(" — one unfixed regression
    in the repo's own citation checker, counted eight times by run count. Its
    own distinction is the reusable one: *"'Windows is the dominant source of
    red' and 'the team has looked at eight different Windows failures' are
