@@ -124,3 +124,62 @@ why each check exists; drop the instructions to run them by hand.
   `npm test -- --project repo` — 371 passed; `npm test` (full suite, run
   because `scripts/test/tsconfig.json` is shared config) — 176 files, 3177
   tests, exit 0.
+
+- 2026-09-20 — Round 2, on the orchestrator's authority, after the reviewer's
+  gate 1 (CONCERNS: 5 med, 2 low, every reachable Done when line proven).
+  Reproduced two of the five med findings by hand before the orchestrator's
+  own decisions arrived — the merge-tree exit-status ambiguity (confirmed
+  against real git 2.43.0: a bad ref and a real conflict both exit 1, and only
+  stdout being non-empty tells them apart — the Log above already had this
+  half right) and the merge-commit title bypass (`--title "Merge branch 'main'
+into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
+  The orchestrator then settled both open decisions and specified all six
+  fixes; none were left to this builder's judgement.
+
+  Applied, each with its own planted-failure test:
+  1. Check 5 now compares by commit oid (`gh pr list --json … headRefOid`),
+     not by `origin/<headRefName>` — a stale local mirror of a peer's branch no
+     longer reads as clean. Self-exclusion is by oid too, which closes low
+     finding 6 (a detached `HEAD` defeated the old branch-name comparison) as
+     a side effect. An oid this checkout does not have is now a failure
+     (`git fetch` named as the repair), not a silent skip.
+  2. `preflight` verifies `--base` resolves before any check runs and raises
+     `EXIT.setup` (64) itself; a bad `--base` used to propagate git's raw exit
+     status (128), which the `EXIT` docblock's own claim already asserted
+     falsely. Each check is now run through `guarded()`, so a check whose own
+     internals throw — `gh` unauthenticated, a pull request head absent from
+     the clone — becomes that check's own FAIL line and bit, and the other
+     four still print. Measured before the fix: unauthenticated `gh` inside
+     check 5 aborted the whole run and left the failing child's own status (a
+     `gh` auth failure exits 4) sitting in `EXIT.review`'s bit.
+  3. `testPlan` runs `npm test -- --project repo` when the diff touches
+     `scripts/` (which already covers `scripts/test/`, named separately in the
+     Build section but redundant with it). This branch is the reproduction:
+     its own first gate ran `ok npm run check` alone and never its own 25
+     tests.
+  4. `checkTitle` fails outright, naming "no conventional subject found; pass
+     --title", when `commit-message.mjs`'s own `validate` bypasses a subject
+     (a merge, revert, fixup or squash) and no type can be extracted — instead
+     of silently reading the absent type as "hidden" and passing.
+  5. Check 1 now runs through `runBuildCommand`, a dedicated runner that
+     captures stdout and stderr together and prints the last 40 lines on
+     failure, decoupled from `runCommand` (imported from `next-id.mjs`, still
+     used for git/gh plumbing elsewhere) whose error message is `next-id.mjs`'s
+     own and was leaking into a build failure with two sentences about a
+     partial id sweep and nothing about what broke.
+  6. `checkCitations` now defaults its grandfather list to `grandfatheredFor(repo)`,
+     which reads the _target_ repository's own `scripts/citations-gate.mjs`
+     (via `citations-gate.mjs`'s own `parseGrandfathered`), not the constant
+     baked into this script's own checkout — so a `--repo <fixture>` run no
+     longer reports this checkout's debt as `STALE` against a corpus that
+     never held it.
+
+  Gates: `npx vitest run scripts/test/preflight.test.ts` — 38 passed (13 new,
+  each added for one of the six items above); `npm run check` exit 0;
+  `npm test -- --project repo` — 384 passed. `npm test` (full suite) not
+  re-run this round — no shared config outside `scripts/test/` moved beyond
+  what round 1 already ran it for. Live sanity check, not a gate in itself:
+  `node scripts/preflight.mjs --base origin/orchestrate-skill-sweep` on this
+  branch now runs `npm test -- --project repo` under check 1 (confirming fix
+  3 against the reproduction that found it) and still names the missing
+  `## Review` section this ticket does not yet carry.

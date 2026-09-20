@@ -50,12 +50,20 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { runCommand } from "./next-id.mjs";
 import { EXTRA_SCOPES, releasingTypes, toolScopes, validate } from "./commit-message.mjs";
-import { GRANDFATHERED, SCOPE, compareAgainst, gate as citationsGate } from "./citations-gate.mjs";
+import {
+  SCOPE,
+  SELF as CITATIONS_GATE_SELF,
+  compareAgainst,
+  gate as citationsGate,
+  parseGrandfathered,
+} from "./citations-gate.mjs";
 
 export const USAGE =
   "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>]";
@@ -70,9 +78,16 @@ const lines = (out) => out.split("\n").filter(Boolean);
 
 /**
  * Which bit of the exit code each check sets, in the order the Build section
- * lists them. `setup` is not a check's bit — it is what a bad `--base` or an
- * unreadable repository sets, before any check could even run, and is kept
+ * lists them. `setup` is not a check's bit — it is what a missing or
+ * unresolvable `--base` sets, before any check could even run, and is kept
  * outside 1–16 so it is never mistaken for one of the five.
+ *
+ * **`setup` used to be aspirational rather than true.** Repo-51's second gate
+ * measured a bad `--base` exiting `128` — git's own status for an unresolvable
+ * ref, propagated unchanged because nothing validated `base` before computing
+ * a diff against it. `preflight`'s own prelude now verifies `base` resolves
+ * before any check runs and raises `setup` itself when it does not, which is
+ * what makes this docblock's claim true rather than merely intended.
  */
 export const EXIT = /** @type {const} */ ({
   check: 1,
@@ -104,9 +119,9 @@ function globToRegExp(glob) {
 
 const TICKET_PATTERNS = SCOPE.records.map(globToRegExp);
 
-/** @param {string} path */
-export function isTicketPath(path) {
-  return TICKET_PATTERNS.some((pattern) => pattern.test(path));
+/** @param {string} candidate */
+export function isTicketPath(candidate) {
+  return TICKET_PATTERNS.some((pattern) => pattern.test(candidate));
 }
 
 /**
@@ -130,6 +145,15 @@ export function touchedTools(diffPaths) {
  * a per-tool run the way `builder.md`'s gate list already says: "full `npm
  * test` if shared config moved."
  *
+ * Root-level only — a nested `tools/<tool>/tsconfig.json` is that tool's own
+ * and must not force the full suite, so a path carrying a `/` never matches
+ * here whatever its basename. `tsconfig.*json` is a pattern rather than a
+ * literal `tsconfig.json`/`tsconfig.tests.json` pair, so a third root
+ * `tsconfig*.json` this repo adds later is shared config on the day it is
+ * added, with nothing here to update — the same reasoning `commit-message.mjs`
+ * gives for reading `TYPES` off `release-please-config.json` rather than a
+ * second list.
+ *
  * @param {string[]} diffPaths
  */
 export function sharedConfigTouched(diffPaths) {
@@ -137,16 +161,35 @@ export function sharedConfigTouched(diffPaths) {
     "package.json",
     "package-lock.json",
     "vitest.config.ts",
-    "tsconfig.json",
-    "tsconfig.tests.json",
     ".oxlintrc.json",
     ".oxfmtrc.json",
   ]);
-  return diffPaths.some((p) => SHARED_FILES.has(p) || p.startsWith("packages/"));
+  return diffPaths.some((p) => {
+    if (p.startsWith("packages/")) return true;
+    if (p.includes("/")) return false;
+    return SHARED_FILES.has(p) || /^tsconfig.*\.json$/u.test(p);
+  });
 }
 
 /**
- * `npm run check`, plus whichever `npm test` a diff's own paths call for.
+ * `scripts/` is this script's own kind, and repo-51's second gate found the
+ * gap: a branch touching only `scripts/` (this one, at its first gate) ran
+ * `npm run check` alone and never its own suite, the `repo` vitest project —
+ * so preflight could exit 0 on a branch that broke `scripts/test/next-id.test.ts`.
+ * `scripts/test/` is named in the Build section but is already covered, since
+ * every path under it starts with `scripts/` too.
+ *
+ * @param {string[]} diffPaths
+ */
+export function scriptsTouched(diffPaths) {
+  return diffPaths.some((p) => p.startsWith("scripts/"));
+}
+
+/**
+ * `npm run check`, plus whichever `npm test` a diff's own paths call for: the
+ * full suite when shared config moved, the `repo` project when `scripts/`
+ * moved, and one project per tool the diff touches — all three read from the
+ * diff's own paths, never from a flag.
  *
  * @param {string[]} diffPaths
  * @returns {[string, string[]][]}
@@ -155,12 +198,45 @@ export function testPlan(diffPaths) {
   const commands = [["npm", ["run", "check"]]];
   if (sharedConfigTouched(diffPaths)) {
     commands.push(["npm", ["test"]]);
-  } else {
-    for (const tool of touchedTools(diffPaths)) {
-      commands.push(["npm", ["test", "--", "--project", tool]]);
-    }
+    return commands;
+  }
+  if (scriptsTouched(diffPaths)) {
+    commands.push(["npm", ["test", "--", "--project", "repo"]]);
+  }
+  for (const tool of touchedTools(diffPaths)) {
+    commands.push(["npm", ["test", "--", "--project", tool]]);
   }
   return commands;
+}
+
+/** How many lines of a failing build command's own output to keep. */
+const BUILD_FAILURE_TAIL = 40;
+
+/**
+ * Run one of `testPlan`'s commands and hand back its combined stdout and
+ * stderr — `oxlint`, `oxfmt --check` and `vitest` all report on stdout, so a
+ * runner that keeps only stderr (`runCommand`'s, right for git/gh plumbing)
+ * would drop the diagnostic and leave only the command line and its status.
+ * Reproduced on repo-51's own first gate: a failing `npm run check` printed
+ * two sentences about a partial list of ids — `runCommand`'s own message,
+ * written for `next-id.mjs`'s guard against a truncated sweep — and nothing
+ * about what actually broke. That wording is `next-id.mjs`'s alone and must
+ * never appear here, which is this function's whole reason to exist rather
+ * than reusing `runCommand`.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{cwd?: string}} [options]
+ */
+export function runBuildCommand(command, args, options = {}) {
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  if (result.error) throw fail(`${command}: ${result.error.message}`, 127);
+  const combined = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  if (result.status !== 0) {
+    const tail = combined.split("\n").filter(Boolean).slice(-BUILD_FAILURE_TAIL).join("\n");
+    throw fail(`${command} ${args.join(" ")} exited ${result.status}\n${tail}`, result.status ?? 1);
+  }
+  return combined;
 }
 
 /**
@@ -168,9 +244,9 @@ export function testPlan(diffPaths) {
  *
  * @param {string} repo
  * @param {string[]} diffPaths
- * @param {typeof runCommand} [run]
+ * @param {typeof runBuildCommand} [run]
  */
-export function checkBuild(repo, diffPaths, run = runCommand) {
+export function checkBuild(repo, diffPaths, run = runBuildCommand) {
   const out = [];
   for (const [command, args] of testPlan(diffPaths)) {
     const label = `${command} ${args.join(" ")}`;
@@ -184,6 +260,35 @@ export function checkBuild(repo, diffPaths, run = runCommand) {
     }
   }
   return { ok: true, bit: 0, name: "check", lines: out };
+}
+
+/**
+ * The grandfather list `repo` itself carries, not this script's own
+ * checkout's. **Low finding 7 on repo-51's first gate**: `checkCitations`
+ * used to default to the imported `GRANDFATHERED` constant, which is this
+ * script's own installation's list — right for the ordinary case, where
+ * `repo` *is* this checkout, and silently wrong for `--repo <fixture>`, where
+ * every entry belongs to a corpus the fixture does not have and printed as
+ * `STALE`. Reading `repo`'s own copy of `citations-gate.mjs` off disk, via the
+ * same `parseGrandfathered` the ratchet itself uses to read a historical
+ * commit, means the two can never disagree about whose list this is.
+ *
+ * A `repo` with no such file — a fixture with no `scripts/` at all, or the
+ * bootstrap commit before this gate existed — has no debt to grandfather,
+ * which is a real state and not an error; `new Map()` says so without
+ * `parseGrandfathered` ever running on a file that is not there.
+ *
+ * @param {string} repo
+ * @returns {Map<string, number>}
+ */
+export function grandfatheredFor(repo) {
+  let source;
+  try {
+    source = fs.readFileSync(path.join(repo, CITATIONS_GATE_SELF), "utf8");
+  } catch {
+    return new Map();
+  }
+  return parseGrandfathered(source) ?? new Map();
 }
 
 /** The `state: count` half of a record's counts, for a one-line summary. */
@@ -203,7 +308,7 @@ const countLine = (counts = {}) =>
  * @param {string} base
  * @param {Map<string, number>} [grandfathered]
  */
-export function checkCitations(repo, base, grandfathered = GRANDFATHERED) {
+export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo)) {
   const result = citationsGate(repo, SCOPE, grandfathered);
   const problems = [];
   for (const r of result.failed) problems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
@@ -315,6 +420,23 @@ export function checkTitle(repo, diffPaths, title, run = runCommand) {
   }
 
   const type = /^(?<type>[a-z]+)/u.exec(subject)?.groups?.type;
+  // `validate`'s own `BYPASS` lets a merge/revert/fixup/squash subject through
+  // with `ok: true` and no type at all — a branch's *own* commits are working
+  // notes and may include one, and the default title source is the branch's
+  // last commit subject. Reproduced on repo-51's second gate: a `--title` of
+  // `Merge branch 'main' into work` passed this check silently, printing
+  // `ok    "undefined" is hidden …` — `type` was `undefined`,
+  // `types.includes(undefined)` is `false`, and the branch this precisely never
+  // gets a type-versus-paths check. This must fail instead of quietly reading
+  // as "hidden".
+  if (type === undefined) {
+    return {
+      ok: false,
+      bit: EXIT.title,
+      name: "title",
+      lines: [`FAIL  no conventional subject found in "${subject}"; pass --title`],
+    };
+  }
   // `types === null` means the config could not be read; treated the same as
   // "reaches a changelog", the conservative reading `validate` itself uses via
   // `SCOPE_REQUIRED_FALLBACK` for the same reason — assuming the quieter answer
@@ -417,26 +539,47 @@ export function mergeTreeConflicts(repo, ours, theirs, spawn = spawnRaw) {
 
 /**
  * `gh pr list`, the only part of check 5 that cannot be answered from the
- * tree in hand.
+ * tree in hand. Reads `headRefOid` alongside `headRefName`: repo-51's second
+ * gate found that comparing against `origin/<headRefName>` compares against
+ * whatever this checkout last fetched, not against the head itself, and a
+ * clone that has not fetched since a peer pushed reports a stale branch as
+ * clean. The oid is the head; the ref name is only ever a label for it here.
  *
  * @param {typeof runCommand} run
  */
 function defaultListOpenHeads(run) {
   return (/** @type {string} */ repo) => {
-    const out = run("gh", ["pr", "list", "--state", "open", "--json", "number,headRefName"], {
-      cwd: repo,
-    });
-    /** @type {{number: number, headRefName: string}[]} */
+    const out = run(
+      "gh",
+      ["pr", "list", "--state", "open", "--json", "number,headRefName,headRefOid"],
+      { cwd: repo },
+    );
+    /** @type {{number: number, headRefName: string, headRefOid: string}[]} */
     const parsed = JSON.parse(out || "[]");
-    return parsed.map((p) => ({ ...p, ref: `origin/${p.headRefName}` }));
+    return parsed.map((p) => ({ number: p.number, headRefName: p.headRefName, oid: p.headRefOid }));
   };
 }
 
 /**
  * Check 5: `git merge-tree --write-tree HEAD <head>` against every other open
- * pull request head, naming the conflicting paths and which of them are
- * ticket files — a conflict there is a gate record two branches both touched,
- * `orchestrate-tickets/SKILL.md` step 11's recurring failure.
+ * pull request head's own commit oid, naming the conflicting paths and which
+ * of them are ticket files — a conflict there is a gate record two branches
+ * both touched, `orchestrate-tickets/SKILL.md` step 11's recurring failure.
+ *
+ * **Compared by oid, not by ref name, and excluded by oid too.** Two fixes in
+ * one, from repo-51's second gate: comparing against `origin/<headRefName>`
+ * went stale the moment a peer pushed since this checkout last fetched (med
+ * finding 1), and excluding "the current branch's own pull request" by
+ * `git rev-parse --abbrev-ref HEAD` returned the literal string `HEAD` in a
+ * detached worktree, so a branch's own pull request was never excluded there
+ * (low finding 6). `git rev-parse HEAD` — the oid, not the ref — has no
+ * detached-or-not distinction to get wrong.
+ *
+ * **An oid this checkout does not have is a failure, not a skip.** A pull
+ * request head genuinely cannot be compared without fetching it, and reporting
+ * it clean because nothing was checked is the same silent gap the ref-name
+ * comparison had, one layer down; naming the fetch to run is the repair, not
+ * excusing the check.
  *
  * **The zero-heads case says so explicitly rather than reporting `ok` with no
  * further line.** An empty pull request list must not read like "checked
@@ -444,33 +587,56 @@ function defaultListOpenHeads(run) {
  * positive control a silent pass would defeat.
  *
  * @param {string} repo
- * @param {{run?: typeof runCommand, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, ref?: string}[]}} [options]
+ * @param {{run?: typeof runCommand, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[]}} [options]
  */
 export function checkMergeTree(repo, options = {}) {
   const run = options.run ?? runCommand;
   const spawn = options.spawn ?? spawnRaw;
   const listOpenHeads = options.listOpenHeads ?? defaultListOpenHeads(run);
 
-  const currentBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repo }).trim();
-  const heads = listOpenHeads(repo).filter((h) => h.headRefName !== currentBranch);
+  const headOid = run("git", ["rev-parse", "HEAD"], { cwd: repo }).trim();
+  const heads = listOpenHeads(repo).filter((h) => h.oid !== headOid);
 
   const out = [`comparing HEAD against ${heads.length} other open pull request head(s)`];
-  let conflicts = 0;
+  let problems = 0;
   for (const head of heads) {
-    const ref = head.ref ?? `origin/${head.headRefName}`;
-    const result = mergeTreeConflicts(repo, "HEAD", ref, spawn);
+    let reachable = true;
+    try {
+      run("git", ["cat-file", "-e", `${head.oid}^{commit}`], { cwd: repo });
+    } catch {
+      reachable = false;
+    }
+    if (!reachable) {
+      problems += 1;
+      out.push(
+        `FAIL  #${head.number} ${head.headRefName} is at ${head.oid.slice(0, 7)}, which this ` +
+          `checkout does not have — run \`git fetch origin\` and re-run; a head that cannot be ` +
+          `compared is not clean`,
+      );
+      continue;
+    }
+
+    let result;
+    try {
+      result = mergeTreeConflicts(repo, "HEAD", head.oid, spawn);
+    } catch (error) {
+      problems += 1;
+      const message = /** @type {Error} */ (error).message.split("\n")[0];
+      out.push(`FAIL  #${head.number} ${head.headRefName} could not be compared: ${message}`);
+      continue;
+    }
     if (!result.conflict) {
       out.push(`ok    #${head.number} ${head.headRefName} merges cleanly with HEAD`);
       continue;
     }
-    conflicts += 1;
+    problems += 1;
     const gateRecords = result.paths.filter(isTicketPath);
     out.push(
       `FAIL  #${head.number} ${head.headRefName} conflicts on: ${result.paths.join(", ")}` +
         (gateRecords.length > 0 ? ` — gate record(s): ${gateRecords.join(", ")}` : ""),
     );
   }
-  if (conflicts === 0) {
+  if (problems === 0) {
     out.push(
       heads.length === 0
         ? "no other open pull request to compare against — nothing was checked"
@@ -482,32 +648,78 @@ export function checkMergeTree(repo, options = {}) {
 }
 
 /**
+ * Run one check and never let it take the other four down with it.
+ *
+ * Repo-51's second gate: nothing wrapped an individual check's own internal
+ * calls, so `gh` failing inside check 5 — an expired token, a repository with
+ * no GitHub remote, a pull request head this checkout cannot fetch — aborted
+ * the whole run before checks 1 through 4 printed anything, and the failing
+ * child's own raw exit status (`gh`'s auth failure is `4`) landed in the exit
+ * code, indistinguishable from `EXIT.review`. A thrown error now becomes that
+ * check's own FAIL line and its own bit, so a `gh` outage costs check 5's
+ * verdict and nothing else's.
+ *
+ * @param {string} name
+ * @param {number} bit
+ * @param {() => {ok: boolean, bit: number, name: string, lines: string[]}} run
+ */
+function guarded(name, bit, run) {
+  try {
+    return run();
+  } catch (error) {
+    const message = /** @type {Error} */ (error).message;
+    return {
+      ok: false,
+      bit,
+      name,
+      lines: [`FAIL  ${name} threw:`, ...message.split("\n").map((l) => `      ${l}`)],
+    };
+  }
+}
+
+/**
  * Every check, in the Build section's order. `diffPaths` is computed once,
  * against `${base}...HEAD`, and handed to whichever checks read the diff —
  * check 1 and check 4 — rather than each recomputing it.
+ *
+ * `base` is verified to resolve before anything else runs. A `--base` that
+ * does not exist in this checkout is not any one check's problem — every
+ * check but check 5 reads `base` or the diff against it — so it is raised as
+ * `EXIT.setup` here, before the per-check guard below, rather than surfacing
+ * as whichever check happened to call `git` first with the bad ref.
  *
  * @param {string} repo
  * @param {{
  *   base: string,
  *   title?: string,
  *   run?: typeof runCommand,
+ *   buildRun?: typeof runBuildCommand,
  *   spawn?: typeof spawnRaw,
  *   grandfathered?: Map<string, number>,
- *   listOpenHeads?: (repo: string) => {number: number, headRefName: string, ref?: string}[],
+ *   listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[],
  * }} options
  */
 export function preflight(repo, options) {
-  const { base, title, run = runCommand, spawn, grandfathered, listOpenHeads } = options;
+  const { base, title, run = runCommand, buildRun, spawn, grandfathered, listOpenHeads } = options;
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
-  const diffPaths = lines(run("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: repo }));
+  let diffPaths;
+  try {
+    run("git", ["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd: repo });
+    diffPaths = lines(run("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: repo }));
+  } catch (error) {
+    throw fail(
+      `--base ${base} could not be read: ${/** @type {Error} */ (error).message}`,
+      EXIT.setup,
+    );
+  }
 
   return [
-    checkBuild(repo, diffPaths, run),
-    checkCitations(repo, base, grandfathered),
-    checkReview(repo, diffPaths, run),
-    checkTitle(repo, diffPaths, title, run),
-    checkMergeTree(repo, { run, spawn, listOpenHeads }),
+    guarded("check", EXIT.check, () => checkBuild(repo, diffPaths, buildRun)),
+    guarded("citations", EXIT.citations, () => checkCitations(repo, base, grandfathered)),
+    guarded("review", EXIT.review, () => checkReview(repo, diffPaths, run)),
+    guarded("title", EXIT.title, () => checkTitle(repo, diffPaths, title, run)),
+    guarded("mergeTree", EXIT.mergeTree, () => checkMergeTree(repo, { run, spawn, listOpenHeads })),
   ];
 }
 

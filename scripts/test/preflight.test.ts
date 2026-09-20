@@ -34,11 +34,14 @@ import {
   checkMergeTree,
   checkReview,
   checkTitle,
+  grandfatheredFor,
   isTicketPath,
   mergeTreeConflicts,
   parseArgs,
   parseMergeTreeConflicts,
   preflight,
+  runBuildCommand,
+  scriptsTouched,
   sharedConfigTouched,
   testPlan,
   touchedTools,
@@ -109,7 +112,21 @@ test("sharedConfigTouched fires on packages/ and the named root config, not on a
   expect(sharedConfigTouched(["tools/downloader/api/src/a.ts"])).toBe(false);
 });
 
-test("testPlan runs the full suite when shared config moved, one project per tool otherwise", () => {
+test("sharedConfigTouched matches any root tsconfig*.json, never a tool's own nested one", () => {
+  expect(sharedConfigTouched(["tsconfig.json"])).toBe(true);
+  expect(sharedConfigTouched(["tsconfig.tests.json"])).toBe(true);
+  expect(sharedConfigTouched(["tsconfig.new-surface.json"])).toBe(true);
+  expect(sharedConfigTouched(["tools/downloader/api/tsconfig.json"])).toBe(false);
+});
+
+/** Round 2's third med finding: a `scripts/`-only branch ran no suite at all. */
+test("scriptsTouched fires on scripts/ and its own scripts/test/ subtree", () => {
+  expect(scriptsTouched(["scripts/preflight.mjs"])).toBe(true);
+  expect(scriptsTouched(["scripts/test/preflight.test.ts"])).toBe(true);
+  expect(scriptsTouched(["tools/downloader/api/src/a.ts"])).toBe(false);
+});
+
+test("testPlan runs the repo project on scripts/, the full suite on shared config, one project per tool otherwise", () => {
   expect(testPlan(["tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "downloader"]],
@@ -119,6 +136,15 @@ test("testPlan runs the full suite when shared config moved, one project per too
     ["npm", ["test"]],
   ]);
   expect(testPlan(["docs/work/repo-1-a.md"])).toEqual([["npm", ["run", "check"]]]);
+  expect(testPlan(["scripts/preflight.mjs"])).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test", "--", "--project", "repo"]],
+  ]);
+  expect(testPlan(["scripts/preflight.mjs", "tools/downloader/api/src/a.ts"])).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test", "--", "--project", "repo"]],
+    ["npm", ["test", "--", "--project", "downloader"]],
+  ]);
 });
 
 test("isTicketPath matches both ticket roots and nothing outside them", () => {
@@ -146,6 +172,40 @@ test("parseMergeTreeConflicts reads a clean merge's single line as no conflicts"
 });
 
 // --- check 1: build and suites (injected run — see file header) ------------
+
+/**
+ * Round 2's fifth med finding: a failing build command used to print
+ * `runCommand`'s own message, written for `next-id.mjs`'s guard against a
+ * truncated id sweep, and nothing about what actually broke — because
+ * `runCommand` keeps only the first three lines of *stderr*, where oxlint,
+ * oxfmt and vitest all report on stdout.
+ */
+test("runBuildCommand surfaces combined output on failure and never next-id.mjs's own wording", () => {
+  expect(() =>
+    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exit(1)"]),
+  ).toThrow(/from stdout/);
+  expect(() =>
+    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exit(1)"]),
+  ).not.toThrow(/partial file list/);
+});
+
+test("runBuildCommand keeps only the last 40 lines of a long failure", () => {
+  const script = "for (let i = 0; i < 200; i++) console.log('line ' + i); process.exit(1);";
+  let message = "";
+  try {
+    runBuildCommand(process.execPath, ["-e", script]);
+  } catch (error) {
+    message = (error as Error).message;
+  }
+  expect(message).toMatch(/line 199/);
+  expect(message).not.toMatch(/line 0\n/);
+  expect(message.split("\n").length).toBeLessThanOrEqual(41); // 40 lines + the "exited N" header
+});
+
+test("runBuildCommand returns combined output when the command succeeds", () => {
+  const out = runBuildCommand(process.execPath, ["-e", "console.log('ok')"]);
+  expect(out).toMatch(/ok/);
+});
 
 /** A `run` stub with nothing to close over — module scope per oxlint's own rule. */
 function recordingRun(calls: string[]) {
@@ -213,6 +273,54 @@ test("checkCitations fails and names the record when a merged citation's target 
     expect(result.ok).toBe(false);
     expect(result.bit).toBe(EXIT.citations);
     expect(result.lines.join("\n")).toMatch(/docs\/work\/a\.md/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Round 2's low finding 7: `checkCitations` used to default to this script's
+ * own `GRANDFATHERED`, so scanning a `--repo` fixture reported that
+ * checkout's own debt list as `STALE` against a corpus that never held it.
+ * `grandfatheredFor` reads the repository under test's own copy instead.
+ */
+test("grandfatheredFor reads the target repository's own citations-gate.mjs, not this script's", () => {
+  const repo = makeRepo();
+  try {
+    repo.write(
+      "scripts/citations-gate.mjs",
+      'export const GRANDFATHERED = new Map([\n  ["docs/work/only-here.md", 3],\n]);\n',
+    );
+    repo.commitAll("seed a fixture debt list");
+    expect(grandfatheredFor(repo.dir)).toEqual(new Map([["docs/work/only-here.md", 3]]));
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("grandfatheredFor is empty for a repository with no citations-gate.mjs at all", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("base");
+    expect(grandfatheredFor(repo.dir)).toEqual(new Map());
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("checkCitations defaults to the target repo's own list and reports no STALE entries for one with none", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    // No `grandfathered` argument — exercising the default, not `new Map()`.
+    const result = checkCitations(repo.dir, base);
+    expect(result).toMatchObject({ ok: true, bit: 0 });
+    expect(result.lines.join("\n")).not.toMatch(/STALE/);
   } finally {
     repo.cleanup();
   }
@@ -344,12 +452,37 @@ test("checkTitle fails outright on a title commit-message.mjs's own convention r
   }
 });
 
+/**
+ * Round 2's fourth med finding: `validate`'s own `BYPASS` lets a merge subject
+ * through with `ok: true` and no type at all, and this branch's own default
+ * title source is the branch's last commit subject — so a branch whose tip is
+ * a merge commit used to print `ok "undefined" is hidden …` and pass with no
+ * type-versus-paths check at all, silently.
+ */
+test("checkTitle fails a subject commit-message.mjs bypasses rather than reading its type as hidden", () => {
+  const repo = makeTitleRepo();
+  try {
+    const result = checkTitle(
+      repo.dir,
+      ["tools/downloader/docs/work/dl-1-a.md"],
+      "Merge branch 'main' into work",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.title);
+    expect(result.lines.join("\n")).toMatch(/no conventional subject found/);
+    expect(result.lines.join("\n")).not.toMatch(/undefined/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
 // --- check 5: merge-tree against every other open pull request head --------
 
 /**
  * Done when's fourth planted failure: a gate record two open heads both edit.
  * `main` is the shared base; `a` and `b` each rewrite `docs/work/x-1.md`'s
  * `## Review` section, so `a`'s own preflight sees `b` as a conflicting head.
+ * Compared by oid — round 2's fix — not by branch name.
  */
 test("checkMergeTree fails and names the gate record two open heads both edit", () => {
   const repo = makeRepo();
@@ -365,10 +498,11 @@ test("checkMergeTree fails and names the gate record two open heads both edit", 
     repo.git("checkout", "-q", "-b", "b");
     repo.write("docs/work/x-1.md", "## Review\n\nSecond pass, from b.\n");
     repo.commitAll("gate on b");
+    const oidB = repo.git("rev-parse", "b");
 
     repo.git("checkout", "-q", "a");
     const result = checkMergeTree(repo.dir, {
-      listOpenHeads: () => [{ number: 7, headRefName: "b", ref: "b" }],
+      listOpenHeads: () => [{ number: 7, headRefName: "b", oid: oidB }],
     });
     expect(result.ok).toBe(false);
     expect(result.bit).toBe(EXIT.mergeTree);
@@ -400,10 +534,11 @@ test("checkMergeTree passes and says so when the other open head does not confli
     repo.git("checkout", "-q", "-b", "b");
     repo.write("other.md", "changed by b, a different file entirely\n");
     repo.commitAll("edit on b");
+    const oidB = repo.git("rev-parse", "b");
 
     repo.git("checkout", "-q", "a");
     const result = checkMergeTree(repo.dir, {
-      listOpenHeads: () => [{ number: 7, headRefName: "b", ref: "b" }],
+      listOpenHeads: () => [{ number: 7, headRefName: "b", oid: oidB }],
     });
     expect(result).toMatchObject({ ok: true, bit: 0 });
     expect(result.lines.join("\n")).toMatch(/no conflicts with any other open pull request head/);
@@ -426,7 +561,55 @@ test("checkMergeTree says explicitly that an empty pull request list checked not
   }
 });
 
-test("checkMergeTree excludes the current branch's own pull request from the comparison", () => {
+/**
+ * Round 2's med finding 1, reproduced and now closed: comparing against
+ * `origin/<headRefName>` went stale the moment a peer pushed since this
+ * checkout last fetched. `refs/remotes/origin/b` is deliberately pointed at
+ * `main` here — as stale as a ref can be — while `listOpenHeads` reports `b`'s
+ * real, conflicting oid. `checkMergeTree` must still catch the conflict,
+ * because it never reads the ref at all.
+ */
+test("checkMergeTree compares the head's own oid and ignores a stale remote-tracking ref of the same name", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "main");
+
+    repo.git("checkout", "-q", "-b", "a");
+    repo.write("docs/work/x-1.md", "## Review\n\nSecond pass, from a.\n");
+    repo.commitAll("gate on a");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("docs/work/x-1.md", "## Review\n\nSecond pass, from b.\n");
+    repo.commitAll("gate on b");
+    const oidB = repo.git("rev-parse", "b");
+
+    // A stale local mirror of `b` — as if this checkout fetched before `b`'s
+    // gating commit was pushed, and never fetched again.
+    repo.git("update-ref", "refs/remotes/origin/b", mainOid);
+
+    repo.git("checkout", "-q", "a");
+    const result = checkMergeTree(repo.dir, {
+      listOpenHeads: () => [{ number: 7, headRefName: "b", oid: oidB }],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.mergeTree);
+    expect(result.lines.join("\n")).toMatch(/docs\/work\/x-1\.md/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Round 2's low finding 6, reproduced and now closed: excluding "this
+ * branch's own pull request" used to compare `git rev-parse --abbrev-ref
+ * HEAD` — the literal string `HEAD` in a detached worktree — against a branch
+ * name, so it never matched there. Comparing oids has no detached state to
+ * get wrong.
+ */
+test("checkMergeTree excludes the current branch's own pull request even in a detached HEAD", () => {
   const repo = makeRepo();
   try {
     repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
@@ -434,11 +617,33 @@ test("checkMergeTree excludes the current branch's own pull request from the com
     repo.git("checkout", "-q", "-b", "mine");
     repo.write("docs/work/x-1.md", "## Review\n\nMy own pass.\n");
     repo.commitAll("gate on mine");
+    const oidMine = repo.git("rev-parse", "mine");
+    repo.git("checkout", "-q", "--detach", oidMine);
+    expect(repo.git("rev-parse", "--abbrev-ref", "HEAD")).toBe("HEAD");
 
     const result = checkMergeTree(repo.dir, {
-      listOpenHeads: () => [{ number: 1, headRefName: "mine", ref: "mine" }],
+      listOpenHeads: () => [{ number: 1, headRefName: "mine", oid: oidMine }],
     });
     expect(result.lines[0]).toMatch(/against 0 other open pull request head/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** Round 2's addition to check 5: a head this checkout cannot fetch is a failure, not a skip. */
+test("checkMergeTree fails a pull request head whose oid this checkout does not have", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+    repo.commitAll("base");
+
+    const result = checkMergeTree(repo.dir, {
+      listOpenHeads: () => [{ number: 9, headRefName: "never-fetched", oid: "a".repeat(40) }],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.mergeTree);
+    expect(result.lines.join("\n")).toMatch(/never-fetched.*does not have/);
+    expect(result.lines.join("\n")).toMatch(/git fetch/);
   } finally {
     repo.cleanup();
   }
@@ -456,16 +661,21 @@ test("mergeTreeConflicts reports a real git failure rather than treating it as a
 });
 
 /**
- * `npm run check` / `npm test` stubbed out — a throwaway fixture repo has no
- * `node_modules` to run either against — every other command spawned for
- * real, so the four checks that do have an opinion run it.
+ * Every git/gh call spawned for real. Check 1's `npm run check` / `npm test`
+ * reach the network and a `node_modules` a throwaway fixture repo does not
+ * have, so they are stubbed separately, via `buildRun` — a decoupling `run`
+ * and `buildRun` only have since round 2, and load-bearing for it: check 1
+ * used to share `run` with everything else, which is what let its own
+ * `runCommand`-shaped error message leak `next-id.mjs`'s wording into a build
+ * failure (round 2's fifth med finding).
  */
-function realGitStubbedNpm(command: string, args: string[], options: { cwd?: string } = {}) {
-  if (command === "npm") return "";
+function realRun(command: string, args: string[], options: { cwd?: string } = {}) {
   const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")}\n${result.stderr}`);
   return result.stdout;
 }
+
+const stubBuild = () => "";
 
 // --- the whole pipeline ------------------------------------------------------
 
@@ -489,13 +699,75 @@ test("preflight sets no bit at all on a clean branch", () => {
 
     const results = preflight(repo.dir, {
       base,
-      run: realGitStubbedNpm,
+      run: realRun,
+      buildRun: stubBuild,
       grandfathered: new Map(),
       listOpenHeads: () => [],
     });
     const bitmask = results.reduce((mask, r) => mask | r.bit, 0);
     expect(bitmask).toBe(0);
     expect(results.every((r) => r.ok)).toBe(true);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Round 2's second med finding, reproduced and now closed: a bad `--base`
+ * used to propagate `git`'s own raw exit status (128) because nothing
+ * validated it before computing a diff against it. `preflight` now verifies
+ * `base` itself and raises `EXIT.setup`, matching `EXIT`'s own docblock.
+ */
+test("preflight raises EXIT.setup, not git's raw status, on a --base that does not resolve", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("base");
+
+    let caught: (Error & { exit?: number }) | undefined;
+    try {
+      preflight(repo.dir, { base: "no-such-base", run: realRun, buildRun: stubBuild });
+    } catch (error) {
+      caught = error as Error & { exit?: number };
+    }
+    expect(caught?.exit).toBe(EXIT.setup);
+    expect(caught?.exit).not.toBe(128);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Round 2's first med finding, reproduced and now closed: a check that threw
+ * used to abort the whole run before the other four printed anything, and the
+ * failing child's own raw exit status landed in the bitmask's own namespace.
+ * `listOpenHeads` here plays the part `gh` auth failure measured against the
+ * real CLI: a throw from inside check 5 alone.
+ */
+test("preflight isolates a throwing check to its own bit and still runs the other four", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("docs(repo): seed a fixture");
+    const base = repo.git("rev-parse", "HEAD");
+
+    const results = preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun: stubBuild,
+      grandfathered: new Map(),
+      listOpenHeads: () => {
+        throw new Error("gh: authentication failed");
+      },
+    });
+    const byName = (name: string) => results.find((r) => r.name === name);
+    expect(byName("mergeTree")).toMatchObject({ ok: false, bit: EXIT.mergeTree });
+    expect(byName("mergeTree")?.lines.join("\n")).toMatch(/authentication failed/);
+    expect(byName("check")).toMatchObject({ ok: true, bit: 0 });
+    expect(byName("citations")).toMatchObject({ ok: true, bit: 0 });
+    expect(byName("review")).toMatchObject({ ok: true, bit: 0 });
+    expect(byName("title")).toMatchObject({ ok: true, bit: 0 });
   } finally {
     repo.cleanup();
   }
