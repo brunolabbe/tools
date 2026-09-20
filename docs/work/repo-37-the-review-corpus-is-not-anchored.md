@@ -20,7 +20,7 @@ repo-29 built the gate and did not pay the debt. That was the owner's answer —
 the mechanism was the deliverable — but the debt has to have a home or the answer
 evaporates into a comment in a script. This is the home.
 
-`scripts/citations-gate.mjs:269 "const FAILING = new Set"` enforces anchors on
+`scripts/citations-gate.mjs@fdafd1a:269 "const FAILING = new Set"` enforces anchors on
 every work record's `## Review` section. **59 of the 63 records that have such a
 section are exempted by name**, each with the number of failing references it is
 allowed to hold. Measured on repo-29's branch:
@@ -120,7 +120,7 @@ should point at, which is this ticket's judgement and not a repoint. `repo-6`
 carries no `## Review` section, so no gate will ever raise it.
 
 **One known instance outside this scope, recorded here so it is not lost.**
-`.claude/skills/orchestrate-tickets/SKILL.md:115 "model: sonnet"` anchors on a
+`.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:115 "model: sonnet"` anchors on a
 fragment that occurs twice in `.claude/agents/ticket-reviewer.md`. repo-21's CI
 step over that file runs `--require-anchors` without
 `--require-distinct-anchors`, so it passes today. Whoever adds the stricter flag

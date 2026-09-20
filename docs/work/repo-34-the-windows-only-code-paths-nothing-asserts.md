@@ -381,7 +381,7 @@ scripts/citations.mjs docs/work/repo-31-the-windows-leg-is-almost-all-red.md`).
 docs/work/repo-31-the-windows-leg-is-almost-all-red.md` after the
     repoint: 20 verified / 8 moved — the 8 remaining are exactly those six
     `ci.yml` citations plus two pre-existing `MOVED`s unrelated to either
-    branch (`scripts/test/citations.test.ts:1319`,
+    branch (`scripts/test/citations.test.ts@fdafd1a:1319`,
     `tools/downloader/engine/test/hls-e2e.test.ts:366`, both already `moved`
     at `b384033`, before this ticket existed).
 

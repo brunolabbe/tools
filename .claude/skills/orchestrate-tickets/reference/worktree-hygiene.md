@@ -9,7 +9,10 @@ Two rules, both required:
 - Reviewers **return** their section as text; they never write it to a file.
 - Remove each worktree once its ticket is **finished** — merged, or abandoned —
   not when its PR opens: `git worktree remove --force <path>`, then
-  `git worktree prune`, then delete the `review-*` branch.
+  `git worktree prune`, then delete the `review-*` branch, then the ticket's
+  scratch directory `<scratchpad>/<ticket-id>/`, which holds the reviewer's
+  base-tree extract and outlives its rounds for that reason (repo-57). List it
+  beside the worktrees at close-out.
 
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.

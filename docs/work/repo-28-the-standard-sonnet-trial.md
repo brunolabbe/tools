@@ -208,7 +208,7 @@ the same page. `#170` was confirmed merged first — `gh pr view 170` reports
    which was chosen, and that it went against this ticket's own recommendation.
 2. **proven** — the `standard` row reads `` `sonnet` ``, and the change is now
    machine-checked from the other side: `SKILL.md` carries
-   `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+   `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |" as an anchored
    citation, and `ci.yml` runs
    `node scripts/citations.mjs …/SKILL.md --require-anchors` on every push. Revert
    the row and that job goes red naming this line.
@@ -221,11 +221,11 @@ the same page. `#170` was confirmed merged first — `gh pr view 170` reports
 
 Same checkout as repo-21's gate (one branch, shared commits); see that ticket's header for setup detail. Re-verified at the final tip `5065aed`; nothing in this ticket's own files changed between `928e3ac` and `5065aed`.
 
-| Done when                                          | Proof                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Decision recorded with answer and reason        | _Answered 2026-09-07_ section present: question, 3 options with the recommended one marked, which was chosen, whose recommendation it overrode, how it was taken ✓                                                                                                                                                                                            |
-| 2. `builder.md` reflects the answer                | `builder.md:23` "measured, and the cheapest row to get wrong — see below."'s `standard` row reads `sonnet`, confirmed by direct read and by `citations.mjs` resolving `SKILL.md`'s citation of it. Machine-checked from the other side: reverting the row turns `ci.yml`'s citations step red, reproduced independently as part of repo-21's Build 1.4 test ✓ |
-| 3. `npm run check` passes, `status --json` exits 0 | Reproduced at `5065aed`: both exit 0 ✓                                                                                                                                                                                                                                                                                                                        |
+| Done when                                          | Proof                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision recorded with answer and reason        | _Answered 2026-09-07_ section present: question, 3 options with the recommended one marked, which was chosen, whose recommendation it overrode, how it was taken ✓                                                                                                                                                                                                    |
+| 2. `builder.md` reflects the answer                | `builder.md@fdafd1a:23` "measured, and the cheapest row to get wrong — see below."'s `standard` row reads `sonnet`, confirmed by direct read and by `citations.mjs` resolving `SKILL.md`'s citation of it. Machine-checked from the other side: reverting the row turns `ci.yml`'s citations step red, reproduced independently as part of repo-21's Build 1.4 test ✓ |
+| 3. `npm run check` passes, `status --json` exits 0 | Reproduced at `5065aed`: both exit 0 ✓                                                                                                                                                                                                                                                                                                                                |
 
 - **low** · The ticket's own Done-when-3 test-count claim ("2170 passed") is correct — reproduced independently at 129 files / 2170 tests, matching exactly.
 - **dropped** · none.
@@ -299,7 +299,7 @@ NFR: security n/a · performance n/a — the cost/gate-parity arithmetic ($7.20 
   prose bullets that said less.
 
   **The row is now checked from both sides.** `SKILL.md` cites
-  `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+  `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |" as an anchored
   citation, and `ci.yml`'s `check` job runs `citations.mjs --require-anchors` over
   `SKILL.md` on every push (repo-21). Reverting the row without updating the skill
   turns CI red naming the line — which is the drift class repo-21 exists to catch,

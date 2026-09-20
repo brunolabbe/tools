@@ -23,7 +23,14 @@ Set up in this order, and **all of it before any test or check**:
    given. Detach rather than checking out the branch by name — the builder still
    holds that branch in its own worktree and git refuses a second checkout of it.
 2. **Confirm you are looking at the right tree**: `git log --oneline -1` and one
-   `git diff --stat <base>...HEAD`. **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
+   `git diff --stat <base>...HEAD`. **Resolve the base to a sha and say in the
+   section where the named branch landed after your fetch**: the base moves
+   between the dispatch and your fetch, and any `--against <branch>` you run
+   then compares with a tree the dispatch never named. Four gates on
+   2026-09-20 each found the base one to four commits past the sha they were
+   given; harmless each time because the diff range was pinned by sha, and a
+   gate that had used the branch name for the range would have reviewed
+   different work without noticing. **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
 3. Populate `node_modules` with
    `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. Not `npm install`:
    it is minutes and can fail outright when a postinstall cannot reach the
@@ -106,7 +113,10 @@ first attempt.
 "reply to me at `<your id>`". You were dispatched after it was, so its prompt
 cannot have named you, and your message is the only place it can learn where to
 answer. Leaving this out is what ended three consecutive exchanges after one
-message.
+message. **If `ListAgents` is not in your function schema** — the delivered
+tool set has been measured short of the frontmatter's more than once — take the
+id from your worktree directory name, `agent-<id>`, and say it is derived; a
+gate that did so on 2026-09-20 reached its builder on the first message.
 
 **Send the same findings to the orchestrator, in full, in the same pass** — not a
 status line saying you sent them. It has to weigh your account against the
@@ -127,11 +137,17 @@ say what was run rather than that it was addressed. Both accounts of the same
 exchange, written by two models, is what lets a reader hold one against the other.
 
 **Your report is accepted or sent back — it is not the end of the job.** The
-orchestrator checks four things: that each finding names the command that settled
+orchestrator checks five things: that each finding names the command that settled
 it, that your account and the builder's describe the same exchange, that every
-`Done when` line carries a verdict with a test named, and that any open decision
-reached it rather than being resolved between you. Write the report so those are
-answerable without a follow-up question.
+`Done when` line carries a verdict with a test named, that the population you say
+you read equals the population that exists — a gate told to enumerate read 39 of
+114 pins and reported PASS (2026-09-13) — and that any open decision reached it
+rather than being resolved between you. Write the report so those are answerable
+without a follow-up question. **End it with what these pages got wrong or omitted
+for this gate**, whether or not your dispatch asked; that field is what the
+skill's history is built from. **Never write `# Done`**: that heading closes the
+session that talks to the user, and in your report it lands mid-transcript
+claiming a batch is over (2026-09-17).
 
 **Do not agree in order to be finished.** A pair that both want to be done can
 converge on "addressed" with nothing run between them, and that failure looks
@@ -147,13 +163,13 @@ built them.** Builders inherit the orchestrator's model and gates did too, so
 every gate re-ran the reasoning that produced the code, which is the one thing
 this split exists to prevent.
 
-So the default is Sonnet, which is right whenever the builder ran Opus — the
-common case, since builders inherit and the orchestrator is usually Opus.
-
-**When the builder ran Sonnet, the caller must override to `opus`.** The default
-cannot know that; the caller can, because the builder's own Agent result reports
-`resolvedModel`. Never `haiku` and never `fable`: the rule is "a different model",
-not "a cheaper one", and a gate from a small model still reads as PASS.
+So the default is Sonnet, which is right for a `hard` ticket and for an unrated
+one under an Opus orchestrator, and wrong for every `standard` ticket, which
+builds on Sonnet by rating. **The caller passes your model per ticket from the
+pairing table in `SKILL.md`**, knowable at dispatch without reading any
+`resolvedModel`; the default is what you run on when it forgets. Never `haiku` and
+never `fable`: the rule is "a different model", not "a cheaper one", and a gate
+from a small model still reads as PASS.
 
 ## What the tool list already decides for you
 
@@ -180,7 +196,43 @@ own acceptance, trace each "Done when" line to the test that proves it, and chec
 this repo's invariants. Run the defect hunt yourself.
 
 **Cite line numbers against the tip you actually reviewed**, and name that sha in
-the section. Lines move between the gate and the commit that records it.
+the section. Lines move between the gate and the commit that records it. **Never
+write a `@sha` pin to a branch-only commit into the section**: the branch is
+deleted on merge, the pin goes `unresolvable` in CI for everyone, and one such
+record cost four repair rounds across five pull requests (2026-09-14). Anchor the
+coordinate instead; where text was deleted, write prose naming the sha, or an
+evidence declaration — `records.md` has both forms.
+
+**Dry-run your section against the checker before you hand it over.** You have
+no `Write`, so build the scratch copy with Bash and `node -e` into your
+scratchpad: the ticket as it is on the branch, your section spliced in above
+`## Log`, then `node scripts/citations.mjs <copy> --section Review
+--require-anchors --require-distinct-anchors`. That is the command the builder
+runs before committing; a section that fails it there costs a round
+(2026-09-13), and one dry-run at the real insertion point needed no repair on
+landing (2026-09-09). An anchor cannot contain a double quote, and a coordinate
+into the ticket's own file can never be distinct — name the section instead.
+**To materialise the base tree for a before-and-after measurement**, use
+`git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command: it
+survives the sandbox where `git show` inside a loop or a `node -e` program does
+not, and it is what made two gates' base-versus-tip citation sweeps possible
+(2026-09-20). **Keep the extract and any comparison script in the ticket's
+scratch directory, the `<scratchpad>/<ticket-id>/` path your prompt names, and
+look there first when you are woken**: a gate woken for round two, three or
+four re-verifies its earlier measurements against the same base, and rebuilding
+the extract each time is most of what made a later round cost an hour where the
+one with the extract kept cost ten minutes (2026-09-20, repo-57). A round that
+rebuilds an extract already present says why.
+
+**The sandbox refuses some ordinary shell shapes**, with "too complex to verify
+that it stays inside the worktree": a git command followed by `echo $?`, a
+heredoc, a variable holding a path, a `for` loop, an `awk` program containing
+`>>`, `python3` (2026-09-12 to 2026-09-14), and `git` named inside a `node -e`
+program — the trigger is the literal token `git` anywhere in the program text,
+even in a string that never runs (2026-09-20). One plain command per call, literal
+paths, `printf`, `awk -v` and `node -e` hold; read an exit code by redirecting
+output to a file and running the next command plainly. Rewrite the shape rather
+than reporting a broken channel.
 
 **Verdict, then evidence.** For each finding give the reproduction, not a verdict
 to implement — the builder is told to reproduce before accepting, and a finding it

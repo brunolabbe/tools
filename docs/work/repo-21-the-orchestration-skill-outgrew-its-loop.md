@@ -100,7 +100,7 @@ the rewrite, and only fixed it when this filing pointed at it.**
 **1. A claim about another file that stopped being true.** `SKILL.md` step 4 said
 a `mechanical` ticket puts a **Sonnet** builder in a batch, and drew from that the
 consequence that the gate's model "cannot be set once". `.claude/agents/builder.md`
-maps `mechanical` to **`haiku`** — verified at `.claude/agents/builder.md:22`, ``| `mechanical`
+maps `mechanical` to **`haiku`** — verified at `.claude/agents/builder.md@fdafd1a:22`, ``| `mechanical`
 | `haiku` |``. The skill was right when written; `builder.md` changed underneath
 it, and the sentence went on being read as current for as long as nobody
 re-checked. Nothing could have caught this, because nothing checks it.
@@ -217,7 +217,7 @@ from a scratch copy, not from its documentation:
   **not** parse as citations, so today `SKILL.md` has effectively none.
 - Writing defect 1's own sentence as a citation reports
   `MOVED  .claude/agents/builder.md:22 "| \`mechanical\` | \`sonnet\` |"`with
-*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
+*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md@1bb63fa:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
 **0** with`--require-anchors`. **The check would have caught defect 1 and does
   not fire on the corrected text.**
 - Working-tree mode uses `git ls-files`, so it needs no history: it is safe in
@@ -266,7 +266,7 @@ between them, which is why nothing can be removed. Give each provision:
   list would be worse than what exists now. **Do not delete the numbers.**
 - **Narrative** — the story of the session that found it. Moves to
   `reference/history.md`, which is already scoped for exactly this readership:
-  `.claude/skills/orchestrate-tickets/SKILL.md:17` sends the reader there with _"read it only if you are revising
+  `.claude/skills/orchestrate-tickets/SKILL.md@cddbbb4:17` sends the reader there with _"read it only if you are revising
   this skill"_. (The sentence is in `SKILL.md`'s own preamble describing
   `history.md`, not inside `history.md` — worth knowing before you go looking for
   it there.)
@@ -344,7 +344,7 @@ here **who had just written the model version down.** Move the statement into th
 table, leave a pointer — the same shape as Build 7.
 
 **Disambiguate the term while you are in there.**
-`reference/defect-shapes.md:41,63` uses "self-report" for a builder's claim about
+`reference/defect-shapes.md@cddbbb4:41,63` uses "self-report" for a builder's claim about
 its **work**, not about **itself**. One word doing two jobs is how a rule gets
 read as already-covered. Name them apart; do not merge them.
 
@@ -624,7 +624,7 @@ Checked out `6c0ee2e` via `git fetch origin && git checkout --detach 6c0ee2e`. `
 - **med** · Build 4 (90 of the Build section's 301 lines, by far the largest of 7 steps) does not follow the ticket's own instruction/measurement/narrative split — much of the "Inferred, not stated" block is story rather than instruction+citation. Recommend compressing to a citation plus the resulting bullets.
 - **med** · No general "an instruction lives in exactly one file, everywhere else is a pointer" rule is stated, despite `Packages` now spanning three files and Build 7 relying on exactly that principle for its own placement. Recommend one sentence, most naturally in Build 2.
 - **low** · "Corrected two commits later by `62cb999`" — `git rev-list --count a980d5e..62cb999` = 1, the very next commit.
-- **low** · "`citations.mjs` prints the rule that covers this" — that sentence is a source comment (`scripts/citations.mjs:730-732`), never printed at runtime. Substance unaffected.
+- **low** · "`citations.mjs` prints the rule that covers this" — that sentence is a source comment (`scripts/citations.mjs@fdafd1a:730-732`), never printed at runtime. Substance unaffected.
 - **low** · "`reference/history.md`, which already tells its reader..." — that sentence is in `SKILL.md`'s own Reference table, not inside `history.md`.
 - **low** · "Step 2's decision-grep bullets are 13 lines" — counted 15 (lines 55-69); flagged at low confidence in case a different span was meant.
 - **dropped** · none.
@@ -644,7 +644,7 @@ reviewer also self-corrected its own last finding before I acted on it.
 | 3   | no general one-file rule             | **accepted**                                                                      | `grep -niE 'exactly one file\|single home\|everywhere else is a pointer'` → no match                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 4   | "two commits later"                  | **accepted**                                                                      | `git rev-list --count a980d5e..62cb999` → 1                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 5   | "`citations.mjs` prints the rule"    | **refuted, and the finding improved anyway**                                      | `sed -n '430,440p' scripts/citations.mjs` → the sentence is inside a `process.stderr.write`, and it is the tail of the ticket's own reproduced run. It **is** printed on `main`. It is a comment at `:730-732` in the **`repo-18`** version the reviewer read — which this ticket depends on, so the verb goes false when `#146` merges. Both halves now recorded                                                                                                                                |
-| 6   | `history.md` self-declaration        | **accepted**                                                                      | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md:17`, no hit in `history.md`                                                                                                                                                                                                                                                                                                                                                                                       |
+| 6   | `history.md` self-declaration        | **accepted**                                                                      | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md@cddbbb4:17`, no hit in `history.md`                                                                                                                                                                                                                                                                                                                                                                               |
 | 7   | "13 lines"                           | **accepted, and both counts were wrong**                                          | bullet 1 is `55–70` = **16** lines; `sed -n '71p'` is the next bullet's first line. Pair with the seam-mapper bullet = `55–76` = 22. The reviewer's self-correction that `main` lacks this content entirely is confirmed: `grep -n "Read the matches, do not count them" SKILL.md` exits 1 on `main`                                                                                                                                                                                             |
 
 **Two-sided model check.** The reviewer quoted _"You are powered by the model named
@@ -736,7 +736,7 @@ grounds that a third instance was not worth a re-gate. The owner questioned the
 
 Measured before acting, all three confirmed:
 
-- `reference/dispatching.md:196-199` states it for **tool lists only**, on a page
+- `reference/dispatching.md@fdafd1a:196-199` states it for **tool lists only**, on a page
   about dispatch mechanics. **Corrected by gate 3, and the correction is the
   finding: those coordinates are `main`'s.** The blocking record branch inserts
   ~27 lines above the passage, so on the tree this ticket says to build against it
@@ -747,7 +747,7 @@ Measured before acting, all three confirmed:
 - **`repo-21` restated it five times** — at the pre-amendment lines 361, 383, 589,
   780, 796. A fourteenth row written as an instance would have been the sixth
   mention in one ticket.
-- `reference/defect-shapes.md:41,63` uses "self-report" for a **different** thing:
+- `reference/defect-shapes.md@cddbbb4:41,63` uses "self-report" for a **different** thing:
   a builder's claim about its _work_, not about _itself_. Genuine term collision.
   **Verified stable across both trees** — the record branch does not touch this
   file, so unlike the citation above these coordinates hold where the work happens.
@@ -796,14 +796,14 @@ escalations.
   lines for fourteen rows exactly as it did at 42 for twelve. A real fourteenth
   shape costs real estate the same way the first thirteen did.
 
-**One new finding, accepted: `dispatching.md:196-199` is `main`'s coordinates, not
+**One new finding, accepted: `dispatching.md@fdafd1a:196-199` is `main`'s coordinates, not
 the build tree's.** Reproduced — `grep -n "Ask an agent to"` gives 198 on `main`
 and **225** on the record branch, which inserts ~27 lines above the passage; the
 sentence is identical on both. **This is defect 4's shape one level down** — right
 sentence, stale coordinates — and I caused it by checking against `main` while the
 rest of this ticket is pinned to the blocking dependency. Build 3 now cites the
 passage by its quoted opening instead of by number, which is what this ticket's own
-top-of-file rule already told me to do. `defect-shapes.md:41,63` was checked the
+top-of-file rule already told me to do. `defect-shapes.md@cddbbb4:41,63` was checked the
 same way and is byte-identical on both trees, so it keeps its numbers.
 
 **Verdict: settled at `319fe40`.** The reviewer re-derived every claim on a fresh
@@ -831,18 +831,18 @@ what covers the real tip, and it is the only participant positioned to take it.
 
 Checked out `928e3ac` via `git fetch origin && git checkout --detach 928e3ac`. `git log --oneline -1` matched; `git diff --stat origin/main...HEAD` showed 9 files, 1004 insertions / 601 deletions across six commits (this ticket plus repo-28, coupled per repo-28's Build step 2). `worktree-farm.sh` then `npm run build` succeeded before any check.
 
-| Done when                                                                         | Proof                                                                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. `citations.mjs --require-anchors` on `SKILL.md` exits 0, all `ok`              | Reproduced: exit 0, 5/5 `ok` ✓                                                                                                                                                                                                                                                                 |
-| 2. Same command in `ci.yml`'s `check` job; Log records Build 1.4's falsify/revert | `ci.yml` runs it in the unfiltered `check` job. Falsify/revert reproduced independently: falsifying the `mechanical` anchor → exit 2, 1 moved; revert → exit 0, matching the Log's transcript ✓. Confirmed independently the step needs no build (ran with `dist/` moved aside, still correct) |
-| 3. Every cross-file claim is an anchored citation                                 | `grep -noE '\]\(\.\./[^)]*\)' SKILL.md` → empty ✓                                                                                                                                                                                                                                              |
-| 4. Laundering family collapsed to 1 section, 14-row table                         | Confirmed: 1 `###` heading under `## Decisions`, 14 data rows ✓                                                                                                                                                                                                                                |
-| 5. Loop: 12 steps, no paragraph >3 lines                                          | Confirmed via `awk` ✓                                                                                                                                                                                                                                                                          |
-| 6. Every dated measurement at merge-base survives in `SKILL.md` or `history.md`   | **unproven as literally written** — two of ~29 dated measurements (the 2026-09-06 task-output-file result, repo-17's ~94% figure) live in `reference/dispatching.md:101` "182 records, one" and `:110` "repo-17 measured on 2026-09-01", not in the line's named pair. See finding below       |
-| 7. Defect 4 gone, did not come back                                               | `grep -n resolvedModel SKILL.md` → both lines the narrow correct form ✓                                                                                                                                                                                                                        |
-| 8. No self-report-as-model verification path                                      | Confirmed, 1 line, the explaining clause only ✓                                                                                                                                                                                                                                                |
-| 9. `records.md` one generalisation; step 7 one clause                             | Confirmed ✓                                                                                                                                                                                                                                                                                    |
-| 10. `npm run check`, `format`, `status --json` pass                               | Reproduced independently, all exit 0 ✓                                                                                                                                                                                                                                                         |
+| Done when                                                                         | Proof                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. `citations.mjs --require-anchors` on `SKILL.md` exits 0, all `ok`              | Reproduced: exit 0, 5/5 `ok` ✓                                                                                                                                                                                                                                                                   |
+| 2. Same command in `ci.yml`'s `check` job; Log records Build 1.4's falsify/revert | `ci.yml` runs it in the unfiltered `check` job. Falsify/revert reproduced independently: falsifying the `mechanical` anchor → exit 2, 1 moved; revert → exit 0, matching the Log's transcript ✓. Confirmed independently the step needs no build (ran with `dist/` moved aside, still correct)   |
+| 3. Every cross-file claim is an anchored citation                                 | `grep -noE '\]\(\.\./[^)]*\)' SKILL.md` → empty ✓                                                                                                                                                                                                                                                |
+| 4. Laundering family collapsed to 1 section, 14-row table                         | Confirmed: 1 `###` heading under `## Decisions`, 14 data rows ✓                                                                                                                                                                                                                                  |
+| 5. Loop: 12 steps, no paragraph >3 lines                                          | Confirmed via `awk` ✓                                                                                                                                                                                                                                                                            |
+| 6. Every dated measurement at merge-base survives in `SKILL.md` or `history.md`   | **unproven as literally written** — two of ~29 dated measurements (the 2026-09-06 task-output-file result, repo-17's ~94% figure) live in `reference/dispatching.md@fdafd1a:101` "182 records, one" and `:110` "repo-17 measured on 2026-09-01", not in the line's named pair. See finding below |
+| 7. Defect 4 gone, did not come back                                               | `grep -n resolvedModel SKILL.md` → both lines the narrow correct form ✓                                                                                                                                                                                                                          |
+| 8. No self-report-as-model verification path                                      | Confirmed, 1 line, the explaining clause only ✓                                                                                                                                                                                                                                                  |
+| 9. `records.md` one generalisation; step 7 one clause                             | Confirmed ✓                                                                                                                                                                                                                                                                                      |
+| 10. `npm run check`, `format`, `status --json` pass                               | Reproduced independently, all exit 0 ✓                                                                                                                                                                                                                                                           |
 
 - **med** · Done-when 6 is internally self-contradictory, independent of anything this branch did: its primary clause ("somewhere in the skill") and its own checkable procedure ("grep each in the new tree") both already admit `reference/dispatching.md`, while only its em-dash apposition ("`SKILL.md` or `reference/history.md`") excludes it — three readings of four pass. Reproduced independently by builder and reviewer with the same command. Nothing was lost: every other spot-checked dated measurement from the merge-base survives in the named files, and a full 29-measurement sweep confirms it.
 - **low** · The Log's "`records.md`'s citation output is now byte-identical to `main`'s" is not literally true — same resolution status per entry, different `record line N` values from unrelated content shifting line numbers elsewhere in the file.
@@ -857,7 +857,7 @@ NFR: security n/a (docs/CI only) · performance n/a · reliability — CI step w
 All three Gate 1 findings resolved on the branch and independently re-verified, not taken from the Log:
 
 - **Finding 1 (med), fixed.** `Done when` 6 amended in place at lines 539–583: original text byte-for-byte untouched, an indented annotation beneath it admits `reference/dispatching.md` as a third home **"for a measurement whose instruction is dispatch mechanics"**, states explicitly _"Not 'or elsewhere in the skill' — three named files, closed the way the original was closed, and a fourth needs its own amendment,"_ quotes the contradiction, states the checked property (29 of 29 survive), gives an honest mixed self-assessment (tighter than the procedure clause, looser than the apposition by one file), and records a rejected fourth remedy (moving both into `history.md`'s tenth-session row) with the command that killed it (`27,800`/`87,596`/`100–330` each have exactly one home across the skill, so a two-home measurement has no precedent). Re-verified myself: the annotation text matches exactly what's described; re-ran the 29-measurement sweep independently and confirm 29/29 with the two resolving under the three named files (`grep -n "182 records\|94% of the bill" SKILL.md reference/history.md reference/dispatching.md` → both found, only in `dispatching.md`). `Done when` 6 is now **proven** as amended.
-- **Finding 2 (low), fixed and improved.** The Log's "byte-identical" claim is struck through and withdrawn in place (not deleted), with the actual mechanism written up: the builder's own verification command produced silent, correct output and then had an authored `&& echo "IDENTICAL to main"` label read back as if it were the tool's result. Re-ran the comparison myself without any label in the output position: 13 references both sides, identical resolution state and citation target on every entry once record-line numbering noise is stripped, exit 11 both ways — matches the corrected claim exactly. Filed as instance four of `records.md`'s existing "a command's real signal is not the line you read" family (`reference/records.md:331-342` "on the end of a check is your label, not the tool's"), not as a new `SKILL.md` row — right call, since `SKILL.md` is the page this ticket just halved and `records.md` already governs exactly this failure shape.
+- **Finding 2 (low), fixed and improved.** The Log's "byte-identical" claim is struck through and withdrawn in place (not deleted), with the actual mechanism written up: the builder's own verification command produced silent, correct output and then had an authored `&& echo "IDENTICAL to main"` label read back as if it were the tool's result. Re-ran the comparison myself without any label in the output position: 13 references both sides, identical resolution state and citation target on every entry once record-line numbering noise is stripped, exit 11 both ways — matches the corrected claim exactly. Filed as instance four of `records.md`'s existing "a command's real signal is not the line you read" family (`reference/records.md@fdafd1a:331-342` "on the end of a check is your label, not the tool's"), not as a new `SKILL.md` row — right call, since `SKILL.md` is the page this ticket just halved and `records.md` already governs exactly this failure shape.
 - **Finding 3 (low), no fix, correctly attributed.** The Log now credits the reviewer's gate with confirming the CI step needs no build (`dist/` removed, step still works) and that `check` carries no path filter. What remains genuinely unmeasured — an actual green run in GitHub Actions — is stated as exactly that, with the empty `gh run list` as its evidence. Nothing to fix; this stays true until a PR opens.
 
 **Re-verified independently at `5065aed`, not read off the Log:** `npm run check` exit 0 · `npm run format` exit 0, clean `git status` · `node scripts/status.mjs --json` exit 0 · `npm test` 129 files / 2170 tests, unchanged · both new commit subjects pass `commit-message.mjs` · `citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors` exit 0, 5/5 ok · the ticket's own `citations.mjs` run still exits 3 with exactly its two deliberate bare failures, the Build-1.4 evidence declaration still suppressing correctly.
@@ -911,10 +911,10 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   it must not be edited to make a checker happy, and it is the very citation the
   dispositions table refutes, so repointing it would erase the finding it is
   evidence for. **Both are the carve-out the tool names and cannot check.** `main`'s `citations.mjs` **prints** the rule that covers
-  this on the `unresolvable` path — `scripts/citations.mjs:435-436`, inside a
+  this on the `unresolvable` path — `scripts/citations.mjs@fdafd1a:435-436`, inside a
   `process.stderr.write`, reproduced as the tail of the run above: _"a
   citation that is a finding's own evidence … must stay as written."_ The other
-  five (`.claude/agents/builder.md:22` ×3 and `.claude/agents/ticket-reviewer.md:6`
+  five (`.claude/agents/builder.md@fdafd1a:22` ×3 and `.claude/agents/ticket-reviewer.md@cddbbb4:6`
   ×2) all verify against their anchors. Nothing in CI reads tickets with
   `citations.mjs` today, so no gate is red. **Re-run this before gating** — the
   first draft of this bullet said `3/4` and was falsified by the commit that
@@ -940,7 +940,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   more defect.** The −9 cut was not taken and my "+21 was unavoidable" defence was
   upheld, both on the reviewer's own line-by-line check rather than on my argument.
   The new finding is the one worth carrying forward: **I cited
-  `dispatching.md:196-199` off `main` while every other coordinate in this ticket
+  `dispatching.md@fdafd1a:196-199` off `main` while every other coordinate in this ticket
   is pinned to the blocking dependency, and the record branch moves that passage to
   223–225.** Right sentence, wrong coordinates — defect 4's shape, committed by the
   filer, in the amendment that added a row about checking claims from outside. Now
@@ -1159,7 +1159,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
      real matches on stdout, **exit 2**.
   6. **`citations.mjs` no longer prints the carve-out sentence**, which this Log's
      third bullet predicted would go false when `#146` merged. Withdrawn in place
-     rather than rewritten: that bullet's "prints … `scripts/citations.mjs:435-436`"
+     rather than rewritten: that bullet's "prints … `scripts/citations.mjs@fdafd1a:435-436`"
      is false at `24e5bf7`. The sentence is a source comment on line 1320 and
      appears in no output — confirmed by running the tool over `SKILL.md`'s
      unresolvable state and reading the whole stderr trailer.
@@ -1177,7 +1177,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   exit 2 — 1 moved
   ```
 
-  <!-- citations: evidence .claude/agents/builder.md:21-25 -->
+  <!-- citations: evidence .claude/agents/builder.md:21-25, .claude/agents/builder.md:22 -->
 
   Reverted, and the same command exits **0** with `4 verified, 0 moved, 0
 unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
@@ -1253,7 +1253,7 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
 
 - **A citation I added and then removed, because it made two other references
   falsely resolve.** The exit-code correction above was first written as a real
-  `scripts/citations.mjs:662` citation. It verified — and it also became the
+  `scripts/citations.mjs@fdafd1a:662` citation. It verified — and it also became the
   _nearest preceding qualified citation_ for the two illustrative shorthands
   further down that page (_"the text is at `:94-95`, not `:93-94`"_), which
   promptly stopped failing and started resolving against `citations.mjs`, a file
@@ -1390,7 +1390,7 @@ gated it` gained a four-row pairing table with a gate column and lost three
   still pass, including the loop's twelve steps and three-line paragraph bound.
 
   **It also gave the citation gate its first real subject.** The pairing table
-  cites `.claude/agents/builder.md:23` "| `standard` | `sonnet` |", so the row
+  cites `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |", so the row
   `repo-28` just changed is machine-checked from `SKILL.md` by the `ci.yml` step
   this ticket adds. A future revert of that row without a matching skill edit is
   now a red CI run naming the line — defect 1's class, caught on the first change

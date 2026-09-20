@@ -92,7 +92,7 @@ account, provenance-marked, and checked as far as the tree allows:
 **This is not a one-off.** `history.md` records the same shape twice more,
 both re-read here for what they actually say, not for a paraphrase:
 
-- **Nineteenth session (2026-09-13)**, `history.md:2672` — matches. "The
+- **Nineteenth session (2026-09-13)**, `history.md@fdafd1a:2672` — matches. "The
   seam-mapper reported no file overlap, and the owner chose 'pl-39 + pl-42
   only'... The branches as finished share two paths, neither of which the
   briefs predicted: `tools/planner/contract/src/errors.ts` (pl-42's new codes;
@@ -103,7 +103,7 @@ both re-read here for what they actually say, not for a paraphrase:
   costly — the same passage records "`git merge-tree --write-tree` reports no
   conflict, and the scratch merge passes the citation gate." A shared touch
   is not always a collision; `dl-56`/`dl-58` is the case where it was.
-- **Seventeenth session (2026-09-12/13)**, `history.md:2511`, item 10 —
+- **Seventeenth session (2026-09-12/13)**, `history.md@fdafd1a:2511`, item 10 —
   **does not match, and is dropped from this claim rather than folded in.**
   That passage is about `repo-39` and `repo-35` both editing the
   `GRANDFATHERED` list, which moved lines `repo-37`'s **already-existing**
@@ -129,7 +129,7 @@ or 3).
 **The cost this batch actually paid is not novel, and a stacking tool would
 not close the largest part of it.** `history.md`'s Sixteenth session row
 (`repo-40`) measured the same class of problem head-on:
-`.claude/skills/orchestrate-tickets/reference/history.md:2304-2307` — "Under
+`.claude/skills/orchestrate-tickets/reference/history.md@fdafd1a:2304-2307` — "Under
 squash-merge, a stacked branch conflicts with `main` after its own base lands
 even though it carries the identical commits, because the squash produces a
 new commit that is not an ancestor of the stack." That reconciliation is paid
@@ -198,7 +198,7 @@ relayed claim (above); do not repeat that pattern.
      against another feature branch disappears with it, and its own page
      still says merged" is exactly the hazard a draft base has to be watched
      against, and
-     `history.md:2304-2307`'s measured repeat-conflict mechanism above is
+     `history.md@fdafd1a:2304-2307`'s measured repeat-conflict mechanism above is
      what still has to happen once the base lands.
    - That this option does not eliminate the reconciliation `repo-40`'s record
      measured; it only sequences _when_ it happens (once, after the base
@@ -370,11 +370,11 @@ decision" is now tree-confirmed, not just asserted; "the seam-mapper's matrix
 named these specific other pairs" remains the orchestrator's account, marked
 as such, since seam-map output is never committed here. Also checked, per the
 coordinator's second message, two further `history.md` passages it named as
-supporting evidence: the Nineteenth-session row (`history.md:2672`,
+supporting evidence: the Nineteenth-session row (`history.md@fdafd1a:2672`,
 `pl-39`/`pl-42`) is the same shape — an intake-time seam map missing a seam a
 mid-batch decision later created — though that instance never became a
 conflict (`git merge-tree` clean, citation gate clean on the scratch merge).
-The Seventeenth-session row (`history.md:2511`, item 10, `repo-39`/`repo-35`
+The Seventeenth-session row (`history.md@fdafd1a:2511`, item 10, `repo-39`/`repo-35`
 on the `GRANDFATHERED` list) is a **different shape** — a citation-into-a-
 shared-file seam that existed at intake and was missed because the seam map's
 detection is edit-based, not because a decision created it after dispatch —

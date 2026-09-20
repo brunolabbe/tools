@@ -26,6 +26,20 @@ under a heading of its own and `## Review` stays empty until something is built 
 work that merged without its status being flipped. `dl-29` is the worked example:
 gated as a filing, recorded under `## The gate on this filing`.
 
+**And when the branch has no ticket at all** — a skill correction, a records
+pass, anything the loop produces about itself — three of the steps below have no
+object: step 1 has no ticket to read, step 4 has no `Done when` lines, and step 8
+has no `## Log` to commit above. The dispatcher supplies the acceptance lines in
+the prompt and names the commit message as the brief; the reviewer traces each
+supplied line as it would a ticket's; and the section goes on the pull request
+thread rather than into a file, per `orchestrate-tickets`' `records.md`. The
+severity table below then grades the prompt's lines exactly as it would a
+ticket's — an unproven one is still FAIL — and the reviewer says so in the
+section, because a prompt's acceptance and a ticket's are the kind of difference
+that otherwise gets argued in a round. Every other step applies unchanged. A gate
+on 2026-09-20 needed all of this patched by hand in its prompt, which is what
+this paragraph replaces.
+
 ## Arguments
 
 `/review-ticket <id> [level]` — e.g. `pl-16`, or `dl-9 high`.
@@ -127,11 +141,19 @@ independence a separate transcriber would buy: the subject of the review
 becomes its own transcriber, and the disclosure note below plus the posted
 report (step 8) are what is left standing in its place.
 
-So the builder writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
-in the branch's own commit, then runs `npx oxfmt` on the ticket file — markdown is
-formatted in this repo, and an unformatted table fails `npm run check`, which is
-the merge gate. Formatting is not a rewrite and does not conflict with committing
-it verbatim: it pads table cells to column width and touches nothing else.
+So the builder lands it in `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
+in the branch's own commit, with `scripts/review-record.mjs` as step 8 says —
+the script splices, formats and checks it in one run. Markdown is formatted in
+this repo, and an unformatted table fails `npm run check`, which is the merge
+gate; formatting is not a rewrite and does not conflict with committing it
+verbatim, since it pads table cells to column width and touches nothing else.
+**Each gate on a ticket is its own commit**: the script refuses to run on a
+ticket dirty against `HEAD`, so land gate 1, commit, then land the next, and a
+four-gate ticket is four commits (repo-55, 2026-09-20). A record with several
+gates is restated at the current tip when a later round moves the lines an
+earlier gate cited: a coordinate that resolves onto the repair is not a
+citation of the defect, so re-resolve, or rewrite the finding's coordinate as
+prose that names the sha it was true at.
 
 **Verbatim is the whole point, and it is now the builder who could break it.**
 Under the old wording a caller that edited the section had "handed the review back
@@ -217,12 +239,25 @@ is the builder's alone.
 
    Two constraints on the fragment, both of which have bitten somebody here:
 
-   - **No `"` inside it.** The parser's anchor group admits none, so escaping
-     one truncates the fragment at the backslash and the citation reports
-     `moved`. Pick a quote-free substring.
-   - **Quote enough of the line to be unique.** `verified` means *some*
-     occurrence of your fragment starts inside the range you named — not that
-     only one does. A one-word anchor keeps saying `ok` after an unrelated edit
+   - **No `"` inside it, and no backtick either.** The parser's anchor group
+     admits no `"`, so escaping one truncates the fragment at the backslash and
+     the citation reports `moved`. A backtick inside the fragment breaks the
+     cell's inline-code parsing, and the formatter then rewrites the text
+     around it — measured on a gate's own first draft, 2026-09-20. Pick a
+     substring free of both.
+   - **A citation into any file under `.claude/` is pinned or names a
+     heading, never a bare line number.** Those pages move every few sessions
+     and an unanchored coordinate into them is silently redirected by the next
+     edit; write `<file>@<rev>:<line>` with a `main` commit, or the page and
+     the heading (repo-52). `citations.mjs --require-claude-pins` reports the
+     bare form as `unpinned-volatile`.
+   - **Quote enough of the line to be unique, and know that the line wrap bounds
+     what you can quote.** `verified` means *some* occurrence of your fragment
+     starts inside the range you named — not that only one does. In prose files
+     the fragment cannot cross a physical line break, so the distinctive words
+     are sometimes on the next line; cite that line, or a range, rather than
+     settling for a short fragment that verifies on more than one line
+     (2026-09-20). A one-word anchor keeps saying `ok` after an unrelated edit
      slides a different occurrence onto the cited line, which is exactly how
      `repo-31`'s `"informational"` citation survived pointing at a comment it had
      nothing to do with.
@@ -321,17 +356,29 @@ is the builder's alone.
    when you report, so a file you edit here goes nowhere. The builder commits it.
 
 8. **Commit the section, post the report, then say what would clear it.** This
-   step is the builder's, and it has three acts. First write the returned section
-   into the ticket above `## Log`, verbatim, in the branch's own commit, together
-   with the disclosure note — say that you transcribed it and name what you
-   altered or dropped from the reviewer's text, "nothing" included — and
-   before that commit, run `node scripts/citations.mjs <ticket> --section Review
-   --require-anchors --require-distinct-anchors` over it and fix what it says. That is the check CI is
-   about to run; catching it here costs one command, and catching it in CI costs
-   a push. Where a citation is deliberately unresolvable — a coordinate quoted as
-   the evidence of a finding — declare it with
-   `<!-- citations: evidence file.ts:120 -->` rather than repointing it, and the
-   declaration is itself an error if it excuses nothing. Second,
+   step is the builder's, and it has three acts. First, write the reviewer's
+   returned text to a file, `## Review` as its first line (or `### Gate <n>` for
+   a later gate), and run
+   `node scripts/review-record.mjs <ticket> <section-file> [--gate <n>]`. The
+   script finds the insertion point by heading form, never by a bare-text
+   search — a first review lands above `## Log`, a later gate at the end of the
+   existing `## Review` block — inserts the text verbatim, runs the formatter,
+   then runs `citations.mjs --section Review --require-anchors
+   --require-distinct-anchors` itself; on a failure it restores the ticket from
+   `git show HEAD:<ticket>` and prints the checker's own output, so fix what it
+   says and run it again. On success it prints a normalised diff between the
+   section file and what landed, ignoring table padding and rule width: paste
+   that into the Log as the disclosure note — say that you transcribed it and
+   what, if anything, differs, "nothing" included — in the same commit. That is
+   the check CI is about to run; catching it here costs one command, and
+   catching it in CI costs a push. Where a citation is deliberately
+   unresolvable — a coordinate quoted as the evidence of a finding — declare it
+   with `<!-- citations: evidence file.ts:120 -->` in the section file before
+   running the script, and the declaration is itself an error if it excuses
+   nothing. Before repo-55 this act was four hand steps, and each had failed at
+   least once: a record spliced into the middle of an earlier one, a section
+   red the moment it was committed, a record that went uncommitted, a
+   formatter rewrap that split a citation from its anchor (2026-09-20). Second,
    **post the reviewer's report to the pull request thread** — `gh pr comment
    <number> --body-file <file>` — so the transcription can be audited against
    what the reviewer actually said; if the branch has no pull request yet, that
@@ -381,8 +428,17 @@ rebuilds the defect from the brief that still describes it.
 
 - **FAIL** — any high, or any acceptance line **unproven**.
 - **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
+- **unproven (scope)** — a line the dispatch removed from the branch's scope,
+  with the row naming who scoped it and where the work lands instead. It does
+  not force FAIL: three gates on 2026-09-20 each had to reconcile this by hand
+  when a builder was told to leave the page wiring to the orchestrator.
 - **PASS** — every acceptance line proven or verified, nothing above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
+- **PREFLIGHT** — a page-only `chore` with no source change, gated by
+  `scripts/preflight.mjs` exiting 0 and the orchestrator's own read, per
+  `orchestrate-tickets`' `sizing.md`. Written by the orchestrator, naming the
+  sha the check ran at; never for a ticket that touches `scripts/`, `packages/`
+  or a tool's source, which gets a reviewer (2026-09-20).
 
 `unproven (gate)` is CONCERNS rather than FAIL on purpose: the work may be
 entirely correct and the gate simply has not run yet. It is not PASS either,

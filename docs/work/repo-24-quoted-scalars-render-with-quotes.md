@@ -324,7 +324,7 @@ node scripts/status.mjs --root "$R" --json
 
 **On the CLI-runs-not-tests substitution**: sound for a filing. `docs/01-TICKETS.md`'s "a ticket carries a decision or a reproduction" makes the reproduction itself the deliverable here, and I independently re-ran every one of those commands myself (not trusting the Log's numbers) against both scratch fixtures and the real board, getting identical results — the harder bar `unproven`/`verified` distinguishes.
 
-- **low** · The ticket's own citation `scripts/status.mjs:115-118` for `parseScalar` (`## Why` line 20, Build step 1 line 212 — two occurrences) stops one line short of the closing brace at 119; `parseList`'s adjacent citation `:121-129` includes its own closing brace, so the document used two conventions for the same kind of citation. Caught by the builder cross-checking this record before committing, not by my own defect hunt — I had certified `115-118` as resolving "exactly" without re-deriving the boundary myself. Corrected here to `:115-119`. Changes no acceptance row and no reproduction above; `scripts/citations.mjs` still reports `115-118` as `ok` because it only bounds-checks against EOF (`scripts/citations.mjs:222`), which is the tell, not a clean bill.
+- **low** · The ticket's own citation `scripts/status.mjs:115-118` for `parseScalar` (`## Why` line 20, Build step 1 line 212 — two occurrences) stops one line short of the closing brace at 119; `parseList`'s adjacent citation `:121-129` includes its own closing brace, so the document used two conventions for the same kind of citation. Caught by the builder cross-checking this record before committing, not by my own defect hunt — I had certified `115-118` as resolving "exactly" without re-deriving the boundary myself. Corrected here to `:115-119`. Changes no acceptance row and no reproduction above; `scripts/citations.mjs` still reports `115-118` as `ok` because it only bounds-checks against EOF (`scripts/citations.mjs@fdafd1a:222`), which is the tell, not a clean bill.
 - **dropped** — none.
 - **findings** · own defect hunt (as described in the header) returned 0; the builder's cross-check of this record before committing surfaced 1 more (above); 1 carried, 0 dropped.
 - NFR: security n/a (docs-only) · performance n/a · reliability n/a to this diff directly (it documents, correctly, a real reliability defect in `status.mjs` without fixing it, which is the right scope for a filing) · maintainability — strong; every citation but one checked resolves exactly, decision gives concrete costs per option, nothing left for a future builder to re-derive.
@@ -429,7 +429,7 @@ than out of its defect hunt.
   stands. No ratio is quoted here on purpose: the count grows every time
   anything is appended to this ticket, so a number written into it is stale by
   the next edit. It bounds-checks a range against end of file
-  (`scripts/citations.mjs:222`) and nothing else.
+  (`scripts/citations.mjs@fdafd1a:222`) and nothing else.
   repo-18 (PR #146) adds anchor checking, and **verified first-hand by reading
   `scripts/citations.mjs` at `origin/repo-18-citation-anchors@02197ea`, not from
   that ticket's description** — its rule, in the docblock above the verification
@@ -475,7 +475,7 @@ than out of its defect hunt.
   so it carries none.
 - **`citations.mjs --rev <sha>` does not check the ticket as it was at that
   sha.** The ticket file is read from the working tree unconditionally
-  (`scripts/citations.mjs:389`); `rev` reaches only `makeReader` and
+  (`scripts/citations.mjs@fdafd1a:389`); `rev` reaches only `makeReader` and
   `candidateFiles` (`:403-404`), which resolve the citation _targets_. So
   `--rev` answers "did these citations point at the right thing back then", not
   "what did this document claim back then" — to get the second, extract the file

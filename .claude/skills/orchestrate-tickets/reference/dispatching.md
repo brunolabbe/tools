@@ -21,6 +21,13 @@ What only you can supply, and what every builder prompt therefore carries:
 - **The ticket, and the base.** Say the base explicitly — `origin/<base>` —
   especially for a stacked branch. The agent knows *how* to set up; only you know
   what it is building and what it is building on.
+- **The branch name, checked free.** `git branch --list <name>` and
+  `git ls-remote --heads origin <name>` both empty before you write it into the
+  prompt. Refs are shared across every worktree of this repo, and a builder's
+  setup refuses an existing name rather than reusing it; a records-only dispatch
+  left to pick its own took a live sibling's branch from stale context and reset
+  it (2026-09-18). Name the branch for every dispatch, records-only ones
+  included.
 - **The sibling that carries the handover.** The agent definition cannot know
   which sibling ticket's Log holds the context for this one. You do, from intake.
 - **What is already settled**, if this is a resume: which findings are addressed,
@@ -28,7 +35,18 @@ What only you can supply, and what every builder prompt therefore carries:
 - **Ship authority, or not.** The default is stop before the PR. On the *last*
   relay, replace it with conditional ship authority — see [sizing.md](sizing.md).
   This is per-dispatch by definition and is the single highest-value line in the
-  prompt, because it removes an entire round.
+  prompt, because it removes an entire round. **It goes in the builder's own
+  dispatch or a direct message from you, never through a gate prompt**: authority
+  a reviewer pastes into its message is not authority under `builder.md`, and
+  both builders that received it that way declined — one at the cost of a
+  resume, the other holding until a direct message arrived (2026-09-12,
+  2026-09-13).
+- **What the skill got wrong**, asked in the dispatch. `history.md`'s schema
+  says to ask every agent at dispatch; three sessions asked at close-out or not
+  at all (2026-09-13, 2026-09-14, 2026-09-18), and their fields are the
+  orchestrator's own observations plus whatever agents volunteered. One sentence
+  in the prompt: *end your report with what these pages got wrong or omitted for
+  this ticket.*
 - **The fold-in exception, out loud.** The agent is told to implement the Build
   section and not widen it. Say in the prompt that if the work in front of it
   makes some *other* small, already-specified piece of work free, it should fold
@@ -36,9 +54,17 @@ What only you can supply, and what every builder prompt therefore carries:
   could have and why it did not. That note is what lets you catch the call; a
   silent deferral is invisible. See _Fold it in, or file it_ in
   [sizing.md](sizing.md).
-- **Where to write scratch files**, namespaced by ticket — see
-  [concurrency.md](concurrency.md) on the pull request that briefly carried
-  another ticket's body.
+- **Where to write scratch files: one directory per ticket,
+  `<scratchpad>/<ticket-id>/`, as a literal path, and the same path in the
+  gate prompt.** Namespacing is [concurrency.md](concurrency.md)'s rule, from
+  the pull request that briefly carried another ticket's body. Sharing the path
+  with the reviewer is repo-57's: a reviewer woken for a later round
+  re-verifies against the same base tree, and the one that had kept its
+  base-tree extract and comparison script there took ten minutes on a round
+  where the one that rebuilt them took an hour (2026-09-20).
+- **Say "maintenance" when it is one** — no ticket, or a `chore` with no
+  source change — so the builder runs on Haiku by the table and stops on a
+  judgement call instead of making it (repo-56).
 - **The narrowest thing that can fail**, for verification runs. Agents reach for
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
@@ -123,6 +149,19 @@ directly and neither has `ToolSearch`, so that instruction sends a reviewer to a
 tool it does not have — measured, and recorded below. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
+
+### An agent definition is read at launch, from the shared checkout
+
+**A branch that edits `ticket-reviewer.md` or `builder.md` is gated by the old
+page.** The gate on the 2026-09-20 sweep ran on a `ticket-reviewer.md` that still
+said the orchestrator checks "four things" while the branch under review said
+five, and it reported the mismatch itself. A sweep of the agent definitions
+cannot dogfood itself: say in the gate prompt what the branch changes in the
+reviewer's own page, hand it the rules it is missing, and read the record knowing
+the reviewer did not run under them. **A resumed reviewer runs an older page
+still** — its definition was read at its first launch, so a gate 2 woken by
+message gates the corrections under the page that predates gate 1's own
+findings; the same gate proved that one commit after this section was written.
 
 ### Never write an install into a gate prompt
 
@@ -287,6 +326,14 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
 
 **So make gate 1 look like gate 4.** Every gate prompt should:
 
+- **Run the thing under review on one real input and check the answer by a
+  second method, first.** Before the diff, before the tests: for a tool, the
+  real file it will be used on; for a rule, the branch it governs. Every
+  defect that mattered on 2026-09-20 was found this way and none by reading —
+  a cost script whose brief double-counted streamed responses by 86%, a
+  preflight that passed a stale sibling ref as clean, a restore that discarded
+  uncommitted work — and each of those tickets' tests were green throughout.
+  Mutation and reproduction check the tests; this checks the claim.
 - **Name what to attack.** The riskiest decision, the seam with the longest reach,
   the claim you least believe. Generic review finds generic things.
 - **Demand reproductions, not conclusions.** "Revert the fix, confirm it goes red"
@@ -341,6 +388,28 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
   another round."*
 - **Forbid delegation.** No subagents.
 - **Fix nothing.** The gate reports; the builder fixes.
+- **Return a `## Review` section as text for the builder to commit verbatim**,
+  in those words. A gate prompt that asked for findings in full and not for the
+  section got narrative back, and the record was missing from the ticket until
+  the builder noticed at close-out (2026-09-17). The rule sits under _Send the
+  findings in full_ above; this is where the prompt has to carry it.
+- **Dry-run the section against the checker before handing it over.** Splice it
+  into a scratch copy of the ticket at the real insertion point, above `## Log`,
+  and run `node scripts/citations.mjs <copy> --section Review --require-anchors
+  --require-distinct-anchors`. A reviewer that did this unprompted handed over a
+  section needing no repair (2026-09-09); one that did not cost the builder a
+  round on two citations (2026-09-13).
+- **Say which failure the positive control must plant.** "Prove your harness" is
+  satisfiable by a control that moves a citation out of range, when the
+  prohibited failure is a repoint that still resolves; a gate did exactly that
+  and passed the failure it existed to catch (2026-09-12).
+- **Name the severity floor** for a mechanism ticket — _Name a floor for a
+  mechanism ticket_ in [sizing.md](sizing.md).
+- **Never carry ship authority** — the builder bullet above.
+- **Name the ticket's scratch directory**, the same literal
+  `<scratchpad>/<ticket-id>/` the builder was given, for the base-tree extract
+  and any comparison script a later round will need (repo-57).
+- **Ask what the skill got wrong**, as for the builder.
 
 Ask for: `PASS / CONCERNS / FAIL`, gates reproduced independently, findings
 most-severe-first with `file:line` and a concrete failure scenario each, and
@@ -388,10 +457,20 @@ in this order:
 The obvious economy — "three gates then ship" — is wrong. In the reference session a
 fourth gate caught a process document contradicting itself in adjacent sentences,
 and another fourth gate caught three mediums including a UI element stuck permanently
-on for every healthy job. A cap ships those.
+on for every healthy job. A cap ships those; so would it have shipped a credential
+leak that `dl-58`'s sixth gate found (2026-09-17). A severity floor named at
+dispatch is not a cap — _Name a floor for a mechanism ticket_ in
+[sizing.md](sizing.md).
 
 The economy is in **scope**, not count. Gates 1 and 2 cost the most and found the
 least because they re-read everything from scratch.
+
+**And it is in the resume.** A later round on the same reviewer, woken by
+message with its base-tree extract kept in the ticket's scratch directory, costs
+a fraction of a fresh dispatch: four rounds on one ticket came to $19 measured
+by `agent-cost.mjs`, against $33 for one reviewer's four rounds on a larger
+diff and $26 for three on another (2026-09-20). Never dispatch a fresh reviewer
+for round two of a ticket whose round-one reviewer can be woken.
 
 Narrowing works, measurably: in the second session narrow gates averaged 75 k
 against 124 k for full ones, found fewer things, and **never found nothing.** The

@@ -36,7 +36,7 @@ it, and neither is the one the script exists to provide:
   stops the failure and stops the check with it.
 
 This page is currently in the second state, deliberately and as an interim:
-`.claude/skills/orchestrate-tickets/reference/history.md:79` "### Citations on this page are historical"
+`.claude/skills/orchestrate-tickets/reference/history.md@fdafd1a:79` "### Citations on this page are historical"
 records four pinned coordinates and the commit each was verified at, and the two
 declarations that carry them are at
 `.claude/skills/orchestrate-tickets/reference/history.md@64edce2:653` "<!-- citations: evidence"
@@ -121,7 +121,7 @@ repair, out of this ticket's scope, and doing it quietly here would hide that
 the interim declarations are not self-maintaining.
 
 Also checked: the declarations are load-bearing. Deleting the `<!-- citations:
-evidence dispatching.md:206, dispatching.md:209 -->` line, the first of the two,
+evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line, the first of the two,
 from a scratch
 copy of `history.md` and re-running turns `13 verified, 4 moved, ..., 8 evidence`
 into `13 verified, 8 moved, ..., 4 evidence` — the four citations it covers move
@@ -219,7 +219,7 @@ the third — and none of them should be settled by whoever picks this up.
   that counts every mention of the string, including backtick-quoted prose
   describing the syntax (repo-35's own text among them). Filtering to lines
   that actually match the checker's own `DECLARATION` regex
-  (`scripts/citations.mjs:248`) — i.e. lines that function as a declaration,
+  (`scripts/citations.mjs@fdafd1a:248`) — i.e. lines that function as a declaration,
   not lines that talk about one — narrows it to **10** real declaration
   comments across **5** files: `.claude/skills/orchestrate-tickets/reference/history.md`
   (2 lines, naming 4 citations), `.claude/skills/orchestrate-tickets/reference/records.md`
@@ -742,14 +742,14 @@ as a named cost when the question was put, and the owner took it knowingly.
 
 #### Where the dedupe goes, and why that decides how much wording changes
 
-`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs:826` — so
+`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs@fdafd1a:826` — so
 deduplicating inside it is safe, and it is the better of the two places:
 
 - **Dedupe inside `locateAnchor`** makes all six texts below true at once, and
   also improves the `moved` message, which prints `hits.slice(0, 3)` as "it is at
   _M_" and today can repeat a line number there.
 - **Dedupe only at the `occurrences` assignment** leaves `locateAnchor` returning
-  one entry per match, so `scripts/citations.mjs:595` stays wrong and must be
+  one entry per match, so `scripts/citations.mjs@fdafd1a:595` stays wrong and must be
   edited by hand.
 
 #### Six sites, each checked individually rather than waved through
@@ -759,22 +759,22 @@ recorded.** Each was read and judged against the post-change behaviour, because
 "the behaviour now matches what the text always claimed" is a claim to check, not
 a reason to skip checking:
 
-| Site                         | Text                                                                  | Printed? | After dedupe                     |
-| ---------------------------- | --------------------------------------------------------------------- | -------- | -------------------------------- |
-| `scripts/citations.mjs:118`  | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
-| `scripts/citations.mjs:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
-| `scripts/citations.mjs:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
-| `scripts/citations.mjs:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
-| `scripts/citations.mjs:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
-| `scripts/citations.mjs:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
+| Site                                 | Text                                                                  | Printed? | After dedupe                     |
+| ------------------------------------ | --------------------------------------------------------------------- | -------- | -------------------------------- |
+| `scripts/citations.mjs:118`          | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
+| `scripts/citations.mjs@fdafd1a:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
+| `scripts/citations.mjs@fdafd1a:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
 
-**`scripts/citations.mjs:595` is the sixth, and it was in neither relayed list.**
+**`scripts/citations.mjs@fdafd1a:595` is the sixth, and it was in neither relayed list.**
 It is `locateAnchor`'s own contract, not a statement about `occurrences`, so
 whether it becomes true depends on where the dedupe is applied — it is the one
 site the behaviour change does **not** automatically repair. That is the whole
 reason the individual check was worth doing.
 
-**`scripts/citations.mjs:1424` prints the right word beside the right number after
+**`scripts/citations.mjs@fdafd1a:1424` prints the right word beside the right number after
 the change, and that is checkable rather than hopeful.** The number it
 interpolates is `r.occurrences`, and the predicate that fails a citation reads the
 same field in both places that judge it —
@@ -1065,15 +1065,15 @@ The reviewer was told before this was committed.
 
 **Gate: PASS** — 2026-09-13 · `origin/main...998b52a` (base 64edce2) · defect hunt run directly by this reviewer (no `Skill` tool; `code-review` not delegated), dispatched as sonnet against an opus build
 
-| Done when                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. A, B, C, parts 8-9 answered as dated Log entries; `status` moves to `ready`/`done`                                         | proven — six Log entries dated 2026-09-12 each name the option and reasoning; ticket frontmatter reads `status: done`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 2. Reproduction's three rows still print `4901cd6`'s numbers, or drift is recorded beside them                                | verified — independently re-run: `--rev b142a4a` → `7 verified, 6 moved, 1 unanchored, 5 unresolvable, 3 unchecked, 0 evidence — of 22 references`; `--rev 9b426c8` → `16 verified, 1 moved, 1 unanchored, 1 unresolvable, 3 unchecked, 0 evidence — of 22 references`, matching the Log's re-run entry exactly                                                                                                                                                                                                                                                 |
-| 3. `history.md`'s declarations migrated, residual drift repointed, carries no failing citation a declaration used to suppress | proven — fresh clone of `origin/repo-35-pinned-citations`, `node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md` → `35 verified, 0 moved, 5 unanchored, 0 unresolvable, 14 unchecked, 0 evidence — of 54 references, 12 pinned`                                                                                                                                                                                                                                                                                                  |
-| 4. Malformed pin rejected loudly, with a falsifiable test                                                                     | proven — `scripts/test/citations.test.ts:2149 "a malformed pin is counted and fails loudly"` (4 shapes) and `scripts/test/citations.test.ts:2170 "no declaration excuses a malformed pin"`; independently reproduced by disabling the permissive scan (`PIN_SHAPED` loop), which fails 5 of 123 tests across both spec files                                                                                                                                                                                                                                    |
-| 5. Five locations migrated to pins, 21 kept as declarations, gate stays exit 0                                                | proven, against the line's own "cheap half or both" allowance — `node scripts/citations-gate.mjs` → exit 0, `30 enforced, 0 failing`; `GRANDFATHERED` map confirmed byte-identical to base by isolated diff; cheap half tested at `scripts/test/citations.test.ts:2275 "a declaration is refused for a citation that another line of its file would verify"`                                                                                                                                                                                                    |
-| 6. Self-citation detected and named; both texts corrected; two tests, the first falsifiable                                   | proven — `scripts/test/citations.test.ts:1928 "a citation into its own record is named a self-citation instead of being told to quote more"` and `scripts/test/citations.test.ts:1963 "a citation into a different ticket file is not a self-citation, and counts as before"`; independently reproduced live on `docs/work/repo-31-the-windows-leg-is-almost-all-red.md` (3 real self-citations: plain run exit 0, `--require-distinct-anchors` exit 16) and on a scratch same-line self-citation (plain exit 0, flag exit 16 despite deduping to 1 occurrence) |
-| 7. `occurrences` deduplicated by line; six sites individually checked; number retaken; corpus-wide before/after               | proven — dedupe at `scripts/citations.mjs:878 "hits.at(-1) !== lineNo"`; `scripts/test/citations.test.ts:2025 "a self-citation of its own line still fails, although it now starts on one line"`; corpus-wide identity independently confirmed via a byte-identical gate summary line between base and tip (`45 grandfathered, holding 35 unresolvable, 43 moved, 530 unanchored, 6 indistinct.`, same on both) and via reverting the dedupe (3 of 123 tests fail)                                                                                              |
+| Done when                                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A, B, C, parts 8-9 answered as dated Log entries; `status` moves to `ready`/`done`                                         | proven — six Log entries dated 2026-09-12 each name the option and reasoning; ticket frontmatter reads `status: done`                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2. Reproduction's three rows still print `4901cd6`'s numbers, or drift is recorded beside them                                | verified — independently re-run: `--rev b142a4a` → `7 verified, 6 moved, 1 unanchored, 5 unresolvable, 3 unchecked, 0 evidence — of 22 references`; `--rev 9b426c8` → `16 verified, 1 moved, 1 unanchored, 1 unresolvable, 3 unchecked, 0 evidence — of 22 references`, matching the Log's re-run entry exactly                                                                                                                                                                                                                                                                 |
+| 3. `history.md`'s declarations migrated, residual drift repointed, carries no failing citation a declaration used to suppress | proven — fresh clone of `origin/repo-35-pinned-citations`, `node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md` → `35 verified, 0 moved, 5 unanchored, 0 unresolvable, 14 unchecked, 0 evidence — of 54 references, 12 pinned`                                                                                                                                                                                                                                                                                                                  |
+| 4. Malformed pin rejected loudly, with a falsifiable test                                                                     | proven — `scripts/test/citations.test.ts@fdafd1a:2149 "a malformed pin is counted and fails loudly"` (4 shapes) and `scripts/test/citations.test.ts@fdafd1a:2170 "no declaration excuses a malformed pin"`; independently reproduced by disabling the permissive scan (`PIN_SHAPED` loop), which fails 5 of 123 tests across both spec files                                                                                                                                                                                                                                    |
+| 5. Five locations migrated to pins, 21 kept as declarations, gate stays exit 0                                                | proven, against the line's own "cheap half or both" allowance — `node scripts/citations-gate.mjs` → exit 0, `30 enforced, 0 failing`; `GRANDFATHERED` map confirmed byte-identical to base by isolated diff; cheap half tested at `scripts/test/citations.test.ts@fdafd1a:2275 "a declaration is refused for a citation that another line of its file would verify"`                                                                                                                                                                                                            |
+| 6. Self-citation detected and named; both texts corrected; two tests, the first falsifiable                                   | proven — `scripts/test/citations.test.ts@fdafd1a:1928 "a citation into its own record is named a self-citation instead of being told to quote more"` and `scripts/test/citations.test.ts@fdafd1a:1963 "a citation into a different ticket file is not a self-citation, and counts as before"`; independently reproduced live on `docs/work/repo-31-the-windows-leg-is-almost-all-red.md` (3 real self-citations: plain run exit 0, `--require-distinct-anchors` exit 16) and on a scratch same-line self-citation (plain exit 0, flag exit 16 despite deduping to 1 occurrence) |
+| 7. `occurrences` deduplicated by line; six sites individually checked; number retaken; corpus-wide before/after               | proven — dedupe at `scripts/citations.mjs@fdafd1a:878 "hits.at(-1) !== lineNo"`; `scripts/test/citations.test.ts@fdafd1a:2025 "a self-citation of its own line still fails, although it now starts on one line"`; corpus-wide identity independently confirmed via a byte-identical gate summary line between base and tip (`45 grandfathered, holding 35 unresolvable, 43 moved, 530 unanchored, 6 indistinct.`, same on both) and via reverting the dedupe (3 of 123 tests fail)                                                                                              |
 
 - **low** · No test exercises a citation that is both pinned and a self-citation (a pin into the record's own file). Already named as unmeasured in this ticket's own Log (Build part 8/9 section); not required by `Done when` #6, and not raised as new work — settled as an accepted, disclosed gap.
 - **findings** · 1 raised, 1 carried (as the low above), 0 dropped.
@@ -1308,8 +1308,8 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
 
   **1. There are six wording sites, not three and not five.** The page first
   recorded three; the dispatch corrected that to five and named two this branch had
-  not found, `scripts/citations.mjs:975` and the printed
-  `scripts/citations.mjs:1424`. Verified each against the source — and found a
+  not found, `scripts/citations.mjs@fdafd1a:975` and the printed
+  `scripts/citations.mjs@fdafd1a:1424`. Verified each against the source — and found a
   **sixth that neither relayed list contained**:
   `scripts/citations.mjs@64edce2:595` "Every line an anchor's text starts on, in a file.",
   which is `locateAnchor`'s own contract rather than a statement about
@@ -1320,7 +1320,7 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
   left quietly false. That is the answer to the instruction to check each site
   rather than assume.
 
-  **2. `scripts/citations.mjs:1424` is the reproduction, and it did harm on this
+  **2. `scripts/citations.mjs@fdafd1a:1424` is the reproduction, and it did harm on this
   branch.** It interpolates `r.occurrences` beside the word "lines", so for hits
   `[224, 224, 235]` it printed "anchor starts on 3 lines" for a fragment starting
   on two. That is the entire origin of the disagreement the previous entry records:
@@ -1536,8 +1536,8 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
   **Both texts are in scope, not just the behaviour**, and `Done when` #6 now says
   so in three parts. The source comment at `scripts/citations.mjs:144`, which
   justifies `applyDeclarations` refusing a waiver, and the remediation **printed at
-  the moment of failure** at `scripts/citations.mjs:1501` and
-  `scripts/citations.mjs:1502`. The second is the worse of the two — it is what an
+  the moment of failure** at `scripts/citations.mjs@fdafd1a:1501` and
+  `scripts/citations.mjs@fdafd1a:1502`. The second is the worse of the two — it is what an
   author reads while trying to repair the failure — and it was this branch's
   finding, not present in the report that raised the defect. The orchestrator
   verified both coordinates independently.
@@ -1650,7 +1650,7 @@ failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
   claim is in two places, and the second is the one an author actually reads: not
   only the source comment at `scripts/citations.mjs:144`, which justifies
   `applyDeclarations` refusing a waiver, but the **printed remediation** at
-  `scripts/citations.mjs:1502`, which tells the author at the moment of failure
+  `scripts/citations.mjs@fdafd1a:1502`, which tells the author at the moment of failure
   that "the fix is always available". The checker misdirects the repair it is
   asking for.
 
@@ -1919,7 +1919,7 @@ unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the examp
   branch's diff past its stated purpose.
 
   **Declarations are load-bearing, checked directly.** Deleting the `<!--
-citations: evidence dispatching.md:206, dispatching.md:209 -->` line from a
+citations: evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line from a
   scratch copy of `history.md` and re-running turned `4 moved, ..., 8 evidence`
   into `8 moved, ..., 4 evidence` — the four citations that line covers move
   from suppressed to failing the moment it is gone. Reverted with `git checkout
@@ -1938,7 +1938,7 @@ HEAD --`, diffed byte-identical against a pre-edit backup before continuing.
   **One disagreement with the dispatching session's own relayed numbers, both
   ways.** It relayed "22 are real declaration comments, across 8 files" for the
   option-C count; filtering by the checker's actual `DECLARATION` regex
-  (`scripts/citations.mjs:248`) rather than by substring match gives 10 across
+  (`scripts/citations.mjs@fdafd1a:248`) rather than by substring match gives 10 across
   5 — the relayed count still included prose lines that merely mention the
   string inside backticks. It also relayed "I measured 3" against this page's
   own "four declarations on `history.md`" (`Done when` #3); re-measured here as

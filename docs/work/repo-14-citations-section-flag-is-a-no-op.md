@@ -55,7 +55,7 @@ is never read.
 
 ### A second defect, found while reproducing the first
 
-`main()` picks the ticket file at `scripts/citations.mjs:226` with:
+`main()` picks the ticket file at `scripts/citations.mjs@fdafd1a:226` with:
 
 ```js
 const file = argv.find((a) => !a.startsWith("--"));
@@ -80,7 +80,7 @@ is the more valuable half of the ticket.
 
 Two smaller things worth knowing, both true today:
 
-- The usage string thrown at `scripts/citations.mjs:229` on a missing file argument reads
+- The usage string thrown at `scripts/citations.mjs@fdafd1a:229` on a missing file argument reads
   `usage: node scripts/citations.mjs <ticket-file> [--rev <sha>]` — it does
   **not** mention `--section`. The docblock and the error message already
   disagree with each other, which is a hint about which of them was intended.
@@ -156,7 +156,7 @@ becomes a loud error rather than the silent no-op it is now.
 | 4. `npm run check` and `npx vitest run scripts` pass                                                                                                       | verified — re-ran against `a888fd9`: `npm run check` exit 0 (only pre-existing, unrelated warnings); `npx vitest run scripts` → 3 files / 126 tests; full `npx vitest run` → 119 files / 1926 tests, all green                                                                                                                              |
 
 - **low, folded in** · nothing tied the docblock usage line, the `USAGE` constant and `FLAGS`'s key set together — confirmed by hand at gate time, no test. Closed in `a888fd9`: `FLAGS` exported, `scripts/test/citations.test.ts:797` "the docblock usage line, USAGE, and FLAGS name the same set" extracts the `--flag` tokens from all three and asserts equality. Reproduced the drift independently: dropped `--section` from `USAGE`, reran, only this test went red; restored, 22/22 green.
-- **low, declined** · the header (`scripts/citations.mjs:1719-1722` "const scope = chosen") shows a filtered count with no unfiltered-total denominator on the same line. Not carried as a defect — every invocation, filtered or not, already prints the scope inline, so a filtered number can't appear without the word "under" and a heading name beside it, which is unlike the defect this ticket was filed for. Declined with reasoning recorded in the ticket's Log (2026-09-03, "gate fold-ins") for repo-18 to inherit rather than left as an open question.
+- **low, declined** · the header (`scripts/citations.mjs@fdafd1a:1719-1722` "const scope = chosen") shows a filtered count with no unfiltered-total denominator on the same line. Not carried as a defect — every invocation, filtered or not, already prints the scope inline, so a filtered number can't appear without the word "under" and a heading name beside it, which is unlike the defect this ticket was filed for. Declined with reasoning recorded in the ticket's Log (2026-09-03, "gate fold-ins") for repo-18 to inherit rather than left as an open question.
 - **findings** · own hunt at medium depth returned 2, both carried into the fold-in round; 1 addressed with a test, 1 declined with recorded reasoning. 0 dropped.
 - NFR: security n/a (no user-influenced URLs, no new subprocess surface) · performance n/a (single pass over markdown lines) · reliability ✓ (nesting, fence-skipping, exact/prefix/ambiguous/no-match matching, argument order, and unknown/valueless/second-positional arguments are all independently reproduced, including two disabled-invariant counterfactuals) · maintainability ✓ (the one gap found now has its own regression test)
 

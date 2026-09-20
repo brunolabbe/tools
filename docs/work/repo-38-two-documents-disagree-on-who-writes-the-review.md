@@ -19,7 +19,7 @@ One of the two, not both — which one is the decision.
 Both documents govern the gate loop, both are read by agents in every review, and
 they name **different people** as the writer of the record.
 
-`.claude/skills/review-ticket/SKILL.md:113` "The subagent returns the" — the full
+`.claude/skills/review-ticket/SKILL.md@fdafd1a:113` "The subagent returns the" — the full
 sentence is that the subagent returns the section as text and **the caller**
 commits it to the ticket, verbatim.
 
@@ -130,12 +130,12 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
 | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Decision recorded as a dated Log entry naming the option and the reasoning                         | **verified** — the Log entry dated 2026-09-08, later names option A over B and C with the reasoning, and its second paragraph names the disclosure answer. A second entry, 2026-09-09 owner's rulings, records both escalated decisions with their provenance         |
 | 2. Exactly one document states the rule; the other names it and points at it rather than restating it | **verified** — `grep -c caller docs/01-TICKETS.md` is 0; `docs/01-TICKETS.md:339 "what it returns is appended to the"` names no actor, and `docs/01-TICKETS.md:352 "The rule itself, and the"` points at the page that states it                                      |
-| 3. Whether a transcription note is required is stated in whichever document holds the rule            | **verified** — `.claude/skills/review-ticket/SKILL.md:143 "The disclosure note is required, not a habit"`                                                                                                                                                             |
+| 3. Whether a transcription note is required is stated in whichever document holds the rule            | **verified** — `.claude/skills/review-ticket/SKILL.md@fdafd1a:143 "The disclosure note is required, not a habit"`                                                                                                                                                     |
 | 4. `npm run check` and `node scripts/status.mjs --json` exit 0                                        | **verified** — reproduced at `2371b5b`: both exit 0, plus `--project repo` 288 tests across 6 files, `oxfmt --check` exit 0, and `citations-gate.mjs` exit 0 with and without `--against origin/main`; both halves of the status gate watched failing first at exit 1 |
 
-- **resolved** · round-5 `med`, the carve-out's non-working repair. `.claude/skills/orchestrate-tickets/reference/dispatching.md:229 "Repairing that means not citing"` now drops the full-path prescription, states that a full path does not help and why, and keeps only the repair that works. Both agents reproduced the full-path case independently at `anchor starts on 2 lines`, `1 anchor(s) not distinct`; a cross-file citation in the same probe passed and the page now says so.
+- **resolved** · round-5 `med`, the carve-out's non-working repair. `.claude/skills/orchestrate-tickets/reference/dispatching.md@fdafd1a:229 "Repairing that means not citing"` now drops the full-path prescription, states that a full path does not help and why, and keeps only the repair that works. Both agents reproduced the full-path case independently at `anchor starts on 2 lines`, `1 anchor(s) not distinct`; a cross-file citation in the same probe passed and the page now says so.
 - **resolved** · round-1 `high`. `docs/work/repo-29-citations-carry-no-anchor.md:549 "So the reviewer reports and the builder writes"` is repointed by one character, touching nothing else in that record. Both forms of the gate exit 0 at `23 enforced, 0 failing` with no record named, after four rounds at exit 1 with that record named. **Severity note for the next reader:** this was called `high` against the letter of the table, which would have said `med`, because it fired unconditionally on push and no gate this ticket's own acceptance names could see it. The stretch is why it was repaired rather than merged red.
-- **resolved** · round-1 `med`. `.claude/skills/orchestrate-tickets/reference/dispatching.md:171 "Tell the reviewer to send a"` now instructs what that section previously forbade, agreeing with `.claude/skills/review-ticket/SKILL.md:113 "the builder commits it to"`. Both 2026-09-03 measurements survive intact — every concrete fact, citation and quoted test name — and only the evaluative conclusion drawn from one of them was reversed, which is what the ruling licenses.
+- **resolved** · round-1 `med`. `.claude/skills/orchestrate-tickets/reference/dispatching.md@fdafd1a:171 "Tell the reviewer to send a"` now instructs what that section previously forbade, agreeing with `.claude/skills/review-ticket/SKILL.md@fdafd1a:113 "the builder commits it to"`. Both 2026-09-03 measurements survive intact — every concrete fact, citation and quoted test name — and only the evaluative conclusion drawn from one of them was reversed, which is what the ruling licenses.
 - **resolved** · round-5 `low`. The Log now carries both owner rulings with provenance, the orchestrator's two supporting measurements, the builder's own wrong first prescription and who caught it, and why the correction would not trim below the size it was asked to hit.
 - **resolved** · rounds 2-4, five `low`s: three coordinates one line short, an ambiguous bare file name, a pointer loop, an unrecorded finding with a misattributed mechanism, and a reference count that went stale three times before being dropped. Each settled by `node scripts/citations.mjs` on the ticket at exit 0, 0 moved, 0 unresolvable, and by reading the fix at the tip.
 - **shape, informational, for the orchestrator** · Three branches in this batch independently broke the citation in `repo-29`'s gate record, each by adding a line above the sentence it names in `docs/01-TICKETS.md`. Verified directly rather than relayed: the `repo-32-done-hides-obligation` branch rewrites the same line of the same record to a different value than this branch does, so the two conflict on that line and neither value survives both merging. Sequencing and the sibling briefs are the orchestrator's, not this branch's.
@@ -189,7 +189,7 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
   coordinator, not defaulted.
 
 - **2026-09-09** — Built option A. Both cited line numbers still held against
-  `origin/main` at dispatch (`.claude/skills/review-ticket/SKILL.md:113`,
+  `origin/main` at dispatch (`.claude/skills/review-ticket/SKILL.md@fdafd1a:113`,
   `docs/01-TICKETS.md:293`); re-checked with `grep -n` before editing either.
 
   `.claude/skills/review-ticket/SKILL.md` now states the rule: the builder — not
@@ -247,7 +247,7 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   (`repo-1`, `pl-5`) quoting wording as it stood at the time — append-only
   records, not live rules, left untouched.
 
-  `.claude/agents/ticket-reviewer.md:83-86` already said "the builder writes the
+  `.claude/agents/ticket-reviewer.md@fdafd1a:83-86` already said "the builder writes the
   `## Review` section" before this ticket; it was not the outlier and needed no
   change. Its two remaining "caller" uses (`:153-154`) are about which model
   gates, unrelated to who writes the record.
@@ -278,7 +278,7 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   editing it — who does the appending is stated once, below, not here."
 
   **Not acted on, med** — `.claude/skills/orchestrate-tickets/reference/
-dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
+dispatching.md@fdafd1a:176` ("Verbatim transcription is nowhere in that rule")
   contradicts `SKILL.md`'s now-authoritative verbatim requirement. Confirmed
   real and pre-existing at `origin/main`, sharpened rather than created by this
   branch: `docs/01-TICKETS.md` now delegates the rule to `SKILL.md` by name, so
@@ -287,13 +287,13 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   and escalated it to the orchestrator as an open decision rather than asking
   either of us to settle it — verbatim transcription vs. completeness-of-receipt
   is a real tradeoff with measured evidence on both sides
-  (`dispatching.md:186-197`), and neither a builder nor a reviewer gets to pick.
+  (`dispatching.md@fdafd1a:186-197`), and neither a builder nor a reviewer gets to pick.
   Left both documents exactly as they stood.
 
   **Fixed, low** — the Log's survivor count was wrong: it said "two" `caller`
   uses were left deliberately and listed "the repo-1 narrative" among the
   places changed, when one of that narrative's three `caller` mentions
-  (`.claude/skills/review-ticket/SKILL.md:119`, unchanged text, only reflowed)
+  (`.claude/skills/review-ticket/SKILL.md@fdafd1a:119`, unchanged text, only reflowed)
   survived alongside its `:93` and `:137`. Corrected the count to three and
   named `:119`'s own reason — it reads as the dispatcher who oversaw the
   pre-fix process, not a claim about who commits today.
@@ -301,7 +301,7 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   **Fixed, low** — `node scripts/citations.mjs` on this ticket exited 1: the
   bare filename `SKILL.md` at line 113 in the Log's dispatch line was ambiguous
   across three tracked files of that name. Qualified it to
-  `.claude/skills/review-ticket/SKILL.md:113`. Fixing `:282` above then moved
+  `.claude/skills/review-ticket/SKILL.md@fdafd1a:113`. Fixing `:282` above then moved
   `docs/01-TICKETS.md:293`'s sentence down to `:294`, which the checker caught
   as `MOVED` on the next run — this ticket's own Why-section citation
   (`:26` in this file) and re-cited it at `:294`, noting it was `:293` as
@@ -313,7 +313,7 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   below, after every edit in this round landed.
 
   **Deferred, low, on the reviewer's own recommendation** — the pointer loop
-  between `.claude/skills/review-ticket/SKILL.md:126` and
+  between `.claude/skills/review-ticket/SKILL.md@fdafd1a:126` and
   `docs/01-TICKETS.md`'s disclaimer. Fixed anyway, since it was one sentence:
   `SKILL.md`'s tradeoff paragraph no longer points back to `docs/01-TICKETS.md`
   at all, so there is nothing left to loop with.

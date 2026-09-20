@@ -1,0 +1,3 @@
+{"type":"assistant","requestId":"req_a","message":{"id":"msg_a","model":"claude-opus-5","usage":{"input_tokens":500,"cache_creation_input_tokens":20000,"cache_read_input_tokens":100000,"output_tokens":1000}}}
+{"type":"assistant","requestId":"req_b","message":{"model":"<synthetic>","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[{"type":"text","text":"You've hit your session limit · resets 4:20am (UTC)"}]}}
+{"type":"assistant","requestId":"req_c","message":{"id":"msg_c","model":"claude-opus-5","usage":{"input_tokens":500,"cache_creation_input_tokens":10000,"cache_read_input_tokens":50000,"output_tokens":2000}}}

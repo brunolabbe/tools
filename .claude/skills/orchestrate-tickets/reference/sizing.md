@@ -24,8 +24,11 @@ tokens, but 3.9 M and 5.8 M tokens all-in for the builder and the reviewer once
 cache reads are counted, and cache reads are essentially the entire bill. So these
 numbers compare rounds against rounds honestly and say nothing directly about
 cost. The conversion measured on that ticket was **$0.0182 per 1k subagent
-tokens**, which prices the sessions in `history.md` at roughly $16 to $73 each —
-useful for a budget, and stale the moment rates move.
+tokens**, which priced the sessions in `history.md` at roughly $16 to $73 each.
+**Retired by repo-53 on 2026-09-20**: `node scripts/agent-cost.mjs` prices an
+agent from its task output file with cache reads counted, and one Opus gate
+alone came to $32.73 that way, in the range the old conversion gave for whole
+sessions. The figure stays here as the unit the earlier rows were priced in.
 
 Eleven tool calls cost more than thirty-seven. The third session reproduced this
 at four times the scale on its widest branch — 100 calls → 238 k, then **29 calls
@@ -41,6 +44,15 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   five in the third. **Know when you cannot give it:** a FAIL whose fix is real
   work needs a real check, and that branch will cost you a round no matter how the
   relay is written. Budget for it rather than trying to write around it.
+
+  **Running the conditions is mechanical; writing them is not.** Derive each
+  condition from the words of a `Done when` line, not from the command that seems
+  to stand for it: a condition demanding a clean whole-file citation check stood
+  for a line that was only about indistinct anchors, two deliberate pre-existing
+  failures made it exit 3, and the round was lost (2026-09-13). And every set of
+  ship conditions includes `node scripts/citations-gate.mjs --against
+  origin/main` exiting 0, which is what CI's `check` job runs and what two
+  branches in one batch failed or would have (2026-09-13).
 - **Batch every finding from a gate into one relay.** Two relays of one finding
   each cost double for the same result.
 - **Choose the gate count from what the branch risks escaping** — a shared
@@ -103,7 +115,40 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the clear case: require the builder to reproduce the defect before writing it up,
   and the reproduction **is** the verification. In the second session that builder
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
-  no reviewer at all.
+  no reviewer at all. **A page-only `chore` with no source change is the other
+  case**: it ships on `scripts/preflight.mjs` exiting 0 and the orchestrator's
+  own read, and its record is a `## Review` headed `Gate: PREFLIGHT` naming the
+  sha, written by the orchestrator — the verdict `review-ticket` reserves for it.
+  Three such tickets on 2026-09-20 would each have cost an Opus round to gate
+  what a diff of prose and a mechanical check already showed.
+- **The whole-branch gate on a batch merged into one branch runs only when a
+  merge conflicted in source.** Every piece was gated on its own branch; when
+  the merges collide only on a shared `include` line or on pins, preflight, the
+  suites, the citations gate and a mutation control per merged guard are the
+  ship condition, and a further Opus read of the whole diff mostly re-derives
+  the per-branch verdicts (2026-09-20, decided by the owner at 2% of the weekly
+  budget and kept as the rule).
+
+### Name a floor for a mechanism ticket
+
+A ticket whose deliverable is a mechanism hardens without a natural floor,
+because the mechanism is also the thing every gate attacks. `repo-29` shipped an
+enforcement gate and each round found a smaller hole in the enforcement itself:
+seven builder rounds and five gates on a branch landable since round two, 1.24 M
+tokens across its two agents (2026-09-08). `repo-38` ran six rounds and 683 k on
+a two-sentence prose fix, four of them on defects the repairs introduced
+(2026-09-09). Every finding was real and reproduced by both sides; each batch
+still paid about a third of itself for one branch.
+
+**A round cap is the wrong instrument.** `dl-58` ran six gates, and two
+credential leaks appeared only after the first three highs were fixed; a
+three-gate cap would have shipped one (2026-09-17). So the dispatch names a
+**severity floor** instead: *below `med`, disclose the finding in the record and
+do not open a round; a further round only for `high`, or for a `med` a `Done
+when` line depends on.* Put it in the gate prompt and in the relay, and put the
+same floor in the builder's ship conditions so both sides stop at the same line.
+Decided by the owner on 2026-09-20. The floor is the dispatcher's to set per
+ticket; `med` is the default, not the rule.
 
 ### Slice a blocked ticket
 

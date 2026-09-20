@@ -16,7 +16,7 @@ difficulty: mechanical
 A dispatched agent's worktree lives at
 `/workspaces/tools/.claude/worktrees/agent-<id>/`, which is **nested underneath
 the shared root checkout's own path**, `/workspaces/tools/`.
-`.claude/agents/builder.md:159 "Never touch `/workspaces/tools` itself"` already
+`.claude/agents/builder.md@fdafd1a:159 "Never touch `/workspaces/tools` itself"` already
 warns against deliberately reaching for the shared root — but that line assumes
 the danger is a chosen action. It is not only that. Because the worktree sits
 inside the root's own path, an absolute path built from the literal prefix
@@ -30,7 +30,7 @@ This is a second, structurally different route into the same failure shape
 `repo-20` already fixed once. `repo-20` closed the case where a reviewer built
 before checking out, because `ticket-reviewer.md`'s setup order put the build
 above the checkout. The fix there was a section reorder — order of operations,
-inside one worktree, on one file the agent controls (`ticket-reviewer.md:12`
+inside one worktree, on one file the agent controls (`ticket-reviewer.md@16d9874:12`
 "Get the branch under review before you measure anything"). This defect needs
 no misordering at all: a worktree-relative and a root-relative path can be
 issued back to back, in either order, and the second one silently reads a
@@ -40,9 +40,9 @@ not because a step ran early.
 **And nothing downstream tells you.** The same silent-wrong-tree shape
 `dispatching.md` already documents from the other mechanism applies word for
 word here. A gate read that page top to bottom on 2026-09-04 and built `main`,
-`.claude/skills/orchestrate-tickets/reference/dispatching.md:157 "not the branch — catching it only because `dist/` was missing a file the branch"`,
+`.claude/skills/orchestrate-tickets/reference/dispatching.md@fdafd1a:157 "not the branch — catching it only because `dist/` was missing a file the branch"`,
 and a reviewer measuring the base rather than the branch produces
-`.claude/skills/orchestrate-tickets/reference/dispatching.md:159 "the base produces a fluent, correctly formatted gate that marks acceptance lines"`
+`.claude/skills/orchestrate-tickets/reference/dispatching.md@fdafd1a:159 "the base produces a fluent, correctly formatted gate that marks acceptance lines"`
 `unproven`. A gate or a build that reads the shared root instead of the
 worktree by this route has no `dist/`-shaped tell at all: it is reading source
 files directly, and a file that happens to be identical between the two trees
@@ -149,16 +149,16 @@ already orient an agent to its own worktree.** Precedented by `repo-20`, which
 put the checkout-before-build fix directly in the agent definitions rather than
 leaving it to a skill's prompt clause, on the reasoning that a convention which
 must hold every time belongs where it
-`.claude/skills/orchestrate-tickets/reference/dispatching.md:163 "reordered that page to fetch → detach → farm → build, so the instruction"`
+`.claude/skills/orchestrate-tickets/reference/dispatching.md@fdafd1a:163 "reordered that page to fetch → detach → farm → build, so the instruction"`
 now loads itself into every reviewer for free, rather than in prose a caller
 has to remember. The natural insertion points already exist:
-`.claude/agents/builder.md:152 "## Your worktree"`, right beside the existing
-`.claude/agents/builder.md:159 "Never touch `/workspaces/tools` itself"` line,
+`.claude/agents/builder.md@fdafd1a:152 "## Your worktree"`, right beside the existing
+`.claude/agents/builder.md@fdafd1a:159 "Never touch `/workspaces/tools` itself"` line,
 which already gestures at the shared root without saying an absolute path into
 it can silently succeed; and
-`.claude/agents/ticket-reviewer.md:12 "## Get the branch under review before you measure anything"`,
+`.claude/agents/ticket-reviewer.md@16d9874:12 "## Get the branch under review before you measure anything"`,
 beside its
-`.claude/agents/ticket-reviewer.md:25 "Confirm you are looking at the right tree"`
+`.claude/agents/ticket-reviewer.md@16d9874:25 "Confirm you are looking at the right tree"`
 step, which currently checks branch and diff stat but not path construction.
 
 Recommended. Cheapest of the three — one or two sentences, in a place
@@ -219,11 +219,11 @@ Add one or two sentences to `.claude/agents/builder.md` right after the "Never t
 
 **Gate: PASS** — 2026-09-12 · `8d79d8e...6150b09` (origin/main...HEAD) · own defect hunt at medium (ticket-reviewer subagent, no `code-review` delegation available)
 
-| Done when                                                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision answered as dated Log entry naming option and reasoning                                                                                                                 | ✓ — the Log entry dated 2026-09-12 below names the question, all three options, chosen=(a), overrides none, and states in those words that the (a)-alone gap is accepted rather than closed                                                                                                                                                                                                                                                        |
-| Reproduction re-verified against the then-current tip, hashes recorded beside the original                                                                                       | ✓ — the Log entry dated 2026-09-12 below re-runs the reproduction against the then-current tip and records both hashes beside the original; independently re-run by me as well: worktree-relative read after a fresh marker hashed `ed93adeecd3311bbe09b03559da6c9f7`, `/workspaces/tools/CLAUDE.md` hashed `7e44f25cc0a6757b93f8f6eb56c239be` (unmodified, matches `HEAD`)                                                                        |
-| Warning written to `builder.md` and `ticket-reviewer.md` at their named insertion points; `npm run check`, both `citations-gate.mjs` invocations, and `status.mjs --json` exit 0 | `.claude/agents/builder.md:163 "resolves silently to the shared root's copy of that file"` ✓, `.claude/agents/ticket-reviewer.md:26 "resolves silently to the shared root's copy, not your worktree"` ✓ — all four commands re-run by me: `npm run check` exit 0, `node scripts/citations-gate.mjs` exit 0, `node scripts/citations-gate.mjs --against origin/main` exit 0 ("45 entr(y/ies)... 0 raised"), `node scripts/status.mjs --json` exit 0 |
+| Done when                                                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Decision answered as dated Log entry naming option and reasoning                                                                                                                 | ✓ — the Log entry dated 2026-09-12 below names the question, all three options, chosen=(a), overrides none, and states in those words that the (a)-alone gap is accepted rather than closed                                                                                                                                                                                                                                                                        |
+| Reproduction re-verified against the then-current tip, hashes recorded beside the original                                                                                       | ✓ — the Log entry dated 2026-09-12 below re-runs the reproduction against the then-current tip and records both hashes beside the original; independently re-run by me as well: worktree-relative read after a fresh marker hashed `ed93adeecd3311bbe09b03559da6c9f7`, `/workspaces/tools/CLAUDE.md` hashed `7e44f25cc0a6757b93f8f6eb56c239be` (unmodified, matches `HEAD`)                                                                                        |
+| Warning written to `builder.md` and `ticket-reviewer.md` at their named insertion points; `npm run check`, both `citations-gate.mjs` invocations, and `status.mjs --json` exit 0 | `.claude/agents/builder.md@fdafd1a:163 "resolves silently to the shared root's copy of that file"` ✓, `.claude/agents/ticket-reviewer.md@fdafd1a:26 "resolves silently to the shared root's copy, not your worktree"` ✓ — all four commands re-run by me: `npm run check` exit 0, `node scripts/citations-gate.mjs` exit 0, `node scripts/citations-gate.mjs --against origin/main` exit 0 ("45 entr(y/ies)... 0 raised"), `node scripts/status.mjs --json` exit 0 |
 
 - **low** · Done-when item 1 says status moves to `ready` "in the same commit" as the decision Log entry; this branch's single commit moves it straight `needs-decision` → `done`, so `ready` never appears in history. Not carried as a repair item — no rule requires the intermediate value, `done` is a strictly stronger completion signal, and every substantive requirement in items 1–3 is met. Builder agrees (message received: "the substantive work is done and that's the correct final state").
 - **dropped** · considered whether the (a)-alone gap (no coverage for ad-hoc subagents, the orchestrator working directly in a worktree, or a human) was being quietly closed by this diff. It is not: `git diff --name-only 8d79d8e...HEAD` touches only `builder.md`, `ticket-reviewer.md`, and the ticket file; `CLAUDE.md` and `.claude/rules/` are untouched. Not a defect, confirms the owner's decision was honored as scoped.
@@ -252,7 +252,7 @@ free: repo-43` (clashes on `repo-16`, `repo-29`, `repo-32` — each claimed by
   the builder avoiding it by habit) is a relay, and is presented as one.** I
   did not enter `fix/repo-42-drop-bare-push-branch`'s worktree to confirm it
   myself — doing so would mean touching another session's worktree, which
-  both this ticket's own dispatch and `builder.md:159` say to stop and report
+  both this ticket's own dispatch and `builder.md@fdafd1a:159` say to stop and report
   rather than do. The general mechanism these two reports describe is the same
   one verified above on a file I do control, which is why the reproduction
   section stands on `CLAUDE.md` rather than on repo-42's files.

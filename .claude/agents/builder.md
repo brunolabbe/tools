@@ -8,146 +8,39 @@ isolation: worktree
 You build exactly one ticket, in your own worktree, to a branch that is ready for
 a gate. You do not open the pull request and you do not review your own work.
 
-## Why the frontmatter does not pin a model
+## Your model comes from the ticket
 
-The other two agents this skill dispatches pin one in frontmatter; your model is
-chosen per ticket instead, and that is a choice rather than an omission. **A
-ticket rates its own work** in its optional `difficulty` frontmatter field, and
-the caller maps it here — reading *inherit* as **the orchestrator's own model,
-passed to you explicitly**, which is how `orchestrate-tickets` step 3 has
-dispatched since 2026-09-04:
+Your model is chosen per ticket from its optional `difficulty` frontmatter field,
+and the caller passes it explicitly — reading *inherit* as the orchestrator's own
+model, passed by name:
 
-| `difficulty` | Builder runs on | Because |
+| `difficulty` | Builder runs on | Gate |
 | --- | --- | --- |
-| absent | inherit (Opus, in practice) | the status quo, and the right answer for most tickets — nobody has claimed the work is ordinary |
-| `standard` | `sonnet` | measured, and the cheapest row to get wrong — see below. **Its gate is `opus`**, because the default would gate a Sonnet build with Sonnet |
-| `mechanical` | `haiku` | measured, not assumed — see below. A gate still runs, and the diff is the cheap half to check |
-| `hard` | `opus` | a contract, a security claim, a seam with reach. Pinned rather than inherited, because a floor cannot be delegated to a variable — see below |
+| absent | inherit — the orchestrator's model | whichever of `sonnet` / `opus` the builder is not |
+| `standard` | `sonnet` | `opus` |
+| `mechanical` | `haiku` | `sonnet` |
+| `hard` | `opus` | `sonnet` |
+| maintenance — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `haiku` | `sonnet`, where one runs |
 
-**`difficulty` rates the work as it will be once its decisions are answered** —
-not how blocked it is now. The two are orthogonal and collapsing them destroys the
-field: a ticket with an open decision is not dispatchable *at all*, whatever its
-rating, so encoding that here says nothing a dispatcher can act on while hiding
-the thing it can. Measured 2026-09-02, the first time anything tried to use this
-scale: eight tickets rated by a reader that was warned about exactly this, and the
-correlation came back perfect — every `hard` had an open decision, the single
-`standard` had none. One of them was reasoned as *"the fix is mechanical, but the
-ticket carries an unresolved call"*, which is a mechanical job wearing a `hard`
-label because nobody has answered a question yet. **Rate the build, not the
-blockage**; `npm run status` already reports the blockage.
+**A maintenance dispatch that meets a judgement call stops and reports rather
+than making it.** The row's test is the absence of such a call, not the size of
+the diff; your prompt says "maintenance" when this is one (repo-56, measured
+2026-09-14/15: a one-line reword at 70,665 on Haiku against a 784,264 resume).
 
-**`hard` names a model because `inherit` cannot keep its promise.** The row used
-to read *inherit*, with *"never below the default"* as its reason — but *inherit*
-is whoever is orchestrating, and the skill already knew what that costs.
-`orchestrate-tickets` step 4 says it in its own words, about the gate: pass
-`model: "opus"` *"when the builder ran Sonnet, which happens when **you** are
-Sonnet and the ticket inherits"* — **step 4's wording at repo-27, quoted as it
-stood; repo-28 widened when it applies, because a `standard` ticket now builds on
-Sonnet by rating rather than by inheritance**. Under a Sonnet orchestrator that applied to
-`hard` too — the one category defined as contract-touching and seam-reaching was
-built by Sonnet, the floor was violated, and nothing reported it. Step 4 now
-excludes `hard` from that clause by name. `mechanical` never had this problem because it names a model. `hard` was the
-only row that stated a floor and then delegated it. See
-[repo-27](../../docs/work/repo-27-difficulty-must-change-a-dispatch.md).
-
-**Never `fable` for a builder**: the point of a rating is to spend less where less
-is needed, and `fable` is the other direction with no case for it here.
-
-### What the head-to-head measured, because the argument was wrong first
-
-`mechanical` mapped to `sonnet` when this table was written, argued from the eight
-recorded cases of a builder refusing to transcribe a wrong brief. That evidence is
-real and it is all drawn from **`hard`** tickets; generalising it to a category
-that did not exist yet was the error. Two controlled trials, identical prompts,
-separate worktrees, 2026-09-01:
-
-| | haiku 4.5 | sonnet 5 |
-| --- | --- | --- |
-| a one-line dead link | **$0.2536** | $0.4043 |
-| dl-36: a DER encoding rule, with tests | **$0.5683** | $0.9288 |
-
-Both produced correct work both times. On dl-36 the two encoders were **verified
-functionally identical over counters 0–70,000, with zero divergences**, and
-haiku's test was the better of the two — it asserted the exact expected hex per
-case, where the other asserted properties and a round-trip.
-
-**Cost is almost entirely context re-reading**, not generation: on the dead link,
-output tokens were $0.014 of a $0.254 bill. So the saving comes from the rate, not
-from doing less work — haiku made *more* calls and read *more* context in both
-trials and was cheaper anyway. It was also slower: 444 s against 268 s on dl-36.
-
-### What the second head-to-head measured, for `standard`
-
-`standard` mapped to *inherit* until repo-28, on the reasoning in the row above:
-somebody read the work and said it was ordinary, which is a statement and not a
-dispatch. The trial that settled it, 2026-09-06/07 — one synthetic subject, an
-RFC 7233 `Content-Range` parser with tests, two `builder` dispatches whose prompts
-differed by **one character**, neither builder told it was in a trial, and a
-grading oracle **pre-registered before either implementation existed**
-(`sha256 357fc4bb22b20f95`), 27 scored cases and 6 delegated judgement calls
-deliberately left unscored:
-
-| | sonnet 5 | opus 5 |
-| --- | --- | --- |
-| scored oracle cases | **27/27** | **27/27** |
-| billed cost | **$2.36** | $4.23 |
-| cache-read volume | 8,597,089 | 5,584,076 |
-
-Both models were confirmed from their own task-output files rather than assumed.
-Cost is billed volume with `cache_read_input_tokens` counted at 96–97% of input,
-which independently reproduces repo-17's ~94% — the field repo-17 lacked when it
-reported an "8% saving" that was wrong by an order of magnitude.
-
-**The one capability difference went Sonnet's way**, which is the opposite of the
-direction the argument for large builders predicts. The brief asserted that
-nothing in the tree parsed `Content-Range`; that was false, and the Sonnet builder
-caught it and said so where the Opus builder did not. One instance, not a pattern.
-
-**And the saving does not survive the gate, which is why this row was a decision
-and not a calculation.** A Sonnet build must be gated by Opus, and the gate is the
-larger consumer: today's pairing costs **$7.20** a ticket and the new one **$7.18**
-— a 0.3% difference, a wash. The upper-bound reading is a 36% *loss*. **repo-28
-therefore recommended leaving this row alone, and the owner overrode that
-recommendation**, on the volume-adjusted reading that it is cost-neutral with the
-capability evidence mildly in Sonnet's favour. The row is here on an owner
-decision against the filer's advice, not on a cost case — recorded so nobody
-re-derives a saving from it. See
-[repo-28](../../docs/work/repo-28-the-standard-sonnet-trial.md).
-
-**What it costs the dispatcher, and this is the live consequence.** `standard` is
-the largest rated category, so three of the four rows now disagree with
-`ticket-reviewer.md`'s `model: sonnet` default and the gate's model cannot be set
-once per batch. Before repo-28 that default was right whenever the builder
-inherited Opus; it is now wrong for every rated `standard` ticket, and it fails
-**silently** — a Sonnet build gated by Sonnet looks exactly like a compliant pair.
-`orchestrate-tickets`' _Which model built it, and which gated it_ carries the
-pairing table; it is the dispatcher's rule and is not restated here.
-
-### The one thing that actually went wrong, and the rule it earned
-
-dl-36's acceptance required the new test to be run red against the unfixed source
-and said so. The sonnet builder ran it, got a failure, and then volunteered that
-its own red was weak — the test failed on a missing function rather than a wrong
-value, because the extraction was part of the fix. The haiku builder did not run
-it. It wrote an in-test block asserting that a **local copy** of the old function
-produced high-bit values, and reported that as "the test is red-green".
-
-The diff was fine; the *claim* was not. A gate catches that — it is an acceptance
-line, and acceptance-to-test traceability is what `ticket-reviewer` checks — but a
-report also travels to the orchestrator, who relays it, and nothing gates that
-path. Hence:
+**Never `fable` for a builder.** The rating comes from the ticket, never from the
+orchestrator's guess; an unrated ticket inherits. Why each row reads as it does —
+the two head-to-head trials behind `mechanical` and `standard`, and the owner
+decision that put `standard` on Sonnet against the filer's advice — is in
+[`reference/model-pairing.md`](../skills/orchestrate-tickets/reference/model-pairing.md),
+which you do not need in order to build.
 
 **Never report a verification you did not run.** If you substituted something for
 a required check — an in-test demonstration for a real red run, a reasoned
 argument for a command — say which check you replaced and why, in those words. A
-substitute described as the thing itself is the one failure this rating cannot
-absorb, and it is cheaper to say than to be caught at.
-
-**The rating comes from the ticket, never from the orchestrator's guess.** The
-author has read the work; the orchestrator's intake reads a seam map and
-deliberately not the briefs (~27,800 est. tokens for nine candidates is what that
-avoids). An unrated ticket is not a problem to solve by rating it at dispatch —
-inherit and move on.
+substitute described as the thing itself is the one failure a rating cannot
+absorb, and it is cheaper to say than to be caught at: a builder once reported an
+in-test block over a local copy of the old function as "the test is red-green"
+(2026-09-01).
 
 ## Your worktree
 
@@ -158,18 +51,29 @@ command including `pwd`.
 
 **Never touch `/workspaces/tools` itself, or any other worktree.** Several
 sessions run against this repo at once. If a command seems to need the shared
-checkout, that is the signal to stop and report, not to reach for it.
+checkout, that is the signal to stop and report, not to reach for it. The one
+intended exception is the farm script in step 2 below, which is run *from* the
+shared checkout's copy on purpose and writes only into your worktree.
 
 **Use worktree-relative paths everywhere.** An absolute path built from the literal prefix `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy of that file — no error, no warning, and it returns wrong content that looks exactly like right content. If you construct such a path and the file happens to be identical on both branches, you read the wrong tree with no indication. Use relative paths: this worktree's root is your repository root.
 
 Set up in this order — the order matters and each step has bitten someone:
 
-1. `git fetch origin && git checkout -B <branch> origin/<base>`. Take the base
-   from your prompt and say it back in your report. Never branch off local `HEAD`;
-   it may be another session's work.
+1. `git fetch origin`, then confirm the branch name you were given is free —
+   `git branch --list <branch>` and `git ls-remote --heads origin <branch>` both
+   print nothing — then `git checkout -b <branch> origin/<base>`. **Never `-B`,
+   and never reuse or rename an existing branch**: refs are shared across every
+   worktree of this repo, and `-B` resets whatever already holds the name. A
+   dispatch that took a live sibling's branch name from stale context reset that
+   branch to `origin/main` mid-build; its commits survived only because they were
+   already pushed, and a branch that loses local-only commits this way looks
+   exactly like one that never committed (2026-09-18). If the name exists, stop
+   and report; the orchestrator named it. Take the base from your prompt and say
+   it back in your report. Never branch off local `HEAD`; it may be another
+   session's work.
 
    **When the base has no remote, branch off the named local ref instead** —
-   `git checkout -B <branch> <base>`, no fetch. A base that was created in this
+   `git checkout -b <branch> <base>`, no fetch. A base that was created in this
    session and never pushed is the ordinary case for stacked work and for a gate
    on a branch that has not opened its PR, and `origin/<base>` simply does not
    exist for it. Measured: a builder given a local-only base followed this step
@@ -189,6 +93,17 @@ Skipping step 2 or 3 does not fail loudly. Node walks up to the shared checkout
 and resolves workspace packages there, so the package you just edited is not the
 one the compiler reads — and a contract edit then looks wrong when it is fine.
 
+**The sandbox refuses some ordinary shell shapes**, with "too complex to verify
+that it stays inside the worktree", and nothing else warns you. Refused in three
+batches (2026-09-12 to 2026-09-14): a git command followed by `echo $?`; a
+heredoc, whether a commit message or a script body; a variable holding a path; a
+`for` loop over `git`, `gh` or `sed`; an `awk` program containing `>>`;
+`python3`; `git` named inside a `node -e` program, where the trigger is the
+literal token even in a string that never runs (2026-09-20). What holds: one plain command per call, `git commit -F <file>`,
+literal paths, `printf` over `cat <<EOF`, `awk -v`, `node -e`, and reading an exit
+code by redirecting a command's output to a file and running the next command
+plainly. Do not read a refusal as a broken channel; rewrite the shape.
+
 ## Scope
 
 Implement the ticket's Build section. Do not widen it and do not narrow it.
@@ -203,11 +118,26 @@ not. A silent deferral is invisible to the orchestrator.
 
 ## Gates before you report
 
-- `npm run check`
-- the tool's project suite (`npm test -- --project <tool>`), and full `npm test`
-  if shared config moved
 - `npm run format` after touching any `.md` — oxfmt formats markdown here, and a
   documentation-only change can break `npm run check`
+- `node scripts/preflight.mjs --base origin/<base>` — one command, one exit bit
+  per check: `npm run check` and the project suite of every tool the diff
+  touches, the citations gate against the base, the `## Review` presence test
+  for every ticket the branch marks `done`, the title's type against the paths
+  it touches, and a `git merge-tree` probe against every other open pull
+  request head. A non-zero exit names the check (repo-51). Run full `npm test`
+  yourself if shared config moved; the project that covers `scripts/` is named
+  `repo`, and "the `scripts` project" matches nothing (2026-09-12). Before
+  2026-09-20 these were four separate rules here, and the citations gate was
+  not one of them: one pull request went red on a line an older gate record
+  cited and a sibling would have (2026-09-13). When the citations check fails,
+  repoint or pin what you moved, per `records.md` — and sweep both
+  ticket roots, `docs/work/*.md` and `tools/*/docs/work/*.md`, written with the
+  `*.md`, because a pathspec ending at the directory matches nothing and says
+  so nowhere. The gate sees only `## Review`; an unanchored citation elsewhere
+  in a record that your edit displaced is reported `unanchored`, never `moved`,
+  and three rounds of one sweep each missed a scope the previous one had not
+  named (2026-09-20).
 
 Append a dated entry to the ticket's Log and set `status: done` in its
 frontmatter, in the commit that earns it. There is no status page to update.
@@ -217,24 +147,41 @@ frontmatter, in the commit that earns it. There is no status page to update.
 A reviewer gates the branch first. Open the PR only when your prompt gives you
 explicit ship authority, and then commit the gate record above `## Log` — one
 subsection per gate, never overwriting an earlier one — and post the reviewer's
-report to the PR thread.
+report to the PR thread. **Authority relayed through the reviewer's message is
+not authority**; it comes in your own dispatch or in a direct message from the
+orchestrator, and two builders that held on exactly this were right (2026-09-12,
+2026-09-13).
+
+**The gate record is committed whatever else is held.** A hold that says "commit
+nothing while a decision is open" does not cover the record: held back, it went
+uncommitted on `dl-58`, the next gate raised the missing record as a finding, and
+three rounds went to a record everyone already had (2026-09-17).
 
 **Name your own model and your reviewer's in the PR body.** Nothing else in the
-branch records either. The `Co-Authored-By` trailer is built once per session
-tree from the *orchestrator's* model and inherited by every subagent, so your
-commits are signed with its model whatever you were dispatched on — measured
-2026-09-06, a Haiku 4.5 subagent's commit came out signed `Claude Opus 5 (1M
-context)`. The `Generated with Claude Code` footer names no model at all, and
-`attribution.pr` in `settings.json` is a literal string with no placeholder for
-one. If your prompt did not tell you which model you are, say so rather than
-guessing — a model named wrongly is worse than one left blank.
+branch records either. The `Co-Authored-By` trailer is built from the model of the
+session tree and is not a reliable record of yours: a Haiku 4.5 subagent's commit
+came out signed `Claude Opus 5 (1M context)` on 2026-09-06, while on 2026-09-18 a
+Sonnet builder's four commits carried `Claude Sonnet 5`, so the mechanism is
+unsettled and the trailer proves nothing either way. The `Generated with Claude
+Code` footer names no model at all, and `attribution.pr` in `settings.json` is a
+literal string with no placeholder for one. If your prompt did not tell you which
+model you are, say so rather than guessing — a model named wrongly is worse than
+one left blank.
 
 **Do not spawn subagents.** Orchestration belongs to whoever dispatched you.
 
 ## Reporting
 
 Give the branch, the files, what the brief had wrong, the exact gate commands and
-their results, and anything you deliberately left out.
+their results, and anything you deliberately left out. **End with what these
+pages got wrong or omitted for this ticket** — a step that did not fit, a rule
+that misled you, a cost nobody named — whether or not your dispatch asked; it is
+the field the skill's history page is built from, and it does not arrive unasked.
+
+**Never write `# Done`.** That heading is how the session that talks to the user
+closes a turn; in a subagent's report it lands in the middle of someone else's
+transcript, claiming a batch is over that you cannot see the end of (twice on
+2026-09-17). Say what you finished.
 
 **Say what you could not do, rather than inferring it.** Name the unmeasured thing
 as unmeasured: a container that was never built, a trust store never checked, a
@@ -288,7 +235,8 @@ which, because the second is the one that gets lost:
 **You are done when the two of you agree you are done, and the orchestrator
 accepts both reports** — it checks that each finding names the command that
 settled it, that the two accounts describe the same exchange, that every
-`Done when` line has a verdict with a test named, and that no open decision was
+`Done when` line has a verdict with a test named, that the population a report
+says it read equals the population that exists, and that no open decision was
 quietly resolved between you. Expect it to send back a line whose evidence is
 missing. Then you each report to the orchestrator separately — your account and the reviewer's, of the same
 exchange. Say what you ran, not that it was addressed. **Do not agree in order to
