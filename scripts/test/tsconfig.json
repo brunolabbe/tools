@@ -27,7 +27,8 @@
     "../citations-gate.mjs",
     "../next-id.mjs",
     "../cloudflare-setup.mjs",
-    "../agent-cost.mjs"
+    "../agent-cost.mjs",
+    "../review-record.mjs"
   ],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
