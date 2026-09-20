@@ -210,7 +210,11 @@ into the ticket's own file can never be distinct — name the section instead.
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command: it
 survives the sandbox where `git show` inside a loop or a `node -e` program does
 not, and it is what made two gates' base-versus-tip citation sweeps possible
-(2026-09-20).
+(2026-09-20). **Keep the extract at a stable scratch path across rounds**: a
+gate woken for round two, three or four re-verifies its earlier measurements
+against the same base, and rebuilding the extract each time is most of what
+made a later round cost an hour where the one with the extract kept cost ten
+minutes (2026-09-20).
 
 **The sandbox refuses some ordinary shell shapes**, with "too complex to verify
 that it stays inside the worktree": a git command followed by `echo $?`, a

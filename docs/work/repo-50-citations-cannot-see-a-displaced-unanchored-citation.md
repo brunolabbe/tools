@@ -68,7 +68,10 @@ a cited unanchored line in a scratch copy and watch the mode report it.
 - The positive control above is in the test suite, not only in the Log.
 - Run against `orchestrate-skill-sweep`'s tip before its pins landed, the mode
   reports the 24 citations that branch pinned by hand, or the Log says which it
-  misses and why.
+  misses and why. Those tips (`ac98b37`, `5c517d3`, `44196c1`) are branch-only
+  commits, unreachable from a fresh clone once the branch squash-merges and is
+  deleted; `git fetch origin refs/pull/281/head` brings them back, since all
+  three are ancestors of pull request #281's head.
 
 ## Log
 

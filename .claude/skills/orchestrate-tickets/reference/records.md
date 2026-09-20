@@ -169,6 +169,11 @@ discarded. So:
   - A tag on the reviewed commit would also keep pins reachable, exit 0 in the
     same simulation; the owner chose prose (2026-09-15). Do not re-derive the tag
     remedy without re-asking.
+  - **The same holds for a sha in a ticket's `Done when` or Log**, because a
+    ticket outlives the branch that filed it by definition. Name a `main` commit,
+    a tag, or the pull request whose head ref (`refs/pull/<n>/head`) keeps the
+    branch-only commits fetchable — a filed ticket named three such shas with no
+    route back to them and was caught by its own gate (2026-09-20).
 
   **A committed record can be spliced by a later edit, and nothing here catches
   it.** `review-ticket` spends several paragraphs protecting "the builder commits
