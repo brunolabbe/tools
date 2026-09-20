@@ -166,8 +166,8 @@ test("the streamed fixture's grouped sums differ from what an ungrouped sum over
 
 test("priceFile on the streamed fixture's grouped totals matches the hand-computed dollar figure", () => {
   const priced = processFile(streamedFixture);
-  // (502/1e6)*5 + (39580/1e6)*6.25 + (50000/1e6)*0.5 + (1503/1e6)*25 = 0.3125
-  expect(priced.dollars).toBeCloseTo(0.3125, 4);
+  // (502/1e6)*5 + (39580/1e6)*6.25 + (50000/1e6)*0.5 + (1503/1e6)*25 = 0.31246
+  expect(priced.dollars).toBeCloseTo(0.31246, 9);
 });
 
 test("the CLI over the streamed fixture prices the deduplicated total, not the raw record count", () => {
@@ -178,28 +178,15 @@ test("the CLI over the streamed fixture prices the deduplicated total, not the r
   expect(result.stdout).toContain(formatDollars(0.3125));
 });
 
-test("the real task output file named in the ticket's Log prices at the deduplicated figure, not the raw one", () => {
-  const real =
-    "/tmp/claude-1000/-workspaces-tools/35f08415-9d8f-4d7b-ad2a-b393b8e94091/tasks/ac9491c3ec452c459.output";
-  let content;
-  try {
-    content = readFileSync(real, "utf8");
-  } catch {
-    // Not every machine running this suite has this session's scratch files.
-    // The fixture-based tests above prove the same grouping logic; this one
-    // is corroboration against the file the gate actually measured, when it
-    // happens to still be present.
-    return;
-  }
-  const priced = priceFile(sumUsage(content, real), real);
-  expect(priced).toMatchObject({
-    input: 446,
-    cacheWrite: 627777,
-    cacheRead: 48194756,
-    output: 188291,
-  });
-  expect(priced.dollars).toBeCloseTo(32.7305, 4);
-});
+// A test against the real file named in the ticket's Log
+// (`ac9491c3ec452c459.output`) was tried here and dropped at gate 2: it lives
+// under this session's UUID-scoped scratch directory, so on any other
+// machine, in CI, or once this session's scratch is reaped, the test would
+// silently assert nothing rather than fail — the same failure mode
+// `.claude/rules` elsewhere in this repo calls out for a test that measures
+// the sandbox instead of the code. The fixture above (`streamed.jsonl`) was
+// built from that real file's exact worked-example shape and gives the same
+// coverage without depending on a path this suite cannot guarantee.
 
 // --- Refusal: two model ids in one file -------------------------------------
 

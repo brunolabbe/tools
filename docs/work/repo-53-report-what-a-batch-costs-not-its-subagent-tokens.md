@@ -168,15 +168,61 @@ vitest run scripts/test/agent-cost.test.ts` (19/19 passed),
   **`status` stays `done`, on the orchestrator's direction, not reverted to
   `in-flight` as the reviewer's med recommended.** The two lines that
   recommendation was about — the accounting table and history schema wiring,
-  and the real-batch table — land on `orchestrate-skill-sweep` in the same
-  pull request before anything merges: that branch already carries the
-  `SKILL.md`/`reference/history.md` wiring at `811b8f6`, and the real-batch
-  table is the orchestrator's at close-out. `npm run status` only ever reads
-  the merged state, so the partial-completion problem the med finding named
-  does not reach the board.
+  and the real-batch table — are meant to land on `orchestrate-skill-sweep` in
+  the same pull request before anything merges. (Whether that wiring already
+  existed there at the time of this entry is corrected in the entry below,
+  after gate 2 checked it and found it did not yet.)
 
   Gates re-run after the fix: `npm run check` exit 0; `npx vitest run
 scripts/test/agent-cost.test.ts` 24/24 passed; `npx vitest run --project
 repo` 370/370 passed. Full `npm test` not re-run a second time in this round
   — no shared config changed beyond the prior round's `tsconfig.json` entry,
   already covered.
+
+- 2026-09-20 — Gate 2 independently re-verified the fix against the exact
+  file (`$32.7305`, byte-identical) and mutation-tested it on top, and found
+  two things I got wrong. First, a false factual claim in the entry above:
+  I wrote that `orchestrate-skill-sweep` "already carries" the `SKILL.md`/
+  `reference/history.md` wiring at `811b8f6` — it does not, which I
+  reproduced myself with `git grep -n -i 'agent-cost'
+origin/orchestrate-skill-sweep` (one hit: this ticket's own Build line) and
+  `git show origin/orchestrate-skill-sweep:.claude/skills/orchestrate-tickets/reference/history.md`
+  (its `cost` row still names the retired subagent-token conversion). That
+  sentence is corrected above rather than left standing; the false claim
+  originated in a premise handed to me, not something I checked before
+  writing it down. Second, two lows in the streamed-fixture test I added:
+  the hand-computed comment said `0.3125` where the real figure is `0.31246`
+  (fixed, and tightened the assertion to `toBeCloseTo(0.31246, 9)` to match
+  the other two fixtures' precision), and a fifth test that read the real
+  scratch file directly returned silently rather than failing on any machine
+  where that session-scoped path is absent — dropped, since the fixture
+  already gives equivalent coverage without depending on a path this suite
+  cannot guarantee.
+
+  One more thing gate 2 found and flagged as not mine to fix, for whoever
+  writes the `.claude/` wiring: the retired "$0.0182 per 1k subagent tokens"
+  conversion also lives in a third place the Done-when line does not name,
+  `reference/sizing.md:26` on `orchestrate-skill-sweep`.
+
+  Gates re-run after these fixes: `npm run check` exit 0; `npx vitest run
+scripts/test/agent-cost.test.ts` (23/23 — one net fewer test, the dropped
+  real-file check); `npx vitest run --project repo` (369/369).
+
+  **Resolved**: the "already carries" claim was wrong when written (the
+  wiring was in the orchestrator's own working tree, not pushed), and the
+  orchestrator has since pushed it for real. `orchestrate-skill-sweep` is now
+  at `56d5564`, confirmed by me with `git fetch origin` +
+  `git grep -c agent-cost origin/orchestrate-skill-sweep -- .claude`, which
+  returns exactly three files —
+  `.claude/skills/orchestrate-tickets/SKILL.md` (a **Cost** column sourced
+  from `node scripts/agent-cost.mjs`),
+  `.claude/skills/orchestrate-tickets/reference/history.md` (the `cost` row
+  reworded off the retired conversion, with pre-repo-53 rows kept as
+  historical floors on the old unit), and
+  `.claude/skills/orchestrate-tickets/reference/sizing.md` (the third site
+  gate 2 found, now marked "Retired by repo-53 on 2026-09-20"). `status:
+done` on this ticket now rests on a landed fact, not a premise — the two
+  previously-outstanding Done-when lines are satisfied on `main` once this
+  branch and `orchestrate-skill-sweep` both merge; the fifth Done-when line
+  (one real batch's table) remains the orchestrator's to produce at
+  close-out, as recorded above.
