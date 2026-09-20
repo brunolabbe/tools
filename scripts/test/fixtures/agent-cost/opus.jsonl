@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"gate the branch"}}
+{"type":"assistant","message":{"model":"claude-opus-5","usage":{"input_tokens":500,"cache_creation_input_tokens":20000,"cache_read_input_tokens":100000,"output_tokens":1000}}}
+{"type":"attachment","message":{"role":"user","content":"a tool result, not billed"}}
+{"type":"assistant","message":{"model":"claude-opus-5","usage":{"input_tokens":500,"cache_creation_input_tokens":10000,"cache_read_input_tokens":50000,"output_tokens":2000}}}
