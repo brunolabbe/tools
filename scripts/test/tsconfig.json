@@ -28,7 +28,8 @@
     "../next-id.mjs",
     "../cloudflare-setup.mjs",
     "../agent-cost.mjs",
-    "../review-record.mjs"
+    "../review-record.mjs",
+    "../preflight.mjs"
   ],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
