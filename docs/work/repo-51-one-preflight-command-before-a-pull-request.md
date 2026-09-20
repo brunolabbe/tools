@@ -158,9 +158,10 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
      its own first gate ran `ok npm run check` alone and never its own 25
      tests.
   4. `checkTitle` fails outright, naming "no conventional subject found; pass
-     --title", when `commit-message.mjs`'s own `validate` bypasses a subject
-     (a merge, revert, fixup or squash) and no type can be extracted — instead
-     of silently reading the absent type as "hidden" and passing.
+     --title", when `type === undefined` — instead of silently reading the
+     absent type as "hidden" and passing. **This catches a `Merge ` or
+     `Revert "` subject and no other `BYPASS` form; see gate 2's med finding
+     and round 3's Log entry below for the rest.**
   5. Check 1 now runs through `runBuildCommand`, a dedicated runner that
      captures stdout and stderr together and prints the last 40 lines on
      failure, decoupled from `runCommand` (imported from `next-id.mjs`, still
@@ -183,3 +184,41 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   branch now runs `npm test -- --project repo` under check 1 (confirming fix
   3 against the reproduction that found it) and still names the missing
   `## Review` section this ticket does not yet carry.
+
+- 2026-09-20 — Round 3, on the orchestrator's authority, after the reviewer's
+  gate 2 (CONCERNS: 1 med, 3 low; the other five round-2 fixes verified closed
+  against their own reproductions). The med was a verdict, not a decision, so
+  the orchestrator did not escalate it as one: round 2's Log said the title
+  fix covered "a merge, revert, fixup or squash" subject, and it covered only
+  the first two — reproduced and confirmed before applying anything, matching
+  gate 2's own measurement exactly (`--title "fixup! feat(downloader): …"`
+  exited 0, printing `ok "fixup" is hidden in release-please-config.json`).
+
+  1. (the med) `checkTitle`'s guard now requires the extracted word to be a
+     member of `commit-message.mjs`'s own exported `TYPES`, not merely
+     present. `Merge `/`Revert "` still fail via `type === undefined`;
+     `fixup!`/`squash!`/`amend!` now fail because `"fixup"`, `"squash"` and
+     `"amend"` are not real types, closing all five `BYPASS` forms with one
+     extra check rather than a second regex. Nothing outside
+     `scripts/preflight.mjs` was touched to get it — `TYPES` was already
+     exported, so this cost one import, not an edit to `commit-message.mjs`.
+  2. (low) The two remaining leaks of `next-id.mjs`'s id-sweep wording — on
+     stdout through `guarded()` when `gh` fails inside check 5, and on stderr
+     when `--base` does not resolve — are gone because the plumbing runner
+     that produced them is gone: `runCommand` is no longer imported from
+     `next-id.mjs` at all. A private `runGit` replaces it everywhere in this
+     file (git/gh calls only; `runBuildCommand` already covered check 1),
+     carrying `runCommand`'s two real guarantees — a failed command's stdout
+     is never read, `PATH`-absent exits 127 — without its prose.
+  3. (low) `defaultListOpenHeads` now validates every `gh pr list` entry's
+     `headRefOid` and fails naming the PR and the missing field, rather than
+     letting a later `.slice(0, 7)` on `undefined` raise an unrelated
+     `TypeError`. The fourth low (`SCOPE` and the grandfather list having
+     different provenance under `--repo`) was recorded as harmless in-tree and
+     left alone — not a decision this round revisited.
+
+  Gates: `npx vitest run scripts/test/preflight.test.ts` — 45 passed (was 38:
+  one single-subject bypass test replaced by five parametrized over
+  `commit-message.mjs`'s own `BYPASS` forms, plus three new — two for item 2's
+  stdout/stderr wording, one for item 3's actionable message); `npm run check`
+  exit 0; `npm test -- --project repo` — 391 passed.

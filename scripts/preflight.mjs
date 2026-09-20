@@ -55,8 +55,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { runCommand } from "./next-id.mjs";
-import { EXTRA_SCOPES, releasingTypes, toolScopes, validate } from "./commit-message.mjs";
+import { EXTRA_SCOPES, TYPES, releasingTypes, toolScopes, validate } from "./commit-message.mjs";
 import {
   SCOPE,
   SELF as CITATIONS_GATE_SELF,
@@ -75,6 +74,41 @@ function fail(message, exit) {
 
 /** Non-empty lines of a command's output. */
 const lines = (out) => out.split("\n").filter(Boolean);
+
+/**
+ * Spawn a plumbing command (`git`, `gh`) and hand back its stdout, or throw
+ * with its exit status attached and never read a failed command's partial
+ * stdout.
+ *
+ * **Deliberately not `next-id.mjs`'s exported `runCommand`, which this file
+ * used until round 3.** That function's failure message is `next-id.mjs`'s
+ * own — two sentences about a truncated id sweep, written for a guard this
+ * script does not have — and round 2's fifth med finding was already this
+ * project's reason to stop routing check 1's `npm`/`vitest` output through it
+ * (`runBuildCommand`, above). Round 3's low finding is the same wording
+ * reaching a user a second way: `guarded()` prints a thrown error's message
+ * verbatim, so a `gh` or `git` failure elsewhere in preflight still surfaced
+ * `next-id.mjs`'s sentences on stdout or stderr. This keeps `runCommand`'s two
+ * real guarantees — a failed command's stdout is never read, and a command
+ * not on `PATH` is reported as "not found" at 127 — without importing its
+ * prose along with them.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{cwd?: string}} [options]
+ */
+function runGit(command, args, options = {}) {
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  if (result.error) throw fail(`${command}: ${result.error.message}`, 127);
+  if (result.status !== 0) {
+    const detail = (result.stderr || "").trim().split("\n").slice(0, 3).join("\n");
+    throw fail(
+      `${command} ${args.join(" ")} exited ${result.status}${detail ? `\n${detail}` : ""}`,
+      result.status ?? 1,
+    );
+  }
+  return result.stdout;
+}
 
 /**
  * Which bit of the exit code each check sets, in the order the Build section
@@ -356,9 +390,9 @@ export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo
  *
  * @param {string} repo
  * @param {string[]} diffPaths
- * @param {typeof runCommand} [run]
+ * @param {typeof runGit} [run]
  */
-export function checkReview(repo, diffPaths, run = runCommand) {
+export function checkReview(repo, diffPaths, run = runGit) {
   const changed = diffPaths.filter(isTicketPath);
 
   const out = [];
@@ -403,9 +437,9 @@ export function checkReview(repo, diffPaths, run = runCommand) {
  * @param {string} repo
  * @param {string[]} diffPaths
  * @param {string | undefined} title
- * @param {typeof runCommand} [run]
+ * @param {typeof runGit} [run]
  */
-export function checkTitle(repo, diffPaths, title, run = runCommand) {
+export function checkTitle(repo, diffPaths, title, run = runGit) {
   const subject = title ?? run("git", ["log", "-1", "--format=%s"], { cwd: repo }).trim();
   const types = releasingTypes(repo);
   const scopes = [...toolScopes(repo), ...EXTRA_SCOPES];
@@ -420,16 +454,26 @@ export function checkTitle(repo, diffPaths, title, run = runCommand) {
   }
 
   const type = /^(?<type>[a-z]+)/u.exec(subject)?.groups?.type;
-  // `validate`'s own `BYPASS` lets a merge/revert/fixup/squash subject through
-  // with `ok: true` and no type at all — a branch's *own* commits are working
-  // notes and may include one, and the default title source is the branch's
-  // last commit subject. Reproduced on repo-51's second gate: a `--title` of
-  // `Merge branch 'main' into work` passed this check silently, printing
-  // `ok    "undefined" is hidden …` — `type` was `undefined`,
-  // `types.includes(undefined)` is `false`, and the branch this precisely never
-  // gets a type-versus-paths check. This must fail instead of quietly reading
-  // as "hidden".
-  if (type === undefined) {
+  // `validate`'s own `BYPASS` lets a merge, revert, fixup, squash or amend
+  // subject through with `ok: true` and no convention enforced at all — a
+  // branch's *own* commits are working notes and may carry one, and the
+  // default title source is the branch's last commit subject. Reproduced on
+  // repo-51's second gate: a `--title` of `Merge branch 'main' into work`
+  // passed this check silently, printing `ok    "undefined" is hidden …`.
+  //
+  // **`type === undefined` alone is not the whole guard, and gate 2 measured
+  // the gap rather than assumed it.** `Merge ` and `Revert "` both start
+  // uppercase, so `/^[a-z]+/` extracts nothing from either and `type` really
+  // is `undefined` there. `fixup! `, `squash! ` and `amend! ` do not: they are
+  // lowercase, and the regex happily reads `"fixup"`, `"squash"` and
+  // `"amend"` out of them, none of which is a real type. Checked at gate 2:
+  // `--title "fixup! feat(downloader): document a thing (dl-1)"` on the same
+  // fixture that fails a `feat` title with bit 8 instead printed `ok
+  // "fixup" is hidden in release-please-config.json` — a word that appears in
+  // that file nowhere at all — and exited 0. So the type must also be a
+  // member of `commit-message.mjs`'s own `TYPES`, the only types that can ever
+  // be genuine, rather than merely present.
+  if (type === undefined || !TYPES.includes(type)) {
     return {
       ok: false,
       bit: EXIT.title,
@@ -545,7 +589,14 @@ export function mergeTreeConflicts(repo, ours, theirs, spawn = spawnRaw) {
  * clone that has not fetched since a peer pushed reports a stale branch as
  * clean. The oid is the head; the ref name is only ever a label for it here.
  *
- * @param {typeof runCommand} run
+ * **Every entry's `headRefOid` is checked before it is used.** Round 3's low
+ * finding: a `gh` version, or a caller-supplied `listOpenHeads`, that omits
+ * the field left `head.oid` as `undefined`, and `mergeTreeConflicts` calling
+ * `.slice(0, 7)` on it surfaced a raw `TypeError` naming no PR and no fix —
+ * a check 5 that still failed at the right bit, on the wrong words. This
+ * fails here instead, naming the PR and the field that was missing.
+ *
+ * @param {typeof runGit} run
  */
 function defaultListOpenHeads(run) {
   return (/** @type {string} */ repo) => {
@@ -554,9 +605,18 @@ function defaultListOpenHeads(run) {
       ["pr", "list", "--state", "open", "--json", "number,headRefName,headRefOid"],
       { cwd: repo },
     );
-    /** @type {{number: number, headRefName: string, headRefOid: string}[]} */
+    /** @type {{number: number, headRefName: string, headRefOid?: string}[]} */
     const parsed = JSON.parse(out || "[]");
-    return parsed.map((p) => ({ number: p.number, headRefName: p.headRefName, oid: p.headRefOid }));
+    return parsed.map((p) => {
+      if (typeof p.headRefOid !== "string" || p.headRefOid === "") {
+        throw fail(
+          `gh pr list did not report headRefOid for PR #${p.number} (${p.headRefName}) — pass ` +
+            `--json number,headRefName,headRefOid explicitly, or upgrade gh`,
+          1,
+        );
+      }
+      return { number: p.number, headRefName: p.headRefName, oid: p.headRefOid };
+    });
   };
 }
 
@@ -587,10 +647,10 @@ function defaultListOpenHeads(run) {
  * positive control a silent pass would defeat.
  *
  * @param {string} repo
- * @param {{run?: typeof runCommand, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[]}} [options]
+ * @param {{run?: typeof runGit, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[]}} [options]
  */
 export function checkMergeTree(repo, options = {}) {
-  const run = options.run ?? runCommand;
+  const run = options.run ?? runGit;
   const spawn = options.spawn ?? spawnRaw;
   const listOpenHeads = options.listOpenHeads ?? defaultListOpenHeads(run);
 
@@ -692,7 +752,7 @@ function guarded(name, bit, run) {
  * @param {{
  *   base: string,
  *   title?: string,
- *   run?: typeof runCommand,
+ *   run?: typeof runGit,
  *   buildRun?: typeof runBuildCommand,
  *   spawn?: typeof spawnRaw,
  *   grandfathered?: Map<string, number>,
@@ -700,7 +760,7 @@ function guarded(name, bit, run) {
  * }} options
  */
 export function preflight(repo, options) {
-  const { base, title, run = runCommand, buildRun, spawn, grandfathered, listOpenHeads } = options;
+  const { base, title, run = runGit, buildRun, spawn, grandfathered, listOpenHeads } = options;
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
   let diffPaths;

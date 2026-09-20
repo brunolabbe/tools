@@ -459,18 +459,30 @@ test("checkTitle fails outright on a title commit-message.mjs's own convention r
  * a merge commit used to print `ok "undefined" is hidden …` and pass with no
  * type-versus-paths check at all, silently.
  */
-test("checkTitle fails a subject commit-message.mjs bypasses rather than reading its type as hidden", () => {
+/**
+ * Round 3's med finding: round 2's fix keyed on `type === undefined`, which
+ * only ever catches `Merge ` and `Revert "` — both start uppercase, so
+ * `/^[a-z]+/` extracts nothing. `fixup! `, `squash! ` and `amend! ` are
+ * lowercase and the regex happily reads a word out of each, none of them a
+ * real type. All five of `commit-message.mjs`'s own `BYPASS` forms are tested
+ * here, not only the one round 2 measured, which is exactly why round 2's
+ * suite stayed green over the gap.
+ */
+test.each([
+  "Merge branch 'main' into work",
+  'Revert "feat(downloader): add a thing"',
+  "fixup! feat(downloader): document a thing (dl-1)",
+  "squash! feat(downloader): document a thing (dl-1)",
+  "amend! feat(downloader): document a thing (dl-1)",
+])("checkTitle fails a subject commit-message.mjs bypasses: %s", (subject) => {
   const repo = makeTitleRepo();
   try {
-    const result = checkTitle(
-      repo.dir,
-      ["tools/downloader/docs/work/dl-1-a.md"],
-      "Merge branch 'main' into work",
-    );
+    const result = checkTitle(repo.dir, ["tools/downloader/docs/work/dl-1-a.md"], subject);
     expect(result.ok).toBe(false);
     expect(result.bit).toBe(EXIT.title);
     expect(result.lines.join("\n")).toMatch(/no conventional subject found/);
     expect(result.lines.join("\n")).not.toMatch(/undefined/);
+    expect(result.lines.join("\n")).not.toMatch(/is hidden in release-please-config/);
   } finally {
     repo.cleanup();
   }
@@ -788,4 +800,82 @@ test("the CLI demands --base and exits outside the check bitmask", () => {
 
 test("parseArgs rejects an option with no value", () => {
   expect(() => parseArgs(["--base"])).toThrow(/--base needs a value/);
+});
+
+/**
+ * Round 3's first low finding: `guarded()` prints a thrown error's message
+ * verbatim, and until this round every git/gh call ran through `next-id.mjs`'s
+ * `runCommand`, whose failure message is two sentences about a truncated id
+ * sweep — a guard this script does not have. A bad `--base` reaches that path
+ * on stderr; `gh` failing inside check 5 reaches it on stdout, through
+ * `guarded()`. `runGit` (the replacement, private to this file) carries no
+ * such wording, so neither surface should show it any more.
+ */
+test("the CLI never leaks next-id.mjs's id-sweep wording on a bad --base", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("docs(repo): seed a fixture");
+
+    const result = spawnSync(
+      process.execPath,
+      [CLI, "--repo", repo.dir, "--base", "no-such-base"],
+      {
+        encoding: "utf8",
+      },
+    );
+    expect(result.status).toBe(EXIT.setup);
+    expect(result.stderr).not.toMatch(/partial file list/);
+    expect(result.stderr).not.toMatch(/Refusing to answer/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside check 5", () => {
+  const repo = makeRepo();
+  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
+  const ghPath = path.join(shimDir, "gh");
+  fs.writeFileSync(ghPath, "#!/bin/sh\nexit 1\n");
+  fs.chmodSync(ghPath, 0o755);
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("docs(repo): seed a fixture");
+    const base = repo.git("rev-parse", "HEAD");
+
+    const result = spawnSync(process.execPath, [CLI, "--repo", repo.dir, "--base", base], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` },
+    });
+    expect(result.stdout).toMatch(/FAIL {2}mergeTree threw/);
+    expect(result.stdout).not.toMatch(/partial file list/);
+    expect(result.stdout).not.toMatch(/Refusing to answer/);
+  } finally {
+    repo.cleanup();
+    fs.rmSync(shimDir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Round 3's second low finding: `head.oid.slice(0, 7)` on an `undefined` oid
+ * surfaced a raw `TypeError` naming no PR and no field. `defaultListOpenHeads`
+ * now validates `headRefOid` itself and fails with the PR number and name
+ * instead — reproduced through `checkMergeTree`'s own default, not a bespoke
+ * `listOpenHeads` override, since that default is what a `gh` version gap
+ * would actually go through.
+ */
+test("a gh payload missing headRefOid gives an actionable error, not a raw TypeError", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+    repo.commitAll("base");
+
+    const run = (command: string, args: string[], options: { cwd?: string } = {}) => {
+      if (command === "gh") return JSON.stringify([{ number: 5, headRefName: "no-oid" }]);
+      return realRun(command, args, options);
+    };
+    expect(() => checkMergeTree(repo.dir, { run })).toThrow(/headRefOid for PR #5 \(no-oid\)/);
+  } finally {
+    repo.cleanup();
+  }
 });
