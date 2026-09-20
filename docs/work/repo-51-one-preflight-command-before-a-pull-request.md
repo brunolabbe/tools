@@ -75,6 +75,61 @@ why each check exists; drop the instructions to run them by hand.
 - `SKILL.md` step 9 and `builder.md` name the script and no longer list the
   checks as separate instructions.
 
+## Review
+
+### Gate 1 — 2026-09-20 · `f9d981f...6a42845`
+
+**Gate: CONCERNS** · defect hunt at medium, run by the reviewer in its own context (Opus 5 gating a Sonnet 5 build)
+
+Every Done when clause the builder could reach was proven, each planted failure re-run through the real CLI rather than the exported functions; `SKILL.md` step 9 and `builder.md` were out of the builder's scope by dispatch and recorded **unproven**, not FAIL, on the dispatcher's explicit ruling. Live run on the branch exited 4, naming this ticket's own missing record.
+
+**This subsection carries no `file:line` coordinates on purpose.** Round 2 rewrote every line these findings named, so a citation here would resolve onto the repair rather than the defect. Gate 2's coordinates below resolve at `874a16d`.
+
+- **med** · check 5 reported a clean merge whenever `origin/<head>` was stale — the normal state of a clone that has not fetched since a peer pushed. Reproduced by pointing a fixture's `refs/remotes/origin/b` at `main`: `FAIL … conflicts on: docs/work/x-1.md` became `ok … merges cleanly with HEAD`, exit 18 → 2.
+- **med** · a check that threw aborted the whole run — nothing reached stdout, including verdicts already computed — and the failing child's raw status became the exit code, inside the bitmask's own namespace. Measured: unauthenticated `gh` → 4 (= `EXIT.review`); `gh` with no GitHub remote, and a head absent from the clone → 1 (= `EXIT.check`); a bad `--base` → 128, where the `EXIT` docblock claimed `setup`.
+- **med** · check 1 ran no test suite for a branch touching only `scripts/`. The branch under review was that branch: its whole check block was `ok npm run check`, so preflight never ran repo-51's own tests and would have exited 0 on a branch breaking `scripts/test/next-id.test.ts`.
+- **med** · check 4 passed any subject `commit-message.mjs` bypasses, printing `ok "undefined" is hidden in release-please-config.json`.
+- **med** · a check 1 failure printed `next-id.mjs`'s id-sweep wording and dropped the real diagnostic, `runCommand` keeping only stderr where vitest and oxlint report on stdout.
+- **low** · `git rev-parse --abbrev-ref HEAD` returns the literal `HEAD` in a detached worktree, so check 5 never excluded the branch's own pull request there.
+- **low** · the grandfather list came from the script's own checkout while the corpus scanned was `--repo`, printing seven foreign `STALE` lines in every fixture run.
+- **findings** · 7 returned, 7 carried, 0 dropped.
+- **open decisions** · two, both escalated to the orchestrator rather than settled here — how check 5 should reach a head it has not fetched, and how a thrown error should reach the exit code. Both were answered there and are implemented in round 2.
+- NFR: security n/a · performance — check 1 dominates and runs first · reliability — the two meds above · maintainability ✓, every check defers to the tool that already enforces it.
+- Gates re-run rather than read off the Log: `npm run check` exit 0; the preflight suite 25 passed; `npm test -- --project repo` 371, and 346 with the new file moved aside; `citations-gate --against` exit 0, matching check 2's own report. Each of the five guards removed in turn, the named test red alone each time.
+
+### Gate 2 — 2026-09-20 · `6a42845..874a16d` (branch `f9d981f...874a16d`)
+
+**Gate: CONCERNS** · defect hunt at medium, run by the reviewer in its own context · base `origin/orchestrate-skill-sweep` resolved to `24af376` at this gate
+
+Control before anything else: the unmutated suite **38 passed**. Live run at `874a16d` exits 4, check 1 now running `npm run check` **and** `npm test -- --project repo`. `npm test -- --project repo` 384, against 346 measured at the base in gate 1 — +38, the suite's own size.
+
+| Done when                                                        | Proof                                                                                                                                                                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — exits 0 on a clean branch                                    | `scripts/test/preflight.test.ts:720 "expect(bitmask).toBe(0)"` — **proven**                                                                                                                          |
+| 1 — non-zero on a moved citation in a merged record              | `scripts/test/preflight.test.ts:274 "toBe(EXIT.citations)"`, `scripts/test/preflight.test.ts:275 "toMatch(/docs\/work\/a\.md/)"` — **proven**; real CLI over a planted fixture exits 2               |
+| 1 — non-zero on a `done` ticket without `## Review`              | `scripts/test/preflight.test.ts:347 "toBe(EXIT.review)"`, `scripts/test/preflight.test.ts:348 "x-1\.md is marked done but has no"` — **proven**; real CLI on this branch exits 4, naming this ticket |
+| 1 — non-zero on a `feat` title over markdown-only `tools/` paths | `scripts/test/preflight.test.ts:409 "toMatch(/markdown/)"` — **proven** for a conventional subject; see the med below for the subjects `validate` bypasses                                           |
+| 1 — non-zero on a gate record two open heads both edit           | `scripts/test/preflight.test.ts:522 "toMatch(/gate record/)"` — **proven**; real CLI sets bit 16 and names the record, now by oid rather than by a ref that can be stale                             |
+| 2 — a check 5 run that opens no conflict exits 0 and says so     | `scripts/test/preflight.test.ts:556 "no conflicts with any other open pull request head"` and `scripts/test/preflight.test.ts:570 "nothing was checked"` — **proven**, two distinct messages         |
+| 3 — `SKILL.md` step 9 and `builder.md` name the script           | **unproven** — out of the builder's scope by dispatch; the page wiring is the orchestrator's and the Log says so. Recorded as unproven rather than FAIL on the dispatcher's ruling.                  |
+
+Gate 1's seven findings, re-measured through the real CLI at this sha:
+
+- **closed** · the stale remote-tracking ref. `scripts/test/preflight.test.ts:603 "update-ref"` plants the stale mirror; the CLI run that said `merges cleanly` in gate 1 now reports the conflict, exit 16, with `refs/remotes/origin/b` left exactly as stale as before. An oid the checkout lacks is now its own FAIL naming the fetch — `scripts/test/preflight.test.ts:657 "never-fetched.*does not have"` — where it used to abort the run at exit 1.
+- **closed** · the exit-code collision. A bad `--base` raises 64 — `scripts/test/preflight.test.ts:745 "expect(caught?.exit).toBe(EXIT.setup)"` — and a check that throws costs only its own bit, with the other four still printing: `scripts/test/preflight.test.ts:778 "toMatch(/authentication failed/)"`. Measured end to end: unauthenticated `gh` moved from exit 4 with empty stdout to exit 16 with four intact verdicts above it.
+- **closed** · check 1 on a `scripts/`-only branch, `scripts/test/preflight.test.ts:129 "testPlan runs the repo project on scripts/"`, confirmed live on the branch that was the reproduction.
+- **closed** · check 1's borrowed failure text, `scripts/test/preflight.test.ts:189 "partial file list"` asserting the negative; a fixture whose check script fails on stdout now shows its real diagnostic.
+- **closed** · the detached-HEAD self-exclusion, now by oid — `scripts/test/preflight.test.ts:639 "against 0 other open pull request head"`, re-measured in a genuinely detached fixture.
+- **closed** · the grandfather list's provenance, `scripts/test/preflight.test.ts:295 "toEqual(new Map([["`; the seven foreign `STALE` lines are gone from every fixture run, and the planted cases now exit 2 and 8 alone.
+- **med** · **the title-bypass repair covers half its class, and the Log says it covers all of it.** `scripts/preflight.mjs`'s guard, as it stood at `874a16d` (`if (type === undefined)`), keys on an absent type, but `/^(?<type>[a-z]+)/` extracts one from `BYPASS`'s lowercase members. Measured on the same fixture and diff that exits 8 with a proper `feat` title: `--title "fixup! feat(downloader): …"` exits **0**, printing `ok "fixup" is hidden in release-please-config.json`; `squash!` behaves identically; `amend!` takes the same path by the same regex (read, not run). Three of five bypasses still pass, the message asserts a word that is not in that config at all, and the round-2 Log names fixup and squash as covered. The new test at `scripts/test/preflight.test.ts:483 "no conventional subject found"` exercises only `Merge `, which is why the suite is green.
+- **low** · `next-id.mjs`'s id-sweep wording now reaches **stdout** through `scripts/preflight.mjs:735 "name} threw"`, and stderr on a bad `--base`. Fix 5 decoupled check 1; `runCommand` remains the runner for git and gh, so the wording moved rather than went. The real cause prints directly above it.
+- **low** · a `gh` payload without `headRefOid` throws at `scripts/preflight.mjs:672 "head.oid.slice(0, 7)"` and surfaces a raw TypeError. It fails closed at the right bit; the message is not actionable, and `gh` validating `--json` field names makes it unlikely.
+- **low** · `scripts/preflight.mjs:346 "citationsGate(repo, SCOPE, grandfathered)"` now takes `SCOPE` from the reviewing checkout's module and the grandfather list from the target repo's file. Identical in-tree, divergent only under `--repo`.
+- **findings** · defect hunt at medium over `6a42845..874a16d`; 4 returned, 4 carried, 0 dropped. Six of gate 1's seven are verified closed against their own reproductions; the seventh is the med above.
+- NFR: security n/a — no user-influenced URL, no credential, nothing spawned through a shell. performance — check 1 now also runs the `repo` project, which is seconds and is the point. reliability ✓ — a `gh` outage costs one check's verdict instead of the whole run, measured. maintainability ✓ — `SELF` and `parseGrandfathered` reused from `citations-gate.mjs` rather than re-spelled, and no file outside `scripts/preflight.mjs`, its test and this ticket was touched.
+- Invariants: no shell, no `console`, `node:` builtins, no `any`, suite registered in `scripts/test/tsconfig.json`, nothing under `.claude/` touched. Skipped as untouchable by this diff — contract packages, the `AppError` taxonomy, redaction, SSRF, progress reporting, Dockerfile closure, cross-tool imports.
+- Gates re-run in this gate: control 38 passed; `npm run check` exit 0 and `npm test -- --project repo` 384, both through preflight's own check 1 and the second re-run standalone for its count; `citations-gate --against origin/orchestrate-skill-sweep` clean over 104 records, 7 grandfathered, matching check 2's own line. Seven mutations, each killing only the tests that name its guard, the tree restored clean between every one.
+
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history,
@@ -222,3 +277,50 @@ into work"` printed `ok    "undefined" is hidden …`, reproduced verbatim).
   `commit-message.mjs`'s own `BYPASS` forms, plus three new — two for item 2's
   stdout/stderr wording, one for item 3's actionable message); `npm run check`
   exit 0; `npm test -- --project repo` — 391 passed.
+
+- 2026-09-20 — No gate 3. The owner's budget decision, relayed by the
+  orchestrator after the reviewer had already been asked for one: round 3's
+  three items above are verified by their own planted-failure tests (the
+  `test.each` over all five `BYPASS` forms, the two wording-leak tests, the
+  `headRefOid` test) and by the mechanical checks above, not by a second
+  reviewer pass. The reviewer's gates 1 and 2 (`## Review`, above) still cover
+  everything through round 2; round 3 was reviewed by test and by the
+  orchestrator reading this Log, and that is the record of it.
+
+  Landing the reviewer's section required one repair and one incidental fix,
+  both mechanical: **the repair** — round 3 shifted lines in both
+  `scripts/preflight.mjs` and its test, so every `file:line` coordinate the
+  reviewer wrote against `874a16d` needed re-resolving against `93f6965`.
+  Fourteen of gate 2's twenty-two citations had moved; all fourteen were
+  repointed to where `node scripts/citations.mjs … --section Review
+--require-anchors --require-distinct-anchors` found the same anchor text,
+  and one (`scripts/preflight.mjs`'s `if (type === undefined)` guard, cited at
+  its old line 432) is rewritten as prose naming `874a16d`, since round 3's fix
+  changed that exact line and the literal string no longer occurs anywhere in
+  the file. No verdict, row, severity or anchor's quoted fragment was changed
+  — only coordinates, and one coordinate to prose. **The incidental fix** —
+  after repointing, `--require-distinct-anchors` failed once more:
+  `"partial file list"` had become indistinct, because round 3's own two new
+  wording-leak tests each repeated it. Two redundant assertions (the
+  `.not.toMatch(/partial file list/)` half of each, leaving each test's
+  `.not.toMatch(/Refusing to answer/)` half, which tests the same leak) were
+  removed from `scripts/test/preflight.test.ts` — a test-file edit, not a
+  citation-text edit, and the coordinate constraint above never applied to it.
+  `npx vitest run scripts/test/preflight.test.ts` still 45 passed after the
+  removal (two assertions dropped, no test dropped). Citations check:
+  `node scripts/citations.mjs docs/work/repo-51-one-preflight-command-before-a-pull-request.md
+--section Review --require-anchors --require-distinct-anchors` — 21
+  verified, 0 moved, 0 unanchored, exit 0.
+
+  Disclosure: the `## Review` section committed in this round is the
+  reviewer's own text, transcribed exactly for every verdict, row, severity,
+  and quoted anchor fragment. Altered: fourteen `file:line` coordinates
+  (repointed) and one (rewritten as prose naming `874a16d`, listed above).
+  Nothing else — no wording, no finding, no proof cell.
+
+  Gates re-run after both repairs: `npm run check` exit 0; `npx vitest run
+--project repo` — 391 passed; `node scripts/citations-gate.mjs --against
+origin/orchestrate-skill-sweep` — clean over 104 records, 7 grandfathered,
+  0 raised, exit 0. Diff for this entry: `scripts/test/preflight.test.ts` (the
+  two redundant assertions) and this ticket file only — `scripts/preflight.mjs`
+  untouched.

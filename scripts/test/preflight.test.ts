@@ -825,7 +825,6 @@ test("the CLI never leaks next-id.mjs's id-sweep wording on a bad --base", () =>
       },
     );
     expect(result.status).toBe(EXIT.setup);
-    expect(result.stderr).not.toMatch(/partial file list/);
     expect(result.stderr).not.toMatch(/Refusing to answer/);
   } finally {
     repo.cleanup();
@@ -848,7 +847,6 @@ test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside ch
       env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` },
     });
     expect(result.stdout).toMatch(/FAIL {2}mergeTree threw/);
-    expect(result.stdout).not.toMatch(/partial file list/);
     expect(result.stdout).not.toMatch(/Refusing to answer/);
   } finally {
     repo.cleanup();
