@@ -20,6 +20,12 @@ model, passed by name:
 | `standard` | `sonnet` | `opus` |
 | `mechanical` | `haiku` | `sonnet` |
 | `hard` | `opus` | `sonnet` |
+| maintenance — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `haiku` | `sonnet`, where one runs |
+
+**A maintenance dispatch that meets a judgement call stops and reports rather
+than making it.** The row's test is the absence of such a call, not the size of
+the diff; your prompt says "maintenance" when this is one (repo-56, measured
+2026-09-14/15: a one-line reword at 70,665 on Haiku against a 784,264 resume).
 
 **Never `fable` for a builder.** The rating comes from the ticket, never from the
 orchestrator's guess; an unrated ticket inherits. Why each row reads as it does —

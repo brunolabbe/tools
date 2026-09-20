@@ -3,7 +3,7 @@ id: repo-56
 tool: repo
 title: A maintenance dispatch runs on Haiku by rule, not by the orchestrator's mood
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -58,3 +58,4 @@ maintenance in the prompt so the agent knows to stop on a judgement call.
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history.
+- 2026-09-20 — Built on `orchestrate-skill-sweep` by the orchestrating session: the maintenance row is in both model tables (`SKILL.md` _Which model built it_, `builder.md`) with the twenty-first session's measurements, and `dispatching.md`'s builder-prompt list says to name a maintenance dispatch as one. The second Done when line is the next batch's to record here.

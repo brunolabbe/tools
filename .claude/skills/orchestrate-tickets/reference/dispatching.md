@@ -54,9 +54,17 @@ What only you can supply, and what every builder prompt therefore carries:
   could have and why it did not. That note is what lets you catch the call; a
   silent deferral is invisible. See _Fold it in, or file it_ in
   [sizing.md](sizing.md).
-- **Where to write scratch files**, namespaced by ticket — see
-  [concurrency.md](concurrency.md) on the pull request that briefly carried
-  another ticket's body.
+- **Where to write scratch files: one directory per ticket,
+  `<scratchpad>/<ticket-id>/`, as a literal path, and the same path in the
+  gate prompt.** Namespacing is [concurrency.md](concurrency.md)'s rule, from
+  the pull request that briefly carried another ticket's body. Sharing the path
+  with the reviewer is repo-57's: a reviewer woken for a later round
+  re-verifies against the same base tree, and the one that had kept its
+  base-tree extract and comparison script there took ten minutes on a round
+  where the one that rebuilt them took an hour (2026-09-20).
+- **Say "maintenance" when it is one** — no ticket, or a `chore` with no
+  source change — so the builder runs on Haiku by the table and stops on a
+  judgement call instead of making it (repo-56).
 - **The narrowest thing that can fail**, for verification runs. Agents reach for
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
@@ -390,6 +398,9 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
 - **Name the severity floor** for a mechanism ticket — _Name a floor for a
   mechanism ticket_ in [sizing.md](sizing.md).
 - **Never carry ship authority** — the builder bullet above.
+- **Name the ticket's scratch directory**, the same literal
+  `<scratchpad>/<ticket-id>/` the builder was given, for the base-tree extract
+  and any comparison script a later round will need (repo-57).
 - **Ask what the skill got wrong**, as for the builder.
 
 Ask for: `PASS / CONCERNS / FAIL`, gates reproduced independently, findings

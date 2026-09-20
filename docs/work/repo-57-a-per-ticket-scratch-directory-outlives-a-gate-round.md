@@ -3,7 +3,7 @@ id: repo-57
 tool: repo
 title: A per-ticket scratch directory, named in both prompts, outlives a gate round
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -53,3 +53,4 @@ tools there rather than in a path it invents per round.
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history,
   after the reviewer on #281 named it in its last report.
+- 2026-09-20 — Built on `orchestrate-skill-sweep` by the orchestrating session: the per-ticket scratch directory is named in `dispatching.md`'s builder-prompt list and gate checklist, `ticket-reviewer.md` keeps the base-tree extract there and looks there first when woken, and `worktree-hygiene.md` removes it with the ticket's worktrees. The second Done when line is the next multi-round gate's to record here.

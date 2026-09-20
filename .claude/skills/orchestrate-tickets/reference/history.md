@@ -88,6 +88,23 @@ the same ordinal: the twenty-third row avoided it only by stacking on #268 and
 drafting (2026-09-18), and the twelfth was dispatched as the eleventh
 (2026-09-07). That is what the scheme change is for.
 
+**And the row's shape is fixed, since repo-54 (2026-09-20).** A row is the
+schema table; then `what the skill got wrong` as one bullet per item, each
+ending with the page and heading the fix landed under, or the ticket id it was
+filed as; then, optionally, `what went right` as one line per entry. No
+subsection runs past one paragraph, and a measurement worth keeping goes on the
+rule's page as a dated clause that the bullet points at. The rows before this
+note are in the older shape: 100 to 300 lines each, written by records-only
+dispatches costing 100 k to 250 k subagent tokens (the eighteenth session's
+author reported 175,595, the sixteenth's 251,529), on a page that had reached
+3,900 lines and could no longer be read at the step that needed it. The row is
+written by a maintenance dispatch on Haiku from the orchestrator's account and
+its accounting table, and the verification the records-only dispatches did is
+kept as a checklist rather than a narrative: re-read each verdict and each
+frontmatter status out of `git show <branch>:<ticket>`, re-add the token total,
+re-run `--ready` at the base, and say per field whether it was measured here or
+relayed.
+
 ### Citations on this page are historical, and four of them are pinned
 
 An entry's citations are a claim about the tree that session read, and
@@ -1508,7 +1525,7 @@ the line that already covers them.
 covers it.**
 
 - **"`worktree-hygiene.md` has no test for *and it has stopped working*"** —
-  it does. `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md:74` "Retire a reviewer when its record is pushed"
+  it does. `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md@fdafd1a:74` "Retire a reviewer when its record is pushed"
   continues *"**and** the exchange
   has ended — not on the record alone"*, and the paragraph above it says the
   exception is now the common case rather than the rare one. The reviewer here had

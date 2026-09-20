@@ -189,6 +189,17 @@ a **default, not an answer**, and it is right on two rows of four.
 | `standard` | `sonnet`, since repo-28 | **`opus`** |
 | `hard` | `opus`, pinned rather than inherited | `sonnet` |
 | absent | inherit — pass your own model by name | whichever of `sonnet` / `opus` the builder is not |
+| **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `haiku` | `sonnet`, where one runs |
+
+**The maintenance row's test is the absence of a judgement call, not the size
+of the diff**, and a maintenance dispatch that meets one stops and reports
+rather than making it; say "maintenance" in its prompt so it knows to. Measured
+2026-09-14/15: a one-line Log reword cost 70,665 on Haiku where resuming the
+builder that wrote the line would have reloaded 784,264; two merges from `main`
+cost 30,224 and 37,902; two filers dispatched on Opus for tickets that build
+nothing cost 101,134 and 152,847. Every Haiku artefact was correct, and every
+one of those choices was the orchestrator's judgement because no row said so
+(repo-56).
 
 **Pair per ticket, never once per batch**, because no two adjacent rows agree.
 **`standard` is the trap**: it is the largest rated category, it moved to Sonnet

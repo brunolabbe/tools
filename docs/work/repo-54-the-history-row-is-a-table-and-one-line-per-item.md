@@ -3,7 +3,7 @@ id: repo-54
 tool: repo
 title: The history row is the schema table and one line per item, and the narrative goes to the rule it changed
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -55,3 +55,4 @@ the step that needs it.
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history.
+- 2026-09-20 — Built on `orchestrate-skill-sweep` by the orchestrating session, on the owner's call to build the seven filings there rather than later: the schema section of `history.md` now fixes the row shape and the cap, names the Haiku maintenance dispatch that writes it, and keeps the records-only verification as a checklist; earlier rows are marked as the older shape. The second Done when line is the next session's to record here.
