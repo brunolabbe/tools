@@ -3960,3 +3960,38 @@ Every builder/gate pair ran on different models, with each half as dispatched, p
 5. **The skill sets no concurrency ceiling.** Fourteen agents running at once hit the session usage limit, and every agent died mid-step. The branches survived because each builder had pushed or held clean worktrees, but six resumes each reloaded a full transcript.
 6. **An orchestrator's option wording becomes a requirement.** The phrase "or its redacted form" in a question to the owner was carried into the ticket as scope, and both agents then argued to keep dead code because of it. This is a costume of the _relayed option_ row that points the other way: the orchestrator's own words, relayed down.
 7. **A cross-tool filing leaks into a changelog, and the fold-in rule does not warn about it.** `dl-66`'s branch filed `pl-51` under `tools/planner/` in a `fix(downloader)` PR, so it will put a downloader line in the planner's changelog, as #248 already did. The owner accepted it this time. The builder prompt should say that a ticket for another tool is filed in its own `docs` PR.
+
+## Session 2026-09-20 — base fdafd1a
+
+**Written by the orchestrating session (Claude Fable 5.1), which also built the
+page-side work; the first row in repo-54's shape, and the first whose `cost`
+is measured rather than converted.**
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **11** on one branch, `orchestrate-skill-sweep` (#281): the sweep of sessions 12 to 23 into the rule pages (no ticket), then `repo-50` filed, `repo-51` to `repo-57` filed and built — `repo-54`, `repo-56`, `repo-57` on the pages by the orchestrator, `repo-51`, `repo-52`, `repo-53`, `repo-55` by Sonnet builders on their own branches, merged here |
+| `agents` / `dispatches` | **9** subagents (1 reviewer on the sweep, 4 builders, 4 reviewers) / **9** spawns plus about 30 orchestrator messages; sideways wakes not counted |
+| `builder rounds` | `repo-51` 3, `repo-52` 2, `repo-53` 4, `repo-55` 3, each plus a landing round. **Orchestrator's fault: 3** — a brief that summed every assistant record where streaming logs a response once per block (repo-53, 86% over); a brief naming an anchor that cannot exist for a first `## Review` (repo-55); a claim that the page wiring was on the branch when it was in the working tree (repo-53, one round on a false premise) |
+| `gates` | **14 passes across 5 reviewers**, every one Opus on a Sonnet build or on the orchestrator's own work: the sweep 4 (FAIL, CONCERNS, CONCERNS, PASS), `repo-51` 2 (CONCERNS, CONCERNS; a third cancelled on budget), `repo-52` 1 (CONCERNS; second cancelled on budget), `repo-53` 4 (FAIL, CONCERNS, PASS, PASS), `repo-55` 3 (CONCERNS, CONCERNS, PASS). **All returned findings.** The whole-branch gate was replaced by preflight, the full suite, the citations gate and mutation controls run by the orchestrator, on the owner's decision at 2% of the weekly budget |
+| `wrong findings` | **0 gate findings refuted by a builder.** One reviewer corrected its own pin count (8 → 7) before sending. The wrong claims ran the other way: three orchestrator briefs or relays, above, and one Log sentence per script ticket caught by its gate |
+| `subagent tokens` | last observed: sweep gate 390,374 · `repo-51` builder 204,236 · `repo-52` builder 571,525 · `repo-53` builder 414,369 · `repo-55` builder 213,087 · `repo-51` gate 236,498 · `repo-52` gate 136,385 · `repo-53` gate 231,915 · `repo-55` gate 285,260. Floors: three builders' landing rounds ended in messages and reported no usage |
+| `cost` | **$195.40** from `node scripts/agent-cost.mjs` over the nine transcripts, rates read 2026-09-20, five synthetic session-limit records skipped; the orchestrator's own transcript is not priced. For scale, the old conversion would have called this batch about $50 |
+
+**what the skill got wrong**
+
+- A gate record's coordinates cannot be re-resolved by the reviewer, so the builder repoints them; every multi-round ticket paid one landing round for it → `records.md`, multi-round record; `review-ticket`, each gate is its own commit.
+- Three sweeps for displaced citations each missed a scope the previous one had not named (`## Review` only, then `docs/work` only) → `builder.md`, both roots with the `*.md`; `repo-50` filed.
+- `subagent_tokens` priced a batch at a third of its bill → `repo-53`, built; `SKILL.md` Cost column; `history.md` cost row.
+- `gh run list` hides `continue-on-error`, `skipped` and non-workflow checks → `SKILL.md`, After a merge.
+- The pre-PR checks lived as four prose rules and were skipped in three sessions → `repo-51`, built; the PR's own `fix` title would have released the downloader through one pinned record, caught by preflight's first real run.
+- An agent definition is read at launch from the shared checkout, so a branch editing it is gated under the old page; a resumed reviewer runs an older one still → `dispatching.md`.
+- A queued message to a running agent is not delivered until an artefact shows it → `SKILL.md` step 6, `concurrency.md`.
+- A brief can name an anchor that cannot exist, or a rule that double-counts a real input; a gate's first attack should run the tool on one real input by a second method → `dispatching.md` gate checklist.
+- A dispatched builder reports `# Done` because its page predates the rule → `builder.md`, `ticket-reviewer.md`.
+- The session limit killed four Opus gates mid-round; damage check clean, all four resumed by message with results declared void → `worktree-hygiene.md` held as written.
+
+**what went right**
+
+- Every one of eleven orchestrator relays that a builder or gate contradicted was contradicted with a command, and every contradiction was right.
+- A builder verified its pin revs' ancestry against `origin/main` unasked; a reviewer tested the literal-token sandbox claim it had inferred before letting a page carry it.
+- The reviewer of the sweep found the sweep's own gate record could not cite the pages it moved, and the rule it produced governed every record after it.

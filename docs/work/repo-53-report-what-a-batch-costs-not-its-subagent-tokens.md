@@ -383,3 +383,5 @@ scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
   Gates re-run: `npm run check` exit 0; `npx vitest run
 scripts/test/agent-cost.test.ts` (27/27 — one net new test over gate 4's
   26); `npx vitest run --project repo` (373/373).
+
+- 2026-09-20 — Orchestrator, closing the fifth Done when line after the merge into `orchestrate-skill-sweep`: `node scripts/agent-cost.mjs` over the nine subagent transcripts of the batch that built this ticket gives **$195.40** (input 4,250 · cache write 8,792,557 · cache read 476,993,037 · output 1,469,529; five synthetic session-limit records skipped; rates read 2026-09-20). The same nine agents sum to about 2.75 M `subagent_tokens` as last observed, which the retired conversion priced at about $50 — the old figure was roughly a quarter of the bill, in the direction the Why predicts. One Opus gate of four rounds alone came to $32.73. The table is in #281's body.
