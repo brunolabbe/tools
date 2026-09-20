@@ -208,7 +208,7 @@ the same page. `#170` was confirmed merged first — `gh pr view 170` reports
    which was chosen, and that it went against this ticket's own recommendation.
 2. **proven** — the `standard` row reads `` `sonnet` ``, and the change is now
    machine-checked from the other side: `SKILL.md` carries
-   `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+   `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |" as an anchored
    citation, and `ci.yml` runs
    `node scripts/citations.mjs …/SKILL.md --require-anchors` on every push. Revert
    the row and that job goes red naming this line.
@@ -299,7 +299,7 @@ NFR: security n/a · performance n/a — the cost/gate-parity arithmetic ($7.20 
   prose bullets that said less.
 
   **The row is now checked from both sides.** `SKILL.md` cites
-  `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+  `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |" as an anchored
   citation, and `ci.yml`'s `check` job runs `citations.mjs --require-anchors` over
   `SKILL.md` on every push (repo-21). Reverting the row without updating the skill
   turns CI red naming the line — which is the drift class repo-21 exists to catch,

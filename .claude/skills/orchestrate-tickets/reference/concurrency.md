@@ -108,8 +108,9 @@ mid-flight cost almost nothing and it folded the check into work it was already
 doing. Banking it would have cost a round.
 
 **Cheap is not delivered.** A message queued to a running agent was reported
-never read three times (2026-09-13 twice, 2026-09-14): the agent completed with
-its branch unpushed and nothing announced the drop. After sending to a running
+never read twice (2026-09-13): the agent completed with its branch unpushed and
+nothing announced the drop. A resumed builder's final report was lost the other
+way, after shipping, and had to be asked for again (2026-09-14). After sending to a running
 agent, confirm with `ListAgents` and with the artefact the message should
 produce — a push, a commit — and resend if neither appears. The resume figure
 above is not a constant either: one measured wake cost 25,443 tokens

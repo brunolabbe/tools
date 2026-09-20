@@ -69,8 +69,9 @@ you are there.
    the gate's model explicitly, paired per ticket** — `standard` gates on `opus`.
    **And never put ship authority in a gate prompt**: a builder opens a PR only on
    authority in its own dispatch or a direct message from you, and both builders
-   handed it through their reviewer correctly declined, at a resume each
-   (2026-09-12, 2026-09-13).
+   handed it through their reviewer correctly declined — one at the cost of a
+   resume, the other holding until your direct message arrived (2026-09-12,
+   2026-09-13).
 
 5. **The reviewer sends its findings to the builder itself**, as one batched
    message, **and the same findings to you in full** — not a status line saying it
@@ -90,8 +91,9 @@ you are there.
 
    **A message to a running agent is not delivered until something shows it
    was.** A reply queued "for delivery at its next tool round" was never read
-   three times (2026-09-13 twice, 2026-09-14): the agent completed with its
-   branch unpushed and nothing announced the drop. After sending to a running
+   twice (2026-09-13): the agent completed with its branch unpushed and nothing
+   announced the drop. A resumed builder's final report was lost the other way,
+   after shipping, and had to be asked for again (2026-09-14). After sending to a running
    agent, confirm with `ListAgents` and with the artefact the message should
    produce — a push, a commit — and resend if neither appears.
 
@@ -145,8 +147,10 @@ you are there.
 
 12. **Append this session's row to [reference/history.md](reference/history.md),
     and change the rules it names.** The row follows the schema that page fixes,
-    headed by date and base sha rather than by ordinal — two sessions appending
-    from one base both compute the same ordinal (2026-09-18). Nothing forces it,
+    headed by date and base sha rather than by ordinal — a row written while the
+    previous row's pull request was still open had to stack on it to avoid
+    computing the same ordinal (2026-09-18), and a dispatch had already once
+    called the twelfth row the eleventh (2026-09-07). Nothing forces it,
     and **its last field earns the page** — what the skill got wrong (2026-09-02:
     six, all only because it was asked). **Ask every agent for it in its
     dispatch**, not at close-out: three sessions running asked late or not at all,
@@ -252,7 +256,7 @@ gh pr view <n> --json headRefOid,statusCheckRollup
 default CodeQL setup, which `gh run list` cannot see with any flag. An
 orchestrator used the weaker command for a whole batch and nearly closed with two
 failures unseen (2026-09-18), after `skipped` had been recorded as reading green
-in each of the three sessions before. Read a failing check's reason with
+in three consecutive sessions, all on 2026-09-07. Read a failing check's reason with
 `gh run view <id> --log-failed`, and say which of the two CodeQL checks you mean,
 since `CodeQL` and `codeql` both exist here. `--json` rather than the table,
 because the failure this guards against is reading a list by eye. **Name the sha

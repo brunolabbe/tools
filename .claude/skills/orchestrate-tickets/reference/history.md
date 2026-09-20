@@ -83,8 +83,10 @@ so. Eight rows between 2026-09-12 and 2026-09-18 carried about seventy items and
 changed no rule page; the sweep of 2026-09-20 folded them in, and each rule it
 touched carries the item's date as its measurement. **Head new rows by date and
 base sha** — `## Session 2026-09-20 — base fdafd1a` — not by ordinal. The ordinals
-below stand as written; two sessions appending from one base both computed
-"twenty-third" (2026-09-18), which is what the scheme change is for.
+below stand as written. Two sessions appending from one base would both compute
+the same ordinal: the twenty-third row avoided it only by stacking on #268 and
+drafting (2026-09-18), and the twelfth was dispatched as the eleventh
+(2026-09-07). That is what the scheme change is for.
 
 ### Citations on this page are historical, and four of them are pinned
 

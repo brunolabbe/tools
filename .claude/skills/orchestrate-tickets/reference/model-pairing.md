@@ -117,9 +117,11 @@ Sonnet-built `standard` ticket cost 187,338 against 296,234 for the Sonnet gate 
 an Opus-built `hard` one (2026-09-17) — one batch, not a rule.
 
 **What it costs the dispatcher, and this is the live consequence.** `standard` is
-the largest rated category, so three of the four rows disagree with
-`ticket-reviewer.md`'s `model: sonnet` default and the gate's model cannot be set
-once per batch. Before repo-28 that default was right whenever the builder
+the largest rated category, and it is the one row whose gate disagrees outright
+with `ticket-reviewer.md`'s `model: sonnet` default — the unrated row disagrees
+only under a Sonnet orchestrator — so the gate's model cannot be set once per
+batch. (This paragraph said "three of the four rows" on `builder.md` from repo-28
+until 2026-09-20; against the gate column it was never three.) Before repo-28 that default was right whenever the builder
 inherited Opus; it is now wrong for every rated `standard` ticket, and it fails
 **silently** — a Sonnet build gated by Sonnet looks exactly like a compliant pair.
 `SKILL.md`'s _Which model built it, and which gated it_ carries the pairing table;

@@ -23,7 +23,11 @@ Set up in this order, and **all of it before any test or check**:
    given. Detach rather than checking out the branch by name — the builder still
    holds that branch in its own worktree and git refuses a second checkout of it.
 2. **Confirm you are looking at the right tree**: `git log --oneline -1` and one
-   `git diff --stat <base>...HEAD`. **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
+   `git diff --stat <base>...HEAD`. **Say in the section where `origin/main`
+   landed after your fetch**: it can move between the dispatch and your fetch,
+   and any `--against origin/main` you run then compares with a tree the
+   dispatch never named (2026-09-20, harmless that time because it was a
+   descendant of the base). **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
 3. Populate `node_modules` with
    `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. Not `npm install`:
    it is minutes and can fail outright when a postinstall cannot reach the
@@ -206,7 +210,8 @@ into the ticket's own file can never be distinct — name the section instead.
 **The sandbox refuses some ordinary shell shapes**, with "too complex to verify
 that it stays inside the worktree": a git command followed by `echo $?`, a
 heredoc, a variable holding a path, a `for` loop, an `awk` program containing
-`>>`, `python3` (2026-09-12 to 2026-09-14). One plain command per call, literal
+`>>`, `python3` (2026-09-12 to 2026-09-14), and `git` named inside a `node -e`
+program (2026-09-20). One plain command per call, literal
 paths, `printf`, `awk -v` and `node -e` hold; read an exit code by redirecting
 output to a file and running the next command plainly. Rewrite the shape rather
 than reporting a broken channel.

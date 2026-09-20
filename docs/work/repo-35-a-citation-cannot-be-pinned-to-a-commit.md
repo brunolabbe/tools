@@ -36,7 +36,7 @@ it, and neither is the one the script exists to provide:
   stops the failure and stops the check with it.
 
 This page is currently in the second state, deliberately and as an interim:
-`.claude/skills/orchestrate-tickets/reference/history.md:79` "### Citations on this page are historical"
+`.claude/skills/orchestrate-tickets/reference/history.md@fdafd1a:79` "### Citations on this page are historical"
 records four pinned coordinates and the commit each was verified at, and the two
 declarations that carry them are at
 `.claude/skills/orchestrate-tickets/reference/history.md@64edce2:653` "<!-- citations: evidence"

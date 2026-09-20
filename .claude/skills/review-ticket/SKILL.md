@@ -26,6 +26,16 @@ under a heading of its own and `## Review` stays empty until something is built 
 work that merged without its status being flipped. `dl-29` is the worked example:
 gated as a filing, recorded under `## The gate on this filing`.
 
+**And when the branch has no ticket at all** — a skill correction, a records
+pass, anything the loop produces about itself — three of the steps below have no
+object: step 1 has no ticket to read, step 4 has no `Done when` lines, and step 8
+has no `## Log` to commit above. The dispatcher supplies the acceptance lines in
+the prompt and names the commit message as the brief; the reviewer traces each
+supplied line as it would a ticket's; and the section goes on the pull request
+thread rather than into a file, per `orchestrate-tickets`' `records.md`. Every
+other step applies unchanged. A gate on 2026-09-20 needed all three of these
+patched by hand in its prompt, which is what this paragraph replaces.
+
 ## Arguments
 
 `/review-ticket <id> [level]` — e.g. `pl-16`, or `dl-9 high`.

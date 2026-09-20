@@ -37,14 +37,16 @@ What only you can supply, and what every builder prompt therefore carries:
   This is per-dispatch by definition and is the single highest-value line in the
   prompt, because it removes an entire round. **It goes in the builder's own
   dispatch or a direct message from you, never through a gate prompt**: authority
-  a reviewer pastes into its message is not authority under `builder.md`, both
-  builders that received it that way declined, and each cost a resume
-  (2026-09-12, 2026-09-13).
+  a reviewer pastes into its message is not authority under `builder.md`, and
+  both builders that received it that way declined — one at the cost of a
+  resume, the other holding until a direct message arrived (2026-09-12,
+  2026-09-13).
 - **What the skill got wrong**, asked in the dispatch. `history.md`'s schema
-  says to ask every agent at dispatch; three consecutive sessions asked at
-  close-out or not at all, and the field came back thinner each time
-  (2026-09-13 to 2026-09-18). One sentence in the prompt: *end your report with
-  what these pages got wrong or omitted for this ticket.*
+  says to ask every agent at dispatch; three sessions asked at close-out or not
+  at all (2026-09-13, 2026-09-14, 2026-09-18), and their fields are the
+  orchestrator's own observations plus whatever agents volunteered. One sentence
+  in the prompt: *end your report with what these pages got wrong or omitted for
+  this ticket.*
 - **The fold-in exception, out loud.** The agent is told to implement the Build
   section and not widen it. Say in the prompt that if the work in front of it
   makes some *other* small, already-specified piece of work free, it should fold
@@ -139,6 +141,16 @@ directly and neither has `ToolSearch`, so that instruction sends a reviewer to a
 tool it does not have — measured, and recorded below. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
+
+### An agent definition is read at launch, from the shared checkout
+
+**A branch that edits `ticket-reviewer.md` or `builder.md` is gated by the old
+page.** The gate on the 2026-09-20 sweep ran on a `ticket-reviewer.md` that still
+said the orchestrator checks "four things" while the branch under review said
+five, and it reported the mismatch itself. A sweep of the agent definitions
+cannot dogfood itself: say in the gate prompt what the branch changes in the
+reviewer's own page, hand it the rules it is missing, and read the record knowing
+the reviewer did not run under them.
 
 ### Never write an install into a gate prompt
 

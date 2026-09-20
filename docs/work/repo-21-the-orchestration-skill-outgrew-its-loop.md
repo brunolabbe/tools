@@ -1390,7 +1390,7 @@ gated it` gained a four-row pairing table with a gate column and lost three
   still pass, including the loop's twelve steps and three-line paragraph bound.
 
   **It also gave the citation gate its first real subject.** The pairing table
-  cites `.claude/agents/builder.md:23` "| `standard` | `sonnet` |", so the row
+  cites `.claude/agents/builder.md@fdafd1a:23` "| `standard` | `sonnet` |", so the row
   `repo-28` just changed is machine-checked from `SKILL.md` by the `ci.yml` step
   this ticket adds. A future revert of that row without a matching skill edit is
   now a red CI run naming the line — defect 1's class, caught on the first change
