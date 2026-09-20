@@ -3,7 +3,7 @@ id: repo-51
 tool: repo
 title: One preflight command replaces the pre-PR checks the skill pages ask for by hand
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -80,3 +80,47 @@ why each check exists; drop the instructions to run them by hand.
 - 2026-09-20 — Filed from the owner's review of the orchestration history,
   after the sweep in #281 had written these checks as prose. Not built there:
   it is a script with tests, and #281 is scoped to the pages.
+
+- 2026-09-20 — Built `scripts/preflight.mjs` and `scripts/test/preflight.test.ts`.
+  Scope narrowed by the dispatch: the `SKILL.md`/`builder.md` prose replacement
+  named in Build's last paragraph is deferred to the orchestrator, who is
+  editing both pages once across several builders working the same session;
+  the replacement text was handed back in this builder's report rather than
+  applied here, and `.claude/` was not touched.
+
+  **What the Build section did not say, found by measurement rather than
+  assumed:** `git merge-tree --write-tree` exits `1` for a genuine conflict
+  _and_ for a ref that does not resolve, with the only reliable difference
+  being that a real merge (clean or conflicting) always writes its tree oid to
+  stdout first, where a bad ref writes nothing to stdout and puts the reason on
+  stderr. `mergeTreeConflicts` in the new script keys on stdout being non-empty
+  rather than on the exit status for exactly this reason; an earlier version
+  keyed on the status alone and could not tell "two branches conflict" from
+  "the ref does not exist," which would have made check 5 report a false
+  positive.
+
+  Each check reuses the tool that already enforces it rather than re-deriving
+  it: check 2 imports `gate`/`compareAgainst` from `citations-gate.mjs` over
+  its own `SCOPE`; check 3 and check 5 both resolve "is this a ticket file"
+  from `SCOPE.records`'s own globs rather than a second copy; check 4 imports
+  `validate`/`releasingTypes`/`toolScopes` from `commit-message.mjs` and calls
+  `releasingTypes(repo)`/`toolScopes(repo)` against the repository under test
+  (not this script's own installation), so a fixture's own
+  `release-please-config.json` decides the answer, per the dispatch's
+  instruction to never hardcode the hidden-type list.
+
+  **Check 1 is narrower than the other four, and is documented as such rather
+  than left to look the same.** `npm run check` / `npm test` cannot run for
+  real against a throwaway git fixture with no `node_modules`, so its test
+  coverage is an injected `run` stub (success and failure paths), not a
+  planted git fixture the way the other four Done-when cases are. The
+  "clean branch exits 0" pipeline test stubs only the `npm` calls and runs
+  every other check for real against one fixture.
+
+  Gates: `npx vitest run scripts/test/preflight.test.ts` — 25 passed;
+  `npm run check` — lint, format, typecheck all exit 0 (a `scripts/test/tsconfig.json`
+  `include` entry for `preflight.mjs` was needed, the same one-line cost
+  `citations-gate.mjs` paid before it, per that file's own comment);
+  `npm test -- --project repo` — 371 passed; `npm test` (full suite, run
+  because `scripts/test/tsconfig.json` is shared config) — 176 files, 3177
+  tests, exit 0.
