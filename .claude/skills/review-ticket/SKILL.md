@@ -147,9 +147,13 @@ the script splices, formats and checks it in one run. Markdown is formatted in
 this repo, and an unformatted table fails `npm run check`, which is the merge
 gate; formatting is not a rewrite and does not conflict with committing it
 verbatim, since it pads table cells to column width and touches nothing else.
-**Two gates on one ticket in one session are two commits**: the script refuses
-to run on a ticket dirty against `HEAD`, so land gate 1, commit, then land
-gate 2 (repo-55, 2026-09-20).
+**Each gate on a ticket is its own commit**: the script refuses to run on a
+ticket dirty against `HEAD`, so land gate 1, commit, then land the next, and a
+four-gate ticket is four commits (repo-55, 2026-09-20). A record with several
+gates is restated at the current tip when a later round moves the lines an
+earlier gate cited: a coordinate that resolves onto the repair is not a
+citation of the defect, so re-resolve, or rewrite the finding's coordinate as
+prose that names the sha it was true at.
 
 **Verbatim is the whole point, and it is now the builder who could break it.**
 Under the old wording a caller that edited the section had "handed the review back
