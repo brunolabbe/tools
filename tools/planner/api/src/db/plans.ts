@@ -23,6 +23,7 @@ import {
   candidateSchema,
   itemTravelSchema,
   planGapSchema,
+  planRevisionSchema,
   revisionOperationSchema,
   sourceSchema,
   tripBriefSchema,
@@ -73,6 +74,9 @@ interface RevisionRow {
   gaps_json: string;
   coverage_json: string;
   reading_json: string;
+  /** Migration 11. `NULL` on a row written before it: that row was built from `plans.brief_json`. */
+  brief_json: string | null;
+  deadlines_json: string;
   created_at: string;
 }
 
@@ -194,8 +198,8 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
   db.prepare(
     `INSERT INTO plan_revisions
        (id, plan_id, revision, parent_revision_id, reason, operation_json, gaps_json,
-        coverage_json, reading_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        coverage_json, reading_json, brief_json, deadlines_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     revision.id,
     revision.planId,
@@ -208,6 +212,11 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
     JSON.stringify(revision.gaps),
     JSON.stringify(revision.coverage),
     JSON.stringify(revision.reading),
+    // On every row, the first draft's included, and never left to migration
+    // 11's NULL: the read turns NULL into the plan's snapshot, which is the
+    // first draft's brief, and would attach it to a dates edit in silence.
+    JSON.stringify(revision.brief),
+    JSON.stringify(revision.deadlines),
     revision.createdAt,
   );
 
@@ -399,7 +408,7 @@ export function selectPlan(db: Database, id: string): PlanDetail | undefined {
     .prepare("SELECT * FROM plan_revisions WHERE plan_id = ? ORDER BY revision")
     .all(id) as RevisionRow[];
 
-  const revisions = revisionRows.map((each) => toRevision(db, each));
+  const revisions = revisionRows.map((each) => toRevision(db, each, brief));
 
   return {
     id: row.id,
@@ -418,9 +427,16 @@ const gapsSchema = z.array(planGapSchema);
 // the contract's `RevisionOperation`, not zod's rendering of it.
 const operationSchema: z.ZodType<RevisionOperation> = revisionOperationSchema;
 const coverageSchema = z.array(uncheckedConstraintSchema);
+// The revision schema's own field, so a stored list holding another kind, or
+// two entries, is the same fatal read a corrupt coverage list is.
+const deadlinesSchema: z.ZodType<UncheckedConstraint[]> = planRevisionSchema.shape.deadlines;
 const readingSchema = z.array(sourceSchema);
 
-function toRevision(db: Database, row: RevisionRow): PlanRevision {
+/**
+ * `planBrief` is `plans.brief_json`, parsed: what a row written before
+ * migration 11 was built from, and so what its `NULL` means.
+ */
+function toRevision(db: Database, row: RevisionRow, planBrief: TripBrief): PlanRevision {
   const gaps: PlanGap[] = parseOr(gapsSchema, row.gaps_json, "revision", row.id);
   const coverage: UncheckedConstraint[] = parseOr(
     coverageSchema,
@@ -428,6 +444,18 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     "revision",
     row.id,
   );
+  const deadlines: UncheckedConstraint[] = parseOr(
+    deadlinesSchema,
+    row.deadlines_json,
+    "revision",
+    row.id,
+  );
+  // Migration 11's column. `insertRevision` writes it on every row, so `NULL`
+  // is only ever a row from before it, which the plan's snapshot built.
+  const brief: TripBrief =
+    row.brief_json === null
+      ? structuredClone(planBrief)
+      : parseOr(tripBriefSchema, row.brief_json, "revision", row.id);
 
   const reading: Source[] = parseOr(readingSchema, row.reading_json, "revision", row.id);
 
@@ -452,10 +480,12 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     // is `first-draft` and was true of every row then. One that does not parse
     // is the same fatal read a corrupt gap list is.
     operation: parseOr(operationSchema, row.operation_json, "revision", row.id),
+    brief,
     createdAt: row.created_at,
     days,
     gaps,
     coverage,
+    deadlines,
     reading,
   };
 }

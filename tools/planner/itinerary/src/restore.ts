@@ -24,10 +24,15 @@ export function restoreRevision(
     id: revision.id,
     reason: revision.reason,
     operation: { kind: "restore", revision: target.revision },
+    // Its dates and budget come back with its days (the owner's decision on
+    // pl-47): version 1's days under version 3's dates would be neither.
+    brief: structuredClone(target.brief),
     createdAt: revision.createdAt,
     days: rekeyDays(target.days, revision.id),
     gaps: [...structuredClone(target.gaps)],
     coverage: [...structuredClone(target.coverage)],
+    // As stored, like its pins: a fact about the moment its dates were set.
+    deadlines: [...structuredClone(target.deadlines)],
     reading: [...structuredClone(target.reading)],
   };
 }

@@ -59,14 +59,18 @@ construction because both are the same function over the days. Do not add a
 column for the list: a stored list can disagree with the days it is printed
 beside, and re-composing on read would drift with `limits.ts` and with the clock.
 
-**`coverage` is the one exception, and it proves the rule** (pl-29). A thin
-corridor is not a function of the brief, the candidates or the days — it is a
-live backend's answer to a query that ran once, upstream of any candidate — so it
-rides on `PlanRevision.coverage`, exactly as a measured leg rides on
-`PlanItem.travelFromPrevious`. That is the same test as the paragraph below, not
-a hole in it: **evidence from outside is stored; a derivation over the days is
-not.** `tools/planner/CLAUDE.md` carries the full reasoning. Anything else you are
-tempted to add a column for, check against that test first.
+**`coverage` and `booking-deadline-passed` are the two exceptions, and they
+prove the rule** (pl-29, pl-47). A thin corridor is not a function of the brief,
+the candidates or the days — it is a live backend's answer to a query that ran
+once, upstream of any candidate — so it rides on `PlanRevision.coverage`, exactly
+as a measured leg rides on `PlanItem.travelFromPrevious`. A booking deadline that
+a dates edit left too short is a fact about the moment of the edit, read off a
+clock this derivation does not have, so it rides on `PlanRevision.deadlines`.
+That is the same test as the paragraph below, not a hole in it: **a fact from
+outside, or from a clock, cannot be re-derived on read, so it is stored; a
+derivation over the days is not.** `tools/planner/CLAUDE.md` carries the full
+reasoning. Anything else you are tempted to add a column for, check against that
+test first.
 
 **Evidence is stored; a derivation is not**, and pl-27 is where the two part
 company. `PlanItem.travelFromPrevious` is a column, because a measured distance

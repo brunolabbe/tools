@@ -58,10 +58,12 @@ function asRevision(
     parentRevisionId: null,
     reason: REVISION.reason,
     operation: { kind: "first-draft" },
+    brief: briefFor({}),
     createdAt: REVISION.createdAt,
     days,
     gaps,
     coverage,
+    deadlines: [],
     reading: [],
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import Database from "better-sqlite3";
-import { AppError, appendRevision, latestRevision } from "@planner/contract";
+import { AppError, appendRevision, latestRevision, slot } from "@planner/contract";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import { insertRevision, selectPlan } from "../src/db/plans.ts";
 import { insertRun, selectRun } from "../src/db/runs.ts";
@@ -53,6 +53,12 @@ const UNDO_MIGRATION_10 = `
   ALTER TABLE plan_revisions DROP COLUMN operation_json;
 `;
 
+/** Migration 11, undone (pl-47). Neither column is named by a trigger or an index. */
+const UNDO_MIGRATION_11 = `
+  ALTER TABLE plan_revisions DROP COLUMN deadlines_json;
+  ALTER TABLE plan_revisions DROP COLUMN brief_json;
+`;
+
 describe("migrations", () => {
   test("a fresh database arrives at the current schema", () => {
     const db = new Database(":memory:");
@@ -69,7 +75,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     db.close();
   });
 
@@ -91,7 +97,7 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     db.close();
   });
 
@@ -126,6 +132,7 @@ describe("migrations", () => {
       END;
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 4;
@@ -136,7 +143,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
@@ -150,7 +157,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     db.close();
   });
@@ -163,6 +170,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 8;
@@ -177,7 +185,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     const row = db
       .prepare(`SELECT ${USAGE_COLUMNS.join(", ")} FROM plan_runs WHERE id = ?`)
@@ -209,7 +217,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -233,6 +241,7 @@ describe("migrations", () => {
     db.exec(`
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
       PRAGMA user_version = 6;
@@ -248,7 +257,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     const row = db
       .prepare("SELECT coverage_json, reading_json FROM plan_revisions WHERE id = ?")
       .get("r") as { coverage_json: string; reading_json: string };
@@ -269,6 +278,7 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       PRAGMA user_version = 9;
     `);
@@ -294,7 +304,7 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
     // migration back: that this does not throw is the trigger not firing.
     expect(() => migrate(db)).not.toThrow();
 
-    expect(userVersion(db)).toBe(10);
+    expect(userVersion(db)).toBe(11);
     // Through the read paths, not the raw columns: `toRevision` and `toRun`
     // read the columns now, where pl-42 wrote literals.
     expect(selectPlan(db, "p")?.revisions.map((each) => each.operation)).toEqual([
@@ -316,10 +326,12 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
         id: "r2",
         reason: "Restored version 1.",
         operation,
+        brief: plan.brief,
         createdAt: NOW,
         days: [],
         gaps: [],
         coverage: [],
+        deadlines: [],
         reading: [],
       }),
     );
@@ -380,6 +392,120 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
       expect((error as AppError).code).toBe("PLAN_BUSY");
       expect((error as AppError).details).toEqual({ run: "live" });
     }
+    db.close();
+  });
+});
+
+/** A revision's `brief_json` column as stored, before any read falls back. */
+function rawBrief(db: Database.Database, id: string): string | null {
+  const row = db.prepare("SELECT brief_json FROM plan_revisions WHERE id = ?").get(id) as {
+    brief_json: string | null;
+  };
+  return row.brief_json;
+}
+
+describe("migration 11 — the brief per revision, and its deadlines (pl-47)", () => {
+  const brief = loadFixture("road-trip").brief;
+  const edited = {
+    ...brief,
+    budget: slot.answered({ kind: "band" as const, band: "shoestring" as const }),
+  };
+
+  /** A database wound back to `user_version = 10`, holding one first draft. */
+  function atVersionTen(): Database.Database {
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec(`
+      ${UNDO_MIGRATION_11}
+      PRAGMA user_version = 10;
+    `);
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", JSON.stringify(brief), NOW, NOW);
+    db.prepare(
+      `INSERT INTO plan_revisions
+         (id, plan_id, revision, parent_revision_id, reason, gaps_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run("r1", "p", 1, null, "The first draft.", "[]", NOW);
+    return db;
+  }
+
+  test("an existing revision reads back the plan's brief and no deadlines, and the append-only trigger does not fire", () => {
+    const db = atVersionTen();
+    expect(columns(db, "plan_revisions")).not.toContain("brief_json");
+
+    // `plan_revisions_append_only` raises on any UPDATE: not throwing is the
+    // trigger not firing.
+    expect(() => migrate(db)).not.toThrow();
+
+    expect(userVersion(db)).toBe(11);
+    expect(rawBrief(db, "r1")).toBeNull();
+    const revision = selectPlan(db, "p")?.revisions[0];
+    expect(revision?.brief).toEqual(brief);
+    expect(revision?.deadlines).toEqual([]);
+    db.close();
+  });
+
+  test("a revision written afterwards reads back its own brief, never the plan's", () => {
+    const db = atVersionTen();
+    migrate(db);
+
+    const plan = selectPlan(db, "p");
+    if (plan === undefined) throw new Error("no plan");
+    const late = {
+      kind: "booking-deadline-passed" as const,
+      detail: "Needs booking further ahead than there was time for.",
+      candidateIds: ["c1"],
+    };
+    const second = latestRevision(
+      appendRevision(plan, {
+        id: "r2",
+        reason: "Changed the budget, and re-packed every day.",
+        operation: {
+          kind: "brief",
+          dates: null,
+          budget: { from: brief.budget, to: { kind: "band", band: "shoestring" } },
+          days: [],
+        },
+        brief: edited,
+        createdAt: NOW,
+        days: [],
+        gaps: [],
+        coverage: [],
+        deadlines: [late],
+        reading: [],
+      }),
+    );
+    if (second === null) throw new Error("no revision 2");
+    insertRevision(db, second);
+
+    expect(rawBrief(db, "r2")).not.toBeNull();
+    const read = selectPlan(db, "p");
+    expect(read?.brief).toEqual(brief);
+    expect(read?.revisions.map((each) => each.brief)).toEqual([brief, edited]);
+    expect(read?.revisions.map((each) => each.deadlines)).toEqual([[], [late]]);
+    db.close();
+  });
+
+  test("a stored deadlines list holding another kind is a fatal read", () => {
+    const db = atVersionTen();
+    migrate(db);
+    db.prepare(
+      `INSERT INTO plan_revisions
+         (id, plan_id, revision, parent_revision_id, reason, gaps_json, deadlines_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "r2",
+      "p",
+      2,
+      "r1",
+      "Restored version 1.",
+      "[]",
+      JSON.stringify([{ kind: "coverage", detail: "Thin.", candidateIds: [] }]),
+      NOW,
+    );
+
+    expect(() => selectPlan(db, "p")).toThrow(AppError);
     db.close();
   });
 });
