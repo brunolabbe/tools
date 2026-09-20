@@ -264,9 +264,18 @@ export const GRANDFATHERED = new Map([
 /**
  * The states that fail this gate. `unanchored` is here; that is the whole point.
  * So is `malformed-pin` (repo-35), for the same reason: a pin nothing could read
- * is a citation nothing checked.
+ * is a citation nothing checked. `unpinned-volatile` (repo-52) only exists at
+ * all because `checkCitations` is called with `requireClaudePins: true` above —
+ * it cannot appear otherwise, so listing it here costs this gate nothing on a
+ * record with no `.claude` citations.
  */
-const FAILING = new Set(["unanchored", "moved", "unresolvable", "malformed-pin"]);
+const FAILING = new Set([
+  "unanchored",
+  "moved",
+  "unresolvable",
+  "malformed-pin",
+  "unpinned-volatile",
+]);
 
 /** This file, as git names it — the thing `--against` reads an older copy of. */
 export const SELF = "scripts/citations-gate.mjs";
@@ -520,8 +529,14 @@ export function checkRecord(
   const inScope = (line) => chosen === null || (line >= chosen.start && line <= chosen.end);
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
+  // `requireClaudePins` is always on here, unconditionally, the same way
+  // `requireDistinct` defaults to `true` below: this gate is the caller
+  // `citations.mjs`'s own `--require-claude-pins` flag exists for, so there is no
+  // parameter threading it through — a `## Review` citation into a `.claude` page
+  // has to be pinned or dropped in favour of a heading, from the day this landed
+  // (repo-52).
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve, { record, trees }),
+    checkCitations(citations, read, resolve, { record, trees, requireClaudePins: true }),
     declarations,
   );
 
@@ -630,6 +645,7 @@ const countLine = (counts) =>
     "unresolvable",
     "moved",
     "unanchored",
+    "unpinned-volatile",
     "indistinct",
     "unchecked",
     "evidence",

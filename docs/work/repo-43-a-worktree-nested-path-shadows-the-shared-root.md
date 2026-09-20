@@ -30,7 +30,7 @@ This is a second, structurally different route into the same failure shape
 `repo-20` already fixed once. `repo-20` closed the case where a reviewer built
 before checking out, because `ticket-reviewer.md`'s setup order put the build
 above the checkout. The fix there was a section reorder — order of operations,
-inside one worktree, on one file the agent controls (`ticket-reviewer.md:12`
+inside one worktree, on one file the agent controls (`ticket-reviewer.md@16d9874:12`
 "Get the branch under review before you measure anything"). This defect needs
 no misordering at all: a worktree-relative and a root-relative path can be
 issued back to back, in either order, and the second one silently reads a
@@ -156,9 +156,9 @@ has to remember. The natural insertion points already exist:
 `.claude/agents/builder.md@fdafd1a:159 "Never touch `/workspaces/tools` itself"` line,
 which already gestures at the shared root without saying an absolute path into
 it can silently succeed; and
-`.claude/agents/ticket-reviewer.md:12 "## Get the branch under review before you measure anything"`,
+`.claude/agents/ticket-reviewer.md@16d9874:12 "## Get the branch under review before you measure anything"`,
 beside its
-`.claude/agents/ticket-reviewer.md:25 "Confirm you are looking at the right tree"`
+`.claude/agents/ticket-reviewer.md@16d9874:25 "Confirm you are looking at the right tree"`
 step, which currently checks branch and diff stat but not path construction.
 
 Recommended. Cheapest of the three — one or two sentences, in a place
