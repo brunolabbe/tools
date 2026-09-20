@@ -122,7 +122,13 @@ not. A silent deferral is invisible to the orchestrator.
   it, and any branch that moves a line an older gate record cites fails it
   whatever the branch's own tests say. One pull request went red on it and a
   sibling would have (2026-09-13); nothing on this page named the script until
-  2026-09-20. Repoint or pin what you moved, per `records.md`.
+  2026-09-20. Repoint or pin what you moved, per `records.md` — and sweep both
+  ticket roots, `docs/work/*.md` and `tools/*/docs/work/*.md`, written with the
+  `*.md`, because a pathspec ending at the directory matches nothing and says
+  so nowhere. The gate sees only `## Review`; an unanchored citation elsewhere
+  in a record that your edit displaced is reported `unanchored`, never `moved`,
+  and three rounds of one sweep each missed a scope the previous one had not
+  named (2026-09-20).
 
 Append a dated entry to the ticket's Log and set `status: done` in its
 frontmatter, in the commit that earns it. There is no status page to update.

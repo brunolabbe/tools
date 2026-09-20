@@ -490,7 +490,7 @@ unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
   (line-shifted, not wrong): `dl-19`, `dl-32`, `dl-34`, `dl-43`, `dl-44`,
   `dl-45`, `dl-46`, and the repo-scoped `repo-33`. Pinned the 7 `dl-*` records'
   moved citations to `origin/main`'s `95c6403` (`<file>@95c6403:<line>`, line
-  and anchor text unchanged), per `.claude/skills/orchestrate-tickets/reference/records.md:93-138`
+  and anchor text unchanged), per `.claude/skills/orchestrate-tickets/reference/records.md@fdafd1a:93-138`
   and the repo-44 precedent. Left `repo-33` untouched — it is under
   `docs/work/repo-*`, and the orchestrator said a peer session is pinning repo
   records concurrently. Verified each pin resolves with

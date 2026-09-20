@@ -61,7 +61,10 @@ discarded. So:
   against one tree — so an earlier round's coordinates that a later round's
   fixes moved are pinned to the sha that round reviewed, or the record goes red
   the moment it is committed to a ticket file (2026-09-20, seen on a PR-thread
-  record where it was harmless).
+  record where it was harmless). **The builder does that pinning**, when it
+  transcribes the multi-round section: the reviewer returns text and never edits
+  a file, and a pin changes no verdict, row or severity, so it is the same kind
+  of repair as the self-citation one and not the builder editing the record.
 - **A record cannot assert that its own branch is green, and this is structural
   rather than a lapse.** *"Any commit that corrects a status claim invalidates the
   status claim"* — measured 2026-09-04: a Log said "every completed run on the
