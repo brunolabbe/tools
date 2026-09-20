@@ -156,9 +156,9 @@ has to remember. The natural insertion points already exist:
 `.claude/agents/builder.md@fdafd1a:159 "Never touch `/workspaces/tools` itself"` line,
 which already gestures at the shared root without saying an absolute path into
 it can silently succeed; and
-`.claude/agents/ticket-reviewer.md:12 "## Get the branch under review before you measure anything"`,
+`.claude/agents/ticket-reviewer.md@16d9874:12 "## Get the branch under review before you measure anything"`,
 beside its
-`.claude/agents/ticket-reviewer.md:25 "Confirm you are looking at the right tree"`
+`.claude/agents/ticket-reviewer.md@16d9874:25 "Confirm you are looking at the right tree"`
 step, which currently checks branch and diff stat but not path construction.
 
 Recommended. Cheapest of the three — one or two sentences, in a place

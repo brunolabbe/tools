@@ -177,7 +177,7 @@ worktree whose branch adds a dependency the shared checkout never had. **That is
 a second scope, and choosing it is part of the decision below.**
 
 The existing guidance does not cover this either.
-`.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md:268 "Verify a farm the same way rather than trusting it"`
+`.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md@9ecd2e9:268 "Verify a farm the same way rather than trusting it"`
 checks that a workspace link points into the worktree and that one suite runs.
 Only a suite that imports the missing package would catch this. The third
 builder's run shows a failing suite can still be reported as pre-existing.

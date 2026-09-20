@@ -217,7 +217,7 @@ from a scratch copy, not from its documentation:
   **not** parse as citations, so today `SKILL.md` has effectively none.
 - Writing defect 1's own sentence as a citation reports
   `MOVED  .claude/agents/builder.md:22 "| \`mechanical\` | \`sonnet\` |"`with
-*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
+*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md@1bb63fa:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
 **0** with`--require-anchors`. **The check would have caught defect 1 and does
   not fire on the corrected text.**
 - Working-tree mode uses `git ls-files`, so it needs no history: it is safe in
@@ -266,7 +266,7 @@ between them, which is why nothing can be removed. Give each provision:
   list would be worse than what exists now. **Do not delete the numbers.**
 - **Narrative** — the story of the session that found it. Moves to
   `reference/history.md`, which is already scoped for exactly this readership:
-  `.claude/skills/orchestrate-tickets/SKILL.md:17` sends the reader there with _"read it only if you are revising
+  `.claude/skills/orchestrate-tickets/SKILL.md@cddbbb4:17` sends the reader there with _"read it only if you are revising
   this skill"_. (The sentence is in `SKILL.md`'s own preamble describing
   `history.md`, not inside `history.md` — worth knowing before you go looking for
   it there.)
@@ -644,7 +644,7 @@ reviewer also self-corrected its own last finding before I acted on it.
 | 3   | no general one-file rule             | **accepted**                                                                      | `grep -niE 'exactly one file\|single home\|everywhere else is a pointer'` → no match                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 4   | "two commits later"                  | **accepted**                                                                      | `git rev-list --count a980d5e..62cb999` → 1                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 5   | "`citations.mjs` prints the rule"    | **refuted, and the finding improved anyway**                                      | `sed -n '430,440p' scripts/citations.mjs` → the sentence is inside a `process.stderr.write`, and it is the tail of the ticket's own reproduced run. It **is** printed on `main`. It is a comment at `:730-732` in the **`repo-18`** version the reviewer read — which this ticket depends on, so the verb goes false when `#146` merges. Both halves now recorded                                                                                                                                |
-| 6   | `history.md` self-declaration        | **accepted**                                                                      | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md:17`, no hit in `history.md`                                                                                                                                                                                                                                                                                                                                                                                       |
+| 6   | `history.md` self-declaration        | **accepted**                                                                      | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md@cddbbb4:17`, no hit in `history.md`                                                                                                                                                                                                                                                                                                                                                                               |
 | 7   | "13 lines"                           | **accepted, and both counts were wrong**                                          | bullet 1 is `55–70` = **16** lines; `sed -n '71p'` is the next bullet's first line. Pair with the seam-mapper bullet = `55–76` = 22. The reviewer's self-correction that `main` lacks this content entirely is confirmed: `grep -n "Read the matches, do not count them" SKILL.md` exits 1 on `main`                                                                                                                                                                                             |
 
 **Two-sided model check.** The reviewer quoted _"You are powered by the model named
@@ -914,7 +914,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   this on the `unresolvable` path — `scripts/citations.mjs:435-436`, inside a
   `process.stderr.write`, reproduced as the tail of the run above: _"a
   citation that is a finding's own evidence … must stay as written."_ The other
-  five (`.claude/agents/builder.md@fdafd1a:22` ×3 and `.claude/agents/ticket-reviewer.md:6`
+  five (`.claude/agents/builder.md@fdafd1a:22` ×3 and `.claude/agents/ticket-reviewer.md@cddbbb4:6`
   ×2) all verify against their anchors. Nothing in CI reads tickets with
   `citations.mjs` today, so no gate is red. **Re-run this before gating** — the
   first draft of this bullet said `3/4` and was falsified by the commit that
