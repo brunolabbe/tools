@@ -206,12 +206,18 @@ runs before committing; a section that fails it there costs a round
 (2026-09-13), and one dry-run at the real insertion point needed no repair on
 landing (2026-09-09). An anchor cannot contain a double quote, and a coordinate
 into the ticket's own file can never be distinct — name the section instead.
+**To materialise the base tree for a before-and-after measurement**, use
+`git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command: it
+survives the sandbox where `git show` inside a loop or a `node -e` program does
+not, and it is what made two gates' base-versus-tip citation sweeps possible
+(2026-09-20).
 
 **The sandbox refuses some ordinary shell shapes**, with "too complex to verify
 that it stays inside the worktree": a git command followed by `echo $?`, a
 heredoc, a variable holding a path, a `for` loop, an `awk` program containing
 `>>`, `python3` (2026-09-12 to 2026-09-14), and `git` named inside a `node -e`
-program (2026-09-20). One plain command per call, literal
+program — the trigger is the literal token `git` anywhere in the program text,
+even in a string that never runs (2026-09-20). One plain command per call, literal
 paths, `printf`, `awk -v` and `node -e` hold; read an exit code by redirecting
 output to a file and running the next command plainly. Rewrite the shape rather
 than reporting a broken channel.

@@ -100,7 +100,7 @@ the rewrite, and only fixed it when this filing pointed at it.**
 **1. A claim about another file that stopped being true.** `SKILL.md` step 4 said
 a `mechanical` ticket puts a **Sonnet** builder in a batch, and drew from that the
 consequence that the gate's model "cannot be set once". `.claude/agents/builder.md`
-maps `mechanical` to **`haiku`** — verified at `.claude/agents/builder.md:22`, ``| `mechanical`
+maps `mechanical` to **`haiku`** — verified at `.claude/agents/builder.md@fdafd1a:22`, ``| `mechanical`
 | `haiku` |``. The skill was right when written; `builder.md` changed underneath
 it, and the sentence went on being read as current for as long as nobody
 re-checked. Nothing could have caught this, because nothing checks it.
@@ -736,7 +736,7 @@ grounds that a third instance was not worth a re-gate. The owner questioned the
 
 Measured before acting, all three confirmed:
 
-- `reference/dispatching.md:196-199` states it for **tool lists only**, on a page
+- `reference/dispatching.md@fdafd1a:196-199` states it for **tool lists only**, on a page
   about dispatch mechanics. **Corrected by gate 3, and the correction is the
   finding: those coordinates are `main`'s.** The blocking record branch inserts
   ~27 lines above the passage, so on the tree this ticket says to build against it
@@ -796,7 +796,7 @@ escalations.
   lines for fourteen rows exactly as it did at 42 for twelve. A real fourteenth
   shape costs real estate the same way the first thirteen did.
 
-**One new finding, accepted: `dispatching.md:196-199` is `main`'s coordinates, not
+**One new finding, accepted: `dispatching.md@fdafd1a:196-199` is `main`'s coordinates, not
 the build tree's.** Reproduced — `grep -n "Ask an agent to"` gives 198 on `main`
 and **225** on the record branch, which inserts ~27 lines above the passage; the
 sentence is identical on both. **This is defect 4's shape one level down** — right
@@ -914,7 +914,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   this on the `unresolvable` path — `scripts/citations.mjs:435-436`, inside a
   `process.stderr.write`, reproduced as the tail of the run above: _"a
   citation that is a finding's own evidence … must stay as written."_ The other
-  five (`.claude/agents/builder.md:22` ×3 and `.claude/agents/ticket-reviewer.md:6`
+  five (`.claude/agents/builder.md@fdafd1a:22` ×3 and `.claude/agents/ticket-reviewer.md:6`
   ×2) all verify against their anchors. Nothing in CI reads tickets with
   `citations.mjs` today, so no gate is red. **Re-run this before gating** — the
   first draft of this bullet said `3/4` and was falsified by the commit that
@@ -940,7 +940,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   more defect.** The −9 cut was not taken and my "+21 was unavoidable" defence was
   upheld, both on the reviewer's own line-by-line check rather than on my argument.
   The new finding is the one worth carrying forward: **I cited
-  `dispatching.md:196-199` off `main` while every other coordinate in this ticket
+  `dispatching.md@fdafd1a:196-199` off `main` while every other coordinate in this ticket
   is pinned to the blocking dependency, and the record branch moves that passage to
   223–225.** Right sentence, wrong coordinates — defect 4's shape, committed by the
   filer, in the amendment that added a row about checking claims from outside. Now

@@ -121,7 +121,7 @@ repair, out of this ticket's scope, and doing it quietly here would hide that
 the interim declarations are not self-maintaining.
 
 Also checked: the declarations are load-bearing. Deleting the `<!-- citations:
-evidence dispatching.md:206, dispatching.md:209 -->` line, the first of the two,
+evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line, the first of the two,
 from a scratch
 copy of `history.md` and re-running turns `13 verified, 4 moved, ..., 8 evidence`
 into `13 verified, 8 moved, ..., 4 evidence` — the four citations it covers move
@@ -1919,7 +1919,7 @@ unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the examp
   branch's diff past its stated purpose.
 
   **Declarations are load-bearing, checked directly.** Deleting the `<!--
-citations: evidence dispatching.md:206, dispatching.md:209 -->` line from a
+citations: evidence dispatching.md@fdafd1a:206, dispatching.md@fdafd1a:209 -->` line from a
   scratch copy of `history.md` and re-running turned `4 moved, ..., 8 evidence`
   into `8 moved, ..., 4 evidence` — the four citations that line covers move
   from suppressed to failing the moment it is gone. Reverted with `git checkout

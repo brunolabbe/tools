@@ -189,7 +189,7 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
   coordinator, not defaulted.
 
 - **2026-09-09** — Built option A. Both cited line numbers still held against
-  `origin/main` at dispatch (`.claude/skills/review-ticket/SKILL.md:113`,
+  `origin/main` at dispatch (`.claude/skills/review-ticket/SKILL.md@fdafd1a:113`,
   `docs/01-TICKETS.md:293`); re-checked with `grep -n` before editing either.
 
   `.claude/skills/review-ticket/SKILL.md` now states the rule: the builder — not
@@ -247,7 +247,7 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   (`repo-1`, `pl-5`) quoting wording as it stood at the time — append-only
   records, not live rules, left untouched.
 
-  `.claude/agents/ticket-reviewer.md:83-86` already said "the builder writes the
+  `.claude/agents/ticket-reviewer.md@fdafd1a:83-86` already said "the builder writes the
   `## Review` section" before this ticket; it was not the outlier and needed no
   change. Its two remaining "caller" uses (`:153-154`) are about which model
   gates, unrelated to who writes the record.
@@ -278,7 +278,7 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   editing it — who does the appending is stated once, below, not here."
 
   **Not acted on, med** — `.claude/skills/orchestrate-tickets/reference/
-dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
+dispatching.md@fdafd1a:176` ("Verbatim transcription is nowhere in that rule")
   contradicts `SKILL.md`'s now-authoritative verbatim requirement. Confirmed
   real and pre-existing at `origin/main`, sharpened rather than created by this
   branch: `docs/01-TICKETS.md` now delegates the rule to `SKILL.md` by name, so
@@ -287,13 +287,13 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   and escalated it to the orchestrator as an open decision rather than asking
   either of us to settle it — verbatim transcription vs. completeness-of-receipt
   is a real tradeoff with measured evidence on both sides
-  (`dispatching.md:186-197`), and neither a builder nor a reviewer gets to pick.
+  (`dispatching.md@fdafd1a:186-197`), and neither a builder nor a reviewer gets to pick.
   Left both documents exactly as they stood.
 
   **Fixed, low** — the Log's survivor count was wrong: it said "two" `caller`
   uses were left deliberately and listed "the repo-1 narrative" among the
   places changed, when one of that narrative's three `caller` mentions
-  (`.claude/skills/review-ticket/SKILL.md:119`, unchanged text, only reflowed)
+  (`.claude/skills/review-ticket/SKILL.md@fdafd1a:119`, unchanged text, only reflowed)
   survived alongside its `:93` and `:137`. Corrected the count to three and
   named `:119`'s own reason — it reads as the dispatcher who oversaw the
   pre-fix process, not a claim about who commits today.
@@ -301,7 +301,7 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   **Fixed, low** — `node scripts/citations.mjs` on this ticket exited 1: the
   bare filename `SKILL.md` at line 113 in the Log's dispatch line was ambiguous
   across three tracked files of that name. Qualified it to
-  `.claude/skills/review-ticket/SKILL.md:113`. Fixing `:282` above then moved
+  `.claude/skills/review-ticket/SKILL.md@fdafd1a:113`. Fixing `:282` above then moved
   `docs/01-TICKETS.md:293`'s sentence down to `:294`, which the checker caught
   as `MOVED` on the next run — this ticket's own Why-section citation
   (`:26` in this file) and re-cited it at `:294`, noting it was `:293` as
@@ -313,7 +313,7 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   below, after every edit in this round landed.
 
   **Deferred, low, on the reviewer's own recommendation** — the pointer loop
-  between `.claude/skills/review-ticket/SKILL.md:126` and
+  between `.claude/skills/review-ticket/SKILL.md@fdafd1a:126` and
   `docs/01-TICKETS.md`'s disclaimer. Fixed anyway, since it was one sentence:
   `SKILL.md`'s tradeoff paragraph no longer points back to `docs/01-TICKETS.md`
   at all, so there is nothing left to loop with.

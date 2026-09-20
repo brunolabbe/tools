@@ -150,7 +150,10 @@ said the orchestrator checks "four things" while the branch under review said
 five, and it reported the mismatch itself. A sweep of the agent definitions
 cannot dogfood itself: say in the gate prompt what the branch changes in the
 reviewer's own page, hand it the rules it is missing, and read the record knowing
-the reviewer did not run under them.
+the reviewer did not run under them. **A resumed reviewer runs an older page
+still** — its definition was read at its first launch, so a gate 2 woken by
+message gates the corrections under the page that predates gate 1's own
+findings; the same gate proved that one commit after this section was written.
 
 ### Never write an install into a gate prompt
 

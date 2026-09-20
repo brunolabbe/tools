@@ -32,9 +32,13 @@ object: step 1 has no ticket to read, step 4 has no `Done when` lines, and step 
 has no `## Log` to commit above. The dispatcher supplies the acceptance lines in
 the prompt and names the commit message as the brief; the reviewer traces each
 supplied line as it would a ticket's; and the section goes on the pull request
-thread rather than into a file, per `orchestrate-tickets`' `records.md`. Every
-other step applies unchanged. A gate on 2026-09-20 needed all three of these
-patched by hand in its prompt, which is what this paragraph replaces.
+thread rather than into a file, per `orchestrate-tickets`' `records.md`. The
+severity table below then grades the prompt's lines exactly as it would a
+ticket's — an unproven one is still FAIL — and the reviewer says so in the
+section, because a prompt's acceptance and a ticket's are the kind of difference
+that otherwise gets argued in a round. Every other step applies unchanged. A gate
+on 2026-09-20 needed all of this patched by hand in its prompt, which is what
+this paragraph replaces.
 
 ## Arguments
 
@@ -230,9 +234,13 @@ is the builder's alone.
    - **No `"` inside it.** The parser's anchor group admits none, so escaping
      one truncates the fragment at the backslash and the citation reports
      `moved`. Pick a quote-free substring.
-   - **Quote enough of the line to be unique.** `verified` means *some*
-     occurrence of your fragment starts inside the range you named — not that
-     only one does. A one-word anchor keeps saying `ok` after an unrelated edit
+   - **Quote enough of the line to be unique, and know that the line wrap bounds
+     what you can quote.** `verified` means *some* occurrence of your fragment
+     starts inside the range you named — not that only one does. In prose files
+     the fragment cannot cross a physical line break, so the distinctive words
+     are sometimes on the next line; cite that line, or a range, rather than
+     settling for a short fragment that verifies on more than one line
+     (2026-09-20). A one-word anchor keeps saying `ok` after an unrelated edit
      slides a different occurrence onto the cited line, which is exactly how
      `repo-31`'s `"informational"` citation survived pointing at a comment it had
      nothing to do with.

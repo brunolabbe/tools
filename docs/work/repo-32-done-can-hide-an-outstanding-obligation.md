@@ -638,7 +638,7 @@ obligation` (16 failed | 111 passed), which **was a false green and was
     every session, it already sends the reader to `docs/01-TICKETS.md` for the
     fields, and `awaiting` is written rarely and read from `npm run status`.
     Recorded rather than silently deferred.
-  - **`.claude/skills/orchestrate-tickets/reference/sizing.md:137` cites
+  - **`.claude/skills/orchestrate-tickets/reference/sizing.md@fdafd1a:137` cites
     `scripts/status.mjs:264` for `reviewedButReady`, which is at 387 here and was
     already at 346 on `origin/main`** — stale before this branch, staler after.
     Left, because [repo-39](./repo-39-the-unanchored-half-of-the-review-corpus.md)

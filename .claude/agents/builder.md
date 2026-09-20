@@ -92,7 +92,8 @@ that it stays inside the worktree", and nothing else warns you. Refused in three
 batches (2026-09-12 to 2026-09-14): a git command followed by `echo $?`; a
 heredoc, whether a commit message or a script body; a variable holding a path; a
 `for` loop over `git`, `gh` or `sed`; an `awk` program containing `>>`;
-`python3`; `git` named inside a `node -e` program (2026-09-20). What holds: one plain command per call, `git commit -F <file>`,
+`python3`; `git` named inside a `node -e` program, where the trigger is the
+literal token even in a string that never runs (2026-09-20). What holds: one plain command per call, `git commit -F <file>`,
 literal paths, `printf` over `cat <<EOF`, `awk -v`, `node -e`, and reading an exit
 code by redirecting a command's output to a file and running the next command
 plainly. Do not read a refusal as a broken channel; rewrite the shape.
