@@ -430,3 +430,157 @@ test('refuses a second first-review call once "## Review" already exists on disk
     cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Round 2 — a ticket-reviewer gate on repo-55 (2026-09-20): the HEAD restore
+// must not discard uncommitted work, the disclosure diff must not stop at a
+// gate's own trailing heading, and a repeated --gate must be refused.
+// ---------------------------------------------------------------------------
+
+test("refuses to run when the ticket has uncommitted changes against HEAD, and touches nothing", () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const before = fs.readFileSync(ticketAbs, "utf8");
+    fs.appendFileSync(ticketAbs, "\n- an uncommitted note, never committed.\n");
+    const dirty = fs.readFileSync(ticketAbs, "utf8");
+    expect(dirty).not.toBe(before);
+
+    const section = writeSectionFile(
+      dir,
+      "section.md",
+      '## Review\n\n### Gate 1 — 2026-09-20\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    const result = runCli(dir, [ticketAbs, section]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/uncommitted changes against HEAD/);
+    // Not restored to HEAD, not spliced — exactly as it stood before the run,
+    // uncommitted note included. A restore that overwrote this with HEAD's
+    // content would pass just as silently as the splice it was meant to undo.
+    expect(fs.readFileSync(ticketAbs, "utf8")).toBe(dirty);
+  } finally {
+    cleanup();
+  }
+});
+
+test('the disclosure diff is bounded to the end of "## Review", not a gate\'s own trailing heading', () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const first = writeSectionFile(
+      dir,
+      "gate1.md",
+      '## Review\n\n### Gate 1 — 2026-09-19\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    expect(runCli(dir, [ticketAbs, first]).status).toBe(0);
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "gate 1 lands");
+
+    // Gate 2's own body carries a second "###" heading — the reproduction: a
+    // block bounded to the *last nested heading* rather than to the end of
+    // "## Review" would diff only "three." against the whole section file and
+    // report a false non-empty diff on a splice that landed correctly.
+    const second = writeSectionFile(
+      dir,
+      "gate2.md",
+      [
+        "### Gate 2 — 2026-09-20",
+        "",
+        "The splice itself.",
+        "",
+        "### What the builder should read first",
+        "",
+        'Still proof: `src/tls.ts:2 "Defence in depth"`.',
+        "",
+      ].join("\n"),
+    );
+    const result = runCli(dir, [ticketAbs, "--gate", "2", second]);
+    expect(result.status).toBe(0);
+
+    const after = fs.readFileSync(ticketAbs, "utf8");
+    const headings = after.split("\n").filter((l) => /^#{2,3} /.test(l));
+    expect(headings).toEqual([
+      "## Why",
+      "## Build",
+      "## Done when",
+      "## Review",
+      "### Gate 1 — 2026-09-19",
+      "### Gate 2 — 2026-09-20",
+      "### What the builder should read first",
+      "## Log",
+    ]);
+
+    const diffStart = result.stdout.indexOf("Paste this into the Log as the disclosure note:");
+    expect(diffStart).toBeGreaterThan(-1);
+    const diffBody = result.stdout.slice(diffStart).split("\n").slice(2).join("\n").trim();
+    expect(diffBody).toBe("");
+  } finally {
+    cleanup();
+  }
+});
+
+test('refuses to re-append a gate number that already exists under "## Review"', () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const first = writeSectionFile(
+      dir,
+      "gate1.md",
+      '## Review\n\n### Gate 1 — 2026-09-19\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    expect(runCli(dir, [ticketAbs, first]).status).toBe(0);
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "gate 1 lands");
+
+    const again = writeSectionFile(
+      dir,
+      "gate1-again.md",
+      "### Gate 1 — should not land twice\n\nshould not land.\n",
+    );
+    const result = runCli(dir, [ticketAbs, "--gate", "1", again]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/already has a "### Gate 1" heading/);
+
+    const after = fs.readFileSync(ticketAbs, "utf8");
+    expect(after.match(/^### Gate 1 /gmu)).toHaveLength(1);
+    expect(after).not.toMatch(/should not land/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('planInsertion refuses a gate number that already exists under "## Review" (pure)', () => {
+  const withReview = noReview.replace("## Log", "## Review\n\n### Gate 1\n\nok.\n\n## Log");
+  expect(() => planInsertion(withReview, 1)).toThrow(/already has a "### Gate 1" heading/);
+});
+
+test('locateInsertedBlock bounds a gate\'s block to the end of "## Review", past its own trailing heading', () => {
+  const formatted = [
+    "## Why",
+    "",
+    "## Done when",
+    "",
+    "## Review",
+    "",
+    "### Gate 1",
+    "",
+    "one.",
+    "",
+    "### Gate 2",
+    "",
+    "two.",
+    "",
+    "### A heading inside gate 2's own body",
+    "",
+    "three.",
+    "",
+    "## Log",
+    "",
+  ].join("\n");
+  const block = locateInsertedBlock(formatted, 2);
+  const blockText = formatted
+    .split("\n")
+    .slice(block.start - 1, block.end)
+    .join("\n");
+  expect(blockText).toContain("### Gate 2");
+  expect(blockText).toContain("### A heading inside gate 2's own body");
+  expect(blockText).not.toContain("## Log");
+});

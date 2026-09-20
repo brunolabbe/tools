@@ -105,3 +105,45 @@ procedure.
 scripts/test/review-record.test.ts` (20/20 passed); `npm test -- --project
 repo` (366/366 passed); full `npm test`, run because
   `scripts/test/tsconfig.json` moved (176 files, 3172 tests, exit 0).
+
+- 2026-09-20 — Round 2, from a ticket-reviewer gate (Opus) on `ebd05d2` and the
+  orchestrator's decisions on its two open findings. Reproduced both before
+  applying: a check failure's `git show HEAD:<ticket>` restore silently
+  discarded an uncommitted edit unrelated to the splice (planted one, ran a
+  failing section, `grep -c` the planted line afterward → `0`); and
+  `locateInsertedBlock`'s "last nested `### `" rule diffed only a gate's own
+  tail against the whole section file when that gate's body carried a second
+  `###` heading, reporting a false non-empty diff on a splice that landed
+  correctly. Both held.
+
+  Applied the orchestrator's decisions, both taking its recommendation: (1)
+  `main()` now refuses to run at all when the ticket has uncommitted changes
+  against `HEAD` (`git diff --quiet HEAD -- <ticket>`), before writing
+  anything — corrected the module docblock, which had presented the `HEAD`
+  restore as unconditionally safe. (2) `locateInsertedBlock` now bounds a
+  gate's block from its own `### Gate <n>` heading to the end of `## Review`,
+  not to the matched heading's own `extractSections` range. Also folded in the
+  three low findings: `planInsertion` refuses a `--gate <n>` whose heading
+  already exists under `## Review`; the citations CLI is spawned under
+  `process.execPath` instead of a bare `node` from `PATH`, matching the
+  reasoning the docblock already gave for `oxfmt`; and `oxfmt` is now given
+  `cwd: ticketRepoRoot` (previously unset), matching the checker's own `cwd`.
+
+  Added five tests (25 total), one per change above plus a pure-function test
+  for the gate-bound fix, and watched each fail first by reverting its guard
+  in isolation and restoring afterward — recorded here rather than assumed:
+  removing the dirty-check branch reported `git diff failed` instead of the
+  named message; returning the matched heading unbounded from
+  `locateInsertedBlock` reproduced the reviewer's own "diffs only the tail"
+  failure; dropping the repeat-gate guard let a second `--gate 1` land at exit 0.
+
+  The `review-ticket` step 8 / `records.md` wiring landed on
+  `orchestrate-skill-sweep` at `56d5564` while this branch was in review
+  (`git grep -n review-record 56d5564 -- .claude` names both) — so **Done
+  when** 4 is met on the branch this one merges into, not by a commit on this
+  branch. `status: done` stands on the orchestrator's word; the reviewer's
+  `unproven` grade on that line was correct at the time it was given.
+
+  Gates: `npm run check` (exit 0); `npx vitest run
+scripts/test/review-record.test.ts` (25/25 passed); `npx vitest run
+--project repo` (371/371 passed, 8 files).

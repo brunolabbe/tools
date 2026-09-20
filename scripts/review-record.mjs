@@ -31,7 +31,11 @@
  * from an in-memory copy** — so a checker crash or an unexpected exception
  * between the write and the restore can never leave a half-spliced ticket
  * looking like a clean one; the working tree's own history is the only copy
- * trusted.
+ * trusted. That restore is only safe because the script refuses to run at all
+ * when the ticket already has uncommitted changes against `HEAD` (a
+ * ticket-reviewer gate, repo-55): without that guard the restore would
+ * silently discard whatever was uncommitted, not only the splice — trading a
+ * stale-memory hazard for a lost-work one rather than closing it.
  *
  * **The formatter runs as `oxfmt`'s own `bin` entry under `process.execPath`,
  * never through `npx` or `node_modules/.bin/oxfmt`.** `testing.md` names the
@@ -128,8 +132,9 @@ export function validateFirstLine(sectionText, gate) {
 
 /**
  * Find the line to insert the section above — ticket step 2 — and enforce the
- * refusal rules that keep a second call from either duplicating `## Review` or
- * appending a gate to a ticket that has none.
+ * refusal rules that keep a second call from either duplicating `## Review`,
+ * appending a gate to a ticket that has none, or re-appending a gate number
+ * that already exists under it (a ticket-reviewer gate, repo-55).
  *
  * Both anchors are heading-form matches from `extractSections`, so a heading
  * name quoted inline in the ticket's own prose is never mistaken for the real
@@ -160,6 +165,18 @@ export function planInsertion(markdown, gate) {
     if (review.length > 1) {
       throw new Error(
         `the ticket has ${review.length} "## Review" sections; fix the ticket by hand before splicing another gate into it`,
+      );
+    }
+    const already = sections.filter(
+      (s) =>
+        s.level === 3 &&
+        s.start >= review[0].start &&
+        s.end <= review[0].end &&
+        new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
+    );
+    if (already.length > 0) {
+      throw new Error(
+        `the ticket already has a "### Gate ${gate}" heading under "## Review"; choose a different --gate number`,
       );
     }
   }
@@ -203,6 +220,13 @@ export function insertSection(markdown, sectionText, anchorLine) {
  * heading structure is what keeps that reflow from being mistaken for part of
  * the diff in step 4.
  *
+ * **Bounded to the end of `## Review`, not to the matched heading's own
+ * `extractSections` range** (a ticket-reviewer gate, repo-55): a gate's own
+ * body can carry a `###` heading of its own — "what the builder should read
+ * first" and the like — which would otherwise end the range early and diff
+ * only the gate's tail against the whole section file the builder pasted,
+ * reporting a false non-empty diff on a splice that landed correctly.
+ *
  * @param {string} formattedMarkdown
  * @param {number | null} gate
  */
@@ -212,18 +236,19 @@ export function locateInsertedBlock(formattedMarkdown, gate) {
   const review = selectSection(level2, "Review");
   if (gate === null) return review;
 
-  const nested = sections.filter(
-    (s) => s.level === 3 && s.start >= review.start && s.end <= review.end,
+  const heading = sections.find(
+    (s) =>
+      s.level === 3 &&
+      s.start >= review.start &&
+      s.end <= review.end &&
+      new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
   );
-  if (nested.length === 0) {
+  if (heading === undefined) {
     throw new Error(
-      'could not find the inserted "### Gate" subsection under "## Review" after formatting',
+      `could not find the inserted "### Gate ${gate}" heading under "## Review" after formatting`,
     );
   }
-  // Sections come back in document order, and a gate is always appended after
-  // every gate before it, so the last one nested inside "## Review" is the one
-  // just spliced in.
-  return nested[nested.length - 1];
+  return { start: heading.start, end: review.end };
 }
 
 /** A table rule cell, collapsed to its shortest form — alignment kept, width dropped. */
@@ -336,6 +361,31 @@ function main() {
   const ticketRepoRoot = repoRootFor(ticketAbsolutePath);
   const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
 
+  // Refuse before touching the file at all when the ticket already carries
+  // uncommitted changes against HEAD — the restore below overwrites the whole
+  // file with HEAD's content on a failed check, which would silently discard
+  // anything uncommitted, not only the splice (a ticket-reviewer gate,
+  // repo-55).
+  const dirty = spawnSync(
+    "git",
+    ["-C", ticketRepoRoot, "diff", "--quiet", "HEAD", "--", relative],
+    {
+      encoding: "utf8",
+    },
+  );
+  if (dirty.error) throw dirty.error;
+  if (dirty.status === 1) {
+    throw new Error(
+      `${relative} has uncommitted changes against HEAD; commit or stash them first. A failed check ` +
+        `restores this file from HEAD, which would discard anything not committed — not only the splice.`,
+    );
+  }
+  if (dirty.status !== 0) {
+    throw new Error(
+      `could not check ${relative} against HEAD: ${dirty.stderr || "git diff failed"}`,
+    );
+  }
+
   // Step 3: insert, then format, then check — restoring from HEAD on either
   // formatter or checker failure, never from `markdown` above, which is this
   // process's memory and not the ticket's own history.
@@ -357,6 +407,7 @@ function main() {
   };
 
   const fmt = spawnSync(process.execPath, [OXFMT, ticketAbsolutePath], {
+    cwd: ticketRepoRoot,
     encoding: "utf8",
     shell: false,
   });
@@ -371,7 +422,7 @@ function main() {
 
   const citationsCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "citations.mjs");
   const check = spawnSync(
-    "node",
+    process.execPath,
     [
       citationsCli,
       ticketAbsolutePath,
