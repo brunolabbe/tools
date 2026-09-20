@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunolabbe/tools/compare/planner-v0.6.0...planner-v0.7.0) (2026-09-20)
+
+
+### Features
+
+* **planner:** edit a plan's dates and budget, with a brief on every version (pl-47) ([#279](https://github.com/brunolabbe/tools/issues/279)) ([abeb369](https://github.com/brunolabbe/tools/commit/abeb369f36027bd05658d7b0c56e050e2cc3d991))
+* **planner:** prove P3 against a real model with an offline-gated live harness (pl-40) ([#266](https://github.com/brunolabbe/tools/issues/266)) ([a4ad365](https://github.com/brunolabbe/tools/commit/a4ad36565bb234a7f5f20bbf0917983725844d8a))
+* **planner:** revise a plan over HTTP — re-plans run as jobs, edits write synchronously (pl-44) ([#264](https://github.com/brunolabbe/tools/issues/264)) ([b63b2bb](https://github.com/brunolabbe/tools/commit/b63b2bba158d4612c3348f0a16be23f7c1066f18))
+* **planner:** revise a plan through a browser, across the reload (pl-46) ([#276](https://github.com/brunolabbe/tools/issues/276)) ([d224afc](https://github.com/brunolabbe/tools/commit/d224afcb019bfb4e097fe938fdffd102a22b38c9))
+
+
+### Fixes
+
+* **downloader:** report a body Fastify cannot parse as BAD_REQUEST, not INTERNAL (dl-66) ([#278](https://github.com/brunolabbe/tools/issues/278)) ([2e5bd9f](https://github.com/brunolabbe/tools/commit/2e5bd9f4add056e6c7d8f30d12ed06c44107b75c))
+* **planner:** count thinking tokens billed as output (pl-50) ([#274](https://github.com/brunolabbe/tools/issues/274)) ([7f54561](https://github.com/brunolabbe/tools/commit/7f54561bedf2ad173778e7d90d29a4ccead17055))
+
 ## [0.6.0](https://github.com/brunolabbe/tools/compare/planner-v0.5.1...planner-v0.6.0) (2026-09-16)
 
 
