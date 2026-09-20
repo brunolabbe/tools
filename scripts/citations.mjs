@@ -88,7 +88,7 @@
  * `commit-message.mjs`.
  *
  * Usage:
- *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors]
+ *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins]
  *
  * `--rev` resolves the citation **targets** against a commit rather than the
  * working tree. Pinning the record to the commit the gate actually reviewed is
@@ -180,6 +180,19 @@
  * self-citation still fails under the flag and still cannot be declared — what
  * changed is that the run names it, and gives the repair that works: point the
  * citation at the real subject, or write it as prose.
+ *
+ * `--require-claude-pins` reports an unpinned citation into a `.claude/` page as
+ * its own state, `unpinned-volatile` (repo-52). Those pages are the ones the
+ * orchestration loop edits every few sessions, and a bare `file:line` into one is
+ * a claim about the page as it stood the day it was written — a fact a pin can
+ * make permanent and a line number cannot. Off by default for the same reason
+ * `--require-anchors` is: turning it on for every run would fail every citation
+ * into these pages already in the tree before repo-52's own pinning pass, and
+ * `citations-gate.mjs` is where it is actually enforced. The override applies
+ * only to a citation that would otherwise print `verified` or `unanchored` —
+ * `isUnpinnedVolatile` says why the failing states are left alone — so a `moved`
+ * or `unresolvable` citation into a `.claude/` page keeps naming its own, more
+ * specific defect.
  *
  * **The exit code is a bitmask** (`EXIT`), because the failure classes are not
  * alike and one code cannot say which happened — a citation that cannot be
@@ -887,6 +900,7 @@ const STATES = /** @type {const} */ ([
   "moved",
   "unchecked",
   "unanchored",
+  "unpinned-volatile",
   "evidence",
   "verified",
 ]);
@@ -908,6 +922,7 @@ export const EXIT = /** @type {const} */ ({
   declaration: 8,
   indistinct: 16,
   malformedPin: 32,
+  unpinnedVolatile: 64,
 });
 
 /**
@@ -929,17 +944,19 @@ export const EXIT = /** @type {const} */ ({
  *   rather than inferred from the default, which typed the parameter as one that
  *   can only succeed — so `makeResolver`, the one implementation that exists, was
  *   not assignable to it and a test passing it failed to compile.
- * @param {{record?: string | null, trees?: ReturnType<typeof makeTrees>}} [options]
+ * @param {{record?: string | null, trees?: ReturnType<typeof makeTrees>, requireClaudePins?: boolean}} [options]
  *   `record` is the record being checked, named as git names it — see
  *   `locateRecord` — so a citation that resolves to it can be told apart as a
  *   self-citation; omitted, nothing is. `trees` supplies the commit a pin names;
  *   omitted, every pin is `unresolvable` and none is ever read through `read`.
+ *   `requireClaudePins` turns on the `unpinned-volatile` override below; omitted
+ *   or false, nothing here changes (repo-52).
  */
 export function checkCitations(citations, read, resolve = (f) => ({ path: f }), options = {}) {
   const record = options.record ?? null;
   const trees = options.trees ?? (() => null);
   const cache = new Map();
-  return citations.map((c) => {
+  const results = citations.map((c) => {
     // Refused before anything else, file or no file: a malformed pin names no
     // commit anything could read, and a shorthand carrying one may have no file.
     if (c.malformed !== undefined) {
@@ -1138,6 +1155,59 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f }), 
       self,
     };
   });
+
+  if (!options.requireClaudePins) return results;
+  return results.map((r) => (isUnpinnedVolatile(r) ? unpinnedVolatile(r) : r));
+}
+
+/**
+ * A page under `.claude/` that this repo's rule pages live on — the ones a
+ * session edits every few sessions, per repo-52's Why. A bare `file:line` into
+ * one of these is a claim about the page as it stood on the day it was written,
+ * never about the page as it will stand, and a line number cannot say so on its
+ * own.
+ */
+const CLAUDE_PAGE = /^\.claude\/.*\.md$/;
+
+/**
+ * Whether a citation is a candidate for the override below: it names a file
+ * under a `.claude/` page, carries no pin, and would otherwise print as
+ * `verified` or `unanchored` — the two states in which nothing here already
+ * says the citation needs attention.
+ *
+ * **Deliberately excludes every failing state.** `unresolvable`, `moved` and
+ * `malformed-pin` already name a more specific defect than "this could move",
+ * and overriding them would spend the one word this state has on a citation
+ * that is already flagged for a better reason. `unchecked` and `evidence` are
+ * excluded too: the first has no file this could check with confidence (a
+ * shorthand's guessed file, or a prose reference), and the second has already
+ * been told, by a human, that its failure is deliberate — a fact this override
+ * cannot see and must not talk over.
+ *
+ * @param {{file: string | null, rev?: string, state: string}} r
+ */
+export const isUnpinnedVolatile = (r) =>
+  (r.state === "verified" || r.state === "unanchored") &&
+  r.rev === undefined &&
+  r.file !== null &&
+  CLAUDE_PAGE.test(r.file);
+
+/**
+ * Replace a citation's outcome with the finding repo-52 exists to raise: the
+ * citation is fine today, and nothing here can promise it stays fine, because
+ * the page it names moves under this repo's own hand every few sessions.
+ *
+ * @param {ReturnType<typeof checkCitations>[number]} r
+ */
+function unpinnedVolatile(r) {
+  return {
+    ...r,
+    state: "unpinned-volatile",
+    reason:
+      `a bare line number into a .claude page — pin it as ${r.file}@<rev>:${r.start}` +
+      `${r.start === r.end ? "" : `-${r.end}`} to the commit it is true of, or cite the page and` +
+      ` the heading it sits under instead`,
+  };
 }
 
 /**
@@ -1331,6 +1401,14 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
   if (counts["malformed-pin"] > 0) {
     set("malformedPin", `${counts["malformed-pin"]} malformed pin`);
   }
+  // Always fatal rather than gated by a second `requireX` parameter here: this
+  // count can only be non-zero when the caller already asked for it, by passing
+  // `requireClaudePins` to `checkCitations` — the same shape `malformed-pin`
+  // uses, and for the same reason. A second gate at this layer would just be a
+  // flag agreeing with itself.
+  if (counts["unpinned-volatile"] > 0) {
+    set("unpinnedVolatile", `${counts["unpinned-volatile"]} unpinned-volatile`);
+  }
 
   // Counted across states rather than as one of them: a pinned citation is still
   // verified, moved or whatever else it came out as.
@@ -1345,6 +1423,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
       counts.moved +
       counts.unresolvable +
       counts["malformed-pin"] +
+      counts["unpinned-volatile"] +
       (requireAnchors ? counts.unanchored : 0) +
       (requireDistinct ? indistinct.length : 0),
     exit,
@@ -1353,17 +1432,23 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
     // suffix is on the same line as the counts so a CI log shows the policy that
     // judged them next to the numbers it judged.
     //
-    // **`malformed-pin` and `pinned` are the two figures printed only above
-    // zero** (repo-35), against the rule that every bucket prints. A record with
-    // no pin prints the line it printed before pins existed, byte for byte:
-    // repo-35's reproduction holds three rows to the exact strings they printed at
-    // `4901cd6`, and a field printed unconditionally would change every record's
-    // output in the tree.
+    // **`malformed-pin`, `unpinned-volatile` and `pinned` are the figures printed
+    // only above zero** (repo-35, repo-52), against the rule that every bucket
+    // prints. A record with no pin prints the line it printed before pins
+    // existed, byte for byte: repo-35's reproduction holds three rows to the
+    // exact strings they printed at `4901cd6`, and a field printed
+    // unconditionally would change every record's output in the tree.
+    // `unpinned-volatile` can only be non-zero when the caller opted in, so an
+    // unconditional field here would do the same thing to every record checked
+    // without the flag.
     line:
       `${counts.verified} verified, ${counts.moved} moved, ` +
       `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable, ` +
       `${counts.unchecked} unchecked, ${counts.evidence} evidence` +
       (counts["malformed-pin"] > 0 ? `, ${counts["malformed-pin"]} malformed-pin` : "") +
+      (counts["unpinned-volatile"] > 0
+        ? `, ${counts["unpinned-volatile"]} unpinned-volatile`
+        : "") +
       ` — of ${results.length} reference${results.length === 1 ? "" : "s"}` +
       (pinned > 0 ? `, ${pinned} pinned` : "") +
       (requireAnchors ? ", anchors required" : "") +
@@ -1516,6 +1601,7 @@ export const FLAGS = new Map([
   ["--section", { option: "section", takesValue: true }],
   ["--require-anchors", { option: "requireAnchors", takesValue: false }],
   ["--require-distinct-anchors", { option: "requireDistinct", takesValue: false }],
+  ["--require-claude-pins", { option: "requireClaudePins", takesValue: false }],
 ]);
 
 /**
@@ -1526,7 +1612,7 @@ export const FLAGS = new Map([
  * repo-14's open question answered by an error message.
  */
 export const USAGE =
-  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors]";
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins]";
 
 /**
  * Parse argv into the ticket file and its options.
@@ -1545,13 +1631,19 @@ export const USAGE =
  * needing a fourth arm here.
  *
  * @param {string[]} argv
- * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean, requireDistinct: boolean}}
+ * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean, requireDistinct: boolean, requireClaudePins: boolean}}
  */
 export function parseArgs(argv) {
   /** @type {string | null} */
   let file = null;
   /** @type {{rev: string | null, section: string | null, requireAnchors: boolean}} */
-  const options = { rev: null, section: null, requireAnchors: false, requireDistinct: false };
+  const options = {
+    rev: null,
+    section: null,
+    requireAnchors: false,
+    requireDistinct: false,
+    requireClaudePins: false,
+  };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -1675,7 +1767,9 @@ export function locateRecord(repo, file) {
 }
 
 function main() {
-  const { file, rev, section, requireAnchors, requireDistinct } = parseArgs(process.argv.slice(2));
+  const { file, rev, section, requireAnchors, requireDistinct, requireClaudePins } = parseArgs(
+    process.argv.slice(2),
+  );
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
@@ -1705,6 +1799,7 @@ function main() {
     checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev)), {
       record: relative,
       trees: makeTrees(repo),
+      requireClaudePins,
     }),
     declarations,
   );
@@ -1731,7 +1826,7 @@ function main() {
     // which is this branch's own thesis turning up inside the file arguing it.)
     // `unanchored` sets the width; the rest are padded.
     //
-    // **Two of these six labels are not their state's name**, and that has
+    // **Three of these seven labels are not their state's name**, and that has
     // caught a reader: `unresolvable` prints as `FAIL` and `verified` as `ok`,
     // so grepping this output for a state name silently drops the worst class
     // of all. It happened during repo-29's gate — a sweep counting
@@ -1740,12 +1835,14 @@ function main() {
     // confident. Grep the marks, not the states, or read the summary line, which
     // does name every state. `citations-gate.mjs` prints the state name instead,
     // which is the right choice there and one more reason not to grep across the
-    // two.
+    // two. `unpinned-volatile` prints `UNPINNED` for the same reason `moved`
+    // prints `MOVED`: upper case is always a failure, and this one always is.
     const mark = {
       "malformed-pin": "MALFORMED",
       verified: "ok",
       moved: "MOVED",
       unanchored: "unanchored",
+      "unpinned-volatile": "UNPINNED",
       unresolvable: "FAIL",
       unchecked: "unchecked",
       evidence: "evidence",
@@ -1863,6 +1960,16 @@ function main() {
         `a declaration naming the location stays stale. Write a pin as \`file.ts@<rev>:120 "a fragment"\` — the\n` +
         `rev before the colon, 7 to 40 hex characters of a commit this repository has. A shorthand takes the\n` +
         `pin of the citation it inherits its file from, and carries none of its own.`,
+    );
+  }
+  if (summary["unpinned-volatile"] > 0) {
+    advice.push(
+      `${summary["unpinned-volatile"]} citation(s) name a line of a .claude page with no pin, and\n` +
+        `--require-claude-pins is in force. That page is prose the loop edits every few sessions, so a bare\n` +
+        `line number moves silently the next time it does. Pin it to the commit it is true of, as\n` +
+        `\`file.ts@<rev>:120\`, or cite the page and the heading it sits under instead, with no line number.\n` +
+        `There is no evidence declaration for this: the fix is a pin, and a waiver standing in for it would\n` +
+        `be a rubber stamp.`,
     );
   }
   // Split, because the two have different repairs and the old single paragraph

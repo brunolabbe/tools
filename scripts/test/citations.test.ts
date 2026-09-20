@@ -816,6 +816,7 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
     section: null,
     requireAnchors: false,
     requireDistinct: false,
+    requireClaudePins: false,
   };
   expect(parseArgs(["--rev", "HEAD", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--rev", "HEAD"])).toEqual(expected);
@@ -825,6 +826,7 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
     section: null,
     requireAnchors: false,
     requireDistinct: false,
+    requireClaudePins: false,
   });
 });
 
@@ -842,6 +844,7 @@ test("parseArgs treats --require-anchors as a flag with no value", () => {
     section: null,
     requireAnchors: true,
     requireDistinct: false,
+    requireClaudePins: false,
   };
   expect(parseArgs(["--require-anchors", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--require-anchors"])).toEqual(expected);
@@ -2307,4 +2310,103 @@ test("a declaration is refused for a citation that another line of its file woul
   } finally {
     cleanup();
   }
+});
+
+/**
+ * **repo-52.** A `.claude/` page is prose the loop edits every few sessions, so
+ * a bare `file:line` into one is a claim about the page as it stood the day it
+ * was written and not as it will stand. `--require-claude-pins` is off by
+ * default — a run without it must come out exactly as it always has, `ok` and
+ * exit 0, which is the half of the contract every other `--require-*` flag here
+ * keeps.
+ */
+test("a bare citation into a .claude page is invisible without --require-claude-pins", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'Bare: `.claude/agents/x.md:1 "the mechanical row"`.\n',
+    { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
+  );
+  try {
+    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    expect(lax.status).toBe(0);
+    expect(lax.stdout).toMatch(/ok {9}\.claude\/agents\/x\.md:1/);
+    expect(lax.stdout).toMatch(summary(1, 0, 0, 0, 1));
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The flagged run reports the same citation as `unpinned-volatile`: printed as
+ * `UNPINNED` (the mark, not the state — see the docblock on `mark` above), fatal
+ * on its own bit, and with the reason naming the two repairs — a pin, or a
+ * heading instead of a line number.
+ */
+test("--require-claude-pins reports an unpinned .claude citation as unpinned-volatile", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'Bare: `.claude/agents/x.md:1 "the mechanical row"`.\n',
+    { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
+  );
+  try {
+    const strict = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(strict.status).toBe(EXIT.unpinnedVolatile);
+    expect(strict.stdout).toMatch(/UNPINNED {3}\.claude\/agents\/x\.md:1/);
+    expect(strict.stdout).toMatch(
+      /pin it as \.claude\/agents\/x\.md@<rev>:1 to the commit it is true of, or cite the page/,
+    );
+    expect(strict.stdout).toMatch(/1 unpinned-volatile — of 1 reference/);
+    expect(strict.stderr).toMatch(/--require-claude-pins is in force/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The same citation, pinned, passes under the flag — the half that proves the
+ * test above measures the missing pin and not the flag itself.
+ */
+test("a pinned citation into a .claude page passes --require-claude-pins", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'Bare: `.claude/agents/x.md:1 "the mechanical row"`.\n',
+    { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
+  );
+  try {
+    const head = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    fs.writeFileSync(file, `Pinned: \`.claude/agents/x.md@${head}:1 "the mechanical row"\`.\n`);
+    const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/ok {9}\.claude\/agents\/x\.md@/);
+    expect(result.stdout).not.toMatch(/unpinned-volatile/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * A `.claude` citation that is already `moved` or `unresolvable` keeps that
+ * state under the flag rather than being relabelled `unpinned-volatile` —
+ * `isUnpinnedVolatile` excludes every failing state on purpose, so a citation
+ * already flagged for a more specific reason is not spent on this one instead.
+ */
+test("isUnpinnedVolatile does not override an already-failing state", () => {
+  const moved = checkCitations(
+    [cite({ file: ".claude/agents/x.md", start: 1, end: 1, anchor: "not on this line" })],
+    () => ["the mechanical row", "second line"],
+    undefined,
+    { requireClaudePins: true },
+  )[0];
+  expect(moved?.state).toBe("moved");
+
+  const unresolvable = checkCitations(
+    [cite({ file: ".claude/agents/missing.md", start: 1, end: 1 })],
+    () => null,
+    undefined,
+    { requireClaudePins: true },
+  )[0];
+  expect(unresolvable?.state).toBe("unresolvable");
 });
