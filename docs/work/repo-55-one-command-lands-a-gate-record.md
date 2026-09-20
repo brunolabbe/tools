@@ -3,7 +3,7 @@ id: repo-55
 tool: repo
 title: One command splices a returned Review section into its ticket, checks it, and formats it
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -66,3 +66,42 @@ procedure.
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history.
+- 2026-09-20 — Built `scripts/review-record.mjs` and
+  `scripts/test/review-record.test.ts` (20 tests). Scope was narrowed by the
+  dispatch to those two files plus closing the ticket — `review-ticket` step 8
+  and `records.md` are explicitly deferred to the orchestrator's own commit
+  after this branch merges, so **Done when**'s fourth line ("`review-ticket`
+  step 8 names the script; the procedure it replaces is gone") is not done by
+  this branch. The replacement text for both is in the build report handed
+  back, not written here.
+
+  What Build step 2 had wrong: its first branch names the insertion anchor for
+  a brand-new review as "a `## Review` at line start with blank lines around
+  it", but a ticket has no `## Review` at that point at all —
+  `docs/01-TICKETS.md` says the section is "Absent until the work is
+  reviewed", and every ticket observed with one (e.g. `repo-15`) carries it
+  between `## Done when` and `## Log`. The Why section already says the real
+  anchor: "above `## Log` ... anchored on the heading form". Implemented that
+  way — the first review anchors on the ticket's own `## Log` heading, found
+  via `citations.mjs`'s `extractSections`, and a later `--gate` anchors on the
+  end of the existing `## Review` block (which lands at the same line in
+  practice, since `## Log` always follows `## Review` immediately).
+
+  Also found and worked around a formatter-invocation trap not in the brief:
+  `npx oxfmt <ticket>`, run literally, fetches an unpinned `oxfmt` over the
+  network whenever the ticket's own directory has no `node_modules` above it —
+  reproduced directly (`0.68.0` installed against this tree's pinned
+  `0.62.0`) — and separately, `node_modules/.bin/oxfmt` cannot be spawned
+  without a shell on Windows (`.claude/rules/testing.md`, and
+  `packages/core/test/oxfmt-ignore-patterns.test.ts` already carries the fix).
+  `review-record.mjs` resolves `oxfmt`'s own `bin` entry via `createRequire`
+  and runs it under `process.execPath`, matching that existing pattern, rather
+  than shelling out to `npx`.
+
+  Registered the new script in `scripts/test/tsconfig.json`'s `include` list,
+  per that file's own documented convention for a plain `.mjs` under test.
+
+  Gates: `npm run check` (exit 0); `npx vitest run
+scripts/test/review-record.test.ts` (20/20 passed); `npm test -- --project
+repo` (366/366 passed); full `npm test`, run because
+  `scripts/test/tsconfig.json` moved (176 files, 3172 tests, exit 0).
