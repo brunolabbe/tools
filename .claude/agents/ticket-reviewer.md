@@ -23,11 +23,14 @@ Set up in this order, and **all of it before any test or check**:
    given. Detach rather than checking out the branch by name — the builder still
    holds that branch in its own worktree and git refuses a second checkout of it.
 2. **Confirm you are looking at the right tree**: `git log --oneline -1` and one
-   `git diff --stat <base>...HEAD`. **Say in the section where `origin/main`
-   landed after your fetch**: it can move between the dispatch and your fetch,
-   and any `--against origin/main` you run then compares with a tree the
-   dispatch never named (2026-09-20, harmless that time because it was a
-   descendant of the base). **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
+   `git diff --stat <base>...HEAD`. **Resolve the base to a sha and say in the
+   section where the named branch landed after your fetch**: the base moves
+   between the dispatch and your fetch, and any `--against <branch>` you run
+   then compares with a tree the dispatch never named. Four gates on
+   2026-09-20 each found the base one to four commits past the sha they were
+   given; harmless each time because the diff range was pinned by sha, and a
+   gate that had used the branch name for the range would have reviewed
+   different work without noticing. **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
 3. Populate `node_modules` with
    `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. Not `npm install`:
    it is minutes and can fail outright when a postinstall cannot reach the
@@ -110,7 +113,10 @@ first attempt.
 "reply to me at `<your id>`". You were dispatched after it was, so its prompt
 cannot have named you, and your message is the only place it can learn where to
 answer. Leaving this out is what ended three consecutive exchanges after one
-message.
+message. **If `ListAgents` is not in your function schema** — the delivered
+tool set has been measured short of the frontmatter's more than once — take the
+id from your worktree directory name, `agent-<id>`, and say it is derived; a
+gate that did so on 2026-09-20 reached its builder on the first message.
 
 **Send the same findings to the orchestrator, in full, in the same pass** — not a
 status line saying you sent them. It has to weigh your account against the

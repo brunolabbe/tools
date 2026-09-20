@@ -552,6 +552,19 @@ tree stay exactly as they are**, and this is the decision, not a deferral:
   `grounding-fixtures.test.ts:29` for a test that is at line **53**, and the old
   script called that resolved.
 
+**A citation into any file under `.claude/` is written either pinned —
+`<file>@<rev>:<line>` with `<rev>` a `main` commit — or as the page and the
+heading it sits under, with no line number. A bare `file:line` into `.claude/`
+is a finding** (repo-52, 2026-09-20). Those pages are prose the loop edits
+every few sessions, and every insertion displaces every unanchored coordinate
+below it, silently: the gate reads `## Review` only, and an unanchored citation
+is `unanchored` whatever line it now lands on. One sweep of the rule pages
+paid three of its four gate rounds for that class and pinned 35 citations in
+eleven merged records by hand before repo-52 pinned the rest. The checker
+reports the bare form as `unpinned-volatile` under `--require-claude-pins`,
+off by default; a citation failing for a more specific reason keeps that
+state.
+
 **Anchor every citation in a record you are writing now.** That is the whole
 migration: the population that matters is the records still being read against
 live code, and they are the ones being written this week.

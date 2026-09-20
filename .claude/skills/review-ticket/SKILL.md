@@ -231,9 +231,18 @@ is the builder's alone.
 
    Two constraints on the fragment, both of which have bitten somebody here:
 
-   - **No `"` inside it.** The parser's anchor group admits none, so escaping
-     one truncates the fragment at the backslash and the citation reports
-     `moved`. Pick a quote-free substring.
+   - **No `"` inside it, and no backtick either.** The parser's anchor group
+     admits no `"`, so escaping one truncates the fragment at the backslash and
+     the citation reports `moved`. A backtick inside the fragment breaks the
+     cell's inline-code parsing, and the formatter then rewrites the text
+     around it — measured on a gate's own first draft, 2026-09-20. Pick a
+     substring free of both.
+   - **A citation into any file under `.claude/` is pinned or names a
+     heading, never a bare line number.** Those pages move every few sessions
+     and an unanchored coordinate into them is silently redirected by the next
+     edit; write `<file>@<rev>:<line>` with a `main` commit, or the page and
+     the heading (repo-52). `citations.mjs --require-claude-pins` reports the
+     bare form as `unpinned-volatile`.
    - **Quote enough of the line to be unique, and know that the line wrap bounds
      what you can quote.** `verified` means *some* occurrence of your fragment
      starts inside the range you named — not that only one does. In prose files
@@ -411,6 +420,10 @@ rebuilds the defect from the brief that still describes it.
 
 - **FAIL** — any high, or any acceptance line **unproven**.
 - **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
+- **unproven (scope)** — a line the dispatch removed from the branch's scope,
+  with the row naming who scoped it and where the work lands instead. It does
+  not force FAIL: three gates on 2026-09-20 each had to reconcile this by hand
+  when a builder was told to leave the page wiring to the orchestrator.
 - **PASS** — every acceptance line proven or verified, nothing above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
 
