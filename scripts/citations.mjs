@@ -1175,22 +1175,42 @@ const CLAUDE_PAGE = /^\.claude\/.*\.md$/;
  * `verified` or `unanchored` — the two states in which nothing here already
  * says the citation needs attention.
  *
+ * **Tested against `resolved`, not `file`** (repo-52, gate 1). `file` is the
+ * raw token a citation carries — for a shorthand, that is whatever it was
+ * written as (`:120`), never the page it means; only `resolved`, which
+ * `checkCitations` fills in after resolution, is the actual page. Reading
+ * `file` here made every shorthand `.claude` coordinate invisible to this
+ * check, verified before the fix — the flagged run over
+ * `repo-21-the-orchestration-skill-outgrew-its-loop.md` reported three
+ * shorthand coordinates into `reference/defect-shapes.md` as plain
+ * `unanchored` and never as `unpinned-volatile`.
+ *
  * **Deliberately excludes every failing state.** `unresolvable`, `moved` and
  * `malformed-pin` already name a more specific defect than "this could move",
  * and overriding them would spend the one word this state has on a citation
- * that is already flagged for a better reason. `unchecked` and `evidence` are
- * excluded too: the first has no file this could check with confidence (a
- * shorthand's guessed file, or a prose reference), and the second has already
- * been told, by a human, that its failure is deliberate — a fact this override
- * cannot see and must not talk over.
+ * that is already flagged for a better reason. `unchecked` is excluded too:
+ * it has no file this could check with confidence (a shorthand's guessed
+ * file, or a prose reference).
  *
- * @param {{file: string | null, rev?: string, state: string}} r
+ * **`evidence` is not excluded here, and cannot be — this docblock said
+ * otherwise until gate 1 read it against the code.** `checkCitations` runs
+ * this check before `applyDeclarations` ever assigns `evidence`, so no result
+ * this function sees carries that state; naming it as an exclusion described
+ * a branch nothing can reach. A declared-evidence `.claude` citation is
+ * overridden to `unpinned-volatile` the same as an undeclared one, and
+ * `applyDeclarations`'s own `FAILING` set is where that is actually refused —
+ * deliberately, on the same reasoning `isIndistinct`'s declaration refusal
+ * uses: the fix is a pin, one edit, and a waiver standing in for it would be
+ * a rubber stamp. See its docblock and the stale-declaration message it
+ * prints for this case.
+ *
+ * @param {{resolved: string | null, rev?: string, state: string}} r
  */
 export const isUnpinnedVolatile = (r) =>
   (r.state === "verified" || r.state === "unanchored") &&
   r.rev === undefined &&
-  r.file !== null &&
-  CLAUDE_PAGE.test(r.file);
+  r.resolved !== null &&
+  CLAUDE_PAGE.test(r.resolved);
 
 /**
  * Replace a citation's outcome with the finding repo-52 exists to raise: the
@@ -1242,7 +1262,19 @@ const SELF_CITATION =
 export const isIndistinct = (r) =>
   r.state === "verified" && (r.self === true || (r.occurrences ?? 1) > 1);
 
-/** The states a declaration may excuse — the ones that would otherwise fail. */
+/**
+ * The states a declaration may excuse — the ones that would otherwise fail.
+ *
+ * **`unpinned-volatile` is deliberately absent** (repo-52). Its fix is a pin,
+ * one edit at the citation itself, so a waiver standing in for it is the
+ * rubber stamp this whole mechanism refuses everywhere else — the same
+ * reasoning `isIndistinct`'s declaration refusal already states. Left
+ * excused, a declared-evidence `.claude` citation would report `evidence`
+ * despite failing on `unpinned-volatile`'s own bit, which is worse than
+ * refusing it: an exit code a reader has no reason to doubt while a citation
+ * fails under it. So it is refused instead, and the refusal is why the stale
+ * message below has a branch of its own for this state.
+ */
 const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
 
 /** A location as both a citation and a declaration spell it, pin included, for matching. */
@@ -1269,17 +1301,19 @@ const key = (file, start, end, rev) =>
  * excusable too: a prose reference is one of the shapes a reproduction is made
  * of, and it fails no run, but declaring it is how a record says it meant it.
  *
- * **Two things no declaration excuses** (repo-35). A `malformed-pin`, which is
- * named by nothing — a declaration naming its location reads as naming a
- * citation this record does not have. And **the cheap half of the boundary rule
- * between a declaration and a pin**: a `moved` citation whose anchor is on
- * another line of the file it was checked against. That tree verifies it, so it
- * is a citation some commit would verify — it wants repointing, or a pin to the
- * commit where it held — and a declaration standing in for that edit is refused
- * on the declaration bit while the citation goes on failing as `moved`. A
- * citation whose anchor is nowhere in the file may be either a rewritten file or
- * a fabricated anchor; telling those apart needs history, and is left to the
- * author.
+ * **Three things no declaration excuses.** A `malformed-pin` (repo-35), which
+ * is named by nothing — a declaration naming its location reads as naming a
+ * citation this record does not have. **The cheap half of the boundary rule
+ * between a declaration and a pin** (repo-35): a `moved` citation whose anchor
+ * is on another line of the file it was checked against. That tree verifies
+ * it, so it is a citation some commit would verify — it wants repointing, or a
+ * pin to the commit where it held — and a declaration standing in for that
+ * edit is refused on the declaration bit while the citation goes on failing as
+ * `moved`. A citation whose anchor is nowhere in the file may be either a
+ * rewritten file or a fabricated anchor; telling those apart needs history,
+ * and is left to the author. And `unpinned-volatile` (repo-52), for the same
+ * reason as the second: the fix is a pin, and `FAILING`'s own docblock says
+ * why leaving it excusable would be worse than refusing it outright.
  *
  * @param {ReturnType<typeof checkCitations>} results
  * @param {ReturnType<typeof extractDeclarations>} declarations
@@ -1311,7 +1345,11 @@ export function applyDeclarations(results, declarations) {
     .filter((d) => !used.has(key(d.file, d.start, d.end, d.rev)))
     .map((d) => {
       const at = key(d.file, d.start, d.end, d.rev);
-      const cited = results.some(
+      // The matching citation itself, not just whether one exists: the
+      // message below has to tell "does not fail" from "fails on a bit this
+      // mechanism refuses to excuse", and only the citation's own state says
+      // which (repo-52, gate 1).
+      const match = results.find(
         (r) =>
           r.file !== null &&
           r.state !== "malformed-pin" &&
@@ -1323,9 +1361,11 @@ export function applyDeclarations(results, declarations) {
         reason:
           why !== undefined
             ? `record line ${d.line}: "${d.text}" is declared evidence, but ${why} — that tree verifies it, so a declaration is not what it needs: repoint it, or pin it to the commit where it held`
-            : cited
-              ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
-              : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
+            : match?.state === "unpinned-volatile"
+              ? `record line ${d.line}: "${d.text}" is declared evidence, but it fails as unpinned-volatile, which no declaration excuses — pin it as file.ts@<rev>:120, or cite the page and the heading it sits under instead`
+              : match !== undefined
+                ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
+                : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
       };
     });
 

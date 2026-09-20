@@ -30,7 +30,7 @@ This is a second, structurally different route into the same failure shape
 `repo-20` already fixed once. `repo-20` closed the case where a reviewer built
 before checking out, because `ticket-reviewer.md`'s setup order put the build
 above the checkout. The fix there was a section reorder — order of operations,
-inside one worktree, on one file the agent controls (`ticket-reviewer.md:12`
+inside one worktree, on one file the agent controls (`ticket-reviewer.md@16d9874:12`
 "Get the branch under review before you measure anything"). This defect needs
 no misordering at all: a worktree-relative and a root-relative path can be
 issued back to back, in either order, and the second one silently reads a

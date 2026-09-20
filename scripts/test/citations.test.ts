@@ -2412,3 +2412,58 @@ test("isUnpinnedVolatile does not override an already-failing state", () => {
   )[0];
   expect(unresolvable?.state).toBe("unresolvable");
 });
+
+/**
+ * **repo-52, gate 1, med 2.** `isUnpinnedVolatile` used to test the citation's
+ * raw `file` token, which is never the page for a shorthand — that field
+ * carries whatever the shorthand was written as, and the page it means is
+ * only in `resolved`. A shorthand into a `.claude` page is common here
+ * (repo-25 is the whole reason shorthand is read at all), so this is not a
+ * corner case.
+ */
+test("--require-claude-pins catches a shorthand into a .claude page, not only an inline one", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'First: `.claude/agents/x.md:1 "the mechanical row"`, then `:2`.\n',
+    { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
+  );
+  try {
+    const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(EXIT.unpinnedVolatile);
+    expect(result.stdout).toMatch(/UNPINNED {3}:2 in \.claude\/agents\/x\.md/);
+    expect(result.stdout).toMatch(/2 unpinned-volatile — of 2 references/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-52, gate 1, med 3.** A declaration cannot excuse `unpinned-volatile`
+ * — `FAILING`'s own docblock says why — so a record that declares one anyway
+ * has to be told it still fails, in words that name the bit it fails on.
+ * Before this test could exist, `applyDeclarations` only knew "does not fail"
+ * and "is not cited", and printed the first of those for a citation that was
+ * failing in the very same run, at exit 72.
+ */
+test("a declaration cannot excuse unpinned-volatile, and the stale message says why", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'Bare: `.claude/agents/x.md:1 "the mechanical row"`.\n\n' +
+      "<!-- citations: evidence .claude/agents/x.md:1 -->\n",
+    { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
+  );
+  try {
+    const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(EXIT.unpinnedVolatile | EXIT.declaration);
+    expect(result.stderr).toMatch(
+      /is declared evidence, but it fails as unpinned-volatile, which no declaration excuses/,
+    );
+    expect(result.stderr).not.toMatch(/is declared evidence, but it does not fail/);
+  } finally {
+    cleanup();
+  }
+});

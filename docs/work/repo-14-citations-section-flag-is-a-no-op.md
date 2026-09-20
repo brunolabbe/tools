@@ -55,7 +55,7 @@ is never read.
 
 ### A second defect, found while reproducing the first
 
-`main()` picks the ticket file at `scripts/citations.mjs:226` with:
+`main()` picks the ticket file at `scripts/citations.mjs@fdafd1a:226` with:
 
 ```js
 const file = argv.find((a) => !a.startsWith("--"));
@@ -80,7 +80,7 @@ is the more valuable half of the ticket.
 
 Two smaller things worth knowing, both true today:
 
-- The usage string thrown at `scripts/citations.mjs:229` on a missing file argument reads
+- The usage string thrown at `scripts/citations.mjs@fdafd1a:229` on a missing file argument reads
   `usage: node scripts/citations.mjs <ticket-file> [--rev <sha>]` — it does
   **not** mention `--section`. The docblock and the error message already
   disagree with each other, which is a hint about which of them was intended.

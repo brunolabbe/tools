@@ -344,7 +344,7 @@ here **who had just written the model version down.** Move the statement into th
 table, leave a pointer — the same shape as Build 7.
 
 **Disambiguate the term while you are in there.**
-`reference/defect-shapes.md:41,63` uses "self-report" for a builder's claim about
+`reference/defect-shapes.md@cddbbb4:41,63` uses "self-report" for a builder's claim about
 its **work**, not about **itself**. One word doing two jobs is how a rule gets
 read as already-covered. Name them apart; do not merge them.
 
@@ -624,7 +624,7 @@ Checked out `6c0ee2e` via `git fetch origin && git checkout --detach 6c0ee2e`. `
 - **med** · Build 4 (90 of the Build section's 301 lines, by far the largest of 7 steps) does not follow the ticket's own instruction/measurement/narrative split — much of the "Inferred, not stated" block is story rather than instruction+citation. Recommend compressing to a citation plus the resulting bullets.
 - **med** · No general "an instruction lives in exactly one file, everywhere else is a pointer" rule is stated, despite `Packages` now spanning three files and Build 7 relying on exactly that principle for its own placement. Recommend one sentence, most naturally in Build 2.
 - **low** · "Corrected two commits later by `62cb999`" — `git rev-list --count a980d5e..62cb999` = 1, the very next commit.
-- **low** · "`citations.mjs` prints the rule that covers this" — that sentence is a source comment (`scripts/citations.mjs:730-732`), never printed at runtime. Substance unaffected.
+- **low** · "`citations.mjs` prints the rule that covers this" — that sentence is a source comment (`scripts/citations.mjs@fdafd1a:730-732`), never printed at runtime. Substance unaffected.
 - **low** · "`reference/history.md`, which already tells its reader..." — that sentence is in `SKILL.md`'s own Reference table, not inside `history.md`.
 - **low** · "Step 2's decision-grep bullets are 13 lines" — counted 15 (lines 55-69); flagged at low confidence in case a different span was meant.
 - **dropped** · none.
@@ -747,7 +747,7 @@ Measured before acting, all three confirmed:
 - **`repo-21` restated it five times** — at the pre-amendment lines 361, 383, 589,
   780, 796. A fourteenth row written as an instance would have been the sixth
   mention in one ticket.
-- `reference/defect-shapes.md:41,63` uses "self-report" for a **different** thing:
+- `reference/defect-shapes.md@cddbbb4:41,63` uses "self-report" for a **different** thing:
   a builder's claim about its _work_, not about _itself_. Genuine term collision.
   **Verified stable across both trees** — the record branch does not touch this
   file, so unlike the citation above these coordinates hold where the work happens.
@@ -803,7 +803,7 @@ sentence is identical on both. **This is defect 4's shape one level down** — r
 sentence, stale coordinates — and I caused it by checking against `main` while the
 rest of this ticket is pinned to the blocking dependency. Build 3 now cites the
 passage by its quoted opening instead of by number, which is what this ticket's own
-top-of-file rule already told me to do. `defect-shapes.md:41,63` was checked the
+top-of-file rule already told me to do. `defect-shapes.md@cddbbb4:41,63` was checked the
 same way and is byte-identical on both trees, so it keeps its numbers.
 
 **Verdict: settled at `319fe40`.** The reviewer re-derived every claim on a fresh
@@ -911,7 +911,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   it must not be edited to make a checker happy, and it is the very citation the
   dispositions table refutes, so repointing it would erase the finding it is
   evidence for. **Both are the carve-out the tool names and cannot check.** `main`'s `citations.mjs` **prints** the rule that covers
-  this on the `unresolvable` path — `scripts/citations.mjs:435-436`, inside a
+  this on the `unresolvable` path — `scripts/citations.mjs@fdafd1a:435-436`, inside a
   `process.stderr.write`, reproduced as the tail of the run above: _"a
   citation that is a finding's own evidence … must stay as written."_ The other
   five (`.claude/agents/builder.md@fdafd1a:22` ×3 and `.claude/agents/ticket-reviewer.md@cddbbb4:6`
@@ -1159,7 +1159,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
      real matches on stdout, **exit 2**.
   6. **`citations.mjs` no longer prints the carve-out sentence**, which this Log's
      third bullet predicted would go false when `#146` merged. Withdrawn in place
-     rather than rewritten: that bullet's "prints … `scripts/citations.mjs:435-436`"
+     rather than rewritten: that bullet's "prints … `scripts/citations.mjs@fdafd1a:435-436`"
      is false at `24e5bf7`. The sentence is a source comment on line 1320 and
      appears in no output — confirmed by running the tool over `SKILL.md`'s
      unresolvable state and reading the whole stderr trailer.
@@ -1177,7 +1177,7 @@ NFR: security n/a · performance n/a · reliability — improved (the CI-step bu
   exit 2 — 1 moved
   ```
 
-  <!-- citations: evidence .claude/agents/builder.md:21-25 -->
+  <!-- citations: evidence .claude/agents/builder.md:21-25, .claude/agents/builder.md:22 -->
 
   Reverted, and the same command exits **0** with `4 verified, 0 moved, 0
 unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
@@ -1253,7 +1253,7 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
 
 - **A citation I added and then removed, because it made two other references
   falsely resolve.** The exit-code correction above was first written as a real
-  `scripts/citations.mjs:662` citation. It verified — and it also became the
+  `scripts/citations.mjs@fdafd1a:662` citation. It verified — and it also became the
   _nearest preceding qualified citation_ for the two illustrative shorthands
   further down that page (_"the text is at `:94-95`, not `:93-94`"_), which
   promptly stopped failing and started resolving against `citations.mjs`, a file

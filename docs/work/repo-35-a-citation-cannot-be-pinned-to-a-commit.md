@@ -219,7 +219,7 @@ the third — and none of them should be settled by whoever picks this up.
   that counts every mention of the string, including backtick-quoted prose
   describing the syntax (repo-35's own text among them). Filtering to lines
   that actually match the checker's own `DECLARATION` regex
-  (`scripts/citations.mjs:248`) — i.e. lines that function as a declaration,
+  (`scripts/citations.mjs@fdafd1a:248`) — i.e. lines that function as a declaration,
   not lines that talk about one — narrows it to **10** real declaration
   comments across **5** files: `.claude/skills/orchestrate-tickets/reference/history.md`
   (2 lines, naming 4 citations), `.claude/skills/orchestrate-tickets/reference/records.md`
@@ -742,14 +742,14 @@ as a named cost when the question was put, and the owner took it knowingly.
 
 #### Where the dedupe goes, and why that decides how much wording changes
 
-`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs:826` — so
+`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs@fdafd1a:826` — so
 deduplicating inside it is safe, and it is the better of the two places:
 
 - **Dedupe inside `locateAnchor`** makes all six texts below true at once, and
   also improves the `moved` message, which prints `hits.slice(0, 3)` as "it is at
   _M_" and today can repeat a line number there.
 - **Dedupe only at the `occurrences` assignment** leaves `locateAnchor` returning
-  one entry per match, so `scripts/citations.mjs:595` stays wrong and must be
+  one entry per match, so `scripts/citations.mjs@fdafd1a:595` stays wrong and must be
   edited by hand.
 
 #### Six sites, each checked individually rather than waved through
@@ -759,22 +759,22 @@ recorded.** Each was read and judged against the post-change behaviour, because
 "the behaviour now matches what the text always claimed" is a claim to check, not
 a reason to skip checking:
 
-| Site                         | Text                                                                  | Printed? | After dedupe                     |
-| ---------------------------- | --------------------------------------------------------------------- | -------- | -------------------------------- |
-| `scripts/citations.mjs:118`  | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
-| `scripts/citations.mjs:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
-| `scripts/citations.mjs:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
-| `scripts/citations.mjs:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
-| `scripts/citations.mjs:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
-| `scripts/citations.mjs:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
+| Site                                 | Text                                                                  | Printed? | After dedupe                     |
+| ------------------------------------ | --------------------------------------------------------------------- | -------- | -------------------------------- |
+| `scripts/citations.mjs:118`          | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
+| `scripts/citations.mjs@fdafd1a:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
+| `scripts/citations.mjs@fdafd1a:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
+| `scripts/citations.mjs@fdafd1a:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
 
-**`scripts/citations.mjs:595` is the sixth, and it was in neither relayed list.**
+**`scripts/citations.mjs@fdafd1a:595` is the sixth, and it was in neither relayed list.**
 It is `locateAnchor`'s own contract, not a statement about `occurrences`, so
 whether it becomes true depends on where the dedupe is applied — it is the one
 site the behaviour change does **not** automatically repair. That is the whole
 reason the individual check was worth doing.
 
-**`scripts/citations.mjs:1424` prints the right word beside the right number after
+**`scripts/citations.mjs@fdafd1a:1424` prints the right word beside the right number after
 the change, and that is checkable rather than hopeful.** The number it
 interpolates is `r.occurrences`, and the predicate that fails a citation reads the
 same field in both places that judge it —
@@ -1308,8 +1308,8 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
 
   **1. There are six wording sites, not three and not five.** The page first
   recorded three; the dispatch corrected that to five and named two this branch had
-  not found, `scripts/citations.mjs:975` and the printed
-  `scripts/citations.mjs:1424`. Verified each against the source — and found a
+  not found, `scripts/citations.mjs@fdafd1a:975` and the printed
+  `scripts/citations.mjs@fdafd1a:1424`. Verified each against the source — and found a
   **sixth that neither relayed list contained**:
   `scripts/citations.mjs@64edce2:595` "Every line an anchor's text starts on, in a file.",
   which is `locateAnchor`'s own contract rather than a statement about
@@ -1320,7 +1320,7 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
   left quietly false. That is the answer to the instruction to check each site
   rather than assume.
 
-  **2. `scripts/citations.mjs:1424` is the reproduction, and it did harm on this
+  **2. `scripts/citations.mjs@fdafd1a:1424` is the reproduction, and it did harm on this
   branch.** It interpolates `r.occurrences` beside the word "lines", so for hits
   `[224, 224, 235]` it printed "anchor starts on 3 lines" for a fragment starting
   on two. That is the entire origin of the disagreement the previous entry records:
@@ -1536,8 +1536,8 @@ unchecked, 0 evidence — of 84 references, 38 pinned`.
   **Both texts are in scope, not just the behaviour**, and `Done when` #6 now says
   so in three parts. The source comment at `scripts/citations.mjs:144`, which
   justifies `applyDeclarations` refusing a waiver, and the remediation **printed at
-  the moment of failure** at `scripts/citations.mjs:1501` and
-  `scripts/citations.mjs:1502`. The second is the worse of the two — it is what an
+  the moment of failure** at `scripts/citations.mjs@fdafd1a:1501` and
+  `scripts/citations.mjs@fdafd1a:1502`. The second is the worse of the two — it is what an
   author reads while trying to repair the failure — and it was this branch's
   finding, not present in the report that raised the defect. The orchestrator
   verified both coordinates independently.
@@ -1650,7 +1650,7 @@ failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
   claim is in two places, and the second is the one an author actually reads: not
   only the source comment at `scripts/citations.mjs:144`, which justifies
   `applyDeclarations` refusing a waiver, but the **printed remediation** at
-  `scripts/citations.mjs:1502`, which tells the author at the moment of failure
+  `scripts/citations.mjs@fdafd1a:1502`, which tells the author at the moment of failure
   that "the fix is always available". The checker misdirects the repair it is
   asking for.
 
@@ -1938,7 +1938,7 @@ HEAD --`, diffed byte-identical against a pre-edit backup before continuing.
   **One disagreement with the dispatching session's own relayed numbers, both
   ways.** It relayed "22 are real declaration comments, across 8 files" for the
   option-C count; filtering by the checker's actual `DECLARATION` regex
-  (`scripts/citations.mjs:248`) rather than by substring match gives 10 across
+  (`scripts/citations.mjs@fdafd1a:248`) rather than by substring match gives 10 across
   5 — the relayed count still included prose lines that merely mention the
   string inside backticks. It also relayed "I measured 3" against this page's
   own "four declarations on `history.md`" (`Done when` #3); re-measured here as
