@@ -324,3 +324,5 @@ origin/orchestrate-skill-sweep` — clean over 104 records, 7 grandfathered,
   0 raised, exit 0. Diff for this entry: `scripts/test/preflight.test.ts` (the
   two redundant assertions) and this ticket file only — `scripts/preflight.mjs`
   untouched.
+
+- 2026-09-20 — Orchestrator, after the merge into `orchestrate-skill-sweep`: the "keeps only the last 40 lines" test failed once in six preflight runs on the merged branch, seeing "line 175" as the last of 200 lines. Cause is the child script's `process.exit(1)` racing its piped stdout, not the tool; both test children now set `process.exitCode = 1` and end on their own. Verified by re-running the test file; no gate, by the owner's budget decision.

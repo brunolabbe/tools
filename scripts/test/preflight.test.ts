@@ -182,15 +182,19 @@ test("parseMergeTreeConflicts reads a clean merge's single line as no conflicts"
  */
 test("runBuildCommand surfaces combined output on failure and never next-id.mjs's own wording", () => {
   expect(() =>
-    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exit(1)"]),
+    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exitCode = 1"]),
   ).toThrow(/from stdout/);
   expect(() =>
-    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exit(1)"]),
+    runBuildCommand(process.execPath, ["-e", "console.log('from stdout'); process.exitCode = 1"]),
   ).not.toThrow(/partial file list/);
 });
 
 test("runBuildCommand keeps only the last 40 lines of a long failure", () => {
-  const script = "for (let i = 0; i < 200; i++) console.log('line ' + i); process.exit(1);";
+  // `process.exitCode`, not `process.exit(1)`: a child that exits explicitly can
+  // end before its piped stdout drains, and under load this test then saw
+  // "line 175" as the last line of 200 (measured once in six preflight runs
+  // on 2026-09-20). Letting the process end on its own flushes the pipe.
+  const script = "for (let i = 0; i < 200; i++) console.log('line ' + i); process.exitCode = 1;";
   let message = "";
   try {
     runBuildCommand(process.execPath, ["-e", script]);
