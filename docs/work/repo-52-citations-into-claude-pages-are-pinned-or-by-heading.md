@@ -122,7 +122,7 @@ One deviation from what was asked, disclosed rather than silent: the orchestrato
   alongside the line it already covered, rather than left merely disclosed:
   gate 1 found an accepted remedy sitting unused one line away. Same
   treatment does not apply to the declaration line and the citation it
-  originally excused (`.claude/agents/builder.md@fdafd1a:21-25`), which stay bare by
+  originally excused (`.claude/agents/builder.md:21-25`), which stay bare by
   the mechanism's own design — a declaration names a location, it does not
   carry one. `git grep -nE '\.claude/[^@ ]*\.md:[0-9]'` over both roots now
   returns only those three lines. Verified every new pin resolves
@@ -209,7 +209,7 @@ when` line. Verdicts and repairs, each reproduced before acting on it:
     rather than report and stop. Pinned 6 (repo-20 ×2, repo-21 ×3, repo-43
     ×1, same `git blame`-on-the-record-line method as the original pass); left
     2 bare, both in this ticket's own Log above, both already-disclosed
-    unpinnable demonstrations (the `builder.md@fdafd1a:22`/`:21-25` pair). New test:
+    unpinnable demonstrations (the `builder.md:22`/`:21-25` pair). New test:
     `scripts/test/citations.test.ts` "`--require-claude-pins` catches a
     shorthand into a .claude page, not only an inline one".
   - **med 3, accepted the behaviour, fixed the two things describing it
@@ -234,7 +234,7 @@ when` line. Verdicts and repairs, each reproduced before acting on it:
     in the original entry rather than by editing history.
   - **low 2, accepted** — repo-21 line 219 had the same remedy line 1174
     already used and wasn't using it. Extended the existing declaration at
-    line 1180 to also name `.claude/agents/builder.md@fdafd1a:22` (one comma, no new
+    line 1180 to also name `.claude/agents/builder.md:22` (one comma, no new
     line, so nothing below it shifts) rather than adding a second comment —
     verified the citation now reports `evidence` and the record's exit code
     drops from `3` to `1` (the one remaining is the pre-existing, unrelated
