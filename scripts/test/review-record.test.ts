@@ -584,3 +584,55 @@ test('locateInsertedBlock bounds a gate\'s block to the end of "## Review", past
   expect(blockText).toContain("### A heading inside gate 2's own body");
   expect(blockText).not.toContain("## Log");
 });
+
+// ---------------------------------------------------------------------------
+// Round 3 — a ticket-reviewer gate on repo-55, gate 2 (2026-09-20): the
+// refusal message must not advise a bare stash in a checkout with a shared
+// stash stack, and an untracked ticket must not slip the dirty guard.
+// ---------------------------------------------------------------------------
+
+test("the dirty-ticket refusal advises committing, never stashing", () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    fs.appendFileSync(ticketAbs, "\n- another uncommitted note.\n");
+    const section = writeSectionFile(
+      dir,
+      "section.md",
+      '## Review\n\n### Gate 1 — 2026-09-20\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    const result = runCli(dir, [ticketAbs, section]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/commit them first/);
+    // The stash stack in this checkout is shared across worktrees and
+    // concurrent sessions, so a bare `git stash` is unsafe here — the advice
+    // must never point at it.
+    expect(result.stderr).not.toMatch(/stash/iu);
+  } finally {
+    cleanup();
+  }
+});
+
+test("refuses to run when the ticket is not tracked by git yet, and touches nothing", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const untrackedProse = "An untracked ticket, never added.";
+    const untrackedAbs = path.join(dir, "docs", "work", "untracked-1.md");
+    fs.writeFileSync(untrackedAbs, baseTicket(untrackedProse));
+    // Deliberately never `git add`-ed — a diff against HEAD for this path
+    // would report clean, which is the trap this guard exists to close.
+
+    const section = writeSectionFile(
+      dir,
+      "section.md",
+      '## Review\n\n### Gate 1 — 2026-09-20\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    const result = runCli(dir, [untrackedAbs, section]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/is not tracked by git yet/);
+    // Untouched — refused before ever writing the splice.
+    expect(fs.readFileSync(untrackedAbs, "utf8")).toBe(baseTicket(untrackedProse));
+  } finally {
+    cleanup();
+  }
+});

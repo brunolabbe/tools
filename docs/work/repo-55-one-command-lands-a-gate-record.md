@@ -147,3 +147,19 @@ repo` (366/366 passed); full `npm test`, run because
   Gates: `npm run check` (exit 0); `npx vitest run
 scripts/test/review-record.test.ts` (25/25 passed); `npx vitest run
 --project repo` (371/371 passed, 8 files).
+
+- 2026-09-20 — Round 3, folding two `low` findings from gate 2 (Opus,
+  `ebd05d2...7db4d52`) per the orchestrator's instruction, ahead of splicing
+  either gate's record: the dirty-ticket refusal now says "commit them
+  first" rather than "commit or stash them first" — this checkout's stash
+  stack is shared across worktrees and concurrent sessions, so the advice
+  must not point at it — and the script now refuses to run at all when the
+  ticket is not tracked by git yet (`git ls-files --error-unmatch`), because
+  `git diff --quiet HEAD -- <path>` reports a clean tree for a path `HEAD`
+  has no record of, which let an untracked ticket slip the round 2 dirty
+  guard entirely and land a failed splice with no `HEAD` copy to restore
+  from. Two new tests (27 total), each watched failing first against its own
+  fix reverted.
+
+  Gates: `npm run check` (exit 0); `npx vitest run
+scripts/test/review-record.test.ts` (27/27 passed).

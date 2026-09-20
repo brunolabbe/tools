@@ -32,10 +32,12 @@
  * between the write and the restore can never leave a half-spliced ticket
  * looking like a clean one; the working tree's own history is the only copy
  * trusted. That restore is only safe because the script refuses to run at all
- * when the ticket already has uncommitted changes against `HEAD` (a
- * ticket-reviewer gate, repo-55): without that guard the restore would
- * silently discard whatever was uncommitted, not only the splice — trading a
- * stale-memory hazard for a lost-work one rather than closing it.
+ * when the ticket is not tracked by git yet, or already has uncommitted
+ * changes against `HEAD` (both a ticket-reviewer gate, repo-55): without the
+ * first guard an untracked ticket has no `HEAD` copy to restore from at all,
+ * and without the second the restore would silently discard whatever was
+ * uncommitted, not only the splice — trading a stale-memory hazard for a
+ * lost-work one rather than closing it.
  *
  * **The formatter runs as `oxfmt`'s own `bin` entry under `process.execPath`,
  * never through `npx` or `node_modules/.bin/oxfmt`.** `testing.md` names the
@@ -361,6 +363,26 @@ function main() {
   const ticketRepoRoot = repoRootFor(ticketAbsolutePath);
   const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
 
+  // Refuse before touching the file at all when the ticket is not tracked yet
+  // — a ticket-reviewer gate, repo-55. `git diff --quiet HEAD -- <path>`
+  // below reports a clean tree for a path HEAD has no record of at all, which
+  // is indistinguishable from "committed and unchanged" to that command; an
+  // untracked ticket would sail past the dirty check, splice, fail its check,
+  // and then have no HEAD copy to restore from — the exact failure the dirty
+  // check exists to prevent, reached through the one path it cannot see.
+  const tracked = spawnSync(
+    "git",
+    ["-C", ticketRepoRoot, "ls-files", "--error-unmatch", "--", relative],
+    { encoding: "utf8" },
+  );
+  if (tracked.error) throw tracked.error;
+  if (tracked.status !== 0) {
+    throw new Error(
+      `${relative} is not tracked by git yet; commit it first. A failed check restores this file ` +
+        `from HEAD, which has no copy of an untracked path to restore.`,
+    );
+  }
+
   // Refuse before touching the file at all when the ticket already carries
   // uncommitted changes against HEAD — the restore below overwrites the whole
   // file with HEAD's content on a failed check, which would silently discard
@@ -376,7 +398,7 @@ function main() {
   if (dirty.error) throw dirty.error;
   if (dirty.status === 1) {
     throw new Error(
-      `${relative} has uncommitted changes against HEAD; commit or stash them first. A failed check ` +
+      `${relative} has uncommitted changes against HEAD; commit them first. A failed check ` +
         `restores this file from HEAD, which would discard anything not committed — not only the splice.`,
     );
   }
