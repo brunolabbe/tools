@@ -49,6 +49,12 @@ tools there rather than in a path it invents per round.
 - The next multi-round gate records the wall time of its second round beside
   #281's ten minutes, in this Log.
 
+## Review
+
+**Gate: WAIVED** — 2026-09-20 · waived by the owner, Bruno Labbé, on the budget decision that replaced the whole-branch gate with mechanical checks at 2% of the weekly limit
+
+Page-only chore built by the orchestrating session on `orchestrate-skill-sweep`; no reviewer ran against it. Verified by the orchestrator with `npm run check`, the citations gate against `origin/main`, and `node scripts/preflight.mjs` on the merged branch, whose review check reported this ticket as done without a record — which is what this section answers. The owner chose to record the waiver rather than dispatch a narrow gate or merge against a red check.
+
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history,

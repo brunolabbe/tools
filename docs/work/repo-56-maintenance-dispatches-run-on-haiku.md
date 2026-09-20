@@ -55,6 +55,12 @@ maintenance in the prompt so the agent knows to stop on a judgement call.
   `haiku`, recorded in this Log with their token figures beside the
   twenty-first session's.
 
+## Review
+
+**Gate: WAIVED** — 2026-09-20 · waived by the owner, Bruno Labbé, on the budget decision that replaced the whole-branch gate with mechanical checks at 2% of the weekly limit
+
+Page-only chore built by the orchestrating session on `orchestrate-skill-sweep`; no reviewer ran against it. Verified by the orchestrator with `npm run check`, the citations gate against `origin/main`, and `node scripts/preflight.mjs` on the merged branch, whose review check reported this ticket as done without a record — which is what this section answers. The owner chose to record the waiver rather than dispatch a narrow gate or merge against a red check.
+
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history.
