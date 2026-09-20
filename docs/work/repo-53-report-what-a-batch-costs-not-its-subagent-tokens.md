@@ -132,6 +132,23 @@ accurate and not mine to resolve; this section was still spliced in by
 hand, via `scripts/citations.mjs` and `npx oxfmt`, per the reviewer's
 "keep doing what you have done."
 
+Folding the low that added `all-synthetic.jsonl` inserted two lines and one
+test above the ten `scripts/test/agent-cost.test.ts` coordinates gate 4's
+table cited against `871bbd9`, moving all ten by exactly one or thirteen
+lines. `scripts/citations.mjs --require-anchors --require-distinct-anchors`
+caught all ten as `MOVED` before this commit and `0 moved` after; every
+coordinate in the gate 4 table above is re-resolved against this commit's
+own tip, not `871bbd9`, since folding the fix is what moved them. Every
+changed line number, named as old line number to new line number so
+neither reads as a citation on its own: line 76 became line 77, line 90
+became line 91, line 112 became line 113, line 150 became line 151, line
+170 became line 171, line 176 became line 177, line 242 became line 255,
+line 248 became line 261, line 266 became line 279, and line 325 became
+line 338. `scripts/agent-cost.mjs`'s line 228 (gate 4's one non-test
+citation) was not touched this round and needed no change. Gates 1
+through 3's citations are prose only (shas and file names, no
+`file:line`), so none of them needed re-resolution.
+
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history,
