@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunolabbe/tools/compare/downloader-v0.6.0...downloader-v0.7.0) (2026-09-20)
+
+
+### Features
+
+* **downloader:** grab a preview frame from the stream when the page names no image (dl-56) ([#267](https://github.com/brunolabbe/tools/issues/267)) ([af734fe](https://github.com/brunolabbe/tools/commit/af734fee93f50fe91579b6c9378281f90028f907))
+
+
+### Fixes
+
+* **downloader:** fill size, bitrate, codecs and audio for bare progressive rows (dl-64) ([#259](https://github.com/brunolabbe/tools/issues/259)) ([6c0c58b](https://github.com/brunolabbe/tools/commit/6c0c58bb4380a98f6e770bc53f7ebee05365e462))
+* **downloader:** let a cancel from the UI reach the server instead of answering INTERNAL (dl-65) ([#260](https://github.com/brunolabbe/tools/issues/260)) ([20c8fd1](https://github.com/brunolabbe/tools/commit/20c8fd1e82907030072cf491797e81a52c3803b2))
+* **downloader:** let cancelling a waiting job reach canceled, not stall at queued (dl-59) ([#263](https://github.com/brunolabbe/tools/issues/263)) ([92764af](https://github.com/brunolabbe/tools/commit/92764af405e0889191e65a3afd3ea38cb3136654))
+* **downloader:** let PLAY_SCRIPT and the metadata audio fallback pierce shadow roots (dl-68) ([#275](https://github.com/brunolabbe/tools/issues/275)) ([d5187c0](https://github.com/brunolabbe/tools/commit/d5187c02aeeae2f3d220f6fe335998525c004a7c))
+* **downloader:** let the surface click reach a player inside an open shadow root (dl-61) ([#265](https://github.com/brunolabbe/tools/issues/265)) ([160a49b](https://github.com/brunolabbe/tools/commit/160a49b821f70782de26f54d33d86813d393a66c))
+* **downloader:** mask the request URL before classifying yt-dlp's stderr (dl-67) ([#277](https://github.com/brunolabbe/tools/issues/277)) ([283dc71](https://github.com/brunolabbe/tools/commit/283dc71046f5b68d2be7b8834679da51f4a315d5))
+* **downloader:** redact every logged URL, not just a failed probe's page URL (dl-58) ([#269](https://github.com/brunolabbe/tools/issues/269)) ([fb15bc9](https://github.com/brunolabbe/tools/commit/fb15bc9e12600db3fe3683803ac916b666997f0b))
+* **downloader:** refuse the native IPv6 special-purpose ranges (dl-63) ([#273](https://github.com/brunolabbe/tools/issues/273)) ([477f5b8](https://github.com/brunolabbe/tools/commit/477f5b84ba1e5855a4be0e5ab47a0d6629941cb7))
+* **downloader:** report a body Fastify cannot parse as BAD_REQUEST, not INTERNAL (dl-66) ([#278](https://github.com/brunolabbe/tools/issues/278)) ([2e5bd9f](https://github.com/brunolabbe/tools/commit/2e5bd9f4add056e6c7d8f30d12ed06c44107b75c))
+
 ## [0.6.0](https://github.com/brunolabbe/tools/compare/downloader-v0.5.0...downloader-v0.6.0) (2026-09-16)
 
 
