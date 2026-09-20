@@ -2,7 +2,7 @@
 name: orchestrate-tickets
 description: Run several tickets to merged pull requests at once by dispatching builder and reviewer subagents, gating each ticket before it opens a PR. Use when asked to work through a batch of ready tickets, to "keep the board moving", or to act as orchestrator over parallel work — "pick up the ready tickets", "run dl-15 and pl-25 together", "continue working, dispatch agents". Not for a single ticket you can build yourself.
 disable-model-invocation: true
-allowed-tools: Bash(npm run status*) Bash(gh pr list*) Bash(gh pr view*) Bash(gh pr diff*) Bash(git fetch*) Bash(git log*) Bash(git worktree list) Bash(git show*) Bash(gh run list*)
+allowed-tools: Bash(npm run status*) Bash(gh pr list*) Bash(gh pr view*) Bash(gh pr diff*) Bash(gh pr checks*) Bash(git fetch*) Bash(git log*) Bash(git worktree list) Bash(git show*) Bash(git diff*) Bash(git merge-tree*) Bash(gh run list*) Bash(gh run view*) Bash(node scripts/citations-gate.mjs*)
 ---
 
 # Orchestrating a batch of tickets
@@ -31,6 +31,7 @@ you are there.
 | [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (steps 4 and 8) |
 | [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3, 6 and 10) |
 | [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 9) |
+| [reference/model-pairing.md](reference/model-pairing.md) | Why the pairing table below reads as it does — the trials and the owner decision behind it. Never needed to dispatch |
 | [reference/history.md](reference/history.md) | Appending step 12's row, or looking up the session behind a rule here — read it only if you are revising this skill |
 
 ## The loop
@@ -38,6 +39,18 @@ you are there.
 1. **Intake.** `gh pr list` first, then `npm run status -- --ready`: a ticket file
    says `ready` until something merges. Read each candidate's opening section, not
    its status line, and `git fetch` again immediately before you dispatch.
+
+   **The board is the working tree, and `git fetch` does not move it.**
+   `npm run status` reads the ticket files in the checkout you run it in, and a
+   shared checkout sits wherever the last session left it. Before trusting the
+   board, compare `git log --oneline -1 HEAD` with `origin/main`; if they differ,
+   the board is unread — read ticket state with `git show origin/main:<path>`
+   instead, and do not reset the shared checkout while `ListAgents` shows a live
+   peer, because the fix for your staleness is their reverting index. Measured
+   2026-09-08: a tree eight commits behind returned three `ready` tickets, two of
+   which had merged hours earlier, and two Opus builders were dispatched against
+   finished work. The fetch had printed the ref movement in the session's first
+   command.
 
 2. **Map the seams, then ask which batch** — never pick it yourself. Dispatch
    `subagent_type: "seam-mapper"` over the candidate ids; reading the tickets
@@ -54,6 +67,10 @@ you are there.
 4. **Gate each finished branch** — `subagent_type: "ticket-reviewer"`, spawned by
    **you, never the builder**: the checked thing must not pick its checker. **Pass
    the gate's model explicitly, paired per ticket** — `standard` gates on `opus`.
+   **And never put ship authority in a gate prompt**: a builder opens a PR only on
+   authority in its own dispatch or a direct message from you, and both builders
+   handed it through their reviewer correctly declined, at a resume each
+   (2026-09-12, 2026-09-13).
 
 5. **The reviewer sends its findings to the builder itself**, as one batched
    message, **and the same findings to you in full** — not a status line saying it
@@ -71,32 +88,79 @@ you are there.
    it sends, and `SendMessage` wakes the other. Sideways wakes work (2026-09-03);
    upward wakes are disputed, so spend one `ListAgents` rather than assuming.
 
+   **A message to a running agent is not delivered until something shows it
+   was.** A reply queued "for delivery at its next tool round" was never read
+   three times (2026-09-13 twice, 2026-09-14): the agent completed with its
+   branch unpushed and nothing announced the drop. After sending to a running
+   agent, confirm with `ListAgents` and with the artefact the message should
+   produce — a push, a commit — and resend if neither appears.
+
 7. **Both report to you when they are done**, separately — two accounts of one
    exchange by two models. **Ask each for its method, not only its verdict**:
    describing *how* you checked surfaces what describing *what* you concluded cannot.
 
-8. **You accept, or you send it back. The work is not done until you do** — four
+8. **You accept, or you send it back. The work is not done until you do** — five
    checks, not a re-review. Does each report say what was *run*, and where each
    quote is? Do the two accounts describe the same exchange?
 
    Does every `Done when` line carry a verdict naming a spec file and line rather
-   than "covered"? Is there an open decision in either? **You judge whether they
-   are finished, not whether they were right**: send back the line lacking evidence.
+   than "covered"? Is there an open decision in either? **Does the population the
+   report says it read equal the population that exists?** A gate told to
+   enumerate read 39 of 114 pins and reported PASS (2026-09-13), one session after
+   another gate had sampled under the same instruction; the instruction alone does
+   not hold, so the count sits with whoever accepts the report. **You judge whether
+   they are finished, not whether they were right**: send back the line lacking
+   evidence.
 
 9. **The builder opens the PR**, commits the gate record, and posts the reviewer's
    report to the PR thread. **The PR body names both models — which built and
    which gated** — because nothing else in the artefact does.
 
+   **Three things you check before granting the ship.** First, the record is on
+   the branch: `git show <branch>:<ticket-path> | grep '^## Review'` prints a
+   line. The stalled-exchange row below uses the same command as a stall test; it
+   is also this precondition, and `repo-29` opened a pull request carrying five
+   gate rounds and no record because nobody ran it as one (2026-09-08). Second,
+   the ship conditions include `node scripts/citations-gate.mjs --against
+   origin/main` exiting 0 — CI's `check` job runs it, and any branch that moves a
+   line an older gate record cites fails it (#228 went red on it, 2026-09-13).
+   Third, the title's type against the paths: read
+   `git diff --name-only origin/main...<branch>` for `tools/` paths, because
+   release-please routes by path, and a `feat` or `fix` title on a branch whose
+   only `tools/` paths are markdown cuts a changelog line and a version for that
+   tool where `docs` and `chore` do not (2026-09-12, 2026-09-14).
+
 10. **Hold every worktree — the reviewer's as well as the builder's — until the
     ticket is finished.** "The exchange is over" cannot be evaluated: tested twice
     on 2026-09-03, both times it resumed. Announce any early removal to that agent.
 
-11. **Check the merge landed what it was supposed to.** Not polling — one look,
-    after the fact. See _After a merge_.
+11. **Scratch-merge the batch, then check the merge landed what it was supposed
+    to.** Before any branch in the batch merges, run
+    `git merge-tree --write-tree <headA> <headB>` over every pair of open batch
+    heads, and the citations gate on a scratch merge of all of them. The seam map
+    reads briefs and cannot see the gate-record pins a branch writes mid-build:
+    in two batches every merge conflict was in a gate record more than one branch
+    pinned, and none was in source (2026-09-12, 2026-09-14). Then one look, after
+    the fact, not polling. See _After a merge_.
 
-12. **Append this session's row to [reference/history.md](reference/history.md)**, in
-    the schema that page fixes. Nothing forces it, and **its last field earns the
-    page** — what the skill got wrong (2026-09-02: six, all only because it was asked).
+12. **Append this session's row to [reference/history.md](reference/history.md),
+    and change the rules it names.** The row follows the schema that page fixes,
+    headed by date and base sha rather than by ordinal — two sessions appending
+    from one base both compute the same ordinal (2026-09-18). Nothing forces it,
+    and **its last field earns the page** — what the skill got wrong (2026-09-02:
+    six, all only because it was asked). **Ask every agent for it in its
+    dispatch**, not at close-out: three sessions running asked late or not at all,
+    and the field came back thinner each time (2026-09-13 to 2026-09-18).
+
+    **A defect that stops at the history entry has not been fixed.** Every item in
+    that field either edits the page that holds the rule, in the same pull
+    request, or files a ticket carrying the reproduction. A row "scoped to this
+    file alone" is the failure this step used to produce: between 2026-09-12 and
+    2026-09-18 eight rows carrying about seventy items landed and no rule page
+    changed, so each batch paid again for defects the previous one had recorded.
+    The cheap test is whether the rule's page changed in the same commit
+    (2026-09-07). Decided by the owner on 2026-09-20, against the rows' own
+    precedent.
 
 **The PR is not the end of gating; the merge is.** A branch that has already shown
 its corrections can be wrong may open its PR under conditional ship authority *and*
@@ -110,8 +174,8 @@ take one narrow gate afterwards, scoped to the corrections. Not the default.
 **Read each ticket's `difficulty` off `npm run status -- --json` and pair it here.**
 **Never rate an unrated ticket yourself**; you have not read it, which is the point
 of step 2. The builder column is two rows of one table —
-`.claude/agents/builder.md:23` "| `standard` | `sonnet` |" and
-`.claude/agents/builder.md:24` "| `mechanical` | `haiku` |". The gate column is
+`.claude/agents/builder.md:20` "| `standard` | `sonnet` |" and
+`.claude/agents/builder.md:21` "| `mechanical` | `haiku` |". The gate column is
 yours to compute, because `.claude/agents/ticket-reviewer.md:6` "model: sonnet" is
 a **default, not an answer**, and it is right on two rows of four.
 
@@ -176,19 +240,35 @@ gate earlier still, so **you are the only participant alive at merge time who is
 not writing to the branch.** One call per branch about to land:
 
 ```
-gh run list --branch <branch> --limit 6 --json workflowName,status,conclusion,headSha,event
+gh pr checks <n>
+gh pr view <n> --json headRefOid,statusCheckRollup
 ```
 
-`--json` rather than the table, because the failure this guards against is reading
-a run list by eye. **Name the sha in whatever you conclude** — your look decays the
-same way a record's does (2026-09-04: a relayed status claim went stale between
-being taken and being read).
+**Not `gh run list`, which this page prescribed until 2026-09-20.** It reports
+*workflow* conclusions, and three real failures hide behind a green workflow: a
+`continue-on-error` job (this repo's `windows-latest, informational` leg), a
+`changes`-gated matrix that was `skipped` on a markdown-only push and still reads
+`success`, and a check run that is not an Actions workflow at all — GitHub's
+default CodeQL setup, which `gh run list` cannot see with any flag. An
+orchestrator used the weaker command for a whole batch and nearly closed with two
+failures unseen (2026-09-18), after `skipped` had been recorded as reading green
+in each of the three sessions before. Read a failing check's reason with
+`gh run view <id> --log-failed`, and say which of the two CodeQL checks you mean,
+since `CodeQL` and `codeql` both exist here. `--json` rather than the table,
+because the failure this guards against is reading a list by eye. **Name the sha
+in whatever you conclude** — your look decays the same way a record's does
+(2026-09-04: a relayed status claim went stale between being taken and being
+read).
 
-**After the merge, one more call: `gh run list --branch main --limit 10`, and read
-the `push` rows.** Green PR checks say nothing about `push`-triggered jobs — they
-are different events with different jobs, and a job that only runs on `push` to
-`main` can fail on every merge while every pull request stays green, because nobody
-is looking at `main`.
+**After the merge, one more look at `main`:
+`gh run list --branch main --limit 10 --json databaseId,event,conclusion,headSha`,
+then `gh run view <id> --json jobs` for each `push` row, reading job conclusions.**
+Green PR checks say nothing about `push`-triggered jobs — they are different
+events with different jobs, and a job that only runs on `push` to `main` can fail
+on every merge while every pull request stays green, because nobody is looking at
+`main`. A `push` run `cancelled` by the next merge landing on top of it reported
+no `test` conclusion at all, and `main` stayed red on Windows for most of a day
+(2026-09-07).
 
 ## Decisions
 
@@ -221,7 +301,11 @@ the decision turns on a fact nobody has, put the fact into a gate prompt — nam
 as blocking a decision you owe the user — and ask once, with the number attached.
 **A running builder can produce that measurement too, and the line to hold is
 committing, not measuring**: ask for the reproduction freely, and say explicitly
-that nothing is committed or pushed while either decision is open (2026-09-04).
+that nothing is committed or pushed while either decision is open (2026-09-04) —
+**except the gate record, which is committed whatever is open.** A hold with no
+carve-out left `dl-58`'s gate-1 record uncommitted, the next gate raised the
+missing record as a med finding, and three rounds went to a record everyone
+already held; the same hold lost gate 4's record on the same ticket (2026-09-17).
 
 **"Accept the baseline" is rarely zero work.** An option that reads *do nothing*
 usually leaves the ticket's unconditional steps standing — read the Build for the
@@ -239,7 +323,7 @@ and say explicitly that concluding both gates are wrong is an available answer
 (2026-08-24 — the builder proposed a third reading neither gate held, and a further
 gate was still needed to say what kind of claim it was).
 
-### Relaying: fourteen costumes of one mistake
+### Relaying: sixteen costumes of one mistake
 
 **Compressing something the receiving agent needed in full.** Each row is one
 instruction; where the shape has a worked example it is in
@@ -258,9 +342,11 @@ instruction; where the shape has a worked example it is in
 | A fix relayed without its **mechanism** | Ask *"why did the argument not transfer?"*, not for a corrected number. [reference/defect-shapes.md](reference/defect-shapes.md)'s re-derive-list rule exists because a relay asked for one; its builder did not volunteer it | 2026-08-24 |
 | A finding accepted **unreproduced** | Make the builder reproduce it first — not to doubt the reviewer, but to put the builder in contact with the gap. It also catches the reviewer being wrong, which happens | 2026-08-24 |
 | A **described** artifact | Paste anything the builder must *commit*, *post* or *quote*. A description is not a smaller version of a record; a builder asked to commit one it could not find correctly stopped, and the round was lost | 2026-09-01 |
-| A result read **at a glance** | `cancelled` is a *completed* run and a glance counts it as green. Take the measurement with `--json`; four glance-readings turned up in one batch, in prose every time and in citations never | 2026-09-05 |
+| A result read **at a glance** | `cancelled` and `skipped` are *completed* runs and a glance counts either as green — a `changes`-gated matrix that never ran reads `success` at workflow level. Take the measurement with `--json` and read jobs, not runs; four glance-readings turned up in one batch, in prose every time and in citations never, and `skipped` recurred in three consecutive sessions after it was first recorded | 2026-09-05, 2026-09-07 |
 | A **disposition** marked "accepted" | A disposition is a relay, and "accepted" is the word that hides an unmeasured one. **Gate a disposition by measuring what it claims changed**, not by checking the finding is marked closed | 2026-09-05 |
 | A claim an agent makes **about itself** | Its tools, its model, its lifecycle are self-reports, and a self-report is checked from outside — see the table below for the one-call check per field | 2026-09-03 |
+| An **option or cost you construct yourself** | A claim you are making, and it needs a measurement or an explicit "unverified" exactly as a relayed one does. An orchestrator described a closure as needing a flag that would fail the branch; the builder had already built one that did neither, reverted it on the declined mechanism, and the reversal cost two rounds | 2026-09-08 |
+| A **recommendation on an unmeasured premise** | A gate's recommendation conditioned on a fact nobody measured is not a recommendation. Measure the condition, or hand the decision up unrecommended — one such premise was measured false before it reached the owner | 2026-09-17 |
 
 **A claim an agent makes about itself — its tools, its model, its lifecycle — is a
 self-report, and is checked from outside.** It bites at dispatch, at gate and at
@@ -340,9 +426,12 @@ which is the only place the duplicated work is visible at all.
 
 Three caveats, all measured 2026-09-05/06:
 
-- **`subagent_tokens` are cumulative per agent**, so a resume is folded into the
-  figure rather than added to it. Summing an agent's successive reports
-  double-counts it.
+- **`subagent_tokens` are usually cumulative per agent**, so a resume is folded
+  into the figure rather than added to it, and summing an agent's successive
+  reports double-counts it. **Not always**: a builder reported 516,783, was
+  resumed, and reported 400,121 (2026-09-12); a gate reported 202,260 then
+  196,927 (2026-09-14). The mechanism is not known. Record every figure you
+  observe per agent, and say which one the table carries.
 - **Some agents never report a total** — a final turn ending in a `SendMessage`
   delivers no usage block. Write `not reported`, **do not omit the row and do not
   estimate the cell**, and state the observed total *and* how many agents are

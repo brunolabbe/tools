@@ -41,6 +41,15 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   five in the third. **Know when you cannot give it:** a FAIL whose fix is real
   work needs a real check, and that branch will cost you a round no matter how the
   relay is written. Budget for it rather than trying to write around it.
+
+  **Running the conditions is mechanical; writing them is not.** Derive each
+  condition from the words of a `Done when` line, not from the command that seems
+  to stand for it: a condition demanding a clean whole-file citation check stood
+  for a line that was only about indistinct anchors, two deliberate pre-existing
+  failures made it exit 3, and the round was lost (2026-09-13). And every set of
+  ship conditions includes `node scripts/citations-gate.mjs --against
+  origin/main` exiting 0, which is what CI's `check` job runs and what two
+  branches in one batch failed or would have (2026-09-13).
 - **Batch every finding from a gate into one relay.** Two relays of one finding
   each cost double for the same result.
 - **Choose the gate count from what the branch risks escaping** — a shared
@@ -104,6 +113,27 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   and the reproduction **is** the verification. In the second session that builder
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
   no reviewer at all.
+
+### Name a floor for a mechanism ticket
+
+A ticket whose deliverable is a mechanism hardens without a natural floor,
+because the mechanism is also the thing every gate attacks. `repo-29` shipped an
+enforcement gate and each round found a smaller hole in the enforcement itself:
+seven builder rounds and five gates on a branch landable since round two, 1.24 M
+tokens across its two agents (2026-09-08). `repo-38` ran six rounds and 683 k on
+a two-sentence prose fix, four of them on defects the repairs introduced
+(2026-09-09). Every finding was real and reproduced by both sides; each batch
+still paid about a third of itself for one branch.
+
+**A round cap is the wrong instrument.** `dl-58` ran six gates, and two
+credential leaks appeared only after the first three highs were fixed; a
+three-gate cap would have shipped one (2026-09-17). So the dispatch names a
+**severity floor** instead: *below `med`, disclose the finding in the record and
+do not open a round; a further round only for `high`, or for a `med` a `Done
+when` line depends on.* Put it in the gate prompt and in the relay, and put the
+same floor in the builder's ship conditions so both sides stop at the same line.
+Decided by the owner on 2026-09-20. The floor is the dispatcher's to set per
+ticket; `med` is the default, not the rule.
 
 ### Slice a blocked ticket
 

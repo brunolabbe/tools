@@ -65,6 +65,12 @@ Two of the ten tickets `npm run status -- --ready` returned had no Packages line
 three of the twelve that read `status: ready`. A map built from headers alone would
 have missed a live collision.
 
+**And no map can see gate-record pins, because those are written mid-build.** In
+two batches every merge conflict was in a gate record more than one branch had
+pinned, none was in source, and the seam map had reported zero overlap
+(2026-09-12, 2026-09-14). The check that can see them is `git merge-tree` over
+the finished heads, which is step 11 of the skill page.
+
 **Your own batch's work is not available to your own builders.** Obvious stated
 plainly, and easy to lose after a few hours of shipping: every builder branches
 from `origin/main`, so a capability one of your branches just added does not exist
@@ -101,6 +107,14 @@ one builder discovered its mutation harness was broken, warning the other gate
 mid-flight cost almost nothing and it folded the check into work it was already
 doing. Banking it would have cost a round.
 
+**Cheap is not delivered.** A message queued to a running agent was reported
+never read three times (2026-09-13 twice, 2026-09-14): the agent completed with
+its branch unpushed and nothing announced the drop. After sending to a running
+agent, confirm with `ListAgents` and with the artefact the message should
+produce — a push, a commit — and resend if neither appears. The resume figure
+above is not a constant either: one measured wake cost 25,443 tokens
+(2026-09-12).
+
 **So is the scratchpad, and a collision there can reach outward.** Every agent in a
 session writes to one shared scratch directory, and left to themselves they choose
 `test.txt`, `section.md`, `verify.py`, `tail.md`. In the fourth session one builder
@@ -115,6 +129,17 @@ the dispatch prompt, and do it in the paths you hand out yourself), and **write 
 file you are about to publish immediately before publishing it**, never reusing a
 path written earlier in the round. The same applies to the gate records you stage
 for a builder to commit — name them for their branch and gate number.
+
+**Branch refs are shared the same way, and `git checkout -B` is a reset of
+whatever already holds the name.** Worktrees isolate files, not refs. A
+records-only dispatch took a branch name from stale context, set up with `-B`,
+and reset a live sibling's checked-out branch to `origin/main` mid-build; the
+four commits survived only because they were already pushed, and a branch that
+loses local-only commits this way looks exactly like a branch that never
+committed (2026-09-18). So the orchestrator names every branch it dispatches,
+records-only dispatches included, after `git branch --list <name>` and
+`git ls-remote --heads origin <name>` both print nothing, and a builder's setup
+refuses an existing name rather than reusing it.
 
 **Ticket ids are an unlocked shared namespace**, and it is wider than your batch:
 parallel builders, other sessions on the same machine, and unmerged branches all

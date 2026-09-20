@@ -76,6 +76,16 @@ came from asking. None would have been recorded by a session that merely
 succeeded** — and five earlier sessions had the same signal available and did not
 capture it.
 
+**And since 2026-09-20 the row is not the deliverable; the rule change is.**
+Every item in the last field edits the page that holds the rule in the same pull
+request, or files a ticket carrying the reproduction — `SKILL.md` step 12 says
+so. Eight rows between 2026-09-12 and 2026-09-18 carried about seventy items and
+changed no rule page; the sweep of 2026-09-20 folded them in, and each rule it
+touched carries the item's date as its measurement. **Head new rows by date and
+base sha** — `## Session 2026-09-20 — base fdafd1a` — not by ordinal. The ordinals
+below stand as written; two sessions appending from one base both computed
+"twenty-third" (2026-09-18), which is what the scheme change is for.
+
 ### Citations on this page are historical, and four of them are pinned
 
 An entry's citations are a claim about the tree that session read, and
@@ -1366,7 +1376,7 @@ cannot absorb.
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **3** taken from `ready` to a gated branch, none merged at close: `repo-15` (#182, tip `a2c5b0a`), `dl-44` (#183, tip `b94f9bf`), `repo-16` (#184, tip `14703b5`) — every tip and PR number re-checked here with `git ls-remote --heads origin` and `gh pr view --json headRefOid`, all three open against `main`. Around them: **one ticket closed without being built** (`repo-26`, `status: done` on `repo-15`'s branch, closed as already built by `repo-22`/#161 — confirmed on `main`, where `36be01b` carries it), **one filed** (`repo-32`, `status: needs-decision`, no `## Review` heading, on `repo-16`'s branch), and **two held tickets amended on a sibling's branch** (`dl-46` on `dl-44`'s, `repo-29` on `repo-16`'s). Both amendments re-verified additive-only by `--numstat` (+24/−0 and +46/−0) and frontmatter-identical by hunk position — the added hunks open at 105 and 140, and at 387 and 653, none of them inside a nine-line frontmatter block. **Board at intake: 7 `ready`, 1 withheld**, re-measured at the base with `npm run status -- --ready` — `dl-44`, `dl-45`, `dl-46`, `repo-15`, `repo-16`, `repo-26`, `repo-29` ready, `repo-31` withheld as `needs-decision`; all four `depends_on` blockers among them (`dl-40`, `dl-41`, `dl-43`, `repo-13`) read `done`. **All three built tickets carry `difficulty: hard`, and all three were built on Opus and gated on Sonnet**, stated in each pull request body — the first batch to run entirely under `repo-27`'s pinned `hard` row, `.claude/agents/builder.md:25` "a contract, a security claim, a seam with reach" |
+| `tickets` | **3** taken from `ready` to a gated branch, none merged at close: `repo-15` (#182, tip `a2c5b0a`), `dl-44` (#183, tip `b94f9bf`), `repo-16` (#184, tip `14703b5`) — every tip and PR number re-checked here with `git ls-remote --heads origin` and `gh pr view --json headRefOid`, all three open against `main`. Around them: **one ticket closed without being built** (`repo-26`, `status: done` on `repo-15`'s branch, closed as already built by `repo-22`/#161 — confirmed on `main`, where `36be01b` carries it), **one filed** (`repo-32`, `status: needs-decision`, no `## Review` heading, on `repo-16`'s branch), and **two held tickets amended on a sibling's branch** (`dl-46` on `dl-44`'s, `repo-29` on `repo-16`'s). Both amendments re-verified additive-only by `--numstat` (+24/−0 and +46/−0) and frontmatter-identical by hunk position — the added hunks open at 105 and 140, and at 387 and 653, none of them inside a nine-line frontmatter block. **Board at intake: 7 `ready`, 1 withheld**, re-measured at the base with `npm run status -- --ready` — `dl-44`, `dl-45`, `dl-46`, `repo-15`, `repo-16`, `repo-26`, `repo-29` ready, `repo-31` withheld as `needs-decision`; all four `depends_on` blockers among them (`dl-40`, `dl-41`, `dl-43`, `repo-13`) read `done`. **All three built tickets carry `difficulty: hard`, and all three were built on Opus and gated on Sonnet**, stated in each pull request body — the first batch to run entirely under `repo-27`'s pinned `hard` row, `.claude/agents/builder.md@fdafd1a:25` "a contract, a security claim, a seam with reach" |
 | `agents` / `dispatches` | **7** agents — 1 seam-mapper, 3 builders, 3 reviewers — / **11** dispatches-and-wakes: 7 dispatches plus 4 orchestrator `SendMessage` wakes. Supplied; nothing in the tree records either half |
 | `builder rounds` | **8 across 3 builders** — `repo-15` 2, `repo-16` 2, `dl-44` 4 — supplied. **Zero caused by orchestrator error**, which is the half the schema asks for. It is the **first zero** among the sessions that stated an attribution at all — seventh 1, eighth 1, ninth 2, tenth 2, and the eleventh stated none. `dl-44`'s fourth round was the Windows CI defect below: structural, not a relay failure. One orchestrator error did harden a gate finding into an instruction, and cost no round only because it rode an existing relay — see _Orchestrator errors_ |
 | `gates` | **3, all returned findings**, every verdict read out of `git show` on the branch rather than from the account. `repo-15` **PASS**, 3 low, none changing a `Done when` verdict. `repo-16` **CONCERNS** — its own defect hunt at medium returned **0**, and the concern is one acceptance line unprovable before merge: the dismissal step has never run, and the live alert state is unreachable because `gh api` is denied. `dl-44` **CONCERNS → PASS**, 2 med both closed plus 1 low, the final record re-verifying at `992ac2e` |
@@ -1447,7 +1457,7 @@ the line that already covers them.
    `changes` job gated the unit matrix off and `gh run view --json jobs` reads
    `test  skipped`. A workflow-level `success` whose matrix job never ran is
    indistinguishable from a green one in `gh run list`. The glance-reading row
-   at `.claude/skills/orchestrate-tickets/SKILL.md:261` "and a glance counts it as green"
+   at `.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:261` "and a glance counts it as green"
    still names only `cancelled`. **What is new is not the mechanism** — the entry
    directly above this one records exactly it, on the same workflow, from the
    previous batch — **it is that recording it changed nothing.** A defect written
@@ -1611,7 +1621,7 @@ branches, and the correction is narrow.** `repo-36`'s frontmatter reads
 `difficulty: standard` on its own branch, and `repo-34` is filed `standard` too.
 The claim holds *at intake* — neither existed when the board was read — and the
 outcome was fine: `repo-36` was built on Opus, which is above what
-`.claude/agents/builder.md:23` "Its gate is" asks for. What the claim hides is
+`.claude/agents/builder.md@fdafd1a:23` "Its gate is" asks for. What the claim hides is
 that its gate was **Sonnet**, where that row pairs a `standard` ticket with an
 Opus gate. **A ticket filed and built in the same dispatch cannot be governed by
 the rating it is given**, because the rating is written after the model is
@@ -1669,7 +1679,7 @@ to this file alone.
    `a1c2a83`, the branch's first commit, that grep matches nothing. It is the
    same discriminator the entry two above records catching the same shape,
    holding unaltered for the second consecutive session —
-   `.claude/skills/orchestrate-tickets/SKILL.md:157` "Empty means the exchange is still open".
+   `.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:157` "Empty means the exchange is still open".
 5. **A gate record's own citations are this batch's most-measured defect, and
    the one anchored round is the only round in which the mechanism caught
    anything.** #190 exists to record it. On `repo-36`'s record the checker
@@ -1700,7 +1710,7 @@ to this file alone.
    markdown-only and `ci.yml`'s `changes` job gates the matrix off. The entry
    above already argued that a defect stopping at the history entry has not been
    fixed, and named the glance-reading row at
-   `.claude/skills/orchestrate-tickets/SKILL.md:261` "and a glance counts it as green"
+   `.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:261` "and a glance counts it as green"
    as still saying only `cancelled`. It still
    does. **The new datum is the third instance in three consecutive sessions**,
    which retires the reading that the first two were coincidence.
@@ -2200,7 +2210,7 @@ and the ticket's own text rather than accepted.
    override and gives `hard` and `absent` none, so two different difficulty
    classes collapse onto one pairing under an Opus orchestrator — found while
    checking the account's "every pair differs," not named by it.**
-   `.claude/agents/builder.md:23 "Its gate is"` states `standard`'s Sonnet
+   `.claude/agents/builder.md@fdafd1a:23 "Its gate is"` states `standard`'s Sonnet
    builder is gated by Opus specifically because the default would gate a
    Sonnet build with Sonnet; `:25 "a contract, a security claim, a seam with reach"`
    pins `hard`'s builder to Opus but states no gate override, and an unrated
@@ -3564,7 +3574,7 @@ one has to read after it.
   ticket at 31ba6c9 has no `## Review` section … A merge from this commit
   loses the FAIL that caused the round" — the round the account attributes
   to the orchestrator's own hold instruction.
-- `.claude/skills/orchestrate-tickets/SKILL.md:224 "that nothing is committed"`
+- `.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:224 "that nothing is committed"`
   carries no carve-out anywhere near it for a gate record that is itself only
   reachable through a commit — confirming the gap item 1 names.
 - `dispatching.md`'s "Tell the reviewer to send a `## Review` block for the
@@ -3587,7 +3597,7 @@ one has to read after it.
 - `.claude/agents/builder.md` — the file behind this dispatch's own system
   prompt — never mentions `CLAUDE.md`'s "Handing back" section or the
   `# Done` heading anywhere across its 296 lines (`grep -n` finds nothing);
-  `.claude/skills/orchestrate-tickets/SKILL.md:312 "Close the batch with"`
+  `.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:312 "Close the batch with"`
   states the rule instead. So a subagent whose instructions are
   drawn only from `builder.md` has no textual source, inside that file, for
   the prohibition it is nonetheless expected to follow.
@@ -3779,7 +3789,7 @@ and `codeql` (this repo's own `security.yml` job), and `test
 **The `gh run list --branch` blind spot behind item 8 below is reproduced
 here, not only reported.** Re-running the exact command
 `SKILL.md`'s own `## After a merge` section names —
-`.claude/skills/orchestrate-tickets/SKILL.md:179 "gh run list --branch"` —
+`.claude/skills/orchestrate-tickets/SKILL.md@fdafd1a:179 "gh run list --branch"` —
 against `dl-56-grab-a-preview-frame`, filtered to the commit named in the
 account (`6035bca`), returns exactly four workflow-level rows, all
 `success`: `pr-title`, `security`, `downloader`, `CI`. Neither `CodeQL` (a

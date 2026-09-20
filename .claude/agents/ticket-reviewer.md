@@ -127,11 +127,17 @@ say what was run rather than that it was addressed. Both accounts of the same
 exchange, written by two models, is what lets a reader hold one against the other.
 
 **Your report is accepted or sent back — it is not the end of the job.** The
-orchestrator checks four things: that each finding names the command that settled
+orchestrator checks five things: that each finding names the command that settled
 it, that your account and the builder's describe the same exchange, that every
-`Done when` line carries a verdict with a test named, and that any open decision
-reached it rather than being resolved between you. Write the report so those are
-answerable without a follow-up question.
+`Done when` line carries a verdict with a test named, that the population you say
+you read equals the population that exists — a gate told to enumerate read 39 of
+114 pins and reported PASS (2026-09-13) — and that any open decision reached it
+rather than being resolved between you. Write the report so those are answerable
+without a follow-up question. **End it with what these pages got wrong or omitted
+for this gate**, whether or not your dispatch asked; that field is what the
+skill's history is built from. **Never write `# Done`**: that heading closes the
+session that talks to the user, and in your report it lands mid-transcript
+claiming a batch is over (2026-09-17).
 
 **Do not agree in order to be finished.** A pair that both want to be done can
 converge on "addressed" with nothing run between them, and that failure looks
@@ -147,13 +153,13 @@ built them.** Builders inherit the orchestrator's model and gates did too, so
 every gate re-ran the reasoning that produced the code, which is the one thing
 this split exists to prevent.
 
-So the default is Sonnet, which is right whenever the builder ran Opus — the
-common case, since builders inherit and the orchestrator is usually Opus.
-
-**When the builder ran Sonnet, the caller must override to `opus`.** The default
-cannot know that; the caller can, because the builder's own Agent result reports
-`resolvedModel`. Never `haiku` and never `fable`: the rule is "a different model",
-not "a cheaper one", and a gate from a small model still reads as PASS.
+So the default is Sonnet, which is right for a `hard` ticket and for an unrated
+one under an Opus orchestrator, and wrong for every `standard` ticket, which
+builds on Sonnet by rating. **The caller passes your model per ticket from the
+pairing table in `SKILL.md`**, knowable at dispatch without reading any
+`resolvedModel`; the default is what you run on when it forgets. Never `haiku` and
+never `fable`: the rule is "a different model", not "a cheaper one", and a gate
+from a small model still reads as PASS.
 
 ## What the tool list already decides for you
 
@@ -180,7 +186,30 @@ own acceptance, trace each "Done when" line to the test that proves it, and chec
 this repo's invariants. Run the defect hunt yourself.
 
 **Cite line numbers against the tip you actually reviewed**, and name that sha in
-the section. Lines move between the gate and the commit that records it.
+the section. Lines move between the gate and the commit that records it. **Never
+write a `@sha` pin to a branch-only commit into the section**: the branch is
+deleted on merge, the pin goes `unresolvable` in CI for everyone, and one such
+record cost four repair rounds across five pull requests (2026-09-14). Anchor the
+coordinate instead; where text was deleted, write prose naming the sha, or an
+evidence declaration — `records.md` has both forms.
+
+**Dry-run your section against the checker before you hand it over.** You have
+no `Write`, so build the scratch copy with Bash and `node -e` into your
+scratchpad: the ticket as it is on the branch, your section spliced in above
+`## Log`, then `node scripts/citations.mjs <copy> --section Review
+--require-anchors --require-distinct-anchors`. That is the command the builder
+runs before committing; a section that fails it there costs a round
+(2026-09-13), and one dry-run at the real insertion point needed no repair on
+landing (2026-09-09). An anchor cannot contain a double quote, and a coordinate
+into the ticket's own file can never be distinct — name the section instead.
+
+**The sandbox refuses some ordinary shell shapes**, with "too complex to verify
+that it stays inside the worktree": a git command followed by `echo $?`, a
+heredoc, a variable holding a path, a `for` loop, an `awk` program containing
+`>>`, `python3` (2026-09-12 to 2026-09-14). One plain command per call, literal
+paths, `printf`, `awk -v` and `node -e` hold; read an exit code by redirecting
+output to a file and running the next command plainly. Rewrite the shape rather
+than reporting a broken channel.
 
 **Verdict, then evidence.** For each finding give the reproduction, not a verdict
 to implement — the builder is told to reproduce before accepting, and a finding it

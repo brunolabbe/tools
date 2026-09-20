@@ -52,6 +52,19 @@ Nothing but this, and keep it under about forty lines:
   contradicts its own opening section, a `depends_on` that names something
   already merged, a Build section that describes work a recent commit already
   did. State these as findings, not corrections.
+- **Which gate records each candidate is likely to move lines in.** A branch
+  that edits a file an enforced `## Review` section cites fails the citations
+  gate until that record is repointed, and two branches repointing one record
+  conflict on it. Name the record and the citing line where you can find them
+  with `git grep` over `docs/work` and `tools/*/docs/work`. Say plainly that the
+  pins a branch writes mid-build are invisible to you — in two batches every
+  merge conflict was in a gate record, none in source, and the map had reported
+  zero overlap — and that `git merge-tree` over finished heads is the
+  orchestrator's check for those.
+- **Ordering constraints inside a Build**, as distinct from open decisions. An
+  open decision blocks a build; an ordering constraint — "put X to the owner
+  *before* the parser is written" — permits it and binds the sequence, and a
+  builder dispatched without it built the parser first (2026-09-09).
 - **What you could not determine**, named as such.
 
 Do not include ticket summaries, restatements of the briefs, or your opinion of

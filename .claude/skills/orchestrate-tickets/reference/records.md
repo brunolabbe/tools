@@ -49,6 +49,13 @@ discarded. So:
   the opposite with equal confidence. Swapping one unsupported claim for another is
   the same failure in different clothes, and it is the pull after a retraction.
 - Every finding is listed, including those needing no change.
+- **A fix that lands after the verbatim section is committed does not edit the
+  section.** The section stays as a description of the sha it reviewed; the
+  builder adds a dated post-gate Log entry naming the new sha and saying the
+  record above describes the earlier one; and a citation the fix deleted
+  outright cannot be repointed — it goes back to the reviewer for an amended
+  bullet, marked in place as amended at the new sha, because a finding's words
+  are the reviewer's to change (2026-09-13, 2026-09-18).
 - **A record cannot assert that its own branch is green, and this is structural
   rather than a lapse.** *"Any commit that corrects a status claim invalidates the
   status claim"* — measured 2026-09-04: a Log said "every completed run on the
@@ -125,18 +132,34 @@ discarded. So:
   cannot be right from one that says the wrong thing, and either from a record
   whose failures are deliberate.
 
-  **A record and a Log passage pin to different commits, and swapping them breaks
-  one of them.** This repo squash-merges, so a branch sha does not survive the
-  merge — pin a record to it and the `--rev` dangles for everyone who reads the
-  ticket afterwards. The obvious correction, pinning to the base instead, is
-  worse: a gate record cites the tests the branch *introduced*, and those lines
-  do not exist at the base, so every citation fails. So:
+  **A gate record never pins to a branch-only sha.** This repo squash-merges and
+  deletes the branch, so a pre-squash sha is unreachable from a fresh clone once
+  the branch is gone, and `citations-gate.mjs` then fails every pin as
+  `unresolvable` — on `main` and on every open pull request at once. Measured
+  2026-09-14/15: 16 pins to `dl-51`'s own gate-fix commit, `main` red, four
+  repair rounds across five pull requests. The rule this paragraph replaced said
+  to pin to the sha reviewed, "reachable afterwards through the ticket's pull
+  request"; it was measured false — CI checks out with `fetch-depth: 0`, which
+  fetches branches and tags and never `refs/pull/*`. **A checkout that once
+  fetched the branch still holds the object until gc, so the check passes
+  locally and fails in CI**; a fresh clone, or a squash plus
+  `git gc --prune=now`, is the only valid test, and `git branch -r --contains
+  <sha>` printing nothing is the tell. Pinning to the base is no better: a record
+  cites the tests the branch *introduced*, which do not exist there. So:
 
-  - **A gate record pins to the sha it reviewed**, and says in its header that
-    this is a pre-squash branch sha, kept because it is the only tree where those
-    citations resolve, reachable afterwards through the ticket's pull request.
+  - **A gate record cites the tip it reviewed by coordinate with an anchor, and
+    is re-resolved as the last action before commit.** After the squash those
+    lines are on `main` under the same content, so an unpinned, anchored
+    citation survives the merge where a pin does not.
+  - **Where a later commit deleted the cited text outright, rewrite the citation
+    as prose naming the reviewed sha, or declare it as evidence.** `dl-58`'s
+    owner decision D4(b) is the worked example: pins dropped from the record in
+    favour of prose plus declarations (2026-09-17).
   - **A Log passage citing pre-existing code pins to a sha that survives** — the
-    base, or a `main` commit.
+    base, or a `main` commit — as before.
+  - A tag on the reviewed commit would also keep pins reachable, exit 0 in the
+    same simulation; the owner chose prose (2026-09-15). Do not re-derive the tag
+    remedy without re-asking.
 
   **A committed record can be spliced by a later edit, and nothing here catches
   it.** `review-ticket` spends several paragraphs protecting "the builder commits

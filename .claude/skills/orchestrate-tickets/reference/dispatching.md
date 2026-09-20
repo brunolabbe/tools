@@ -21,6 +21,13 @@ What only you can supply, and what every builder prompt therefore carries:
 - **The ticket, and the base.** Say the base explicitly — `origin/<base>` —
   especially for a stacked branch. The agent knows *how* to set up; only you know
   what it is building and what it is building on.
+- **The branch name, checked free.** `git branch --list <name>` and
+  `git ls-remote --heads origin <name>` both empty before you write it into the
+  prompt. Refs are shared across every worktree of this repo, and a builder's
+  setup refuses an existing name rather than reusing it; a records-only dispatch
+  left to pick its own took a live sibling's branch from stale context and reset
+  it (2026-09-18). Name the branch for every dispatch, records-only ones
+  included.
 - **The sibling that carries the handover.** The agent definition cannot know
   which sibling ticket's Log holds the context for this one. You do, from intake.
 - **What is already settled**, if this is a resume: which findings are addressed,
@@ -28,7 +35,16 @@ What only you can supply, and what every builder prompt therefore carries:
 - **Ship authority, or not.** The default is stop before the PR. On the *last*
   relay, replace it with conditional ship authority — see [sizing.md](sizing.md).
   This is per-dispatch by definition and is the single highest-value line in the
-  prompt, because it removes an entire round.
+  prompt, because it removes an entire round. **It goes in the builder's own
+  dispatch or a direct message from you, never through a gate prompt**: authority
+  a reviewer pastes into its message is not authority under `builder.md`, both
+  builders that received it that way declined, and each cost a resume
+  (2026-09-12, 2026-09-13).
+- **What the skill got wrong**, asked in the dispatch. `history.md`'s schema
+  says to ask every agent at dispatch; three consecutive sessions asked at
+  close-out or not at all, and the field came back thinner each time
+  (2026-09-13 to 2026-09-18). One sentence in the prompt: *end your report with
+  what these pages got wrong or omitted for this ticket.*
 - **The fold-in exception, out loud.** The agent is told to implement the Build
   section and not widen it. Say in the prompt that if the work in front of it
   makes some *other* small, already-specified piece of work free, it should fold
@@ -341,6 +357,25 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
   another round."*
 - **Forbid delegation.** No subagents.
 - **Fix nothing.** The gate reports; the builder fixes.
+- **Return a `## Review` section as text for the builder to commit verbatim**,
+  in those words. A gate prompt that asked for findings in full and not for the
+  section got narrative back, and the record was missing from the ticket until
+  the builder noticed at close-out (2026-09-17). The rule sits under _Send the
+  findings in full_ above; this is where the prompt has to carry it.
+- **Dry-run the section against the checker before handing it over.** Splice it
+  into a scratch copy of the ticket at the real insertion point, above `## Log`,
+  and run `node scripts/citations.mjs <copy> --section Review --require-anchors
+  --require-distinct-anchors`. A reviewer that did this unprompted handed over a
+  section needing no repair (2026-09-09); one that did not cost the builder a
+  round on two citations (2026-09-13).
+- **Say which failure the positive control must plant.** "Prove your harness" is
+  satisfiable by a control that moves a citation out of range, when the
+  prohibited failure is a repoint that still resolves; a gate did exactly that
+  and passed the failure it existed to catch (2026-09-12).
+- **Name the severity floor** for a mechanism ticket — _Name a floor for a
+  mechanism ticket_ in [sizing.md](sizing.md).
+- **Never carry ship authority** — the builder bullet above.
+- **Ask what the skill got wrong**, as for the builder.
 
 Ask for: `PASS / CONCERNS / FAIL`, gates reproduced independently, findings
 most-severe-first with `file:line` and a concrete failure scenario each, and
@@ -388,7 +423,10 @@ in this order:
 The obvious economy — "three gates then ship" — is wrong. In the reference session a
 fourth gate caught a process document contradicting itself in adjacent sentences,
 and another fourth gate caught three mediums including a UI element stuck permanently
-on for every healthy job. A cap ships those.
+on for every healthy job. A cap ships those; so would it have shipped a credential
+leak that `dl-58`'s sixth gate found (2026-09-17). A severity floor named at
+dispatch is not a cap — _Name a floor for a mechanism ticket_ in
+[sizing.md](sizing.md).
 
 The economy is in **scope**, not count. Gates 1 and 2 cost the most and found the
 least because they re-read everything from scratch.
