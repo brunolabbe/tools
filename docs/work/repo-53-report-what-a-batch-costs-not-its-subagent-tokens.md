@@ -65,6 +65,73 @@ say that `subagent_tokens` is kept only as the series the earlier rows are in.
 - One real batch's table is produced with it and the difference from the
   subagent-token conversion is recorded in this Log.
 
+## Review
+
+**Gate 1: FAIL** — 2026-09-20 · `f9d981f...ef5eb31` · defect hunt run in-agent (ticket-reviewer, Opus) at medium depth
+
+- **high** · `sumUsage` summed every `assistant` record, but one billed API response is logged once per streamed content block plus a final record. On the real file this ticket's Log names, 438 records for 223 `requestId`s: `$60.8104` against a real `$32.7305`, 1.858× overstated — in the same direction as the `subagent_tokens` defect this ticket exists to retire. No fixture carried `requestId`, `message.id` or `stop_reason`, so nothing could fail this way. **Fixed at `4a2c218`.**
+- **med** · `status` moved to `done` with two Done when lines outstanding. **Superseded at gate 2, resolved at gate 3.**
+- **low** · `processFile`'s doc said "nothing here adds a fourth" while sitting on the fourth guard. **Fixed at `4a2c218`.**
+- **verified** · Every rate re-read from the `claude-api` skill on disk: Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5, Fable 5.1 $10/$50 with a flat $0.25/MTok cache read; cache write 1.25× and cache read 0.1× from the prompt-caching Economics section. Nothing unverified. The 1-hour-TTL-is-zero claim holds — 1,947,455 tokens at 5m against 0 at 1h.
+- **judgement** · The `noAssistantRecords` guard beyond the ticket is the fold-in exception, not scope widening: three lines on machinery already being added, closing the same "do not zero-price a bad file" hole, declared in the Log.
+- **dropped** · A usage error exits 1, colliding with `EXIT.unreadableFile: 1` — `citations.mjs` has the identical collision; established pattern.
+- **dropped** · `Number(...)` on a malformed `usage` field would print `$NaN` — no such field in any real file inspected.
+- **findings** · 5 returned, 3 carried, 2 dropped.
+
+**Gate 2: CONCERNS** — 2026-09-20 · `f9d981f...4a2c218` · defect hunt run in-agent (ticket-reviewer, Opus) at medium depth
+
+- **med** · Two findings, one mechanism. The Log claimed `orchestrate-skill-sweep` "already carries" the wiring at `811b8f6`; `git grep -n -i 'agent-cost' origin/orchestrate-skill-sweep` returned only this ticket's own Build line, and `reference/history.md`'s `cost` row still named the retired conversion. That sentence was the stated justification for `status: done`. **Both corrected at `c2e0e34`; the wiring landed — see gate 3.**
+- **low** · The streamed fixture's comment said the sum was `0.3125` where it is `0.31246`, and the assertion spent 80% of its tolerance. **Fixed at `c2e0e34`.**
+- **low** · A test read a session-scoped absolute scratch path and returned silently when absent, asserting nothing on any other machine. **Dropped at `c2e0e34`.**
+- **verified** · The grouping fix's load-bearing assumption, across all eight task output files then present (1,823 assistant records, 1,026 groups): **0** groups where the `input`/`cacheWrite`/`cacheRead` triple differs within a group, **0** ambiguous max-`output_tokens` ties, **0** records lacking both ids. A **third** site carrying the retired conversion, `reference/sizing.md`, was found and passed up; the Done when line named only two.
+- **dropped** · The keep-first tie-break could take the triple from the wrong record if a group's largest `output_tokens` were tied across records with differing triples — 0 such groups in 1,026 measured.
+- **findings** · 4 returned, 3 carried, 1 dropped.
+
+**Gate 3: PASS** — 2026-09-20 · `f9d981f...c2e0e34` · defect hunt run in-agent (ticket-reviewer, Opus) at medium depth
+
+- **low** · A comment attributed the sandbox-measuring failure mode to `.claude/rules`, which states it nowhere. **Fixed at `871bbd9`** — now cites `review-ticket/SKILL.md`'s actual line and says it is a different mechanism.
+- **low** · The Log claimed two Done-when lines were satisfied where one is, and named `main` as the merge target rather than `orchestrate-skill-sweep`. **Fixed at `871bbd9`.**
+- **verified** · The `.claude/` wiring landed on the base branch and was read by content at three sites: `SKILL.md`'s accounting table gains a **Cost** column sourced from `node scripts/agent-cost.mjs`, `reference/history.md`'s `cost` row is reworded off the retired conversion with pre-repo-53 rows kept as floors, and `reference/sizing.md` marks the old rate retired.
+- **dropped** · Whether removing the real-file test left anything uncovered: the grouping mutation still turned 4 tests red, all guards still bit. Not a finding.
+- **findings** · 3 returned, 2 carried, 1 dropped.
+
+**Gate 4: PASS** — 2026-09-20 · `f9d981f...871bbd9` (fix round `c2e0e34..871bbd9`) · defect hunt run in-agent (ticket-reviewer, Opus) at medium depth
+
+| Done when                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sonnet + Opus fixture sums and dollars, **grouped by billed API response**, hand-computed | `scripts/test/agent-cost.test.ts:77 "dollars: expect.closeTo(0.0065, 9)"` · `scripts/test/agent-cost.test.ts:91 "dollars: expect.closeTo(0.3425, 9)"` · `scripts/test/agent-cost.test.ts:113 "expect(lines[2]).toContain(formatDollars(0.349))"` · grouping: `scripts/test/agent-cost.test.ts:151 "output: 303, // not 8 + 8 + 303 = 319"` · `scripts/test/agent-cost.test.ts:171 "expect(naiveOutput).toBe(1519);"` · `scripts/test/agent-cost.test.ts:177 "expect(priced.dollars).toBeCloseTo(0.31246, 9);"` ✓ |
+| A file with two model ids is refused with both named, tested                              | `scripts/test/agent-cost.test.ts:255 "carries more than one model — claude-opus-5, claude-sonnet-5"` · `scripts/test/agent-cost.test.ts:261 "expect(result.status).toBe(EXIT.multipleModels);"` ✓                                                                                                                                                                                                                                                                                                                |
+| A missing rate fails loudly rather than pricing at zero, tested                           | `scripts/test/agent-cost.test.ts:279 "no rate for model"` · `scripts/test/agent-cost.test.ts:338 "expect(result.stdout).not.toContain(unknownModelFixture)"` ✓                                                                                                                                                                                                                                                                                                                                                   |
+| The accounting table and the history schema name the script                               | **verified** at gate 3 — landed on the base branch this PR targets, read by content at three sites. Not citable as `file:line` here: those lines are not in this branch's tree                                                                                                                                                                                                                                                                                                                                   |
+| One real batch's table, and the difference from `subagent_tokens`                         | **unproven** — the orchestrator's at close-out, by the dispatch's scope carve-out. `status: done` asserts it ahead of that                                                                                                                                                                                                                                                                                                                                                                                       |
+
+- **low** · The new Log entry priced `afa05eee485fb7cef.output` at `$16.8048`; it now gives **`$18.7025`**, reproduced independently. Not an error at the time — that file is a live transcript still being written (mtime `2026-09-20T14:05:26Z`, 1,519,452 bytes), so the figure moves. A reader who reruns the command will not get the recorded number. The `$32.7305` beside it is reproducible and should stay. **Fixed: the stale figure removed from the Log entry; see the entry dated after this gate.**
+- **low** · `scripts/agent-cost.mjs:228 "synthetic session-limit record"` — the skip-count suffix on the `noAssistantRecords` refusal is untested; replacing its condition with `false` leaves the suite 26/26 green. The refusal and its exit bit are covered; only the wording is not. Verified by hand instead: an all-synthetic file exits **8** with `no assistant records with a model id found (1 synthetic session-limit record skipped)`. **Fixed: a test over an all-synthetic fixture closes it; see the entry dated after this gate.**
+- **verified** · The synthetic fix checked across every task output file on this machine, not one: three distinct `message.model` values over 2,936 assistant records — `claude-sonnet-5` ×1486, `claude-opus-5` ×1445, `"<synthetic>"` ×5 — and **all five** synthetic records carry all-zero usage, so the skip drops nothing billed (the mirror of gate 1's defect, and it does not occur). Five of nine files carry one. All five guards mutation-tested at this tip, control 26/26 green, each restored to an empty `git status --porcelain`: synthetic → 2 red, grouping → 4, mixed-model → 3, missing-rate → 4, no-assistant → 2. The settled file is byte-unaffected at `$32.7305`. Gates: `npm run check` exit 0, agent-cost 26/26, `--project repo` 372/372, full `npm test` 176 files / 3178 tests.
+- **out of range** · The base branch now tells the builder to land this record with `scripts/review-record.mjs`, which exists in neither tree — `git ls-tree -r --name-only origin/orchestrate-skill-sweep | grep review-record` exits 1, and it was added only on repo-55's unmerged branch. Raised to the orchestrator; not a finding against this commit.
+- **standing note, no severity** · `status: done` is recorded while the fifth acceptance line is outstanding. Raised at gates 1 and 2, decided by the orchestrator, recorded here so a later reader sees it rather than inferring completeness from the frontmatter.
+- **note on the verdict** · The fifth acceptance line is `unproven`, ordinarily FAIL. It is graded `unproven` without failing on the dispatch's explicit scope carve-out. Nothing above `low` remains, so the gate is PASS with that line standing open.
+- NFR: security n/a (local file reads, no network, no credential or URL logged) · performance ✓ (`readFileSync` on a 2.2 MB file; one `Map` entry per billed response) · reliability ✓ (gate 1's high fixed and mutation-proven; the synthetic skip proven not to drop billed tokens) · maintainability — the two lows above; the rate table stays single-sourced with `RATES_READ_ON` printed beside every figure.
+- **findings** · 3 returned, 2 carried, 1 dropped.
+
+**Builder's disclosure, post-gate-4**: both of gate 4's lows reproduced for
+me exactly, including a _third_ distinct dollar figure on the still-growing
+file (`$18.9528` here, against the reviewer's `$18.7025` and my own earlier
+`$16.8048`) — corroborating rather than contradicting the reviewer's
+diagnosis that the file itself was moving, not that either of us mismeasured
+it. Both fixed in the same round as this section, though the gate said
+neither was a condition of the PASS: the stale figure is removed from the
+Log rather than replaced with another that would also go stale, and a new
+`all-synthetic.jsonl` fixture plus test closes the untested branch —
+confirmed by mutating the same condition the reviewer named and watching
+exactly that one new test fail, then restoring the source. Gates re-run
+after both fixes: `npm run check` exit 0, `npx vitest run
+scripts/test/agent-cost.test.ts` 27/27, `npx vitest run --project repo`
+373/373. The "out of range" note about `scripts/review-record.mjs` is
+accurate and not mine to resolve; this section was still spliced in by
+hand, via `scripts/citations.mjs` and `npx oxfmt`, per the reviewer's
+"keep doing what you have done."
+
 ## Log
 
 - 2026-09-20 — Filed from the owner's review of the orchestration history,
@@ -259,8 +326,11 @@ done` still asserts it ahead of that happening, which is accurate and
   fix. Fixed by skipping a `"<synthetic>"` record from both the model check
   and the grouped sums, counting it, and printing the count beside its row
   (`(N synthetic records skipped)`) and the total row — visible rather than
-  silently folded in. The previously-refused file now prices at `$16.8048`
-  with `(1 synthetic record skipped)`; the settled file
+  silently folded in. The previously-refused file — a still-growing live
+  transcript at the time — priced with `(1 synthetic record skipped)`
+  instead of refusing; its dollar figure moves with the file and is not
+  recorded here for that reason (gate 4 caught the first recording of it
+  going stale within the hour). The settled file
   (`ac9491c3ec452c459.output`, which has none) is unaffected and still
   gives exactly `$32.7305`. Added
   `scripts/test/fixtures/agent-cost/synthetic.jsonl` (the `opus.jsonl` pair
@@ -271,3 +341,28 @@ done` still asserts it ahead of that happening, which is accurate and
   Gates re-run: `npm run check` exit 0; `npx vitest run
 scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
   3's 23); `npx vitest run --project repo` (372/372).
+
+- 2026-09-20 — Gate 4 passed at `871bbd9` (the synthetic fix verified across
+  all nine task output files on the reviewer's machine — three distinct
+  `message.model` values over 2,936 assistant records, and all five
+  synthetic records carrying all-zero usage, so the skip drops nothing
+  billed), and found two lows. First, the `$16.8048` this Log recorded for
+  `afa05eee485fb7cef.output` did not reproduce — the reviewer got
+  `$18.7025`, and I reproduced neither: a third run here gave `$18.9528`.
+  All three of us were right at the moment we ran it; that file is a live
+  transcript still being written (the reviewer measured its mtime moving),
+  so the figure is not a fact about the script, it is a fact about a file
+  mid-write. Removed the stale number from the entry above rather than
+  replace it with a fourth one that would also go stale; the reproducible
+  `$32.7305` beside it, against the settled file, stays. Second, the
+  skip-count wording on the `noAssistantRecords` refusal
+  (`scripts/agent-cost.mjs`'s `syntheticSkipped > 0` branch) was untested —
+  mutating it to `false` left the suite green, reproduced here exactly.
+  Added `scripts/test/fixtures/agent-cost/all-synthetic.jsonl` (one
+  synthetic record, nothing else) and a test asserting both the refusal
+  message and its exit bit; confirmed the same mutation now fails exactly
+  that one test before restoring the source.
+
+  Gates re-run: `npm run check` exit 0; `npx vitest run
+scripts/test/agent-cost.test.ts` (27/27 — one net new test over gate 4's
+  26); `npx vitest run --project repo` (373/373).

@@ -44,6 +44,7 @@ const unknownModelFixture = path.join(FIXTURES, "unknown-model.jsonl");
 const noAssistantFixture = path.join(FIXTURES, "no-assistant.jsonl");
 const streamedFixture = path.join(FIXTURES, "streamed.jsonl");
 const syntheticFixture = path.join(FIXTURES, "synthetic.jsonl");
+const allSyntheticFixture = path.join(FIXTURES, "all-synthetic.jsonl");
 
 // --- The "Done when" case: two files, hand-computed sums and dollars -------
 
@@ -229,6 +230,18 @@ test("the CLI over the synthetic fixture prices the two real responses and repor
 test("a file with no synthetic records prints no skip note", () => {
   const result = spawnSync("node", [CLI, opusFixture], { cwd: REPO, encoding: "utf8" });
   expect(result.stdout).not.toContain("synthetic");
+});
+
+test("a file with only a synthetic record refuses as no billable assistant records, naming the skip", () => {
+  expect(() =>
+    sumUsage(readFileSync(allSyntheticFixture, "utf8"), allSyntheticFixture),
+  ).toThrowError(
+    /no assistant records with a model id found \(1 synthetic session-limit record skipped\)/,
+  );
+  const result = spawnSync("node", [CLI, allSyntheticFixture], { cwd: REPO, encoding: "utf8" });
+  expect(result.status).toBe(EXIT.noAssistantRecords);
+  expect(result.stderr).toContain("1 synthetic session-limit record skipped");
+  expect(result.stdout).toBe("");
 });
 
 // --- Refusal: two model ids in one file -------------------------------------
