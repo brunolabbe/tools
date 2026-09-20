@@ -141,11 +141,15 @@ independence a separate transcriber would buy: the subject of the review
 becomes its own transcriber, and the disclosure note below plus the posted
 report (step 8) are what is left standing in its place.
 
-So the builder writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
-in the branch's own commit, then runs `npx oxfmt` on the ticket file — markdown is
-formatted in this repo, and an unformatted table fails `npm run check`, which is
-the merge gate. Formatting is not a rewrite and does not conflict with committing
-it verbatim: it pads table cells to column width and touches nothing else.
+So the builder lands it in `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
+in the branch's own commit, with `scripts/review-record.mjs` as step 8 says —
+the script splices, formats and checks it in one run. Markdown is formatted in
+this repo, and an unformatted table fails `npm run check`, which is the merge
+gate; formatting is not a rewrite and does not conflict with committing it
+verbatim, since it pads table cells to column width and touches nothing else.
+**Two gates on one ticket in one session are two commits**: the script refuses
+to run on a ticket dirty against `HEAD`, so land gate 1, commit, then land
+gate 2 (repo-55, 2026-09-20).
 
 **Verbatim is the whole point, and it is now the builder who could break it.**
 Under the old wording a caller that edited the section had "handed the review back
