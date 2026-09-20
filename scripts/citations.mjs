@@ -1197,7 +1197,13 @@ export const isUnpinnedVolatile = (r) =>
  * citation is fine today, and nothing here can promise it stays fine, because
  * the page it names moves under this repo's own hand every few sessions.
  *
- * @param {ReturnType<typeof checkCitations>[number]} r
+ * Typed generically over `T` rather than against `checkCitations`'s own return
+ * type: this function is the last step *inside* that type's inference, so
+ * naming it here would ask the checker to resolve a type from itself.
+ *
+ * @template {{file: string | null, start: number, end: number}} T
+ * @param {T} r
+ * @returns {T}
  */
 function unpinnedVolatile(r) {
   return {

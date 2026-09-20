@@ -2373,7 +2373,9 @@ test("a pinned citation into a .claude page passes --require-claude-pins", () =>
     { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
   );
   try {
-    const head = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    const head = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).stdout.trim();
     fs.writeFileSync(file, `Pinned: \`.claude/agents/x.md@${head}:1 "the mechanical row"\`.\n`);
     const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
       cwd: dir,
