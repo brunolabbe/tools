@@ -16,14 +16,32 @@
  * Only `"assistant"` records bill anything, and each one's `message.usage`
  * carries that request's `input_tokens`, `cache_creation_input_tokens`,
  * `cache_read_input_tokens` and `output_tokens`, alongside `message.model`.
- * This sums those four fields per file, over every assistant record, and
- * prices the sums with the rate table below. It does not split
- * `cache_creation_input_tokens` by TTL (`usage.cache_creation.ephemeral_5m_*`
- * vs `ephemeral_1h_*`) — the field the ticket asks this to sum is the combined
- * one, and in every sample measured while building this the 1-hour figure was
- * zero, so the whole sum is priced at the 5-minute write rate. A caller with a
- * file that leans on 1-hour caching will get a slight overstatement; there is
- * nowhere in the summed field to see that and correct it.
+ *
+ * **One billed API response is logged as several `"assistant"` records**,
+ * one per streamed content block plus a final record — repo-53's first gate
+ * caught this on a real file (`ac9491c3ec452c459.output`): 438 assistant
+ * records, only 223 distinct `requestId`/`message.id` values, and summing
+ * every record priced the file at $60.8104 against a real bill of $32.7305, a
+ * 1.858× overstatement in the same direction as the `subagent_tokens` defect
+ * this script exists to retire. So this groups records by `requestId ??
+ * message.id` first and takes each group's largest `output_tokens` — the
+ * final record in the stream, its `input_tokens`/`cache_creation_input_tokens`/
+ * `cache_read_input_tokens` taken from that same record, since every record in
+ * a group carries identical values for those three fields — and only then
+ * sums across groups. `stop_reason` is not the selector: on two of the four
+ * sampled files its non-null count disagreed with the request-id count
+ * (91-vs-89 and 148-vs-150), where `requestId` and `message.id` agreed exactly
+ * on all four. A record with neither id (none of the sampled files had one) is
+ * its own group by line number, so it neither merges with an unrelated record
+ * nor is silently dropped.
+ *
+ * It does not split `cache_creation_input_tokens` by TTL
+ * (`usage.cache_creation.ephemeral_5m_*` vs `ephemeral_1h_*`) — the field the
+ * ticket asks this to sum is the combined one, and in every sample measured
+ * while building this the 1-hour figure was zero, so the whole sum is priced
+ * at the 5-minute write rate. A caller with a file that leans on 1-hour
+ * caching will get a slight overstatement; there is nowhere in the summed
+ * field to see that and correct it.
  *
  * **A file is refused, not zero-priced, when it can't be read honestly**: more
  * than one model id in one file (a resumed session that changed models
@@ -93,8 +111,18 @@ function fail(message, exit) {
  */
 
 /**
- * Sum the four billed token fields over every assistant record in one task
- * output file's contents, and name its single model id.
+ * Sum the four billed token fields over every **billed API response** in one
+ * task output file's contents, and name its single model id.
+ *
+ * A response is not a record: streaming logs the same response once per
+ * content block plus a final record, all sharing one `requestId` and
+ * `message.id` and identical `input_tokens`/`cache_creation_input_tokens`/
+ * `cache_read_input_tokens` — only `output_tokens` grows across them, ending
+ * at the true billed figure on the final record. So records are grouped by
+ * `requestId ?? message.id` first, this keeps each group's largest
+ * `output_tokens` and that same record's other three fields, and only the
+ * kept, deduplicated figures are summed. See the module doc comment for the
+ * measurement that found this.
  *
  * Refuses (`EXIT.multipleModels`) a file whose assistant records carry more
  * than one `message.model` value, naming both. Refuses
@@ -108,10 +136,8 @@ function fail(message, exit) {
 export function sumUsage(content, file) {
   /** @type {Set<string>} */
   const models = new Set();
-  let input = 0;
-  let cacheWrite = 0;
-  let cacheRead = 0;
-  let output = 0;
+  /** @type {Map<string, {input: number, cacheWrite: number, cacheRead: number, output: number}>} */
+  const responses = new Map();
 
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
@@ -129,7 +155,7 @@ export function sumUsage(content, file) {
       );
     }
     const rec =
-      /** @type {{type?: unknown, message?: {model?: unknown, usage?: Record<string, unknown>}}} */ (
+      /** @type {{type?: unknown, requestId?: unknown, message?: {id?: unknown, model?: unknown, usage?: Record<string, unknown>}}} */ (
         record
       );
     if (rec.type !== "assistant") continue;
@@ -137,11 +163,28 @@ export function sumUsage(content, file) {
     const model = rec.message?.model;
     if (typeof model === "string") models.add(model);
 
+    // requestId first, then message.id, and a per-line fallback when neither
+    // is present — so a record with no id is its own group rather than
+    // merging with an unrelated one that also lacks an id (both fixtures and
+    // any future record shape this hasn't seen yet).
+    const key =
+      typeof rec.requestId === "string"
+        ? rec.requestId
+        : typeof rec.message?.id === "string"
+          ? rec.message.id
+          : `line:${i}`;
+
     const usage = rec.message?.usage ?? {};
-    input += Number(usage.input_tokens ?? 0);
-    cacheWrite += Number(usage.cache_creation_input_tokens ?? 0);
-    cacheRead += Number(usage.cache_read_input_tokens ?? 0);
-    output += Number(usage.output_tokens ?? 0);
+    const output = Number(usage.output_tokens ?? 0);
+    const kept = responses.get(key);
+    if (!kept || output > kept.output) {
+      responses.set(key, {
+        input: Number(usage.input_tokens ?? 0),
+        cacheWrite: Number(usage.cache_creation_input_tokens ?? 0),
+        cacheRead: Number(usage.cache_read_input_tokens ?? 0),
+        output,
+      });
+    }
   }
 
   if (models.size > 1) {
@@ -152,6 +195,17 @@ export function sumUsage(content, file) {
   }
   if (models.size === 0) {
     throw fail(`${file}: no assistant records with a model id found`, EXIT.noAssistantRecords);
+  }
+
+  let input = 0;
+  let cacheWrite = 0;
+  let cacheRead = 0;
+  let output = 0;
+  for (const kept of responses.values()) {
+    input += kept.input;
+    cacheWrite += kept.cacheWrite;
+    cacheRead += kept.cacheRead;
+    output += kept.output;
   }
 
   return { model: [...models][0], input, cacheWrite, cacheRead, output };
@@ -246,8 +300,9 @@ export function parseArgs(argv) {
 }
 
 /**
- * Read, sum and price one file. The three ways this can fail are exactly the
- * three guards above; nothing here adds a fourth.
+ * Read, sum and price one file. Reading is where the fourth guard lives —
+ * `EXIT.unreadableFile` on a file `readFileSync` cannot open — alongside the
+ * three `sumUsage`/`priceFile` raise above.
  *
  * @param {string} file
  * @returns {PricedTotals}

@@ -37,7 +37,10 @@ script reads them.
 Add `scripts/agent-cost.mjs <output-file>...` that, for each file:
 
 - sums `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`
-  and `output_tokens` over every assistant record;
+  and `output_tokens` **one row per billed API response, grouped by request
+  id, since a streamed response is logged once per content block** — not over
+  every assistant record, which double- and triple-counts a streamed
+  response;
 - reads the model from `/message/model` and refuses a file where more than one
   value appears, naming both;
 - prices the sums with a rate table keyed by model id, kept in the script with
@@ -51,7 +54,8 @@ say that `subagent_tokens` is kept only as the series the earlier rows are in.
 ## Done when
 
 - The script over a fixture of two short output files, one Sonnet and one
-  Opus, prints the expected sums and dollars, and a test asserts them against
+  Opus, prints the expected sums and dollars, grouped by billed API response
+  rather than by raw assistant record, and a test asserts them against
   hand-computed values.
 - A file with two model ids is refused with both named, tested.
 - A rate that is missing for a model id fails loudly rather than pricing at
@@ -119,3 +123,60 @@ vitest run scripts/test/agent-cost.test.ts` (19/19 passed),
   `npx vitest run --project repo` (365/365 passed), full `npm test` (exit 0;
   176 files, 3171 tests, all passed — run because `scripts/test/tsconfig.json`
   is shared config).
+
+- 2026-09-20 — **The Build line was wrong, and gate 1 caught it**: "sums ...
+  over every assistant record" double- and triple-counts. A backgrounded
+  `Agent` dispatch logs one billed API response once per streamed content
+  block plus a final record, all sharing one `requestId` and `message.id` and
+  carrying identical `input_tokens`/`cache_creation_input_tokens`/
+  `cache_read_input_tokens` — only `output_tokens` climbs across them, ending
+  at the true figure on the final record. On the real file this ticket's own
+  Log names (`ac9491c3ec452c459.output`), that is **438 assistant records for
+  223 billed responses**: the script priced it at $60.8104 against the real
+  $32.7305, an 1.858× overstatement — in the same direction, on the very first
+  file it was pointed at, as the `subagent_tokens` defect this ticket exists
+  to retire. The reviewer's premises all reproduced exactly (byte-identical
+  sums, byte-identical dedup-by-`requestId` total, byte-identical worked
+  example at that file's lines 10/11/13); this was not a disagreement, only a
+  brief that needed correcting once a real streamed file was checked against
+  it — no fixture in the original build carried `requestId`/`message.id`, so
+  nothing could have caught this before a real file was tried.
+
+  Fixed `sumUsage` to group assistant records by `requestId ?? message.id`
+  (a record with neither is its own group, by line number, rather than
+  merging with an unrelated one) and keep each group's largest `output_tokens`
+  plus that same record's other three fields, summing only across groups.
+  `stop_reason` was considered and rejected as the grouping key, per the
+  reviewer's measurement: its non-null count disagreed with the `requestId`
+  count on two of the four sampled files (91-vs-89, 148-vs-150), where
+  `requestId` and `message.id` agreed exactly on all four. Amended the Build
+  and first Done-when lines above to say so. Added
+  `scripts/test/fixtures/agent-cost/streamed.jsonl` (three records sharing one
+  `requestId`, built from the real worked example's 8/8/303 output-token
+  shape, plus a second distinct response) and four tests: the grouped sum on
+  an inline three-record stream, the fixture's grouped sum against a
+  naive/ungrouped sum shown to disagree (1503 vs 1519), the priced dollar
+  figure, the CLI's own output, and — when the scratch file is present on the
+  machine running the suite — a direct check against the real file's numbers
+  ($32.7305, `input=446 cacheWrite=627777 cacheRead=48194756 output=188291`),
+  skipped rather than failed where that file is absent.
+
+  Also fixed the reviewer's low: `processFile`'s doc comment said "three ways
+  this can fail ... nothing here adds a fourth" while sitting directly on the
+  fourth (`EXIT.unreadableFile`).
+
+  **`status` stays `done`, on the orchestrator's direction, not reverted to
+  `in-flight` as the reviewer's med recommended.** The two lines that
+  recommendation was about — the accounting table and history schema wiring,
+  and the real-batch table — land on `orchestrate-skill-sweep` in the same
+  pull request before anything merges: that branch already carries the
+  `SKILL.md`/`reference/history.md` wiring at `811b8f6`, and the real-batch
+  table is the orchestrator's at close-out. `npm run status` only ever reads
+  the merged state, so the partial-completion problem the med finding named
+  does not reach the board.
+
+  Gates re-run after the fix: `npm run check` exit 0; `npx vitest run
+scripts/test/agent-cost.test.ts` 24/24 passed; `npx vitest run --project
+repo` 370/370 passed. Full `npm test` not re-run a second time in this round
+  — no shared config changed beyond the prior round's `tsconfig.json` entry,
+  already covered.

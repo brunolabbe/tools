@@ -15,6 +15,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
@@ -41,6 +42,7 @@ const opusFixture = path.join(FIXTURES, "opus.jsonl");
 const mixedModelFixture = path.join(FIXTURES, "mixed-model.jsonl");
 const unknownModelFixture = path.join(FIXTURES, "unknown-model.jsonl");
 const noAssistantFixture = path.join(FIXTURES, "no-assistant.jsonl");
+const streamedFixture = path.join(FIXTURES, "streamed.jsonl");
 
 // --- The "Done when" case: two files, hand-computed sums and dollars -------
 
@@ -118,6 +120,85 @@ test("the CLI over the Sonnet and Opus fixtures prints the same total and exits 
   expect(result.stdout).toContain(formatDollars(0.0065));
   expect(result.stdout).toContain(formatDollars(0.3425));
   expect(result.stdout).toContain(formatDollars(0.349));
+});
+
+// --- Streaming: one billed response is several assistant records -----------
+//
+// `streamed.jsonl` is built from the shape of a real streamed response
+// (repo-53's first gate: `msg_011CfDsWG2Rqq1LTUifH2ZZV` in a real task output
+// file, at 8, 8, then 303 output tokens across three records sharing one
+// `requestId`/`message.id`) plus a second, distinct response. Grouping must
+// keep the final record's 303, not sum all three 8+8+303 — and the second
+// response's own fields must still be added once, not folded into the first
+// group or dropped.
+
+test("sumUsage groups a streamed response by requestId, keeping only its final output_tokens", () => {
+  const content = [
+    '{"type":"assistant","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":29580,"cache_read_input_tokens":0,"output_tokens":8}}}',
+    '{"type":"assistant","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":29580,"cache_read_input_tokens":0,"output_tokens":8}}}',
+    '{"type":"assistant","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":29580,"cache_read_input_tokens":0,"output_tokens":303}}}',
+  ].join("\n");
+  expect(sumUsage(content, "streamed-inline.jsonl")).toEqual({
+    model: "claude-opus-5",
+    input: 2,
+    cacheWrite: 29580,
+    cacheRead: 0,
+    output: 303, // not 8 + 8 + 303 = 319
+  });
+});
+
+test("the streamed fixture's grouped sums differ from what an ungrouped sum over the same records would give", () => {
+  const grouped = sumUsage(readFileSync(streamedFixture, "utf8"), streamedFixture);
+  expect(grouped).toEqual({
+    model: "claude-opus-5",
+    input: 502, // req_1's kept record (2) + req_2 (500)
+    cacheWrite: 39580, // req_1's kept record (29580) + req_2 (10000)
+    cacheRead: 50000, // req_1's kept record (0) + req_2 (50000)
+    output: 1503, // req_1's largest (303) + req_2 (1200)
+  });
+
+  // The naive sum this replaced: every record counted once, undeduplicated.
+  // 3 req_1 records (8, 8, 303) + 1 req_2 record (1200) = 1519, not 1503.
+  const naiveOutput = [8, 8, 303, 1200].reduce((a, b) => a + b, 0);
+  expect(naiveOutput).not.toBe(grouped.output);
+  expect(naiveOutput).toBe(1519);
+});
+
+test("priceFile on the streamed fixture's grouped totals matches the hand-computed dollar figure", () => {
+  const priced = processFile(streamedFixture);
+  // (502/1e6)*5 + (39580/1e6)*6.25 + (50000/1e6)*0.5 + (1503/1e6)*25 = 0.3125
+  expect(priced.dollars).toBeCloseTo(0.3125, 4);
+});
+
+test("the CLI over the streamed fixture prices the deduplicated total, not the raw record count", () => {
+  const result = spawnSync("node", [CLI, streamedFixture], { cwd: REPO, encoding: "utf8" });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("output=1503");
+  expect(result.stdout).not.toContain("output=1519");
+  expect(result.stdout).toContain(formatDollars(0.3125));
+});
+
+test("the real task output file named in the ticket's Log prices at the deduplicated figure, not the raw one", () => {
+  const real =
+    "/tmp/claude-1000/-workspaces-tools/35f08415-9d8f-4d7b-ad2a-b393b8e94091/tasks/ac9491c3ec452c459.output";
+  let content;
+  try {
+    content = readFileSync(real, "utf8");
+  } catch {
+    // Not every machine running this suite has this session's scratch files.
+    // The fixture-based tests above prove the same grouping logic; this one
+    // is corroboration against the file the gate actually measured, when it
+    // happens to still be present.
+    return;
+  }
+  const priced = priceFile(sumUsage(content, real), real);
+  expect(priced).toMatchObject({
+    input: 446,
+    cacheWrite: 627777,
+    cacheRead: 48194756,
+    output: 188291,
+  });
+  expect(priced.dollars).toBeCloseTo(32.7305, 4);
 });
 
 // --- Refusal: two model ids in one file -------------------------------------
