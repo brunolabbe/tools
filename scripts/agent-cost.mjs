@@ -35,6 +35,16 @@
  * its own group by line number, so it neither merges with an unrelated record
  * nor is silently dropped.
  *
+ * **A `message.model` of `"<synthetic>"` is not a billed model.** The harness
+ * writes one when a request hit the account's session limit (HTTP 429):
+ * `usage` is all zeros and the model id names no real model. Counting it as a
+ * second model made the multiple-model guard refuse any file that a limit
+ * ever touched mid-session — the ordinary case on a busy day, not a rare
+ * one — so such records are skipped from both grouping and the model check,
+ * counted, and the count is printed beside the row rather than folded in
+ * silently. The brief this script started from assumed every assistant
+ * record names a billed model; it does not.
+ *
  * It does not split `cache_creation_input_tokens` by TTL
  * (`usage.cache_creation.ephemeral_5m_*` vs `ephemeral_1h_*`) — the field the
  * ticket asks this to sum is the combined one, and in every sample measured
@@ -107,7 +117,14 @@ function fail(message, exit) {
 }
 
 /**
- * @typedef {{model: string, input: number, cacheWrite: number, cacheRead: number, output: number}} FileTotals
+ * A `message.model` value that names no real, billable model — the harness's
+ * own marker for a request that hit the session limit rather than a response
+ * from any model.
+ */
+const SYNTHETIC_MODEL = "<synthetic>";
+
+/**
+ * @typedef {{model: string, input: number, cacheWrite: number, cacheRead: number, output: number, syntheticSkipped: number}} FileTotals
  */
 
 /**
@@ -124,10 +141,16 @@ function fail(message, exit) {
  * kept, deduplicated figures are summed. See the module doc comment for the
  * measurement that found this.
  *
- * Refuses (`EXIT.multipleModels`) a file whose assistant records carry more
- * than one `message.model` value, naming both. Refuses
- * (`EXIT.noAssistantRecords`) a file with no assistant records at all, rather
- * than returning a zero-cost row that reads as a real, cheap file.
+ * A `"<synthetic>"` `message.model` (a session-limit marker, not a billed
+ * response — see the module doc comment) is skipped before either check:
+ * it counts toward neither the model set nor the grouped totals, only toward
+ * `syntheticSkipped`.
+ *
+ * Refuses (`EXIT.multipleModels`) a file whose **billable** assistant records
+ * carry more than one `message.model` value, naming both. Refuses
+ * (`EXIT.noAssistantRecords`) a file with no billable assistant records at
+ * all, rather than returning a zero-cost row that reads as a real, cheap
+ * file.
  *
  * @param {string} content
  * @param {string} file
@@ -138,6 +161,7 @@ export function sumUsage(content, file) {
   const models = new Set();
   /** @type {Map<string, {input: number, cacheWrite: number, cacheRead: number, output: number}>} */
   const responses = new Map();
+  let syntheticSkipped = 0;
 
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
@@ -161,6 +185,10 @@ export function sumUsage(content, file) {
     if (rec.type !== "assistant") continue;
 
     const model = rec.message?.model;
+    if (model === SYNTHETIC_MODEL) {
+      syntheticSkipped += 1;
+      continue;
+    }
     if (typeof model === "string") models.add(model);
 
     // requestId first, then message.id, and a per-line fallback when neither
@@ -194,7 +222,13 @@ export function sumUsage(content, file) {
     );
   }
   if (models.size === 0) {
-    throw fail(`${file}: no assistant records with a model id found`, EXIT.noAssistantRecords);
+    throw fail(
+      `${file}: no assistant records with a model id found` +
+        (syntheticSkipped > 0
+          ? ` (${syntheticSkipped} synthetic session-limit record${syntheticSkipped === 1 ? "" : "s"} skipped)`
+          : ""),
+      EXIT.noAssistantRecords,
+    );
   }
 
   let input = 0;
@@ -208,7 +242,7 @@ export function sumUsage(content, file) {
     output += kept.output;
   }
 
-  return { model: [...models][0], input, cacheWrite, cacheRead, output };
+  return { model: [...models][0], input, cacheWrite, cacheRead, output, syntheticSkipped };
 }
 
 /**
@@ -252,12 +286,19 @@ export function formatDollars(n) {
  * @typedef {PricedTotals & {file: string}} Row
  */
 
+/** ` (N synthetic records skipped)`, or `""` when there were none — never printed for a zero count. */
+function syntheticNote(count) {
+  return count > 0 ? `  (${count} synthetic record${count === 1 ? "" : "s"} skipped)` : "";
+}
+
 /**
  * One line per priced file, in the order given, then a total row summing all
  * four token fields and the dollar figure across them. `RATES_READ_ON` is
  * printed beside every dollar figure — the per-file ones and the total —
  * rather than once at the top, so a line copied out of a longer run still
- * carries the date its number depends on.
+ * carries the date its number depends on. A file that skipped one or more
+ * `"<synthetic>"` session-limit records says so beside its row, so the
+ * skip is visible rather than folded silently into the totals.
  *
  * @param {Row[]} rows
  * @returns {string}
@@ -267,7 +308,7 @@ export function render(rows) {
     (r) =>
       `${r.file}  ${r.model}  input=${r.input} cacheWrite=${r.cacheWrite} ` +
       `cacheRead=${r.cacheRead} output=${r.output}  ${formatDollars(r.dollars)} ` +
-      `(rates read ${RATES_READ_ON})`,
+      `(rates read ${RATES_READ_ON})${syntheticNote(r.syntheticSkipped)}`,
   );
 
   const total = rows.reduce(
@@ -277,12 +318,14 @@ export function render(rows) {
       cacheRead: acc.cacheRead + r.cacheRead,
       output: acc.output + r.output,
       dollars: acc.dollars + r.dollars,
+      syntheticSkipped: acc.syntheticSkipped + r.syntheticSkipped,
     }),
-    { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, dollars: 0 },
+    { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, dollars: 0, syntheticSkipped: 0 },
   );
   lines.push(
     `total  input=${total.input} cacheWrite=${total.cacheWrite} cacheRead=${total.cacheRead} ` +
-      `output=${total.output}  ${formatDollars(total.dollars)} (rates read ${RATES_READ_ON})`,
+      `output=${total.output}  ${formatDollars(total.dollars)} (rates read ${RATES_READ_ON})` +
+      `${syntheticNote(total.syntheticSkipped)}`,
   );
   return lines.join("\n");
 }

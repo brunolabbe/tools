@@ -43,6 +43,7 @@ const mixedModelFixture = path.join(FIXTURES, "mixed-model.jsonl");
 const unknownModelFixture = path.join(FIXTURES, "unknown-model.jsonl");
 const noAssistantFixture = path.join(FIXTURES, "no-assistant.jsonl");
 const streamedFixture = path.join(FIXTURES, "streamed.jsonl");
+const syntheticFixture = path.join(FIXTURES, "synthetic.jsonl");
 
 // --- The "Done when" case: two files, hand-computed sums and dollars -------
 
@@ -58,6 +59,7 @@ test("sums the four billed fields over every assistant record, ignoring other re
     cacheWrite: 1000,
     cacheRead: 7000,
     output: 200,
+    syntheticSkipped: 0,
   });
 });
 
@@ -70,6 +72,7 @@ test("prices the Sonnet fixture at the hand-computed dollar figure", () => {
     cacheWrite: 1000,
     cacheRead: 7000,
     output: 200,
+    syntheticSkipped: 0,
     dollars: expect.closeTo(0.0065, 9),
   });
 });
@@ -83,6 +86,7 @@ test("prices the Opus fixture at the hand-computed dollar figure", () => {
     cacheWrite: 30000,
     cacheRead: 150000,
     output: 3000,
+    syntheticSkipped: 0,
     dollars: expect.closeTo(0.3425, 9),
   });
 });
@@ -144,6 +148,7 @@ test("sumUsage groups a streamed response by requestId, keeping only its final o
     cacheWrite: 29580,
     cacheRead: 0,
     output: 303, // not 8 + 8 + 303 = 319
+    syntheticSkipped: 0,
   });
 });
 
@@ -155,6 +160,7 @@ test("the streamed fixture's grouped sums differ from what an ungrouped sum over
     cacheWrite: 39580, // req_1's kept record (29580) + req_2 (10000)
     cacheRead: 50000, // req_1's kept record (0) + req_2 (50000)
     output: 1503, // req_1's largest (303) + req_2 (1200)
+    syntheticSkipped: 0,
   });
 
   // The naive sum this replaced: every record counted once, undeduplicated.
@@ -182,11 +188,48 @@ test("the CLI over the streamed fixture prices the deduplicated total, not the r
 // (`ac9491c3ec452c459.output`) was tried here and dropped at gate 2: it lives
 // under this session's UUID-scoped scratch directory, so on any other
 // machine, in CI, or once this session's scratch is reaped, the test would
-// silently assert nothing rather than fail — the same failure mode
-// `.claude/rules` elsewhere in this repo calls out for a test that measures
-// the sandbox instead of the code. The fixture above (`streamed.jsonl`) was
-// built from that real file's exact worked-example shape and gives the same
-// coverage without depending on a path this suite cannot guarantee.
+// silently assert nothing rather than fail — a test that measures the
+// sandbox it runs in rather than the code, in the shape
+// `.claude/skills/review-ticket/SKILL.md`'s "Unregistered specs pass green
+// while checking nothing" is about, though that line is stated of a
+// different mechanism. The fixture above (`streamed.jsonl`) was built from
+// that real file's exact worked-example shape and gives the same coverage
+// without depending on a path this suite cannot guarantee.
+
+// --- Synthetic model: a session-limit record is not a second model ---------
+//
+// `synthetic.jsonl` is two real Opus responses (the exact shape of
+// `opus.jsonl`) with a `"<synthetic>"` session-limit record between them —
+// the shape a real file gave the orchestrator when a dispatch hit today's
+// session limit mid-run. Before this guard, a file like this was refused as
+// carrying two models; the fix is to skip the synthetic record from both the
+// model check and the sums, and report that it was skipped rather than
+// folding it in silently.
+
+test("sumUsage skips a synthetic session-limit record from both the model check and the sums", () => {
+  const content = readFileSync(syntheticFixture, "utf8");
+  expect(sumUsage(content, syntheticFixture)).toEqual({
+    model: "claude-opus-5",
+    input: 1000,
+    cacheWrite: 30000,
+    cacheRead: 150000,
+    output: 3000,
+    syntheticSkipped: 1,
+  });
+});
+
+test("the CLI over the synthetic fixture prices the two real responses and reports the skip", () => {
+  const result = spawnSync("node", [CLI, syntheticFixture], { cwd: REPO, encoding: "utf8" });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain(formatDollars(0.3425));
+  expect(result.stdout).toContain("1 synthetic record skipped");
+  expect(result.stderr).toBe("");
+});
+
+test("a file with no synthetic records prints no skip note", () => {
+  const result = spawnSync("node", [CLI, opusFixture], { cwd: REPO, encoding: "utf8" });
+  expect(result.stdout).not.toContain("synthetic");
+});
 
 // --- Refusal: two model ids in one file -------------------------------------
 
@@ -217,6 +260,7 @@ test("priceFile fails loudly on a model id missing from RATES, rather than prici
     cacheWrite: 0,
     cacheRead: 0,
     output: 5,
+    syntheticSkipped: 0,
   };
   expect(() => priceFile(totals, "unknown.jsonl")).toThrowError(
     /unknown\.jsonl: no rate for model "claude-nonexistent-9"/,

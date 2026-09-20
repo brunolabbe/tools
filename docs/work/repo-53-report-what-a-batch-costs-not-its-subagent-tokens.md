@@ -221,8 +221,53 @@ scripts/test/agent-cost.test.ts` (23/23 — one net fewer test, the dropped
   historical floors on the old unit), and
   `.claude/skills/orchestrate-tickets/reference/sizing.md` (the third site
   gate 2 found, now marked "Retired by repo-53 on 2026-09-20"). `status:
-done` on this ticket now rests on a landed fact, not a premise — the two
-  previously-outstanding Done-when lines are satisfied on `main` once this
-  branch and `orchestrate-skill-sweep` both merge; the fifth Done-when line
-  (one real batch's table) remains the orchestrator's to produce at
-  close-out, as recorded above.
+done` on this ticket now rests on a landed fact, not a premise — **one** of
+  the two previously-outstanding Done-when lines (the accounting table and
+  history schema naming this script) is satisfied once this branch and
+  `orchestrate-skill-sweep` both merge — this branch merges into
+  `orchestrate-skill-sweep`, not directly into `main`. The other, the fifth
+  Done-when line (one real batch's table, and the difference from the
+  subagent-token conversion recorded here), remains the orchestrator's to
+  produce at close-out, as recorded above — gate 3 flagged that `status:
+done` still asserts it ahead of that happening, which is accurate and
+  left standing rather than reverted, per the orchestrator's repeated
+  direction on this line.
+
+- 2026-09-20 — Gate 3 passed at `c2e0e34` (both gate-2 lows fixed correctly,
+  the wiring verified by content at all three sites, nothing above `low`),
+  and flagged two new lows, folded into this round rather than opened as a
+  fourth: the dropped-test comment cited `.claude/rules` for a failure mode
+  stated nowhere there (`grep -rn -i 'measure the sandbox' .claude/rules/`
+  exits 1) — corrected to point at
+  `.claude/skills/review-ticket/SKILL.md`'s actual nearby statement, noting
+  it is a different mechanism; and this Log's own closing paragraph said
+  "the two previously-outstanding Done-when lines are satisfied" one
+  sentence before naming a still-outstanding fifth — one is satisfied, not
+  two, and this branch merges into `orchestrate-skill-sweep`, not `main`
+  directly. Both fixed above and in `scripts/test/agent-cost.test.ts`.
+
+  Separately, the orchestrator ran the script for real over this session's
+  own task output files and found a fourth guard the ticket never
+  anticipated: **the brief assumed every assistant record names a billed
+  model**, and one does not. A request that hits the account's session
+  limit (HTTP 429) is logged as an assistant record with
+  `message.model: "<synthetic>"` and all-zero usage — not a second model,
+  an error marker — and the multiple-model guard was refusing any file a
+  limit touched mid-session, which reproduced exactly:
+  `node scripts/agent-cost.mjs afa05eee485fb7cef.output` refused with
+  `carries more than one model — <synthetic>, claude-opus-5` before this
+  fix. Fixed by skipping a `"<synthetic>"` record from both the model check
+  and the grouped sums, counting it, and printing the count beside its row
+  (`(N synthetic records skipped)`) and the total row — visible rather than
+  silently folded in. The previously-refused file now prices at `$16.8048`
+  with `(1 synthetic record skipped)`; the settled file
+  (`ac9491c3ec452c459.output`, which has none) is unaffected and still
+  gives exactly `$32.7305`. Added
+  `scripts/test/fixtures/agent-cost/synthetic.jsonl` (the `opus.jsonl` pair
+  with one synthetic record between them) and three tests: the grouped sum
+  with the skip counted, the CLI's row and skip note, and a file with no
+  synthetic records printing no skip note at all.
+
+  Gates re-run: `npm run check` exit 0; `npx vitest run
+scripts/test/agent-cost.test.ts` (26/26 — three net new tests over gate
+  3's 23); `npx vitest run --project repo` (372/372).
