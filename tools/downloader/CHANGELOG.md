@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/brunolabbe/tools/compare/downloader-v0.7.0...downloader-v0.8.0) (2026-09-22)
+
+
+### Features
+
+* **downloader:** a human check on probe and job creation, with Turnstile (dl-50) ([#283](https://github.com/brunolabbe/tools/issues/283)) ([6f1f6bf](https://github.com/brunolabbe/tools/commit/6f1f6bf2550f980a809f978369adfb589ee878a5))
+
 ## [0.7.0](https://github.com/brunolabbe/tools/compare/downloader-v0.6.0...downloader-v0.7.0) (2026-09-20)
 
 
