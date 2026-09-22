@@ -65,7 +65,7 @@ that ordering matters:
   `ENABLE_YTDLP_RESOLVER=false` — just slower on well-known sites", and for
   YouTube that is false: with the tier off, a watch page ends in
   `NO_MEDIA_FOUND` after both the sniffer and the direct tier come back empty
-  ([dl-71](./work/dl-71-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md),
+  ([dl-72](./work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md),
   measured 2026-09-22). The released image had shipped without the binary on
   the strength of that sentence. **YouTube needs yt-dlp**, so the image installs
   it by default and a scheduled workflow keeps its pin current — a stale pin

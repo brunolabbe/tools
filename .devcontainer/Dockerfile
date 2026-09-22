@@ -98,7 +98,7 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
   && docker compose version
 
 # yt-dlp, at the same version the production image ships — YouTube resolves
-# through it and through nothing else (dl-71). YTDLP_VERSION here, in
+# through it and through nothing else (dl-72). YTDLP_VERSION here, in
 # devcontainer.json and in tools/downloader/Dockerfile must agree;
 # tools/downloader/api/test/ytdlp-in-the-image.test.ts fails when they do not,
 # and .github/workflows/ytdlp-bump.yml moves all three together.

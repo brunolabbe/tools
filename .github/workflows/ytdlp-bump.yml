@@ -4,7 +4,7 @@ name: yt-dlp bump
 # YouTube changes under yt-dlp constantly, and a pin nobody moves stops working
 # the same way a missing binary does. `2025.09.26` sat pinned until it failed on
 # YouTube with "The page needs to be reloaded", and the tier fell through to a
-# sniffer that cannot resolve YouTube at all (dl-71).
+# sniffer that cannot resolve YouTube at all (dl-72).
 #
 # Once a week, and on demand, this compares the pin in
 # `tools/downloader/Dockerfile` with yt-dlp's latest GitHub release. When the
@@ -16,7 +16,7 @@ name: yt-dlp bump
 # Dockerfile `ARG` naming a GitHub release, so it cannot see this pin. Renovate
 # can, through a regex manager, but it is a GitHub App installed on the account
 # with write access to every repository it is granted — a larger grant than one
-# workflow with this repository's own token. See dl-71's Log.
+# workflow with this repository's own token. See dl-72's Log.
 #
 # **Why the title is `fix(downloader)`.** This repo squash-merges, so the title
 # is the commit that lands, and release-please decides from its type whether a
@@ -152,7 +152,7 @@ jobs:
             echo "**What they do not.** Worth a look before merging:"
             echo
             echo "- The trust pair from dl-39 — \`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`, both required — is measured by hand only. Re-run it if the release notes mention certifi, compat options or TLS."
-            echo "- If a YouTube probe starts losing formats, this is where a JavaScript runtime (deno) gets added; dl-71 deferred it while it bought nothing measurable."
+            echo "- If a YouTube probe starts losing formats, this is where a JavaScript runtime (deno) gets added; dl-72 deferred it while it bought nothing measurable."
             echo
             echo "Merging releases the downloader: \`fix\` is a releasing type and the Dockerfile is under \`tools/downloader/\`."
             if [ "$HAS_TOKEN" != "true" ]; then

@@ -145,7 +145,7 @@ jobs:
           # `--no-build` below starts something other than what was just
           # built. No build-args, on purpose: `release.yml` passes none, so
           # the Dockerfile's defaults are what ships, and this gate builds
-          # what ships — yt-dlp layer included. Until dl-71 this passed the
+          # what ships — yt-dlp layer included. Until dl-72 this passed the
           # install switch as off, which is how the released image went out
           # without yt-dlp and nothing here noticed.
           tags: downloader:local
@@ -178,7 +178,7 @@ jobs:
           exit 1
       # Booting proves nothing about yt-dlp: a missing binary is a silent
       # fallthrough by design, so an image without it is healthy and finds no
-      # video on YouTube (dl-71). `/api/health` says whether the service found
+      # video on YouTube (dl-72). `/api/health` says whether the service found
       # the binary; running it proves the PyInstaller build starts on this
       # base; and comparing its version with the Dockerfile's pin proves the
       # layer came from the pin rather than from a stale cache.

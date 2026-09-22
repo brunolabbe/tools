@@ -33,7 +33,7 @@ services:
       # No build args: the Dockerfile's defaults are what the release ships,
       # yt-dlp included, and this file builds the same image. yt-dlp is not
       # optional for coverage — YouTube resolves through it and nothing else
-      # (dl-71).
+      # (dl-72).
     image: downloader:local
     restart: unless-stopped
     ports:

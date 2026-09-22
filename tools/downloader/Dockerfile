@@ -91,7 +91,7 @@ RUN apt-get update \
 # it. The browser sniffer covers pages nobody has written an extractor for, but
 # it does not cover YouTube: with this tier off, a YouTube watch page ends in
 # NO_MEDIA_FOUND after the sniffer and the direct tier both come back empty.
-# Until dl-71 this defaulted to `false` on the claim that the sniffer "still
+# Until dl-72 this defaulted to `false` on the claim that the sniffer "still
 # works", no build passed `true`, and the released image found no video on
 # YouTube at all.
 #

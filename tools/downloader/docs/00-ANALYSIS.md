@@ -147,6 +147,13 @@ for" is exactly the set the project exists to serve. Extractors are a speed
 optimisation for the well-trodden case. They are never the foundation, and the
 system must remain fully functional with `yt-dlp` absent entirely.
 
+That holds for the sites the sniffer can see, and it is not all of them.
+YouTube serves nothing a network-layer sniffer can catch, so without yt-dlp it
+answers `NO_MEDIA_FOUND`: measured in
+[dl-72](./work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md),
+which is why the released image ships yt-dlp. Its absence costs latency on most
+sites, and coverage on some.
+
 ### Mechanism B — headless browser network sniffing (Playwright)
 
 Drive a real Chromium, let the page's own player do the work, and watch what it

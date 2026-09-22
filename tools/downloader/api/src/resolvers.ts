@@ -15,7 +15,7 @@
  *   yt-dlp into an *error* rather than a fallthrough is a bug.
  *
  *   A fallthrough is not the same as coverage, though: the sniffer cannot
- *   resolve YouTube, so removing yt-dlp removes YouTube (dl-71). That is why
+ *   resolve YouTube, so removing yt-dlp removes YouTube (dl-72). That is why
  *   the image installs it — not a reason to make its absence an error.
  *
  * Priorities come from the resolvers themselves (yt-dlp 20, browser 50, direct

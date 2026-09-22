@@ -37,7 +37,7 @@ tier in front of it is mainly a fast path for the ~1800 sites it has extractors
 for: better metadata, ~2 s instead of ~15 s. A missing binary is a fallthrough
 rather than an error, but it is not optional for coverage: **YouTube needs
 yt-dlp**, because the sniffer finds no video on a YouTube page
-([dl-71](./docs/work/dl-71-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md)).
+([dl-72](./docs/work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md)).
 The image ships it. An extractor-only tool was considered and
 ruled out — on an unknown site its coverage is not degraded but zero. See
 [docs/02-ROADMAP.md](./docs/02-ROADMAP.md).

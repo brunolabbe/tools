@@ -500,7 +500,7 @@ of what does not get fixed afterwards.
 **`INSTALL_YTDLP` is decided by the downloader's `Dockerfile`, not on the host
 and not in CI.** It is a build arg, and a host that pulls an image runs no build
 to pass it to. This paragraph used to say it was "decided in CI", and that is
-how the downloader shipped without yt-dlp until dl-71: `release.yml` passed no
+how the downloader shipped without yt-dlp until dl-72: `release.yml` passed no
 build-args, so the image took the `Dockerfile`'s default, which was `false` —
 and the pull-request gate in `downloader.yml` passed `false` explicitly, so the
 one build that could have looked never built what shipped. YouTube found no

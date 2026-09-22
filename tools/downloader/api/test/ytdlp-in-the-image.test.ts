@@ -1,6 +1,6 @@
 /**
  * The image ships yt-dlp, at one version, and the bot that moves that version
- * opens a pull request release-please will actually ship (dl-71).
+ * opens a pull request release-please will actually ship (dl-72).
  *
  * Why this is a scan and not trust. The released image went out without yt-dlp
  * because `INSTALL_YTDLP` defaulted to `false` and no build passed it, and the
@@ -107,7 +107,7 @@ describe("the downloader image installs yt-dlp", () => {
 describe("every yt-dlp pin agrees", () => {
   test("the pins the image and the devcontainer are built from are all found", () => {
     // A scan that finds nothing agrees with itself. These three are the pins
-    // dl-71 found; a new one is welcome, a missing one means the scan broke.
+    // dl-72 found; a new one is welcome, a missing one means the scan broke.
     const files = new Set(pins().map((pin) => pin.file));
     expect([...files]).toEqual(
       expect.arrayContaining([
@@ -128,7 +128,7 @@ describe("every yt-dlp pin agrees", () => {
   });
 
   test("the pin is at least 2026.08.19, the first release measured to resolve YouTube again", () => {
-    // `2025.09.26` fails on the video in dl-71's reproduction. A string
+    // `2025.09.26` fails on the video in dl-72's reproduction. A string
     // comparison is an order comparison for zero-padded dates.
     const [pin] = pins();
     expect(pin?.version.localeCompare("2026.08.19")).toBeGreaterThanOrEqual(0);

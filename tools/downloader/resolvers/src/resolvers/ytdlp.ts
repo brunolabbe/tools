@@ -6,7 +6,7 @@
  * does, only slower and with poorer metadata. That premise is false for YouTube:
  * the sniffer returns `NO_MEDIA_FOUND` on a watch page, so there this tier is the
  * only one that finds anything, and the image ships the binary for that reason
- * (dl-71). The fallthrough rules below still hold — a missing or broken
+ * (dl-72). The fallthrough rules below still hold — a missing or broken
  * yt-dlp must degrade, never fail the chain. Two consequences are encoded here
  * deliberately:
  *
