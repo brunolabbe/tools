@@ -463,6 +463,12 @@ touches `CHANGELOG.md`, `version.txt` and `api/package.json` — nothing
 executable — so this is a small hole. Add the token the day an unchecked release
 PR actually bothers you.
 
+**The same token serves `ytdlp-bump.yml`**, and there the hole is not small: a
+bump changes the binary the image runs, and the container gate that proves the
+new version starts is one of the checks that does not run. Without the token,
+close and reopen each bump pull request by hand before merging it — a reopen by
+a person triggers every workflow.
+
 To add it, a fine-grained personal access token scoped to this repository alone,
 with **Contents: read and write** and **Pull requests: read and write**, and
 nothing else:
@@ -491,9 +497,26 @@ release PR — which is allowed: the changelog in an open release PR is a normal
 file and can be edited before merging. downloader 0.2.0 is the standing example
 of what does not get fixed afterwards.
 
-**`INSTALL_YTDLP` is decided in CI now, not on the host.** It was a build arg,
-and a host that pulls an image no longer runs a build to pass it to. Changing it
-means changing the workflow and cutting a release.
+**`INSTALL_YTDLP` is decided by the downloader's `Dockerfile`, not on the host
+and not in CI.** It is a build arg, and a host that pulls an image runs no build
+to pass it to. This paragraph used to say it was "decided in CI", and that is
+how the downloader shipped without yt-dlp until dl-72: `release.yml` passed no
+build-args, so the image took the `Dockerfile`'s default, which was `false` —
+and the pull-request gate in `downloader.yml` passed `false` explicitly, so the
+one build that could have looked never built what shipped. YouTube found no
+video in production, because the sniffer cannot resolve it. The default is
+`true` now, **no workflow and no compose file passes the arg at all**, and
+`tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails if one starts to.
+Changing it means changing the `Dockerfile` and cutting a release.
+
+**The yt-dlp pin is moved by a workflow, not by memory.**
+[`ytdlp-bump.yml`](../.github/workflows/ytdlp-bump.yml) opens a
+`fix(downloader): bump yt-dlp to <version>` pull request when yt-dlp publishes
+a release; merging it queues a downloader release like any other `fix`. It uses
+`RELEASE_PLEASE_TOKEN` when that secret exists, and without it the pull request
+arrives with **no checks run** — its body says so, and closing and reopening it
+by hand runs them. A pin nobody moves fails the same way a missing binary does:
+`2025.09.26` stopped resolving YouTube.
 
 **A rebuilt image at the same version is a different image.** The
 `workflow_dispatch` path exists for exactly one case — the source is unchanged

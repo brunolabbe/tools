@@ -1,0 +1,171 @@
+name: yt-dlp bump
+
+# Keeps the downloader's yt-dlp pin from going stale, which is not a nicety:
+# YouTube changes under yt-dlp constantly, and a pin nobody moves stops working
+# the same way a missing binary does. `2025.09.26` sat pinned until it failed on
+# YouTube with "The page needs to be reloaded", and the tier fell through to a
+# sniffer that cannot resolve YouTube at all (dl-72).
+#
+# Once a week, and on demand, this compares the pin in
+# `tools/downloader/Dockerfile` with yt-dlp's latest GitHub release. When the
+# release is newer it rewrites **every** `YTDLP_VERSION` pin in the repo — found
+# by shape, not by a list, so a new pin is moved without anyone editing this
+# file — and opens a pull request. Nothing merges on its own.
+#
+# **Why not Dependabot or Renovate.** Dependabot has no ecosystem for a
+# Dockerfile `ARG` naming a GitHub release, so it cannot see this pin. Renovate
+# can, through a regex manager, but it is a GitHub App installed on the account
+# with write access to every repository it is granted — a larger grant than one
+# workflow with this repository's own token. See dl-72's Log.
+#
+# **Why the title is `fix(downloader)`.** This repo squash-merges, so the title
+# is the commit that lands, and release-please decides from its type whether a
+# release follows: `chore`, `build` and `ci` are `hidden` in
+# `release-please-config.json` and would merge a new pin into `main` while the
+# running image kept the old one. `fix` releases, and the Dockerfile the bump
+# rewrites is under `tools/downloader/`, which is what routes it to that tool —
+# release-please reads paths, never the scope. Both halves are asserted by
+# `tools/downloader/api/test/ytdlp-in-the-image.test.ts`, which reads the
+# `title=` line below.
+#
+# **Checks, and the token.** A pull request opened with the default
+# `GITHUB_TOKEN` triggers no workflow at all — GitHub's loop-prevention rule —
+# so without a token of another kind the bump arrives with no CI, no container
+# gate and no title check. This reuses `RELEASE_PLEASE_TOKEN`, the fine-grained
+# token `docs/03-RELEASING.md` already describes for the same problem with the
+# same two permissions, and falls back to `GITHUB_TOKEN` without it. On the
+# fallback the pull request says so in its body, and closing and reopening it
+# by hand runs every check, because a reopen by a person is an ordinary event.
+# The fallback also needs "Allow GitHub Actions to create and approve pull
+# requests" on in the repository's Actions settings, which release-please's own
+# fallback already depends on.
+
+on:
+  schedule:
+    # Mondays, 07:23 UTC. Off the hour because every scheduled workflow on
+    # GitHub starts on the hour and the queue shows it.
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ytdlp-bump
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The push below is made with this token, so it has to be the one
+          # that can trigger workflows when there is one.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Compare the pin with yt-dlp's latest release
+        id: versions
+        env:
+          # Reading a public release needs nothing beyond the default token.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current="$(sed -n 's/^ARG YTDLP_VERSION=//p' tools/downloader/Dockerfile)"
+          # `releases/latest` excludes drafts and pre-releases. Nightlies are a
+          # different repository (yt-dlp/yt-dlp-nightly-builds) and never
+          # reach this.
+          latest="$(gh release view --repo yt-dlp/yt-dlp --json tagName --jq .tagName)"
+          shape='^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
+          for value in "$current" "$latest"; do
+            if ! [[ "$value" =~ $shape ]]; then
+              echo "::error::'${value}' is not a yt-dlp release tag; refusing to rewrite pins with it"
+              exit 1
+            fi
+          done
+          newest="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)"
+          if [ "$latest" = "$current" ] || [ "$newest" != "$latest" ]; then
+            echo "The pin ${current} is current (latest release ${latest})."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          branch="ytdlp-bump/${latest}"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "${branch} already exists; its pull request is this bump."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "bump=true"
+            echo "current=${current}"
+            echo "latest=${latest}"
+            echo "branch=${branch}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Rewrite every pin
+        if: steps.versions.outputs.bump == 'true'
+        env:
+          CURRENT: ${{ steps.versions.outputs.current }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          set -euo pipefail
+          # The same shape the unit test scans for, over the same files:
+          # markdown and fixtures excluded, because ticket Logs and captured
+          # output quote old versions as history rather than as pins.
+          current_re="${CURRENT//./\\.}"
+          pin="YTDLP_VERSION[\"']?[[:space:]]*[=:][[:space:]]*[\"']?"
+          files="$(git grep -lE "${pin}${current_re}" -- ':!*.md' ':!**/fixtures/**')"
+          echo "Pins at ${CURRENT}:"
+          echo "$files"
+          echo "$files" | xargs sed -i -E "s/(${pin})${current_re}/\1${LATEST}/g"
+          if git grep -nE "${pin}${current_re}" -- ':!*.md' ':!**/fixtures/**'; then
+            echo "::error::a pin still names ${CURRENT} after the rewrite"
+            exit 1
+          fi
+          git diff --stat
+
+      - name: Open the pull request
+        if: steps.versions.outputs.bump == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          HAS_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN != '' }}
+          CURRENT: ${{ steps.versions.outputs.current }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+          BRANCH: ${{ steps.versions.outputs.branch }}
+        run: |
+          set -euo pipefail
+          latest="$LATEST"
+          title="fix(downloader): bump yt-dlp to ${latest}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -a -m "$title"
+          git push origin "$BRANCH"
+          {
+            echo "Moves every \`YTDLP_VERSION\` pin from \`${CURRENT}\` to \`${latest}\`, opened by \`.github/workflows/ytdlp-bump.yml\`."
+            echo
+            echo "Release notes: https://github.com/yt-dlp/yt-dlp/releases/tag/${latest}"
+            echo
+            echo "**What the checks prove.** The container gate in \`downloader.yml\` builds the image with this pin and fails unless \`yt-dlp --version\` inside it prints \`${latest}\`. Nothing in CI runs yt-dlp against a real site."
+            echo
+            echo "**What they do not.** Worth a look before merging:"
+            echo
+            echo "- The trust pair from dl-39 — \`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`, both required — is measured by hand only. Re-run it if the release notes mention certifi, compat options or TLS."
+            echo "- If a YouTube probe starts losing formats, this is where a JavaScript runtime (deno) gets added; dl-72 deferred it while it bought nothing measurable."
+            echo
+            echo "Merging releases the downloader: \`fix\` is a releasing type and the Dockerfile is under \`tools/downloader/\`."
+            if [ "$HAS_TOKEN" != "true" ]; then
+              echo
+              echo "**No checks have run on this pull request.** It was opened with the default \`GITHUB_TOKEN\`, which triggers no workflows. Close it and reopen it to run them, or add \`RELEASE_PLEASE_TOKEN\` as \`docs/03-RELEASING.md\` describes."
+            fi
+          } > "$RUNNER_TEMP/body.md"
+          url="$(gh pr create --base main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/body.md")"
+          echo "Opened ${url}"
+          # An older bump still open is superseded by this one; leaving it
+          # would offer the owner two pull requests that conflict on every line.
+          gh pr list --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("ytdlp-bump/")) | select(.headRefName != env.BRANCH) | .number' |
+            while read -r number; do
+              gh pr close "$number" --delete-branch --comment "Superseded by ${url}."
+            done

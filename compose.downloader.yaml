@@ -30,11 +30,10 @@ services:
       # `packages/core`, none of which live beside its Dockerfile.
       context: .
       dockerfile: tools/downloader/Dockerfile
-      args:
-        # yt-dlp is a latency optimisation on well-known sites, never a
-        # dependency: without it, requests fall through to the browser sniffer
-        # and still resolve. Set true to include it.
-        INSTALL_YTDLP: "false"
+      # No build args: the Dockerfile's defaults are what the release ships,
+      # yt-dlp included, and this file builds the same image. yt-dlp is not
+      # optional for coverage — YouTube resolves through it and nothing else
+      # (dl-72).
     image: downloader:local
     restart: unless-stopped
     ports:

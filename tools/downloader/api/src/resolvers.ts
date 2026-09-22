@@ -9,11 +9,14 @@
  * The ordering rule from `tools/downloader/docs/02-ROADMAP.md`, restated because it is the one
  * thing here that is easy to get subtly wrong:
  *
- *   The browser sniffer is the *foundation*. yt-dlp is a latency optimisation
- *   layered on top of it. Removing yt-dlp must not remove coverage — with
- *   `ENABLE_YTDLP_RESOLVER=false`, or with the binary simply absent, every
- *   request falls through to the sniffer and still works. Any code path that
- *   turns a missing yt-dlp into an *error* rather than a fallthrough is a bug.
+ *   The browser sniffer is the *foundation*. yt-dlp is layered on top of it.
+ *   With `ENABLE_YTDLP_RESOLVER=false`, or with the binary simply absent, every
+ *   request falls through to the sniffer. Any code path that turns a missing
+ *   yt-dlp into an *error* rather than a fallthrough is a bug.
+ *
+ *   A fallthrough is not the same as coverage, though: the sniffer cannot
+ *   resolve YouTube, so removing yt-dlp removes YouTube (dl-72). That is why
+ *   the image installs it — not a reason to make its absence an error.
  *
  * Priorities come from the resolvers themselves (yt-dlp 20, browser 50, direct
  * 90) and the registry sorts by them, so this function only decides membership.

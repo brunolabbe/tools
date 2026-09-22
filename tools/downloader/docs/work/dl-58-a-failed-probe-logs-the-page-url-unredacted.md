@@ -173,7 +173,7 @@ hunt run by the reviewer itself at medium depth, every log call site in
   `GET http://blocked.test/seg.ts?sig=SECRET_BLOCKED` logged
   `"host":"http://blocked.test/seg.ts?sig=SECRET_BLOCKED"` beside a correctly
   redacted `details.url`.
-- **high** · `tools/downloader/resolvers/src/resolvers/ytdlp.ts:983 "stderr: stderr.slice(-500)"`
+- **high** · `tools/downloader/resolvers/src/resolvers/ytdlp.ts:988 "stderr: stderr.slice(-500)"`
   puts raw yt-dlp stderr in `details`, and yt-dlp echoes the URL mid-sentence
   (`ERROR: Unsupported URL: http://…?sig=…`, measured with yt-dlp 2025.09.26
   against a local server). `tools/downloader/api/src/logger.ts:115 "parsed = new URL(value);"`

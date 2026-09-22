@@ -88,12 +88,23 @@ analysis, and skipping it produces intermittent 403s that are miserable to debug
 **Browser sniffer as the foundation, extractors as a fast path in front of it.**
 Not an even trade between two strategies — a base layer plus an optimisation.
 Only the sniffer can handle a site nobody has written code for, which is the
-whole requirement; yt-dlp is layered ahead of it purely to serve the common ~90%
-in 2 s instead of 15 s with better metadata. The invariant that follows:
-**remove every extractor tier and the system still works**, only slower. If a
-change ever makes yt-dlp load-bearing for coverage, the layering has inverted and
-is wrong. Adding site support = adding a resolver file; it must never require
+whole requirement; yt-dlp is layered ahead of it mainly to serve the common ~90%
+in 2 s instead of 15 s with better metadata. The invariant that follows: **a
+missing extractor tier is a fallthrough, never an error**, and a site the sniffer
+can read still resolves without it. Adding site support = adding a resolver file; it must never require
 touching the engine, API or UI.
+
+**What this section used to claim, and what building it measured.** It said
+"remove every extractor tier and the system still works, only slower", and that
+yt-dlp becoming load-bearing for coverage would mean the layering had inverted.
+For YouTube it is load-bearing, and not because of anything this code did: the
+sniffer comes back with `NO_MEDIA_FOUND` on a YouTube watch page, so without
+yt-dlp the site finds no video at all
+([dl-72](./work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md)).
+The layering is still right for the sites nobody has written an extractor for;
+it is not a promise that every site the extractor handles is also one the
+sniffer can. **YouTube needs yt-dlp**, so the image ships it and its pin is kept
+current by `.github/workflows/ytdlp-bump.yml`.
 
 **ffmpeg for all assembly.** Hand-rolled segment concatenation breaks on
 discontinuities, timestamp drift and A/V sync. Ship `ffmpeg-static` so there is
@@ -205,7 +216,7 @@ and their defaults.
 | `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `FFMPEG_PATH`                 | bundled      | override system binary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `YTDLP_PATH`                  | `yt-dlp`     | optional; degrade gracefully if absent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `YTDLP_PATH`                  | `yt-dlp`     | absent is a fallthrough, not an error — but the image ships it, because YouTube resolves through nothing else (`dl-72`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `PROXY_URL`                   | —            | must apply to probe _and_ download (IP-bound signed URLs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `EGRESS_CA_FILE`              | system store | extra CA bundle, **merged** with the public roots; four clients get it — ffmpeg's terminating proxy, the tiers' terminating proxy (`dl-37`), the undici dispatcher behind every probe, and ffmpeg when interception is off. Chromium and yt-dlp are reached through their proxy rather than directly, because neither has a trust store this repo can write to; with `FFMPEG_TLS_INTERCEPT` off they are not reached at all and say `TLS_VERIFICATION_FAILED` when that bites (`dl-34`). Boot warns which of the two states it is in. `FFMPEG_CA_FILE` is the deprecated spelling and still works, warning at boot |
 | `FFMPEG_TLS_INTERCEPT`        | `true`       | the proxies terminate TLS, which is what verifies **segment** origins and what carries `EGRESS_CA_FILE` to the tiers. `false` restores the `dl-14` tunnel for ffmpeg _and_ the tiers: everything keeps working and the manifest is still checked, but the segments go back to unverified (`dl-21`) and the tiers back to their own trust stores (`dl-34`). Narrower than its name since `dl-37`. Warns at boot                                                                                                                                                                                                     |
