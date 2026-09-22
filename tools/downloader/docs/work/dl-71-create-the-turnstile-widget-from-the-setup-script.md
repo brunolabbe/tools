@@ -3,7 +3,7 @@ id: dl-71
 tool: downloader
 title: Create the downloader's Turnstile widget from the Cloudflare setup script
 kind: work-package
-status: needs-decision
+status: ready
 milestone: M5
 depends_on: [dl-50]
 difficulty: standard
@@ -31,7 +31,12 @@ click the downloader's deployment needs, and it fits the same shape. Cloudflare'
 API creates one with `POST /accounts/{account_id}/challenges/widgets`, taking a
 name, a list of domains and a mode, and answering with the site key and secret.
 
-## Decision — open, the owner's
+## Decision — answered 2026-09-22 by the owner, not open
+
+**D1 (a)** and **D2 (a)**, both the recommendation: the same
+`CLOUDFLARE_API_TOKEN` gains `Account · Turnstile · Edit`, and `--apply` prints
+the site key and the secret once, as `.env` lines to paste, writing nothing to
+disk. The options as they were put:
 
 **D1. Which token creates the widget.** The script's header lists exactly three
 permissions for `CLOUDFLARE_API_TOKEN` and says a token with more "is a token
@@ -102,3 +107,4 @@ file. Either order works, but they must not run concurrently.
 - 2026-09-22 — Filed at the owner's request while dl-50 was in review, to help
   create the Turnstile widget. Nothing measured against the live API: the script's
   token is not available to an agent, and reading a real `.env` is denied.
+- 2026-09-22 — The owner answered D1 (a) and D2 (a). Moved to `ready`.
