@@ -1,9 +1,14 @@
 /**
  * yt-dlp fast path — priority 20.
  *
- * This tier is a **latency optimisation, not a coverage mechanism** (analysis
- * §4). Everything it does, the browser sniffer can also do, only slower and with
- * poorer metadata. Two consequences are encoded here deliberately:
+ * This tier was designed as a **latency optimisation, not a coverage mechanism**
+ * (analysis §4), on the premise that the browser sniffer can do everything it
+ * does, only slower and with poorer metadata. That premise is false for YouTube:
+ * the sniffer returns `NO_MEDIA_FOUND` on a watch page, so there this tier is the
+ * only one that finds anything, and the image ships the binary for that reason
+ * (dl-71). The fallthrough rules below still hold — a missing or broken
+ * yt-dlp must degrade, never fail the chain. Two consequences are encoded here
+ * deliberately:
  *
  *  - A missing binary makes `canHandle()` return `false`. It is not an error,
  *    it is a fallthrough. Same for `ENABLE_YTDLP_RESOLVER=false`.

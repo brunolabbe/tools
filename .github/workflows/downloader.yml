@@ -141,11 +141,14 @@ jobs:
           file: tools/downloader/Dockerfile
           push: false
           load: true
-          # The tag and the build arg both have to match
-          # `compose.downloader.yaml`, or the `--no-build` below starts
-          # something other than what was just built.
+          # The tag has to match `compose.downloader.yaml`, or the
+          # `--no-build` below starts something other than what was just
+          # built. No build-args, on purpose: `release.yml` passes none, so
+          # the Dockerfile's defaults are what ships, and this gate builds
+          # what ships — yt-dlp layer included. Until dl-71 this passed the
+          # install switch as off, which is how the released image went out
+          # without yt-dlp and nothing here noticed.
           tags: downloader:local
-          build-args: INSTALL_YTDLP=false
           cache-from: type=gha,scope=downloader
           # Read on every run, written only from `main`. A cache written on a
           # pull request branch is scoped to that branch and readable from
@@ -173,6 +176,21 @@ jobs:
           echo "the service never became healthy"
           docker compose -f compose.downloader.yaml logs
           exit 1
+      # Booting proves nothing about yt-dlp: a missing binary is a silent
+      # fallthrough by design, so an image without it is healthy and finds no
+      # video on YouTube (dl-71). `/api/health` says whether the service found
+      # the binary; running it proves the PyInstaller build starts on this
+      # base; and comparing its version with the Dockerfile's pin proves the
+      # layer came from the pin rather than from a stale cache.
+      - name: Check the image ships yt-dlp at the pinned version
+        run: |
+          set -euo pipefail
+          jq -e '.ytdlp.available == true' /tmp/health.json
+          pinned="$(sed -n 's/^ARG YTDLP_VERSION=//p' tools/downloader/Dockerfile)"
+          shipped="$(docker compose -f compose.downloader.yaml exec -T downloader yt-dlp --version)"
+          echo "pinned ${pinned}, shipped ${shipped}"
+          test -n "$pinned"
+          test "$shipped" = "$pinned"
       # `-v` is safe here and nowhere else: this is a throwaway runner whose
       # volume was created sixty seconds ago. On a host, that flag is what
       # destroys the job database — see docs/02-DEPLOYMENT.md.

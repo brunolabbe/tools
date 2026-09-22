@@ -17,7 +17,7 @@ FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG USERNAME=pwuser
 ARG NODE_MAJOR=22
-ARG YTDLP_VERSION=2025.09.26
+ARG YTDLP_VERSION=2026.08.19
 ARG TZ=Etc/UTC
 
 ENV TZ="${TZ}"
@@ -97,9 +97,11 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
   && rm -rf /var/lib/apt/lists/* \
   && docker compose version
 
-# yt-dlp is a latency optimisation, never a dependency — but the resolver tier
-# that uses it only has tests worth running when the binary exists, so it is
-# present here even though the production image defaults it off.
+# yt-dlp, at the same version the production image ships — YouTube resolves
+# through it and through nothing else (dl-71). YTDLP_VERSION here, in
+# devcontainer.json and in tools/downloader/Dockerfile must agree;
+# tools/downloader/api/test/ytdlp-in-the-image.test.ts fails when they do not,
+# and .github/workflows/ytdlp-bump.yml moves all three together.
 RUN curl -fsSL -o /usr/local/bin/yt-dlp \
       "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
   && chmod 0755 /usr/local/bin/yt-dlp
