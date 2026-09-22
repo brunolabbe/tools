@@ -29,6 +29,15 @@ test.afterAll(async () => {
   await hls.close();
 });
 
+/** A frame's hostname, or `null` for `about:blank` and anything else unparsable. */
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
 function tokenOf(request: Request): unknown {
   return (request.postDataJSON() as { humanCheckToken?: unknown } | null)?.humanCheckToken;
 }
@@ -68,10 +77,12 @@ test("one analysis passes the real widget twice, under the real policy", async (
 
   // The widget really came from Cloudflare — its script, then its iframe —
   // rather than the check being off and both calls passing for that reason.
-  expect(cloudflare.some((url) => url.includes("/turnstile/v0/api.js"))).toBe(true);
-  expect(page.frames().some((frame) => frame.url().includes("challenges.cloudflare.com"))).toBe(
-    true,
-  );
+  // Compared as parsed hostnames and paths, never as substrings of the URL: a
+  // substring match on a host also matches `challenges.cloudflare.com.evil.example`.
+  expect(cloudflare.some((url) => new URL(url).pathname === "/turnstile/v0/api.js")).toBe(true);
+  expect(
+    page.frames().some((frame) => hostnameOf(frame.url()) === "challenges.cloudflare.com"),
+  ).toBe(true);
 
   // And the policy let all of it through: a widget the CSP half-blocked can
   // still produce a token, so a pass above is not enough on its own.

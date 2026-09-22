@@ -67,6 +67,8 @@ the allowlist is the only configuration in which its data model is coherent.
    `curl -sS https://downloader.oludoi.com/api/config` — from a session Access
    lets through — answers a `siteKey`, not `null`. The owner's, because the
    secret key is a credential no agent should hold.
+   [dl-71](./dl-71-create-the-turnstile-widget-from-the-setup-script.md) makes
+   the widget a `cloudflare-setup.mjs --apply` rather than a dashboard click.
 5. **The owner deletes the downloader's Access application** on the dashboard.
    This is outward-facing and hard to take back quietly, so it is the owner's
    action, not an agent's. The ticket's Log records who did it and when.
