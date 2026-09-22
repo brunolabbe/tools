@@ -22,6 +22,8 @@ import { createEgressDispatcher } from "./dispatcher.ts";
 import { startEgressProxy } from "./egress-proxy.ts";
 import type { EgressProxy } from "./egress-proxy.ts";
 import { createGuardedFetch } from "./guarded-fetch.ts";
+import { createHumanCheck } from "./human-check.ts";
+import type { HumanCheck } from "./human-check.ts";
 import { readOperatorCa, withSystemRoots } from "./operator-ca.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
@@ -35,6 +37,7 @@ import { createLogger } from "./logger.ts";
 import { PerClientConcurrencyGate } from "./per-client-gate.ts";
 import { redactLoggedUrl, registerRequestLogging, requestIdFrom } from "./request-log.ts";
 import { buildRegistry } from "./resolvers.ts";
+import { registerClientConfigRoute } from "./routes/config.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerFileRoutes } from "./routes/files.ts";
 import { registerHealthRoute } from "./routes/health.ts";
@@ -63,6 +66,11 @@ export interface CreateAppOptions {
    `ffmpegEgress` (dl-56), which a stub engine has no binary to run.
    */
   grabFrame?: FrameGrabber;
+  /**
+   * Injected in tests. Overrides the check built from `config.turnstile`, so a
+   * test can stand in for Cloudflare's answer without a network (dl-50).
+   */
+  humanCheck?: HumanCheck;
 }
 
 export interface App {
@@ -526,6 +534,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     frameGrabGate,
     jobClientGate: new PerClientConcurrencyGate(config.maxJobsPerClient),
     probeClientGate: new PerClientConcurrencyGate(config.maxProbesPerClient),
+    humanCheck: options.humanCheck ?? createHumanCheck({ turnstile: config.turnstile }),
     now,
     isShuttingDown: () => shuttingDown,
   };
@@ -549,6 +558,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerCors(server, config);
 
   registerHealthRoute(server, context);
+  registerClientConfigRoute(server, context);
   registerProbeRoute(server, context);
   registerProbeEventRoutes(server, context);
   registerJobRoutes(server, context);

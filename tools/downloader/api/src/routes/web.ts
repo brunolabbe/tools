@@ -68,6 +68,33 @@ const API_PREFIX = "/api/";
  *  - `connect-src 'self'` — `fetch` and the `EventSource` progress stream, both
  *    same-origin because this service serves the bundle.
  *
+ * **Widened by dl-50, for two origins and nothing else**, each measured rather
+ * than guessed:
+ *
+ *  - `https://challenges.cloudflare.com` in `script-src` and `frame-src` — the
+ *    Turnstile widget. The page loads its `api.js` from there, and the widget
+ *    runs inside an iframe from the same origin. Loaded only when
+ *    `GET /api/config` says a check is configured, so a deployment without one
+ *    never contacts it; the policy allows it either way, because the header is
+ *    a constant and making it depend on configuration would put two policies
+ *    in front of one test suite.
+ *  - `https://static.cloudflareinsights.com` in `script-src` — Cloudflare Web
+ *    Analytics' beacon, which the edge appends to the document on a proxied
+ *    hostname with automatic setup on. It reports to `/cdn-cgi/rum` on this
+ *    same origin, so `connect-src 'self'` already covers it and was not
+ *    widened in advance; if a browser is ever seen refusing that report, the
+ *    answer is `cloudflareinsights.com` in `connect-src`, recorded here.
+ *
+ * `frame-src` is new with that widening. `default-src 'self'` was covering it
+ * before; written out now because the widening is the first time it needed a
+ * value `default-src` does not have, and widening `default-src` instead would
+ * have widened every directive that falls back to it.
+ *
+ * The document is also never sent `Cache-Control: no-transform`. Cloudflare
+ * does not rewrite such a response, so the beacon above would vanish with no
+ * error anywhere. `no-cache` is what it gets, below and in
+ * `serveIndexForUnknownPath`; `csp.test.ts` asserts both doors.
+ *
  * `object-src 'none'` and `frame-ancestors 'none'` are tightenings rather than
  * enumerations, and `frame-ancestors` has no `default-src` fallback at all — it
  * exists only if it is written. `base-uri 'self'` stops an injected `<base>`
@@ -78,10 +105,11 @@ const API_PREFIX = "/api/";
  */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "style-src 'self'",
   "img-src 'self'",
   "connect-src 'self'",
+  "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",

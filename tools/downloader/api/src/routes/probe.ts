@@ -45,7 +45,15 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
         details: { issues: parsed.error.issues.slice(0, 3) },
       });
     }
-    const { url: rawUrl, refresh, probeId } = parsed.data;
+    const { url: rawUrl, refresh, probeId, humanCheckToken } = parsed.data;
+
+    // dl-50. First after the body parses, and so before everything that costs
+    // something: the SSRF guard's DNS lookup, the cache, the stage channel,
+    // both concurrency gates. A refused request holds no slot because it never
+    // reaches one. A cache hit needs a token too, for the reason the header
+    // gives for spending a bucket token on one. No outcome row either — a
+    // refusal here is about the caller, not about any host (dl-57).
+    await context.humanCheck.require(humanCheckToken, request.logger);
 
     // Before the cache, so a blocked address is rejected even if a previous
     // request cached an answer for it under a different policy.

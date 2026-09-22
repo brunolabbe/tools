@@ -11,6 +11,7 @@ import type { BrowserResolver, ResolverRegistry, YtDlpResolver } from "@download
 import type { ApiConfig } from "./config.ts";
 import type { JobStore } from "./db/job-store.ts";
 import type { GuardedFetch } from "./guarded-fetch.ts";
+import type { HumanCheck } from "./human-check.ts";
 import type { JobEventHub } from "./jobs/events.ts";
 import type { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import type { JobOrchestrator } from "./jobs/orchestrator.ts";
@@ -115,6 +116,12 @@ export interface AppContext {
    */
   jobClientGate: PerClientConcurrencyGate;
   probeClientGate: PerClientConcurrencyGate;
+  /**
+   * The Turnstile check on probe and job creation (dl-50). Runs before every
+   * gate above, so a refused request never holds a slot. A no-op when the
+   * deployment configured none.
+   */
+  humanCheck: HumanCheck;
   now: () => Date;
   /** Flips during shutdown so intake can be refused before the sockets close. */
   isShuttingDown: () => boolean;

@@ -39,6 +39,10 @@ afterEach(async () => {
 
 const HTML = { accept: "text/html,application/xhtml+xml" };
 
+/** dl-50's two widenings, and the only foreign origins the policy may name. */
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+const BEACON_ORIGIN = "https://static.cloudflareinsights.com";
+
 /**
  * Written out here rather than imported from `routes/web.ts`.
  *
@@ -49,10 +53,13 @@ const HTML = { accept: "text/html,application/xhtml+xml" };
  */
 const EXPECTED: ReadonlyMap<string, readonly string[]> = new Map([
   ["default-src", ["'self'"]],
-  ["script-src", ["'self'"]],
+  // dl-50: the Turnstile widget's script, and Cloudflare Web Analytics' beacon.
+  ["script-src", ["'self'", TURNSTILE_ORIGIN, BEACON_ORIGIN]],
   ["style-src", ["'self'"]],
   ["img-src", ["'self'"]],
   ["connect-src", ["'self'"]],
+  // dl-50: the widget renders in an iframe from the same origin as its script.
+  ["frame-src", [TURNSTILE_ORIGIN]],
   ["object-src", ["'none'"]],
   ["base-uri", ["'self'"]],
   ["frame-ancestors", ["'none'"]],
@@ -213,5 +220,28 @@ describe("without WEB_DIR", () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.headers["content-security-policy"]).toBeUndefined();
+  });
+});
+
+describe("the document's Cache-Control (dl-50)", () => {
+  test("never carries no-transform, through either door to the document", async () => {
+    // Cloudflare does not rewrite a response marked `no-transform`, and the
+    // Web Analytics beacon is a rewrite: the edge appends its `<script>` to
+    // the document. So `no-transform` here would remove the beacon with no
+    // error anywhere — the header would be the only evidence, and nobody reads
+    // it. Both doors, because `serveIndexForUnknownPath` sets its own header
+    // rather than inheriting the static plugin's.
+    const app = (await serving()).app;
+    for (const url of ["/", "/jobs/some-id"]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const response = await app.server.inject({ method: "GET", url, headers: HTML });
+      const cacheControl = response.headers["cache-control"];
+
+      expect(response.statusCode, url).toBe(200);
+      // Present, so the absence below is not satisfied by a header that was
+      // never set — which would also be a regression, in the other direction.
+      expect(typeof cacheControl, url).toBe("string");
+      expect((cacheControl as string).toLowerCase(), url).not.toContain("no-transform");
+    }
   });
 });

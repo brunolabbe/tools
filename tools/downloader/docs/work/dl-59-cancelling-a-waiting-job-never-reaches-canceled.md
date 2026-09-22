@@ -84,7 +84,7 @@ on cancellation.
 
 - **resolved** · F1 (med) — restart spec added at the end of pipeline.test.ts; red→green reproduced by the reviewer as above. The Log now records the earlier substitution.
 - **resolved** · F2 (med) — dl-51's four moved citations repointed; citations gate exit 0 at `c70dd8a` (exit 1 at `483ca7d`). Remedy (a), repoint, was the orchestrator's call, recorded in dl-51's Log.
-- **resolved** · F3 (low) — `tools/downloader/api/src/routes/jobs.ts:167 "A no-op for a job that never started"` now names the orchestrator's path, and `tools/downloader/api/src/routes/jobs.ts:175 "For outcome"` scopes the stale-status note to a running job.
+- **resolved** · F3 (low) — `tools/downloader/api/src/routes/jobs.ts@20eb8ba:167 "A no-op for a job that never started"` now names the orchestrator's path, and `tools/downloader/api/src/routes/jobs.ts@20eb8ba:175 "For outcome"` scopes the stale-status note to a running job.
 - **resolved** · F4 (low) — the false sentence about the brief's path is removed and the correction logged.
 - **resolved** · F5 (low) — `tools/downloader/api/src/index.ts:37 "CancelOutcome, InProcessQueueOptions"`.
 - **findings** · re-check of 5 carried findings: 5 resolved, 0 new, 0 dropped. No fresh hunt this round.

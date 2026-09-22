@@ -3,7 +3,7 @@ id: dl-50
 tool: downloader
 title: Tell a person from a script before a probe runs, without asking for an account
 kind: work-package
-status: ready
+status: done
 milestone: M5
 depends_on: []
 difficulty: hard
@@ -52,6 +52,26 @@ Offered beside it: a ticket of its own after this one, or folding it into
 visitors do but never touches the CSP. Google Analytics was offered earlier and
 not chosen. The owner ruled out ads, so nothing needed its dashboards, and it
 would have widened `connect-src` to a third party.
+
+**Added 2026-09-14, the owner's:** the always-pass and always-fail Done-when
+lines are proven against Cloudflare's **real** `siteverify`, with the
+devcontainer's egress firewall opened for the build, rather than against stubs.
+
+**Added 2026-09-22, the owner's, each the recommendation:**
+
+1. **The site key reaches the page through a new `GET /api/config`**, read at
+   run time, not baked into the bundle and not folded into `/api/health`. One
+   image serves every operator; a bundle carrying the key fails badly when
+   built without it (every request refused behind a widget that never
+   rendered); and health 503s while draining.
+2. **The live proof is an opt-in suite**, committed and skipped unless asked
+   for, so the proof is re-runnable and CI never depends on Cloudflare. That
+   reconciles the 2026-09-14 decision with the repo's "fixtures, not live
+   network calls".
+3. **The widget is invisible and executed per request** — rendered with
+   `appearance: "interaction-only"` and `execution: "execute"`, reset and
+   executed again immediately before each checked call — not a visible
+   checkbox in the form.
 
 The options as they were put, so the choice is not re-opened as an oversight:
 
@@ -136,6 +156,34 @@ host for as long as it cares to.
   fresh token each time, and neither is refused.
 - `npm run check` and `npm test` are green.
 
+## Review
+
+**Gate: PASS** — 2026-09-22 · `20eb8bac7b3a85ada01afa12658af8820d200923...9308d9bd0c88f7ea457f74453e6cf9cd354ce33b` · defect hunt run directly by the reviewer (Sonnet 5), medium-to-high depth
+
+`origin/main` at dispatch was `20eb8ba`; a fetch immediately before review found `origin/main` unchanged at `20eb8ba`, so the base is exactly the sha the diff range names.
+
+| Done when                                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No token, or the always-fail secret, is refused with the core code; no slot is taken                                       | **proven** — `tools/downloader/api/test/human-check.test.ts:157-165 "expectRefused(await postProbe(h));"`; `:175-183 "expectRefused(await postJob(h));"`; always-fail secret `:191-205 "expect(verifier.calls).toHaveLength(2);"`. Reproduced: deleting `tools/downloader/api/src/routes/probe.ts:56 "await context.humanCheck.require(humanCheckToken, request.logger);"` turns 8 of 14 specs red, restored clean         |
+| With the always-pass test keys, a probe and a job run as they do today                                                     | **proven** — `tools/downloader/api/test/human-check.test.ts:210-233 "expect(probe.statusCode).toBe(200);"`. **Verified live**: `TURNSTILE_LIVE=1 npx vitest run tools/downloader/api/test/human-check.live.test.ts` → 2 passed                                                                                                                                                                                             |
+| A `siteverify` that times out or cannot be reached refuses; a test stubs both                                              | **proven** — `tools/downloader/api/test/human-check.test.ts:237-260 "expect(Date.now() - started).toBeLessThan(5_000);"` for the timeout; `:262-278 "const h = await checked(verifier, { logger });"` for the unreachable case                                                                                                                                                                                             |
+| With the settings unset, no token is required, and a test says so                                                          | **proven** — `tools/downloader/api/test/human-check.test.ts:302-312 "expect((await postProbe(harness)).statusCode).toBe(200);"` and `:311 "expect(JSON.parse(config.body)).toEqual({ humanCheck: null });"`                                                                                                                                                                                                                |
+| No log line and no stored record contains the token                                                                        | **proven** — `tools/downloader/api/test/human-check.test.ts:364-409 "expect(line).not.toContain(TOKEN);"` and `:408 "expect(stored).not.toContain(TOKEN);"`, including a run where the thrown error message itself embeds the token: `:393 "fetch failed for a body carrying"`                                                                                                                                             |
+| The CSP differs from dl-35 only by the two origins; `e2e/csp.spec.ts` asserts the new policy                               | **proven** — `tools/downloader/api/test/csp.test.ts:57 "TURNSTILE_ORIGIN, BEACON_ORIGIN]],"` and `:62 ", [TURNSTILE_ORIGIN]],"`; `tools/downloader/e2e/csp.spec.ts:45 "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com"` proven live at `:84-94 ").toBe(EXPECTED_POLICY);"`                                                                                                      |
+| The e2e suite loads the beacon via a Playwright route with no CSP violation, and a script from any other origin is refused | **proven** — `tools/downloader/e2e/csp.spec.ts:249-251 "expect(await scriptsThatRan(page)).toEqual([BEACON_URL, TURNSTILE_URL]);"`; `:261-266 "expect(await scriptsThatRan(page)).toEqual([]);"`. Reproduced running: `npm run e2e:downloader` → 9/9                                                                                                                                                                       |
+| A test proves the document's `Cache-Control` never carries `no-transform`                                                  | **proven** — `tools/downloader/api/test/csp.test.ts:227-246 "toLowerCase(), url).not.toContain("`                                                                                                                                                                                                                                                                                                                          |
+| In the browser, one analysis makes both calls with a fresh token each, and neither is refused                              | **proven** — `tools/downloader/e2e/turnstile/live-widget.spec.ts:48-67 "expect(probeResponse?.status()).toBe(200);"`, against the real widget and `siteverify`. **Verified live**: `npm run e2e:downloader:turnstile` → 1 passed. Freshness by value is pinned separately: `tools/downloader/web/test/human-check.test.ts:96-110 "each call gets its own token: the widget is reset before every execute after the first"` |
+| `npm run check` and `npm test` are green                                                                                   | **verified** — re-run at `9308d9b`: `npm run check` exit 0; `npm test` → 3283 passed, 2 skipped; `npm test -- --project downloader` → 1540 passed, 2 skipped                                                                                                                                                                                                                                                               |
+
+- **checked, no finding** · the check runs before every slot/gate/queue/SSRF lookup in both routes, including the probe cache-hit path. `tools/downloader/api/src/routes/probe.ts:56 "await context.humanCheck.require(humanCheckToken, request.logger);"` precedes `:62 "await context.guard.assertAllowed(rawUrl);"`, `:96 "if (refresh !== true) {"`, `:163 "const clientReleaseProbe = context.probeClientGate.tryAcquire(clientKey(request.ip));"`, and `:191 "const release = context.probeGate.tryAcquire();"`; `tools/downloader/api/src/routes/jobs.ts:56 "await context.humanCheck.require(parsed.data.humanCheckToken, request.logger);"` precedes `:62 "await context.guard.assertAllowed(parsed.data.url);"`, `:68 "context.queue.waiting >= context.config.maxQueuedJobs"`, and `:86 "const releaseJobSlot = context.jobClientGate.tryAcquire(key);"`.
+- **checked, no finding** · no path from the token to a log line, an error's `details`/`cause`, the job row, `probe_outcomes`, or the SSE stream. `humanCheckToken` is destructured in both routes and passed only to `humanCheck.require(...)`; a repo-wide search for `humanCheckToken` under `tools/downloader` finds no other use. `tools/downloader/api/src/human-check.ts:105 "function refuse("` never receives the token in its `fields` argument at any call site, and `:146 "const timedOut = error instanceof Error"` logs only `error.name`, proven adversarially by the row above (the thrown error's own message was made to embed the token).
+- **checked, no finding** · `tools/downloader/api/src/config.ts:589 "in overrides"` versus `??`: correct under `exactOptionalPropertyTypes` — the build compiles clean and `turnstile: undefined` is a real, distinguishable override from absent. The harness `tools/downloader/api/test/helpers.ts:232 "turnstile: undefined,"` sets it off explicitly before spreading `options.config`, and every other suite in the 1540/2-skipped downloader run stayed green under it.
+- **checked, no finding** · the web token source. Serialised: `tools/downloader/web/src/lib/human-check.ts:181 "let line: Promise<unknown> = Promise.resolve();"` chains every `next()` call. Memoised on success only: `:184 "config ??= readConfig().then("` and `:195 "widget ??= loadTurnstile()"`, each reset to `null` in its own `catch`. Reset before every execute but the first: `:160 "if (executed) api.reset(widgetId);"`. One residual, not a defect: a genuinely hung interactive challenge depends on Cloudflare's own `timeout-callback` firing, which is wired but is Cloudflare's behaviour rather than this code's, and is not exercised by any suite here (the always-pass test key never presents an interactive challenge).
+- **verified** · the release-routing premise. The path-based routing described in `docs/03-RELEASING.md` means a `feat(downloader)` squash touching one file under `tools/planner` would cut the planner a changelog line and a version bump, because `feat` is not `hidden` in `release-please-config.json`. The stated plan is exactly this repo's documented way out, and it is already built as pull request #282, touching only `tools/planner/docs/work/pl-2-container-image.md` under a hidden `chore`/`docs` type. The preflight `mergeTree` check confirms it merges cleanly against this tip with no conflicts.
+- **verified** · the second commit's 25 re-pinned citations. Every one spot-checked (spanning all 9 touched files) resolves at `20eb8ba` to the identical line and text it read before dl-50 moved it; `node scripts/citations-gate.mjs --against 20eb8ba` reports 104 enforced, 0 failing.
+- **findings** · defect hunt (mutation on the check-ordering, adversarial log-capture, full re-run of check/test/both e2e suites/the live siteverify suite, a manual trace of every route touching `humanCheckToken`, and a reconciliation of the second commit's citation pins) returned 0 findings above the checked/verified notes above; 0 carried, 0 dropped.
+- NFR: security ✓ · performance n/a · reliability — the fail-closed decision couples request admission to Cloudflare's `siteverify` uptime when the check is on, a deliberate owner decision recorded in the ticket, not a new finding · maintainability ✓.
+
 ## Log
 
 - 2026-09-13 — Filed as `needs-decision`. Nothing measured yet. Option B's
@@ -147,3 +195,99 @@ host for as long as it cares to.
   the owner's decision recorded above. Not measured: whether automatic setup is
   already on for the zone. If it is, today's `script-src 'self'` is already
   refusing the beacon on every page load, with no visible error.
+- 2026-09-22 — Built, on branch `dl-50-human-check-without-an-account`, by
+  Claude Opus 5 working in its own session rather than as a dispatched builder
+  (one `hard` ticket, so no orchestration). The owner answered three questions
+  first, recorded under the Decision above. Before building, `siteverify` was
+  measured reachable from the devcontainer with the firewall open: the
+  always-pass secret answered `{"success":true,…,"result_with_testing_key":true}`
+  in 0.15 s, and the always-fail secret `{"success":false,"error-codes":["invalid-input-response"],…}`.
+
+  **What was built.** `HUMAN_CHECK_FAILED` in core (403, not retryable, and a
+  note that it is not `BOT_CHALLENGE`, which is a _source_ challenging us). An
+  optional `humanCheckToken` on both request schemas. `api/src/human-check.ts`,
+  called first after the body parses in both routes, so before the SSRF guard,
+  the cache, both gates and the queue. It fails closed on a timeout (5 s), a
+  network error, a non-2xx or a body without a boolean `success`, and says which
+  only in its `warn` line. `GET /api/config` for the site key. On the page,
+  `web/src/lib/human-check.ts` inside the HTTP transport, so `App.tsx` and
+  `useJobs` are unchanged and the mock never loads Cloudflare. The CSP gains the
+  two origins, with each reason beside the policy. Settings in `.env.example`,
+  the architecture table and a paragraph under its decisions.
+
+  **Done when, line by line.**
+  - No token, and the always-fail answer, are refused with the core code, and no
+    slot is taken: `api/test/human-check.test.ts`, "a request without a passing
+    token is refused before any slot is taken". The guard, both probe gates, the
+    per-client job gate and `enqueue` are spied and never called. Live, against
+    the real always-fail secret: `api/test/human-check.live.test.ts`.
+  - The always-pass keys run a probe and a job: "a passing token changes nothing
+    about the work", which runs the job to `completed`. Live:
+    `human-check.live.test.ts`, 200 and 201.
+  - A timeout and an unreachable verifier refuse: "failing closed", plus a
+    non-2xx and three malformed bodies.
+  - Unset, no token is required: "with no keys configured", which also covers
+    `/api/config` answering `{"humanCheck":null}`.
+  - No log line and no stored row carries the token: "the token is a
+    credential". It captures every line at `debug` across pass, refusal and
+    unreachable, where the thrown error's message contains the token, and dumps
+    the job rows, options and outcome rows.
+  - The CSP differs only by the two origins: `api/test/csp.test.ts`'s `EXPECTED`
+    map, which is compared in both directions, and `e2e/csp.spec.ts`'s
+    `EXPECTED_POLICY`.
+  - The beacon runs from a Playwright route, and another origin is refused
+    before it is fetched: `e2e/csp.spec.ts`, the last two tests.
+  - The document's `Cache-Control` never carries `no-transform`, through either
+    door: `api/test/csp.test.ts`, the last `describe`.
+  - In the browser, one analysis makes both calls with a fresh token each and
+    neither is refused: `e2e/turnstile/live-widget.spec.ts`, against Cloudflare's
+    real widget, script and iframe and the real `siteverify`, with zero CSP
+    violations, so the real widget needs nothing past the two widenings. The
+    test site key hands out the same dummy token every time, so freshness is
+    pinned in `web/test/human-check.test.ts`, whose fake widget, like the real
+    one, gives no new token without a `reset`.
+  - `npm run check` green. `npm test`: 3283 passed and 2 skipped (the live
+    suite). The fast e2e ran 9 of 9.
+
+  Mutations, each run and reverted: logging the token in the rejected path
+  failed the credential test. Moving the job route's check behind the per-client
+  gate failed four tests. Dropping the widget reset failed three web tests.
+
+  **What the brief had wrong or left out.**
+  - It gave the page no way to learn the site key. That became decision 1, and a
+    route in the contract beyond the two schema fields the brief named.
+  - `.env.example` and the table would not have let the owner turn the check on.
+    `compose.downloader.prod.yaml` names every variable the container gets, so
+    it now passes `TURNSTILE_*` through from the host's `.env`, and
+    `.env.prod.example` documents them.
+  - One key without the other is refused at boot. Either half alone fails
+    silently at request time.
+  - Build 1's "check whether the downloader's catalog needs its own wording":
+    the contract keeps core's message. The UI's table needed its own entry
+    anyway, because it is exhaustive, and it offers no retry button, because the
+    token is spent. `mock-api.test.ts` asserts that every code is demonstrable,
+    so the mock gained a `notaperson` scenario.
+  - The Web Analytics log line of 2026-09-14 is still unmeasured, and cannot be
+    measured from here. `downloader.oludoi.com` answered an unauthenticated `GET /`
+    with `302` to Access on 2026-09-22, so neither the beacon nor its report
+    can be seen from outside. `connect-src` was left unwidened, as Build 5 says.
+    Checking the report on the live hostname is now a Done-when line on
+    [dl-49](./dl-49-open-without-a-login.md).
+  - dl-49 did not say the keys must be in place before Access comes out. With
+    them unset, this ships the check _off_. That is now step 4 and a Done-when
+    line on dl-49.
+
+  **Not done, on purpose.** `remoteip` is not sent to Cloudflare, so a
+  self-hosted deployment does not hand every visitor's address to a third party.
+  `siteverify`'s `hostname` field is not checked. The widget's allowed-hostname
+  list in the dashboard already restricts where our site key can mint tokens,
+  and a check here would need a setting of its own. File it if that list is
+  ever not enough.
+
+- 2026-09-22 — Gate by Claude Sonnet 5 at `9308d9b`: **PASS**, 0 findings, landed as
+  `## Review` through `scripts/review-record.mjs` (38 of 38 citations verified).
+  One disclosure: the report reached the builder with `>` and `<` HTML-escaped
+  in three anchors, which were restored to the literal characters the source
+  lines carry; nothing else was touched. The reviewer's one unverified edge:
+  a hung interactive challenge relies on Cloudflare firing `timeout-callback`,
+  which is wired, and which the always-pass test key never exercises.

@@ -50,6 +50,11 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
       });
     }
 
+    // dl-50. Before the SSRF guard, the wait-line check and the per-client
+    // gate, so a refused request neither holds a slot nor queues. Its own
+    // token: the probe's was spent on the probe.
+    await context.humanCheck.require(parsed.data.humanCheckToken, request.logger);
+
     // Checked at intake so a blocked address is refused synchronously with a
     // clear error, rather than becoming a job that fails 20 seconds later. The
     // orchestrator checks again before probing, because DNS can change in

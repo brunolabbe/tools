@@ -72,6 +72,22 @@ export const probeIdSchema = z
   .string()
   .regex(/^[A-Za-z0-9_-]{16,64}$/, "Must be an opaque 16–64 character token");
 
+/**
+ * The human check's proof, as the widget handed it to the page (dl-50).
+ *
+ * **A credential.** It is single-use and short-lived, but until it is spent it
+ * is exactly what a script would want to replay, so it reaches no log line and
+ * no stored record — see `api/src/human-check.ts`.
+ *
+ * Optional in the schema because whether it is *required* is the server's
+ * configuration, not the contract's: a deployment that has not configured a
+ * check accepts a request without one, as every request before dl-50 was.
+ * The bound is Cloudflare's documented ceiling of 2048 characters, doubled so
+ * a vendor-side change does not become a validation error here; it exists so
+ * the field cannot be used to fill the 64 KiB body limit.
+ */
+export const humanCheckTokenSchema = z.string().min(1).max(4096);
+
 export const probeRequestSchema = z.object({
   url: sourceUrlSchema,
   /** Skip the probe cache and re-analyse. */
@@ -82,11 +98,14 @@ export const probeRequestSchema = z.object({
    * behaves exactly as it did before dl-43.
    */
   probeId: probeIdSchema.optional(),
+  humanCheckToken: humanCheckTokenSchema.optional(),
 });
 
 export const createJobRequestSchema = z.object({
   url: sourceUrlSchema,
   options: jobOptionsSchema.optional(),
+  /** Its own token, never the probe's: a token is single-use (dl-50). */
+  humanCheckToken: humanCheckTokenSchema.optional(),
 });
 
 export type ProbeRequest = z.infer<typeof probeRequestSchema>;
@@ -329,12 +348,37 @@ export const errorResponseSchema = z.object({
   error: appErrorPayloadSchema,
 }) satisfies z.ZodType<ErrorResponse>;
 
+/** `GET ROUTES.config`. See the note on that route. */
+export interface ClientConfigResponse {
+  /**
+   * `null` when this deployment asks for no human check, and the page then
+   * loads nothing from the verifier's origin. Otherwise the Turnstile *site*
+   * key, which is public by design — it is the half that goes in the page. The
+   * secret half never leaves the API. One nullable object rather than a
+   * `required` flag beside a nullable key, so "required, with no key to render
+   * the widget with" cannot be represented.
+   */
+  humanCheck: { siteKey: string } | null;
+}
+
+export const clientConfigResponseSchema = z.object({
+  humanCheck: z.object({ siteKey: z.string().min(1) }).nullable(),
+}) satisfies z.ZodType<ClientConfigResponse>;
+
 /**
  * Route table. Single source of truth for paths, so the client never
  * hardcodes a string the server can silently rename out from under it.
  */
 export const ROUTES = {
   health: "/api/health",
+  /**
+   * What the page needs to know about this deployment before it can make a
+   * request — today only the human check (dl-50). Its own route rather than a
+   * field on `health`: health is an operator's probe that stats the volume on
+   * every call and answers 503 while draining, and a page must not fail to
+   * configure itself because a load balancer is being told to go away.
+   */
+  config: "/api/config",
   probe: "/api/probe",
   /**
    * The stage channel for one probe. `id` is the client-minted `probeId` sent

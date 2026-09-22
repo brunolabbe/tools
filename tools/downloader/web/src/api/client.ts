@@ -18,6 +18,7 @@
  * everything goes through `ApiClient`.
  */
 
+import { createTurnstileCheck } from "../lib/human-check.ts";
 import { createHttpClient } from "./http.ts";
 import { createMockClient } from "./mock.ts";
 import type { ApiClient } from "./types.ts";
@@ -26,6 +27,11 @@ const env = import.meta.env;
 
 export const USING_MOCK_API = String(env.VITE_API_MOCK ?? String(env.DEV)) !== "false";
 
+// The mock has no human check to pass: it is not a server anyone can spend.
+// The real transport asks the API whether one is configured (dl-50).
 export const api: ApiClient = USING_MOCK_API
   ? createMockClient({ speed: Number(env.VITE_MOCK_SPEED ?? 1) || 1 })
-  : createHttpClient({ baseUrl: String(env.VITE_API_BASE_URL ?? "") });
+  : createHttpClient({
+      baseUrl: String(env.VITE_API_BASE_URL ?? ""),
+      humanCheck: createTurnstileCheck,
+    });

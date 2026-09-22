@@ -17,7 +17,12 @@
   // all, so `defineConfig` was typechecked by nobody — the same hole `e2e/`
   // itself had before dl-13. Named explicitly rather than by a `../**` glob,
   // which would swallow every package under `tools/downloader`.
-  "include": ["**/*.ts", "../playwright.config.ts", "../playwright.sniffer.config.ts"],
+  "include": [
+    "**/*.ts",
+    "../playwright.config.ts",
+    "../playwright.sniffer.config.ts",
+    "../playwright.turnstile.config.ts"
+  ],
   // Replaces the root's `exclude` rather than adding to it — `extends` inherits
   // the whole array, and the root's entry is about its own program, not this
   // one.

@@ -150,6 +150,23 @@ grabbed took 0.38–0.50 s against a real CDN and under 0.11 s against the
 generated fixture. On HLS it fetches the playlist and the first two segments,
 the same as frame 0 would, on 6- and 10-second segments.
 
+**A human check, not a login, in front of the expensive work (dl-50).** When
+`TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set, `POST /api/probe` and
+`POST /api/jobs` each carry a single-use Cloudflare Turnstile token, which the API
+redeems against `siteverify` before the SSRF guard, the cache, either
+concurrency gate or the queue — so a refused request never holds a slot. It
+fails closed: a timeout (5 s), a network error or a non-2xx is a refusal, all
+reported as the core `HUMAN_CHECK_FAILED` without saying which. The page learns
+whether to render the widget, and its site key, from `GET /api/config` at run
+time rather than from the bundle, so one image serves every operator. The widget
+is invisible unless Cloudflare wants interaction, and the page takes a fresh
+token immediately before each checked call and never holds one. The token is a
+credential: no log line and no stored row carries it. Unset, nothing is asked
+for and the page never loads Cloudflare's script. The live proof is opt-in —
+`TURNSTILE_LIVE=1` for `api/test/human-check.live.test.ts`, and
+`npm run e2e:downloader:turnstile` for the real widget — because CI reaches no
+network.
+
 **Fail loudly with typed codes.** Every failure maps to one `ErrorCode` in
 `contract/src/errors.ts`. No layer invents its own strings — that is what makes the UI
 able to say something useful instead of "something went wrong".
@@ -194,6 +211,8 @@ and their defaults.
 | `FFMPEG_TLS_INTERCEPT`        | `true`       | the proxies terminate TLS, which is what verifies **segment** origins and what carries `EGRESS_CA_FILE` to the tiers. `false` restores the `dl-14` tunnel for ffmpeg _and_ the tiers: everything keeps working and the manifest is still checked, but the segments go back to unverified (`dl-21`) and the tiers back to their own trust stores (`dl-34`). Narrower than its name since `dl-37`. Warns at boot                                                                                                                                                                                                     |
 | `FFMPEG_ALLOW_UNVERIFIED_TLS` | `false`      | **strictly larger, and the last resort.** Nothing is verified at all, manifest included. If the interception is what broke, `FFMPEG_TLS_INTERCEPT=false` is the smaller answer and is tried first. Warns louder, see `dl-19`                                                                                                                                                                                                                                                                                                                                                                                       |
 | `ENABLE_AGE_CONFIRMATION`     | `false`      | the browser tier presses a recognised "I am over 18" control. **Off because that press is an attestation made on the user's behalf**, which only an operator can choose to make; with it off, such a page fails `AGE_CONFIRMATION_REQUIRED` rather than `NO_MEDIA_FOUND`. Closing a modal over the player is not behind it (`dl-48`)                                                                                                                                                                                                                                                                               |
+| `TURNSTILE_SITE_KEY`          | —            | with `TURNSTILE_SECRET_KEY`, turns on the human check on probe and job creation: Cloudflare Turnstile, verified before any gate or queue slot is taken, failing closed when Cloudflare cannot be reached. **Both or neither** — one alone refuses to boot. Unset keeps the pre-`dl-50` behaviour, which is right behind a login. The site key is public and reaches the page through `GET /api/config`; the secret goes nowhere but `siteverify` (`dl-50`)                                                                                                                                                         |
+| `TURNSTILE_SECRET_KEY`        | —            | the secret half of the above, and a credential: it is never logged or sent to the page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ---

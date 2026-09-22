@@ -15,7 +15,9 @@
  *  - an injected inline `<script>` does not execute, which is the attack
  *    `script-src 'self'` exists for;
  *  - the app's own subresources and its one CSSOM write raise no violation, so
- *    the policy is not quietly too strict.
+ *    the policy is not quietly too strict;
+ *  - dl-50's two foreign script origins run, and a third origin serving the
+ *    same script is refused before it is fetched.
  *
  * What still is not here: a preview image rendering under this policy. That
  * needs a probe that produces one, and the only resolver that reads an
@@ -39,10 +41,12 @@ import type { HlsOrigin } from "./fixtures/hls-origin.ts";
  */
 const EXPECTED_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
+  // dl-50: the Turnstile widget, and Cloudflare Web Analytics' beacon.
+  "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "style-src 'self'",
   "img-src 'self'",
   "connect-src 'self'",
+  "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
@@ -177,4 +181,87 @@ test("the app's own page raises no violation, theme toggle included", async ({ p
   expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe("dark");
 
   expect(await cspViolationsOn(page)).toEqual([]);
+});
+
+/**
+ * dl-50's widening, as a differential: a script from each allowed foreign
+ * origin runs, and the same script from any other origin does not.
+ *
+ * The suite reaches no network, so every URL below is answered by a Playwright
+ * route rather than by Cloudflare. That is what makes the refused case mean
+ * something: its route is installed and would serve the script perfectly well,
+ * so if it does not run, the browser refused it — and the route recording no
+ * request proves the refusal happened before the socket, as the image test
+ * above does with the fixture origin's log.
+ */
+const BEACON_URL = "https://static.cloudflareinsights.com/beacon.min.js";
+const TURNSTILE_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const FOREIGN_URL = "https://scripts.example.net/beacon.min.js";
+
+/** Serves a script that records its own URL on `window`, and logs every hit. */
+async function serveMarkerScripts(page: Page, urls: readonly string[]): Promise<string[]> {
+  const hits: string[] = [];
+  for (const url of urls) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.route(url, async (route) => {
+      hits.push(url);
+      await route.fulfill({
+        contentType: "text/javascript",
+        body: `(window.cspScriptsRan = window.cspScriptsRan || []).push(${JSON.stringify(url)});`,
+      });
+    });
+  }
+  return hits;
+}
+
+/** Appends `<script src>` and waits for it to load or be refused. */
+async function loadScript(page: Page, src: string): Promise<void> {
+  await page.evaluate(async (url) => {
+    const script = document.createElement("script");
+    script.src = url;
+    await new Promise<void>((resolve) => {
+      script.addEventListener("load", () => resolve(), { once: true });
+      script.addEventListener("error", () => resolve(), { once: true });
+      setTimeout(resolve, 5_000);
+      document.head.append(script);
+    });
+  }, src);
+}
+
+async function scriptsThatRan(page: Page): Promise<string[]> {
+  // Written by the served script in the page's own world; evaluate reads the
+  // same window.
+  return await page.evaluate(
+    () => (window as unknown as { cspScriptsRan?: string[] }).cspScriptsRan ?? [],
+  );
+}
+
+test("the Web Analytics beacon and the Turnstile script run, with no violation", async ({
+  page,
+}) => {
+  await collectCspViolations(page);
+  const hits = await serveMarkerScripts(page, [BEACON_URL, TURNSTILE_URL]);
+  await page.goto("/");
+
+  await loadScript(page, BEACON_URL);
+  await loadScript(page, TURNSTILE_URL);
+
+  expect(await scriptsThatRan(page)).toEqual([BEACON_URL, TURNSTILE_URL]);
+  expect(hits).toEqual([BEACON_URL, TURNSTILE_URL]);
+  expect(await cspViolationsOn(page)).toEqual([]);
+});
+
+test("a script from any other origin is still refused, before it is fetched", async ({ page }) => {
+  await collectCspViolations(page);
+  const hits = await serveMarkerScripts(page, [FOREIGN_URL]);
+  await page.goto("/");
+
+  await loadScript(page, FOREIGN_URL);
+
+  expect(await scriptsThatRan(page)).toEqual([]);
+  // The route would have served it: nothing asked.
+  expect(hits).toEqual([]);
+  const violations = (await cspViolationsOn(page)).filter((v) => v.blockedURI === FOREIGN_URL);
+  expect(violations).toHaveLength(1);
+  expect(violations[0]?.effectiveDirective.startsWith("script-src")).toBe(true);
 });

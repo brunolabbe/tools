@@ -849,6 +849,26 @@ code {
   font-size: 0.72rem;
 }
 
+/* The Turnstile widget's host (dl-50). Empty and sizeless in the ordinary case,
+   because the widget is interaction-only: it draws itself here only when
+   Cloudflare wants a person to answer a challenge. Fixed rather than in the
+   form, so it appears wherever the person is — the probe and the job are both
+   checked, and the job starts from a panel far below the form. The host lets
+   clicks through; only the widget inside it takes them. */
+.human-check {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.human-check > * {
+  pointer-events: auto;
+}
+
 @media (width <= 40rem) {
   .app {
     padding: 1rem 0.75rem 3rem;
