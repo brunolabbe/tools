@@ -77,6 +77,20 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "blocked",
     allowRetry: false,
   },
+  // No retry button, and the taxonomy's `retryable: false` would veto one
+  // anyway: the token that failed is spent. What a person does instead is
+  // repeat the step — Analyse or Download, both are checked — which asks the
+  // widget for a fresh token. The copy says that rather than "try again",
+  // which would read as the button that is missing. The payload's message
+  // deliberately does not say which of "no token", "refused" and "verifier
+  // unreachable" it was (dl-50).
+  HUMAN_CHECK_FAILED: {
+    title: "Could not confirm you are a person",
+    detail:
+      "The automatic check did not pass. Repeat what you just did to take a fresh one, and complete the challenge if one appears.",
+    tone: "transient",
+    allowRetry: false,
+  },
   NO_MEDIA_FOUND: {
     title: "No video found",
     detail:

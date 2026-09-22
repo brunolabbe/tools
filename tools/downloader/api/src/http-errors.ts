@@ -22,6 +22,12 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // link on purpose, because the answer to it is "do not trust this", not
   // "try again".
   TLS_VERIFICATION_FAILED: 502,
+  // 403, never 401: 401 promises a `WWW-Authenticate` scheme the client could
+  // answer, and there is none — the answer is a fresh token from the widget.
+  // Also 403 when the verifier itself could not be reached (dl-50 fails
+  // closed), because a 5xx there would invite exactly the retry loop the
+  // single-use token makes pointless.
+  HUMAN_CHECK_FAILED: 403,
 
   NO_MEDIA_FOUND: 422,
   // 451 is the one status that means precisely this.

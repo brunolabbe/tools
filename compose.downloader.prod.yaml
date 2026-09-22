@@ -56,6 +56,13 @@ services:
       # the `networks.edge.ipam` comment there, which counts all three.
       TRUST_PROXY: "172.30.42.0/24"
 
+      # The human check on probe and job creation (dl-50), from the host's
+      # `.env`. Empty by default, which leaves the check off — the right state
+      # while the hostname is behind Access. Both or neither: the API refuses
+      # to start with one. See `.env.prod.example`.
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
+
   cloudflared:
     # Merged into the definition in `compose.prod.yaml` rather than repeating
     # it, exactly as `compose.planner.prod.yaml` does for the planner. This is

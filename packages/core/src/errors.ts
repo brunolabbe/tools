@@ -74,6 +74,31 @@ export const CORE_ERROR_CODES = [
    * lifting rule asks for.
    */
   "NOT_FOUND",
+  /**
+   * The caller did not prove it was a person. A human check is configured on
+   * this endpoint, and the request carried no token, or one the verifier
+   * refused, or one the verifier could not be asked about at all — a service
+   * that fails closed reports all three the same way, because telling them
+   * apart would tell a script which of them to manufacture.
+   *
+   * Core rather than a tool's own, by the repo's test: a trip planner that has
+   * never heard of a video stream still knows what "prove you are a person"
+   * means, and would otherwise grow a second spelling of it. Nothing about the
+   * check is in the code — which vendor, which endpoint and whether it runs at
+   * all are the tool's configuration.
+   *
+   * **Not `BOT_CHALLENGE`, and the difference is who is being challenged.**
+   * That code is the downloader's, and it means a *source site* put an
+   * interstitial in front of the page we were sent to fetch. This one means
+   * *we* asked, at our own door. The two travel in opposite directions and a
+   * deployment can see both in one request.
+   *
+   * Deliberately not retryable. A token is single-use and already spent by the
+   * time this is raised, so an automatic retry re-sends a token that is now
+   * certain to fail; the caller must obtain a fresh one, which is work only a
+   * client with the widget can do.
+   */
+  "HUMAN_CHECK_FAILED",
 
   // --- Artifacts ---
   /** Output would exceed the configured per-job or global size cap. */
@@ -113,6 +138,7 @@ export const CORE_ERROR_MESSAGES: Readonly<Record<CoreErrorCode, string>> = {
   UNREACHABLE: "The site could not be reached.",
   TLS_VERIFICATION_FAILED: "The site's security certificate could not be verified.",
   NOT_FOUND: "That endpoint does not exist.",
+  HUMAN_CHECK_FAILED: "We could not confirm this request came from a person. Try again.",
   SIZE_LIMIT_EXCEEDED: "The result is larger than the configured size limit.",
   DISK_FULL: "The server has run out of storage.",
   FILE_EXPIRED: "That file has been removed. Results are kept for a limited time.",

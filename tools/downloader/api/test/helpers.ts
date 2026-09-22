@@ -225,6 +225,11 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       rateLimitJobsPerMinute: 0,
       rateLimitFilesPerMinute: 0,
       rateLimitThumbnailPerMinute: 0,
+      // Off unless a test asks, and off *explicitly* rather than by omission:
+      // an omitted key falls through to the environment, and a developer who
+      // exported their Turnstile keys would otherwise see every suite here
+      // refused for want of a token (dl-50).
+      turnstile: undefined,
       ...options.config,
     },
   });

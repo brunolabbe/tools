@@ -29,6 +29,8 @@
     "e2e:downloader": "playwright test -c tools/downloader/playwright.config.ts",
     "// e2e:downloader:sniffer": "The slow half, kept out of `e2e:downloader` so the suite a developer runs between edits stays fast: the API launches its own Chromium and a probe takes 10-20 s. Its own config rather than its own project, because Playwright starts every `webServer` in a config whatever `--project` selects. See tools/downloader/playwright.sniffer.config.ts.",
     "e2e:downloader:sniffer": "playwright test -c tools/downloader/playwright.sniffer.config.ts",
+    "// e2e:downloader:turnstile": "Opt-in and never in CI: the human check against Cloudflare's real Turnstile widget and siteverify, with their published always-pass test keys (dl-50). Reaches the internet, so from the devcontainer it needs the egress firewall opened. See tools/downloader/playwright.turnstile.config.ts.",
+    "e2e:downloader:turnstile": "playwright test -c tools/downloader/playwright.turnstile.config.ts",
     "e2e:planner": "playwright test -c tools/planner/playwright.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "// e2e:serve": "The downloader's, from before there was a second tool to disambiguate against. Its playwright.config.ts names it.",

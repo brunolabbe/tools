@@ -7,6 +7,7 @@
 import {
   AppError,
   appErrorPayloadSchema,
+  clientConfigResponseSchema,
   jobResponseSchema,
   parseJobEvent,
   parseProbeEvent,
@@ -16,11 +17,21 @@ import {
 import type { CreateJobRequest, ProbeRequest } from "@downloader/contract";
 import type { z } from "zod";
 import type { EventStream } from "../lib/event-stream.ts";
+import { noHumanCheck } from "../lib/human-check.ts";
+import type { HumanCheckFactory } from "../lib/human-check.ts";
 import type { ApiClient } from "./types.ts";
 
 export interface HttpClientOptions {
   /** Origin the API is served from. Empty string means same origin. */
   baseUrl?: string;
+  /**
+   * Where probe and job tokens come from (dl-50). The default sends none, which
+   * is what a test of the request shape wants; `client.ts` passes the real
+   * Turnstile check. Handed a reader for `GET /api/config` rather than the
+   * config itself, so the read happens on the first checked request and not at
+   * import time.
+   */
+  humanCheck?: HumanCheckFactory;
 }
 
 export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
@@ -71,17 +82,31 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
     return parsed.data;
   }
 
+  const tokens = (options.humanCheck ?? noHumanCheck)(() =>
+    request(ROUTES.config, clientConfigResponseSchema),
+  );
+
+  /**
+   * Taken here, per call, and never earlier: the probe and the job each spend
+   * their own (dl-50). Added only when there is one, so a deployment without a
+   * check sends exactly the body it sent before.
+   */
+  async function withHumanCheck<T extends object>(body: T): Promise<T> {
+    const humanCheckToken = await tokens.next();
+    return humanCheckToken === null ? body : { ...body, humanCheckToken };
+  }
+
   return {
-    probe: (probeRequest: ProbeRequest) =>
-      request(ROUTES.probe, probeResponseSchema, {
+    probe: async (probeRequest: ProbeRequest) =>
+      await request(ROUTES.probe, probeResponseSchema, {
         method: "POST",
-        body: JSON.stringify(probeRequest),
+        body: JSON.stringify(await withHumanCheck(probeRequest)),
       }),
 
-    createJob: (createRequest: CreateJobRequest) =>
-      request(ROUTES.jobs, jobResponseSchema, {
+    createJob: async (createRequest: CreateJobRequest) =>
+      await request(ROUTES.jobs, jobResponseSchema, {
         method: "POST",
-        body: JSON.stringify(createRequest),
+        body: JSON.stringify(await withHumanCheck(createRequest)),
       }),
 
     getJob: (id: string) => request(ROUTES.job(id), jobResponseSchema),

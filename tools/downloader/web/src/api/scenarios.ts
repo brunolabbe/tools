@@ -396,6 +396,15 @@ export const SCENARIOS: readonly Scenario[] = [
     job: SUCCESS,
   },
   {
+    keyword: "notaperson",
+    title: "Human check failed",
+    description:
+      "The Turnstile token was missing, refused, or could not be verified (dl-50). Not retryable: the token is spent.",
+    probeDelayMs: 200,
+    probeError: "HUMAN_CHECK_FAILED",
+    job: SUCCESS,
+  },
+  {
     keyword: "probetimeout",
     title: "Probe timeout",
     description: "The probe ran past its budget. Retryable.",

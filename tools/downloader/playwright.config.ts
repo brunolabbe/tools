@@ -129,8 +129,9 @@ export default defineConfig({
   // The sniffer suite lives under `e2e/sniffer/` and needs a server with
   // Chromium enabled, which is a different `webServer` and therefore a
   // different config. Without this line it would be collected here too and run
-  // against a server whose sniffer is off.
-  testIgnore: "**/sniffer/**",
+  // against a server whose sniffer is off. `e2e/turnstile/` is the same shape
+  // for the same reason: it needs a server with the human check's keys (dl-50).
+  testIgnore: ["**/sniffer/**", "**/turnstile/**"],
   outputDir: path.join(root, "e2e/.artifacts/results"),
 
   use: {

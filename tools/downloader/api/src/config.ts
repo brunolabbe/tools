@@ -281,6 +281,20 @@ export interface ApiConfig {
   /** See `SsrfGuardOptions`. Both are escape hatches for local development. */
   ssrfAllowHosts: readonly string[];
   ssrfAllowPrivateAddresses: boolean;
+
+  /**
+   * Cloudflare Turnstile, the human check on probe and job creation (dl-50).
+   * **Both or neither**: with neither, no token is asked for, which is every
+   * deployment before dl-50 and the right answer for a self-hoster behind
+   * Access. One without the other is refused at boot — a secret with no site
+   * key refuses every request behind a widget that cannot render, and a site
+   * key with no secret renders a widget nothing checks. Both fail silently at
+   * request time, which is what boot validation is for.
+   *
+   * The site key is public; `GET /api/config` hands it to the page. The secret
+   * is a credential and goes nowhere but the `siteverify` body.
+   */
+  turnstile: { siteKey: string; secretKey: string } | undefined;
 }
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
@@ -420,6 +434,25 @@ function proxyUrl(raw: string | undefined): string | undefined {
   return value;
 }
 
+/** See `ApiConfig.turnstile`. The error names the variables, never their values. */
+function turnstile(
+  rawSiteKey: string | undefined,
+  rawSecretKey: string | undefined,
+): ApiConfig["turnstile"] {
+  const siteKey = rawSiteKey?.trim() ?? "";
+  const secretKey = rawSecretKey?.trim() ?? "";
+  if (siteKey === "" && secretKey === "") return undefined;
+  if (siteKey === "" || secretKey === "") {
+    const missing = siteKey === "" ? "TURNSTILE_SITE_KEY" : "TURNSTILE_SECRET_KEY";
+    throw new AppError("INTERNAL", `${missing} is not set; the human check needs both keys.`, {
+      details: {
+        hint: "Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY together to turn the check on, or unset both to leave it off.",
+      },
+    });
+  }
+  return { siteKey, secretKey };
+}
+
 function logLevel(raw: string | undefined): LogLevel {
   const value = (raw ?? API_DEFAULTS.logLevel).trim().toLowerCase();
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
@@ -549,6 +582,13 @@ export function loadApiConfig(
     ssrfAllowHosts: overrides.ssrfAllowHosts ?? list(env["SSRF_ALLOW_HOSTS"]),
     ssrfAllowPrivateAddresses:
       overrides.ssrfAllowPrivateAddresses ?? bool(env["SSRF_ALLOW_PRIVATE_ADDRESSES"], false),
+    // `in`, not `??`: a test that passes `turnstile: undefined` is asking for
+    // the check to be off, and must not fall through to whatever the shell
+    // running the suite happens to export.
+    turnstile:
+      "turnstile" in overrides
+        ? overrides.turnstile
+        : turnstile(env["TURNSTILE_SITE_KEY"], env["TURNSTILE_SECRET_KEY"]),
   };
 
   assertUsable(config);
