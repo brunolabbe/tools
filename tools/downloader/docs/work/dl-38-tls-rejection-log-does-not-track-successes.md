@@ -131,8 +131,8 @@ Three `file:line` citations below were re-resolved against tip `cad1d56` by the
 builder before this record was committed and corrected there: the Done-when
 reproduction row (`resolvers.test.ts:222 "a success on another host leaves the reattachment alone"` → `:191 "a concurrent success on the same host blocks reattachment"`, where `:222 "a success on another host leaves the reattachment alone"` is the
 adjacent over-suppression guard rather than the reproduction), `portFor`
-(`tls-rejections.ts:174 "look unaffordable before the header"` → `:176 "export function portFor(url: URL)"`), and the query site (`resolvers.ts:159 "REATTACHABLE_CODES.has(error.code)"` →
-`:163 "rejections.since(url.hostname, portFor(url), startedAt)"`). Nothing else was altered. See the Log entry below for the commands.
+(`tls-rejections.ts:174 "look unaffordable before the header"` → `:176 "export function portFor(url: URL)"`), and the query site (`resolvers.ts:162 "REATTACHABLE_CODES.has(error.code)"` →
+`:166 "rejections.since(url.hostname, portFor(url), startedAt)"`). Nothing else was altered. See the Log entry below for the commands.
 
 ### dl-38 — Done when (re-verified at cad1d56)
 
@@ -182,7 +182,7 @@ for one rather than exhausting a fuzz search.
    (`tls-rejections.ts:176 "export function portFor(url: URL)"`, exported) returns `Number(url.port)` when explicit,
    else `443`/`80` by scheme. Both `record*` call sites (`egress-proxy.ts`, via
    `parseAuthority`, which always yields an explicit numeric port) and the query
-   site (`resolvers.ts:163 "rejections.since(url.hostname, portFor(url), startedAt)"`, via `portFor`) end up with the identical number for
+   site (`resolvers.ts:166 "rejections.since(url.hostname, portFor(url), startedAt)"`, via `portFor`) end up with the identical number for
    an ordinary default-port URL — confirmed by the four `portFor` unit tests
    (`tls-rejections.test.ts:429 "an https URL with no port means 443"`, `tls-rejections.test.ts:433 "an explicit port is used as written"`, `tls-rejections.test.ts:437 "an http URL with no port means 80"`, `tls-rejections.test.ts:444 "an IPv6 URL keeps its port"`) and by the "a success on :443 still
    suppresses it for the caller that asked about :443" test, which only passes if
