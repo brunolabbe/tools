@@ -542,11 +542,13 @@ the same day when a second-pass review found it could not be landed:
 `## Review` and a second `### Gate 1`, so three angles of one round cannot be
 recorded; `review-ticket`'s `gate.md` requires a `findings` line that only a
 defect-hunting angle produces; nothing was assigned the verdict, which the lander
-may not compose; and the cost argument counted review turns and not each
-angle's own farm, build and reading. [repo-58](../../../../docs/work/repo-58-a-gate-split-by-angle-cannot-be-landed.md)
-carries the reproduction and the fix-or-drop question. Until it is answered, the
-rule above — split when the attack list needs two kinds of setup — is the only
-split.
+may not compose. A fourth objection — that each angle pays its own farm, build
+and reading — was measured and does not hold: setup is a median 2% of a gate's
+cost. [repo-58](../../../../docs/work/repo-58-trial-a-gate-split-by-angle.md)
+answers the fix-or-drop question with a trial of a different shape, angles
+returning data to a workflow that merges them and computes the verdict in code.
+Until that trial reads, the rule above — split when the attack list needs two
+kinds of setup — is the only split.
 
 ## Routing findings: the builder or the fixer
 
