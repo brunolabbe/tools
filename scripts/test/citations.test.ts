@@ -817,6 +817,7 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
     requireAnchors: false,
     requireDistinct: false,
     requireClaudePins: false,
+    displacedSince: null,
   };
   expect(parseArgs(["--rev", "HEAD", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--rev", "HEAD"])).toEqual(expected);
@@ -827,6 +828,7 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
     requireAnchors: false,
     requireDistinct: false,
     requireClaudePins: false,
+    displacedSince: null,
   });
 });
 
@@ -845,6 +847,7 @@ test("parseArgs treats --require-anchors as a flag with no value", () => {
     requireAnchors: true,
     requireDistinct: false,
     requireClaudePins: false,
+    displacedSince: null,
   };
   expect(parseArgs(["--require-anchors", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--require-anchors"])).toEqual(expected);
@@ -2466,4 +2469,189 @@ test("a declaration cannot excuse unpinned-volatile, and the stale message says 
   } finally {
     cleanup();
   }
+});
+
+/**
+ * repo-50's own reproduction: the same insertion `withInsertionRepo` uses, cited
+ * with no anchor at all. Before this ticket, both revs reported `unanchored` and
+ * exit 0 — the coordinates still resolve, and nothing checked what they now
+ * point at. `checkCitations` alone, with a fake `trees` standing in for a real
+ * repository, so this fails on the comparison itself rather than on the git
+ * plumbing around it.
+ */
+test("checkCitations reports an unanchored, unpinned citation displaced since a ref", () => {
+  const citation = cite({ start: 2, end: 3 });
+  const fakeTrees = () => ({ read: () => CITED_REGION, resolve: (f: string) => ({ path: f }) });
+
+  const displaced = checkCitations([citation], () => INSERTED_ABOVE, undefined, {
+    displacedSince: "before",
+    trees: fakeTrees,
+  })[0];
+  expect(displaced?.state).toBe("displaced");
+  // The line that moved, both versions, so a reader does not have to go read the
+  // file to tell what changed.
+  expect(displaced?.reason).toBe(
+    'line 2 read "// Defence in depth, and **not** what fixes the collision — a mutation" before, ' +
+      'and reads "// inserted" now — an edit moved what this citation points at without touching its coordinates',
+  );
+
+  // Without the flag, the very same citation and content report `unanchored`,
+  // exactly as they did before this ticket — the defect this reproduces.
+  const plain = checkCitations([citation], () => INSERTED_ABOVE)[0];
+  expect(plain?.state).toBe("unanchored");
+});
+
+/**
+ * The negative of the same reproduction: nothing moved, so nothing is reported.
+ * Asserted separately from the positive case so a comparison that always fires
+ * — reporting every unanchored citation as displaced regardless of content —
+ * cannot pass either test in isolation.
+ */
+test("checkCitations does not report displacement when the cited text has not moved", () => {
+  const citation = cite({ start: 2, end: 3 });
+  const fakeTrees = () => ({ read: () => CITED_REGION, resolve: (f: string) => ({ path: f }) });
+
+  const result = checkCitations([citation], () => CITED_REGION, undefined, {
+    displacedSince: "before",
+    trees: fakeTrees,
+  })[0];
+  expect(result?.state).toBe("unanchored");
+});
+
+/** A ref tree fixed to three lines, for the out-of-scope cases below. */
+const threeLineRefTree = (rev: string) =>
+  rev === "before"
+    ? { read: () => ["one", "two", "three"], resolve: (f: string) => ({ path: f }) }
+    : null;
+
+/**
+ * Three ways a citation is out of scope for `--displaced-since`, per the Build
+ * section: anchored, pinned, or the ref simply has nothing to compare against.
+ * All three stay silent rather than reporting a false positive.
+ */
+test("--displaced-since leaves an anchored, a pinned, and a ref-less citation alone", () => {
+  // Anchored: already verified/moved on its own terms, never displaced.
+  const anchored = checkCitations(
+    [cite({ start: 1, end: 1, anchor: "changed" })],
+    () => ["changed"],
+    undefined,
+    { displacedSince: "before", trees: threeLineRefTree },
+  )[0];
+  expect(anchored?.state).toBe("verified");
+
+  // Pinned: read from the commit it names, not from the tree this flag compares
+  // against, so "displaced since a ref" is not a question this citation asks.
+  const pinnedRev = "cafef00dcafef00dcafef00dcafef00dcafef00d";
+  const pinned = checkCitations(
+    [cite({ start: 1, end: 1, rev: pinnedRev })],
+    () => ["moved"],
+    undefined,
+    {
+      displacedSince: "before",
+      trees: (rev: string) =>
+        rev === pinnedRev
+          ? { read: () => ["moved"], resolve: (f: string) => ({ path: f }) }
+          : threeLineRefTree(rev),
+    },
+  )[0];
+  expect(pinned?.state).toBe("unanchored");
+
+  // A citation the record gained after the ref: the ref's tree has only 3 lines,
+  // so line 9 postdates it rather than having moved.
+  const grew = checkCitations([cite({ start: 9, end: 9 })], () => Array(9).fill("new"), undefined, {
+    displacedSince: "before",
+    trees: threeLineRefTree,
+  })[0];
+  expect(grew?.state).toBe("unanchored");
+});
+
+/**
+ * A throwaway repository whose second commit inserts three lines above a cited
+ * comment and changes nothing else — the same shape `withInsertionRepo` builds,
+ * cited with no anchor. It has to be a real repository for the same reason that
+ * one does: the CLI finds its root with `git rev-parse` and reads a rev with
+ * `git show`.
+ */
+function withDisplacedRecord(): {
+  dir: string;
+  record: string;
+  before: string;
+  cleanup: () => void;
+} {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-displaced-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const write = (lines: string[]) =>
+    fs.writeFileSync(path.join(dir, "src", "tls.ts"), `${lines.join("\n")}\n`);
+
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "citations@example.test");
+  git("config", "user.name", "citations test");
+  fs.mkdirSync(path.join(dir, "src"));
+
+  write(CITED_REGION);
+  git("add", "-A");
+  git("commit", "-qm", "the tree the record was written against");
+  const before = git("rev-parse", "HEAD");
+
+  write(INSERTED_ABOVE);
+  git("add", "-A");
+  git("commit", "-qm", "the fix, which inserted three lines above the cited region");
+
+  const record = path.join(dir, "drift.md");
+  fs.writeFileSync(record, "## Review\n\nThe comment at `src/tls.ts:2-3`.\n");
+
+  return { dir, record, before, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
+ * End to end, against a real git tree: the CLI's own reproduction of repo-50.
+ * Without `--displaced-since` the citation is `unanchored` at exit 0 on both
+ * revs — the defect, still reproducing today. With it, the same citation at the
+ * later tree is `displaced`, and it sets its own exit bit.
+ */
+test("the CLI reports a citation displaced since a ref, and stays silent when nothing moved", () => {
+  const { dir, record, before, cleanup } = withDisplacedRecord();
+
+  const plain = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+  expect(plain.status).toBe(0);
+  expect(plain.stdout).toMatch(summary(0, 0, 1, 0, 1));
+
+  const atTip = spawnSync("node", [CLI, record, "--displaced-since", before], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  expect(atTip.status).toBe(EXIT.displaced);
+  expect(atTip.stdout).toMatch(/^exit 128 — 1 displaced$/m);
+  expect(atTip.stdout).toMatch(/^ {2}DISPLACED /m);
+  expect(atTip.stdout).toMatch(/line 2 read ".*" before, and reads "\/\/ inserted" now/);
+  expect(atTip.stderr).toMatch(/1 unanchored citation\(s\) point at a line or range/);
+
+  // Comparing a tree against itself: nothing moved, so nothing is reported.
+  const noOp = spawnSync("node", [CLI, record, "--displaced-since", "HEAD"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  expect(noOp.status).toBe(0);
+  expect(noOp.stdout).toMatch(summary(0, 0, 1, 0, 1));
+
+  cleanup();
+});
+
+/**
+ * A ref that does not resolve is refused loudly rather than silently read as
+ * "nothing to compare" — the same failure mode `citations-gate.mjs`'s
+ * `compareAgainst` already refuses for its own `--against`.
+ */
+test("--displaced-since refuses a ref this repository does not have", () => {
+  const { record, cleanup } = withRecord("## Review\n\nAt `a.ts:1`.\n");
+
+  const result = run(record, "--displaced-since", "not-a-real-ref");
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/--displaced-since not-a-real-ref: no such commit/);
+
+  cleanup();
 });

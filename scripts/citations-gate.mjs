@@ -76,13 +76,24 @@
  * repo's tooling answers without a build step.
  *
  * Usage:
- *   node scripts/citations-gate.mjs [--against <ref>]
+ *   node scripts/citations-gate.mjs [--against <ref>] [--displaced-since <ref>]
  *
  * `--against` is the ratchet's memory: it compares this tree's `GRANDFATHERED`
  * with the one at `ref` and fails on any entry whose number went up, an absent
  * entry counting as zero. Without it this reads only the current tree, which is
  * the right default for a local run and is exactly why an accurate number could
  * silence a regression until the owner asked for this.
+ *
+ * `--displaced-since` is `citations.mjs`'s own flag of the same name (repo-50),
+ * threaded through to every record this gate reaches — both roots `SCOPE`
+ * already walks, the top-level work root and the one under each tool. (Spelled
+ * in prose rather than quoted, for `SCOPE`'s own reason: the literal pathspec
+ * carries the two characters that end a block comment.) It answers "what did
+ * this branch silently redirect" for the whole corpus in one run, which is the
+ * question a per-record invocation cannot answer without a caller enumerating
+ * every record by hand. Off by default: a bare push of this flag over the whole
+ * grandfathered corpus is a migration of its own, exactly as `--require-anchors`
+ * was, and this gate does not decide that here.
  */
 
 import { execFileSync } from "node:child_process";
@@ -267,7 +278,9 @@ export const GRANDFATHERED = new Map([
  * is a citation nothing checked. `unpinned-volatile` (repo-52) only exists at
  * all because `checkCitations` is called with `requireClaudePins: true` above —
  * it cannot appear otherwise, so listing it here costs this gate nothing on a
- * record with no `.claude` citations.
+ * record with no `.claude` citations. `displaced` (repo-50) is the same shape
+ * again: it cannot appear unless the caller passed `--displaced-since`, so it
+ * costs nothing on an ordinary run.
  */
 const FAILING = new Set([
   "unanchored",
@@ -275,6 +288,7 @@ const FAILING = new Set([
   "unresolvable",
   "malformed-pin",
   "unpinned-volatile",
+  "displaced",
 ]);
 
 /** This file, as git names it — the thing `--against` reads an older copy of. */
@@ -502,6 +516,8 @@ export function findRecords(repo, pathspecs) {
  * @param {boolean} [requireDistinct]
  * @param {ReturnType<typeof makeTrees>} [trees] The commits pins name. Made per
  *   call when omitted; `gate` passes one for the whole run instead.
+ * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
+ *   passed straight through; omitted or null, nothing here changes.
  */
 export function checkRecord(
   repo,
@@ -511,6 +527,7 @@ export function checkRecord(
   resolve,
   requireDistinct = true,
   trees = makeTrees(repo),
+  displacedSince = null,
 ) {
   const markdown = fs.readFileSync(path.join(repo, record), "utf8");
 
@@ -536,7 +553,12 @@ export function checkRecord(
   // has to be pinned or dropped in favour of a heading, from the day this landed
   // (repo-52).
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve, { record, trees, requireClaudePins: true }),
+    checkCitations(citations, read, resolve, {
+      record,
+      trees,
+      requireClaudePins: true,
+      displacedSince,
+    }),
     declarations,
   );
 
@@ -577,8 +599,10 @@ export function checkRecord(
  * @param {string} repo
  * @param {{records: string[], section: string | null}} scope
  * @param {Map<string, number>} grandfathered
+ * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
+ *   passed to every record `scope` reaches; omitted or null, nothing changes.
  */
-export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
+export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displacedSince = null) {
   const read = makeReader(repo, null);
   const resolve = makeResolver(candidateFiles(repo, null));
   const trees = makeTrees(repo);
@@ -591,7 +615,16 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const debt = {};
 
   for (const record of findRecords(repo, scope.records)) {
-    const result = checkRecord(repo, record, scope.section, read, resolve, true, trees);
+    const result = checkRecord(
+      repo,
+      record,
+      scope.section,
+      read,
+      resolve,
+      true,
+      trees,
+      displacedSince,
+    );
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
@@ -644,6 +677,7 @@ const countLine = (counts) =>
     "malformed-pin",
     "unresolvable",
     "moved",
+    "displaced",
     "unanchored",
     "unpinned-volatile",
     "indistinct",
@@ -655,29 +689,60 @@ const countLine = (counts) =>
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
 
-const USAGE = "usage: node scripts/citations-gate.mjs [--against <ref>]";
+const USAGE = "usage: node scripts/citations-gate.mjs [--against <ref>] [--displaced-since <ref>]";
 
 function main() {
   const argv = process.argv.slice(2);
   let against = null;
+  let displacedSince = null;
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== "--against") {
-      process.stderr.write(`unknown argument ${argv[i]}\n${USAGE}\n`);
-      process.exitCode = 1;
-      return;
-    }
     // A flag that takes a value must consume one, or it swallows nothing and
     // reports success having compared against undefined — repo-14, one flag over.
-    against = argv[++i];
-    if (against === undefined) {
-      process.stderr.write(`--against needs a value\n${USAGE}\n`);
+    if (argv[i] === "--against") {
+      against = argv[++i];
+      if (against === undefined) {
+        process.stderr.write(`--against needs a value\n${USAGE}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      continue;
+    }
+    if (argv[i] === "--displaced-since") {
+      displacedSince = argv[++i];
+      if (displacedSince === undefined) {
+        process.stderr.write(`--displaced-since needs a value\n${USAGE}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      continue;
+    }
+    process.stderr.write(`unknown argument ${argv[i]}\n${USAGE}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  // Verified up front, loudly, for the same reason `citations.mjs` does: a typo'd
+  // ref here would otherwise silently report "0 displaced" over the whole corpus,
+  // which is indistinguishable from a clean run.
+  if (displacedSince !== null) {
+    try {
+      execFileSync("git", ["rev-parse", "--verify", "--quiet", `${displacedSince}^{commit}`], {
+        cwd: repo,
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+    } catch {
+      process.stderr.write(`--displaced-since ${displacedSince}: no such commit\n`);
       process.exitCode = 1;
       return;
     }
   }
-
-  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(repo);
+  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(
+    repo,
+    SCOPE,
+    GRANDFATHERED,
+    displacedSince,
+  );
   const history = against === null ? null : compareAgainst(repo, against, GRANDFATHERED);
 
   const scope = SCOPE.section === null ? "every citation" : `the "${SCOPE.section}" section`;

@@ -763,3 +763,105 @@ test("an indistinct citation into another file prints the lines it starts on, no
     cleanup();
   }
 });
+
+/**
+ * repo-50, threaded through the gate. `withRepo` commits once; an insertion
+ * left uncommitted in the working tree is enough, since `checkRecord`'s "now"
+ * side already reads the working tree — the same shortcut the pin test above
+ * takes to avoid a second commit that would prove nothing extra.
+ *
+ * The record lives under `tools/planner/docs/work/`, not `docs/work/`, on
+ * purpose: this is the check for the ticket's own "the tools work root is
+ * read" acceptance line, not a copy of the citations.mjs-level test.
+ */
+function withDisplaceable(record: string): { dir: string; before: string; cleanup: () => void } {
+  const { dir, cleanup } = withRepo({ [record]: "## Review\n\nProof: `src/tls.ts:2`.\n" });
+  const before = gitIn(dir, "rev-parse", "HEAD");
+  fs.writeFileSync(
+    path.join(dir, "src", "tls.ts"),
+    [
+      "// inserted",
+      "export function verify() {",
+      "  // Defence in depth: the store is pinned.",
+      "  return true;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  return { dir, before, cleanup };
+}
+
+test("checkRecord's displacedSince catches an unanchored citation the working tree has shifted", () => {
+  const record = "tools/planner/docs/work/pl-99.md";
+  const { dir, before, cleanup } = withDisplaceable(record);
+  try {
+    const [read, resolve] = checkers(dir);
+
+    const plain = checkRecord(dir, record, "Review", read, resolve);
+    expect(plain.counts).toMatchObject({ unanchored: 1 });
+
+    const displaced = checkRecord(dir, record, "Review", read, resolve, true, undefined, before);
+    expect(displaced.passed).toBe(false);
+    expect(displaced.counts).toMatchObject({ displaced: 1 });
+    expect(displaced.failing).toBe(1);
+    expect(displaced.failures?.[0]?.reason).toMatch(
+      /an edit moved what this citation points at without touching its coordinates/,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("gate() passes displacedSince through to a record under tools/*/docs/work", () => {
+  const record = "tools/planner/docs/work/pl-99.md";
+  const { dir, before, cleanup } = withDisplaceable(record);
+  try {
+    const scope = { records: ["tools/*/docs/work/*.md"], section: "Review" };
+    const result = gate(dir, scope, new Map(), before);
+    expect(result.failed.map((r) => r.record)).toEqual([record]);
+    expect(result.failed[0]?.counts).toMatchObject({ displaced: 1 });
+  } finally {
+    cleanup();
+  }
+});
+
+test("the CLI's --displaced-since reaches a record under tools/*/docs/work, not only docs/work", () => {
+  const record = "tools/planner/docs/work/pl-99.md";
+  const { dir, before, cleanup } = withDisplaceable(record);
+  try {
+    const plain = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(plain.stdout).toMatch(/FAIL {2}tools\/planner\/docs\/work\/pl-99\.md/);
+    expect(plain.stdout).toMatch(/unanchored/);
+
+    const result = spawnSync("node", [CLI, "--displaced-since", before], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toMatch(/FAIL {2}tools\/planner\/docs\/work\/pl-99\.md/);
+    expect(result.stdout).toMatch(/displaced/);
+    expect(result.stdout).toMatch(/an edit moved what this citation points at/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("the CLI rejects --displaced-since with no value", () => {
+  const result = spawnSync("node", [CLI, "--displaced-since"], { cwd: REPO, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/--displaced-since needs a value/);
+});
+
+test("the CLI refuses --displaced-since with a ref this repository does not have", () => {
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
+  try {
+    const result = spawnSync("node", [CLI, "--displaced-since", "not-a-real-ref"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--displaced-since not-a-real-ref: no such commit/);
+  } finally {
+    cleanup();
+  }
+});
