@@ -334,8 +334,8 @@ as covering it).
   the dialog must not block dismissal) still returns `1`, reproduced both
   before and after. Both shapes committed as permanent tests in
   `provoke.test.ts`, with new fixtures `modal-is-shadow-host.html` and
-  `modal-shadow-video-outside.html`; confirmed red on the pre-fix walk,
-  green after.
+  `modal-shadow-video-outside.html`; M1 confirmed green throughout, M2
+  confirmed red before the fix.
 - **med 2 (`SCROLL_SCRIPT` lazy-mount case)** — corrected above, in the
   `SCROLL_SCRIPT` paragraph, and as a committed test.
 - **low (hasPlayerElement assertion too loose)** — `expect(verdict.code).not.toBe("AUTH_REQUIRED")`
@@ -347,10 +347,11 @@ as covering it).
   reachable by either check, matching `ALL_MEDIA_FN`'s own existing statement
   about the chooser. Not fixable — there is nothing to query — so documented
   rather than changed, per the gate's own finding.
-- **low (two backslash-escaped backticks)** — `\`force\``and two other
-instances in plain`//`comments (not template literals, so the escape was
-wrong and rendered literally) at what were`provoke.ts:365`and`:438`,
-corrected to `` `force` `` etc.
+- **low (two backslash-escaped backticks)** — two comments escaped their
+  backticks with a backslash (not inside template literals, so the escape
+  renders literally): `provoke.ts:386` "clicking it regardless of" and
+  `provoke.ts:468` "is (dl-61, dl-68): a page with an unrelated password
+  field". Corrected to `` `force` `` etc.
 - **low (`ALL_MEDIA_FN` docstring's caller list wrong)** — corrected: the
   pre-existing callers are `CHOOSE_VIDEO_FN`, `CHOOSE_VIDEO_INDEX_SCRIPT`,
   `UNMARK_VIDEO_SCRIPT`, `PLAY_SCRIPT` and `METADATA_SCRIPT`'s audio fallback

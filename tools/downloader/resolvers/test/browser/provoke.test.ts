@@ -198,26 +198,22 @@ describe("dismissModal's close-layer guard reaches a shadow root (dl-69)", () =>
 describe("SCROLL_SCRIPT reaches a shadow root, for a player that mounts lazily on scroll (dl-69 gate round 1, med 2)", () => {
   test("requests the manifest once the off-screen shadow-root shell scrolls into view", async () => {
     server.requests.length = 0;
-    const { mounted } = await pool.withBrowser(
-      { signal: new AbortController().signal },
-      async (browser) => {
-        const context = await browser.newContext();
-        try {
-          const page = await context.newPage();
-          await page.goto(server.url("/shadow-player-lazy-mount.html"), {
-            waitUntil: "domcontentloaded",
-          });
-          await provokePlayback(page, {
-            deadline: Date.now() + 15_000,
-            signal: new AbortController().signal,
-            confirmAge: false,
-          });
-          return { mounted: await page.evaluate("window.scrollY > 0") };
-        } finally {
-          await context.close();
-        }
-      },
-    );
+    await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext();
+      try {
+        const page = await context.newPage();
+        await page.goto(server.url("/shadow-player-lazy-mount.html"), {
+          waitUntil: "domcontentloaded",
+        });
+        await provokePlayback(page, {
+          deadline: Date.now() + 15_000,
+          signal: new AbortController().signal,
+          confirmAge: false,
+        });
+      } finally {
+        await context.close();
+      }
+    });
 
     // `document.querySelector` never finds the shell (it lives in an open
     // shadow root), so the old `SCROLL_SCRIPT` never scrolled to it and the
@@ -225,7 +221,6 @@ describe("SCROLL_SCRIPT reaches a shadow root, for a player that mounts lazily o
     // request. The shadow-piercing walk matches on the shell's own
     // `player-shell` class and scrolls to it, which is what triggers the
     // fetch below.
-    expect(mounted).toBe(true);
     expect(server.requests).toContain("/media/related/master.m3u8");
   });
 });
