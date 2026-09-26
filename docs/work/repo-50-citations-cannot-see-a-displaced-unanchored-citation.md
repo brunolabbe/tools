@@ -139,15 +139,12 @@ docs/work/repo-52-....md --section Review --require-anchors
   shape**: three small wrong figures are struck through and replaced inline
   (`~~5, 1, 2, 7, 6 = 21~~`, `~~22~~`), matching the "correct in place, mark
   what moved, do not erase that a wrong claim propagated" practice
-  `history.md` records for exactly this case; the old method paragraph and its
-  "Not 24" framing, which were wrong in their premise rather than in one
-  figure, are replaced outright below rather than struck — a smaller,
-  contained correction did not fit a paragraph whose whole reasoning was the
-  thing to withdraw, so it is named as withdrawn in the new paragraph's own
-  prose instead of marked in the old one. (Gate 2 corrected the citation
-  here: this practice is `history.md`'s, not `records.md`'s — that page's own
-  withdrawal rule is scoped to a claim inside a **committed gate record**, a
-  reviewer's verbatim `## Review` text, which this Log is not.) `git fetch
+  `records.md`'s withdrawal rule records for exactly this case; the old method
+  paragraph and its "Not 24" framing, which were wrong in their premise rather
+  than in one figure, are replaced outright below rather than struck — a
+  smaller, contained correction did not fit a paragraph whose whole reasoning
+  was the thing to withdraw, so each is marked as withdrawn in place and stands
+  prose instead of marked in the old one. `git fetch
 origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   reachable — confirmed ancestors of `FETCH_HEAD` by `git merge-base
 --is-ancestor`, all three.
@@ -191,6 +188,31 @@ origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
   against that grep ("cannot see the shorthand spelling"). So: every citation
   the humans caught, plus five more of the same class they structurally could
   not, no subset either way.
+
+  **WITHDRAWN — do not cite this paragraph.** The first pass copied this
+  branch's `citations.mjs` over a `git worktree add --detach` checkout of the
+  historical tip and ran the plain (no-`--rev`) CLI there — which reads every
+  _unpinned_ citation's "now" side off that checkout's working tree,
+  `scripts/citations.mjs` included, and that file had just been overwritten
+  with this branch's own multi-thousand-line version. Every citation into it
+  therefore compared the record's real historical line numbers against content
+  that commit never held, which is exactly what produced the bogus `repo-35`
+  figure below. The fix costs nothing extra: extract the record's own text at
+  the historical tip with `git show <tip>:<path>`, then run this branch's own
+  `citations.mjs` against that extracted copy with `--rev <tip>
+--displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
+  resolves every _other_ citation's "now" side against `<tip>`'s real tree via
+  `git show`, which is what it is for, and nothing in this repository's
+  checkout is overwritten to get there.
+
+  **WITHDRAWN — do not cite this paragraph.** `git show 44196c1 -- docs/work |
+grep "^+" | grep -o '@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7,
+  6 = 21~~ the first pass counted with `grep -c` — which counts _matching
+  lines_, and `repo-35`'s diff carries two lines with two pins each. Per
+  record: `repo-21` 5, `repo-32` 1, `repo-35` 4, `repo-38` 7, `repo-48` 6.
+  `b07d506` adds one more (`dl-57`, into `records.md`) — ~~22~~ **24 pins
+  across six records**, matching the ticket's own figure exactly; the first
+  pass's "Not 24" was wrong, not the ticket.
 
   ~~`repo-35` also carries 22 further `displaced` results into
   `scripts/citations.mjs` itself at this same base, unrelated to the sweep's

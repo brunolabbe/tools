@@ -1062,3 +1062,31 @@ test("the CLI refuses --displaced-since with a ref this repository does not have
     cleanup();
   }
 });
+
+/**
+ * **repo-50 gate 3, low.** The header that reports scope under `--displaced-since`
+ * says "every section (displaced fatal outside "Review")" rather than just
+ * "the Review section" — a claim that a citation's displacement is fatal outside
+ * that scope. The wording has to be checked against the source to catch a
+ * misstatement.
+ */
+test("the CLI reports the header correctly when --displaced-since is used", () => {
+  const record = "tools/planner/docs/work/pl-99.md";
+  const { dir, before, cleanup } = withDisplaceable(record);
+  try {
+    const result = spawnSync("node", [CLI, "--displaced-since", before], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    // Check that the header mentions the specific scope with the displaced
+    // context, not the ordinary Review-only scope
+    expect(result.stdout).toMatch(
+      /citation gate — every section \(displaced fatal outside "Review"\)/,
+    );
+    // Ensure the old wording is not present
+    expect(result.stdout).not.toMatch(/citation gate — the "Review" section/);
+  } finally {
+    cleanup();
+  }
+});

@@ -32,23 +32,21 @@ some earlier ref, the quotation is reported `displaced`, a state a
 `<!-- citations: evidence -->` declaration cannot excuse (`displaced`'s own
 non-excusability is deliberate, matching `unpinned-volatile`) and that no
 coordinate edit can fix without rewriting what the reviewer's prose actually
-says — repo-50 gate 2 refused exactly that edit, on the reasoning that
-changing `` `:443` `` to a real, pinned pointer changes the meaning a reader
-sees in a committed gate record, even though the coordinates it edits are not
-wrong.
+says — repo-50 gate 2 recommended editing the coordinates and pinning the
+citation, but the owner chose instead to keep repo-25's text byte-identical
+to origin/main, letting `` `:443` `` stand unedited in the gate record even
+though the coordinates it carries are unanchored.
 
 So today `docs/work/repo-25-citations-checker-misses-shorthand-references.md`
 fails `--displaced-since` on this branch, permanently, unless this defect is
 fixed or the record's wording is edited — neither of which repo-50 does.
-Reproduced at `cf64d3010c971586b26b42fa27e5914fab741948` (repo-50's own
-branch tip):
+Reproduced at `5ad3286` (repo-50's branch tip):
 
 ```
 $ node scripts/citations.mjs docs/work/repo-25-citations-checker-misses-shorthand-references.md --displaced-since origin/main
 ...
-  DISPLACED  :443 in scripts/citations.mjs (named at record line 195)  (record line 196, shorthand)
-             *
-             line 443 read "let headers = /** @type {string[]} */ ([]);" before, and reads "*" now — an edit moved what this citation points at without touching its coordinates
+10 verified, 0 moved, 7 unanchored, 0 unresolvable, 13 unchecked, 18 evidence, 1 displaced — of 49 references, 9 pinned
+exit 128 — 1 displaced
 ```
 
 The record's own line 196 reads (unedited, exactly as committed):
