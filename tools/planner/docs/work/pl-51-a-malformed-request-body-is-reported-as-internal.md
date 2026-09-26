@@ -3,7 +3,7 @@ id: pl-51
 tool: planner
 title: A request whose body Fastify cannot parse is reported as `INTERNAL` 500
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -129,3 +129,40 @@ understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   step 1 reworded accordingly: it now names this as a default rather than a
   standing decision, and points a future builder at this Log entry rather
   than at dl-66's decision alone.
+- 2026-09-26 — Built. `isClientRequestStatusError` helper added to
+  `tools/planner/api/src/http-errors.ts` matching the downloader's pattern,
+  checking for non-`AppError` errors with numeric `statusCode` in `[400, 500)`.
+  `toErrorResponse` now calls `toAppError` which maps such errors to `BAD_REQUEST`
+  before falling through to `AppError.from`, and returns the computed `appError`
+  alongside `status` and `body`. `STATUS_BY_CODE` gained `BAD_REQUEST: 400`
+  entry. `registerErrorHandling` in `tools/planner/api/src/server.ts` now reads
+  the `appError` from `toErrorResponse` instead of calling `AppError.from`
+  independently, ensuring response and log line agree on the error code.
+
+  Measured width A (the rule as written, 4xx-carrying non-AppError sources) by
+  running inject-based `inject` tests capturing logs. All four Fastify
+  body-parser error sources measured reach `toErrorResponse` and now answer 400
+  `BAD_REQUEST` where they previously answered 500 `INTERNAL`; route misses and
+  method misses continue to answer 404 `NOT_FOUND` (already raised as
+  `AppError`, unchanged). No `@fastify/static` plugin in the planner, so 412/416
+  cases from the downloader are unmeasured here.
+
+  | Fastify error code             | Before (unmerged) | After (Width A) | After (Narrow FST_ERR_CTP_* only) |
+  | ------------------------------ | ----------------- | --------------- | --------------------------------- |
+  | FST_ERR_CTP_EMPTY_JSON_BODY    | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
+  | FST_ERR_CTP_INVALID_PARSE_TYPE | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
+  | FST_ERR_CTP_INVALID_MEDIA_TYPE | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
+  | FST_ERR_CTP_BODY_TOO_LARGE     | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
+  | NOT_FOUND (route miss)         | 404 NOT_FOUND     | 404 NOT_FOUND   | 404 NOT_FOUND                     |
+  | NOT_FOUND (method miss)        | 404 NOT_FOUND     | 404 NOT_FOUND   | 404 NOT_FOUND                     |
+
+  All FST_ERR_CTP_* codes are handled identically under both widths; no code
+  regresses. Tests committed under `tools/planner/api/test/malformed-requests.test.ts`
+  (`api/test/malformed-requests.test.ts:15` and `:43`) verify both the response
+  status and that the log line reports the correct code and level; reverting the
+  `server.ts` hunk to re-introduce the independent `AppError.from(error)` call
+  makes these tests fail on the code assertion.
+
+  Final test count: `npm run build` clean, `npm test -- --project planner`
+  75 files / 1271 tests passed (including the two new inject tests), `npm run check`
+  exit 0.
