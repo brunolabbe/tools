@@ -130,7 +130,7 @@ understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   standing decision, and points a future builder at this Log entry rather
   than at dl-66's decision alone.
 - 2026-09-26 — Built. `isClientRequestStatusError` helper added to
-  `tools/planner/api/src/http-errors.ts` matching the downloader's pattern,
+  `tools/planner/api/src/http-errors.ts` matching the downloader's pattern (dl-66),
   checking for non-`AppError` errors with numeric `statusCode` in `[400, 500)`.
   `toErrorResponse` now calls `toAppError` which maps such errors to `BAD_REQUEST`
   before falling through to `AppError.from`, and returns the computed `appError`
@@ -140,29 +140,41 @@ understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   independently, ensuring response and log line agree on the error code.
 
   Measured width A (the rule as written, 4xx-carrying non-AppError sources) by
-  running inject-based `inject` tests capturing logs. All four Fastify
-  body-parser error sources measured reach `toErrorResponse` and now answer 400
-  `BAD_REQUEST` where they previously answered 500 `INTERNAL`; route misses and
-  method misses continue to answer 404 `NOT_FOUND` (already raised as
-  `AppError`, unchanged). No `@fastify/static` plugin in the planner, so 412/416
-  cases from the downloader are unmeasured here.
+  running inject-based tests capturing logs. All Fastify body-parser error
+  sources measured reach `toErrorResponse` and answer 400 `BAD_REQUEST`. The
+  planner carries `@fastify/static` (registered whenever `webDir` is set, the
+  production default), and its 412/416 cases were measured against a real static
+  bundle: both reach `toErrorResponse` and answer 400 `BAD_REQUEST` under width A.
+  Route misses and method misses continue to answer 404 `NOT_FOUND` (already
+  raised as `AppError`, unchanged).
 
-  | Fastify error code             | Before (unmerged) | After (Width A) | After (Narrow FST_ERR_CTP_* only) |
+  | Error source                   | Before (unmerged) | After (Width A) | After (Narrow FST_ERR_CTP_* only) |
   | ------------------------------ | ----------------- | --------------- | --------------------------------- |
   | FST_ERR_CTP_EMPTY_JSON_BODY    | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
   | FST_ERR_CTP_INVALID_PARSE_TYPE | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
   | FST_ERR_CTP_INVALID_MEDIA_TYPE | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
   | FST_ERR_CTP_BODY_TOO_LARGE     | 500 INTERNAL      | 400 BAD_REQUEST | 400 BAD_REQUEST                   |
+  | @fastify/static 412 (If-Match) | 500 INTERNAL      | 400 BAD_REQUEST | 500 INTERNAL                      |
+  | @fastify/static 416 (Range)    | 500 INTERNAL      | 400 BAD_REQUEST | 500 INTERNAL                      |
   | NOT_FOUND (route miss)         | 404 NOT_FOUND     | 404 NOT_FOUND   | 404 NOT_FOUND                     |
   | NOT_FOUND (method miss)        | 404 NOT_FOUND     | 404 NOT_FOUND   | 404 NOT_FOUND                     |
 
-  All FST_ERR_CTP_* codes are handled identically under both widths; no code
-  regresses. Tests committed under `tools/planner/api/test/malformed-requests.test.ts`
-  (`api/test/malformed-requests.test.ts:15` and `:43`) verify both the response
-  status and that the log line reports the correct code and level; reverting the
-  `server.ts` hunk to re-introduce the independent `AppError.from(error)` call
-  makes these tests fail on the code assertion.
+  Tests committed to `tools/planner/api/test/malformed-requests.test.ts` cover
+  the Fastify body-parser cases (lines 15, 43) and the @fastify/static cases
+  (lines 81, 103). All six new tests (two malformed-request body tests plus two
+  body-parser variants, plus two @fastify/static tests) verify both response
+  status and that the log line reports the correct code at info level; reverting
+  the `server.ts` hunk to re-introduce the independent `AppError.from(error)`
+  call makes all tests fail on the log code assertion.
 
   Final test count: `npm run build` clean, `npm test -- --project planner`
-  75 files / 1271 tests passed (including the two new inject tests), `npm run check`
-  exit 0.
+  75 files / 1275 tests passed (including the four new @fastify/static tests),
+  `npm run check` exit 0.
+
+- 2026-09-26 — Width confirmed with the owner on 2026-09-26 via `AskUserQuestion`
+  (options: width A as built, recommended; narrow FST_ERR_CTP_* only; decide after
+  the gate). The owner chose A, the orchestrator's recommendation, so nothing was
+  overridden. The question stated that the planner has no `@fastify/static`, which
+  gate 1 then showed to be false. The corrected fact favours A: under the narrow
+  rule `@fastify/static`'s 412/416 fall to 500 INTERNAL (see the table above). The
+  owner was told of the correction.

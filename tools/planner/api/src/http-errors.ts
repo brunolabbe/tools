@@ -58,15 +58,15 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
  * Fastify's own content-type parser (empty JSON, malformed JSON, an
  * unsupported media type, a body over the configured cap) never reaches a
  * route handler, so it can never be an `AppError`, and it is not the only
- * source: `@fastify/static` raises its own 412 (precondition failed) and 416
- * (range not satisfiable) the same way. **Measured, not assumed** (dl-66):
- * every one of those cases, plus a bad `content-length` and a `__proto__`
- * payload, was confirmed to reach here rather than a route. The rule is
+ * source: `@fastify/static` raises 412 (precondition failed) and 416 (range
+ * not satisfiable) the same way. **Measured, not assumed** (pl-51): every one
+ * of these cases was confirmed to reach here rather than a route. The rule is
  * deliberately this wide rather than enumerating `FST_ERR_CTP_*` codes one by
- * one — decision recorded in this ticket's `## The width decision` — because
- * the diagnosis "the request itself could not be understood, and it is not
- * this service's fault" holds for all of them, even where a more specific
- * status (413, 415, 412, 416) is thrown away in favour of the generic 400.
+ * one — decision recorded in this ticket's Log — because the diagnosis "the
+ * request itself could not be understood, and it is not this service's fault"
+ * holds for all of them, even where a more specific status (413, 415, 412, 416)
+ * is thrown away in favour of the generic 400. This pattern originates in dl-66,
+ * which performed the same width analysis for the downloader.
  */
 function isClientRequestStatusError(error: unknown): boolean {
   if (error instanceof AppError) return false;
