@@ -91,6 +91,16 @@ application/json` and no body, answers 400 `BAD_REQUEST` and logs at `info`,
 - NFR: security ✓ (no upstream error message or `cause` reaches the response or the log fields) · performance n/a · reliability ✓ (response and log always derive from one `toErrorResponse` call, so they cannot disagree) · maintainability — above.
 - **findings** · code-review at medium returned 2; 2 carried, 0 dropped.
 
+### Gate 2
+
+**Gate 2: CONCERNS** — 2026-09-26 · `git diff 055c516..0325bdf` · code-review at medium (re-gate)
+
+- **finding 1 — fixed.** The copied dl-66 comment and the false "no @fastify/static" claim are both corrected: the comment now says "(pl-51)" and points at this ticket's own Log rather than a heading that never existed here (`tools/planner/api/src/http-errors.ts:65 "decision recorded in this ticket's Log"`), and drops the unverified content-length/proto claim. Two new tests back the corrected width table (`tools/planner/api/test/malformed-requests.test.ts:86 "GET asset with If-Match on stale ETag"`, `:110 "GET asset with unsatisfiable Range"`). Re-verified with two mutations, all four tests in the file each time: disabling the width rule (`isClientRequestStatusError` forced to `false`) fails all 4 on the 400 status assertion (500 received); reverting the log line to a second `AppError.from(error).code` fails all 4 on the log's BAD_REQUEST code assertion instead.
+- **finding 2 — fixed.** The Log records an owner confirmation via `AskUserQuestion` on 2026-09-26, owner chose A, matching the fact given to me for this round. I cannot verify the further claim that the owner was told of the width-A/no-static correction, since that conversation leaves no trace in the repository.
+- **med · new, this round** — the rewritten Log paragraph that fixes finding 1 misdescribes its own tests. It cites lines 15 and 43 for the body-parser tests and 81 and 103 for the @fastify/static ones; none of the four mark a test declaration or the right test's assertion (line 15 is `webDir = undefined;` in `afterEach`, line 43 is the first test's own status assertion, line 81 is the malformed-JSON test's code assertion, line 103 sits inside the If-Match test only) — the real declarations are at lines 28, 56, 86 and 110. The paragraph also claims "All six new tests" and "the four new @fastify/static tests"; this round added exactly two tests, four in the file total, not six added or four new. Its final count line claims 1275 tests; `npm test -- --project planner`, run directly, gives `75 files / 1273 tests passed` — two over the pre-round baseline, matching what was actually added. Aside: the lines-15-and-43 citation is not new — it was already wrong at `055c516` (same two `const raw` lines), and gate 1 did not catch it because the citations gate checks only a ticket's `## Review` section, never its Log.
+- **findings** · new-finding hunt at medium over `git diff 055c516..0325bdf`: 1 returned, 1 carried, 0 dropped. Carried findings from gate 1: 2, both fixed.
+- NFR: unchanged from gate 1 — nothing in this round touches security, performance or reliability. maintainability — the new finding above.
+
 ## Log
 
 - 2026-09-19 — Filed from dl-66's Build step 5, which asked the downloader
