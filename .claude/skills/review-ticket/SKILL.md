@@ -13,10 +13,11 @@ and only one of them is already built — so this skill runs `code-review` for t
 first question and spends its own effort on the rest.
 
 The output is a `## Review` section **committed to the ticket file by the
-builder**, because `docs/01-TICKETS.md` already holds that the file is the unit of
-work from brief to record. A verdict that lives in a terminal scrollback is not a
+session that lands the round** — the builder, or `orchestrate-tickets`' fixer —
+because `docs/01-TICKETS.md` already holds that the file is the unit of work
+from brief to record. A verdict that lives in a terminal scrollback is not a
 record — and neither is one written into a worktree that is about to be deleted,
-which is the sharper version of the same rule and the reason the builder commits
+which is the sharper version of the same rule and the reason the lander commits
 it rather than the reviewer.
 
 **Unless the pull request only *files* a ticket**, in which case the record goes
@@ -62,11 +63,11 @@ not made this particular wrong turn.
 
 So the invoking agent's job here is to dispatch, not to review:
 
-| You are       | Dispatch to |
-| ------------- | ----------- |
-| Opus          | Sonnet      |
-| Sonnet        | Opus        |
-| anything else | Opus        |
+| You are       | Dispatch to              |
+| ------------- | ------------------------ |
+| Opus          | `ticket-reviewer-sonnet` |
+| Sonnet        | `ticket-reviewer-opus`   |
+| anything else | `ticket-reviewer-opus`   |
 
 Keyed on **you**, not on whatever wrote the code, because you usually cannot know
 what wrote the code and you can always know what you are — and if you wrote it,
@@ -78,33 +79,27 @@ for a job whose whole content is holding a ticket, a diff and a page of
 invariants in mind at once, and a gate they produce is worth less than no gate,
 because it still reads as PASS.
 
-Dispatch with the Agent tool — `subagent_type: ticket-reviewer`, `model:` from the
-table — and hand it the ticket id, the sha under review, and the diff range. The
-agent definition at `.claude/agents/ticket-reviewer.md` already carries the rest:
-it preloads this skill, has no `Write`, `Edit`, `Agent` or `Skill` tool, and gets
-its own worktree. Those tool omissions are what make "returns text, commits
-nothing" and "runs the defect hunt itself" facts rather than requests.
+Dispatch with the Agent tool — `subagent_type` from the table, and **no `model`
+parameter**: each definition in `.claude/agents/` pins its model and effort by
+full id, and a `model` passed at dispatch overrides the model while keeping the
+definition's effort — a pairing nobody chose. That is relayed from the sentinelle
+repository and not measured here; Claude Code's sub-agent documentation says a
+definition's `effort` overrides the session's, and nothing about a per-call
+`model`. Hand it the ticket id, the
+ticket's path, the base sha and the head sha. The definition carries the rest:
+it reads [gate.md](gate.md) and the orchestrator's gate role from `origin/main`,
+has no `Write`, `Edit`, `Agent`, `Skill` or `SendMessage` tool, and gets its
+own worktree. Those omissions are what make "returns text, commits nothing" and
+"runs the defect hunt itself" facts rather than requests.
 
-**Do not tell it to call `EnterWorktree`.** An earlier version of this page said
-the reviewer's first instruction should be `EnterWorktree` with the builder's
-worktree path. That is wrong and it stalls: a subagent's cwd is pinned at launch,
-`EnterWorktree` by name is refused outright, and by path it moves only write
-access while the Bash sandbox stays pinned to the parent's tree, refusing every
-command including `pwd`. Two agents launched that way stalled, and one concluded
-it should work in the shared checkout instead. The agent has `isolation: worktree`
-and reaches the branch with `git fetch origin && git checkout --detach <sha>`.
+**Do not tell it to call `EnterWorktree`, and do not write its setup into the
+prompt.** Its checkout, farm and build order is in the gate role, and a gate that
+reads the wrong tree does not fail loudly — it produces a fluent section marking
+every acceptance line `unproven`. So check the sha it names in its report is the
+one you gave it.
 
-**The failure that paragraph was guarding against is real, so keep guarding it**:
-a reviewer that reads the wrong tree does not fail loudly. It produces a fluent,
-correctly formatted gate that marks every acceptance line `unproven`, which reads
-exactly like a review that ran and found the work wanting, and nothing downstream
-catches it — the section still names a range and still cites the ticket. That is
-why the agent is told to print `git log --oneline -1` and a `--stat` before
-reviewing anything: name the sha you gave it in the report, and check it came
-back.
-
-**Hand it the ticket id, the sha and the diff range — not your reading
-of the ticket.** A caller who summarises the acceptance into the prompt anchors
+**Hand it the ticket id and the shas — not your reading of the ticket, and not
+what the build claims.** A caller who summarises the acceptance into the prompt anchors
 the reviewer to its own reading of what the ticket asked, which is a quieter
 version of the thing this whole split exists to prevent. The reviewer opens the
 ticket itself; that is step 1.
@@ -139,7 +134,10 @@ commits it** — in a dispatched loop those are two different sessions, and it i
 the builder who already holds write access to the branch. That costs the
 independence a separate transcriber would buy: the subject of the review
 becomes its own transcriber, and the disclosure note below plus the posted
-report (step 8) are what is left standing in its place.
+report (step 8) are what is left standing in its place. In `orchestrate-tickets`
+a mechanical last round is landed by its fixer instead, which holds write access
+too and is a different model from the gate; everything below applies to it
+unchanged.
 
 So the builder lands it in `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
 in the branch's own commit, with `scripts/review-record.mjs` as step 8 says —
@@ -176,184 +174,18 @@ report in the thread are written by different models, and a reader can hold one
 against the other. A gate that is not committed did not happen; a gate that is
 committed with no report beside it cannot be audited.
 
-**One reviewer, not a panel.** Two models reviewing in parallel is not a second
-opinion, it is two gates and no rule saying which one counts.
+**One model, not a panel.** Two models reviewing in parallel is not a second
+opinion, it is two gates and no rule saying which one counts. A split of one gate
+into angles on one model was tried and shelved before it could run, because
+nothing could land it or write its verdict
+([repo-58](../../../docs/work/repo-58-a-gate-split-by-angle-cannot-be-landed.md)).
 
 ## Steps
 
-These are the reviewing subagent's steps, not the builder's — except step 8, which
-is the builder's alone.
-
-1. **Read the ticket** — `tools/<tool>/docs/work/<id>-*.md`. Its **Done when**
-   lines are the acceptance criteria; its **Build** steps and traps are what the
-   author expected to be hard. Read the tool's `CLAUDE.md` too.
-
-2. **Establish the diff.** `git diff origin/main...HEAD` for branch work, or the
-   PR's diff if given one. Say which range you reviewed — a gate against an
-   unstated range cannot be reproduced.
-
-3. **Hunt defects.** How depends on where you are running, and the two are not
-   interchangeable:
-
-   - **Invoked directly in a main session** (`/review-ticket pl-16`): invoke
-     `code-review` at `level` against that range and do not re-run its analysis
-     yourself. That is the one thing this step delegates.
-   - **Running as the `ticket-reviewer` subagent**: run the hunt **yourself**, in
-     your own context, to the same depth. You have no `Skill` tool, by design —
-     dispatch belongs to whoever dispatched you, and nesting it hides cost and
-     makes the agent tree unreadable. Record the range and the depth you used
-     where the header below says `code-review at <level>`.
-
-   **Read what its finders actually returned, not only the summary it hands
-   back, and account for every finding.** Carrying is a decision per finding, not
-   transcription: keep it, or drop it and **say in your own section that you
-   dropped it and why** — wrong, already fixed, out of the reviewed range, a
-   product decision rather than a defect. All three are good answers; silence is
-   not, because a finding that vanishes between the finder and the table leaves a
-   gate that reads exactly like one that found nothing.
-
-   **Two findings that are one mechanism may share a bullet** — say so in it
-   ("two findings, one mechanism") so the arithmetic still reconciles against the
-   `findings` line below. Merging is a presentation choice and a reasonable one;
-   merging silently is how a count stops adding up, and the builder is then left
-   guessing whether one was dropped.
-
-   This paragraph is here because it has already happened twice, in consecutive
-   reviews, in both directions: pl-10's gate lost two defects its finders had
-   reported — one of them a navigation bug that re-asked an already-drafted
-   trip's questions — and pl-18's lost a duplicated-SQL finding, which its author
-   then did not record in the Log either. Neither reviewer was careless. Both
-   summarised a summary, which is what the old wording of this step invited.
-
-4. **Trace every acceptance line to its proof.** One row per **Done when** line,
-   each naming the test that proves it — `file.test.ts:88 "a fragment of that
-   line"`, not "covered". A line with no test is a finding, and so is a test that
-   asserts something narrower than the line claims.
-
-   **Every citation you write into `## Review` carries anchor text, and the
-   fragment must occur only once in the file it points at.** CI enforces both —
-   `scripts/citations-gate.mjs` runs in `ci.yml`'s `check` job over every
-   record's `## Review` section with `--require-anchors
-   --require-distinct-anchors` — so a bare `file.test.ts:88` in a section you
-   commit turns the build red, and so does `"const"`.
-
-   Two constraints on the fragment, both of which have bitten somebody here:
-
-   - **No `"` inside it, and no backtick either.** The parser's anchor group
-     admits no `"`, so escaping one truncates the fragment at the backslash and
-     the citation reports `moved`. A backtick inside the fragment breaks the
-     cell's inline-code parsing, and the formatter then rewrites the text
-     around it — measured on a gate's own first draft, 2026-09-20. Pick a
-     substring free of both.
-   - **A citation into any file under `.claude/` is pinned or names a
-     heading, never a bare line number.** Those pages move every few sessions
-     and an unanchored coordinate into them is silently redirected by the next
-     edit; write `<file>@<rev>:<line>` with a `main` commit, or the page and
-     the heading (repo-52). `citations.mjs --require-claude-pins` reports the
-     bare form as `unpinned-volatile`.
-   - **Quote enough of the line to be unique, and know that the line wrap bounds
-     what you can quote.** `verified` means *some* occurrence of your fragment
-     starts inside the range you named — not that only one does. In prose files
-     the fragment cannot cross a physical line break, so the distinctive words
-     are sometimes on the next line; cite that line, or a range, rather than
-     settling for a short fragment that verifies on more than one line
-     (2026-09-20). A one-word anchor keeps saying `ok` after an unrelated edit
-     slides a different occurrence onto the cited line, which is exactly how
-     `repo-31`'s `"informational"` citation survived pointing at a comment it had
-     nothing to do with.
-
-   This is not formatting. An unanchored coordinate still *resolves* — the
-   checker only confirms the file has that many lines — so a citation onto a
-   blank line, one that drifted onto unrelated code, and one that bound to the
-   wrong file entirely all report clean at exit 0. All three are measured, all
-   three came out of live review cycles, and they are why
-   [repo-29](../../../docs/work/repo-29-citations-carry-no-anchor.md) exists. An
-   anchor is the only thing here that checks the *claim* rather than the
-   coordinates.
-
-   **Cite the line of the assertion, not the line of the `test(` that contains
-   it.** A test whose name covers half the clause — "reaches grounding, and
-   grounding reaches the composer", for a bullet that also demands `grounding →
-   done` be *rejected* — is cited correctly and is still unverifiable: the reader
-   has to open the file to find out whether the other half is asserted anywhere.
-   Cite the half you mean and the row can be checked without leaving the table.
-
-   **A line with several clauses is proven only when every clause is.**
-   Acceptance lines routinely join three or four claims with commas. Cite each,
-   and if one is unproven the row is unproven whatever the others say — a row
-   ticked on the strength of its first clause is the exact failure this step
-   exists to prevent.
-
-   Four verdicts, and the last two are the ones that matter:
-
-   - **proven** — a test asserts it, and it runs in `npm test`.
-   - **unproven** — nothing asserts it.
-   - **unproven (gate)** — asserted only by something the local gates do not run:
-     a tool's `e2e` suite or its container build, which live in
-     `.github/workflows/<tool>.yml` and nowhere else.
-   - **verified** — nothing asserts it, but you re-ran it. For the bullet almost
-     every ticket ends with: the gates pass, the suite count went up, no existing
-     test changed meaning. **Give the numbers you got, not the ones the Log
-     claims** — a count is verified by running the suite at the base commit too,
-     and "no existing test changed meaning" by reading the diff of the test files
-     it touched for deletions and reworded assertions. Counts as proven for the
-     gate.
-
-   `unproven (gate)` exists because of [pl-16](../../../tools/planner/docs/work/pl-16-the-plan-run.md):
-   `npm run check` and 1,020 tests passed and the image would not boot. "Green
-   locally" is not proof of an acceptance line whose proof is a gate you did not
-   run, and this is the row that refuses to let that pass silently.
-
-   `verified` exists because that last bullet fits none of the other three —
-   nothing asserts it, it is not a CI gate, and it is plainly not unproven.
-   Without a verdict of its own a reviewer reads the Log's numbers back and ticks
-   them, which is the ticket marking its own homework.
-
-   **Then look for what has no proof at all.** A source file the diff adds a
-   branch to, with no test file of its own, is a finding in its own right — name
-   the file and the branch. It costs one `ls` of that package's `test/`, and it
-   catches what reading does not: reading covers the lines you looked at closely,
-   and nothing makes you look at all of them. pl-24 is the worked example.
-   `RunView.tsx` took 38 changed lines in a package with no `run-view.test.tsx`,
-   and absorbed two _never fake progress_ defects in one branch — a lookup
-   labelled as a specialist, and the fan-out's finished counters replayed as
-   grounding's own. Both were eventually found by eye; the second was found
-   twice, because the first reading caught one of its two call sites.
-
-5. **Walk the repo's invariants.** These are not general advice — each is a rule
-   the root or tool `CLAUDE.md` states, and a generic reviewer knows none of them.
-   Check only the ones the diff can plausibly touch, and say which you skipped.
-
-   - A tool imports nothing from another tool. Shared code moves to `packages/`
-     on the **second** real consumer — and a lift is itself a change to the other
-     tool, to be declared rather than smuggled.
-   - Failures throw `AppError` with a code from the taxonomy. New code in core
-     only if it would mean something to a tool that never heard of this one.
-     `NOT_FOUND` (no route) and `JOB_NOT_FOUND` (no such job) are not
-     interchangeable. Re-worded copy at the raise site means the code is wrong.
-   - No shell. Argument arrays, `shell: false`. Kill process **trees**.
-   - `redactHeaders` / `redactUrl` wherever a header or URL is logged — a signed
-     URL carries its credential in the query string.
-   - Every user-influenced URL is SSRF-checked, after each redirect included.
-   - No faked progress: unknown total is `null` and an indeterminate UI.
-   - Contract packages are not edited unilaterally. If the diff changes one, the
-     ticket must show that decision being made, not assumed.
-   - New tests are registered: a package's `references` line in
-     `tsconfig.tests.json`, and a `web` or `e2e` package's own project file plus
-     the `exclude` entry. Unregistered specs pass green while checking nothing.
-   - A new workspace dependency for an `api` costs **two** edits to that tool's
-     `Dockerfile`, in two places, and neither is typechecked.
-   - Style: no `any`, no `console`, `import type`, `node:` builtins, `.ts` in
-     relative imports.
-
-6. **Sweep the four NFRs** — security, performance, reliability,
-   maintainability — one line each. *Not applicable* is a fine answer and a fast
-   one; silence is not, because a skipped sweep and a clean one look identical
-   afterwards.
-
-7. **Decide the gate by the rule below, not by feel**, and **return** the section
-   as text. Do not write it to the ticket yourself: your worktree is discarded
-   when you report, so a file you edit here goes nowhere. The builder commits it.
+Steps 1 to 7 are the gate's, and live in [gate.md](gate.md), which only the gate
+agents read. Step 8 is the lander's — the session that commits to the branch
+under review: the builder, or in `orchestrate-tickets` the fixer on a mechanical
+last round.
 
 8. **Commit the section, post the report, then say what would clear it.** This
    step is the builder's, and it has three acts. First, write the reviewer's
@@ -408,96 +240,3 @@ is the builder's alone.
    stopped there, the last instruction having been carried out. The user had to
    ask twice — the second time "or you are saying it's already fixed?" — to learn
    which of the two acts had taken place.
-
-### A shape-level finding goes onto the siblings too
-
-When a finding is not about this change but about a **shape** the change shares
-with its siblings — the same wrong assumption in three resolvers, one rule
-restated in four ticket briefs — it belongs in the siblings' `## Build` sections,
-in the same pull request as the fix. Naming it only in this ticket's `## Review`
-records it where nobody building the sibling will read it, and the next agent
-rebuilds the defect from the brief that still describes it.
-
-## Severity and the gate
-
-| Severity | Means                                                                    |
-| -------- | ------------------------------------------------------------------------ |
-| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested |
-| **med**  | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
-| **low**  | Style, a missing fixture, a comment that will mislead the next reader     |
-
-- **FAIL** — any high, or any acceptance line **unproven**.
-- **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
-- **unproven (scope)** — a line the dispatch removed from the branch's scope,
-  with the row naming who scoped it and where the work lands instead. It does
-  not force FAIL: three gates on 2026-09-20 each had to reconcile this by hand
-  when a builder was told to leave the page wiring to the orchestrator.
-- **PASS** — every acceptance line proven or verified, nothing above low.
-- **WAIVED** — never yours to write. A human waives, names themself and says why.
-- **PREFLIGHT** — a page-only `chore` with no source change, gated by
-  `scripts/preflight.mjs` exiting 0 and the orchestrator's own read, per
-  `orchestrate-tickets`' `sizing.md`. Written by the orchestrator, naming the
-  sha the check ran at; never for a ticket that touches `scripts/`, `packages/`
-  or a tool's source, which gets a reviewer (2026-09-20).
-
-`unproven (gate)` is CONCERNS rather than FAIL on purpose: the work may be
-entirely correct and the gate simply has not run yet. It is not PASS either,
-because that is precisely the case that has already shipped a broken image here.
-
-**A review never edits the ticket's `status` frontmatter**, and never edits the
-brief. FAIL is a report; whether work stops is the author's call, not the
-reviewer's. The section is added, never in place of anything else in the file.
-
-## The section to commit
-
-Above `## Log`. On a ticket that has been through several rounds, keep one
-subsection per gate rather than overwriting: a record that shows only the last
-gate cannot be told from one whose earlier findings were dropped. Keep it short;
-the reasoning belongs in the Log where the author writes it.
-
-**Every `file:line` in it carries anchor text**, per step 4 — the section is the
-one part of a ticket CI checks, and `node scripts/citations-gate.mjs` is what
-checks it.
-
-```markdown
-## Review
-
-**Gate: CONCERNS** — 2026-08-16 · `origin/main...HEAD` · code-review at medium
-
-| Done when                                 | Proof                                          |
-| ----------------------------------------- | ---------------------------------------------- |
-| Run over HTTP leaves a `PlanDetail`       | `api/test/runs.test.ts:142 "expect(detail)"` ✓ |
-| Image ships every workspace `api` imports | **unproven (gate)** — planner.yml              |
-
-- **med** · `Dockerfile` lists workspaces by hand in two places and nothing
-  typechecks the list; the build-stage half fails differently from the runtime half.
-- **low** · `nfr:maintainability` — no fixture for the empty-roster branch.
-- **dropped** · finder reported the retry loop as unbounded; it is bounded by
-  `maxAttempts` two frames up. Not a defect.
-- **findings** · code-review at medium returned 3; 2 carried, 1 dropped.
-- NFR: security ✓ · performance n/a · reliability ✓ · maintainability — above.
-```
-
-A `dropped` line costs one sentence and is the difference between a gate that
-found nothing and a gate that decided something was not worth carrying. It has
-no severity, and it never changes the verdict.
-
-**The `findings` line is required even when nothing was dropped.** `2 returned,
-2 carried, 0 dropped` looks like a formality and is the opposite: it is the only
-line that separates a gate whose defect hunt found nothing from one whose defect
-hunt never ran. The header above names the hunt and its depth, so a reviewer that
-skipped step 3 entirely still writes them, and every other part
-of the section would look exactly the same. The count also has to reconcile
-against the bullets, which is what makes a merged bullet safe to write.
-
-## What this is not
-
-It does not run the slow gates for you, and it must not report them as run. If an
-acceptance line needs the e2e suite or the image, the honest row is
-`unproven (gate)` and the honest sentence is that the gate is the proof you do not
-have.
-
-It does not fix what it finds unasked. The reviewing subagent fixes nothing at
-all — a model asked to both judge and repair is back on the wrong side of the
-split this skill exists to draw — and the builder proposes the work in step 8
-rather than starting it.

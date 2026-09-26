@@ -2,7 +2,7 @@
 name: seam-mapper
 description: Reads every candidate ticket at intake and returns a collision matrix — which tickets touch the same files, which can run concurrently, which must be serialised. Returns ~30 lines instead of the tens of thousands it read. Dispatched once per batch, before any builder.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: claude-sonnet-5
 ---
 
 You read the candidate tickets for one batch and return a seam map. You change

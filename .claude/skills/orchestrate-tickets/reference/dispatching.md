@@ -2,19 +2,18 @@
 
 ## Dispatching a builder
 
-`.claude/agents/builder.md` is loaded into every builder before your prompt is,
-and it carries the setup order, the scope rule, the gate commands, the
-bookkeeping, "do not spawn subagents", "say what you could not do" and "push back
-rather than transcribe". **Do not restate any of that** — it is inherited, and a
-prompt that repeats it is paying twice for the same instruction while making the
-part that is genuinely yours harder to find.
+Every builder reads `roles/common.md` and `roles/builder.md` from `origin/main`
+before it reads your prompt's intent, and they carry the setup order, the scope
+rule, the gate commands, the push, the report's shape, "say what you could not
+do" and "push back rather than transcribe". **Do not restate any of that** — a
+prompt that repeats it pays twice for the same instruction and buries the part
+that is genuinely yours.
 
-**The one thing you set that is not in the prompt is the model**, and it comes
-from the ticket's `difficulty` field rather than from your read of the work —
-`npm run status -- --json` carries it, the table has no column for it, and
-[`.claude/agents/builder.md`](../../../agents/builder.md) holds the mapping.
-Absent means inherit, which is most tickets. You have not read the brief; do not
-rate it.
+**You choose the agent, not the model.** `builder-mechanical`,
+`builder-standard` or `builder-hard`, from the ticket's `difficulty` —
+`npm run status -- --json` carries it — per `SKILL.md`'s _Which model built it_.
+Absent means `builder-hard`. You have not read the brief; do not rate it, and
+never pass `model`.
 
 What only you can supply, and what every builder prompt therefore carries:
 
@@ -37,7 +36,7 @@ What only you can supply, and what every builder prompt therefore carries:
   This is per-dispatch by definition and is the single highest-value line in the
   prompt, because it removes an entire round. **It goes in the builder's own
   dispatch or a direct message from you, never through a gate prompt**: authority
-  a reviewer pastes into its message is not authority under `builder.md`, and
+  a reviewer pastes into its message is not authority under the builder role, and
   both builders that received it that way declined — one at the cost of a
   resume, the other holding until a direct message arrived (2026-09-12,
   2026-09-13).
@@ -113,6 +112,12 @@ close-out.
 
 ### Reading a subagent's `resolvedModel`, when you have to
 
+**The route since 2026-09-26 is `node scripts/agent-cost.mjs --agent <id>`**,
+which finds the agent's transcript by the id its `Agent` result reported and
+prints the model and the effort its records carry — measured that day on a real
+transcript, 70 of 70 billed records carrying both. What follows is how that was
+established, and still holds for a reconstruction.
+
 You should not have to: both halves of the model pairing are knowable at dispatch,
 and `SKILL.md`'s _Which model built it_ says to write them down there. This is for
 the case where a record has to be reconstructed afterwards. **Three routes, and
@@ -141,27 +146,37 @@ Gate yield tracked prompt specificity, not gate number. In the reference session
 gates 4 and 5 were the cheapest **and** the highest-yield, because by then the
 prompts said *reproduce this exact mutation* instead of *review this*.
 
-**Name the builder in every gate prompt.** The reviewer sends its findings to the
-builder itself now, so a gate prompt that does not say who to address has no
-channel — give the builder's agent id (never an agent-type name; see below).
-**Do not tell it to fetch `SendMessage` first**: both agents carry `SendMessage`
-directly and neither has `ToolSearch`, so that instruction sends a reviewer to a
-tool it does not have — measured, and recorded below. Say explicitly what still comes back to you: an
-unsettleable disagreement, and any open decision. Anything else you ask to be
-routed through yourself, you are volunteering to retype.
+**Give the gate nothing from the build.** The ticket id and path, the base sha,
+the head sha, the scratch directory and what to attack — never the builder's
+report, its reasoning, its open decisions or a summary of any of them. The gate
+reads the brief as it stood at the base and forms its own verdicts; you compare
+them with the builder's (`SKILL.md` step 7). Its findings come back to **you**,
+and you paste them onward — see _Routing findings_ below.
 
-### An agent definition is read at launch, from the shared checkout
+### What an agent reads, and when
 
-**A branch that edits `ticket-reviewer.md` or `builder.md` is gated by the old
-page.** The gate on the 2026-09-20 sweep ran on a `ticket-reviewer.md` that still
-said the orchestrator checks "four things" while the branch under review said
-five, and it reported the mismatch itself. A sweep of the agent definitions
-cannot dogfood itself: say in the gate prompt what the branch changes in the
-reviewer's own page, hand it the rules it is missing, and read the record knowing
-the reviewer did not run under them. **A resumed reviewer runs an older page
-still** — its definition was read at its first launch, so a gate 2 woken by
-message gates the corrections under the page that predates gate 1's own
-findings; the same gate proved that one commit after this section was written.
+**The frontmatter is read at launch, from the shared checkout; the procedure is
+read at the agent's first command, from `origin/main`.** Since 2026-09-26 each
+definition in `.claude/agents/` is a model, an effort, a tool list and a pointer,
+and the agent's first command is one `git show origin/main:…` of its role pages.
+So **a branch that edits a role page is built and gated under the page on
+`main`**, which is what the old arrangement produced by accident: the gate on the
+2026-09-20 sweep ran on a `ticket-reviewer.md` that still said the orchestrator
+checks "four things" while the branch under review said five, and it reported the
+mismatch itself. A sweep of the roles cannot dogfood itself — say in the gate
+prompt what the branch changes in the gate's own page, and read the record
+knowing the gate did not run under it. **A woken gate runs the page it read at
+its first launch**, so a re-gate after a role page merged runs the older one.
+
+A change to a definition's frontmatter — a model, an effort, a tool — takes
+effect for the next dispatch from a shared checkout that has it, which is
+`main` once merged, not the branch.
+
+**A branch that adds or renames a role page cannot dispatch under it until it
+merges.** The definitions read the pages from `origin/main`, so on such a branch
+every new agent fails at its first command with git's `exists on disk, but not
+in` — loudly, which is the intended failure. Gate that branch by hand or under
+the definitions on `main`, and say which in the pull request body.
 
 ### Never write an install into a gate prompt
 
@@ -199,16 +214,18 @@ the base produces a fluent, correctly formatted gate that marks acceptance lines
 `unproven`, which is the silent failure that page already warns about arriving
 from the other direction.
 
-`repo-20` reordered that page to fetch → detach → farm → build, so the instruction
-now loads itself into every reviewer for free. The clause that used to sit here
+`repo-20` reordered that page to fetch → detach → farm → build, and the order now
+lives in `roles/reviewer.md`, so the instruction loads itself into every gate
+for free. The clause that used to sit here
 was habit-dependent and cost a sentence per gate; **a reminder for a bug that no
 longer exists is worse than no reminder**, so do not re-add one. The measurement
 stays because the failure mode is silent.
 
-### Send the findings in full; the builder writes the section down
+### Send the findings in full; the lander writes the section down
 
-**Tell the reviewer to send a `## Review` block for the builder to commit
-verbatim — that is the rule, settled by the owner on repo-38 (2026-09-09), and
+**The gate returns a `## Review` block, and whoever lands the round — the
+builder, or the fixer — commits it verbatim. You carry it between them by
+pasting it, never by describing it. That is the rule, settled by the owner on repo-38 (2026-09-09), and
 this page used to argue the opposite.** An orchestrator instructed exactly that
 on 2026-09-03, on a reading of `docs/01-TICKETS.md:351`'s *"the reviewer reports
 and the builder writes the section down"* that this page called wrong, on the
@@ -278,26 +295,24 @@ is not the builder editing the model under review's own judgement. Make it and
 commit it; do not read it as breaking verbatim, and do not leave the next
 builder caught between an unsatisfiable rule and a red gate.
 
-### Addressing, which is where this loop actually failed
+### Addressing a resume
 
-**Give the gate prompt the builder's agent id**, and require the reviewer to
-**state its own id back** in the message it sends. The asymmetry is structural
-rather than an oversight to fix: the builder is dispatched first, so its prompt
-cannot name a reviewer that does not exist yet, and the reviewer's message is the
-only channel by which it can learn the return address.
-
-**An agent id, never an agent-type name.** `SendMessage` to `"ticket-reviewer"`
-does not resolve. Three consecutive test runs read as a broken design — a builder
-reporting the reviewer "not reachable" and falling back to the orchestrator — and
-all three were this. The same call with the id succeeded first time. When a report
-says a sibling was unreachable, **ask for the verbatim error before believing the
-channel is at fault**; none of the three reports contained one, and there was no
-error to contain.
+**Every resume is yours, by agent id.** Builders and gates no longer message each
+other: since 2026-09-26 neither carries `SendMessage` or `ListAgents`, and you
+wake each one — a builder with judgement findings, a gate to re-gate — with
+`SendMessage` to the id its `Agent` result reported. **An id, never an
+agent-type name**: `SendMessage` to `"builder-standard"` does not resolve. Three
+consecutive test runs of the old loop read as a broken design — an agent
+reporting the other "not reachable" — and all three were a type name; the same
+call with the id succeeded first time. **A `completed` agent is still
+reachable**: `SendMessage` wakes it into its own context (measured 2026-09-01).
+Never infer from a status that it has gone.
 
 ### What was measured about the channel
 
-Probed on 2026-09-01, against the real agent types rather than reasoned from the
-tool docs:
+Probed on 2026-09-01, against the agent types of the loop in which builders and
+gates messaged each other — kept because the self-report half still holds, and
+because a future design that restores peer messaging starts from it:
 
 - **Both `builder` and `ticket-reviewer` carry `ListAgents` and `SendMessage`
   directly.** Not deferred, and **neither has `ToolSearch`** — a prompt telling
@@ -388,8 +403,8 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
   another round."*
 - **Forbid delegation.** No subagents.
 - **Fix nothing.** The gate reports; the builder fixes.
-- **Return a `## Review` section as text for the builder to commit verbatim**,
-  in those words. A gate prompt that asked for findings in full and not for the
+- **Return a `## Review` section as text, with every finding in full, to you**,
+  in those words — you paste it to the lander. A gate prompt that asked for findings in full and not for the
   section got narrative back, and the record was missing from the ticket until
   the builder noticed at close-out (2026-09-17). The rule sits under _Send the
   findings in full_ above; this is where the prompt has to carry it.
@@ -406,6 +421,7 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
 - **Name the severity floor** for a mechanism ticket — _Name a floor for a
   mechanism ticket_ in [sizing.md](sizing.md).
 - **Never carry ship authority** — the builder bullet above.
+- **Nothing from the build** — the first paragraph of this section.
 - **Name the ticket's scratch directory**, the same literal
   `<scratchpad>/<ticket-id>/` the builder was given, for the base-tree extract
   and any comparison script a later round will need (repo-57).
@@ -515,3 +531,70 @@ Prefer `TaskStop` to a `maxTurns` cap in the agent definition. A capped gate sto
 mid-review and still returns something shaped like a finished one — the same
 failure as a reviewer that read the wrong tree and marked every acceptance line
 `unproven`. Bound the gate by scoping it, watch it, and stop it deliberately.
+
+### Splitting a gate by angle — shelved, not runnable
+
+**Do not dispatch this.** A split of one round's gate into parallel angles —
+`acceptance`, `defects`, `invariants`, on one model — was written here on
+2026-09-26, after the sentinelle repository's parallel review angles, and shelved
+the same day when a second-pass review found it could not be landed:
+`scripts/review-record.mjs` refuses a first section headed other than
+`## Review` and a second `### Gate 1`, so three angles of one round cannot be
+recorded; `review-ticket`'s `gate.md` requires a `findings` line that only a
+defect-hunting angle produces; nothing was assigned the verdict, which the lander
+may not compose; and the cost argument counted review turns and not each
+angle's own farm, build and reading. [repo-58](../../../../docs/work/repo-58-a-gate-split-by-angle-cannot-be-landed.md)
+carries the reproduction and the fix-or-drop question. Until it is answered, the
+rule above — split when the attack list needs two kinds of setup — is the only
+split.
+
+## Routing findings: the builder or the fixer
+
+A gate's findings come back to you, and you paste the round onward **as the
+reviewer wrote it**, to one agent — `SKILL.md` step 6 has the table and the
+measurement behind it. What goes in each dispatch:
+
+- **The builder, resumed** with `SendMessage`, when any finding needs
+  judgement: **every** finding of the round in a single message, pasted, the
+  mechanical ones included; any open decision already answered,
+  with how it was taken (`SKILL.md`'s provenance row); and whether it has ship
+  authority for the landing. Its role page tells it to fast-forward from
+  `origin/<branch>` first, since a fixer may have pushed in between.
+- **A fresh `fixer`**, only when every finding of the round is mechanical, or
+  the landing is all that is left: the branch, the base, the findings, pasted,
+  and the scratch directory; ship authority when the round's gate records and
+  pull request are all that remains. **A fixer and a resumed builder never work
+  one branch at the same time** — both push to it, and the second push is
+  rejected as non-fast-forward — which is one more reason a round is never
+  split between them.
+- **Neither gets your judgement of a finding.** If you think one is wrong, say
+  so as a question the agent answers by reproducing it; a verdict of yours is a
+  relay, and `SKILL.md`'s relaying table says what those cost.
+
+**Which findings are mechanical is your call, and err toward the builder.** A
+finding is mechanical when its fix is fully stated by the finding and touches only
+the lines it names: a rename, a citation repoint or pin, a Log sentence, a
+registration line, a lint or format fix. Anything whose fix is "decide how" is the
+builder's, and so is the whole round it arrives in. A fixer that misjudges hands
+the finding back, which costs one small round; a builder woken for a round of
+mechanical fixes alone reads its whole transcript on every turn, and re-writes
+it first if the wake falls past its cache TTL.
+
+## Re-gating a round
+
+Wake the **same** gate with `SendMessage`; its base-tree extract is in the
+scratch directory, and a woken gate costs a fraction of a fresh one (_Do not cap
+the gate count_). The message carries:
+
+- the sha it gated and the new head sha, so its scope is
+  `git diff <gated sha>..<new sha>` and nothing else;
+- **its own findings, as it wrote them** — the only list it gives verdicts on;
+- each refutation the builder or fixer returned, **as the command and its
+  output**, labelled as their claim to re-run. Not their account of the fix:
+  the gate did not see the build's claims in round one, and it does not see the
+  round's either.
+
+Its role page tells it to give each named finding a verdict, raise new findings
+only in the lines the round touched, re-sweep nothing already settled, and return
+a new `### Gate <n>` subsection. After two re-gates that each raise a new `high`,
+`SKILL.md` step 8 hands the state to the user.

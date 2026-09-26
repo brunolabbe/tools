@@ -23,10 +23,11 @@ discarded. So:
   have wrong stays in the Log, as a claim with its command like any other. Judge a
   Log by whether a later agent can re-run it, not by whether it reads well.
 
-- The reviewer returns the section; **the builder commits the short form of it**
+- The reviewer returns the section; **whoever lands the round — the builder, or
+  the fixer — commits the short form of it**
   (the two bullets above say which form) to the ticket, above
   `## Log`, one subsection per gate, never overwriting an earlier one.
-- The builder then posts the reviewer's report to the PR thread
+- The lander then posts the reviewer's report to the PR thread
   (`gh pr comment <n> --body-file <f>`). That is what makes a self-transcribed
   verdict falsifiable, and it is the only check on it.
 - Verdicts are recorded **as given**. "FAIL, since addressed" is a verdict softened
@@ -61,7 +62,7 @@ discarded. So:
   against one tree — so an earlier round's coordinates that a later round's
   fixes moved are pinned to the sha that round reviewed, or the record goes red
   the moment it is committed to a ticket file (2026-09-20, seen on a PR-thread
-  record where it was harmless). **The builder does that pinning**, when it
+  record where it was harmless). **The lander does that pinning**, when it
   transcribes the multi-round section: the reviewer returns text and never edits
   a file, and a pin changes no verdict, row or severity, so it is the same kind
   of repair as the self-citation one and not the builder editing the record.

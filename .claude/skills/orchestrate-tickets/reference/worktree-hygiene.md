@@ -71,11 +71,14 @@ survive is therefore the **agent record and its worktree**, so a wake has
 something to resume into — removing a reviewer's tree while the builder may still
 answer it is what actually closes the channel.
 
-**That exception is now the common case, not the rare one.** The reviewer sends
-its findings to the builder directly and fields the pushback itself, so "a
-specific open question could go back to it" is true for every gate until the
-builder is done answering. Retire a reviewer when its record is pushed **and** the
-exchange has ended — not on the record alone. The fourth session's 133 MB → 61 MB
+**That exception is now the common case, not the rare one.** You wake the gate
+for every re-gate (`SKILL.md` step 8) and a builder's or fixer's refutation goes
+back to it, so "a specific open question could go back to it" is true for every
+gate until the round is landed. From 2026-09-01 to 2026-09-26 the same held for a
+different reason — the gate sent its findings to the builder directly and fielded
+the pushback itself. Retire a reviewer when its record is committed **and** the
+ticket's last round has landed — not on the record alone. A `fixer` is held the
+same way, until the round it fixed has been re-gated. The fourth session's 133 MB → 61 MB
 saving came from retiring four reviewers at report time; expect to keep them a
 round longer now and to give some of that back. That is the price of the hop this
 removes, and it is disk rather than context.
