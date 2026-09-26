@@ -202,9 +202,10 @@ before the trial runs, not after.
     fallback that doubles a bill, B2 (low) `compaction` is never asserted by
     name, B3 (low) the Log counts six transitive packages where there are five,
     B4 `ANTHROPIC_CUSTOM_HEADERS` can override the configured key, B5 (open
-    decision) an empty `MODEL_PROVIDER` boots `scripted`. It was the largest
-    first-round gate on a source change that carried findings; dl-50's, larger,
-    carried none, which would have made criterion 1 true by default.
+    decision) an empty `MODEL_PROVIDER` boots `scripted`. It was chosen for
+    having the most items to recall, not for size: three larger first-round
+    gates on source changes carried fewer — dl-50's none, which would have made
+    criterion 1 true by default, and repo-35's and pl-43's one low finding each.
   - **The run.** Five angles on Sonnet at `xhigh` (the pinned gate effort
     today), each given the attack items of the original gate prompt that fell
     in its territory, in their own worktrees; then one Sonnet refuter per angle
