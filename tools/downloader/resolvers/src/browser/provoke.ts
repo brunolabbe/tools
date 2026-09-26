@@ -67,6 +67,67 @@ const CLOSE_MARK = "data-downloader-close";
 const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='true'], dialog[open]";
 
 /**
+ * Every element matching `selector` under `root` (default `document`), open
+ * shadow roots included, in **Playwright's own locator match order for a
+ * single-type selector** (dl-61) — `'video'` or `'audio'` alone, not a comma
+ * list.
+ *
+ * `root.querySelectorAll(selector)` stops at a shadow root, and a custom
+ * `<video-player>` web component keeps its player in one; the locator API
+ * this chooser replaced pierced open roots by default. Closed roots are
+ * invisible to both, so there is nothing to match there.
+ *
+ * The order is not tree order, and for a `'video'` selector it has to match
+ * the locator's: the cross-origin branch of `clickChosenVideo` clicks
+ * `frame.locator("video").nth(index)` with an index into that list.
+ * Measured against Playwright 1.62's CSS engine, which takes one root's own
+ * `querySelectorAll` matches first and only then descends into the shadow
+ * roots of that root's elements, in document order, recursively — for light
+ * `L1`, host `h1` (shadow `S1a`, nested host `N1`, `S1b`), light `L2`, the
+ * locator yields `L1 L2 S1a S1b N1`, where tree order would be
+ * `L1 S1a N1 S1b L2`. This walk reproduces the former.
+ *
+ * **A comma selector does not carry that guarantee** (dl-68's gate, measured
+ * against Playwright 1.62.1): the walk still takes a root's own matches
+ * first — `querySelectorAll('video, audio')`, tags mixed in tree order —
+ * before descending into that root's shadow roots, but the locator for a
+ * comma list instead returns plain tree order across shadow boundaries, the
+ * order a tree-order walk would give. `PLAY_SCRIPT` and `METADATA_SCRIPT`'s
+ * audio fallback (dl-68) only ever use the returned list itself (call
+ * `.play()` on everything, or take index `0`), never an index handed to a
+ * locator, so the divergence is harmless today. A future caller that indexes
+ * `ALL_MEDIA_FN('video, audio')` against a locator would misalign.
+ *
+ * Takes a selector rather than being hardcoded to `'video'` so `PLAY_SCRIPT`
+ * and `METADATA_SCRIPT`'s audio fallback (dl-68) can reuse the identical walk
+ * for `'video, audio'` and `'audio'` — a second walk that could drift apart
+ * from this one is what dl-55's `CHOOSE_VIDEO_INDEX_FN` split exists to
+ * prevent.
+ *
+ * **Takes an optional `root` too** (dl-69), defaulting to `document` at every
+ * call site that existed before it — `CHOOSE_VIDEO_FN`, `PLAY_SCRIPT`,
+ * `METADATA_SCRIPT`'s audio fallback, `SCROLL_SCRIPT` and `SIGNALS_SCRIPT`'s
+ * `hasPlayerElement` all still pass none. `MARK_CLOSE_SCRIPT`'s close-layer
+ * guard is the one caller that needs a narrower start: it has to walk
+ * `container`, the layer under consideration, not the whole document — a
+ * shadow-root video belonging to some other part of the page must never
+ * excuse *this* layer's close control from being pressed.
+ */
+const ALL_MEDIA_FN = `function (selector, root) {
+  var out = [];
+  var walk = function (node) {
+    var matches = node.querySelectorAll(selector);
+    for (var i = 0; i < matches.length; i++) out.push(matches[i]);
+    var all = node.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      if (all[j].shadowRoot) walk(all[j].shadowRoot);
+    }
+  };
+  walk(root || document);
+  return out;
+}`;
+
+/**
  * Finds the layer that intercepts clicks and marks its close control.
  *
  * **The layer is whatever covers the centre of the viewport**, climbing to the
@@ -84,7 +145,10 @@ const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='tru
  * was pressed (dl-48's gate).
  *
  * A layer holding a `<video>` is left alone: sites open their player in a
- * lightbox, and closing that closes the thing this tier exists to watch.
+ * lightbox, and closing that closes the thing this tier exists to watch. The
+ * check is shadow-piercing (dl-69, `ALL_MEDIA_FN` scoped to `container`): a
+ * player component that keeps its `<video>` in an open shadow root is still
+ * "holding" one, and the layer around it still gets left alone.
  *
  * Returns `marked`, `dialog` (a semantic dialog with no close control this
  * recognises, which earns an Escape), or `none`.
@@ -126,7 +190,7 @@ const MARK_CLOSE_SCRIPT = `(() => {
       }
     }
   }
-  if (!container || container.querySelector('video')) return 'none';
+  if (!container || (${ALL_MEDIA_FN})('video', container).length > 0) return 'none';
   var controls = container.querySelectorAll('button, a, [role="button"], [aria-label], [title]');
   for (var j = 0; j < controls.length; j++) {
     var el = controls[j];
@@ -147,57 +211,6 @@ const UNMARK_CLOSE_SCRIPT = `(() => {
 
 /** Marks the element `CHOOSE_VIDEO_SCRIPT` chose, so the click goes through the locator API. */
 const VIDEO_MARK = "data-downloader-video";
-
-/**
- * Every element matching `selector` in the document, open shadow roots
- * included, in **Playwright's own locator match order for a single-type
- * selector** (dl-61) — `'video'` or `'audio'` alone, not a comma list.
- *
- * `document.querySelectorAll(selector)` stops at a shadow root, and a custom
- * `<video-player>` web component keeps its player in one; the locator API
- * this chooser replaced pierced open roots by default. Closed roots are
- * invisible to both, so there is nothing to match there.
- *
- * The order is not tree order, and for a `'video'` selector it has to match
- * the locator's: the cross-origin branch of `clickChosenVideo` clicks
- * `frame.locator("video").nth(index)` with an index into that list.
- * Measured against Playwright 1.62's CSS engine, which takes one root's own
- * `querySelectorAll` matches first and only then descends into the shadow
- * roots of that root's elements, in document order, recursively — for light
- * `L1`, host `h1` (shadow `S1a`, nested host `N1`, `S1b`), light `L2`, the
- * locator yields `L1 L2 S1a S1b N1`, where tree order would be
- * `L1 S1a N1 S1b L2`. This walk reproduces the former.
- *
- * **A comma selector does not carry that guarantee** (dl-68's gate, measured
- * against Playwright 1.62.1): the walk still takes a root's own matches
- * first — `querySelectorAll('video, audio')`, tags mixed in tree order —
- * before descending into that root's shadow roots, but the locator for a
- * comma list instead returns plain tree order across shadow boundaries, the
- * order a tree-order walk would give. `PLAY_SCRIPT` and `METADATA_SCRIPT`'s
- * audio fallback (dl-68) only ever use the returned list itself (call
- * `.play()` on everything, or take index `0`), never an index handed to a
- * locator, so the divergence is harmless today. A future caller that indexes
- * `ALL_MEDIA_FN('video, audio')` against a locator would misalign.
- *
- * Takes a selector rather than being hardcoded to `'video'` so `PLAY_SCRIPT`
- * and `METADATA_SCRIPT`'s audio fallback (dl-68) can reuse the identical walk
- * for `'video, audio'` and `'audio'` — a second walk that could drift apart
- * from this one is what dl-55's `CHOOSE_VIDEO_INDEX_FN` split exists to
- * prevent.
- */
-const ALL_MEDIA_FN = `function (selector) {
-  var out = [];
-  var walk = function (root) {
-    var matches = root.querySelectorAll(selector);
-    for (var i = 0; i < matches.length; i++) out.push(matches[i]);
-    var all = root.querySelectorAll('*');
-    for (var j = 0; j < all.length; j++) {
-      if (all[j].shadowRoot) walk(all[j].shadowRoot);
-    }
-  };
-  walk(document);
-  return out;
-}`;
 
 /**
  * Scans a list of `<video>` elements and returns the index of the one a
@@ -348,7 +361,7 @@ const PLAY_TEXT =
   /^\s*(?:play|watch|watch now|start|play video|lecture|abspielen|reproducir|riproduci|afspelen)\s*$/i;
 
 const SCROLL_SCRIPT = `(() => {
-  var el = document.querySelector('video, iframe, [class*="player"], [id*="player"]');
+  var el = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]')[0];
   if (el && typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ block: 'center', inline: 'center' });
   }
@@ -409,6 +422,12 @@ const METADATA_SCRIPT = `(() => {
   };
 })()`;
 
+// `hasPlayerElement` feeds `classify.ts`'s \`loginForm\` test (\`hasPasswordInput
+// && !hasPlayerElement\`), and has to be shadow-piercing for the same reason
+// \`CHOOSE_VIDEO_FN\` is (dl-61, dl-68): a page with an unrelated password field
+// and a real player hidden in an open shadow root is not a login wall
+// (dl-69's reproduction — \`document.querySelector\` missed the shadow-root
+// video and the page was misclassified \`AUTH_REQUIRED\`).
 const SIGNALS_SCRIPT = `(() => {
   var body = document.body;
   var text = body ? (body.innerText || body.textContent || '') : '';
@@ -418,7 +437,7 @@ const SIGNALS_SCRIPT = `(() => {
     bodyText: text.slice(0, 4000),
     html: root ? root.outerHTML.slice(0, 8000) : '',
     hasPasswordInput: !!document.querySelector('input[type="password"]'),
-    hasPlayerElement: !!document.querySelector('video, audio, iframe[src], [class*="player"], [id*="player"]'),
+    hasPlayerElement: (${ALL_MEDIA_FN})('video, audio, iframe[src], [class*="player"], [id*="player"]').length > 0,
     ageGate: ${AGE_GATE_SCRIPT},
   };
 })()`;
