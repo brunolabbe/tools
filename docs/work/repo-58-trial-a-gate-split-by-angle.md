@@ -1,0 +1,193 @@
+---
+id: repo-58
+tool: repo
+title: Trial a gate split by angle, run as a workflow whose verdict is computed in code
+kind: chore
+status: ready
+milestone: null
+depends_on: []
+difficulty: hard
+---
+
+# repo-58 — Trial a gate split by angle, run as a workflow whose verdict is computed in code
+
+## Why
+
+The orchestration rework of 2026-09-26 added a trial to
+`.claude/skills/orchestrate-tickets/reference/dispatching.md`: split a large
+branch's gate into three gates on one model, each with an angle —
+`acceptance`, `defects`, `invariants` — on the argument that a gate's cost grows
+faster than its length, since every turn re-reads the transcript so far. The
+sentinelle repository reviews every diff with parallel angles. A second-pass
+review of that change (session code-09, 2026-09-26) found the split could not
+be run end to end in this repo, and the section was shelved before it merged.
+Four things blocked it, each read off the staged files:
+
+1. **The record script refuses it.** `scripts/review-record.mjs` requires the
+   first section's first line to be exactly `## Review`, and refuses a second
+   `### Gate 1`. The gate role had each angle return `### Gate <n> — <angle>`,
+   so three angles of one round cannot share a number, and the first one's
+   heading loses its angle when it becomes `## Review`.
+2. **Two angles cannot satisfy the section format.** `review-ticket`'s
+   `gate.md` requires a `findings` line — the count of what the defect hunt
+   returned, carried and dropped — and only the `defects` angle runs the hunt
+   (steps 1, 2, 3 and 6).
+3. **Nothing writes the ticket's verdict.** The angle table assigned `gate.md`
+   step 7, the verdict, to no angle, and "the ticket's verdict is the worst of
+   the angles'" had no writer: the lander commits every section verbatim and
+   may not compose one.
+4. **The cost argument counted turns only.** Each angle pays its own farm,
+   build, page read and ticket read before its first turn of review, which the
+   `n²/2` argument leaves out. **Measured the same day and refuted** — see the
+   Log: setup is about 2% of a gate's cost.
+
+Blockers 1 to 3 are properties of that design, not of splitting. Each goes away
+if the angles return **data** rather than sections, and one party that is not a
+model merges them.
+
+## The question, answered
+
+**Fix, by trial — not drop.** Asked as fix-or-drop, with the recommendation to
+measure how a gate's cost splits between setup and review turns first. The
+measurement (Log, 2026-09-26) found review turns dominate, which was the
+ticket's own condition for "fix". The owner chose on 2026-09-26, in session,
+between four options — a trial first, building the workflow gate outright,
+giving the gate agent the `Agent` tool to fan out itself, and dropping the split
+for a sharper single gate — and took the trial.
+
+What is still unknown, and what the trial is for: **whether angles find more**.
+The cost case is modelled, not measured, and it is roughly neutral once the
+angles' overlapping reads are counted; the wall-clock case is strong for large
+gates (top quartile runs a median 163 minutes). Yield is the whole argument, and
+nobody has measured it here.
+
+## Build
+
+### 1. The shape to trial
+
+A **Workflow** run by whoever dispatches the gate — `orchestrate-tickets`' main
+session, or the session running `review-ticket` — never by the gate agent itself.
+
+- **Five angles, in parallel**, each an `agent()` with `agentType` naming a
+  pinned gate definition, so the different-model pairing in
+  `orchestrate-tickets`' `SKILL.md` holds and no `model` is passed. Each gets the
+  ticket id, the base and head shas, the scratch directory and its angle — and,
+  as today, nothing from the build.
+
+  | Angle              | Owns (`gate.md`)                               | Phrased as something to run                                               |
+  | ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------- |
+  | `verification-gap` | step 4                                         | revert the fix, confirm each new test goes red; a positive control first  |
+  | `edge-case`        | step 3, step 6 reliability and performance     | drive the known edges: unknown totals, cancel mid-job, redirects, Windows |
+  | `security`         | step 5 shell, redaction, SSRF; step 6 security | point it at a hostile input first, then the candidates                    |
+  | `conventions`      | step 5, everything else                        | one command per rule where one exists                                     |
+  | `intent`           | step 4 against the ticket's `Why`              | list every diff hunk no `Done when` line or `Build` step accounts for     |
+
+  `edge-case` owns the `findings` line, since it runs the defect hunt.
+
+- **Each angle returns a `schema`**, not a section: its findings with severity,
+  anchored citation and reproduction; its acceptance rows where it owns them;
+  its `dropped` lines; its hunt count; and the population it covered against the
+  population that exists.
+- **The script merges and decides, in code.** Findings are concatenated, never
+  summarised — two findings on one coordinate stay two rows, marked. The verdict
+  is `gate.md`'s severity table applied mechanically: any `high` or `unproven`
+  row is FAIL, any `med` or `unproven (gate)` is CONCERNS. The section is
+  rendered from the merged object by the script, so `review-record.mjs` lands it
+  unchanged, as one `## Review` or one `### Gate <n>`. No model writes the
+  verdict, and no model summarises a summary — the loss `gate.md` step 3
+  records on pl-10 and pl-18.
+
+### 2. The trial
+
+Run it once, on **one large branch that has already been gated** — top quartile
+by gate cost. Prefer one where a later ticket fixed a defect that branch shipped:
+whether the angles catch what the single gate missed is the best signal
+available. Compare against the recorded gate, and record in the Log:
+
+- every finding each side carried, and **each finding only one side found,
+  reproduced** — an unreproduced unique finding counts for neither;
+- cost of each shape from `node scripts/agent-cost.mjs`, and wall-clock;
+- the reading against the criteria below.
+
+**Adopt if** the angles reproduce every finding the single gate carried (or
+refute the missing one by command), find at least one confirmed finding it did
+not, and cost no more than 1.5× it. These thresholds are the brief's proposal,
+set before the run so the result cannot move them; the owner may change them
+before the trial runs, not after.
+
+### 3. Then, either way
+
+- **Adopted:** save the script as a named workflow; make `orchestrate-tickets`
+  step 5 and `review-ticket`'s dispatch run it above a size threshold the trial
+  suggests, and the single gate below it; give each angle its section in
+  `gate.md`; replace the shelved section in `dispatching.md` with the rule; and
+  amend `review-ticket`'s "One model, not a panel", which this does not
+  contradict — one model, one verdict, computed.
+- **Not adopted:** delete the shelved section, and fold what the trial taught
+  about single-gate steps (red-on-base, the `intent` hunk list, a security step)
+  into `gate.md`, or file it.
+
+### Traps
+
+- **Workflow opt-in.** The Workflow tool runs only when the user asked for it or
+  a skill's instructions say to call it. The trial is asked for; adoption means
+  the skills say it, in so many words.
+- **Worktrees.** Workflow agents run in the dispatching session's directory
+  unless isolated, and the orchestrator's is the shared checkout. Every angle
+  needs `isolation: 'worktree'` passed, whatever its definition declares —
+  verify the definition's `isolation` is honoured through `agentType` before
+  relying on it, and remember `verification-gap` mutates its tree.
+- **The pinned definitions read the whole gate.** `ticket-reviewer-*` read
+  `gate.md` in full at their first command. An angle needs its slice: either a
+  paragraph in `roles/reviewer.md` for a dispatch that names an angle, or angle
+  definitions of their own. Measure which before choosing.
+- **Cost is read from the wrong files unless checked.** `agent-cost.mjs` reads
+  a dispatch's task output files. Workflow agents write `agent-<id>.jsonl` under
+  the workflow's transcript directory; confirm the script reads those before
+  stating either shape's cost.
+- **`intent` and `conventions` are judgement angles**, and `dispatching.md`
+  records a judgement question coming back as an echo. Keep them phrased as the
+  runs in the table, or fold them into the others.
+- **Not the gate agent fanning out itself.** Nesting is allowed by the platform
+  (three levels by default), and was rejected: `gate.md` step 3 excludes it
+  because it hides cost from `agent-cost.mjs`, and a model would do the merge.
+
+## Done when
+
+- The trial is recorded in the Log: the branch and shas, both shapes' carried
+  findings, each unique finding with its reproduction, both costs from
+  `agent-cost.mjs`, both wall-clocks, and the reading against the adoption
+  criteria.
+- Adopted: a named workflow exists; a gate above the threshold dispatched by
+  `orchestrate-tickets` runs it and lands its section with
+  `scripts/review-record.mjs` unchanged; its verdict matches `gate.md`'s table
+  applied by hand to the same rows. Not adopted: `dispatching.md` carries no
+  angle split.
+- `dispatching.md`'s shelved section is gone either way.
+
+## Log
+
+- 2026-09-26 — filed while shelving the section, from the second-pass review's
+  reproduction above. Nothing built.
+- 2026-09-26 — **measured, and the question answered: trial, then fix or drop.**
+  Read 130 `ticket-reviewer-*` transcripts under
+  `~/.claude/projects/-workspaces-tools/*/subagents/`, found by their
+  `.meta.json` `agentType`; 119 reached a build, 11 never ran one and were left
+  out. Billed requests were grouped by `requestId` as `agent-cost.mjs` does, and
+  weighted input 1, cache write 1.25 (5 m) or 2 (1 h), cache read 0.1, output 5.
+  "Setup" is every request up to the one issuing the first `npm run build`,
+  which slightly understates it, since the build's output lands in the next.
+  - Setup share of cost: median **2%** (p25 1%, p75 7%); in the top quartile by
+    cost, under 1%. Through the first full `git diff`: median 6%. Blocker 4 does
+    not hold.
+  - Wall-clock: median 39 minutes, p75 149; top quartile median 163.
+  - Context after the ticket and diff are read is a median 71 k of a 205 k final
+    context. Modelled as angles splitting the rest evenly with no overlap, 2, 3
+    and 5 angles cost 0.79×, 0.71× and 0.66× a single gate's cache reads; real
+    angles overlap in what they read, so treat cost as roughly neutral.
+  - A first cut ended setup at the _last_ build and read a 57% median: gates
+    rebuild on every re-gate and base comparison. The boundary matters.
+  - None of the 345 recorded subagents was nested (`spawnDepth` 1 on all).
+
+  The measuring scripts were scratch and are not committed; the method above is
+  enough to rerun them.
