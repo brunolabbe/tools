@@ -136,6 +136,8 @@ New, in lines this round touched:
 
 **Gate: PASS** — 2026-09-26 · `cf64d30..5ad3286` (2eded7d, then 5ad3286, Log-only), tip `5ad3286`; base kept at `a1a417b`, while `origin/main` moved to `e50cf81` (#290) · re-gate of the round only · Opus 5.5
 
+_Amended after landing (#291): the two repo-60 citations in the first new-findings low are now prose naming `5ad3286`, because the fix to repo-60 at `d0e82aa` deleted the line 35 text they quoted and rewrote line 43 to name `5ad3286` in place of `cf64d30`; no other coordinate in this section moved at `d0389bb`._
+
 Gate 2 findings:
 
 - **med** (repo-25 reviewer quotation) · **resolved as the owner decided, option (b)** — `git diff origin/main` and `git diff a1a417b` on the repo-25 record are both empty; `node scripts/citations-gate.mjs --displaced-since origin/main` exits 1 with repo-25 as its only failure (1 displaced), both at this tip and on a scratch merge of it into `e50cf81`. The parser gap is filed as repo-60; two lows on its brief below.
@@ -147,7 +149,7 @@ Gate 2 findings:
 
 New, in lines this round touched:
 
-- **low** · Two findings, both in the repo-60 brief. `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md:43 "Reproduced at"` names `cf64d30`, but the repo-25 record as committed there carries the pin and reports exit 0 (run with `--rev cf64d30` on the copy committed there); the quoted output needs the restored record over the cf64d30 scripts. It reproduces at `5ad3286`, exit 128, 1 displaced, with the tip line reading "* verdict." rather than the quoted "*". And `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md:36 "owner chose instead to keep"` credits gate 2 with refusing the pin; gate 2 recommended keeping it, and the owner chose the restoration, as the repo-60 Log itself says correctly.
+- **low** · Two findings, both in the repo-60 brief. the repo-60 brief at `5ad3286`, line 43 ("Reproduced at"), names `cf64d30`, but the repo-25 record as committed there carries the pin and reports exit 0 (run with `--rev cf64d30` on the copy committed there); the quoted output needs the restored record over the cf64d30 scripts. It reproduces at `5ad3286`, exit 128, 1 displaced, with the tip line reading "* verdict." rather than the quoted "*". And the repo-60 brief at `5ad3286`, line 35 ("refused exactly that edit"), credits gate 2 with refusing the pin; gate 2 recommended keeping it, and the owner chose the restoration, as the repo-60 Log itself says correctly.
 - **low** · The new header branch, `scripts/citations-gate.mjs:828 "every section (displaced fatal outside"`, has no test: forcing the old wording under the flag leaves every spec green, and no spec searches for the new string.
 - **low** · The historical-check entry of the repo-50 Log now carries a parenthetical crediting gate 2 with the correction that the practice lives in `history.md` rather than `records.md`, and reads the `records.md` rule as scoped to gate records. The first is the withdrawn clause above; the second is one reading of a rule whose sentence says a record. **Open decision**: (a) restore the replaced method and "Not 24" paragraphs marked WITHDRAWN beneath the new ones, as that rule asks, and drop the attribution — recommended; (b) keep the replacement and only drop the attribution to gate 2.
 - **findings** · hunt over the round returned 4 (the first bullet is two); 4 carried, 0 dropped.
