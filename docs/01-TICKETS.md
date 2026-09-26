@@ -177,13 +177,13 @@ ticket rather than computed by the orchestrator because **the author has read th
 work and the orchestrator deliberately has not** — its intake reads a seam map,
 not the briefs. Rate the _judgement_ the work needs, never the size of the diff:
 a one-line change to a contract is `hard`, a forty-file rename is `mechanical`.
-Absent means the builder inherits the orchestrator's model, which is the status
-quo and the right answer for most tickets, so leaving it off costs nothing;
-`standard` says somebody looked and it is ordinary, which is not the same
-statement. The mapping from a value to a model lives in
-[`.claude/agents/builder.md`](../.claude/agents/builder.md) and only there, so no
-ticket ever names a model — see
-[repo-17](./work/repo-17-a-ticket-declares-its-difficulty.md).
+Absent builds as `hard` — on the strongest builder, which is what inheriting
+an Opus orchestrator's model already produced — so leaving it off costs nothing
+in quality; `standard` says somebody looked and it is ordinary, which is not the
+same statement. The mapping from a value to a model lives in the frontmatter of
+the `builder-*` definitions in [`.claude/agents/`](../.claude/agents/) and in
+`orchestrate-tickets`' _Which model built it_, and only there, so no ticket ever
+names a model — see [repo-17](./work/repo-17-a-ticket-declares-its-difficulty.md).
 
 **`awaiting` is what the ticket still owes, written for the reader who no longer
 has a row to read.** It carries the obligation and the observation that closes
@@ -326,8 +326,8 @@ is to make the state of the thing legible, not to decide it.
 
 The procedure is a skill —
 [`.claude/skills/review-ticket`](../.claude/skills/review-ticket/SKILL.md),
-invoked as `/review-ticket <id>`, and the reviewer it dispatches is the
-[`ticket-reviewer`](../.claude/agents/ticket-reviewer.md) subagent. It reads the
+invoked as `/review-ticket <id>`, and the reviewer it dispatches is a
+`ticket-reviewer-*` subagent from [`.claude/agents/`](../.claude/agents/). It reads the
 ticket, runs a defect hunt — delegated to `code-review` when the skill is invoked
 in a main session, run in its own context when it is the subagent, which has no
 `Skill` tool for the purpose — and spends the rest of its effort on the two things

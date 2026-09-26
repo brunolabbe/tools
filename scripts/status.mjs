@@ -41,11 +41,11 @@ const FIELDS = {
   note: { required: false },
   // Optional, and the one field written for a dispatcher rather than for a
   // reader: how much judgement the work needs, which `orchestrate-tickets`
-  // maps to a builder's model. Absent means the builder inherits the
-  // orchestrator's model, which is the status quo and the right answer for
-  // most tickets. The *author* fills it in, because the author has read the
-  // work and the orchestrator deliberately has not — see repo-17 and
-  // `.claude/agents/builder.md`.
+  // maps to a builder's model. Absent builds as `hard`, on the strongest
+  // builder, which is what inheriting an Opus orchestrator already produced.
+  // The *author* fills it in, because the author has read the work and the
+  // orchestrator deliberately has not — see repo-17 and the `builder-*`
+  // definitions in `.claude/agents/`.
   difficulty: { required: false },
   // Optional, and the only field that describes what a ticket still owes rather
   // than what it is: the obligation a `done` ticket carries when one acceptance

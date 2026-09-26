@@ -1,11 +1,57 @@
 # Why each builder row reads as it does
 
-Provenance for the model-pairing table that `.claude/agents/builder.md` and
-`SKILL.md`'s _Which model built it_ both carry. Moved here from `builder.md` on
-2026-09-20, where it had been lines 11 to 151 of a 296-line file loaded into every
-builder — narrative that no builder needs to build, on the page that costs every
-dispatch. Nothing below is an instruction; the table is the instruction and it
-lives on those two pages.
+Provenance for the model-pairing table in `SKILL.md`'s _Which model built it_,
+whose models and efforts are pinned in the frontmatter of the definitions in
+`.claude/agents/`. Moved here from the old `builder.md` on 2026-09-20, where it
+had been lines 11 to 151 of a 296-line file loaded into every builder — narrative
+that no builder needs to build, on the page that costs every dispatch. Nothing
+below is an instruction; the table is the instruction.
+
+## 2026-09-26: pinned definitions, and what they change
+
+**The pairing moved from a `model` parameter into the agent definitions.** Until
+this date the orchestrator computed each gate's model per ticket and passed it
+at dispatch, over a `ticket-reviewer` whose frontmatter defaulted to `sonnet` —
+right on two rows of four, and silently wrong on `standard`, the largest rated
+category, where a forgotten parameter made a Sonnet build gated by Sonnet that
+looked exactly like a compliant pair. One definition per builder rating and one
+per gate model makes that mistake unwritable: the orchestrator picks an agent
+type, and the type is the pairing. The shape is the sentinelle repository's,
+whose orchestrator has run it since before this date.
+
+**Full model ids, not aliases.** The trials below were run and priced on Opus 5.
+The `opus` alias follows the newest release, so the model behind every `opus`
+row could change without a line of this repo changing, and the cost argument
+under it would go stale unseen. Which model the alias was resolving to when the
+pin replaced it was not checked: the transcripts that would say are in the
+devcontainer, not where this change was made.
+
+**Opus 5.5 reads its cache at Sonnet 5's rate.** $0.20 per million tokens for
+both, against $0.50 for Opus 5 (the `claude-api` skill's pricing table, read
+2026-09-26); input and output stay at twice Sonnet's, $4 and $20. Cache reads
+were 94 to 97% of every bill this repo measured (repo-53). **So the cost case
+behind `standard`, below, is stale in the direction that favours Opus**: the
+trial's $4.23 Opus build and the gate costs it was weighed with are Opus 5
+figures. Re-measure before reading it as a saving; do not re-derive one from it.
+
+**Absent maps to `hard`.** *Inherit* meant the orchestrator's model, which under
+an Opus orchestrator already produced `hard`'s pair (measured 2026-09-12), and
+under the Fable orchestrator of 2026-09-20 would have built unrated tickets on
+Fable, which this page forbids. A definition cannot inherit its dispatcher's
+model and also pin one, and the pin is the point.
+
+**Effort is set per definition, and not measured.** Sonnet 5 builds at `high`
+and gates at `xhigh`; Opus 5.5 builds and gates at `high`; Haiku 4.5 takes no
+effort setting. Those are the sentinelle repository's values for the same models
+— Opus 5.5's own API default is `medium` — and nothing here compared them.
+`agent-cost.mjs` prints the effort each agent ran at since this date, so the
+first history rows under the new lineup are the trial.
+
+**The `fixer` is Haiku 4.5** because every maintenance artefact Haiku produced
+here was correct (repo-56, 2026-09-14/15) and the fixer's work is maintenance by
+definition: a finding whose fix it states in full. It is always checked by the
+round's gate, which is Sonnet or Opus, so the fix is never judged by the model
+that wrote it.
 
 ## The field and what it rates
 
@@ -116,7 +162,7 @@ measurement runs the other way: on a two-round gate each, the Opus gate on a
 Sonnet-built `standard` ticket cost 187,338 against 296,234 for the Sonnet gate on
 an Opus-built `hard` one (2026-09-17) — one batch, not a rule.
 
-**What it costs the dispatcher, and this is the live consequence.** `standard` is
+**What it cost the dispatcher, until the pinned definitions of 2026-09-26.** `standard` is
 the largest rated category, and it is the one row whose gate disagrees outright
 with `ticket-reviewer.md`'s `model: sonnet` default — the unrated row disagrees
 only under a Sonnet orchestrator — so the gate's model cannot be set once per
@@ -146,5 +192,5 @@ produced high-bit values, and reported that as "the test is red-green".
 The diff was fine; the *claim* was not. A gate catches that — it is an acceptance
 line, and acceptance-to-test traceability is what `ticket-reviewer` checks — but a
 report also travels to the orchestrator, who relays it, and nothing gates that
-path. Hence the rule that stayed on `builder.md`: **never report a verification you
+path. Hence the rule that stayed on `builder.md`, and is on `roles/common.md` since 2026-09-26: **never report a verification you
 did not run.**

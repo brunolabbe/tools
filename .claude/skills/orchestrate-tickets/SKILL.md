@@ -2,7 +2,7 @@
 name: orchestrate-tickets
 description: Run several tickets to merged pull requests at once by dispatching builder and reviewer subagents, gating each ticket before it opens a PR. Use when asked to work through a batch of ready tickets, to "keep the board moving", or to act as orchestrator over parallel work — "pick up the ready tickets", "run dl-15 and pl-25 together", "continue working, dispatch agents". Not for a single ticket you can build yourself.
 disable-model-invocation: true
-allowed-tools: Bash(npm run status*) Bash(gh pr list*) Bash(gh pr view*) Bash(gh pr diff*) Bash(gh pr checks*) Bash(git fetch*) Bash(git log*) Bash(git worktree list) Bash(git show*) Bash(git diff*) Bash(git merge-tree*) Bash(gh run list*) Bash(gh run view*) Bash(node scripts/citations-gate.mjs*)
+allowed-tools: Bash(npm run status*) Bash(gh pr list*) Bash(gh pr view*) Bash(gh pr diff*) Bash(gh pr checks*) Bash(git fetch*) Bash(git log*) Bash(git worktree list) Bash(git show*) Bash(git diff*) Bash(git merge-tree*) Bash(gh run list*) Bash(gh run view*) Bash(git ls-remote*) Bash(node scripts/citations-gate.mjs*) Bash(node scripts/agent-cost.mjs*)
 ---
 
 # Orchestrating a batch of tickets
@@ -27,8 +27,8 @@ you are there.
 | --- | --- |
 | [reference/sizing.md](reference/sizing.md) | Before dispatch, to pick gate count and ship authority per ticket (step 2) |
 | [reference/concurrency.md](reference/concurrency.md) | Before dispatching more than one builder — seams, collisions, stacking (step 2–3) |
-| [reference/dispatching.md](reference/dispatching.md) | Writing a builder prompt or a gate prompt (steps 3 and 4) |
-| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (steps 4 and 8) |
+| [reference/dispatching.md](reference/dispatching.md) | Writing a builder, gate, fixer or re-gate prompt (steps 3, 5, 6 and 8) |
+| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (steps 5 and 7) |
 | [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3, 6 and 10) |
 | [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 9) |
 | [reference/model-pairing.md](reference/model-pairing.md) | Why the pairing table below reads as it does — the trials and the owner decision behind it. Never needed to dispatch |
@@ -60,81 +60,132 @@ you are there.
    (2026-09-03: nine ready, eight undispatchable). Tickets filed before that status
    need the decision grep — see _Fallbacks and caveats_.
 
-3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket; the agent
-   definition carries the worktree and the scope rules, your prompt the ticket.
-   **Pass the builder's model explicitly** — see _Which model built it_.
+3. **Dispatch builders** — one per ticket, as the agent the ticket's
+   `difficulty` names in _Which model built it_ below: `builder-mechanical`,
+   `builder-standard` or `builder-hard`. **Never pass `model`**; the definition
+   pins the model and effort, and your prompt carries the ticket, the base, the
+   branch name, the scratch directory and ship authority
+   ([reference/dispatching.md](reference/dispatching.md)).
 
-4. **Gate each finished branch** — `subagent_type: "ticket-reviewer"`, spawned by
-   **you, never the builder**: the checked thing must not pick its checker. **Pass
-   the gate's model explicitly, paired per ticket** — `standard` gates on `opus`.
-   **And never put ship authority in a gate prompt**: a builder opens a PR only on
-   authority in its own dispatch or a direct message from you, and both builders
-   handed it through their reviewer correctly declined — one at the cost of a
-   resume, the other holding until your direct message arrived (2026-09-12,
-   2026-09-13).
+4. **Check the build report before you spend a gate on it** — step 7's checks,
+   applied to the builder's report the moment it arrives: a verdict naming a
+   test for every `Done when` line, every command with its output, what it could
+   not verify, any open decision, the population it read against the one that
+   exists, and a head sha that `git ls-remote --heads origin <branch>` shows
+   pushed. **Send a failing line back now**: the builder has just finished and
+   its cache is warm within its cache TTL, where the same send-back after a
+   gate may be a cold wake of its whole transcript (see step 6). Adopted 2026-09-26 from the sentinelle
+   repository's orchestrator, which checks its build report before its review
+   for the same reason.
 
-5. **The reviewer sends its findings to the builder itself**, as one batched
-   message, **and the same findings to you in full** — not a status line saying it
-   did. Name the builder in the gate prompt so it knows whom to address.
+5. **Gate each accepted branch** — `ticket-reviewer-sonnet` or
+   `ticket-reviewer-opus` per the pairing below, spawned by **you, never the
+   builder**: the checked thing must not pick its checker. **Give the gate
+   nothing from the build** — not the builder's report, its reasoning, its open
+   decisions or a summary of any of them. It gets the ticket, the base and head
+   shas, the scratch directory and what to attack, reads the brief as it stood at
+   the base, and forms its own verdicts; you hold the builder's, and step 7
+   compares them. A reviewer shown what the build claims tends to confirm it,
+   which is this page's _pair that agrees too easily_ arriving by design.
+   **Never put ship authority in a gate prompt.**
 
-   Expect a summary anyway, so **read the committed record out of `git show` before
-   step 8** (2026-09-03: a reviewer reported only "findings sent"). Both recorded
-   relay corruptions in this repo were introduced at this hop, by neither agent.
+6. **Route every finding, pasted, never retyped.** The gate returns its findings
+   and its section to you. Open decisions go to the user. Then **the round** goes
+   to one agent, every finding in it **as the reviewer wrote it** — a summary is
+   a new claim nobody checked:
 
-6. **They iterate until they agree the work is done.** That agreement is theirs to
-   reach, not yours to adjudicate; you re-enter only for a disagreement they
-   cannot settle and for any open decision either surfaces.
+   | The round's findings | Go to |
+   | --- | --- |
+   | any one needs judgement — how, not only whether | **the builder, resumed** with `SendMessage`, carrying the mechanical ones in the same message: it knows why it built what it did, so it does not undo one decision fixing another, and once its wake is paid the mechanical fixes cost a few warm turns |
+   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Haiku 4.5): it starts small and stays small |
 
-   **This is a chain of wakes, not a conversation**: each side ends its turn after
-   it sends, and `SendMessage` wakes the other. Sideways wakes work (2026-09-03);
-   upward wakes are disputed, so spend one `ListAgents` rather than assuming.
+   **Why the second row exists, and why only for a whole round.** A subagent's
+   prompt cache lives five minutes by default, and every subagent write measured
+   here used that default until 2026-09-26 (`scripts/agent-cost.mjs`'s module
+   comment, repo-53; the sentinelle repository reports the same across 40
+   transcripts on 2026-09-22, relayed). A builder woken past its TTL re-writes its
+   whole transcript into the cache before it fixes anything — which is why a
+   resume here cost 100–330 k subagent tokens whatever the remaining work
+   (2026-09-03), and a one-line Log reword 70,665 on Haiku against a 784,264
+   resume (2026-09-14/15). The wakes land past five minutes and within the hour
+   (28 subagent transcripts the devcontainer kept, 2026-08-25 to 09-02: 13 wakes past five minutes, all within the hour, 12 of them re-writing the cache), so the builder and gate definitions set a
+   1-hour TTL since 2026-09-26; a round of mechanical fixes alone still goes to a
+   fixer, because a warm wake still reads the whole transcript on every turn.
+   `agent-cost.mjs` prints the wakes that re-wrote as `cold=`. The wake is the cost, so splitting one round between a
+   woken builder and a fixer pays for both: the fixer's farm, build, page read and
+   reproductions, and a wait, since the two cannot work one branch at once. A
+   fixer that finds a fix needs judgement hands it back, and the builder is woken
+   for it.
 
-   **A message to a running agent is not delivered until something shows it
-   was.** A reply queued "for delivery at its next tool round" was never read
-   twice (2026-09-13): the agent completed with its branch unpushed and nothing
-   announced the drop. A resumed builder's final report was lost the other way,
-   after shipping, and had to be asked for again (2026-09-14). After sending to a running
-   agent, confirm with `ListAgents` and with the artefact the message should
-   produce — a push, a commit — and resend if neither appears.
+   **Until 2026-09-26 the gate sent its findings to the builder directly**,
+   because both relay corruptions this repo recorded were introduced when the
+   orchestrator retyped a finding. Routing through you is safe only because you
+   paste; the moment you paraphrase, that failure is back. **This routing is a
+   one-batch trial** — [repo-59](../../../docs/work/repo-59-findings-routed-through-the-orchestrator-is-a-one-batch-trial.md)
+   names what the first batch's history row must carry, the hop measurement,
+   and the revert criterion; the orchestrator of that batch closes it at step 12.
 
-7. **Both report to you when they are done**, separately — two accounts of one
-   exchange by two models. **Ask each for its method, not only its verdict**:
-   describing *how* you checked surfaces what describing *what* you concluded cannot.
+   **A message to a running or resumed agent is not delivered until something
+   shows it was.** A reply queued "for delivery at its next tool round" was never
+   read, twice (2026-09-13). After sending, confirm with `ListAgents` and with the
+   artefact the message should produce — a push, a commit — and resend if
+   neither appears.
 
-8. **You accept, or you send it back. The work is not done until you do** — five
-   checks, not a re-review. Does each report say what was *run*, and where each
-   quote is? Do the two accounts describe the same exchange?
+7. **Accept each report, or send it back — the work is not done until you do**:
+   five checks, not a re-review. Does each report say what was *run*, and where
+   each quote is? Does every `Done when` line carry a verdict naming a spec file
+   and line rather than "covered"? Is there an open decision in it? **Does the
+   population the report says it read equal the population that exists?** A gate
+   told to enumerate read 39 of 114 pins and reported PASS (2026-09-13), one
+   session after another had sampled under the same instruction; the instruction
+   alone does not hold, so the count sits with whoever accepts the report.
+   **You judge whether they are finished, not whether they were right**: send
+   back the line lacking evidence.
 
-   Does every `Done when` line carry a verdict naming a spec file and line rather
-   than "covered"? Is there an open decision in either? **Does the population the
-   report says it read equal the population that exists?** A gate told to
-   enumerate read 39 of 114 pins and reported PASS (2026-09-13), one session after
-   another gate had sampled under the same instruction; the instruction alone does
-   not hold, so the count sits with whoever accepts the report. **You judge whether
-   they are finished, not whether they were right**: send back the line lacking
-   evidence.
+   **Then compare the two accounts, which only you hold.** For each `Done when`
+   line, put the builder's verdict beside the gate's, and the commands each ran
+   beside each other. Wherever they disagree — the builder says done and the gate
+   says unproven, the two cite different evidence, a command one reports clean
+   fails for the other — **the disagreement is a finding**. It goes through step
+   6 carrying both verdicts and their evidence and no verdict of yours, and
+   concluding that both are wrong is an available answer (2026-08-24).
 
-9. **The builder opens the PR**, commits the gate record, and posts the reviewer's
-   report to the PR thread. **The PR body names both models — which built and
-   which gated** — because nothing else in the artefact does.
+8. **Re-gate the round, scoped to it.** Wake the same gate with `SendMessage` —
+   never a fresh one for round two, per _Do not cap the gate count_ — giving it
+   the sha it gated, the new head sha, its findings as it wrote them, and any
+   refutation the builder or fixer returned as a command and its output. Not
+   their narrative, for step 5's reason. It reviews
+   `git diff <gated sha>..<new sha>` only, gives each named finding a verdict,
+   and raises new findings only in the lines the round touched. Then step 7
+   again. **After two re-gates that each raise a new `high`, stop and put the
+   state to the user** rather than looping — an escalation, not a cap: the
+   gates go on once the user has chosen.
+
+9. **Land it.** Whoever holds the last round lands it — the builder if it was
+   resumed for it, otherwise a `fixer` dispatched as maintenance — **on ship
+   authority in its own dispatch or a direct message from you**: each gate
+   record committed verbatim with `scripts/review-record.mjs`, one commit per
+   gate, the pull request opened, and each gate's report posted to the thread.
+   Paste the sections to it; do not describe them. **The PR body names every
+   model — which built, which gated, which fixed** — because nothing else in the
+   artefact does.
 
    **One command before granting the ship:**
-   `node scripts/preflight.mjs --base origin/main` on the builder's branch, exit
-   0 as a ship condition. It is the check and the touched tools' suites, the
-   citations gate, the `## Review` presence test, the title-type-against-paths
-   test and a `git merge-tree` probe against every other open pull request head,
-   one exit bit each, and a non-zero exit names the check (repo-51). Each was a
-   rule in prose here until 2026-09-20, and each cost a round when forgotten:
-   `repo-29` opened a pull request carrying five gate rounds and no record
-   (2026-09-08); #228 went red on a line an older gate record cited
-   (2026-09-13); a `feat` title over markdown-only `tools/` paths would have cut
-   a tool's changelog and version, because release-please routes by path
-   (2026-09-12, 2026-09-14). The stalled-exchange row below uses the `## Review`
-   grep as a stall test; preflight runs it as this precondition.
+   `node scripts/preflight.mjs --base origin/main` on the branch, exit 0 as a
+   ship condition. It is the check and the touched tools' suites, the citations
+   gate, the `## Review` presence test, the title-type-against-paths test and a
+   `git merge-tree` probe against every other open pull request head, one exit
+   bit each, and a non-zero exit names the check (repo-51). Each was a rule in
+   prose here until 2026-09-20, and each cost a round when forgotten: `repo-29`
+   opened a pull request carrying five gate rounds and no record (2026-09-08);
+   #228 went red on a line an older gate record cited (2026-09-13); a `feat`
+   title over markdown-only `tools/` paths would have cut a tool's changelog and
+   version, because release-please routes by path (2026-09-12, 2026-09-14).
 
-10. **Hold every worktree — the reviewer's as well as the builder's — until the
-    ticket is finished.** "The exchange is over" cannot be evaluated: tested twice
-    on 2026-09-03, both times it resumed. Announce any early removal to that agent.
+10. **Hold every worktree — the gate's and the fixer's as well as the
+    builder's — until the ticket is finished.** "The round is over" cannot be
+    evaluated: tested twice on 2026-09-03, both times it resumed. Announce any
+    early removal to that agent.
 
 11. **Scratch-merge the batch, then check the merge landed what it was supposed
     to.** Before any branch in the batch merges, run
@@ -155,6 +206,9 @@ you are there.
     six, all only because it was asked). **Ask every agent for it in its
     dispatch**, not at close-out: three sessions running asked late or not at all,
     and the field came back thinner each time (2026-09-13 to 2026-09-18).
+    **The first batch under the 2026-09-26 definitions also closes repo-59**:
+    its row carries the hop and wall figures that ticket names, and its Log
+    evaluates the revert criterion.
 
     **A defect that stops at the history entry has not been fixed.** Every item in
     that field either edits the page that holds the rule, in the same pull
@@ -172,73 +226,62 @@ take one narrow gate afterwards, scoped to the corrections. Not the default.
 
 ## Which model built it, and which gated it
 
-**Both halves are knowable before either agent runs, and neither needs
-`resolvedModel`.** Write them down at dispatch rather than inferring them after.
-
-**Read each ticket's `difficulty` off `npm run status -- --json` and pair it here.**
-**Never rate an unrated ticket yourself**; you have not read it, which is the point
-of step 2. The builder column is two rows of one table —
-`.claude/agents/builder.md:20` "| `standard` | `sonnet` |" and
-`.claude/agents/builder.md:21` "| `mechanical` | `haiku` |". The gate column is
-yours to compute, because `.claude/agents/ticket-reviewer.md:6` "model: sonnet" is
-a **default, not an answer**, and it is right on two rows of four.
+**The agent you dispatch is the choice; its definition is the only copy of the
+model and effort.** Each definition in `.claude/agents/` pins both by full id,
+never an alias: `opus` and `sonnet` follow the newest release, which would move a
+pairing without anyone deciding it — and did, silently, while this page priced
+its trials at Opus 5 and the alias went on to newer models. **A change of lineup
+edits this table and those files together, and nothing else.**
 
 | `difficulty` | Builder | Gate |
 | --- | --- | --- |
-| `mechanical` | `haiku` | `sonnet` |
-| `standard` | `sonnet`, since repo-28 | **`opus`** |
-| `hard` | `opus`, pinned rather than inherited | `sonnet` |
-| absent | inherit — pass your own model by name | whichever of `sonnet` / `opus` the builder is not |
-| **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `haiku` | `sonnet`, where one runs |
+| `mechanical` | `builder-mechanical` — Haiku 4.5 | `ticket-reviewer-sonnet` — Sonnet 5, xhigh |
+| `standard` | `builder-standard` — Sonnet 5, high | **`ticket-reviewer-opus`** — Opus 5.5, high |
+| `hard` | `builder-hard` — Opus 5.5, high | `ticket-reviewer-sonnet` |
+| absent | `builder-hard` | `ticket-reviewer-sonnet` |
+| **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
+| **a round's mechanical fixes, and its landing** | `fixer` — Haiku 4.5 | the round's gate, woken |
 
-**The maintenance row's test is the absence of a judgement call, not the size
-of the diff**, and a maintenance dispatch that meets one stops and reports
-rather than making it; say "maintenance" in its prompt so it knows to. Measured
-2026-09-14/15: a one-line Log reword cost 70,665 on Haiku where resuming the
-builder that wrote the line would have reloaded 784,264; two merges from `main`
-cost 30,224 and 37,902; two filers dispatched on Opus for tickets that build
-nothing cost 101,134 and 152,847. Every Haiku artefact was correct, and every
-one of those choices was the orchestrator's judgement because no row said so
-(repo-56).
+- **Never pass `model` when dispatching one of these.** It overrides the
+  definition's model and keeps its effort, which gives a pairing this table does
+  not have. Relayed from the sentinelle repository and not measured here: Claude
+  Code's sub-agent documentation confirms a definition's `effort` overrides the
+  session's, and says nothing about a per-call `model`.
+- **Never rate an unrated ticket yourself**; you have not read it, which is the
+  point of step 2. **Absent maps to `hard`** since 2026-09-26. It used to mean
+  *inherit the orchestrator's model*, which under an Opus orchestrator already
+  collapsed onto `hard`'s pair (measured 2026-09-12), and under the Fable
+  orchestrator of 2026-09-20 would have built every unrated ticket on Fable,
+  which this page forbids.
+- **Never `haiku` for a gate, never `fable` for either.** The rule is "a
+  different model", not "a cheaper one", and a gate from a small model still
+  reads as PASS.
+- **The effort column is a bet, not a measurement.** No trial in this repo has
+  compared efforts; the values are the sentinelle repository's lineup for the
+  same models. `agent-cost.mjs` prints the effort every agent actually ran at,
+  so a history row can test them. Why each model row reads as it does, and why
+  the cost case behind `standard` needs re-measuring now that Opus 5.5 reads its
+  cache at Sonnet 5's rate, is [reference/model-pairing.md](reference/model-pairing.md).
 
-**Pair per ticket, never once per batch**, because no two adjacent rows agree.
-**`standard` is the trap**: it is the largest rated category, it moved to Sonnet
-with repo-28, and a `standard` ticket gated by the default is a Sonnet build
-checked by Sonnet — which looks exactly like a compliant pair and reports nothing.
-Never `haiku` for a gate, never `fable` for either.
-
-- **Three documented paths override an explicit `model`**, so a dispatcher writing
-  "gated by Sonnet" should know what could make that false:
-  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, an `availableModels` allowlist, and `fork`.
-  **Relayed from Claude Code's documentation and not verified in this tree**, along
-  with fallback chains that can move a model mid-run — which is why a record says
-  "dispatched as", not "ran as".
-- **Never ask an agent what model it is.** The "You are powered by the model named
-  X" line is not guaranteed to exist for a subagent, and a claim an agent makes
-  about itself is checked from outside — the self-report row under _Relaying_.
-- **The commit trailer cannot stand in for either half.** It is built once per
-  session tree from *your* model and inherited by every subagent, so a `mechanical`
-  ticket built on Haiku lands a commit signed `Claude Opus 5` (measured 2026-09-06,
-  against the binary and by hand; 480 trailers across all refs name no other model,
-  which is the inheritance and not evidence Opus built them).
-
-Doing both makes the comparison a fact rather than an inference, and the record
-should say so. Measured before any of this was written down: **11 tickets, 22
-gates, none gated by a different model than built it** (2026-08-30). If you ever do
-need `resolvedModel` itself read, three routes exist and only one is measured in
-this tree — [reference/dispatching.md](reference/dispatching.md) carries them.
+**Confirm what ran from the transcript, not from anyone's account of it:**
+`node scripts/agent-cost.mjs --agent <id>` prints each agent's model and effort
+as its records carry them, with its tokens and cost. Never ask an agent what
+model it is — a claim an agent makes about itself is checked from outside. And
+**the commit trailer cannot stand in for either half**: it is built from the
+session tree's model and has named an Opus model on a Haiku subagent's commit
+(2026-09-06). Measured before any of this was written down: **11 tickets, 22
+gates, none gated by a different model than built it** (2026-08-30).
 
 ## Where a gated pair fails, and the test for each
 
 | Failure | Its test |
 | --- | --- |
-| **A pair that agrees too easily** — two agents that want to be done converge on "addressed" without either running anything | The gate prompt, before the fact: demand reproductions and a positive control. Then step 8's first check |
-| **A stalled exchange** — both stop, each treating the gate record as the other's next move. Nothing goes red: `npm run status` reads `done`, the branch is pushed, both reports say finished (2026-09-04) | One command per ticket: `git show <branch>:<ticket-path>` piped to `grep '^## Review'`. Empty means the exchange is still open, whatever either agent told you |
+| **A pair that agrees too easily** — two agents that want to be done converge on "addressed" without either running anything | Structural since 2026-09-26: the gate never sees the build's claims (step 5) and you compare the two accounts (step 7). Before the fact, the gate prompt still demands reproductions and a positive control |
+| **A record nobody landed** — every report says finished, `npm run status` reads `done`, the branch is pushed, and no gate record is on it. Under the old builder↔gate exchange each treated the record as the other's next move (2026-09-04); now it is the lander you forgot to grant | One command per ticket: `git show <branch>:<ticket-path>` piped to `grep '^## Review'`. Empty means the round is not landed, whatever any agent told you; preflight runs the same test |
 | **A decision relayed without its provenance** — no agent can verify authority from inside its own sandbox, so "the owner directed this" is unwarranted on its face (2026-09-04: a gate correctly declined to extend a PASS over such a commit, and the round was lost) | The record, not a command. A relayed decision names the question asked, the options, which was chosen, and **whose recommendation it overrode** |
 
-`^## Review` is right for a *live* branch because
-`.claude/agents/ticket-reviewer.md:10` "return a `## Review` section as text" says
-so. It under-matches historical tickets, where `## Gates` and `## Gate 1 — …` also
+`^## Review` is right for a *live* branch because the gate role returns a
+`## Review` section as text and `review-record.mjs` lands it under that heading. It under-matches historical tickets, where `## Gates` and `## Gate 1 — …` also
 occur: 68 files match `^#{2,3} (Review|Gates?)` against 51 for `^## Review$`,
 measured 2026-09-07 over `docs` and `tools`. Say which of the two you mean.
 
@@ -370,7 +413,7 @@ report time, which is why the rule is here and its per-field check is one call:
 | Field | The one-call check |
 | --- | --- |
 | tools | ask it to *call* the tool ([reference/dispatching.md](reference/dispatching.md) carries the measurement: a builder reported eight against thirteen in its frontmatter) |
-| model | the `model` parameter you passed at dispatch — _Which model built it_, above |
+| model and effort | `node scripts/agent-cost.mjs --agent <id>`, which reads them from its transcript — _Which model built it_, above |
 | lifecycle — running, held, released | `git worktree list` |
 
 `reference/defect-shapes.md` uses "self-report" for a different thing: a builder's
@@ -423,27 +466,39 @@ Unasked, and whatever the batch cost. The owner had to ask for this by hand on
 and a sentence hides where the cost went, whether the model-difference rule held
 per branch, and what an interruption cost.
 
-| PR | Status | Model | Agent | Task | Tokens | Cost |
-| --- | --- | --- | --- | --- | --- | --- |
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 **One row per agent, not per ticket** — an agent killed and replaced is two rows,
 which is the only place the duplicated work is visible at all.
 
-- **Cost** — dollars from `node scripts/agent-cost.mjs <task-output-file>` over
-  that agent's own output file, the path a backgrounded `Agent` result hands
-  you, with the rate date the script prints beside its total. **Never a
-  conversion of `subagent_tokens`**: that figure excludes cache reads, which
-  are 94 to 97% of the bill, and the `standard` trial's first "8% saving" was
-  wrong by an order of magnitude on exactly that (repo-53, 2026-09-20).
-  `subagent_tokens` stays in the table only as the series the earlier history
-  rows are in.
+- **Cost** — dollars from `node scripts/agent-cost.mjs --agent <id> …`, one
+  `--agent` per agent id an `Agent` result reported, with the rate date the
+  script prints beside its total. It reads the agent's transcript, so an agent
+  whose last turn ended in a message is priced too, and it adds a row for your
+  own session, `orchestrator <session id>` — **a floor**, since your transcript
+  keeps growing after the run that read it. A task output file path works as
+  before. **Never a conversion of `subagent_tokens`**: that figure excludes
+  cache reads, which are 94 to 97% of the bill, and the `standard` trial's first
+  "8% saving" was wrong by an order of magnitude on exactly that (repo-53,
+  2026-09-20). `subagent_tokens` stays in the table only as the series the
+  earlier history rows are in.
+- **Active / wall** — as `agent-cost.mjs` prints them: active is the gaps under
+  five minutes between records, wall is first record to last. The total sums
+  active time only, since agents overlap.
 
 - **PR** — where the agent's work landed, or `—` for batch-wide work like the seam
   map. **Status** — the PR's state as you write, from
   `gh pr list --json number,mergeable,statusCheckRollup`, not from memory.
-- **Model** — **recorded fact, never inference**; both halves are already written
-  down by the time you need them, per _Which model built it_. If either had to be
-  inferred, the row says so.
+- **Model / effort** and **Cold** — as `agent-cost.mjs` prints them from the
+  transcript, never inferred: the model and effort every record carries, and the
+  turns that re-wrote the cache because it had expired — a large write that
+  began longer after the previous turn than the cache TTL. **A `cold=` above zero
+  on a builder or gate** means a wake past an hour, or the definition's 1-hour TTL
+  ignored because the subscription was on usage credits; name which in the
+  history row. A `cold` count on a
+  builder is the price of its resumes, and the number that says whether step 6's
+  routing is paying.
 - **Agent** — the `subagent_type`. **Task** — one line, including how it ended
   where that matters: killed by an interrupt, resumed, replaced. **Tokens** — that
   agent's last-observed `subagent_tokens`.
@@ -457,9 +512,8 @@ Three caveats, all measured 2026-09-05/06:
   196,927 (2026-09-14). The mechanism is not known. Record every figure you
   observe per agent, and say which one the table carries.
 - **Some agents never report a total** — a final turn ending in a `SendMessage`
-  delivers no usage block. Write `not reported`, **do not omit the row and do not
-  estimate the cell**, and state the observed total *and* how many agents are
-  missing from it.
+  delivers no usage block. Write `not reported` in **Tokens**, **do not omit the
+  row and do not estimate the cell**, and price it from its transcript by id.
 - **This is not the bill.** [reference/sizing.md](reference/sizing.md) records what
   fraction of the all-in volume `subagent_tokens` is once cache reads are counted.
 

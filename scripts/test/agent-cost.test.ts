@@ -21,7 +21,11 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import {
   EXIT,
+  findAgentTranscript,
   formatDollars,
+  formatDuration,
+  normaliseModel,
+  sessionOf,
   parseArgs,
   priceFile,
   processFile,
@@ -45,6 +49,16 @@ const noAssistantFixture = path.join(FIXTURES, "no-assistant.jsonl");
 const streamedFixture = path.join(FIXTURES, "streamed.jsonl");
 const syntheticFixture = path.join(FIXTURES, "synthetic.jsonl");
 const allSyntheticFixture = path.join(FIXTURES, "all-synthetic.jsonl");
+const CONFIG = path.join(FIXTURES, "config");
+const agentFixture = path.join(
+  CONFIG,
+  "projects",
+  "proj",
+  "sess",
+  "subagents",
+  "agent-a1b2c3.jsonl",
+);
+const sessionFixture = path.join(CONFIG, "projects", "proj", "sess.jsonl");
 
 // --- The "Done when" case: two files, hand-computed sums and dollars -------
 
@@ -55,12 +69,18 @@ test("sums the four billed fields over every assistant record, ignoring other re
     '{"type":"assistant","message":{"model":"claude-sonnet-5","usage":{"input_tokens":200,"cache_creation_input_tokens":0,"cache_read_input_tokens":5000,"output_tokens":150}}}',
   ].join("\n");
   expect(sumUsage(content, "inline.jsonl")).toEqual({
-    model: "claude-sonnet-5",
+    models: ["claude-sonnet-5"],
     input: 300,
     cacheWrite: 1000,
+    cacheWrite1h: 0,
     cacheRead: 7000,
     output: 200,
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
   });
 });
 
@@ -68,12 +88,18 @@ test("prices the Sonnet fixture at the hand-computed dollar figure", () => {
   const priced = processFile(sonnetFixture);
   // (300/1e6)*2 + (1000/1e6)*2.5 + (7000/1e6)*0.2 + (200/1e6)*10 = 0.0065
   expect(priced).toEqual({
-    model: "claude-sonnet-5",
+    models: ["claude-sonnet-5"],
     input: 300,
     cacheWrite: 1000,
+    cacheWrite1h: 0,
     cacheRead: 7000,
     output: 200,
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
     dollars: expect.closeTo(0.0065, 9),
   });
 });
@@ -82,12 +108,18 @@ test("prices the Opus fixture at the hand-computed dollar figure", () => {
   const priced = processFile(opusFixture);
   // (1000/1e6)*5 + (30000/1e6)*6.25 + (150000/1e6)*0.5 + (3000/1e6)*25 = 0.3425
   expect(priced).toEqual({
-    model: "claude-opus-5",
+    models: ["claude-opus-5"],
     input: 1000,
     cacheWrite: 30000,
+    cacheWrite1h: 0,
     cacheRead: 150000,
     output: 3000,
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
     dollars: expect.closeTo(0.3425, 9),
   });
 });
@@ -144,24 +176,36 @@ test("sumUsage groups a streamed response by requestId, keeping only its final o
     '{"type":"assistant","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":2,"cache_creation_input_tokens":29580,"cache_read_input_tokens":0,"output_tokens":303}}}',
   ].join("\n");
   expect(sumUsage(content, "streamed-inline.jsonl")).toEqual({
-    model: "claude-opus-5",
+    models: ["claude-opus-5"],
     input: 2,
     cacheWrite: 29580,
+    cacheWrite1h: 0,
     cacheRead: 0,
     output: 303, // not 8 + 8 + 303 = 319
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
   });
 });
 
 test("the streamed fixture's grouped sums differ from what an ungrouped sum over the same records would give", () => {
   const grouped = sumUsage(readFileSync(streamedFixture, "utf8"), streamedFixture);
   expect(grouped).toEqual({
-    model: "claude-opus-5",
+    models: ["claude-opus-5"],
     input: 502, // req_1's kept record (2) + req_2 (500)
     cacheWrite: 39580, // req_1's kept record (29580) + req_2 (10000)
+    cacheWrite1h: 0,
     cacheRead: 50000, // req_1's kept record (0) + req_2 (50000)
     output: 1503, // req_1's largest (303) + req_2 (1200)
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
   });
 
   // The naive sum this replaced: every record counted once, undeduplicated.
@@ -210,12 +254,18 @@ test("the CLI over the streamed fixture prices the deduplicated total, not the r
 test("sumUsage skips a synthetic session-limit record from both the model check and the sums", () => {
   const content = readFileSync(syntheticFixture, "utf8");
   expect(sumUsage(content, syntheticFixture)).toEqual({
-    model: "claude-opus-5",
+    models: ["claude-opus-5"],
     input: 1000,
     cacheWrite: 30000,
+    cacheWrite1h: 0,
     cacheRead: 150000,
     output: 3000,
     syntheticSkipped: 1,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
+    responses: expect.any(Array),
+    activeMs: 0,
+    wallMs: 0,
   });
 });
 
@@ -244,36 +294,59 @@ test("a file with only a synthetic record refuses as no billable assistant recor
   expect(result.stdout).toBe("");
 });
 
-// --- Refusal: two model ids in one file -------------------------------------
+// --- Two model ids in one file: each response at its own rate -------------
+//
+// Refused until 2026-09-26. Claude Code documents automatic model fallback on
+// Fable, Opus 5.5 and Opus 5 as a model switch mid-session, so a refusal would
+// drop exactly the transcripts a fallback touched.
 
-test("sumUsage refuses a file with two model ids, naming both", () => {
-  const content = [
-    '{"type":"assistant","message":{"model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":5}}}',
-    '{"type":"assistant","message":{"model":"claude-sonnet-5","usage":{"input_tokens":10,"output_tokens":5}}}',
-  ].join("\n");
-  expect(() => sumUsage(content, "mixed.jsonl")).toThrowError(
-    /mixed\.jsonl: carries more than one model — claude-opus-5, claude-sonnet-5/,
-  );
+test("sumUsage names every model a file carries and keeps each response's own", () => {
+  const totals = sumUsage(readFileSync(mixedModelFixture, "utf8"), mixedModelFixture);
+  expect(totals.models).toEqual(["claude-opus-5", "claude-sonnet-5"]);
+  expect(totals.responses.map((r) => r.model)).toEqual(["claude-opus-5", "claude-sonnet-5"]);
 });
 
-test("the CLI over a mixed-model file refuses it, names both models, and sets the multipleModels exit bit", () => {
+test("a mixed-model file prices each response at its own model's rate", () => {
+  // opus (10*5 + 5*25) + sonnet (10*2 + 5*10) = 175 + 70 = 245 per 1e6
+  expect(processFile(mixedModelFixture).dollars).toBeCloseTo(0.000245, 12);
+});
+
+test("the CLI prices a mixed-model file, names both models, and exits 0", () => {
   const result = spawnSync("node", [CLI, mixedModelFixture], { cwd: REPO, encoding: "utf8" });
-  expect(result.status).toBe(EXIT.multipleModels);
-  expect(result.stderr).toContain("claude-opus-5");
-  expect(result.stderr).toContain("claude-sonnet-5");
-  expect(result.stdout).toBe("");
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("claude-opus-5+claude-sonnet-5");
+  expect(result.stderr).toBe("");
+});
+
+test("exit bit 2, once multipleModels, is retired rather than reused", () => {
+  expect(Object.values(EXIT)).not.toContain(2);
 });
 
 // --- Refusal: a model id with no rate ---------------------------------------
 
 test("priceFile fails loudly on a model id missing from RATES, rather than pricing at zero", () => {
   const totals = {
-    model: "claude-nonexistent-9",
+    models: ["claude-nonexistent-9"],
+    responses: [
+      {
+        model: "claude-nonexistent-9",
+        input: 10,
+        cacheWrite: 0,
+        cacheWrite1h: 0,
+        cacheRead: 0,
+        output: 5,
+      },
+    ],
+    activeMs: 0,
+    wallMs: 0,
     input: 10,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     cacheRead: 0,
     output: 5,
     syntheticSkipped: 0,
+    efforts: ["unrecorded"],
+    coldRestarts: 0,
   };
   expect(() => priceFile(totals, "unknown.jsonl")).toThrowError(
     /unknown\.jsonl: no rate for model "claude-nonexistent-9"/,
@@ -341,11 +414,11 @@ test("one bad file among several is excluded from the total; the good files stil
 });
 
 test("exit bits from different failure classes combine by bitwise OR across a batch", () => {
-  const result = spawnSync("node", [CLI, unknownModelFixture, mixedModelFixture], {
+  const result = spawnSync("node", [CLI, unknownModelFixture, noAssistantFixture], {
     cwd: REPO,
     encoding: "utf8",
   });
-  expect(result.status).toBe(EXIT.missingRate | EXIT.multipleModels);
+  expect(result.status).toBe(EXIT.missingRate | EXIT.noAssistantRecords);
 });
 
 // --- Argument parsing --------------------------------------------------------
@@ -364,4 +437,189 @@ test("the CLI with no arguments exits 1 and prints usage to stderr", () => {
   const result = spawnSync("node", [CLI], { cwd: REPO, encoding: "utf8" });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain(USAGE);
+});
+
+test("parseArgs keeps files and --agent ids in the order given", () => {
+  expect(parseArgs(["a.jsonl", "--agent", "x1", "b.jsonl"])).toEqual([
+    { kind: "file", value: "a.jsonl" },
+    { kind: "agent", value: "x1" },
+    { kind: "file", value: "b.jsonl" },
+  ]);
+});
+
+test("parseArgs refuses --agent with no id", () => {
+  expect(() => parseArgs(["--agent"])).toThrowError(/--agent needs an id/);
+  expect(() => parseArgs(["--agent", "--agent"])).toThrowError(/--agent needs an id/);
+});
+
+// --- 2026-09-26: Opus 5.5, cache-write TTLs, effort and cold restarts --------
+//
+// `agent-a1b2c3.jsonl` is three Opus 5.5 responses: a first turn that writes
+// its prefix, a warm turn that reads it, and a turn at a different effort
+// whose write is more than half its context and all at the 1-hour TTL — the
+// shape a wake after the cache expired leaves in a real transcript.
+
+test("sumUsage splits the 1-hour write out, names every effort, and counts the cold turn", () => {
+  expect(sumUsage(readFileSync(agentFixture, "utf8"), agentFixture)).toEqual({
+    models: ["claude-opus-5-5"],
+    input: 30,
+    cacheWrite: 51000,
+    cacheWrite1h: 30000,
+    cacheRead: 21000,
+    output: 400,
+    syntheticSkipped: 0,
+    efforts: ["high", "medium"],
+    coldRestarts: 1, // r3: 30000 written of 31010, 19 min after r2, past r2's 5-minute write
+    responses: expect.any(Array),
+    activeMs: 60_000, // 30 s + 30 s; the 19-minute gap before r3 is waiting, not work
+    wallMs: 1_200_000, // 10:00:00 to 10:20:00
+  });
+});
+
+test("prices the 1-hour part of a write at its own rate", () => {
+  // (30*4 + 21000*5 + 30000*8 + 21000*0.2 + 400*20) / 1e6 = 0.35732
+  expect(processFile(agentFixture).dollars).toBeCloseTo(0.35732, 9);
+});
+
+test("Opus 5.5 reads its cache at the same rate as Sonnet 5", () => {
+  expect(RATES["claude-opus-5-5"].cacheRead).toBe(RATES["claude-sonnet-5"].cacheRead);
+});
+
+test("findAgentTranscript finds a subagent's transcript by id under the config directory", () => {
+  expect(findAgentTranscript("a1b2c3", CONFIG)).toBe(agentFixture);
+  expect(() => findAgentTranscript("nobody", CONFIG)).toThrowError(/no agent-nobody\.jsonl under/);
+});
+
+test("the CLI prices an agent by id, prints its effort and cold count, and labels the row by id", () => {
+  const result = spawnSync("node", [CLI, "--agent", "a1b2c3", opusFixture], {
+    cwd: REPO,
+    encoding: "utf8",
+    env: { ...process.env, CLAUDE_CONFIG_DIR: CONFIG },
+  });
+  expect(result.status).toBe(0);
+  const lines = result.stdout.trim().split("\n");
+  expect(lines).toHaveLength(4);
+  expect(lines[0]).toMatch(/^agent-a1b2c3  claude-opus-5-5  effort=high\/medium /);
+  expect(lines[0]).toContain("active=1m00s wall=20m00s");
+  expect(lines[0]).toContain("cacheWrite=51000 (1h 30000)");
+  expect(lines[0]).toContain("cold=1");
+  expect(lines[1]).toContain(opusFixture);
+  // The session the agent was launched from, once, after the inputs.
+  expect(lines[2]).toMatch(/^orchestrator sess  claude-opus-5-5  /);
+  expect(lines[2]).toContain(formatDollars(0.0904));
+  expect(lines[3]).toMatch(/^total  active=2m00s /);
+  expect(lines[3]).toContain("cold=1");
+  expect(lines[3]).toContain(formatDollars(0.35732 + 0.3425 + 0.0904));
+});
+
+test("the CLI over an unknown agent id sets the unreadableFile bit and names where it looked", () => {
+  const result = spawnSync("node", [CLI, "--agent", "nobody"], {
+    cwd: REPO,
+    encoding: "utf8",
+    env: { ...process.env, CLAUDE_CONFIG_DIR: CONFIG },
+  });
+  expect(result.status).toBe(EXIT.unreadableFile);
+  expect(result.stderr).toContain("agent-nobody.jsonl");
+});
+
+// --- 2026-09-26, second pass: ids, time, the orchestrator ------------------
+
+test("normaliseModel strips a context suffix and a date suffix, and nothing else", () => {
+  expect(normaliseModel("claude-opus-5-5[1m]")).toBe("claude-opus-5-5");
+  expect(normaliseModel("claude-haiku-4-5-20251001")).toBe("claude-haiku-4-5");
+  expect(normaliseModel("claude-sonnet-5")).toBe("claude-sonnet-5");
+});
+
+test("a dated Haiku id and a suffixed Opus id both find their rate", () => {
+  const content = [
+    '{"type":"assistant","requestId":"h","message":{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":1000000,"output_tokens":0}}}',
+    '{"type":"assistant","requestId":"o","message":{"model":"claude-opus-5-5[1m]","usage":{"input_tokens":1000000,"output_tokens":0}}}',
+  ].join("\n");
+  const priced = priceFile(sumUsage(content, "ids.jsonl"), "ids.jsonl");
+  expect(priced.models).toEqual(["claude-haiku-4-5", "claude-opus-5-5"]);
+  expect(priced.dollars).toBeCloseTo(1 + 4, 9);
+});
+
+test("the session that launched an agent is the file beside its session directory", () => {
+  expect(sessionOf(agentFixture)).toEqual({ id: "sess", file: sessionFixture });
+});
+
+test("the orchestrator's session prices at its own rate, a [1m] id included", () => {
+  // (100*4 + 10000*8 + 500*20) / 1e6 = 0.0904, all written at the 1-hour TTL
+  const priced = processFile(sessionFixture);
+  expect(priced.models).toEqual(["claude-opus-5-5"]);
+  expect(priced.dollars).toBeCloseTo(0.0904, 9);
+  expect(priced.activeMs).toBe(60_000);
+});
+
+test("formatDuration prints hours, minutes and seconds only as far as it needs", () => {
+  expect(formatDuration(0)).toBe("0s");
+  expect(formatDuration(59_000)).toBe("59s");
+  expect(formatDuration(60_000)).toBe("1m00s");
+  expect(formatDuration(3_723_000)).toBe("1h02m03s");
+});
+
+test("a gap longer than five minutes, or a backwards clock, is not active time", () => {
+  const content = [
+    '{"type":"user","timestamp":"2026-09-26T10:00:00.000Z"}',
+    '{"type":"assistant","timestamp":"2026-09-26T10:04:00.000Z","requestId":"a","message":{"model":"claude-sonnet-5","usage":{"output_tokens":1}}}',
+    '{"type":"user","timestamp":"2026-09-26T10:03:00.000Z"}',
+    '{"type":"assistant","timestamp":"2026-09-26T10:30:00.000Z","requestId":"b","message":{"model":"claude-sonnet-5","usage":{"output_tokens":1}}}',
+  ].join("\n");
+  const totals = sumUsage(content, "times.jsonl");
+  expect(totals.activeMs).toBe(240_000); // only the first gap; -1 min and 27 min are dropped
+  expect(totals.wallMs).toBe(1_800_000);
+});
+
+// --- cold: a large write AND a gap past the TTL since the previous assistant --
+
+/** One assistant response at `at`, writing `write` of a `write + read` context. */
+function turn(id: string, at: string, write: number, read: number, oneHour = false): string {
+  const creation = oneHour
+    ? { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: write }
+    : { ephemeral_5m_input_tokens: write, ephemeral_1h_input_tokens: 0 };
+  return JSON.stringify({
+    type: "assistant",
+    timestamp: `2026-09-26T${at}.000Z`,
+    requestId: id,
+    message: {
+      model: "claude-sonnet-5",
+      usage: {
+        input_tokens: 0,
+        cache_creation_input_tokens: write,
+        cache_creation: creation,
+        cache_read_input_tokens: read,
+        output_tokens: 1,
+      },
+    },
+  });
+}
+
+test("a large write soon after the previous turn is a tool result, not a cold restart", () => {
+  const content = [turn("a", "10:00:00", 20000, 0), turn("b", "10:00:30", 90000, 20000)].join("\n");
+  expect(sumUsage(content, "warm.jsonl").coldRestarts).toBe(0);
+});
+
+test("a wake's own user record does not hide the gap since the previous assistant turn", () => {
+  const content = [
+    turn("a", "10:00:00", 20000, 0),
+    '{"type":"user","timestamp":"2026-09-26T10:19:00.000Z","message":{"role":"user","content":"wake"}}',
+    turn("b", "10:19:30", 90000, 5000),
+  ].join("\n");
+  expect(sumUsage(content, "wake.jsonl").coldRestarts).toBe(1);
+});
+
+test("a run writing at the 1-hour TTL is cold only after an hour", () => {
+  const within = [turn("a", "10:00:00", 20000, 0, true), turn("b", "10:30:00", 90000, 5000, true)];
+  const past = [turn("a", "10:00:00", 20000, 0, true), turn("b", "11:10:00", 90000, 5000, true)];
+  expect(sumUsage(within.join("\n"), "1h-within.jsonl").coldRestarts).toBe(0);
+  expect(sumUsage(past.join("\n"), "1h-past.jsonl").coldRestarts).toBe(1);
+});
+
+test("a file with no timestamps counts no cold restarts, however large its writes", () => {
+  const content = [
+    '{"type":"assistant","requestId":"a","message":{"model":"claude-sonnet-5","usage":{"cache_creation_input_tokens":20000,"output_tokens":1}}}',
+    '{"type":"assistant","requestId":"b","message":{"model":"claude-sonnet-5","usage":{"cache_creation_input_tokens":90000,"cache_read_input_tokens":1000,"output_tokens":1}}}',
+  ].join("\n");
+  expect(sumUsage(content, "untimed.jsonl").coldRestarts).toBe(0);
 });

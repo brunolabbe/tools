@@ -30,12 +30,24 @@ agent from its task output file with cache reads counted, and one Opus gate
 alone came to $32.73 that way, in the range the old conversion gave for whole
 sessions. The figure stays here as the unit the earlier rows were priced in.
 
+**The mechanism is the cache lifetime.** A subagent's prompt cache lives five
+minutes by default, and every subagent write measured here until 2026-09-26 used
+that default (`agent-cost.mjs`, repo-53). A builder or gate woken past its TTL
+re-writes its whole transcript at the write rate before doing any work, so the
+cost of such a round is the length of the transcript it wakes, not the size of
+the fix — and the wakes land past five minutes: 28 subagent transcripts the devcontainer kept, 2026-08-25 to 09-02: 13 wakes past five minutes, all within the hour, 12 of them re-writing the cache. So since 2026-09-26
+the builder and gate definitions set a 1-hour TTL (`experimental: cacheTtl: 1h`),
+which turns those wakes into reads, and `SKILL.md` step 6 sends a round that is
+all mechanical to a fresh `fixer` rather than waking anyone. `agent-cost.mjs`
+counts the wakes that still paid as `cold=`.
+
 Eleven tool calls cost more than thirty-seven. The third session reproduced this
 at four times the scale on its widest branch — 100 calls → 238 k, then **29 calls
 → 255 k**, then 50 calls → 290 k. Cost rises as the work shrinks. That branch cost
 978 k against a sibling's 322 k, and the difference was rounds, not difficulty. So:
 
-- **End every relay with conditional ship authority.** "Apply these, and **if**
+- **End every relay with conditional ship authority** — to the builder or the
+  fixer, whichever lands the round. "Apply these, and **if**
   `npm run check` is green, the suite is green and the diff scope is unchanged,
   open the PR yourself (**or, on a branch with no PR yet, commit the gate record
   yourself** — the same clause, and the state this skill's default produces) — do not check back. If any condition fails, stop and tell

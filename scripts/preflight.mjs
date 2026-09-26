@@ -176,8 +176,8 @@ export function touchedTools(diffPaths) {
 
 /**
  * Config shared by more than one tool's suite. Touching any of it invalidates
- * a per-tool run the way `builder.md`'s gate list already says: "full `npm
- * test` if shared config moved."
+ * a per-tool run the way the builder role's gate list already says: "full
+ * `npm test` if shared config moved."
  *
  * Root-level only — a nested `tools/<tool>/tsconfig.json` is that tool's own
  * and must not force the full suite, so a path carrying a `/` never matches
