@@ -76,6 +76,21 @@ application/json` and no body, answers 400 `BAD_REQUEST` and logs at `info`,
 - The same for a malformed JSON body.
 - `npm run check` and `npm test -- --project planner` are green.
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-26 · `a1a417b...055c516` · code-review at medium
+
+| Done when                                                        | Proof                                                                                                       |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Empty declared-JSON body answers 400 BAD_REQUEST, logged at info | `tools/planner/api/test/malformed-requests.test.ts:13-38 "empty declared-JSON body: 400, logged at info"` ✓ |
+| Same, malformed JSON body                                        | `tools/planner/api/test/malformed-requests.test.ts:41-67 "with malformed JSON: 400, logged at info"` ✓      |
+| `npm run check` and `npm test -- --project planner` are green    | verified — check exit 0, 75 files / 1271 tests passed                                                       |
+
+- **med** · two findings, one mechanism: the new comment above `isClientRequestStatusError` and the Log entry that backs it were both copied from dl-66 without adapting them to the planner. The comment says `@fastify/static` 412/416 were measured (`tools/downloader/api/src/http-errors.ts:125 "raises its own 412"`, copied near-verbatim into `tools/planner/api/src/http-errors.ts:65 "decision recorded in this ticket's"`, which points at a `## The width decision` heading that exists only in dl-66, not in this ticket), while the Log records the opposite: the planner has no such plugin. Both are wrong — the planner does carry `@fastify/static` (`tools/planner/api/package.json:16 "fastify/static"`, registered whenever `webDir` is set, `tools/planner/api/src/routes/web.ts:22 "fastifyStatic from"`), and it is the production default. I reproduced both cases with inject against a real static bundle (a bad Range header and a failing If-Match precondition): both reach `toErrorResponse` and answer 400 BAD_REQUEST logged at info, so width A does not misbehave here — but the measurement the ticket claims for this path was never actually run, and the claim used to excuse skipping it is false.
+- **med** · Build step 1 asked that the width default be confirmed with the owner, with the planner's own before/after table, when this ticket was picked up — not assumed. The 2026-09-26 Log entry supplies the table but records no such confirmation, and I cannot see the builder's own session to know whether one happened outside the ticket file.
+- NFR: security ✓ (no upstream error message or `cause` reaches the response or the log fields) · performance n/a · reliability ✓ (response and log always derive from one `toErrorResponse` call, so they cannot disagree) · maintainability — above.
+- **findings** · code-review at medium returned 2; 2 carried, 0 dropped.
+
 ## Log
 
 - 2026-09-19 — Filed from dl-66's Build step 5, which asked the downloader
