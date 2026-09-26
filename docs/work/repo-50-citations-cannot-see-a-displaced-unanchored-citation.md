@@ -102,6 +102,36 @@ a cited unanchored line in a scratch copy and watch the mode report it.
 - **gates** · `npm run check` exit 0; `npx vitest run --project repo` 481 of 481 (base 471); `node scripts/citations-gate.mjs --against origin/main` exit 0, 106 enforced, 0 failing.
 - NFR: security ✓ (argument arrays, no shell) · performance ✓ (one tree per ref, cached) · reliability — the high and the first med · maintainability — the lows.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-09-26 · `347cf4b..cf64d30`, tip `cf64d30`; `origin/main` still at `a1a417b` · re-gate of the round only · Opus 5.5
+
+Gate 1 findings:
+
+- **high** (Review-only scope) · **fixed**, one half unproven — reverting the widened read in `checkRecord` reds 2 of 42 in the gate spec, including the Log fixture at `scripts/test/citations-gate.test.ts:906 "expect(states).toEqual("`; `node scripts/citations-gate.mjs --displaced-since origin/main` exits 0 over 184 records. A record with no Review section at all is the new med below.
+- **med** (grandfathered absorbs `displaced`) · **fixed** — `scripts/test/citations-gate.test.ts:1029 "never absorbs a displaced failure into the grandfathered allowance"`; dropping the new check reds 1 of 42.
+- **med** (Log account of Done-when 4) · **fixed** — the Log now gives 23 plus 1 = 24 pins, 29 reported, 5 extras in repo-38, and withdraws the 22 into the script as a method artefact, all matching this gate. New low below on how it was corrected.
+- **low** (base 472) · **fixed** — 471 in the Log, and 471 is what this gate measured.
+- **low** (raw comparison) · **fixed** — `scripts/citations.mjs:1034 "normalize(line) !== normalize(now"`; reverting it reds 1 of 102 at `scripts/test/citations.test.ts:2631 "expect(crlf?.state).toBe("`, which also keeps a real change on the same line failing.
+- **low** (postdates docblock) · **fixed** — the paragraph now says the mode cannot tell a citation written for the ref from one written for the tip. New low below on one label in it.
+- **low** (EOF guard untested) · **fixed** — `scripts/test/citations.test.ts:2595 "refuses a range that straddles the ref"`; dropping the guard reds 1 of 102.
+- **low** (exit byte full, signal reading) · **fixed** in the EXIT docblock; its 256-exits-0 and repo-21 exit 131 claims match this gate measurements.
+- **low** (stale message says "does not fail") · **fixed** — `scripts/test/citations.test.ts:2672 "expect(stale[0]?.reason).not.toMatch(/does not fail/)"`; removing the new branch reds 1 of 102.
+
+New, in lines this round touched:
+
+- **med** · The repo-25 repair edits a reviewer quotation, not only a coordinate. `docs/work/repo-25-citations-checker-misses-shorthand-references.md:196 "backticked port numbers"` quoted the dl-38 port 443 as an example of text that is not a pointer; it now reads as a pin into `scripts/citations.mjs` at `fdafd1a`, line 443, which is unrelated code, and the sibling port 8443 inherits that pin. The words a reader sees in a merged gate record changed meaning. **Open decision**: (a) keep the pin and add a dated transcription note beside that section saying the quotation was rewritten and why, with the owner consenting to an edit of reviewer text — recommended, as the smallest change that keeps the flagged gate green; (b) restore the reviewer text byte for byte and accept that `--displaced-since` fails on repo-25 until the shorthand parser learns that a double-backtick span is a quotation, filed as its own ticket.
+- **med** · Under the flag, a record with no Review section is no longer skipped (`scripts/citations-gate.mjs:568 "if (displacedSince === null) return { record, skipped: true };"`), and no test covers it: making that return unconditional keeps 42 of 42 green. It is the larger half of the high, since 71 of the 184 records reached have no Review section, and that is where most Logs are.
+- **low** · Two findings, one cause: the widened read reaches a summary still worded for the Review-only scope. Under the flag the header still says the Review section of 184 records, and the grandfathered debt line reads 6 unresolvable, 8 moved and 51 unanchored where the plain run reads 2 and 21, because `scripts/citations-gate.mjs:717 "debt[state] = (debt[state] ?? 0) + n"` now sums states from Log citations that are not debt.
+- **low** · `scripts/citations-gate.mjs:518 "outside it, only"` says only `displaced` is fatal outside the section, but every declaration in the record is now read (`scripts/citations-gate.mjs:587 "const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));"`), so a stale declaration in a Log fails the record under the flag. Reproduced on a fixture record with a clean Review and a Log declaration that excuses nothing: plain run 0 failed, flagged run fails it with 0 failures and 1 stale. No live case in the corpus today.
+- **low** · `scripts/citations.mjs:218-219 "before dl-72 merged"` names `20eb8ba`, but dl-72 merged as `7156967`, whose parent is `6f1f6bf`. The measurement holds at both: 2 displaced at each.
+- **low** · The Log says the wrong Done-when 4 figures are "kept struck rather than deleted, per records.md". The old method paragraph and the "Not 24" paragraph were deleted and only three fragments struck, and `records.md` has no such rule; the practice is recorded in `history.md`.
+- **dropped** · the repo-14 pins change a Log, not a Review; the text said the two citations "stay as written", and pinned to `91c117b` they read exactly the `argv.find` line and the usage throw the entry describes (checked with `git show`). Meaning kept.
+- **findings** · hunt over the round returned 7; 6 carried, 1 dropped.
+- **plain gate unchanged** · `a1a417b` scripts and `cf64d30` scripts give byte-identical `node scripts/citations-gate.mjs` output on both the base tree and this tip; `ci.yml` passes neither the flag nor a new argument.
+- **pins** · `91c117b` and `fdafd1a` are both ancestors of `origin/main` (`git merge-base --is-ancestor`).
+- **gates** · `npm run check` exit 0; the two specs 144 of 144; `npx vitest run --project repo` 486 of 486; `node scripts/citations-gate.mjs --against origin/main` exit 0, 106 enforced; `--displaced-since origin/main` exit 0, 177 enforced; `node scripts/preflight.mjs --base origin/main` exit 0.
+
 ## Log
 
 - 2026-09-20 — Filed from the third gate on `orchestrate-skill-sweep`, on the
