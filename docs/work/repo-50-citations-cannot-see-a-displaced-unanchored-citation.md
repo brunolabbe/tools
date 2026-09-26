@@ -377,11 +377,13 @@ unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
 
   **The owner's claim, measured**: that the flag stops flagging `repo-25`
   once this branch merges, since a ref taken after the merge already holds
-  the grown file. Measured against this round's own tip, `<HEAD-SHA>`:
+  the grown file. Measured against this round's own commit `2eded7d` (this
+  Log entry itself lands one commit later, so it is not citing its own sha):
   `node scripts/citations.mjs docs/work/repo-25-....md --displaced-since
-<HEAD-SHA>` reports `<RESULT>`. This is necessarily a same-tree comparison
-  today — nothing has touched `scripts/citations.mjs` between this commit and
-  the working tree it is read against — so it confirms the mechanism
+2eded7d` reports 0 displaced, 8 unanchored (of 49 references) — clean. This
+  is necessarily a same-tree comparison today — nothing has touched
+  `scripts/citations.mjs` between `2eded7d` and the working tree it is read
+  against — so it confirms the mechanism
   (`displaced` only fires across a gap in which the cited line's text
   changed, and a ref taken at or after the point the growth stopped has no
   such gap) rather than proving the claim survives an actual merge. What it
