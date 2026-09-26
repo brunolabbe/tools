@@ -200,7 +200,8 @@ function isRefusedTransitionRange(groups: readonly number[]): boolean {
 
 /**
  * Native IPv6 ranges that must never be reachable: IANA's special-purpose
- * ranges marked not globally reachable, plus the pre-registry `fec0::/10`.
+ * ranges marked not globally reachable, the pre-registry `fec0::/10`, and
+ * `fe00::/9`, which the address-space registry holds reserved by the IETF.
  *
  * Flat on purpose — the owner's decision on dl-63. `2001::/23` is refused
  * whole, which also refuses the few reachable anycast and service allocations
@@ -218,6 +219,7 @@ const BLOCKED_V6: ReadonlyArray<readonly [readonly number[], number]> = (
     ["3fff::", 20], // documentation (RFC 9637)
     ["5f00::", 16], // segment-routing SIDs (RFC 9602)
     ["fc00::", 7], // unique-local
+    ["fe00::", 9], // "Reserved by IETF", IANA IPv6 address-space registry (dl-70)
     ["fe80::", 10], // link-local
     ["fec0::", 10], // site-local, deprecated (RFC 3879)
     ["ff00::", 8], // multicast
