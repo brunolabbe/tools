@@ -910,6 +910,116 @@ test("gate() reads the whole record under displacedSince, failing only on displa
 });
 
 /**
+ * **repo-50 gate 2, med.** The high's fix widens extraction under the flag for
+ * a record that *has* a `## Review` heading but a Log outside it; gate 2 found
+ * the larger half untested — a record with **no** `## Review` heading at all,
+ * 71 of the corpus's 184 records reached by `--displaced-since` at the time.
+ * `checkRecord`'s early return only skips those when `displacedSince` is
+ * `null`; making that condition unconditional (always skip, flag or not)
+ * keeps every other test in this file green, since none of them cover a
+ * record with no Review section under the flag — this one does.
+ */
+test("gate() reads a record with no Review section at all, under displacedSince", () => {
+  const record = "docs/work/unreviewed.md";
+  const { dir, cleanup } = withRepo({
+    [record]: "# unreviewed\n\n## Log\n\n- Displaced in the Log: `src/tls.ts:1`.\n",
+  });
+  const before = gitIn(dir, "rev-parse", "HEAD");
+  fs.writeFileSync(
+    path.join(dir, "src", "tls.ts"),
+    [
+      "// inserted",
+      "export function verify() {",
+      "  // Defence in depth: the store is pinned.",
+      "  return true;",
+      "",
+    ].join("\n"),
+  );
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+
+    // Unflagged: no Review section at all is the ordinary "not gated yet"
+    // skip, exactly as it always was.
+    const plain = gate(dir, scope, new Map());
+    expect(plain.inScope).toHaveLength(0);
+    expect(plain.failed).toHaveLength(0);
+
+    // Flagged: the record is no longer skipped, and its Log's displaced
+    // citation fails it.
+    const flagged = gate(dir, scope, new Map(), before);
+    expect(flagged.failed.map((r) => r.record)).toEqual([record]);
+    expect(flagged.failed[0]?.counts).toMatchObject({ displaced: 1 });
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-50 gate 2, low.** Under `displacedSince`, a grandfathered record's
+ * `counts` is the whole widened read — every citation the flag reaches, Log
+ * included — but the corpus-wide debt tally means "how much pre-existing
+ * enforced debt", and summing `counts` there pulled in ordinary Log citations
+ * that were never debt. This record has one real, enforced `## Review` debt
+ * citation and one unrelated `## Log` citation the flag now reads but does
+ * not enforce; the debt tally must report only the first, with or without the
+ * flag.
+ */
+test("the debt tally under displacedSince counts only the enforced section, not the widened read", () => {
+  const record = "docs/work/b.md";
+  const { dir, cleanup } = withRepo({
+    [record]: "## Review\n\nProof: `src/tls.ts:2`.\n\n## Log\n\n- Aside: `src/tls.ts:3`.\n",
+  });
+  const head = gitIn(dir, "rev-parse", "HEAD");
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+
+    const plain = gate(dir, scope, new Map([[record, 1]]));
+    expect(plain.excused.map((r) => r.record)).toEqual([record]);
+    expect(plain.debt).toEqual({ unanchored: 1 });
+
+    // Compared against its own tip: nothing has moved, so the record is
+    // excused exactly as before, and the debt must read the same — not
+    // inflated by the Log's own, unrelated, merely-read-not-enforced citation.
+    const flagged = gate(dir, scope, new Map([[record, 1]]), head);
+    expect(flagged.excused.map((r) => r.record)).toEqual([record]);
+    expect(flagged.debt).toEqual({ unanchored: 1 });
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-50 gate 2, low.** A stale evidence declaration fails a record
+ * wherever it is written, section or not — deliberate, per the docblock
+ * addition above it, and not the "only `displaced` is fatal outside Review"
+ * carve-out the high's docblock names for a citation's own state. Reproduced
+ * on the gate's own fixture: a Review whose one citation is anchored and
+ * genuinely verifies, and a Log declaring that same citation evidence anyway
+ * — which excuses nothing, since it does not fail.
+ */
+test("a stale evidence declaration in a Log fails the record under displacedSince too", () => {
+  const record = "docs/work/a.md";
+  const { dir, cleanup } = withRepo({
+    [record]: `${ANCHORED}\n## Log\n\n<!-- citations: evidence src/tls.ts:2 -->\n`,
+  });
+  const head = gitIn(dir, "rev-parse", "HEAD");
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+
+    const plain = gate(dir, scope, new Map());
+    expect(plain.failed).toHaveLength(0);
+
+    const flagged = gate(dir, scope, new Map(), head);
+    expect(flagged.failed.map((r) => r.record)).toEqual([record]);
+    expect(flagged.failed[0]?.failures).toHaveLength(0);
+    expect(flagged.failed[0]?.stale).toHaveLength(1);
+    expect(flagged.failed[0]?.stale?.[0]?.reason).toMatch(/does not fail — drop the declaration/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
  * **repo-50 gate 1, med 1.** `EXIT.displaced`'s own docblock in `citations.mjs`
  * says its bit is set "unconditionally" — this is the gate's own ratchet
  * holding to the same word. A generous grandfathered allowance must not

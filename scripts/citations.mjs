@@ -215,10 +215,11 @@
  * first is real, and measured rather than hypothetical: `dl-72`'s own record,
  * which did not exist before its own branch, cites `compose.downloader.yaml:37`
  * and `.github/workflows/downloader.yml:148` bare — both lines its own fix
- * rewrote — and `--displaced-since 20eb8ba` (the commit before it merged)
- * correctly flags both. The second is a false positive this mode cannot
- * distinguish from the first. Read a `displaced` report on a citation newer
- * than `<ref>` with that in mind, rather than as settled either way.
+ * rewrote — and `--displaced-since 6f1f6bf` (`7156967`'s parent, the commit
+ * before dl-72 merged) correctly flags both. The second is a false positive
+ * this mode cannot distinguish from the first. Read a `displaced` report on a
+ * citation newer than `<ref>` with that in mind, rather than as settled either
+ * way.
  *
  * `displaced` sets its own exit bit, unconditionally — unlike `unanchored`,
  * which needs `--require-anchors` to be fatal. There is no policy question here:

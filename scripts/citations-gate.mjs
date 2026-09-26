@@ -516,9 +516,23 @@ export function findRecords(repo, pathspecs) {
  * still has every citation *outside* it read. What changes is only which rule
  * applies to what is read: inside the section (or always, when `section` is
  * `null`), the full `FAILING` set governs, exactly as before; outside it, only
- * `displaced` is fatal — an ordinary unanchored citation in a Log or a Why
- * section is not new debt this flag created, and failing on it would flood
- * every un-reviewed record in the corpus the moment the flag is passed.
+ * `displaced` is fatal among a citation's own *states* — an ordinary
+ * unanchored citation in a Log or a Why section is not new debt this flag
+ * created, and failing on it would flood every un-reviewed record in the
+ * corpus the moment the flag is passed.
+ *
+ * **A stale evidence declaration is fatal wherever it is written, section or
+ * not, and that is deliberate rather than an oversight the widened read
+ * introduced** (repo-50 gate 2, low). A declaration is excused above by the
+ * same reasoning `citations.mjs`'s own `applyDeclarations` docblock gives: it
+ * is a claim the record itself makes, that a named citation fails for a
+ * reason no commit would fix — not a fact about the corpus a flag can widen
+ * into new debt, the way an unanchored citation's mere existence is. Stale
+ * means that claim is false today, in a Log exactly as much as in a Review,
+ * and a false claim is not the kind of thing this flag's "do not flood the
+ * corpus" carve-out exists to tolerate. So `declarations` is read across the
+ * whole widened scope unconditionally, and `checkRecord`'s `failing` count
+ * adds every stale one whatever section it sits in.
  *
  * @param {string} repo
  * @param {string} record
@@ -591,6 +605,21 @@ export function checkRecord(
   const counts = {};
   for (const r of results) counts[r.state] = (counts[r.state] ?? 0) + 1;
 
+  // The same tally, restricted to the section the gate actually enforces
+  // (repo-50 gate 2, low). `counts` above is deliberately the whole widened
+  // read under `displacedSince` — a `FAIL`/`WORSE` line prints it so a reader
+  // sees the full record a failure was found in — but the corpus-wide debt
+  // tally `gate()` reports for a grandfathered record means "how much
+  // pre-existing enforced debt", and summing `counts` there under the flag
+  // pulls in every ordinary Log citation the widened read touches, which was
+  // never debt in the first place. `scopedCounts` is what that tally sums.
+  /** @type {Record<string, number>} */
+  const scopedCounts = {};
+  for (const r of results) {
+    if (!inFullScope(r.line)) continue;
+    scopedCounts[r.state] = (scopedCounts[r.state] ?? 0) + 1;
+  }
+
   // An indistinct anchor is `verified` and still a failure here, which is the
   // one place a state and a verdict come apart. `citations.mjs` keeps the state
   // because how many lines a fragment occupies is a fact about the fragment;
@@ -617,6 +646,7 @@ export function checkRecord(
     error: null,
     total: results.length,
     counts,
+    scopedCounts,
     failures,
     stale,
     // The number the grandfather list ratchets on. Declarations have already
@@ -683,7 +713,7 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displac
       continue;
     }
     excused.push(result);
-    for (const [state, n] of Object.entries(result.counts ?? {})) {
+    for (const [state, n] of Object.entries(result.scopedCounts ?? result.counts ?? {})) {
       if (FAILING.has(state) || state === "indistinct") debt[state] = (debt[state] ?? 0) + n;
     }
   }
@@ -786,7 +816,17 @@ function main() {
   );
   const history = against === null ? null : compareAgainst(repo, against, GRANDFATHERED);
 
-  const scope = SCOPE.section === null ? "every citation" : `the "${SCOPE.section}" section`;
+  // The scope this run actually reads, not only the one it enforces
+  // everywhere (repo-50 gate 2, low): under `--displaced-since` a record's
+  // whole text is read, `## Review` included, even though only `displaced`
+  // is fatal outside it — a header that still said "the Review section" read
+  // as a claim the widened run does not make.
+  const scope =
+    SCOPE.section === null
+      ? "every citation"
+      : displacedSince !== null
+        ? `every section (displaced fatal outside "${SCOPE.section}")`
+        : `the "${SCOPE.section}" section`;
   process.stdout.write(
     `citation gate — ${scope} of ${inScope.length} record(s), distinct anchors required\n\n`,
   );

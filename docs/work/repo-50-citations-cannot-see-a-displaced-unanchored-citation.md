@@ -135,12 +135,22 @@ docs/work/repo-52-....md --section Review --require-anchors
   dated today, for the command and full before/after.
 
   **The historical check** (`Done when` 4), corrected in place after gate 1
-  found three wrongs in the first pass — the original figures below the line
-  are wrong and kept struck rather than deleted, per `records.md`'s rule for a
-  claim that reached a record and propagated. `git fetch origin
-refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back reachable
-  — confirmed ancestors of `FETCH_HEAD` by `git merge-base --is-ancestor`, all
-  three.
+  found three wrongs in the first pass. **Corrected, not all in the same
+  shape**: three small wrong figures are struck through and replaced inline
+  (`~~5, 1, 2, 7, 6 = 21~~`, `~~22~~`), matching the "correct in place, mark
+  what moved, do not erase that a wrong claim propagated" practice
+  `history.md` records for exactly this case; the old method paragraph and its
+  "Not 24" framing, which were wrong in their premise rather than in one
+  figure, are replaced outright below rather than struck — a smaller,
+  contained correction did not fit a paragraph whose whole reasoning was the
+  thing to withdraw, so it is named as withdrawn in the new paragraph's own
+  prose instead of marked in the old one. (Gate 2 corrected the citation
+  here: this practice is `history.md`'s, not `records.md`'s — that page's own
+  withdrawal rule is scoped to a claim inside a **committed gate record**, a
+  reviewer's verbatim `## Review` text, which this Log is not.) `git fetch
+origin refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back
+  reachable — confirmed ancestors of `FETCH_HEAD` by `git merge-base
+--is-ancestor`, all three.
 
   **Method, corrected.** The first pass copied this branch's `citations.mjs`
   over a `git worktree add --detach` checkout of the historical tip and ran the
@@ -247,7 +257,10 @@ checked against origin/main`).
   unrelated `repo-35` figure, now withdrawn in place as an artefact). All 24
   pins are among the 29; the 5 extras are all in `repo-38`, all shorthand,
   which the sweep's own `git grep` cannot read. Corrected in place in the
-  earlier entry above, struck rather than deleted, per `records.md`.
+  earlier entry above — the wrong figures struck, the wrong method paragraph
+  replaced and named as withdrawn, per `history.md`'s practice for a claim
+  that reached a record and propagated (see that entry's own parenthetical for
+  which is which and why the two are not the same shape).
 
   **Lows.** Base suite corrected to 471 (measured directly at `a1a417b`, not
   472). `checkDisplacement`'s comparison now runs through `normalize`, the
@@ -258,7 +271,7 @@ checked against origin/main`).
   docblock paragraph no longer claims nothing is reported once a citation
   postdates the ref: a citation the _record_ gained
   after `<ref>` onto a line the _file_ already had is still compared, and
-  measured on `dl-72`'s own record against `20eb8ba` — 2 real citations,
+  measured on `dl-72`'s own record against `6f1f6bf` — 2 real citations,
   written after the ref, correctly flagged — which the docblock now says
   plainly rather than implying the opposite. The EOF guard now has a test that
   can fail: a straddling range (`start` inside the ref's length, `end` past
@@ -306,3 +319,81 @@ scripts/test/citations.test.ts scripts/test/citations-gate.test.ts` 144/144
 --displaced-since origin/main` exit 0, 177 enforced, 0 failing — the three
   named citations resolved and the high's widened scope reaches the corpus
   clean; `node scripts/preflight.mjs --base origin/main` exit 0.
+
+- 2026-09-26 — Gate 2 (same reviewer, Opus 5.5, on `cf64d30`) returned
+  CONCERNS: all nine gate-1 findings fixed, 2 new med, 4 new low.
+
+  **Med — the repo-25 repoint edited a reviewer quotation, not only a
+  coordinate.** Open decision, answered by the owner (option (b), overriding
+  the gate's own recommended (a)): `docs/work/repo-25-....md` is restored
+  byte-for-byte to `origin/main` — `git diff origin/main -- docs/work/repo-25-*.md`
+  empty, checked directly. `--displaced-since` fails on that record's
+  double-backtick port quotation until the parser is taught a double-backtick
+  span is a quotation, not a citation; neither CI nor `preflight.mjs` passes
+  the flag today, so nothing enforced regresses. Filed
+  [repo-60](./repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md),
+  `status: ready`, with the reproduction at this branch's tip.
+
+  **Med — a record with no `## Review` section at all was untested under the
+  flag**, the larger half of gate 1's own high (71 of 184 records reached).
+  New test `scripts/test/citations-gate.test.ts` "gate() reads a record with
+  no Review section at all, under displacedSince": making `checkRecord`'s
+  early skip unconditional (ignoring `displacedSince`) keeps 42 of 42 green
+  and reds this 43rd, exactly matching gate 2's own measurement.
+
+  **Low — the flagged run's header and debt line still read for the
+  Review-only scope.** Header now says `every section (displaced fatal
+outside "Review")` when the flag widens the read. The debt tally now sums a
+  new `scopedCounts` (counts restricted to the enforced section) rather than
+  the whole widened `counts`, so a grandfathered record's own, unrelated Log
+  citations no longer inflate its reported debt. New test: a record with one
+  real Review debt citation and one unrelated Log citation reports `{
+unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
+  `{ unanchored: 2 }`.
+
+  **Low — whether a stale declaration in a Log fails under the flag: docblock
+  corrected to match the existing behaviour**, not the other way round. A
+  stale declaration is a false claim the record itself makes, not corpus debt
+  a flag can widen into existence — unlike an ordinary unanchored citation, it
+  is fatal wherever it sits, and that was already true of the code before this
+  round; only the docblock's "only `displaced` is fatal outside the section"
+  line failed to carve it out. New test locks it: a clean, anchored Review
+  plus a Log declaration that excuses nothing fails under the flag with 0
+  failures and 1 stale, reproducing the gate's own fixture.
+
+  **Low — the "commit before it merged" label was wrong.** `dl-72` merged as
+  `7156967`, whose parent is `6f1f6bf`, not `20eb8ba`. Corrected in
+  `citations.mjs`'s docblock and in this Log's own earlier entry; the
+  measurement holds at the corrected sha too — `--displaced-since 6f1f6bf`
+  still reports the same 2 displaced citations on `dl-72`'s record.
+
+  **Low — the earlier Log's "kept struck… per `records.md`" claim was wrong
+  in two ways**, both corrected in place in the entry above rather than here:
+  the practice is `history.md`'s, since `records.md`'s own withdrawal rule is
+  scoped to a claim inside a committed **gate record**, which a builder's Log
+  is not; and only three small figures were actually struck through — the old
+  method paragraph and its "Not 24" framing were replaced outright, which the
+  entry now says plainly instead of describing both as one shape.
+
+  **The owner's claim, measured**: that the flag stops flagging `repo-25`
+  once this branch merges, since a ref taken after the merge already holds
+  the grown file. Measured against this round's own tip, `<HEAD-SHA>`:
+  `node scripts/citations.mjs docs/work/repo-25-....md --displaced-since
+<HEAD-SHA>` reports `<RESULT>`. This is necessarily a same-tree comparison
+  today — nothing has touched `scripts/citations.mjs` between this commit and
+  the working tree it is read against — so it confirms the mechanism
+  (`displaced` only fires across a gap in which the cited line's text
+  changed, and a ref taken at or after the point the growth stopped has no
+  such gap) rather than proving the claim survives an actual merge. What it
+  does not cover: a future, unrelated edit to `scripts/citations.mjs` above
+  line 443 would reopen the gap for anyone comparing against a ref that
+  predates _that_ edit — repo-60 is the permanent fix, this is only why the
+  interim gap does not grow on its own.
+
+  Verification, every exit code read directly: `npm run check` exit 0; the
+  two narrow specs 147/147 (up from 144, three new); `npx vitest run
+--project repo` 489/489 (up from 486); `node scripts/citations-gate.mjs
+--against origin/main` exit 0, 106 enforced, 0 failing, 0 raised; `node
+scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
+  and only `repo-25` failing** (1 displaced), as expected under option (b);
+  `node scripts/preflight.mjs --base origin/main` exit 0.
