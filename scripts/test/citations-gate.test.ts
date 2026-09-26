@@ -846,6 +846,93 @@ test("the CLI's --displaced-since reaches a record under tools/*/docs/work, not 
   }
 });
 
+/**
+ * **repo-50 gate 1, high.** The gate's own `## Review`-only scope means an
+ * unanchored citation displaced in a `## Log` — every incident the ticket's Why
+ * section names — was invisible to `--displaced-since` no matter what
+ * `checkDisplacement` itself could see. The reproduction mirrors the gate's own
+ * fixture: an anchored Review that already verifies against the tip, and a Log
+ * carrying two unanchored citations — one into a file the insertion shifted
+ * (displaced), one into a file nothing touched (not displaced), so the "must
+ * not fail on the unanchored backlog" half has something to fail if it broke.
+ */
+function withMixedSectionsFixture(record: string): {
+  dir: string;
+  before: string;
+  cleanup: () => void;
+} {
+  const { dir, cleanup } = withRepo({
+    [record]:
+      '## Review\n\nProof: `src/tls.ts:3 "Defence in depth"`.\n\n' +
+      "## Log\n\n" +
+      "- Displaced in the Log: `src/tls.ts:1`.\n" +
+      "- Not displaced in the Log: `src/stable.ts:1`.\n",
+  });
+  fs.writeFileSync(path.join(dir, "src", "stable.ts"), "stable one\nstable two\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-qm", "add a file that never changes");
+  const before = gitIn(dir, "rev-parse", "HEAD");
+  fs.writeFileSync(
+    path.join(dir, "src", "tls.ts"),
+    [
+      "// inserted",
+      "export function verify() {",
+      "  // Defence in depth: the store is pinned.",
+      "  return true;",
+      "",
+    ].join("\n"),
+  );
+  return { dir, before, cleanup };
+}
+
+test("gate() reads the whole record under displacedSince, failing only on displaced outside Review", () => {
+  const record = "docs/work/mixed.md";
+  const { dir, before, cleanup } = withMixedSectionsFixture(record);
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+
+    // Unflagged: the Review's anchor verifies against the tip and the Log is
+    // never read at all — the ordinary, pre-repo-50 shape, unchanged.
+    const plain = gate(dir, scope, new Map());
+    expect(plain.failed).toHaveLength(0);
+    expect(plain.regressed).toHaveLength(0);
+
+    // Flagged: the Log's displaced citation fails the record, and the Log's
+    // merely-unanchored one does not — the high's own two acceptance halves.
+    const flagged = gate(dir, scope, new Map(), before);
+    expect(flagged.failed.map((r) => r.record)).toEqual([record]);
+    expect(flagged.failed[0]?.counts).toMatchObject({ displaced: 1 });
+    const states = (flagged.failed[0]?.failures ?? []).map((f) => f.state);
+    expect(states).toEqual(["displaced"]);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-50 gate 1, med 1.** `EXIT.displaced`'s own docblock in `citations.mjs`
+ * says its bit is set "unconditionally" — this is the gate's own ratchet
+ * holding to the same word. A generous grandfathered allowance must not
+ * absorb a `displaced` failure the way it absorbs the corpus's pre-existing
+ * unanchored debt; the record still has to be named.
+ */
+test("gate() never absorbs a displaced failure into the grandfathered allowance", () => {
+  const record = "docs/work/mixed.md";
+  const { dir, before, cleanup } = withMixedSectionsFixture(record);
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+    // An allowance generous enough to cover every failure this record could
+    // possibly hold, so only the "displaced is unconditional" rule — not the
+    // ratchet's own arithmetic — can be what routes it to `failed`.
+    const result = gate(dir, scope, new Map([[record, 10]]), before);
+    expect(result.excused).toHaveLength(0);
+    expect(result.regressed).toHaveLength(0);
+    expect(result.failed.map((r) => r.record)).toEqual([record]);
+  } finally {
+    cleanup();
+  }
+});
+
 test("the CLI rejects --displaced-since with no value", () => {
   const result = spawnSync("node", [CLI, "--displaced-since"], { cwd: REPO, encoding: "utf8" });
   expect(result.status).toBe(1);

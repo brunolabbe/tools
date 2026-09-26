@@ -134,52 +134,175 @@ docs/work/repo-52-....md --section Review --require-anchors
   tool named, wording and verdicts unchanged — see that ticket's own Log entry,
   dated today, for the command and full before/after.
 
-  **The historical check** (`Done when` 4): `git fetch origin
+  **The historical check** (`Done when` 4), corrected in place after gate 1
+  found three wrongs in the first pass — the original figures below the line
+  are wrong and kept struck rather than deleted, per `records.md`'s rule for a
+  claim that reached a record and propagated. `git fetch origin
 refs/pull/281/head` brought `ac98b37`, `5c517d3` and `44196c1` back reachable
   — confirmed ancestors of `FETCH_HEAD` by `git merge-base --is-ancestor`, all
-  three. Checked in a throwaway `git worktree add --detach <tmp> <sha>` (removed
-  after, `git worktree list` confirms it is gone), with this branch's
-  `citations.mjs`/`citations-gate.mjs` copied in over each historical
-  checkout — reading the historical _record_ content and the historical
-  _source_ content, through the new code, which is what the flag is for.
+  three.
 
-  `44196c1`'s own diff pins 21 citations across five records (`docs/work/repo-21
--the-orchestration-skill-outgrew-its-loop.md`, `repo-32-done-can-hide-an-
-outstanding-obligation.md`, `repo-35-a-citation-cannot-be-pinned-to-a-
-commit.md`, `repo-38-two-documents-disagree-on-who-writes-the-review.md`,
-  `repo-48-should-this-repo-adopt-a-stacked-branch-tool.md` — `git show
-44196c1 -- <path> | grep -c '^+.*@fdafd1a'` gives 5, 1, 2, 7, 6). `b07d506`
-  pins one more, in `tools/downloader/docs/work/dl-57-....md`, into
-  `records.md` — the sixth record, 22 pins total. **Not 24**: the ticket's own
-  figure does not match either commit's diff, and this area's commit messages
-  are already self-admittedly wrong once in the same range ("Gate 2's low on
-  the previous commit message: it said seven knock-on pins and the diff
-  carried nine" — `44196c1`'s own message). Read as debt in the ticket's
-  premise rather than in the tool: 22 is what the diffs show, not 24.
+  **Method, corrected.** The first pass copied this branch's `citations.mjs`
+  over a `git worktree add --detach` checkout of the historical tip and ran the
+  plain (no-`--rev`) CLI there — which reads every _unpinned_ citation's "now"
+  side off that checkout's working tree, `scripts/citations.mjs` included, and
+  that file had just been overwritten with this branch's own multi-thousand-
+  line version. Every citation into it therefore compared the record's real
+  historical line numbers against content that commit never held, which is
+  exactly what produced the bogus `repo-35` figure below. The fix costs nothing
+  extra: extract the record's own text at the historical tip with `git show
+<tip>:<path>`, then run this branch's own `citations.mjs` against that
+  extracted copy with `--rev <tip> --displaced-since fdafd1a`, from this
+  worktree, untouched — `--rev` already resolves every _other_ citation's "now"
+  side against `<tip>`'s real tree via `git show`, which is what it is for, and
+  nothing in this repository's checkout is overwritten to get there.
 
-  Running `node scripts/citations.mjs <record> --displaced-since fdafd1a` at
-  `5c517d3` (before `44196c1`) for the first five records, and at `44196c1`
-  (before `b07d506`) for `dl-57`, filtered to citations resolving into a
-  `.claude/` page — the class the sweep pinned — reports **29**, not 22:
-  5, 1, 4, 12, 6, 1 per record in the order above. Spot-checked on `repo-38`
-  (12 found, 7 pinned) and `repo-35` (4 found, 2 pinned): every pinned
-  coordinate is among the ones reported, and the extra ones are shorthand
-  citations (`` `:93` ``, `` `:153-154` ``, `` `:282` `` inheriting an already-
-  displaced file) that the sweep's own tool — `git grep -nE
-'\.claude/[^@ ]*\.md:[0-9]'`, a literal pattern — cannot read, exactly the
-  caveat `repo-52`'s own gate 2 recorded against that same grep ("cannot see
-  the shorthand spelling — three unpinned shorthand `.claude` coordinates
-  survive in repo-21"). So the mode reports a superset of what the branch
-  pinned by hand, not a subset: every citation the humans caught, plus seven
-  more of the same class they structurally could not. `repo-35` also carries
-  22 further `displaced` results into `scripts/citations.mjs` itself at this
-  same base, unrelated to the sweep's `.claude`-page edits and outside this
-  ticket's scope — `repo-52`'s own Review section already names that set as an
-  open decision ("pin the 30, or soften the claim and leave them to repo-50's
-  detector"), unresolved there and not resolved here either.
+  **Pin count, corrected.** `git show 44196c1 -- docs/work | grep "^+" | grep -o
+'@fdafd1a' | wc -l` gives **23**, not the ~~5, 1, 2, 7, 6 = 21~~ the first
+  pass counted with `grep -c` — which counts _matching lines_, and `repo-35`'s
+  diff carries two lines with two pins each. Per record: `repo-21` 5,
+  `repo-32` 1, `repo-35` 4, `repo-38` 7, `repo-48` 6. `b07d506` adds one more
+  (`dl-57`, into `records.md`) — ~~22~~ **24 pins across six records**, matching
+  the ticket's own figure exactly; the first pass's "Not 24" was wrong, not the
+  ticket.
+
+  **Displaced count, corrected.** Re-run with the fixed method — `--rev
+5c517d3 --displaced-since fdafd1a` for the first five records' extracted
+  text, `--rev 44196c1 --displaced-since fdafd1a` for `dl-57`'s — reports
+  **29** `.claude`-page citations, unchanged from the first pass's total since
+  that pass's flaw was confined to `repo-35`'s citations into
+  `scripts/citations.mjs`, a different file from the ones it pins: 5, 1, 4, 12,
+  6, 1 per record. All 24 pinned coordinates are among the 29 — spot-checked on
+  `repo-38` (12 found, 7 pinned, matching exactly) and `repo-35` (4 found, 4
+  pinned, now matching exactly where the first pass wrongly reported 2). The
+  five extras are all in `repo-38`, all shorthand (`` `:153-154` ``, `` `:93` ``, `` `:137` ``, a second `` `:119` ``, `` `:282` ``) inheriting a file the
+  sweep's own tool — `git grep -nE '\.claude/[^@ ]*\.md:[0-9]'`, a literal
+  pattern — cannot read, the same caveat `repo-52`'s own gate 2 recorded
+  against that grep ("cannot see the shorthand spelling"). So: every citation
+  the humans caught, plus five more of the same class they structurally could
+  not, no subset either way.
+
+  ~~`repo-35` also carries 22 further `displaced` results into
+  `scripts/citations.mjs` itself at this same base, unrelated to the sweep's
+  `.claude`-page edits.~~ **Withdrawn.** That was the method's own artefact —
+  re-run correctly, `repo-35` at `5c517d3` reports exactly the same 4
+  `.claude`-page results and nothing into `scripts/citations.mjs` at all; the
+  scripts directory is unchanged between `fdafd1a` and `5c517d3`, so there was
+  never anything there to find. This also means the first pass's "blames the
+  ticket premise" framing was itself the error being described: the premise —
+  three rounds, three scope misses, 24 pinned citations — holds exactly as
+  written, and the tool now confirms it rather than disputing it.
 
   Gates: `npm run format` (2 files reformatted, both mine); `npm run check`
-  exit 0; `npx vitest run --project repo` 481/481 (up from 472); `node
+  exit 0; `npx vitest run --project repo` 481/481 (up from **471**, not 472 —
+  `npx vitest run --project repo` at `a1a417b` gives 471, so this branch adds
+  10, not 9); `node
 scripts/preflight.mjs --base origin/main` exit 0 after the repo-52 repoint
   (citations gate: `citation gate clean over 113 record(s), 7 grandfathered —
 checked against origin/main`).
+
+- 2026-09-26 — Gate 1 (ticket-reviewer, Opus 5.5, on `347cf4b`) returned FAIL:
+  1 high, 2 med, 6 low, 2 dropped. Fixed all named findings; both drops
+  (unreachable `c.start < 1` half, renamed-file silence) accepted as stated,
+  no change.
+
+  **High** — the flag's own `## Review`-only scope meant `--displaced-since`
+  could never reach a Log, the exact incident class the Why section is built
+  from. `checkRecord`/`gate` now widen extraction to the whole record when
+  `displacedSince` is set, but only `displaced` is fatal outside the section
+  that was actually found — an ordinary unanchored citation in a Log or Why is
+  not new debt the flag created, and failing on it would flood the corpus.
+  Reproduced on the gate's own fixture (an anchored Review verifying at the
+  tip, a Log citing a line an insertion displaced): `gate()` gave `1 in scope,
+0 failed` before, `1 failed, counts: {displaced: 1}` after — new tests
+  `scripts/test/citations-gate.test.ts` "gate() reads the whole record under
+  displacedSince, failing only on displaced outside Review" (also asserts the
+  unanchored-but-undisplaced half does not fail).
+
+  **Med 1** — `displaced` was silently absorbed into a grandfathered record's
+  debt allowance; `EXIT.displaced`'s own docblock says "unconditionally" and
+  the gate's ratchet did not hold to it. `gate()` now routes any record
+  holding a `displaced` failure straight to `failed`, whatever its entry
+  allows. New test: "gate() never absorbs a displaced failure into the
+  grandfathered allowance", reproduced red first (mutated the check to `false`,
+  the excused allowance of 10 absorbed it) then green.
+
+  **Med 2** — the Done-when-4 account was wrong in the ways the gate named,
+  and the method was the cause: copying this branch's `citations.mjs` over a
+  `git worktree add --detach` checkout of a historical commit overwrites that
+  commit's own copy of the file being cited, so every citation into
+  `scripts/citations.mjs` compared real historical line numbers against
+  content that commit never held — which is exactly what produced the bogus
+  "22 further into `scripts/citations.mjs`" figure for `repo-35`. Corrected
+  method: extract the record's text with `git show <tip>:<path>` and run this
+  branch's own `citations.mjs` against the extract with `--rev <tip>
+--displaced-since fdafd1a`, from this worktree, untouched — `--rev` already
+  resolves every other citation's "now" side against `<tip>`'s real tree via
+  `git show`. Recounted: `44196c1` pins 23 (`grep -o` on added lines, not
+  `grep -c`, since `repo-35` carries two pins on one line), `b07d506` one more
+  — **24 across six records**, matching the ticket's own figure exactly; "Not
+  24" was the first pass's error, not the ticket's. Re-run correctly,
+  `--displaced-since` reports the same **29** as before (5, 1, 4, 12, 6, 1 —
+  the first pass's flaw never touched this total, only the separate,
+  unrelated `repo-35` figure, now withdrawn in place as an artefact). All 24
+  pins are among the 29; the 5 extras are all in `repo-38`, all shorthand,
+  which the sweep's own `git grep` cannot read. Corrected in place in the
+  earlier entry above, struck rather than deleted, per `records.md`.
+
+  **Lows.** Base suite corrected to 471 (measured directly at `a1a417b`, not
+  472). `checkDisplacement`'s comparison now runs through `normalize`, the
+  same collapse the printed message already used, so a re-indent or a
+  CRLF-only difference no longer reports `displaced` with identical text on
+  both sides — new test with both shapes plus a same-line real-change
+  negative. The "nothing is reported when the ref cannot supply a baseline"
+  docblock paragraph no longer claims nothing is reported once a citation
+  postdates the ref: a citation the _record_ gained
+  after `<ref>` onto a line the _file_ already had is still compared, and
+  measured on `dl-72`'s own record against `20eb8ba` — 2 real citations,
+  written after the ref, correctly flagged — which the docblock now says
+  plainly rather than implying the opposite. The EOF guard now has a test that
+  can fail: a straddling range (`start` inside the ref's length, `end` past
+  it) whose truncated overlap differs from the tip, reproduced red with the
+  guard mutated out (`expected 'unanchored' to be... 'displaced'`) then green
+  — `grew`'s wholly-past-EOF shape could never show this, since an empty slice
+  vacuously agrees either way. `EXIT.displaced`'s docblock now states the
+  ceiling: a process exit code is one byte, `256` silently exits `0`
+  (measured), and every code at or above `128` already reads to a shell as
+  "killed by signal `code - 128`" — `repo-21`'s own historical run exits `131`
+  and would misread as `SIGQUIT`. The stale-declaration message now names
+  `displaced` specifically rather than falsely claiming "does not fail".
+
+  **Considered making `displaced` excusable by declaration** (mirroring
+  `unresolvable`/`unchecked`), on the theory that an illustrative citation
+  quoting a known false positive has no line left to repoint to — tried
+  against the two live cases this round surfaced, and reverted for both:
+  `repo-25`'s bare port shorthand broke the _plain_ (unflagged) gate the
+  moment it was declared, since its default state is `unanchored`, not a
+  declarable one, so the declaration itself went stale outside
+  `--displaced-since`; and both it and `repo-14`'s drift-demonstration
+  citations turned out to have `unpinned-volatile`'s one clean repair all
+  along — a pin, to the commit each already names in its own prose
+  (`91c117b`, `fdafd1a`). `displaced` stays non-excusable, matching
+  `unpinned-volatile`; `citations.mjs`'s `FAILING` docblock records the
+  exception as tried and rejected, not only asserted against.
+
+  **The three corpus-wide displaced citations the owner's cost measurement
+  named, all resolved by pin, none by declaration or exemption:**
+  `repo-14-citations-section-flag-is-a-no-op.md`'s two drift-demonstration
+  citations pinned to `91c117b`, the commit its own 2026-09-03 entry already
+  names for this purpose; `repo-25-citations-checker-misses-shorthand-references.md`'s
+  bare port shorthand pinned to `fdafd1a`. Pinning the first port also pinned
+  its sibling port by inheritance (same tight-list paragraph), so its
+  existing evidence declaration was updated to the pinned key it now carries;
+  the `GRANDFATHERED` entry for `repo-25` needed no change, since a pin does
+  not alter the ordinary (unflagged) gate's count.
+
+  Verification, every exit code read directly: `npm run format` (reformatted
+  files already touched); `npm run check` exit 0; `npx vitest run
+scripts/test/citations.test.ts scripts/test/citations-gate.test.ts` 144/144
+  (up from 139, five new); `npx vitest run --project repo` 486/486 (up from
+  481); `node scripts/citations-gate.mjs --against origin/main` exit 0, 106
+  enforced, 0 failing, 0 raised; `node scripts/citations-gate.mjs
+--displaced-since origin/main` exit 0, 177 enforced, 0 failing — the three
+  named citations resolved and the high's widened scope reaches the corpus
+  clean; `node scripts/preflight.mjs --base origin/main` exit 0.

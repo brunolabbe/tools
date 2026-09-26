@@ -2525,6 +2525,15 @@ const threeLineRefTree = (rev: string) =>
     : null;
 
 /**
+ * The same three-line ref, but with a line 2 the tip does not share — for the
+ * straddling-range test below, where the overlap has to actually differ.
+ */
+const shortRefWithDifferentLine2 = (rev: string) =>
+  rev === "before"
+    ? { read: () => ["one", "TWO AT THE REF", "three"], resolve: (f: string) => ({ path: f }) }
+    : null;
+
+/**
  * Three ways a citation is out of scope for `--displaced-since`, per the Build
  * section: anchored, pinned, or the ref simply has nothing to compare against.
  * All three stay silent rather than reporting a false positive.
@@ -2563,6 +2572,104 @@ test("--displaced-since leaves an anchored, a pinned, and a ref-less citation al
     trees: threeLineRefTree,
   })[0];
   expect(grew?.state).toBe("unanchored");
+});
+
+/**
+ * **repo-50 gate 1, low.** The EOF guard has no test that can fail on its own:
+ * a citation wholly past the ref's end of file leaves an *empty* slice on the
+ * ref's side, and `findIndex` over an empty array is vacuously `-1` whether the
+ * guard runs or not — `grew` above passes either way, whatever the two sides'
+ * content, and a test using that shape cannot tell the guard from its absence.
+ *
+ * The guard only matters for a range that *straddles* the ref's own end of
+ * file: `start` inside it, `end` past it. Without it, slicing both sides
+ * truncates the ref's side silently — `[1, 5)` of a 3-line file gives 2
+ * elements, not a refusal — and comparing those 2 against the tip's first 2
+ * can find a difference and report it, or find none and stay silent, neither
+ * of which is the honest answer for a range the ref never held in full. The
+ * fixture below makes the truncated overlap itself differ (ref's line 2 is not
+ * the tip's), so removing the guard changes the verdict from `unanchored` to
+ * `displaced` — a test built on `grew`'s all-agreeing shape could not show
+ * that either way.
+ */
+test("--displaced-since refuses a range that straddles the ref's own end of file", () => {
+  const citation = cite({ start: 2, end: 5 });
+
+  const result = checkCitations(
+    [citation],
+    () => ["one", "two", "three", "four", "five", "six"],
+    undefined,
+    { displacedSince: "before", trees: shortRefWithDifferentLine2 },
+  )[0];
+  expect(result?.state).toBe("unanchored");
+});
+
+/**
+ * **repo-50 gate 1, low.** The comparison used to be raw while the printed
+ * message normalised whitespace, so a re-indent or a line-ending change alone
+ * reported `displaced` with *identical* text on both sides of "before" and
+ * "now" — the tell that the comparison, not the message, was wrong. Both
+ * shapes measured on the gate's own fixture: two spaces becoming a tab, and an
+ * LF file gaining CRLF line endings with no other change.
+ */
+test("--displaced-since ignores a whitespace-only or line-ending-only difference", () => {
+  const reindented = checkCitations(
+    [cite({ start: 1, end: 1 })],
+    () => ["\treturn 1;"],
+    undefined,
+    {
+      displacedSince: "before",
+      trees: () => ({ read: () => ["  return 1;"], resolve: (f: string) => ({ path: f }) }),
+    },
+  )[0];
+  expect(reindented?.state).toBe("unanchored");
+
+  const crlf = checkCitations([cite({ start: 1, end: 1 })], () => ["one\r"], undefined, {
+    displacedSince: "before",
+    trees: () => ({ read: () => ["one"], resolve: (f: string) => ({ path: f }) }),
+  })[0];
+  expect(crlf?.state).toBe("unanchored");
+
+  // The negative of both: a genuine content change on the same line is still
+  // caught, so the fix is "compare normalised" and not "stop comparing".
+  const real = checkCitations([cite({ start: 1, end: 1 })], () => ["  return 2;"], undefined, {
+    displacedSince: "before",
+    trees: () => ({ read: () => ["  return 1;"], resolve: (f: string) => ({ path: f }) }),
+  })[0];
+  expect(real?.state).toBe("displaced");
+});
+
+/**
+ * **repo-50 gate 1, low.** A declaration cannot excuse `displaced`, so a
+ * record that declares one anyway has to be told it still fails, in words
+ * that name the bit it fails on — not the generic "does not fail", which was
+ * wrong here on the same exit-code contradiction repo-52 already fixed once
+ * for `unpinned-volatile`.
+ *
+ * Excusing it by declaration instead was tried and reverted (`FAILING`'s own
+ * docblock says why): the live case that seemed to need it, `repo-25`'s own
+ * `` `:443` ``, turned out to have `unpinned-volatile`'s one clean repair all
+ * along — a pin — once the declaration's own side effect surfaced, which is
+ * the other half of what this test pins: a declared `displaced` citation is
+ * always refused, never absorbed, whatever else it might resolve to.
+ */
+test("a declaration cannot excuse displaced, and the stale message says why", () => {
+  const citation = cite({ start: 1, end: 1 });
+  const declarations = extractDeclarations("<!-- citations: evidence a.ts:1 -->\n");
+
+  const results = checkCitations([citation], () => ["now"], undefined, {
+    displacedSince: "before",
+    trees: () => ({ read: () => ["changed"], resolve: (f: string) => ({ path: f }) }),
+  });
+  expect(results[0]?.state).toBe("displaced");
+
+  const { results: applied, stale } = applyDeclarations(results, declarations);
+  expect(applied[0]?.state).toBe("displaced");
+  expect(stale).toHaveLength(1);
+  expect(stale[0]?.reason).toMatch(
+    /is declared evidence, but it fails as displaced, which no declaration excuses/,
+  );
+  expect(stale[0]?.reason).not.toMatch(/does not fail/);
 });
 
 /**

@@ -199,12 +199,26 @@
  * inside a `<!-- citations: evidence -->` line is never extracted at all, so
  * there is nothing here for the flag to see.
  *
- * **Nothing is reported when the ref cannot supply a baseline.** A citation the
- * record gained after `<ref>` — the file did not reach that line yet, or the
- * bare name resolves to nothing there — is not "displaced": it simply postdates
- * the ref, and guessing at a verdict from a range that never existed is the same
- * mistake `--rev`'s own docblock refuses. Such a citation is left `unanchored`,
- * exactly as it always was.
+ * **Nothing is reported when the ref cannot supply a baseline** — the file did
+ * not reach that line yet, or the bare name resolves to nothing there. Guessing
+ * at a verdict from a range that never existed is the same mistake `--rev`'s own
+ * docblock refuses, so such a citation is left `unanchored`, exactly as it
+ * always was.
+ *
+ * **That is not the whole of "postdates the ref", and this used to claim it
+ * was.** A citation the *record* gained after `<ref>`, onto a line the *file*
+ * already had then, is a baseline the ref can supply — so it is compared, and
+ * reported if the text differs. Nothing here reads the record's own history, so
+ * there is no way to tell a citation written to describe the ref's tree
+ * (correctly `displaced` once that tree moves on) from one written fresh
+ * against the tip, whose match against the ref's older text is coincidence. The
+ * first is real, and measured rather than hypothetical: `dl-72`'s own record,
+ * which did not exist before its own branch, cites `compose.downloader.yaml:37`
+ * and `.github/workflows/downloader.yml:148` bare — both lines its own fix
+ * rewrote — and `--displaced-since 20eb8ba` (the commit before it merged)
+ * correctly flags both. The second is a false positive this mode cannot
+ * distinguish from the first. Read a `displaced` report on a citation newer
+ * than `<ref>` with that in mind, rather than as settled either way.
  *
  * `displaced` sets its own exit bit, unconditionally — unlike `unanchored`,
  * which needs `--require-anchors` to be fatal. There is no policy question here:
@@ -945,6 +959,25 @@ const STATES = /** @type {const} */ ([
  *
  * `evidence` is deliberately absent: a declared citation is not a failure, and
  * exit 0 is the whole point of declaring one.
+ *
+ * **`displaced` (128, repo-50) is the last bit a process exit code can carry,
+ * and that is a ceiling on this table rather than on the check.** A process
+ * exit code is one byte: `process.exitCode = 256` exits `0`, silently, which is
+ * how Node reports "no such code" for a value outside `0`-`255` — measured
+ * rather than assumed. So a ninth failure class needs a different mechanism
+ * (a second exit code, a JSON summary) rather than the next bit, `256`, which
+ * this table cannot use. **The existing bits already collide with a shell's own
+ * reading of a high exit code**, and this predates `displaced`: any code at or
+ * above `128` — `displaced` alone, or any combination that reaches it — reads
+ * to a POSIX shell as "terminated by signal `code - 128`", the convention a
+ * shell uses for a process a signal actually killed. Nothing here was
+ * signalled; `128` is `displaced`'s own bit, `129` is `displaced |
+ * unresolvable`, and so on. A CI step that greps `$?` against that convention
+ * rather than reading the `exitLine` this script prints would misname the
+ * failure — measured on `repo-21`'s historical run, which exits `131`
+ * (`displaced | moved | unresolvable`) and would read as `SIGQUIT` to a naive
+ * check. Read the `exitLine`, not the bare code, for the same reason the
+ * summary line exists at all.
  */
 export const EXIT = /** @type {const} */ ({
   unresolvable: 1,
@@ -992,7 +1025,12 @@ function checkDisplacement(refTree, c, content) {
 
   const now = content.slice(c.start - 1, c.end);
   const then = before.slice(c.start - 1, c.end);
-  const at = then.findIndex((line, i) => line !== now[i]);
+  // Compared normalised, the same collapse the printed message already uses
+  // (repo-50 gate 1, low): a re-indent or a line-ending change alone is not a
+  // citation reading something else, and comparing raw strings reported one as
+  // `displaced` with identical text printed on both sides of "before" and
+  // "now" — the exact tell that the comparison, not the message, was wrong.
+  const at = then.findIndex((line, i) => normalize(line) !== normalize(now[i] ?? ""));
   if (at === -1) return null;
 
   const lineNo = c.start + at;
@@ -1378,6 +1416,23 @@ export const isIndistinct = (r) =>
  * refusing it: an exit code a reader has no reason to doubt while a citation
  * fails under it. So it is refused instead, and the refusal is why the stale
  * message below has a branch of its own for this state.
+ *
+ * **`displaced` (repo-50) is absent for the identical reason, considered and
+ * rejected once already.** A `displaced` citation reads as though it always
+ * has the one clean repair `unpinned-volatile` has — repoint against the tree
+ * being committed, or pin to the commit it was true of — and an early version
+ * of this file excused it anyway, reasoning that an *illustrative* citation
+ * quoting a known false positive (a shorthand line number colliding with a
+ * backticked port, `extractCitations`'s own docblock names the collision) has
+ * no line left to repoint to. Measured against the live case that motivated
+ * it, `repo-25`'s own Review section, that reasoning did not survive contact:
+ * the citation still had a pin available — `` `:443` `` pinned to the commit
+ * the finding was written against reads there exactly what the reviewer's
+ * prose describes, permanently, same as `unpinned-volatile`'s one clean
+ * repair — so declaring it would have been the rubber stamp standing in for
+ * an edit that existed all along. `repo-14`'s own drift-demonstration
+ * citations resolved the same way, for the same reason. Left here as a record
+ * that the exception was tried, not only asserted against.
  */
 const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
 
@@ -1415,9 +1470,10 @@ const key = (file, start, end, rev) =>
  * edit is refused on the declaration bit while the citation goes on failing as
  * `moved`. A citation whose anchor is nowhere in the file may be either a
  * rewritten file or a fabricated anchor; telling those apart needs history,
- * and is left to the author. And `unpinned-volatile` (repo-52), for the same
- * reason as the second: the fix is a pin, and `FAILING`'s own docblock says
- * why leaving it excusable would be worse than refusing it outright.
+ * and is left to the author. And `unpinned-volatile` (repo-52) and `displaced`
+ * (repo-50), for the same reason as the second: the fix is a pin or a repoint,
+ * and `FAILING`'s own docblock says why leaving either excusable would be
+ * worse than refusing it outright.
  *
  * @param {ReturnType<typeof checkCitations>} results
  * @param {ReturnType<typeof extractDeclarations>} declarations
@@ -1467,9 +1523,11 @@ export function applyDeclarations(results, declarations) {
             ? `record line ${d.line}: "${d.text}" is declared evidence, but ${why} — that tree verifies it, so a declaration is not what it needs: repoint it, or pin it to the commit where it held`
             : match?.state === "unpinned-volatile"
               ? `record line ${d.line}: "${d.text}" is declared evidence, but it fails as unpinned-volatile, which no declaration excuses — pin it as file.ts@<rev>:120, or cite the page and the heading it sits under instead`
-              : match !== undefined
-                ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
-                : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
+              : match?.state === "displaced"
+                ? `record line ${d.line}: "${d.text}" is declared evidence, but it fails as displaced, which no declaration excuses — repoint it against the tree you are committing, or pin it to the commit it was true of, as file.ts@<rev>:120`
+                : match !== undefined
+                  ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
+                  : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
       };
     });
 

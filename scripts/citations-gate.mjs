@@ -508,6 +508,18 @@ export function findRecords(repo, pathspecs) {
  * An **ambiguous** name is still an error, and is reported as a failure: two
  * `## Review` sections in one record is a record to fix, not a scope to skip.
  *
+ * **Under `displacedSince`, extraction widens to the whole record** (repo-50
+ * gate 1, high). The Build's own question is "what did this branch displace,
+ * for the whole corpus", and every incident that motivated it — repo-38's Log,
+ * dl-57's Log — sat outside `## Review`. So a record with no matching section
+ * at all is no longer skipped when the flag is set, and a record that has one
+ * still has every citation *outside* it read. What changes is only which rule
+ * applies to what is read: inside the section (or always, when `section` is
+ * `null`), the full `FAILING` set governs, exactly as before; outside it, only
+ * `displaced` is fatal — an ordinary unanchored citation in a Log or a Why
+ * section is not new debt this flag created, and failing on it would flood
+ * every un-reviewed record in the corpus the moment the flag is passed.
+ *
  * @param {string} repo
  * @param {string} record
  * @param {string | null} section
@@ -517,7 +529,8 @@ export function findRecords(repo, pathspecs) {
  * @param {ReturnType<typeof makeTrees>} [trees] The commits pins name. Made per
  *   call when omitted; `gate` passes one for the whole run instead.
  * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
- *   passed straight through; omitted or null, nothing here changes.
+ *   passed straight through; omitted or null, nothing here changes except that
+ *   a record with no matching section is skipped exactly as it always was.
  */
 export function checkRecord(
   repo,
@@ -535,15 +548,27 @@ export function checkRecord(
   if (section !== null) {
     const sections = extractSections(markdown);
     const matches = sections.filter((s) => s.title.toLowerCase() === section.toLowerCase());
-    if (matches.length === 0) return { record, skipped: true };
-    try {
-      chosen = selectSection(sections, section);
-    } catch (error) {
-      return { record, skipped: false, error: /** @type {Error} */ (error).message };
+    if (matches.length === 0) {
+      // Under the flag this is not a skip — see the docblock above — but
+      // without it this is the ordinary "not gated yet" shape, unchanged.
+      if (displacedSince === null) return { record, skipped: true };
+    } else {
+      try {
+        chosen = selectSection(sections, section);
+      } catch (error) {
+        return { record, skipped: false, error: /** @type {Error} */ (error).message };
+      }
     }
   }
 
-  const inScope = (line) => chosen === null || (line >= chosen.start && line <= chosen.end);
+  // Whether a line sits where the gate's full rule set applies: everywhere,
+  // when no section was requested at all (corpus-wide mode); otherwise only
+  // inside the section that was actually found. Named apart from `inScope`
+  // below because the two answer different questions once `displacedSince`
+  // widens what is *read* without widening what is *enforced* everywhere.
+  const inFullScope = (line) =>
+    section === null || (chosen !== null && line >= chosen.start && line <= chosen.end);
+  const inScope = (line) => displacedSince !== null || inFullScope(line);
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
   // `requireClaudePins` is always on here, unconditionally, the same way
@@ -573,9 +598,18 @@ export function checkRecord(
   // predicate is imported rather than restated, so the number `citations.mjs`
   // prints beside "lines" is by construction the one this gate failed on — and
   // a self-citation, which no fragment can make distinct, fails both the same way.
-  const indistinct = requireDistinct ? results.filter(isIndistinct) : [];
+  // Scoped to `inFullScope` for the same reason the failing rule below is: an
+  // indistinct anchor outside the section is not a new defect the flag found.
+  const indistinct = requireDistinct
+    ? results.filter((r) => inFullScope(r.line) && isIndistinct(r))
+    : [];
   if (indistinct.length > 0) counts.indistinct = indistinct.length;
-  const failures = [...results.filter((r) => FAILING.has(r.state)), ...indistinct];
+  const failures = [
+    ...results.filter((r) =>
+      inFullScope(r.line) ? FAILING.has(r.state) : r.state === "displaced",
+    ),
+    ...indistinct,
+  ];
 
   return {
     record,
@@ -628,7 +662,14 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displac
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
-    if (!grandfathered.has(record)) {
+    // `displaced` is never absorbed by the grandfathered allowance (repo-50
+    // gate 1, med 1) — `EXIT.displaced`'s own docblock in citations.mjs says
+    // "unconditionally", and the debt list is the corpus's pre-existing
+    // unanchored backlog, not a budget for a displacement this very run
+    // measured. A record holding one fails outright, naming every failure it
+    // has, whatever its entry allows.
+    const displaced = (result.failures ?? []).some((f) => f.state === "displaced");
+    if (displaced || !grandfathered.has(record)) {
       failed.push(result);
       continue;
     }
