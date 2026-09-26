@@ -3,7 +3,7 @@ id: dl-70
 tool: downloader
 title: The SSRF guard still admits fe00::/9, between unique-local and link-local
 kind: fix
-status: ready
+status: done
 milestone: M5
 depends_on: [dl-63]
 ---
@@ -144,3 +144,30 @@ range if the registry says it is not a globally reachable allocation.
     `dl-31`, and dl-63's own Log at `:306`. None of them is under a `## Review`,
     and repointing history that no ticket asks to be repointed is not
     already-specified work.
+- 2026-09-26 — **Build step 1 is measured, and the range checks out.** The
+  owner opened the container firewall; the orchestrator relayed that the
+  owner chose this over waiving the line or allowlisting `iana.org`. So the
+  entry above, which says this ticket stays `ready`, describes `e1fcc47` and
+  is superseded here. Fetched at 2026-09-26 21:29 UTC:
+  - `https://www.iana.org/assignments/ipv6-address-space/ipv6-address-space-1.csv`
+    returned HTTP 200, 2093 bytes, **20 data rows** (counted by a quote-aware
+    CSV parse, since the `2000::/3` notes span five lines). The row as it
+    reads, with an empty Notes column:
+    `fe00::/9,Reserved by IETF,[RFC3513][RFC4291],`. Its neighbours are
+    `fc00::/7,Unique Local Unicast,[RFC4193]` and
+    `fe80::/10,Link-Scoped Unicast,[RFC3513][RFC4291]`.
+  - `https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry-1.csv`
+    returned HTTP 200, 2289 bytes, **25 data rows**, the same count dl-63
+    measured. **None of them lies inside `fe00::/9`.** The same parse,
+    filtering on a first group from `fe00` to `fe7f`, returned `[]`. The
+    nearest rows are `fc00::/7` (Unique-Local, Globally Reachable `False [4]`)
+    and `fe80::/10` (Link-Local Unicast, Globally Reachable `False`). So
+    nothing in the range is a globally reachable allocation.
+  - By the rule dl-63 applied, the range is blocked: it is reserved, and
+    nothing inside it is reachable. The `BLOCKED_V6` row comment now names
+    the two RFCs the row cites. `status: done`.
+  - What the brief had wrong: it asked for the row's "notes", and there are
+    none. It named one RFC to record, and the row cites two, RFC 3513 and the
+    RFC 4291 that obsoletes it. And the measurement needed a host that is not
+    in `.devcontainer/allowed-domains.txt`, which the brief anticipated but
+    no subagent can act on.

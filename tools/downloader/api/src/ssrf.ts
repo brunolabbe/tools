@@ -219,7 +219,7 @@ const BLOCKED_V6: ReadonlyArray<readonly [readonly number[], number]> = (
     ["3fff::", 20], // documentation (RFC 9637)
     ["5f00::", 16], // segment-routing SIDs (RFC 9602)
     ["fc00::", 7], // unique-local
-    ["fe00::", 9], // "Reserved by IETF", IANA IPv6 address-space registry (dl-70)
+    ["fe00::", 9], // "Reserved by IETF" (RFC 3513, RFC 4291), IANA address-space registry
     ["fe80::", 10], // link-local
     ["fec0::", 10], // site-local, deprecated (RFC 3879)
     ["ff00::", 8], // multicast
