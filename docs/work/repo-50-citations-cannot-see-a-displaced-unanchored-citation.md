@@ -132,6 +132,28 @@ New, in lines this round touched:
 - **pins** · `91c117b` and `fdafd1a` are both ancestors of `origin/main` (`git merge-base --is-ancestor`).
 - **gates** · `npm run check` exit 0; the two specs 144 of 144; `npx vitest run --project repo` 486 of 486; `node scripts/citations-gate.mjs --against origin/main` exit 0, 106 enforced; `--displaced-since origin/main` exit 0, 177 enforced; `node scripts/preflight.mjs --base origin/main` exit 0.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-26 · `cf64d30..5ad3286` (2eded7d, then 5ad3286, Log-only), tip `5ad3286`; base kept at `a1a417b`, while `origin/main` moved to `e50cf81` (#290) · re-gate of the round only · Opus 5.5
+
+Gate 2 findings:
+
+- **med** (repo-25 reviewer quotation) · **resolved as the owner decided, option (b)** — `git diff origin/main` and `git diff a1a417b` on the repo-25 record are both empty; `node scripts/citations-gate.mjs --displaced-since origin/main` exits 1 with repo-25 as its only failure (1 displaced), both at this tip and on a scratch merge of it into `e50cf81`. The parser gap is filed as repo-60; two lows on its brief below.
+- **med** (record with no Review section untested) · **fixed** — `scripts/test/citations-gate.test.ts:922 "reads a record with no Review section at all, under displacedSince"`; making the skip unconditional reds it, 1 of 45.
+- **low** (summary worded for Review-only scope) · **fixed** — the debt tally is locked at `scripts/test/citations-gate.test.ts:985 "expect(flagged.debt).toEqual({ unanchored: 1 });"`, and reverting it to sum the whole read reds 1 of 45; the flagged run now holds 2 unresolvable and 19 unanchored rather than 6, 8 and 51. The header half has no test, below.
+- **low** (stale Log declaration fatal under the flag) · **fixed** by making the docblock match the code, and locked at `scripts/test/citations-gate.test.ts:1000 "a stale evidence declaration in a Log fails the record under displacedSince too"`. A defensible reading, and the behaviour the plain gate never sees.
+- **low** (dl-72 label) · **fixed** — it now names `6f1f6bf`, where gate 1 measured the same 2 displaced.
+- **low** (Log strike claim) · **half fixed, half withdrawn.** The Log now says which figures were struck and which paragraphs replaced. **WITHDRAWN — do not cite:** the Gate 2 clause "and `records.md` has no such rule". It is false: `.claude/skills/orchestrate-tickets/reference/records.md@a1a417b:35 "withdrawn in place, never deleted"` states it, for a claim that reached a record. That gate searched `records.md` for the word struck and not for withdrawn. The builder then relayed the false clause into the repo-50 Log, which is the last low below.
+
+New, in lines this round touched:
+
+- **low** · Two findings, both in the repo-60 brief. `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md:43 "Reproduced at"` names `cf64d30`, but the repo-25 record as committed there carries the pin and reports exit 0 (run with `--rev cf64d30` on the copy committed there); the quoted output needs the restored record over the cf64d30 scripts. It reproduces at `5ad3286`, exit 128, 1 displaced, with the tip line reading "* verdict." rather than the quoted "*". And `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md:36 "owner chose instead to keep"` credits gate 2 with refusing the pin; gate 2 recommended keeping it, and the owner chose the restoration, as the repo-60 Log itself says correctly.
+- **low** · The new header branch, `scripts/citations-gate.mjs:828 "every section (displaced fatal outside"`, has no test: forcing the old wording under the flag leaves every spec green, and no spec searches for the new string.
+- **low** · The historical-check entry of the repo-50 Log now carries a parenthetical crediting gate 2 with the correction that the practice lives in `history.md` rather than `records.md`, and reads the `records.md` rule as scoped to gate records. The first is the withdrawn clause above; the second is one reading of a rule whose sentence says a record. **Open decision**: (a) restore the replaced method and "Not 24" paragraphs marked WITHDRAWN beneath the new ones, as that rule asks, and drop the attribution — recommended; (b) keep the replacement and only drop the attribution to gate 2.
+- **findings** · hunt over the round returned 4 (the first bullet is two); 4 carried, 0 dropped.
+- **checked, no finding** · repo-52: two coordinates re-pinned in its Review (1351 to 1352 twice, 1312 to 1313) and one Log entry added, no reviewer word changed. repo-60 id: `node scripts/next-id.mjs repo --rev origin/main` claims it for this branch only and answers repo-61 as next free, and no open pull request claims it. Scratch merge `5bdc63c` of `5ad3286` into `e50cf81` merged cleanly.
+- **gates** · `npm run check` exit 0; the two specs 147 of 147; `npx vitest run --project repo` 489 of 489; `node scripts/citations-gate.mjs --against origin/main` exit 0 at the tip and exit 0 on the scratch merge, 106 enforced, 0 raised; `node scripts/preflight.mjs --base origin/main` exit 0.
+
 ## Log
 
 - 2026-09-20 — Filed from the third gate on `orchestrate-skill-sweep`, on the
