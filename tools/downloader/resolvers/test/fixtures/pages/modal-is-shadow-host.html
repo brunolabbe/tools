@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog that is itself the shadow host of its player</title>
+  </head>
+  <body>
+    <h1>Dialog that is itself the shadow host of its player</h1>
+    <!-- dl-69 gate round 1, med 1: a custom-element lightbox where the
+         `role="dialog"` element itself carries the open shadow root (a
+         `<slot>` projects the light-DOM close button, the video is a pure
+         shadow child) — not a case of a video nested *inside* the dialog,
+         which `modal-shadow-player.html` already covers. `ALL_MEDIA_FN`
+         walking only `container`'s descendants (never `container.shadowRoot`
+         itself) missed this shape. -->
+    <div
+      id="dlg"
+      role="dialog"
+      aria-modal="true"
+      style="position: fixed; top: 40px; left: 40px; width: 640px; height: 400px; background: #fff"
+    >
+      <button aria-label="Close">×</button>
+    </div>
+    <script>
+      (function () {
+        var root = document.getElementById("dlg").attachShadow({ mode: "open" });
+        root.appendChild(document.createElement("slot"));
+        var video = document.createElement("video");
+        video.id = "sv";
+        video.width = 640;
+        video.height = 360;
+        root.appendChild(video);
+      })();
+    </script>
+  </body>
+</html>

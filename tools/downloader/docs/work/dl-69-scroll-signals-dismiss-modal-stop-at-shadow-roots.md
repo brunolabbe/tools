@@ -263,8 +263,8 @@ resolver tier, as the ticket's Build step 1 asked. Committed as
 `provoke.test.ts` driving `readSignals` + `classifyFailure` directly, per
 Build step 4.
 
-**`SCROLL_SCRIPT`, measured: the missing scroll was cosmetic, not
-load-bearing, for the case the Why section raised.** Built a scratch fixture
+**`SCROLL_SCRIPT`, measured in two directions — cosmetic for the click
+itself, load-bearing for a lazily-mounted player.** Built a scratch fixture
 (reverted, not committed): a click-only shadow-root player, identical in
 shape to `shadow-player.html`, pushed 6000px below the initial viewport.
 Ran the resolver end to end against it twice, swapping only
@@ -275,20 +275,30 @@ returned the stream** (`http://127.0.0.1:<port>/media/related/master.m3u8`,
 with `/media/related/master.m3u8` and `v720.m3u8` both requested). Reading
 Playwright's own `_performPointerAction` in
 `node_modules/playwright-core/lib/coreBundle.js` explains why: it calls
-`doScrollIntoView` unconditionally before every click — a step the `force`
-option does not skip (`force` only skips the `visible`/`stable`/`enabled`
-checks, listed separately in the same function) — so `clickChosenVideo`'s own
-click already scrolls its target into view with no help from `SCROLL_SCRIPT`
-at all. The gap is real only for a page that lazily _mounts_ its player on
-scroll (an `IntersectionObserver`-gated component, say) rather than merely
-positioning an already-mounted one off-screen — not measured, since it needs
-a different fixture shape than the Why section's off-screen case. No
-regression test added for the case measured here: there is no behavioural
-difference for it to protect, and dl-61's existing shadow-root-click tests
-already cover the general "shadow-root player gets clicked" path. The fix
-itself (Build step 2's literal text) is applied regardless, since the ticket
-asked for the shadow-piercing selector on its own merits, independent of
-this measurement.
+`doScrollIntoView` unconditionally before every click — a step `force` does
+not skip (`force` skips the `visible`/`stable`/`enabled` checks _and_ the
+hit-target check, all listed separately from the scroll in the same
+function) — so `clickChosenVideo`'s own click already scrolls its target
+into view with no help from `SCROLL_SCRIPT` at all.
+
+**Corrected in gate round 1 (med 2): the lazy-mount case is real, and was
+measured, not left unmeasured.** The gate built a shadow-root shell 6000px
+down, named with a `player`-ish class, that requests its manifest only once
+an `IntersectionObserver` reports it visible — the shape a real lazy-mount
+library uses. Reproduced independently (`npx vitest run
+tools/downloader/resolvers/test/browser/zz-gate-dl69.test.ts -t "M7c"`,
+scratch copy of the gate's own spec): with the pre-dl-69 `provoke.ts`
+(`git show a1a417b:...provoke.ts`) swapped in, `{"scrollY":800,"mounted":false}`,
+master not requested; with the current tip, `{"scrollY":5656,"mounted":true}`,
+master requested — matching the gate's own numbers. The shadow-piercing
+`SCROLL_SCRIPT` already fixed this (it matches the shell on its class name,
+`<video>` never having mounted yet, and scrolls to it), so the fix needed no
+further code change, only a committed regression test:
+`tools/downloader/resolvers/test/fixtures/pages/shadow-player-lazy-mount.html`
+and `provoke.test.ts`'s "SCROLL_SCRIPT reaches a shadow root, for a player
+that mounts lazily on scroll" — confirmed red against the pre-fix selector
+line, green against the fix. The stale comment above `SCROLL_SCRIPT` (it said
+this case was "not measured here") is corrected to describe both directions.
 
 **`dismissModal`, measured: load-bearing, a real defect, now fixed.** Built
 `tools/downloader/resolvers/test/fixtures/pages/modal-shadow-player.html`: a
@@ -301,6 +311,72 @@ section's concern. With the fix
 (`(ALL_MEDIA_FN)('video', container).length > 0`) it returns `0`: the guard
 fires, the layer is left alone. Committed as a permanent test in
 `provoke.test.ts`.
+
+**2026-09-26 — gate round 1 (ticket-reviewer-opus, Opus 5.5) fixes.** CONCERNS,
+2 med + 6 low + 1 dropped. Owner decision on the first med's open decision:
+fix on this branch (2026-09-26, options were fix here or file a `dl-` ticket
+carrying the reproduction; the owner was told the branch does not introduce
+the reproduced case — the base returns 1 too — only that the docstring reads
+as covering it).
+
+- **med 1 (`dismissModal` still misses one shape)** — reproduced first,
+  independently: copied the gate's own scratch spec
+  (`zz-gate-dl69.test.ts`) into the tree and ran it at `7c02084` —
+  `dismissModal returned 1` for "M2 container is itself the shadow host of
+  its video" (a custom-element lightbox where the `role="dialog"` element is
+  itself the shadow host of its `<video>`, a `<slot>` projecting the light-DOM
+  close button), matching the gate's own number. `ALL_MEDIA_FN` walks a
+  node's descendants and their shadow roots, but never the starting node's
+  _own_ `.shadowRoot` — so a `container` that is itself a shadow host was
+  never checked. Fixed by walking `start.shadowRoot` once, separately from
+  `walk`, after `walk(start)`. Re-ran the same scratch case after the fix:
+  `dismissModal returned 0`. The M1 scope property (a shadow video _outside_
+  the dialog must not block dismissal) still returns `1`, reproduced both
+  before and after. Both shapes committed as permanent tests in
+  `provoke.test.ts`, with new fixtures `modal-is-shadow-host.html` and
+  `modal-shadow-video-outside.html`; confirmed red on the pre-fix walk,
+  green after.
+- **med 2 (`SCROLL_SCRIPT` lazy-mount case)** — corrected above, in the
+  `SCROLL_SCRIPT` paragraph, and as a committed test.
+- **low (hasPlayerElement assertion too loose)** — `expect(verdict.code).not.toBe("AUTH_REQUIRED")`
+  tightened to `.toBe("NO_MEDIA_FOUND")`, the one verdict `classify.ts`
+  documents as falling through the chain. Still green.
+- **low (closed-root limitation undocumented)** — added to both
+  `hasPlayerElement`'s comment and `MARK_CLOSE_SCRIPT`'s docstring: a closed
+  shadow root is invisible to page script, so a closed-root player is not
+  reachable by either check, matching `ALL_MEDIA_FN`'s own existing statement
+  about the chooser. Not fixable — there is nothing to query — so documented
+  rather than changed, per the gate's own finding.
+- **low (two backslash-escaped backticks)** — `\`force\``and two other
+instances in plain`//`comments (not template literals, so the escape was
+wrong and rendered literally) at what were`provoke.ts:365`and`:438`,
+corrected to `` `force` `` etc.
+- **low (`ALL_MEDIA_FN` docstring's caller list wrong)** — corrected: the
+  pre-existing callers are `CHOOSE_VIDEO_FN`, `CHOOSE_VIDEO_INDEX_SCRIPT`,
+  `UNMARK_VIDEO_SCRIPT`, `PLAY_SCRIPT` and `METADATA_SCRIPT`'s audio fallback
+  (all passing no `root`); `SCROLL_SCRIPT` and `SIGNALS_SCRIPT`'s
+  `hasPlayerElement` are dl-69's own new callers, not pre-existing ones.
+- **low (dl-55's merged-record repair reworded more than coordinates)** —
+  restored the original wording at dl-55's Review record lines (record text,
+  not code) describing the `328→373→386→398` chain and dl-68's
+  non-changing append, appending only the new `→422` hop and its
+  attribution to dl-69's reorder, rather than crediting the whole chain to
+  dl-69 or dropping the `386` step.
+- **low (Log's description of what `force` skips was incomplete)** —
+  corrected above, in the `SCROLL_SCRIPT` paragraph: `force` also skips the
+  hit-target check, not only visible/stable/enabled.
+- **dropped (hasPlayerElement now also counts a shadow-root class/id
+  match)** — not a defect, consistent with the light-DOM behaviour already
+  in place; no change.
+
+Re-verified after all of the above: `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts` — 7 of 7 pass (four
+from round 1 plus the M2, M1-scope and lazy-mount tests this round adds).
+`npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
+— 50 of 50 pass, unchanged. `npm run check` — exit 0. `npx vitest run
+tools/downloader/resolvers` — command and count in the round-2 Verification
+paragraph below. `node scripts/citations-gate.mjs --against origin/main` —
+also below, run as the last action before commit.
 
 **Fold-in considered, declined.** dl-68's own dropped finding (this ticket's
 origin) named exactly these three call sites and nothing else; no other
@@ -332,6 +408,21 @@ guard against any existing modal fixture). `npm run check` — exit 0.
 tests passed, 2 skipped (1552), exit 0 (run once, before the final docstring
 line-wrap fix, which touches only a comment; re-run at the narrower specs
 above after it, both green).
+
+**Round-2 verification (gate round 1 fixes), commands run and read
+directly.** `npm run check` — exit 0. `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts` — 7 of 7 pass (3
+tests this round adds: M2, the M1-scope assertion, and the SCROLL_SCRIPT
+lazy-mount test).
+`npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
+— 50 of 50 pass, unchanged. `npx vitest run tools/downloader/resolvers` — 18
+files, 456 of 456 (453 from the gate's own round-1 count plus the 3 this
+round adds). `node scripts/citations-gate.mjs --against origin/main`, run as
+the last action before `git add` — `106 enforced, 0 failing; 7 grandfathered`,
+exit 0. This round's own edits moved 9 more citations across dl-55's and
+dl-68's merged Review records (the same nine coordinates round 1 had already
+moved once, moved a second time by this round's docstring edits); repointed
+the same way, anchor text unchanged, no verdict changed.
 
 **What the ticket had wrong.** Nothing factual — the Why section's
 reproduction and the "unmeasured" labels both held. What it did not say: that

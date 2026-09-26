@@ -104,13 +104,24 @@ const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='tru
  * prevent.
  *
  * **Takes an optional `root` too** (dl-69), defaulting to `document` at every
- * call site that existed before it — `CHOOSE_VIDEO_FN`, `PLAY_SCRIPT`,
- * `METADATA_SCRIPT`'s audio fallback, `SCROLL_SCRIPT` and `SIGNALS_SCRIPT`'s
- * `hasPlayerElement` all still pass none. `MARK_CLOSE_SCRIPT`'s close-layer
- * guard is the one caller that needs a narrower start: it has to walk
- * `container`, the layer under consideration, not the whole document — a
- * shadow-root video belonging to some other part of the page must never
- * excuse *this* layer's close control from being pressed.
+ * call site that already existed — `CHOOSE_VIDEO_FN`, `CHOOSE_VIDEO_INDEX_SCRIPT`,
+ * `UNMARK_VIDEO_SCRIPT`, `PLAY_SCRIPT` and `METADATA_SCRIPT`'s audio fallback
+ * all still pass none. `SCROLL_SCRIPT` and `SIGNALS_SCRIPT`'s
+ * `hasPlayerElement` are dl-69's own new callers, and pass none too.
+ * `MARK_CLOSE_SCRIPT`'s close-layer guard is the one caller that needs a
+ * narrower start: it has to walk `container`, the layer under
+ * consideration, not the whole document — a shadow-root video belonging to
+ * some other part of the page must never excuse *this* layer's close
+ * control from being pressed.
+ *
+ * **`walk`'s own recursion never revisits its starting node** (gate round 1,
+ * med 1): it queries `node`'s descendants and descends into *their* shadow
+ * roots, but a node passed in as `root` is never itself one of those
+ * descendants. A custom-element lightbox where the `role="dialog"` element
+ * is itself the shadow host of its `<video>` (a `<slot>` projecting the
+ * light-DOM close button) made `container` exactly such a node, and the
+ * guard above missed it. `root.shadowRoot` is checked once, separately from
+ * `walk`, to cover it.
  */
 const ALL_MEDIA_FN = `function (selector, root) {
   var out = [];
@@ -122,7 +133,9 @@ const ALL_MEDIA_FN = `function (selector, root) {
       if (all[j].shadowRoot) walk(all[j].shadowRoot);
     }
   };
-  walk(root || document);
+  var start = root || document;
+  walk(start);
+  if (start.shadowRoot) walk(start.shadowRoot);
   return out;
 }`;
 
@@ -147,7 +160,13 @@ const ALL_MEDIA_FN = `function (selector, root) {
  * lightbox, and closing that closes the thing this tier exists to watch. The
  * check is shadow-piercing (dl-69, `ALL_MEDIA_FN` scoped to `container`): a
  * player component that keeps its `<video>` in an open shadow root is still
- * "holding" one, and the layer around it still gets left alone.
+ * "holding" one, whether that root sits on a descendant of `container` or,
+ * a custom-element lightbox's own shape, on `container` itself (gate round
+ * 1, med 1) — either way the layer around it still gets left alone. A
+ * *closed* shadow root is invisible to this check the same way it is to the
+ * chooser (`ALL_MEDIA_FN`'s own docstring); there is nothing to query, so a
+ * closed-root player still loses its lightbox (gate round 1, low; not
+ * fixable here).
  *
  * Returns `marked`, `dialog` (a semantic dialog with no close control this
  * recognises, which earns an Escape), or `none`.
@@ -360,16 +379,27 @@ const PLAY_TEXT =
   /^\s*(?:play|watch|watch now|start|play video|lecture|abspielen|reproducir|riproduci|afspelen)\s*$/i;
 
 /**
- * Shadow-piercing since dl-69, which also measured what the gap was worth:
- * Playwright's own click action scrolls its own target into view before
- * clicking it regardless of \`force\` (a step separate from the actionability
- * checks \`force\` skips), so \`clickChosenVideo\`'s click on a shadow-root
- * player already landed with no help from this scroll at all — reproduced
- * against a click-only shadow-root player pushed 6000px below the initial
- * viewport, where the light-DOM-only selector (before this fix) never found
- * anything to scroll to and the click still started the stream. This walk's
- * own scroll matters for a page that mounts its player lazily on scroll
- * (not measured here), never for the click itself.
+ * Shadow-piercing since dl-69, which also measured what the gap was worth,
+ * in two directions.
+ *
+ * **Cosmetic for the click itself.** Playwright's own click action scrolls
+ * its own target into view before clicking it regardless of `force` (a step
+ * separate from the actionability checks `force` skips), so
+ * `clickChosenVideo`'s click on a shadow-root player already landed with no
+ * help from this scroll at all — reproduced against a click-only shadow-root
+ * player pushed 6000px below the initial viewport, where the light-DOM-only
+ * selector (before this fix) never found anything to scroll to and the click
+ * still started the stream.
+ *
+ * **Load-bearing for a lazily-mounted player** (gate round 1, med 2): a
+ * shell that requests its manifest only once an `IntersectionObserver`
+ * reports it visible, the shape a real lazy-mount library uses, and named
+ * with a `player`-ish class the way a real component would be. With the
+ * shell 6000px down and inside an open shadow root, the light-DOM-only
+ * selector never matched it, the page never scrolled, the observer never
+ * fired and the manifest was never requested; the shadow-piercing selector
+ * matches the shell on its class name alone (no `<video>` has mounted yet)
+ * and scrolls to it, which is what triggers the fetch.
  */
 const SCROLL_SCRIPT = `(() => {
   var el = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]')[0];
@@ -433,12 +463,18 @@ const METADATA_SCRIPT = `(() => {
   };
 })()`;
 
-// `hasPlayerElement` feeds `classify.ts`'s \`loginForm\` test (\`hasPasswordInput
-// && !hasPlayerElement\`), and has to be shadow-piercing for the same reason
-// \`CHOOSE_VIDEO_FN\` is (dl-61, dl-68): a page with an unrelated password field
+// `hasPlayerElement` feeds `classify.ts`'s `loginForm` test (`hasPasswordInput
+// && !hasPlayerElement`), and has to be shadow-piercing for the same reason
+// `CHOOSE_VIDEO_FN` is (dl-61, dl-68): a page with an unrelated password field
 // and a real player hidden in an open shadow root is not a login wall
-// (dl-69's reproduction — \`document.querySelector\` missed the shadow-root
-// video and the page was misclassified \`AUTH_REQUIRED\`).
+// (dl-69's reproduction — `document.querySelector` missed the shadow-root
+// video and the page was misclassified `AUTH_REQUIRED`).
+//
+// A *closed* shadow root inherits the same blind spot `ALL_MEDIA_FN`'s own
+// docstring names for the chooser: invisible to page script, so a
+// closed-root player still reads `hasPlayerElement: false` and a page
+// carrying one alongside an unrelated password field is still misclassified
+// (gate round 1, low; not fixable here — there is nothing to query).
 const SIGNALS_SCRIPT = `(() => {
   var body = document.body;
   var text = body ? (body.innerText || body.textContent || '') : '';

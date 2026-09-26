@@ -11,7 +11,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { classifyFailure } from "../../src/browser/classify.ts";
 import { BrowserPool } from "../../src/browser/pool.ts";
-import { dismissModal, readMetadata, readSignals } from "../../src/browser/provoke.ts";
+import {
+  dismissModal,
+  provokePlayback,
+  readMetadata,
+  readSignals,
+} from "../../src/browser/provoke.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
 
@@ -108,8 +113,12 @@ describe("hasPlayerElement reaches a shadow root (dl-69)", () => {
     // `classifyFailure` would call this AUTH_REQUIRED (`reason: "login-form"`),
     // which stops the resolver chain outright — the wrong answer for a page
     // that also carries a real player, just not in the light DOM.
+    // `classify.ts`'s own doc: only `NO_MEDIA_FOUND` falls through to the next
+    // resolver tier, so that is the one non-`AUTH_REQUIRED` verdict this test
+    // may accept — `not.toBe("AUTH_REQUIRED")` alone would also pass for
+    // another chain-stopping code (gate round 1, low).
     expect(signals.hasPlayerElement).toBe(true);
-    expect(verdict.code).not.toBe("AUTH_REQUIRED");
+    expect(verdict.code).toBe("NO_MEDIA_FOUND");
   });
 });
 
@@ -135,5 +144,88 @@ describe("dismissModal's close-layer guard reaches a shadow root (dl-69)", () =>
     // the guard would not fire, and the close button would be pressed —
     // dismissing the lightbox that holds the real player (dl-69's Why).
     expect(clicked).toBe(0);
+  });
+
+  test("leaves a dialog alone when the dialog itself is the shadow host of its video", async () => {
+    const clicked = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/modal-is-shadow-host.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          return await dismissModal(page.mainFrame(), { timeoutMs: 1500, scriptable: true });
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    // `ALL_MEDIA_FN` walked only `container`'s descendants, never
+    // `container.shadowRoot` itself — so a custom-element lightbox whose
+    // `role="dialog"` element is itself the shadow host (a `<slot>`
+    // projecting the light-DOM close button, the video a pure shadow child)
+    // was missed and its close control pressed (gate round 1, med 1).
+    expect(clicked).toBe(0);
+  });
+
+  test("still closes a dialog whose only video is an unrelated shadow root elsewhere on the page", async () => {
+    const clicked = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/modal-shadow-video-outside.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          return await dismissModal(page.mainFrame(), { timeoutMs: 1500, scriptable: true });
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    // A shadow-root video with nothing to do with the dialog must never
+    // excuse the dialog's own close control from being pressed (gate round
+    // 1, med 1's scope check).
+    expect(clicked).toBe(1);
+  });
+});
+
+describe("SCROLL_SCRIPT reaches a shadow root, for a player that mounts lazily on scroll (dl-69 gate round 1, med 2)", () => {
+  test("requests the manifest once the off-screen shadow-root shell scrolls into view", async () => {
+    server.requests.length = 0;
+    const { mounted } = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/shadow-player-lazy-mount.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          await provokePlayback(page, {
+            deadline: Date.now() + 15_000,
+            signal: new AbortController().signal,
+            confirmAge: false,
+          });
+          return { mounted: await page.evaluate("window.scrollY > 0") };
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    // `document.querySelector` never finds the shell (it lives in an open
+    // shadow root), so the old `SCROLL_SCRIPT` never scrolled to it and the
+    // page's own `IntersectionObserver` never fired: no scroll, no manifest
+    // request. The shadow-piercing walk matches on the shell's own
+    // `player-shell` class and scrolls to it, which is what triggers the
+    // fetch below.
+    expect(mounted).toBe(true);
+    expect(server.requests).toContain("/media/related/master.m3u8");
   });
 });
