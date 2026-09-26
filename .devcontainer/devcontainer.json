@@ -15,7 +15,7 @@
     "args": {
       // Keep in step with `playwright` in package-lock.json.
       "PLAYWRIGHT_VERSION": "1.62.1",
-      "YTDLP_VERSION": "2025.09.26",
+      "YTDLP_VERSION": "2026.08.19",
       "NODE_MAJOR": "22",
       // The container user's ids. They must equal the owner of the checkout on
       // the host, because the workspace is a bind mount from a Linux

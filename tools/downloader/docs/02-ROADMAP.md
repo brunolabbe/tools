@@ -56,14 +56,25 @@ is what makes the goal
 reachable; the extractor tier is a _speed optimisation layered on top of it_, and
 that ordering matters:
 
-- **yt-dlp is never a dependency.** If the binary is absent, its resolver's
-  `canHandle()` returns false and every request falls through to the sniffer.
-  The system is fully functional with `ENABLE_YTDLP_RESOLVER=false` — just
-  slower on well-known sites. Any agent that lets a missing binary produce an
-  error instead of a fallthrough has introduced a bug.
-- **Coverage never depends on extractor maintenance.** When an extractor breaks
-  after a site redesign — which happens constantly — that site degrades to the
-  sniffer path rather than going dark.
+- **A missing yt-dlp is a fallthrough, never an error.** If the binary is
+  absent, its resolver's `canHandle()` returns false and every request falls
+  through to the sniffer. Any agent that lets a missing binary produce an error
+  instead of a fallthrough has introduced a bug.
+- **But yt-dlp is not optional for coverage, and this page used to say it
+  was.** It read "the system is fully functional with
+  `ENABLE_YTDLP_RESOLVER=false` — just slower on well-known sites", and for
+  YouTube that is false: with the tier off, a watch page ends in
+  `NO_MEDIA_FOUND` after both the sniffer and the direct tier come back empty
+  ([dl-72](./work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md),
+  measured 2026-09-22). The released image had shipped without the binary on
+  the strength of that sentence. **YouTube needs yt-dlp**, so the image installs
+  it by default and a scheduled workflow keeps its pin current — a stale pin
+  fails exactly like a missing binary.
+- **Coverage depends on extractor maintenance less, not never.** When an
+  extractor breaks after a site redesign — which happens constantly — a site
+  the sniffer can read degrades to the sniffer path rather than going dark. A
+  site it cannot read, YouTube among them, goes dark until the pin moves, which
+  is why the pin is moved by a workflow rather than by memory.
 
 Everything below assumes Plan B.
 

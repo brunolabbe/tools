@@ -33,9 +33,12 @@ Resolvers are tried in priority order and the first usable answer wins.
 
 The **Playwright sniffer is the foundation** — it works on sites nobody has ever
 written code for, which is what "any website" actually requires. The `yt-dlp`
-tier in front of it is purely a fast path for the ~1800 sites it has extractors
-for: better metadata, ~2 s instead of ~15 s. It is optional by design, and the
-service is fully functional without it. An extractor-only tool was considered and
+tier in front of it is mainly a fast path for the ~1800 sites it has extractors
+for: better metadata, ~2 s instead of ~15 s. A missing binary is a fallthrough
+rather than an error, but it is not optional for coverage: **YouTube needs
+yt-dlp**, because the sniffer finds no video on a YouTube page
+([dl-72](./docs/work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md)).
+The image ships it. An extractor-only tool was considered and
 ruled out — on an unknown site its coverage is not degraded but zero. See
 [docs/02-ROADMAP.md](./docs/02-ROADMAP.md).
 
@@ -112,7 +115,9 @@ Settings are environment variables, listed with their defaults in
 change in the shell.
 
 Requires Node ≥ 22. `ffmpeg` ships bundled via `ffmpeg-static`; `yt-dlp` is
-optional and the system degrades to browser-sniffing without it.
+not bundled for local runs — without it requests fall through to the browser
+sniffer, which works for most sites and not for YouTube. The version the image
+ships is `YTDLP_VERSION` in [`Dockerfile`](./Dockerfile).
 
 The UI defaults to a **mocked** API in development, so it runs with no backend
 at all — copy `web/.env.example` to `web/.env.local` to point it at a running

@@ -87,12 +87,27 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Optional, and off by default: yt-dlp is a latency optimisation, never a
-# dependency. Without it every request falls through to the browser sniffer and
-# still works — see tools/downloader/docs/02-ROADMAP.md. Build with
-# `--build-arg INSTALL_YTDLP=true` to include it.
-ARG INSTALL_YTDLP=false
-ARG YTDLP_VERSION=2025.09.26
+# yt-dlp, installed by default, because some sites cannot be resolved without
+# it. The browser sniffer covers pages nobody has written an extractor for, but
+# it does not cover YouTube: with this tier off, a YouTube watch page ends in
+# NO_MEDIA_FOUND after the sniffer and the direct tier both come back empty.
+# Until dl-72 this defaulted to `false` on the claim that the sniffer "still
+# works", no build passed `true`, and the released image found no video on
+# YouTube at all.
+#
+# The default is what ships: `release.yml` passes no build-args, and the
+# pull-request gate in `.github/workflows/downloader.yml` and
+# `compose.downloader.yaml` pass none either, so all three build this same
+# image. `--build-arg INSTALL_YTDLP=false` still exists for a local build with
+# no route to GitHub; `tools/downloader/api/test/ytdlp-in-the-image.test.ts`
+# fails if any workflow or compose file uses it.
+#
+# The pin is moved by `.github/workflows/ytdlp-bump.yml`, which opens a pull
+# request when yt-dlp publishes a release — a stale pin fails the same way a
+# missing binary does (2025.09.26 stopped resolving YouTube). The same test
+# holds every YTDLP_VERSION in the repo to one value.
+ARG INSTALL_YTDLP=true
+ARG YTDLP_VERSION=2026.08.19
 RUN if [ "${INSTALL_YTDLP}" = "true" ]; then \
   curl -fsSL -o /usr/local/bin/yt-dlp \
   "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \

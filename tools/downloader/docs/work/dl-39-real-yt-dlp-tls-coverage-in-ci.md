@@ -214,3 +214,13 @@ was chosen, so there is one line and it is met:
   by the documented union of two lists, alongside
   [dl-38](./dl-38-tls-rejection-log-does-not-track-successes.md) — see that
   ticket's Log for the check.
+
+- **2026-09-22** — **The reopening trigger above has fired.**
+  [dl-72](./dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md)
+  ships yt-dlp in every released image, because the sniffer cannot resolve
+  YouTube. It also adds a scheduled bump workflow, so the version now changes
+  without anyone re-running the manual measurement. The gap this ticket closed
+  on cost is reopened as
+  [dl-73](./dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md).
+  This ticket stays `done`: its decision was right under the premise it
+  recorded.
