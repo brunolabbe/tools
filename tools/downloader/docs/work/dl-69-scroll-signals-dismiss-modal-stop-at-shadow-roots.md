@@ -3,7 +3,7 @@ id: dl-69
 tool: downloader
 title: SCROLL_SCRIPT, hasPlayerElement and dismissModal's video check stay light-DOM only
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-68]
 difficulty: standard
@@ -217,3 +217,125 @@ was measured before filing, per the owner's instruction that a defect
 ticket's reproduction is its deliverable; `SCROLL_SCRIPT` and `dismissModal`'s
 check were not measured, and are labelled unmeasured above rather than
 claimed. Not built against.
+
+**2026-09-26 — built** on `dl-69-provoke-shadow-dom`, off `origin/main` at
+`a1a417b`.
+
+**Reproduced before any fix.** Ran
+`npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t "dl-69"`
+against the unmodified branch with the ticket's own scratch test appended —
+`AUTH_REQUIRED` (`reason: "login-form"`) for the counterfactual-free run,
+matching the ticket's own measurement exactly. The premise holds.
+
+**What changed**, all in `resolvers/src/browser/provoke.ts`. `ALL_MEDIA_FN`
+(dl-61/dl-68's shadow-piercing walk) gained an optional second parameter,
+`root`, defaulting to `document` at every call site that already existed
+(`CHOOSE_VIDEO_FN`, `CHOOSE_VIDEO_INDEX_SCRIPT`, `UNMARK_VIDEO_SCRIPT`,
+`PLAY_SCRIPT`, `METADATA_SCRIPT`'s audio fallback), per Build step 3. Since a
+template-literal interpolation of `${ALL_MEDIA_FN}` needs the JS `const` in
+scope at the point it is read, and `MARK_CLOSE_SCRIPT` is defined earlier in
+the file than `ALL_MEDIA_FN` was, `ALL_MEDIA_FN`'s definition (with its whole
+doc comment) was moved up, to directly after `SEMANTIC_DIALOG` and before
+`MARK_CLOSE_SCRIPT` — the only way to reference it there without a TDZ error.
+This is what moved most of the file's later line numbers and is the
+"expected work" the dispatch named.
+
+Three call sites now use it:
+
+- `SIGNALS_SCRIPT`'s `hasPlayerElement`:
+  `(ALL_MEDIA_FN)('video, audio, iframe[src], [class*="player"],
+[id*="player"]').length > 0` in place of `document.querySelector(...)`
+  (Build step 1).
+- `SCROLL_SCRIPT`: `(ALL_MEDIA_FN)('video, iframe, [class*="player"],
+[id*="player"]')[0]` in place of `document.querySelector(...)` (Build step
+  2).
+- `MARK_CLOSE_SCRIPT`'s close-layer guard: `(ALL_MEDIA_FN)('video',
+container).length > 0` in place of `container.querySelector('video')`
+  (Build step 3), the one call site that passes a non-default `root`.
+
+**`hasPlayerElement`, verified.** After the fix, the same reproduction
+(`npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t
+"hasPlayerElement"`) reports `hasPlayerElement: true` and `classifyFailure`
+returns `NO_MEDIA_FOUND`, not `AUTH_REQUIRED` — falls through to the next
+resolver tier, as the ticket's Build step 1 asked. Committed as
+`tools/downloader/resolvers/test/fixtures/pages/password-shadow-player.html`
+(the ticket's own reproduction fixture, unchanged) and a permanent test in
+`provoke.test.ts` driving `readSignals` + `classifyFailure` directly, per
+Build step 4.
+
+**`SCROLL_SCRIPT`, measured: the missing scroll was cosmetic, not
+load-bearing, for the case the Why section raised.** Built a scratch fixture
+(reverted, not committed): a click-only shadow-root player, identical in
+shape to `shadow-player.html`, pushed 6000px below the initial viewport.
+Ran the resolver end to end against it twice, swapping only
+`SCROLL_SCRIPT`'s selector line between the light-DOM `document.querySelector`
+(pre-fix) and the shadow-piercing `ALL_MEDIA_FN` (post-fix) between runs,
+each via a scratch test asserting `result.variants[0]?.url` — **both runs
+returned the stream** (`http://127.0.0.1:<port>/media/related/master.m3u8`,
+with `/media/related/master.m3u8` and `v720.m3u8` both requested). Reading
+Playwright's own `_performPointerAction` in
+`node_modules/playwright-core/lib/coreBundle.js` explains why: it calls
+`doScrollIntoView` unconditionally before every click — a step the `force`
+option does not skip (`force` only skips the `visible`/`stable`/`enabled`
+checks, listed separately in the same function) — so `clickChosenVideo`'s own
+click already scrolls its target into view with no help from `SCROLL_SCRIPT`
+at all. The gap is real only for a page that lazily _mounts_ its player on
+scroll (an `IntersectionObserver`-gated component, say) rather than merely
+positioning an already-mounted one off-screen — not measured, since it needs
+a different fixture shape than the Why section's off-screen case. No
+regression test added for the case measured here: there is no behavioural
+difference for it to protect, and dl-61's existing shadow-root-click tests
+already cover the general "shadow-root player gets clicked" path. The fix
+itself (Build step 2's literal text) is applied regardless, since the ticket
+asked for the shadow-piercing selector on its own merits, independent of
+this measurement.
+
+**`dismissModal`, measured: load-bearing, a real defect, now fixed.** Built
+`tools/downloader/resolvers/test/fixtures/pages/modal-shadow-player.html`: a
+semantic dialog (`role="dialog"`, `aria-modal="true"`) holding a close button
+and a shadow-root `<video>`. Calling `dismissModal(frame, { timeoutMs: 1500,
+scriptable: true })` directly against it, with the guard temporarily reverted
+to `container.querySelector('video')`, returned `1` — the close button was
+pressed, dismissing the layer holding the real player, exactly the Why
+section's concern. With the fix
+(`(ALL_MEDIA_FN)('video', container).length > 0`) it returns `0`: the guard
+fires, the layer is left alone. Committed as a permanent test in
+`provoke.test.ts`.
+
+**Fold-in considered, declined.** dl-68's own dropped finding (this ticket's
+origin) named exactly these three call sites and nothing else; no other
+small already-specified piece of work was made free by this change, so
+nothing else was folded in.
+
+**Citations repaired**, per the dispatch's own note that moving these three
+scripts would displace dl-68's and dl-55's merged `## Review` citations into
+this same file. `node scripts/citations-gate.mjs --against origin/main`
+failed at 2 records after the `ALL_MEDIA_FN` move (6 moved in dl-55, 4 moved
+in dl-68, one of which — `provoke.ts:153` — did not resolve anywhere until
+the docstring's own line wrap was adjusted so "Playwright's own locator match
+order for a single-type" sits on one source line again, matching the
+existing anchor text verbatim). All ten were repointed to their new line
+numbers (dl-55: `provoke.test.ts:51→52`, `provoke.ts:398→422` twice,
+`provoke.ts:640→670`, `provoke.ts:226→238`; dl-68: `provoke.test.ts:76→77`,
+`provoke.ts:369→393`, `provoke.ts:398→422`, `provoke.ts:153→71`), anchor text
+unchanged, no verdict changed. Re-run as the last action before this commit:
+`node scripts/citations-gate.mjs --against origin/main` — `106 enforced, 0
+failing; 7 grandfathered`, exit 0.
+
+**Verification.** `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts` — 4 of 4 tests pass
+(the two pre-existing plus the two new ones).
+`npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
+— 50 of 50 tests pass (no regression from the shadow-piercing `dismissModal`
+guard against any existing modal fixture). `npm run check` — exit 0.
+`npm test -- --project downloader` — 92 files passed, 1 skipped (93); 1550
+tests passed, 2 skipped (1552), exit 0 (run once, before the final docstring
+line-wrap fix, which touches only a comment; re-run at the narrower specs
+above after it, both green).
+
+**What the ticket had wrong.** Nothing factual — the Why section's
+reproduction and the "unmeasured" labels both held. What it did not say: that
+giving `ALL_MEDIA_FN` a second parameter requires moving its definition ahead
+of `MARK_CLOSE_SCRIPT` in the file (a `const` used inside another `const`'s
+template-literal interpolation has to be declared first), which is the
+mechanical reason the citation-repair surface was as large as it was.

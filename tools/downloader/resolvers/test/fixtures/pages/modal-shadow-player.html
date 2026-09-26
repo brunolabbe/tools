@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog holding a shadow-root player</title>
+  </head>
+  <body>
+    <h1>Dialog holding a shadow-root player</h1>
+    <!-- dl-69: a semantic dialog whose only video lives inside an open shadow
+         root. `MARK_CLOSE_SCRIPT`'s close-layer guard has to see it, or the
+         close button below dismisses the layer that holds the real player. -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="position: fixed; top: 40px; left: 40px; width: 640px; height: 400px; background: #fff"
+    >
+      <button aria-label="Close">×</button>
+      <div id="host"></div>
+    </div>
+    <script>
+      (function () {
+        var root = document.getElementById("host").attachShadow({ mode: "open" });
+        root.innerHTML = '<video id="sv" width="640" height="360" muted playsinline></video>';
+      })();
+    </script>
+  </body>
+</html>

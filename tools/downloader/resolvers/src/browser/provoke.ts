@@ -68,9 +68,8 @@ const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='tru
 
 /**
  * Every element matching `selector` under `root` (default `document`), open
- * shadow roots included, in **Playwright's own locator match order for a
- * single-type selector** (dl-61) — `'video'` or `'audio'` alone, not a comma
- * list.
+ * shadow roots included, in **Playwright's own locator match order for a single-type
+ * selector** (dl-61) — `'video'` or `'audio'` alone, not a comma list.
  *
  * `root.querySelectorAll(selector)` stops at a shadow root, and a custom
  * `<video-player>` web component keeps its player in one; the locator API
@@ -360,6 +359,18 @@ const PLAY_SELECTORS: readonly string[] = [
 const PLAY_TEXT =
   /^\s*(?:play|watch|watch now|start|play video|lecture|abspielen|reproducir|riproduci|afspelen)\s*$/i;
 
+/**
+ * Shadow-piercing since dl-69, which also measured what the gap was worth:
+ * Playwright's own click action scrolls its own target into view before
+ * clicking it regardless of \`force\` (a step separate from the actionability
+ * checks \`force\` skips), so \`clickChosenVideo\`'s click on a shadow-root
+ * player already landed with no help from this scroll at all — reproduced
+ * against a click-only shadow-root player pushed 6000px below the initial
+ * viewport, where the light-DOM-only selector (before this fix) never found
+ * anything to scroll to and the click still started the stream. This walk's
+ * own scroll matters for a page that mounts its player lazily on scroll
+ * (not measured here), never for the click itself.
+ */
 const SCROLL_SCRIPT = `(() => {
   var el = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]')[0];
   if (el && typeof el.scrollIntoView === 'function') {
