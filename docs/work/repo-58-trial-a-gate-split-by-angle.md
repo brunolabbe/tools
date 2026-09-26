@@ -3,7 +3,7 @@ id: repo-58
 tool: repo
 title: Trial a gate split by angle, run as a workflow whose verdict is computed in code
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -191,3 +191,69 @@ before the trial runs, not after.
 
   The measuring scripts were scratch and are not committed; the method above is
   enough to rerun them.
+
+- 2026-09-26 — **the trial ran, and the split is not adopted: it failed all three
+  criteria.** Run by the main session (Opus) as workflow `wf_0849a545-e13`, with
+  every item the angles carried adjudicated by a Sonnet refuter, since the author of this
+  brief was the one running it.
+  - **The case.** pl-39's first-round gate: `8849c14...489bce9`, 2,133 lines in
+    19 files, one Sonnet gate at `high` effort that took 20 minutes and returned
+    CONCERNS with five items — B1 (med) the run budget's sizing ignores the
+    fallback that doubles a bill, B2 (low) `compaction` is never asserted by
+    name, B3 (low) the Log counts six transitive packages where there are five,
+    B4 `ANTHROPIC_CUSTOM_HEADERS` can override the configured key, B5 (open
+    decision) an empty `MODEL_PROVIDER` boots `scripted`. It was the largest
+    first-round gate on a source change that carried findings; dl-50's, larger,
+    carried none, which would have made criterion 1 true by default.
+  - **The run.** Five angles on Sonnet at `xhigh` (the pinned gate effort
+    today), each given the attack items of the original gate prompt that fell
+    in its territory, in their own worktrees; then one Sonnet refuter per angle
+    that had anything to adjudicate (three did). Every angle reviewed
+    `489bce9`. The verdict computed in code was CONCERNS, the same as the
+    single gate's.
+  - **Recall: 3 of 5.** B1 (edge-case, med), B3 (intent), B4 (security, as an
+    open decision it graded high) reproduced and matched. **B2 was seen twice
+    and lost at the seam**: edge-case dropped it by reading ("same `default`
+    branch as the other three"), which contradicts the acceptance line's "each
+    by its own test"; intent routed it to verification-gap as an
+    `outside_angle` note, which nothing delivers between parallel agents; and
+    verification-gap marked that row `proven`. **B5 was decided rather than
+    surfaced**: edge-case dropped it, with a reason matching the owner's
+    eventual answer, where the single gate brought it as a decision.
+  - **New findings: 0.** The hunts returned 15 candidates between them
+    (edge-case 8, intent 4, security 3) and carried 3, all three matching
+    baseline items.
+  - **Cost: 2.7×.** Weighted as in the entry above: the angles 7,939 k units
+    against the first round's 2,895 k (2.7×), 8,600 k with the refuters (3.0×);
+    `node scripts/agent-cost.mjs` prices the run at $17.20, $15.88 of it the
+    angles. **Wall-clock: none saved** — 19.6 minutes against 20, since the
+    slowest angle alone took 16.
+  - **Criteria:** every carried item reproduced — no, B2; at least one new
+    confirmed finding — no; at most 1.5× the cost — no.
+
+  What the trial taught, beyond the verdict:
+  - **The partition assumption was the flaw in the cost model.** Each angle
+    cost 0.29 to 0.73× the whole first round, because each re-read the ticket,
+    the diff and most of the source it needed. The 0.66× estimate in the entry
+    above assumed angles divide the reading, and they do not.
+  - **A split loses what falls between angles.** A hand-off needs a carrier; a
+    routing stage would add a round of agents to a shape already at 2.7×.
+  - **Computing the verdict in code worked** and matched, and it is the one
+    piece worth keeping if a split is ever tried again.
+  - **The confounds:** one branch; an attack list, given to both shapes, that
+    did much of the finding in each; `xhigh` against the baseline's `high`,
+    which inflates the angles' cost by an amount not measured here — it would
+    have to exceed 1.8× to bring the angles inside 1.5×.
+  - **Two traps in this brief resolved:** `agent-cost.mjs` reads a workflow's
+    `agent-<id>.jsonl` files as they are, and `isolation: 'worktree'` was
+    honoured. **One trap it missed:** a workflow agent that detaches its
+    worktree's HEAD leaves the worktree behind — all eight did, and were
+    removed by hand.
+  - **On sharpening the single gate instead:** the trial gives no evidence
+    that red-on-base tests, an intent hunk list or a security step add
+    findings. The angles running exactly those found nothing the single gate
+    missed, so nothing is folded into `gate.md` on this evidence.
+
+  Done when: the trial is recorded above; not adopted, so `dispatching.md`
+  carries no angle split, and its shelved section is replaced by a note of the
+  result.

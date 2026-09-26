@@ -532,23 +532,17 @@ mid-review and still returns something shaped like a finished one — the same
 failure as a reviewer that read the wrong tree and marked every acceptance line
 `unproven`. Bound the gate by scoping it, watch it, and stop it deliberately.
 
-### Splitting a gate by angle — shelved, not runnable
+### Splitting a gate by angle — trialled, and dropped
 
-**Do not dispatch this.** A split of one round's gate into parallel angles —
-`acceptance`, `defects`, `invariants`, on one model — was written here on
-2026-09-26, after the sentinelle repository's parallel review angles, and shelved
-the same day when a second-pass review found it could not be landed:
-`scripts/review-record.mjs` refuses a first section headed other than
-`## Review` and a second `### Gate 1`, so three angles of one round cannot be
-recorded; `review-ticket`'s `gate.md` requires a `findings` line that only a
-defect-hunting angle produces; nothing was assigned the verdict, which the lander
-may not compose. A fourth objection — that each angle pays its own farm, build
-and reading — was measured and does not hold: setup is a median 2% of a gate's
-cost. [repo-58](../../../../docs/work/repo-58-trial-a-gate-split-by-angle.md)
-answers the fix-or-drop question with a trial of a different shape, angles
-returning data to a workflow that merges them and computes the verdict in code.
-Until that trial reads, the rule above — split when the attack list needs two
-kinds of setup — is the only split.
+Five parallel angles on one model (verification-gap, edge-case, security,
+conventions, intent), merged and decided in code by a workflow, were trialled
+against pl-39's first-round gate on 2026-09-26 and failed all three of their
+adoption criteria: they found 3 of the single gate's 5 items and nothing it had
+not, at 2.7× its cost, in the same wall-clock. Each angle re-read most of what a
+whole gate reads, and an item one angle saw and handed to another was lost at
+the seam. [repo-58](../../../../docs/work/repo-58-trial-a-gate-split-by-angle.md)
+has the numbers. The rule above — split when the attack list needs two kinds of
+setup — is the only split.
 
 ## Routing findings: the builder or the fixer
 
