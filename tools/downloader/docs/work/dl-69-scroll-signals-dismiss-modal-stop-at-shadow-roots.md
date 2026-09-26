@@ -235,6 +235,8 @@ Coordinates re-resolved against da144f9 at gate 2. Where da144f9 removed the cit
 
 **Gate: PASS** — 2026-09-26 · `7c02084..da144f9`, reviewed at tip da144f9 (origin/main still at a1a417b after the fetch) · re-gate of gate 1's findings and of the lines this round touched, nothing else re-swept
 
+Coordinates re-resolved against ebd9649: the lazy-mount manifest assertion moved from line 229 to 224, every other citation reads where it did at da144f9. The first low's two test citations are prose naming da144f9, because the lander's fix at 4816bb7 deleted the lines they cite.
+
 | Gate 1 finding                                                 | Verdict at da144f9                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | med · the guard misses a layer that is its own shadow host     | fixed — `tools/downloader/resolvers/src/browser/provoke.ts:138 "if (start.shadowRoot) walk(start.shadowRoot);"`, proven by `tools/downloader/resolvers/test/browser/provoke.test.ts:170 "was missed and its close control pressed"` (expected 1 to be +0 on both 7c02084's and a1a417b's provoke.ts; green here). The owner chose fixing on this branch                                       |
@@ -246,9 +248,9 @@ Coordinates re-resolved against da144f9 at gate 2. Where da144f9 removed the cit
 | low · the merged-record repair reworded more than coordinates  | fixed — `tools/downloader/docs/work/dl-55-the-surface-click-opens-another-video.md:288 "which appended to the same line rather than changing this"` and `tools/downloader/docs/work/dl-55-the-surface-click-opens-another-video.md:317 "then 398→422→452 by dl-69"`. Against a1a417b, both records differ by coordinates, appended provenance and one conjunction; nothing earlier is removed |
 | low · the Log understated what force skips                     | fixed — the Log's SCROLL_SCRIPT paragraph names the hit-target check                                                                                                                                                                                                                                                                                                                          |
 
-- **low** · the lazy-mount test's mounted assertion proved nothing. The test at `tools/downloader/resolvers/test/browser/provoke.test.ts:224 "expect(server.requests).toContain("` is the real proof that the manifest was requested; the mounted assertion only checked if window.scrollY > 0, which the base satisfies too (scrollY 800 on the base). Removed; the manifest assertion carries the proof alone.
-- **low** · the Log's gate-round-1 fixes entry, backtick bullet, was mangled: its inline code spans ran into the prose around them. Reworded with proper spacing.
-- **low** · the same entry's med-1 bullet said both new dismissModal shapes were confirmed red on the pre-fix walk; the scope test at `tools/downloader/resolvers/test/browser/provoke.test.ts:194 "expect(clicked).toBe(1)"` passes on 7c02084 and on a1a417b. It is a sound guard against over-widening, but it was never red. Corrected to distinguish the M1 scope test (confirmed green throughout) from the M2 shape test (confirmed red before fix).
+- **low** · the lazy-mount test's `mounted` reads provoke.test.ts line 215 at da144f9 (`window.scrollY > 0`, since deleted), which the base satisfies too: with a1a417b's provoke.ts the run passes provoke.test.ts line 228 at da144f9 (`expect(mounted).toBe(true)`, since deleted) and fails only on the manifest assertion, and gate 1 measured scrollY 800 on the base for this shape. So the assertion proves nothing, and its name claims a mount the test never reads; the manifest assertion carries the proof alone.
+- **low** · the Log's gate-round-1 fixes entry, backtick bullet, is mangled: its inline code spans run into the prose around them and one still holds a backslash-escaped `force`. Named by section, because a coordinate into this ticket cannot be distinct.
+- **low** · the same entry's med-1 bullet says both new dismissModal shapes were confirmed red on the pre-fix walk; the scope test at `tools/downloader/resolvers/test/browser/provoke.test.ts:194 "expect(clicked).toBe(1)"` passes on 7c02084 and on a1a417b. It is a sound guard against over-widening, but it was never red.
 - **findings** · the lines this round touched returned 3; 3 carried, 0 dropped.
 - Verified at da144f9: provoke.test.ts 7 of 7; `npx vitest run tools/downloader/resolvers` 18 files, 456 of 456; `npm test -- --project downloader` 92 files passed and 1 skipped, 1553 passed and 2 skipped of 1555; `npm run check` exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0, 106 enforced, 0 failing. Red runs of this tip's spec: on 7c02084's provoke.ts 1 failed of 7, the own-host test; on a1a417b's 4 failed of 7.
 - NFR: as gate 1; the fix adds one `shadowRoot` read per walk.
@@ -480,3 +482,17 @@ giving `ALL_MEDIA_FN` a second parameter requires moving its definition ahead
 of `MARK_CLOSE_SCRIPT` in the file (a `const` used inside another `const`'s
 template-literal interpolation has to be declared first), which is the
 mechanical reason the citation-repair surface was as large as it was.
+
+**2026-09-26 — gate 2's low findings fixed, and the record restored.** The
+three low findings from gate 2 were fixed at 4816bb7: (1) the lazy-mount test's
+`mounted` assertion, which only checked `window.scrollY > 0` and thus passed on
+the base too, was removed, leaving only the manifest assertion to carry the
+proof; (2) the Log's gate-round-1 fixes entry's backtick bullet, which had
+mangled inline code formatting with spaces collapsing into backtick-delimited
+strings, was reworded to separate code spans properly; (3) the med-1 bullet,
+which falsely claimed the M1 scope test was "confirmed red on the pre-fix
+walk", was corrected to distinguish M1 (confirmed green throughout) from M2
+(confirmed red before the fix). Commit ebd9649 committed gate 2's record with
+its three low bullets reworded (as explained at the top of the gate record that
+had been landed). This commit restores the reviewer's text as amended by the
+reviewer at da144f9, with coordinates only re-resolved against ebd9649.
