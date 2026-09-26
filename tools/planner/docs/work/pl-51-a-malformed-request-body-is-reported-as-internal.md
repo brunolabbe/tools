@@ -160,16 +160,14 @@ understood.","retryable":false}}` (the `STATUS_BY_CODE` `Partial`'s
   | NOT_FOUND (method miss)        | 404 NOT_FOUND     | 404 NOT_FOUND   | 404 NOT_FOUND                     |
 
   Tests committed to `tools/planner/api/test/malformed-requests.test.ts` cover
-  the Fastify body-parser cases (lines 15, 43) and the @fastify/static cases
-  (lines 81, 103). All six new tests (two malformed-request body tests plus two
-  body-parser variants, plus two @fastify/static tests) verify both response
-  status and that the log line reports the correct code at info level; reverting
-  the `server.ts` hunk to re-introduce the independent `AppError.from(error)`
-  call makes all tests fail on the log code assertion.
+  the Fastify body-parser cases (lines 28, 56) and the @fastify/static cases
+  (lines 86, 110). The four tests verify both response status and that the log
+  line reports the correct code at info level; reverting the `server.ts` hunk to
+  re-introduce the independent `AppError.from(error)` call makes all tests fail
+  on the log code assertion.
 
   Final test count: `npm run build` clean, `npm test -- --project planner`
-  75 files / 1275 tests passed (including the four new @fastify/static tests),
-  `npm run check` exit 0.
+  75 files / 1273 tests passed, `npm run check` exit 0.
 
 - 2026-09-26 — Width confirmed with the owner on 2026-09-26 via `AskUserQuestion`
   (options: width A as built, recommended; narrow FST_ERR_CTP_* only; decide after
