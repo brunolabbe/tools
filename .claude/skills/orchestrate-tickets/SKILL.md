@@ -97,7 +97,7 @@ you are there.
    | The round's findings | Go to |
    | --- | --- |
    | any one needs judgement — how, not only whether | **the builder, resumed** with `SendMessage`, carrying the mechanical ones in the same message: it knows why it built what it did, so it does not undo one decision fixing another, and once its wake is paid the mechanical fixes cost a few warm turns |
-   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Haiku 4.5): it starts small and stays small |
+   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Sonnet 5 since 2026-09-27): it starts small and stays small |
 
    **Why the second row exists, and why only for a whole round.** A subagent's
    prompt cache lives five minutes by default, and every subagent write measured
@@ -243,7 +243,19 @@ edits this table and those files together, and nothing else.**
 | `hard` | `builder-hard` — Opus 5.5, high | `ticket-reviewer-sonnet` |
 | absent | `builder-hard` | `ticket-reviewer-sonnet` |
 | **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
-| **a round's mechanical fixes, and its landing** | `fixer` — Haiku 4.5 | the round's gate, woken |
+| **a round's mechanical fixes, and its landing** | `fixer` — Sonnet 5, high (Haiku 4.5 until 2026-09-27) | the round's gate, woken |
+
+**2026-09-27: the `fixer` moved to Sonnet 5, on the owner's decision, overriding
+the filer's own recommendation to resume the builder for a record-touching
+landing instead.** The Haiku fixer failed both of the batch's record-touching
+landings — one removed a line it was told to keep and reported the citations
+gate clean while CI's `check` job was red on the pull request it opened; the
+other altered a reviewer's own re-resolved anchors and pushed nothing, its
+round discarded rather than repaired — and the batch before this one had it
+rewrite gate findings twice despite a dispatch saying stop. Effort set to
+`high`, matching the Sonnet row above rather than measuring a new value for
+this one: `reference/model-pairing.md` already gives Sonnet 5 `high` as its
+builder setting, and a fixer's work is a small build.
 
 - **Never pass `model` when dispatching one of these.** It overrides the
   definition's model and keeps its effort, which gives a pairing this table does
@@ -407,7 +419,7 @@ instruction; where the shape has a worked example it is in
 | A **disposition** marked "accepted" | A disposition is a relay, and "accepted" is the word that hides an unmeasured one. **Gate a disposition by measuring what it claims changed**, not by checking the finding is marked closed | 2026-09-05 |
 | A claim an agent makes **about itself** | Its tools, its model, its lifecycle are self-reports, and a self-report is checked from outside — see the table below for the one-call check per field | 2026-09-03 |
 | An **option or cost you construct yourself** | A claim you are making, and it needs a measurement or an explicit "unverified" exactly as a relayed one does. An orchestrator described a closure as needing a flag that would fail the branch; the builder had already built one that did neither, reverted it on the declined mechanism, and the reversal cost two rounds | 2026-09-08 |
-| A **recommendation on an unmeasured premise** | A gate's recommendation conditioned on a fact nobody measured is not a recommendation. Measure the condition, or hand the decision up unrecommended — one such premise was measured false before it reached the owner | 2026-09-17 |
+| A **recommendation on an unmeasured premise** | A gate's recommendation conditioned on a fact nobody measured is not a recommendation. Measure the condition, or hand the decision up unrecommended — one such premise was measured false before it reached the owner | 2026-09-17, 2026-09-27 |
 
 **A claim an agent makes about itself — its tools, its model, its lifecycle — is a
 self-report, and is checked from outside.** It bites at dispatch, at gate and at

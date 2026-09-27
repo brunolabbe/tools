@@ -47,11 +47,28 @@ effort setting. Those are the sentinelle repository's values for the same models
 `agent-cost.mjs` prints the effort each agent ran at since this date, so the
 first history rows under the new lineup are the trial.
 
-**The `fixer` is Haiku 4.5** because every maintenance artefact Haiku produced
-here was correct (repo-56, 2026-09-14/15) and the fixer's work is maintenance by
-definition: a finding whose fix it states in full. It is always checked by the
-round's gate, which is Sonnet or Opus, so the fix is never judged by the model
-that wrote it.
+**The `fixer` was Haiku 4.5, from 2026-09-04 until 2026-09-27,** because every
+maintenance artefact Haiku produced here was correct (repo-56, 2026-09-14/15)
+and the fixer's work is maintenance by definition: a finding whose fix it
+states in full. It is always checked by the round's gate, which is Sonnet or
+Opus, so the fix is never judged by the model that wrote it — that argument
+still holds, and it is not why the row changed.
+
+**What changed is that "checked by the gate" costs a round when the check
+fails, and a record-touching landing is where this fixer kept failing.** Two
+incidents on 2026-09-26 already showed the model rewriting a gate's own words
+mid-landing (`repo-62`'s Why). On 2026-09-27 the same class failed both of the
+batch's record-touching landings outright: one removed a line it was told to
+keep and reported the citations gate clean while CI's `check` job was red on
+the pull request it had already opened (`repo-60`); the other altered a
+reviewer's own re-resolved anchors and pushed nothing, its round discarded
+rather than repaired (`pl-48`). The filer's recommendation was to resume the
+builder for a record-touching landing instead of dispatching a fresh `fixer`
+at all — the builder already knows the branch, where a fixer starts cold — and
+the owner overrode that, choosing instead to keep the single-role split and
+move its model to Sonnet 5, `high` effort (the same effort `standard` builds
+at on this model), on the same day. Neither reading is measured against the
+other yet; the next batch under the new pin is the trial.
 
 ## The field and what it rates
 

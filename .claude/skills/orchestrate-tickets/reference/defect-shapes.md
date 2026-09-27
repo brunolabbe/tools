@@ -169,6 +169,28 @@ the number the gate named" is exactly such a fix.
   was not dangling. In each the result looked like evidence and the setup had
   quietly removed the thing under test. The mutation-testing control run below is
   one instance of this rule, not the whole of it.
+- **A claimed fix needs a control run without it, on the same harness — not
+  only a run of the harness on the fixed code.** A gate's evidence that
+  `-err_detect explode` fixed a stream was "`→ exit 255`" on the harness with
+  the flag added; the harness with the flag removed but everything else
+  unchanged was never run, and the true cause was a missing `-bsf:a
+  aac_adtstoasc` beside it. The owner chose a fix on that false premise before
+  anyone ran the control (2026-09-27). Run the harness with the change and
+  without it, both on the same input, before crediting either result to the
+  change.
+- **A candidate failure detector needs a recovering control before it is
+  adopted**, the same discipline one layer up from a mutation test: prove the
+  detector does not also fire on a case that later succeeds. "Stream ends
+  prematurely" looked like a clean signal for a dead download and also fired on
+  one that healed on reconnect — a detector with no recovering control cannot
+  tell the two apart, and adopting it turns a transient hiccup into a reported
+  failure (2026-09-27).
+- **A new detector can make an older one redundant**, and the check that finds
+  it is the one already run for coverage: **every mutation fails at least its
+  own case.** Running that check over `DEMUX_READ_FAILED` after a later
+  detector was added found the older detector's dedicated case now caught by
+  the newer one first — not a bug, but dead code nothing had swept for
+  (2026-09-27).
 - **Build before testing** in a fresh worktree, always.
 - **A worktree with no farm at all is worse than a stale `dist`, because it does
   not fail — it resolves somewhere else.** Node walks parent directories, so a

@@ -68,11 +68,23 @@ the sentinelle repository, 2026-09-23).
 
 Append a dated entry to the ticket's Log in the commit that earns it. **The
 Log's shape is a claim, its command, and that command's output** (`records.md`).
-**Leave `status` as it is**: `done` goes in with the first gate record, set by
-whoever lands it, because preflight fails a ticket marked `done` that has no
-`## Review` section and before a gate there is none. Three of four builders on
-2026-09-26 set `done` on this page's older wording and resolved preflight's
-failure three different ways.
+**Leave `status` as it is until a `## Review` section actually lands on the
+ticket**: `done` goes in with the commit that lands the round — ship
+authority granted, the record committed — set by whoever lands it, because
+preflight fails a ticket marked `done` that has no `## Review` section and
+before a gate there is none. Three of four builders on 2026-09-26 set `done`
+on this page's older wording and resolved preflight's failure three different
+ways.
+
+**But a gate record committed before landing is a different case, and it
+still needs a status.** `records.md` says a gate record is committed whatever
+else is held — a FAIL or a CONCERNS round included — and committing one onto a
+ticket that is still `ready` fails `status.test`'s `reviewedButReady` check:
+`ready` means nobody has picked the ticket up, and a `## Review` section says
+otherwise. Set `in-flight` in that same commit instead, and leave `done` for
+the landing commit alone. `repo-60`'s and `dl-53`'s builders both hit this
+check cold on 2026-09-27, past this page's `done`-at-landing wording, because
+nothing here named the state in between.
 
 **Push the branch before you report** — `git push -u origin <branch>`. The gate
 checks out the sha you report, and a fixer, if one is dispatched, starts from

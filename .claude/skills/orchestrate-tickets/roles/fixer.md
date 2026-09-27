@@ -18,6 +18,12 @@ tokens whatever the remaining work (2026-09-03), and a one-line Log reword cost
 cheaper than that, but it still reads the whole transcript on every turn. You
 start small and stay small.
 
+**Since 2026-09-27 you run on Sonnet 5, not Haiku 4.5** — `agents/fixer.md` and
+`SKILL.md`'s pairing table have the date and the reason. The work above is
+unchanged; the model changed because a record-touching landing is exactly
+where the previous model failed, twice in the batch that changed it. See the
+_Landing_ section below for what that means in practice.
+
 ## Set up
 
 1. `git checkout --detach origin/<branch>` — the builder's worktree holds the
@@ -61,7 +67,14 @@ even where the anchor survives, goes back to the orchestrator for the reviewer t
 amend — stop and report it. Twice on 2026-09-26 a landing fixer did otherwise —
 three bullets reworded into its own dispositions, then an anchor moved onto the
 corrected text despite a dispatch saying stop — and each cost a reviewer wake and
-a repair fixer. Your account of what you fixed goes in the ticket's Log.
+a repair fixer. **On 2026-09-27, on the model this page then ran, it happened
+twice more and this time nothing was salvaged**: a landing on `repo-60` removed
+a line it was told to keep and reported `citations-gate.mjs` exit 0 while CI's
+`check` job was red on the pull request it had already opened; a landing on
+`pl-48` altered a reviewer's own re-resolved anchors, pushed nothing, and its
+whole round was discarded rather than repaired. Both are why this role now runs
+on a different model — see _Why you exist_, above. Your account of what you
+fixed goes in the ticket's Log.
 
 Set the ticket's `status: done` in the first gate record's commit. **The pull
 request's Summary describes the ticket's whole change, not your round** — a

@@ -60,15 +60,42 @@ discarded. So:
   is several subsections whose coordinates are each correct only against their
   own header's sha**, and the citations gate checks the whole `## Review`
   against one tree — so an earlier round's coordinates that a later round's
-  fixes moved are pinned to the sha that round reviewed, or the record goes red
-  the moment it is committed to a ticket file (2026-09-20, seen on a PR-thread
-  record where it was harmless). **The lander does that pinning**, when it
-  transcribes the multi-round section — unless a re-gating reviewer has already
-  returned its earlier sections re-resolved against the new head, as `roles/reviewer.md`
-  asks since 2026-09-26, in which case the lander commits those as given. Either way
-  the reviewer returns text and never edits
-  a file, and a pin changes no verdict, row or severity, so it is the same kind
-  of repair as the self-citation one and not the builder editing the record.
+  fixes moved have to be repointed, or the record goes red the moment it is
+  committed to a ticket file (2026-09-20, seen on a PR-thread record where it
+  was harmless).
+
+  **Repointed, never pinned — a pin here is exactly the branch-only sha this
+  page forbids two sections down, and this is not hypothetical.** This
+  paragraph used to say the earlier round's coordinates "are pinned to the sha
+  that round reviewed," and two builders (`pl-48`, `repo-60`) followed that
+  wording on 2026-09-27, pinning to `ac00b8d`, `f1bde60` and `247073d` — each a
+  commit that exists only on the branch being built. Both pins cost a reviewer
+  re-resolution once they were checked against a tree that could no longer
+  reach those shas, which is the identical failure the branch-only-sha rule
+  below already exists to prevent; this paragraph simply told the lander to
+  commit it. There is no reading where a multi-round record's own coordinates
+  are exempt from that rule.
+
+  **The lander repoints**, when it transcribes the multi-round section — on a
+  scratch `<ticket>.landed.md` copy of the reviewer's file, coordinate only,
+  and only where the anchor text an earlier round quoted is unchanged; every
+  change it makes goes in the ticket's Log, and the copy is what gets spliced
+  in with `scripts/review-record.mjs`. **Repoint before you splice, never
+  after**: `review-record.mjs --verify` refuses a section it finds `MOVED`
+  against the ticket at the commit it checks, so a landing dispatch that orders
+  a byte-for-byte splice first and coordinate re-resolution second is asking
+  for something the tool cannot do — measured on `dl-53`'s landing (2026-09-27),
+  where that was exactly the order given. A citation whose text a later round's
+  fix deleted outright, or whose claim it corrected even where the anchor
+  survives, is not the lander's to repoint at all — it goes back to the
+  reviewer for an amended bullet, as above.
+
+  This is unless a re-gating reviewer has already returned its earlier
+  sections re-resolved against the new head, as `roles/reviewer.md` asks since
+  2026-09-26, in which case the lander commits those as given. Either way the
+  reviewer returns text and never edits a file, and a coordinate-only repoint
+  changes no verdict, row or severity, so it is the same kind of repair as the
+  self-citation one and not the builder editing the record.
 - **A record cannot assert that its own branch is green, and this is structural
   rather than a lapse.** *"Any commit that corrects a status claim invalidates the
   status claim"* — measured 2026-09-04: a Log said "every completed run on the
@@ -120,6 +147,16 @@ discarded. So:
   4. **The formatter reflows the file after you write the record.** oxfmt
      rewrapping gate tables broke a self-referential row twice on one branch and
      was confirmed on another. Format first, resolve second.
+  5. **You run the check from a checkout that is not the branch's.** `citations.mjs`
+     and `citations-gate.mjs` resolve every `file:line` against the working tree
+     of the process running them, never against a sha you name in your head — so
+     a run from the orchestrator's own worktree, or from a shared checkout that
+     is on a different branch, silently checks the wrong tree and reports
+     numbers about content that is not the ticket's. Measured on the 2026-09-27
+     batch, twice: once against the orchestrator's own checkout, once inside a
+     round-1 gate's worktree that had not detached to the sha under review yet.
+     Run it from inside a worktree already checked out at the exact commit you
+     mean to check, and say which sha that was.
 
   **There is a script for this now: `node scripts/citations.mjs <ticket-file>`**,
   and `--rev <sha>` resolves against the commit the gate reviewed rather than the

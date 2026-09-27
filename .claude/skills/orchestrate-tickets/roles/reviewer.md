@@ -58,13 +58,19 @@ So read in this order:
 - Flag anything you did not verify as unverified in the same sentence you state
   it.
 
-**Dry-run your section against the checker before you return it.** You have no
-`Write`, so build the scratch copy with Bash and `node -e` in the ticket's
-scratch directory: the ticket as it is on the branch, your section spliced in
-above `## Log`, then `node scripts/citations.mjs <copy> --section Review
---require-anchors --require-distinct-anchors`. A section that fails there costs a
-round (2026-09-13). An anchor cannot contain a double quote, and a coordinate into
-the ticket's own file can never be distinct — name the section instead.
+**Dry-run your section against the checker before you return it, and run it
+from inside this worktree — already checked out at the head sha you are
+reviewing, never a different checkout.** You have no `Write`, so build the
+scratch copy with Bash and `node -e` in the ticket's scratch directory: the
+ticket as it is on the branch, your section spliced in above `## Log`, then
+`node scripts/citations.mjs <copy> --section Review --require-anchors
+--require-distinct-anchors`. A section that fails there costs a round
+(2026-09-13); skipping it costs the same round later, on the lander's own
+splice this time (`repo-62`, 2026-09-27). `citations.mjs` resolves every
+`file:line` against whatever tree the process running it sits in, so the check
+is only real from the worktree you already detached to (`records.md`). An
+anchor cannot contain a double quote, and a coordinate into the ticket's own
+file can never be distinct — name the section instead.
 
 **Cite line numbers against the tip you reviewed**, and name that sha in the
 section. **Never write a `@sha` pin to a branch-only commit**: the branch is
@@ -101,6 +107,14 @@ not get their narrative, for the same reason you did not get the build's report.
 - **A new problem in the lines this round touched is a finding; nothing else is
   in scope.** Do not re-run the whole review, do not re-sweep what an earlier
   round settled, and say so under "did not".
+- **Probe a fix from a seed state its own tests never started from.** A fix's
+  new tests all begin where the finding they answer began; a re-gate that
+  starts one from somewhere else finds what those tests structurally cannot.
+  `pl-48`'s gate 2 found a stuck Save that way: the round's own new tests all
+  disable Save from a budget being filled in, and gate 2 instead reproduced on
+  the e2e walk's own plan — an unanswered budget already touched — where
+  clearing it back to empty left Save disabled with nothing on the page saying
+  why, a combination none of the round's tests began from (2026-09-27).
 - Return a new `### Gate <n>` subsection, never an edit to an earlier one's
   words. **If the round moved lines your earlier sections cite, return a
   corrected copy of each as a file** — words and verdicts unchanged, coordinates

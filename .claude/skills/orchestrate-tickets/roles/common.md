@@ -61,9 +61,15 @@ warns you. Refused (2026-09-12 to 2026-09-20): a git command followed by
 `echo $?`; a heredoc, whether a commit message or a script body; a variable
 holding a path; a `for` loop over `git`, `gh` or `sed`; an `awk` program
 containing `>>`; `python3`; and the literal token `git` anywhere inside a
-`node -e` program, even in a string that never runs. What holds: one plain
-command per call, `git commit -F <file>`, literal paths, `printf` over
-`cat <<EOF`, `awk -v`, `node -e`, and reading an exit code by redirecting a
+`node -e` program, even in a string that never runs. Also refused
+(2026-09-27): a git command chained after any other command, not only after
+`echo $?`; `sed -i` with a `Na\…` insert-at-line script; a large heredoc, past
+some size this repo has not pinned; and a long `node -e` program, on its
+length alone rather than any token inside it. **`pkill -f` can match the shell
+that is running it and kill your own session** — never reach for it here; find
+the pid and `kill` it by number instead. What holds: one plain command per
+call, `git commit -F <file>`, literal paths, `printf` over `cat <<EOF`,
+`awk -v`, a short `node -e`, and reading an exit code by redirecting a
 command's output to a file and running the next command plainly. **Rewrite the
 shape rather than reporting a broken channel.**
 
@@ -99,7 +105,8 @@ accepts it. Write it so the checks are answerable without a follow-up question:
   does not arrive unasked.
 - **Never write `# Done`.** That heading closes the session that talks to the
   user; in your report it lands mid-transcript claiming a batch is over that you
-  cannot see the end of (twice on 2026-09-17). Say what you finished.
+  cannot see the end of (twice on 2026-09-17, and again from a builder on
+  2026-09-27 whose page already carried this rule). Say what you finished.
 - **Do not spawn subagents.** Dispatch is the orchestrator's; nesting it hides
   cost and makes the agent tree unreadable.
 
