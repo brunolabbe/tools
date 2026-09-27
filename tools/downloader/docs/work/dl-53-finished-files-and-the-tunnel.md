@@ -1046,3 +1046,48 @@ zero wait. `.env.example`, the settings table and the deployment doc say so.
   squash merge. `<!-- citations: evidence … -->` sits on its own line above the
   citation, adding no word to the finding, the remedy `.claude/skills/orchestrate-tickets/reference/records.md`
   gives for cited text a later commit deleted outright. `status: done`.
+
+- 2026-09-27 — **Round seven: CI's Windows leg, fixed before merging on the
+  owner's decision**, which overrode the orchestrator's recommendation to merge
+  and file a Windows ticket. `test (windows-latest, informational)` failed six
+  of this ticket's streaming tests at `f1adeb4` (run 36333161971). The pull
+  requests before it passed that leg. That leg runs `ffmpeg-static`'s
+  build of 6.1.1, the same version as the distro ffmpeg measured everywhere
+  above, so the cause was the platform. There were two causes, both read off a
+  real Windows ffmpeg log from this repo's own CI (run 35404674345), because
+  the failing run printed no stderr:
+  - **The healed controls** (a progressive body and a separate audio rendition,
+    each cut once and resumed) were cut where they should have completed. The
+    Windows build prints a context pointer without `0x` —
+    `[http @ 0000019e45be7ec0]` against Linux's `[http @ 0x557cbe02b840]` — so
+    `connectionOf` found no address, each line became its own key, and a
+    reconnect never answered the early end before it. It was not CRLF: the
+    runner's `trimEnd()` already strips the `\r`. The fix is in the engine, where
+    the fault was: `CONNECTION_OF` takes the `0x` as optional. Two cases went at
+    the end of `engine/test/stream.test.ts`, each red on Linux before the fix.
+    One reads the address off both line shapes (`expected null not to be null`)
+    and runs on every platform. The other is a stand-in run on Windows-shaped,
+    CRLF-terminated lines: two early ends, both answered, and then one left
+    unanswered. Before the fix it failed with "The source cut part of the
+    video", the same way CI's controls did.
+  - **Every DASH case was a 502**, a failure before the first byte. The fault
+    was in the test harness, not the engine: `generateDash` gave the muxer an
+    absolute manifest path, and the Windows build then writes its segments
+    somewhere other than the manifest's directory, so the origin answers the
+    MPD's own names with 404 (`Failed to open an initialization section` in run
+    35404674345). This is the fault `preview-frame.test.ts` met on `main`, and
+    its fix, which works there, is copied here. The muxer now runs inside the
+    directory with a bare `manifest.mpd`, and `generateDash` then checks that
+    the directory holds every file the MPD names, so a muxer writing elsewhere
+    fails by name at generation.
+    - Linux cannot reproduce this: its muxer writes beside the manifest either
+      way, so this case has no local red.
+    - The check was proven able to fail instead: deleting `init-stream1.m4s`
+      before it failed the suite with "the generated MPD names
+      init-stream1.m4s, which … does not hold" (`scratchpad/dl-53/mutate-guard.cjs`,
+      file restored).
+    - The proof that Windows passes is CI on the pull request.
+
+  No gate-record citation moved. `stream.ts` keeps its line count, the new
+  cases sit after every cited line of `stream.test.ts`, and no record cites
+  `engine/test/helpers/media.ts`.

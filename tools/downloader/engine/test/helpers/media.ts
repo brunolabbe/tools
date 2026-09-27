@@ -35,12 +35,13 @@ interface Ran {
   missing: boolean;
 }
 
-function run(binary: string, args: readonly string[]): Promise<Ran> {
+function run(binary: string, args: readonly string[], cwd?: string): Promise<Ran> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, [...args], {
       shell: false,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(cwd === undefined ? {} : { cwd }),
     });
     let stdout = "";
     let stderr = "";
@@ -62,15 +63,12 @@ function run(binary: string, args: readonly string[]): Promise<Ran> {
   });
 }
 
-async function ffmpeg(args: readonly string[]): Promise<void> {
-  const result = await run(FFMPEG, [
-    "-hide_banner",
-    "-nostdin",
-    "-loglevel",
-    "error",
-    "-y",
-    ...args,
-  ]);
+async function ffmpeg(args: readonly string[], cwd?: string): Promise<void> {
+  const result = await run(
+    FFMPEG,
+    ["-hide_banner", "-nostdin", "-loglevel", "error", "-y", ...args],
+    cwd,
+  );
   if (result.code !== 0)
     throw new Error(`ffmpeg exited ${result.code}: ${result.stderr.slice(-2000)}`);
 }
@@ -125,29 +123,60 @@ export async function generateHls(dir: string, seconds: number, segmentSeconds =
  * `manifest.mpd` with video and audio in **separate adaptation sets** — the
  * shape where a missing `-map` silently loses the sound — and fragmented-MP4
  * segments on a template.
+ *
+ * **Generated from inside the directory, with a bare manifest name.** Given an
+ * absolute `…\manifest.mpd`, the Windows build writes its segments somewhere
+ * other than the directory the manifest sits in, so the origin answers the
+ * MPD's own names with 404 and the stream fails before its first byte: a 502 in
+ * every DASH case on CI's Windows leg (run 36333161971), the same fault
+ * `preview-frame.test.ts` met in run 35404674345. The files the MPD names are
+ * then checked for, so a muxer that writes elsewhere fails here, by name,
+ * rather than later as an unexplained status.
  */
 export async function generateDash(dir: string, seconds: number): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
-  await ffmpeg([
-    ...SOURCES(seconds),
-    "-map",
-    "0:v",
-    "-map",
-    "1:a",
-    ...H264,
-    ...AAC,
-    "-f",
-    "dash",
-    "-seg_duration",
-    "2",
-    "-use_template",
-    "1",
-    "-use_timeline",
-    "1",
-    "-adaptation_sets",
-    "id=0,streams=v id=1,streams=a",
-    path.join(dir, "manifest.mpd"),
-  ]);
+  await ffmpeg(
+    [
+      ...SOURCES(seconds),
+      "-map",
+      "0:v",
+      "-map",
+      "1:a",
+      ...H264,
+      ...AAC,
+      "-f",
+      "dash",
+      "-seg_duration",
+      "2",
+      "-use_template",
+      "1",
+      "-use_timeline",
+      "1",
+      "-adaptation_sets",
+      "id=0,streams=v id=1,streams=a",
+      "manifest.mpd",
+    ],
+    dir,
+  );
+
+  const mpd = await fs.readFile(path.join(dir, "manifest.mpd"), "utf8");
+  const present = await fs.readdir(dir);
+  const templates = [...mpd.matchAll(/(?:initialization|media)="(?<name>[^"]+)"/gu)].map(
+    (match) => match.groups?.["name"] ?? "",
+  );
+  // Each adaptation set carries its own copy of the template; one name each.
+  const named = templates.flatMap((template) =>
+    ["0", "1"].map((id) =>
+      template.replaceAll("$RepresentationID$", id).replace(/\$Number%05d\$/u, "00001"),
+    ),
+  );
+  const missing = [...new Set(named)].filter((name) => !present.includes(name));
+  if (templates.length === 0 || missing.length > 0) {
+    throw new Error(
+      `the generated MPD names ${missing.join(", ") || "no segment"}, which ${dir} does not hold. ` +
+        `It holds: ${present.join(", ")}`,
+    );
+  }
 }
 
 /**

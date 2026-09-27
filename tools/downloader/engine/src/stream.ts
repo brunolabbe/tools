@@ -162,13 +162,13 @@ export const STREAM_ENDED_EARLY = /Stream ends prematurely/iu;
 export const WILL_RECONNECT = /Will reconnect at/iu;
 
 /**
- * The connection a line came from: the address in ffmpeg's `[http @ 0x…]`
- * prefix. Measured on ffmpeg 6.1.1: the early end and its reconnect carry the
- * same address, and a video and a separate audio input each get their own —
- * which is what keeps a reconnect on one from answering for the other when the
- * two inputs' threads interleave their lines.
+ * The connection a line came from: the address in ffmpeg's `[http @ …]` prefix,
+ * `0x557cbe02b840` on Linux, `0000019e45be7ec0` on Windows (CI run 35404674345).
+ * On ffmpeg 6.1.1 an early end and its reconnect carry the same address, and a
+ * video and a separate audio input each get their own, so a reconnect on one
+ * never answers for the other when the two inputs' threads interleave lines.
  */
-const CONNECTION_OF = /^\[[^\]@]*@ (0x[0-9a-f]+)\]/iu;
+const CONNECTION_OF = /^\[[^\]@]*@ (?:0x)?([0-9a-f]+)\]/iu;
 
 export function connectionOf(line: string): string | null {
   return CONNECTION_OF.exec(line)?.[1] ?? null;

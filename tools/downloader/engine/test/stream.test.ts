@@ -979,4 +979,57 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     },
     30_000,
   );
+
+  // The Windows build prints a context pointer without `0x`, zero-padded to
+  // sixteen digits, and ends every line CRLF. That is the shape CI's Windows leg
+  // logged in run 35404674345: `[http @ 0000019e45be7ec0] HTTP error 404 Not
+  // Found\r\n`. Read on every platform, since it needs no ffmpeg at all.
+  test("the connection is read off a Windows-shaped line as well as a Linux one", async () => {
+    const { connectionOf } = await import("../src/stream.ts");
+    const linux = "[http @ 0x557cbe02b840]";
+    const windows = "[http @ 0000019e45be7ec0]";
+    for (const prefix of [linux, windows]) {
+      const early = connectionOf(`${prefix} Stream ends prematurely at 1, should be 2`);
+      expect(early).not.toBeNull();
+      expect(connectionOf(`${prefix} Will reconnect at 1 in 0 second(s), error=End of file.`)).toBe(
+        early,
+      );
+    }
+    expect(connectionOf(`${windows} x`)).not.toBe(connectionOf("[http @ 0000019e45bad940] x"));
+  });
+
+  test.skipIf(process.platform === "win32")(
+    "a healed early end on a Windows-shaped connection completes, and an unanswered one still fails",
+    async () => {
+      // oxlint-disable-next-line consistent-function-scoping -- read beside its lines
+      const ended = (address: string): string =>
+        `[http @ ${address}] Stream ends prematurely at 30028, should be 75004\r`;
+      // oxlint-disable-next-line consistent-function-scoping -- read beside its lines
+      const reconnect = (address: string): string =>
+        `[http @ ${address}] Will reconnect at 30028 in 0 second(s), error=Input/output error.\r`;
+      const video = "0000019e45be7ec0";
+      const audio = "0000019e45bad940";
+
+      const healed = [ended(video), ended(audio), reconnect(audio), reconnect(video)];
+      const engineHealed = engineWith({ ffmpegPath: await standIn(healed) });
+      const whole = await engineHealed.stream({
+        jobId: "windows-healed",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      whole.body.resume();
+      await expect(whole.done).resolves.toBeDefined();
+
+      const oneLeft = [ended(video), ended(audio), reconnect(audio)];
+      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft) });
+      const cut = await engineCut.stream({
+        jobId: "windows-cut",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      cut.body.resume();
+      await expect(cut.done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+    },
+    30_000,
+  );
 });
