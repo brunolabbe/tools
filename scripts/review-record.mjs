@@ -601,9 +601,9 @@ const gateNumbersIn = (text) =>
  * @returns {{start: number, end: number}}
  */
 export function locateGateBlock(markdown, gate, sectionText) {
-  const sections = extractSections(markdown);
+  const headings = extractSections(markdown);
   const review = selectSection(
-    sections.filter((s) => s.level === 2),
+    headings.filter((s) => s.level === 2),
     "Review",
   );
   const own = gateNumbersIn(sectionText);
@@ -611,7 +611,7 @@ export function locateGateBlock(markdown, gate, sectionText) {
 
   let start = review.start;
   if (gate !== null) {
-    const heading = sections.find(
+    const heading = headings.find(
       (s) =>
         s.level === 3 &&
         s.start >= review.start &&
@@ -624,7 +624,7 @@ export function locateGateBlock(markdown, gate, sectionText) {
     start = heading.start;
   }
 
-  const next = sections.find((s) => {
+  const next = headings.find((s) => {
     if (s.level !== 3 || s.start <= start || s.start > review.end) return false;
     const m = /^Gate (\d+)(?!\d)/.exec(s.title.trim());
     return m !== null && !own.has(Number(m[1]));
@@ -647,14 +647,16 @@ export function formatMarkdown(text) {
   try {
     const file = path.join(dir, "section.md");
     fs.writeFileSync(file, text);
-    const fmt = spawnSync(process.execPath, [OXFMT, file], {
+    const formatter = spawnSync(process.execPath, [OXFMT, file], {
       cwd: dir,
       encoding: "utf8",
       shell: false,
     });
-    if (fmt.error) throw fmt.error;
-    if (fmt.status !== 0) {
-      throw new Error(`oxfmt could not format the section file: ${fmt.stderr || fmt.stdout}`);
+    if (formatter.error) throw formatter.error;
+    if (formatter.status !== 0) {
+      throw new Error(
+        `oxfmt could not format the section file: ${formatter.stderr || formatter.stdout}`,
+      );
     }
     return fs.readFileSync(file, "utf8");
   } finally {

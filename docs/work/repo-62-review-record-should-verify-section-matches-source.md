@@ -117,6 +117,14 @@ dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
   temp directory with empty prefixes and reads `--- section-file`. Same line
   count, and it is the output this ticket turns into an error message.
 
+  **Appending is not enough on its own.** The first preflight failed the
+  citations check, repo-55 "4 indistinct": two new helpers repeated
+  `const sections = extractSections(markdown);` and
+  `const fmt = spawnSync(process.execPath, [OXFMT`, the anchors of two of that
+  record's citations, so each anchor started on two lines. Renamed to
+  `headings` and `formatter`; `node scripts/citations-gate.mjs --against
+origin/main` → exit 0, 112 enforced, 0 failing.
+
   **Tests.** `npx vitest run scripts/test/review-record.test.ts` → 33 of 33
   (27 before, 6 new). Red runs by mutation, each reverted: the comparison
   always matching → 4 of 33 fail; byte comparison without the formatter → 2
