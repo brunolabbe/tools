@@ -208,9 +208,10 @@ you are there.
    exit 0. It compares the committed record with that file, ignoring table
    padding and what the formatter rewrites, and a non-zero exit names the ticket
    lines that differ (repo-62). `<ticket-path>` is the path to the ticket file
-   (e.g., `docs/work/repo-81-rate-tickets.md`), not its id; passing an id fails
-   with `fatal: path not found`. Diffing by hand is what caught both landers that
-   rewrote a gate's words on 2026-09-26; this is that diff as one exit bit.
+   (e.g., `docs/work/repo-81-rate-tickets-and-rule-gaps.md`), not its id;
+   passing an id fails with `fatal: path '<id>' does not exist in '<rev>'`.
+   Diffing by hand is what caught both landers that rewrote a gate's words on
+   2026-09-26; this is that diff as one exit bit.
 
    **2026-09-27: dry-run the mechanic before you name it in a landing
    dispatch too — see step 6's rule.** A splice order, a repoint, a
@@ -389,13 +390,16 @@ gh pr view <n> --json headRefOid,statusCheckRollup
 default CodeQL setup, which `gh run list` cannot see with any flag. An
 orchestrator used the weaker command for a whole batch and nearly closed with two
 failures unseen (2026-09-18), after `skipped` had been recorded as reading green
-in three consecutive sessions, all on 2026-09-07. Read a failing check's reason with
-`gh run view <id> --attempt N --log` (where N is the attempt number when a run
-has been retried), and say which of the two CodeQL checks you mean, since
-`CodeQL` and `codeql` both exist here. `--json` rather than the table, because
-the failure this guards against is reading a list by eye. **Name the sha in
-whatever you conclude** — your look decays the same way a record's does (2026-09-04:
-a relayed status claim went stale between being taken and being read).
+in three consecutive sessions, all on 2026-09-07. Read a failing check's reason
+with `gh run view <id> --log-failed`, and say which of the two CodeQL checks
+you mean, since `CodeQL` and `codeql` both exist here. `--json` rather than the
+table, because the failure this guards against is reading a list by eye. To
+read one job's full log on a run that has been retried, add `--attempt N`:
+`gh run view <id> --job <id> --log` alone, without it, returned the wrong
+attempt's log — byte-identical output for a failing job and a passing one
+(reference/history.md item 9). **Name the sha in whatever you conclude** — your
+look decays the same way a record's does (2026-09-04: a relayed status claim
+went stale between being taken and being read).
 
 **After the merge, one more look at `main`:
 `gh run list --branch main --limit 10 --json databaseId,event,conclusion,headSha`,
