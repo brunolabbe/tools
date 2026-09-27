@@ -150,7 +150,7 @@ Procedure read from `origin/main`. The branch's own `roles/reviewer.md` and `rol
 2. **med · The Windows-leg rule rests on a false mechanism and contradicts SKILL.md.** Premises: `gh pr checks 298` at `18ca055` lists `test (windows-latest, informational)` as `fail`, and `gh pr view 298 --json statusCheckRollup` gives that check conclusion `FAILURE`. SKILL.md's After a merge prescribes exactly those two calls because they show a `continue-on-error` job that `gh run list` hides (`.claude/skills/orchestrate-tickets/SKILL.md@6988b65:308 "which this page prescribed until 2026-09-20"`). The new bullet under dispatching.md's Dispatching a builder calls the leg invisible to `gh pr checks`'s rollup and cites After a merge for it. History item 16 repeats the claim. What is true, and worth the rule, is that no gate and no preflight can see a CI leg before the pull request exists. Remedy: drop the `gh pr checks` clause, and point at After a merge's look as the check that finds the leg.
 
 3. **med · records.md still steers a gate record to a branch-only pin in three places the new paragraph does not reach.** (a) The re-resolve list's mode 2 still says the answer is pinning the record to the commit the gate reviewed, "the cheaper answer" (`.claude/skills/orchestrate-tickets/reference/records.md@6988b65:114 "record to the commit the gate reviewed"`, unchanged on the branch). That is the instruction item 1 says two builders followed. (b) The pin-or-declaration test (`.claude/skills/orchestrate-tickets/reference/records.md@6988b65:285 "Reach for a pin when the citation was true of some commit"`) decides with `git log --all -S`, which finds branch-only commits. So for a gate-record citation that a later round deleted, it answers pin. dl-53's lander had to substitute `git log origin/main -S` by hand for gate 5's DEMUX_READ_FAILED citation (the branch's Landed Log entry). (c) The run-output section says "pin it to the commit it was true at" (`.claude/skills/orchestrate-tickets/reference/records.md@6988b65:526 "pin it to the commit it was true at"`). Method: grepped all 20 files under `.claude/skills/orchestrate-tickets/` and `.claude/agents/` (7 definitions, 13 skill pages; history.md is read as evidence, not instruction), plus review-ticket's `gate.md`, for pin, pinned, pins, pinning, `@<rev>`, reviewed sha and branch-only. Every other hit is consistent: builder.md's "repoint or pin" is about merged records, pinned to the base; reviewer.md forbids a branch pin; gate.md requires a `main` commit. Remedy: (a) repoint; (b) `git log origin/main -S` for a gate record; (c) a `main` commit or a declaration.
-4. **med · repo-65's open decision rests on two false premises.** (i) `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:76 "both say to commit and"`. Both pages say preflight comes before the commit: `.claude/skills/orchestrate-tickets/roles/builder.md@6988b65:104 "Fix, run the narrowest checks, then preflight, then commit and push"` and `.claude/skills/orchestrate-tickets/roles/fixer.md@6988b65:39 "Run the checks your fixes touch, narrowest first, then"`, whose next bullet is the commit. Both are unchanged on the branch. So option (a) would refuse the order both role pages prescribe, a cost the option does not name, and "(a) would enforce" is backwards. (ii) `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:50 "so they already see only committed state"`. Check 2 does not: `scripts/preflight.mjs:346 "citationsGate(repo, SCOPE, grandfathered)"` reaches `scripts/citations-gate.mjs:558 "fs.readFileSync(path.join(repo, record)"`, the working tree. Measured: prepending one uncommitted comment line to scripts/citations.mjs made `node scripts/citations-gate.mjs` exit 1 with 3 records failed, repo-50's first (reverted after). The `npm run check` inside check 1 reads the working tree too. So the recommendation's reason, that (a) matches what checks 2 and 4 already assume, fails for check 2. The reproduction itself holds (below). The decision is correctly shaped: options, a recommendation, `needs-decision`. The premises need correcting. Whether (a) stays the recommendation once its real cost is named is the owner's call, not this gate's.
+4. **med · repo-65's open decision rests on two false premises.** (i) `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:140 "both say to commit and"`. Both pages say preflight comes before the commit: `.claude/skills/orchestrate-tickets/roles/builder.md@6988b65:104 "Fix, run the narrowest checks, then preflight, then commit and push"` and `.claude/skills/orchestrate-tickets/roles/fixer.md@6988b65:39 "Run the checks your fixes touch, narrowest first, then"`, whose next bullet is the commit. Both are unchanged on the branch. So option (a) would refuse the order both role pages prescribe, a cost the option does not name, and "(a) would enforce" is backwards. (ii) `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:134 "so they already see only committed state"`. Check 2 does not: `scripts/preflight.mjs:346 "citationsGate(repo, SCOPE, grandfathered)"` reaches `scripts/citations-gate.mjs:558 "fs.readFileSync(path.join(repo, record)"`, the working tree. Measured: prepending one uncommitted comment line to scripts/citations.mjs made `node scripts/citations-gate.mjs` exit 1 with 3 records failed, repo-50's first (reverted after). The `npm run check` inside check 1 reads the working tree too. So the recommendation's reason, that (a) matches what checks 2 and 4 already assume, fails for check 2. The reproduction itself holds (below). The decision is correctly shaped: options, a recommendation, `needs-decision`. The premises need correcting. Whether (a) stays the recommendation once its real cost is named is the owner's call, not this gate's.
 5. **low** · The `wrong findings` cell names Gate 5 as the round that reproduced the builder's recovering control. It was Gate 6, its section 4. Gate 5 is angle A's probe-timeout ceiling round.
 6. **low** · The row counts dl-53 as 5 build rounds plus 3 landing stops, labelled relayed because the branch is unmerged. The branch's Log is readable at `origin/dl-53-stream-to-visitor` and runs two build entries, then Round three to Round seven. That matches the per-agent row's 7 reports; 5 plus 3 does not.
 7. **low** · `wrong findings: 2` leaves out pl-48 gate 1's low, refuted as to scope by gate 2 (`tools/planner/docs/work/pl-48-change-dates-and-budget-on-the-page.md:165 "the day named twice: refuted as to scope"`, counted at `tools/planner/docs/work/pl-48-change-dates-and-budget-on-the-page.md:169 "8 gate-1 verdicts (7 closed, 1 refuted)"`). The defect was real but not in this branch. The row should say either way whether a scope refutation counts.
@@ -177,3 +177,87 @@ Procedure read from `origin/main`. The branch's own `roles/reviewer.md` and `rol
 - 2026-09-27 — Filed and built in the same dispatch, on the owner's
   instruction (maintenance: a `chore` with no source change). Built on
   `origin/main` at `6988b65`.
+- 2026-09-27 — Gate 1 (CONCERNS) fixed. Every finding reproduced before
+  changing anything; none refuted.
+
+  **med 1, fixed.** The `-err_detect` attribution was backwards: the builder
+  refuted it first, in `dl-53`'s Round-three Log at `8ac378c` (05:39Z per
+  `git show -s --format=%cI`); the reviewer's own `### Gate 4` (`536e1d6`,
+  14:09Z) confirmed the builder's refutation by re-running the same
+  measurement, agreeing its own round-1 recommendation was wrong. Fixed in
+  `history.md`'s `wrong findings` cell, item 6, and the "what went right"
+  bullet — all three credited the reviewer with originating the correction.
+  - **med 2, fixed.** `gh pr checks 298` and `gh pr view 298 --json
+statusCheckRollup` both name `test (windows-latest, informational)`
+    directly — reproduced: `gh pr checks 298 | grep -i windows` prints the
+    row, `--json statusCheckRollup` returns its `conclusion`. The true
+    mechanism is that a gate and preflight run before any CI has results at
+    all, not that the leg is invisible to those two commands. Fixed in
+    `dispatching.md`'s builder-dispatch bullet and `history.md` item 16.
+  - **med 3, fixed.** `records.md`'s mode-2 remedy, the `git log --all -S`
+    pin-or-declaration test, and the run-output section all still pointed at
+    a branch-only pin. Reworded mode 2 to repoint rather than pin; added a
+    `git log origin/main -S` carve-out for a gate record's own citation; and
+    corrected the run-output section to name a surviving commit.
+  - **med 4, fixed.** `repo-65`'s decision rested on two false premises:
+    `roles/builder.md:116` and `roles/fixer.md:39` (unchanged on this branch)
+    both prescribe preflight _before_ the commit, not after; and check 2
+    (`checkCitations`) reads the working tree unconditionally — reproduced:
+    prepending an uncommitted line to `scripts/citations.mjs` made
+    `citations-gate.mjs` exit 1, 3 records failing, reverted after.
+    Recommendation flipped from (a) to (b) in `repo-65`, corrected in place
+    with a dated Log entry there; still `needs-decision`. Fixing `repo-65`
+    moved this finding's own two citations into it (`:76→:140`, `:50→:134`);
+    both anchors are unchanged text, so this is the ordinary coordinate-only
+    repoint `records.md` permits the lander, not the fix's own evidence
+    (which must stay wrong) or text the fix deleted outright (which would go
+    back to the reviewer).
+  - **low 5, fixed.** The recovering-control confirmation was `### Gate 6`,
+    not `### Gate 5` (angle A's probe-timeout-ceiling round) — corrected in
+    `history.md`'s `wrong findings` cell.
+  - **low 6, fixed.** `dl-53`'s builder-rounds count is **7** (its own Log
+    runs two initial build entries then Round three through Round seven,
+    matching the per-agent row's "last of 7 reports"), not "5 plus 3 landing
+    stops" — corrected in `history.md`'s `builder rounds` row and `tickets`
+    row.
+  - **low 7, fixed.** Added `pl-48` gate 1's scope-refuted low as a third
+    wrong finding in `history.md`, naming the disposition question the row
+    left implicit rather than counting it silently either way.
+  - **low 8, fixed.** `.claude/agents/fixer.md` and `roles/fixer.md` were
+    both added in `a1a417b` on 2026-09-26, not 2026-09-04 — corrected in
+    `model-pairing.md`.
+  - **low 9, fixed.** Narrowed `common.md`'s new "git command chained after
+    any other command" claim: it did not hold in this gate's own session,
+    which ran several such chains without incident, and the one real refusal
+    was a `bash <script>` compound. Reworded with that caveat rather than
+    stating it as a general rule.
+  - **low 10, fixed.** `history.md` item 3 claimed the landing-order fix
+    landed under both `dispatching.md`'s builder-dispatch and routing-findings
+    sections; it is only under routing-findings. Corrected, with a pointer to
+    item 16 for the builder-dispatch hunk.
+  - **low 11, fixed.** `roles/fixer.md` still said to set `status: done` in
+    "the first gate record's commit," which a multi-round ticket may not
+    have once an earlier round's record already went in as `in-flight`.
+    Reworded to land on the commit that actually lands the round.
+  - **low 12, fixed.** The `repo-60`/`pl-48` fixer-failure descriptions on
+    four pages said more than either ticket's own Log or PR body supports.
+    Replaced with the orchestrator's own relayed measurement (its commands,
+    not read off any primary source here), labelled as such in all four
+    places: `history.md` item 2, `SKILL.md`'s pairing paragraph,
+    `model-pairing.md`, `roles/fixer.md`'s Landing section.
+  - **low 13, fixed.** `records.md`'s mode 5 overclaimed "never against a sha
+    you name" for both scripts; `citations.mjs --rev <sha>` is the documented
+    exception. Narrowed to say the unconditional case is `citations-gate.mjs`,
+    which has no `--rev` at all.
+
+  **Landing order.** Set `status: in-flight` and committed gate 1's section
+  verbatim with `scripts/review-record.mjs`, both before any fix, per the
+  coordinator's instruction and this branch's own `roles/builder.md` edit.
+  `node scripts/review-record.mjs --verify docs/work/repo-64-record-the-2026-09-27-batch.md <gate 1 file>`
+  exits 0 at the landing commit.
+
+  Verified after all fixes: `npm run check` exit 0;
+  `node scripts/citations-gate.mjs --against origin/main` exit 0;
+  `node scripts/preflight.mjs --base origin/main --title "chore(repo): record
+the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
+  exit 0.

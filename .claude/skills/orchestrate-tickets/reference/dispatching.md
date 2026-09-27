@@ -73,13 +73,19 @@ What only you can supply, and what every builder prompt therefore carries:
   timeout one command would have shown first, costing a round (2026-09-26).
 - **A branch touching a spawn call or an ffmpeg path is unproven on Windows
   until you look yourself.** Ask the gate to name that CI leg `unproven (gate)`
-  in its section, but do not stop there: `windows-latest, informational` is
-  `continue-on-error`, invisible to `gh pr checks`'s rollup and to `gh run
-  list` (`SKILL.md`'s _After a merge_), so no gate and no preflight run can see
-  it either. `dl-53` introduced six failures there that nothing else caught;
-  only a pre-merge `gh run view --log-failed` on that leg found them, on an
-  already-open pull request (2026-09-27). Read that leg yourself before
-  granting the merge on any such branch.
+  in its section, but do not stop there: **a gate reviews a detached commit
+  and preflight runs locally, so neither has any CI result to read at all,
+  whatever the leg's own visibility** — that is the true mechanism, not
+  `continue-on-error` hiding the leg from any particular command (correction,
+  gate 1, finding 2: `gh pr checks` and `gh pr view --json statusCheckRollup`
+  do list `windows-latest, informational` by name once a pull request exists
+  and its CI has run — that is exactly why `SKILL.md`'s _After a merge_
+  reaches for those two rather than `gh run list`). So once the pull request
+  is open, run that same look yourself, before granting the merge, rather than
+  waiting for the after-merge one: `dl-53` introduced six failures on that leg
+  that no gate or preflight run could see before the pull request existed, and
+  a pre-merge `gh pr checks 298` on the already-open pull request is what
+  found them (2026-09-27).
 
 ### An answered decision has to be recorded even when you do not build it
 

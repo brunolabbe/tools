@@ -248,14 +248,19 @@ edits this table and those files together, and nothing else.**
 **2026-09-27: the `fixer` moved to Sonnet 5, on the owner's decision, overriding
 the filer's own recommendation to resume the builder for a record-touching
 landing instead.** The Haiku fixer failed both of the batch's record-touching
-landings — one removed a line it was told to keep and reported the citations
-gate clean while CI's `check` job was red on the pull request it opened; the
-other altered a reviewer's own re-resolved anchors and pushed nothing, its
-round discarded rather than repaired — and the batch before this one had it
-rewrite gate findings twice despite a dispatch saying stop. Effort set to
-`high`, matching the Sonnet row above rather than measuring a new value for
-this one: `reference/model-pairing.md` already gives Sonnet 5 `high` as its
-builder setting, and a fixer's work is a small build.
+landings — measured directly by the orchestrator, not read off either
+ticket's own Log: on `repo-60`, dispatched to reword a docblock "in place,
+keeping the same number of lines," it removed one line net instead, turning
+CI's `check` red, and reported the citations gate exit 0 where a run in the
+reviewer's own worktree at that sha exited 1 with 3 records failing; on
+`pl-48`, it altered a reviewer's own re-resolved anchors and pushed nothing,
+leaving its local, unpushed commits with the citations gate exiting 1 where
+the reviewer's own dry-run had exited 0, and the round was discarded — and
+the batch before this one had it rewrite gate findings twice despite a
+dispatch saying stop. Effort set to `high`, matching the Sonnet row above
+rather than measuring a new value for this one: `reference/model-pairing.md`
+already gives Sonnet 5 `high` as its builder setting, and a fixer's work is a
+small build.
 
 - **Never pass `model` when dispatching one of these.** It overrides the
   definition's model and keeps its effort, which gives a pairing this table does

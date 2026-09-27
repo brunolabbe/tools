@@ -45,12 +45,21 @@ $ git checkout -- scripts/test/next-id.test.ts
 uncommitted change there — or to any tool's suite — passes preflight with
 nothing having exercised it.
 
-**What this does not affect.** Check 2 (`checkCitations`), check 3
-(`checkReview`) and check 4 (`checkTitle`) either read `git show HEAD:...` or
-the branch's last commit directly, so they already see only committed state
-and are consistent with committing-then-checking as the intended order; only
-check 1's test selection silently degrades when that order is skipped. Check 5
-(`checkMergeTree`) is unaffected — it compares committed heads.
+**Correction, gate 1: this is narrower than first written, and the checks do
+not agree with each other the way the first draft claimed.** Check 3
+(`checkReview`) and check 4 (`checkTitle`, absent `--title`) do read committed
+state only (`git show HEAD:...`, the last commit subject). **Check 2
+(`checkCitations`) does not**: `scripts/citations-gate.mjs:558
+"fs.readFileSync(path.join(repo, record)"` reads the record straight off
+disk, so it sees an uncommitted change to a ticket's own `## Review` section
+exactly as it sees a committed one. Reproduced: prepending one uncommitted
+comment line to `scripts/citations.mjs` (which many gate records cite by
+line) made `node scripts/citations-gate.mjs --against origin/main` exit 1
+with 3 records failing, on `origin/main` at `6988b65`, reverted after. So the
+checks split three ways, not two: check 1 reads committed diffs only, check 2
+reads the working tree unconditionally, and checks 3–4 read committed state.
+Check 5 (`checkMergeTree`) is unaffected either way — it compares committed
+heads.
 
 ## The decision this ticket carries
 
@@ -59,24 +68,38 @@ Two ways to close the gap, and they trade differently:
 - **(a) Make `preflight.mjs` refuse to run over a dirty working tree.** Check
   `git status --porcelain` before computing `diffPaths` and fail fast (a new
   `EXIT` bit, or fold into `setup`) naming the uncommitted paths, telling the
-  caller to commit first. Cheap, and it turns the silent gap into a loud one
-  without changing what "the diff" means anywhere in the script — matches how
-  checks 2–4 already read only committed state. Downside: a builder who wants
-  to preflight _before_ committing, as a pre-commit sanity pass, cannot.
-- **(b) Extend `diffPaths` to include the working tree.** Union
-  `git diff --name-only ${base}...HEAD` with `git status --porcelain` (staged,
-  unstaged and untracked paths, relative to `repo`). Lets preflight be run
-  before or after committing with the same coverage. Downside: check 3 and
-  check 4 still read committed state only (`git show HEAD:...`, the last
-  commit subject), so the three checks would disagree about what "the branch"
-  means unless those two are widened as well — a larger, contract-adjacent
-  change to a script every builder's report leans on.
+  caller to commit first. **Real cost, corrected at gate 1: both role pages
+  prescribe the opposite order, and (a) would refuse it.**
+  `.claude/skills/orchestrate-tickets/roles/builder.md:116 "Fix, run the
+narrowest checks, then preflight, then commit a"` and
+  `.claude/skills/orchestrate-tickets/roles/fixer.md:39 "Run the checks your
+fixes touch, narrowest first, then"` both say preflight runs **before** the
+  commit, every round — so (a) would fail preflight on the ordinary case
+  both pages already tell every builder and fixer to follow, not only on a
+  caller who skipped a step. It is no longer the smaller change once that is
+  named: it would need those two pages rewritten too, to commit first and
+  preflight second, before it could ship without contradicting them.
+- **(b) Extend `diffPaths` to include the working tree, at least for check
+  1's test selection.** Union `git diff --name-only ${base}...HEAD` with
+  `git status --porcelain` (staged, unstaged and untracked paths, relative to
+  `repo`). Matches what check 2 already does unconditionally and what both
+  role pages' own prescribed order needs — preflight run before the commit
+  that would otherwise make the change visible. Downside: check 3 and check 4
+  still read committed state only (`git show HEAD:...`, the last commit
+  subject), so widening only check 1 makes the three checks read three
+  different trees rather than two; widening all of them is a larger,
+  contract-adjacent change to a script every builder's report leans on.
 
-No orchestration-skill page prescribes committing before preflighting in so
-many words; `roles/builder.md` and `roles/fixer.md` both say to commit and
-then run it, in that order, which (a) would enforce and (b) would merely
-tolerate skipping. Recommend (a): it is the smaller change, and it matches
-what checks 2 and 4 already assume rather than asking them to catch up.
+**Recommendation, corrected at gate 1: (b), reversing the filer's own (a).**
+Both premises behind (a) were wrong — the role pages prescribe preflight
+_before_ the commit, not after, and check 2 already reads the working tree
+unconditionally, so (a) would not "match what checks 2 and 4 already assume";
+it would put check 1 alone out of step with check 2 and with the very order
+`roles/builder.md` and `roles/fixer.md` tell every dispatch to follow. (b)
+brings check 1 into line with check 2's existing behaviour and with that
+order, at the cost named above. Still `needs-decision`: the owner may prefer
+widening checks 3 and 4 too, over living with three checks reading three
+different trees.
 
 ## Build
 
@@ -104,3 +127,20 @@ Whichever of (a) or (b) is chosen:
   reproduction above is independent of `dl-53`'s own report and was run on
   `origin/main` at `6988b65`, in a clean worktree, with the probe reverted
   immediately after.
+- 2026-09-27 — **Correction from repo-64's gate 1.** Two premises behind the
+  first draft's recommendation were false, and both sentences that carried
+  them are quoted here verbatim before their correction, per this repo's
+  discipline for a claim that reached a record: the first draft's Why said
+  check 3 and check 4 read committed state only, "so they already see only
+  committed state" — read on its own line, that clause implied check 2 does
+  too, and it does not: check 2 reads the working tree unconditionally
+  (`fs.readFileSync` on the record path, reproduced: an uncommitted line in
+  `scripts/citations.mjs` made `citations-gate.mjs` exit 1, 3 records
+  failing). And the first draft's decision section said `roles/builder.md`
+  and `roles/fixer.md` "both say to commit and then run it, in that order" —
+  backwards: both pages say preflight runs _before_ the commit. Recommendation
+  flipped from (a) to (b) accordingly; both sections above are rewritten
+  rather than corrected beside the original wording, because neither false
+  clause was itself evidence a later reader needs verbatim — the mechanism
+  each was wrong about is restated correctly in place of it. Still
+  `needs-decision`.

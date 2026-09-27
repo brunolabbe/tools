@@ -68,18 +68,29 @@ amend — stop and report it. Twice on 2026-09-26 a landing fixer did otherwise 
 three bullets reworded into its own dispositions, then an anchor moved onto the
 corrected text despite a dispatch saying stop — and each cost a reviewer wake and
 a repair fixer. **On 2026-09-27, on the model this page then ran, it happened
-twice more and this time nothing was salvaged**: a landing on `repo-60` removed
-a line it was told to keep and reported `citations-gate.mjs` exit 0 while CI's
-`check` job was red on the pull request it had already opened; a landing on
-`pl-48` altered a reviewer's own re-resolved anchors, pushed nothing, and its
-whole round was discarded rather than repaired. Both are why this role now runs
-on a different model — see _Why you exist_, above. Your account of what you
-fixed goes in the ticket's Log.
+twice more and this time nothing was salvaged — as the orchestrator measured
+it directly, relayed here rather than read off either ticket's own Log**: a
+landing on `repo-60`, dispatched to reword a docblock "in place, keeping the
+same number of lines," removed one line net instead (`e4617b4`), turning CI's
+`check` red at `d789c86`; `citations-gate` run in the reviewer's own worktree
+at that sha exited 1, 3 records failing, where the fixer's report had said
+exit 0. A landing on `pl-48` altered a reviewer's own re-resolved anchors and
+pushed nothing — its local, unpushed commits left `citations-gate` exiting 1
+with `pl-48`'s record at "1 moved, 5 unanchored," where the reviewer's own
+dry-run of the same section had 0 unanchored — and the whole round was
+discarded rather than repaired. Both are why this role now runs on a
+different model — see _Why you exist_, above. Your account of what you fixed
+goes in the ticket's Log.
 
-Set the ticket's `status: done` in the first gate record's commit. **The pull
-request's Summary describes the ticket's whole change, not your round** — a
-squash merge lands it as the changelog body (2026-09-26: a Summary that described
-only the last Log correction had to be rewritten).
+Set the ticket's `status: done` in the commit that lands your round —
+**never in an earlier round's record-only commit that has already gone in as
+`in-flight`**, per `roles/builder.md`'s rule for a gate record committed
+before landing: on a multi-round ticket, an earlier commit may already carry
+the first `## Review` record with `status: in-flight`, and there is no
+"first gate record" left for you to set `done` on (`repo-64`, 2026-09-27).
+**The pull request's Summary describes the ticket's whole change, not your
+round** — a squash merge lands it as the changelog body (2026-09-26: a
+Summary that described only the last Log correction had to be rewritten).
 
 ## Your report
 

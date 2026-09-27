@@ -47,7 +47,10 @@ effort setting. Those are the sentinelle repository's values for the same models
 `agent-cost.mjs` prints the effort each agent ran at since this date, so the
 first history rows under the new lineup are the trial.
 
-**The `fixer` was Haiku 4.5, from 2026-09-04 until 2026-09-27,** because every
+**The `fixer` was Haiku 4.5, from 2026-09-26 (when the role itself was
+created, per `git log --diff-filter=A -- .claude/agents/fixer.md`, not
+2026-09-04 as first written here — gate 1, finding 8) until 2026-09-27,**
+because every
 maintenance artefact Haiku produced here was correct (repo-56, 2026-09-14/15)
 and the fixer's work is maintenance by definition: a finding whose fix it
 states in full. It is always checked by the round's gate, which is Sonnet or
@@ -58,11 +61,17 @@ still holds, and it is not why the row changed.
 fails, and a record-touching landing is where this fixer kept failing.** Two
 incidents on 2026-09-26 already showed the model rewriting a gate's own words
 mid-landing (`repo-62`'s Why). On 2026-09-27 the same class failed both of the
-batch's record-touching landings outright: one removed a line it was told to
-keep and reported the citations gate clean while CI's `check` job was red on
-the pull request it had already opened (`repo-60`); the other altered a
-reviewer's own re-resolved anchors and pushed nothing, its round discarded
-rather than repaired (`pl-48`). The filer's recommendation was to resume the
+batch's record-touching landings outright, measured directly by the
+orchestrator rather than read off either ticket's Log: dispatched on
+`repo-60` to reword a docblock "in place, keeping the same number of lines,"
+it removed one line net instead (`e4617b4`), turning CI's `check` red at
+`d789c86` — a `citations-gate` run in the reviewer's own worktree at that sha
+exited 1, 3 records failing, where the fixer's own report had said exit 0. On
+`pl-48` it altered a reviewer's own re-resolved anchors and pushed nothing —
+its local, unpushed commits left `citations-gate` exiting 1 with the record
+at "1 moved, 5 unanchored," where the reviewer's own dry-run of the same
+section had 0 unanchored — and the whole round was discarded rather than
+repaired. The filer's recommendation was to resume the
 builder for a record-touching landing instead of dispatching a fresh `fixer`
 at all — the builder already knows the branch, where a fixer starts cold — and
 the owner overrode that, choosing instead to keep the single-role split and
