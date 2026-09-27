@@ -47,6 +47,12 @@ export const GLOBAL_ARGS: readonly string[] = [
 export const PROGRESS_ARGS: readonly string[] = ["-progress", "pipe:1", "-nostats"];
 
 /**
+ * The same, on descriptor 3, for a run whose stdout is the media itself
+ * (dl-53). `streamFfmpeg` opens the descriptor; nothing else should use this.
+ */
+export const STREAM_PROGRESS_ARGS: readonly string[] = ["-progress", "pipe:3", "-nostats"];
+
+/**
  * Protocols a *remote* manifest is allowed to reference.
  *
  * `file` is deliberately absent. A manifest is attacker-influenced data, and an

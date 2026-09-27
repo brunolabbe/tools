@@ -163,7 +163,7 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   premise, fixed.** The first draft framed a captured session cookie reaching
   Chromium's traffic as new exposure relative to ffmpeg. `tools/downloader/CLAUDE.md:116 "not just the manifest"`
   requires `RequestContext` replayed on every fetch unconditionally, segments
-  included; `engine/src/ffmpeg/args.ts:162 "buildRequestContextArgs(options.requestContext)"` calls `buildRequestContextArgs` on
+  included; `engine/src/ffmpeg/args.ts@c87153d:162 "buildRequestContextArgs(options.requestContext)"` calls `buildRequestContextArgs` on
   every ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent
   from that function's `DROPPED_HEADERS`
   (`engine/src/ffmpeg/headers.ts:28-42 "const DROPPED_HEADERS"`); and `ffmpegTlsIntercept` defaults to

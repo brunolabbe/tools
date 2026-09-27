@@ -173,6 +173,39 @@ export interface OutputArgsOptions {
    */
   sourceMayBeMpegTs?: boolean;
   title?: string | undefined;
+  /**
+   * The output is a pipe, not a file (dl-53): nothing can be rewritten once it
+   * has gone out, so the muxer is named explicitly and MP4 is fragmented.
+   */
+  streaming?: boolean;
+}
+
+/**
+ * The muxer and its flags for an output that is written once, front to back.
+ *
+ * **Fragmented MP4, not fast-start.** `+faststart` moves `moov` ahead of `mdat`
+ * by rewriting the finished file, and a pipe has no finished file to rewrite.
+ * `empty_moov` writes the header first with no samples in it, and each fragment
+ * carries its own index, so a player can start on the first fragment and a
+ * cut-off transfer still plays up to the cut. The owner accepted what this
+ * costs on 2026-09-14 — some players show the duration late or seek slowly in
+ * a long file (dl-53).
+ *
+ * Fragments start at each video keyframe. With no video there are no
+ * keyframes to cut at in any useful sense — every audio packet is one, and a
+ * fragment per packet multiplies the index — so audio-only output is cut by
+ * duration instead.
+ *
+ * Matroska and WebM need nothing: their muxer already writes front to back,
+ * and on a pipe it simply omits the seek index it cannot go back for.
+ */
+export function streamingContainerArgs(container: OutputContainer, hasVideo: boolean): string[] {
+  if (container === "mp4") {
+    return hasVideo
+      ? ["-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4"]
+      : ["-movflags", "empty_moov+default_base_moof", "-frag_duration", "2000000", "-f", "mp4"];
+  }
+  return ["-f", container === "webm" ? "webm" : "matroska"];
 }
 
 export interface OutputArgsResult {
@@ -244,7 +277,9 @@ export function buildOutputArgs(options: OutputArgsOptions): OutputArgsResult {
     args.push("-bsf:a", "aac_adtstoasc");
   }
 
-  if (options.container === "mp4") {
+  if (options.streaming === true) {
+    args.push(...streamingContainerArgs(options.container, hasVideo));
+  } else if (options.container === "mp4") {
     args.push("-movflags", "+faststart");
   }
 

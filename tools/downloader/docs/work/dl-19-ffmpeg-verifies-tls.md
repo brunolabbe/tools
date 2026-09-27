@@ -202,7 +202,7 @@ layer that nothing pins.
    second crash rather than disproving the first. The CONNECT-proxy method was
    judged sound and the measurement stands.
 9. **Cosmetic: `opensTls`'s catch branch emits the flag for a malformed or
-   relative URL** (`engine/src/ffmpeg/args.ts:112-117 "function opensTls(url: string)"`). — **Not fixed**, and the
+   relative URL** (`engine/src/ffmpeg/args.ts@c87153d:112-117 "function opensTls(url: string)"`). — **Not fixed**, and the
    behaviour is deliberate and documented in the function's own comment: a parse
    failure defaults to _more_ verification, not less. A relative URL never
    reaches it, since every variant URL is absolutised before the engine sees it.

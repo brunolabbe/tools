@@ -202,3 +202,80 @@ and raise it with the owner before editing, per the root `CLAUDE.md`.
   The 524 limit is 125 s per Cloudflare's Error 524 doc, not the 100 s often
   quoted. Relay pricing was read from Better Stack's and Deploy Handbook's
   2026 Hetzner reviews. Neither the plan nor the price is contractual here.
+
+- 2026-09-27 — **Build step 1 measured; step 2 (the engine) built; stopped
+  before the contract**, per the Build's "raise it with the owner before
+  editing". Branch `dl-53-stream-to-visitor` off `origin/main` `c87153d`.
+
+  **Step 1, streaming.** A fixture HLS playlist (180 s, 1280x720 at 3 Mb/s,
+  45 segments, 72,888,728 bytes of `.ts`) served by a Referer-gated local
+  origin, fetched by the distribution ffmpeg 6.1.1 through the loopback egress
+  proxy (`startEgressProxy` with an SSRF guard allowing `127.0.0.1`), written
+  as `-movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1` with
+  `-progress pipe:3`. The script and its output are in the builder's scratch
+  directory, not the tree:
+
+  | reader                | first byte | total     | bytes out  | peak ffmpeg RSS | Node RSS before → peak |
+  | --------------------- | ---------- | --------- | ---------- | --------------- | ---------------------- |
+  | full speed, to a file | 68 ms      | 710 ms    | 70,617,030 | 59.1 MB         | 96.2 → 136.1 MB        |
+  | 1 MB/s (pause/resume) | 63 ms      | 66,963 ms | 70,617,030 | 59.4 MB         | 136.2 → 138.0 MB       |
+  | full speed, discarded | 58 ms      | 642 ms    | 70,617,030 | 56.6 MB         | 112.4 → 126.1 MB       |
+
+  Backpressure holds: a reader 100x slower than the source leaves ffmpeg's RSS
+  flat and Node's within 2 MB. `ffprobe` read the fragmented output as
+  `mov,mp4,m4a,3gp,3g2,mj2`, `h264` + `aac`, duration `180.024331`. A 30 s
+  fixture gave first bytes of 81, 56 and 56 ms and the same flat ~58 MB.
+
+  **Step 1, re-probe.** Five `POST /api/probe` with `refresh: true` on the e2e
+  fixture's MSE page (`startHlsOrigin().watchUrl`) through `createApp` with the
+  browser tier on and yt-dlp off, each answered by `browser` with 2 variants:
+  3,327, 2,826, 2,755, 2,761 and 2,758 ms. **Re-probe plus first byte is about
+  3.4 s against Cloudflare's 125 s**, on a fixture page. A real site is slower
+  (the analysis says 10–20 s); the bound that matters is `PROBE_TIMEOUT_MS`
+  (45 s default) plus any wait for a job slot — see the open decisions below.
+
+  **What the brief had wrong.**
+  - **A progressive MP4 cannot be piped into ffmpeg.** Measured with ffmpeg
+    6.1.1: an MP4 with its `moov` at the end (ffmpeg's own default layout) fed
+    on stdin logs `partial file`, **exits 0**, and writes a 1,293-byte output
+    with no samples; the fast-start copy of the same file converts. Straight
+    to the response would not be fragmented. So progressive sources go to
+    ffmpeg **as a URL**, through the egress proxy with the replayed headers,
+    exactly as manifests do, and ffmpeg seeks with `Range`. One code path for
+    every protocol; `engine/src/stream.ts` says why in its header.
+  - **The contract holds no settings.** Build step 5's settings live in
+    `api/src/config.ts` and `engine/src/config.ts`; the contract's part is the
+    job result, the link, the `muxing` state and one error message.
+  - `DISK_FULL` and `FILE_EXPIRED` are `@webtools/core` codes, not the
+    downloader's, so "remove `DISK_FULL`" reaches into `packages/core`.
+
+  **Built, engine only, additive.** `engine.stream()` beside `download()`,
+  which the API still calls until the contract is settled: one ffmpeg per
+  attempt, every input over the network (subtitles as `-f webvtt`/`-f srt`
+  inputs), output on stdout, progress on descriptor 3 (`streamFfmpeg` in
+  `runner.ts`). It resolves at the first byte and rejects before it with the
+  code; mirror failover and a retry without subtitles happen only before it.
+  After it, `done` rejects and the body is destroyed. The body is piped with
+  `end: false` — without it, a killed ffmpeg's stdout ends like any other and a
+  timed-out stream reached the client as a clean, complete response (the
+  "error after the first byte" case failed exactly that way before the fix).
+  Bytes sent are counted in Node, so the size cut is exact.
+
+  `npx vitest run tools/downloader/engine/test/stream.test.ts`: 15 of 15.
+  Mutations, each reverted: a temp file written beside the first chunk failed 7
+  of 15 on the directory listing (`{ tmp: [ 'leak-HLS6s' ] }`); pointing the
+  11 s case at the 6 s fixture failed on duration (`4.962812` against a 0.6 s
+  tolerance); `+faststart` in place of the fragmented flags failed 13 of 15.
+  `npx vitest run tools/downloader/engine`: 204 of 204 across 17 files.
+
+  Ten merged `## Review` citations into `args.ts`, `runner.ts`, `index.ts` and
+  `api/test/helpers.ts` (dl-19, dl-34, dl-45, dl-50, dl-56, dl-58) moved and
+  are pinned to `c87153d`; `node scripts/citations-gate.mjs --against
+origin/main` exits 0.
+
+  **Open, and put to the owner through the orchestrator:** the contract diff (a
+  single-use `link` on `Job`, `downloadUrl` and `expiresAt` off `JobResult`,
+  `muxing` removed, `FILE_EXPIRED`'s copy), `DISK_FULL`, dl-44's persisted
+  thumbnails (they are written into the output directory this ticket removes),
+  how long a link lives, and whether a `GET` waits for a slot. Steps 3 to 6
+  wait on the answers.

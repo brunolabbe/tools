@@ -68,6 +68,8 @@ import type { MuxInputFile, OutputContainer, TranscodeNotice } from "./mux.ts";
 import { CONTAINER_EXTENSIONS, mux } from "./mux.ts";
 import type { GcReport } from "./storage.ts";
 import { assertRealPathInside, sanitizeFilename, Storage } from "./storage.ts";
+import type { MediaStream, StreamRequest } from "./stream.ts";
+import { openStream } from "./stream.ts";
 
 export interface DownloadRequest {
   /** Names `tmp/<jobId>/` and `out/<jobId>/`. Sanitised before use as a path. */
@@ -113,6 +115,11 @@ export interface DownloadEngine {
   /** Creates `tmp/` and `out/`. Call once at boot. */
   init(): Promise<void>;
   download(request: DownloadRequest): Promise<DownloadOutcome>;
+  /**
+   * The rendition as a readable body, resolved at its first byte (dl-53).
+   * Writes nothing to disk. See `stream.ts`.
+   */
+  stream(request: StreamRequest): Promise<MediaStream>;
   /** Retention sweep: expired `out/` dirs and orphaned `tmp/` dirs. */
   collectGarbage(now?: number): Promise<GcReport>;
   /** Removes both directories for a job. For cancel and for post-serve cleanup. */
@@ -188,6 +195,10 @@ class Engine implements DownloadEngine {
 
   async removeJob(jobId: string): Promise<void> {
     await this.storage.removeJob(jobId);
+  }
+
+  async stream(request: StreamRequest): Promise<MediaStream> {
+    return openStream(request, { config: this.config, logger: this.#logger });
   }
 
   async download(request: DownloadRequest): Promise<DownloadOutcome> {
@@ -689,6 +700,8 @@ export {
   SYSTEM_CLOCK,
 } from "./config.ts";
 export type { Logger } from "./logger.ts";
+export type { MediaStream, StreamArgsOptions, StreamOutcome, StreamRequest } from "./stream.ts";
+export { buildStreamArgs, contentTypeFor, selectSubtitles } from "./stream.ts";
 export { NOOP_LOGGER } from "./logger.ts";
 
 export {
@@ -697,6 +710,7 @@ export {
   buildNetworkInputArgs,
   GLOBAL_ARGS,
   PROGRESS_ARGS,
+  STREAM_PROGRESS_ARGS,
 } from "./ffmpeg/args.ts";
 export {
   buildFetchHeaders,
@@ -708,7 +722,13 @@ export { buildTaskkillArgs, killProcessTree } from "./ffmpeg/kill.ts";
 export type { FfmpegProgressSnapshot, JobProgressContext } from "./ffmpeg/progress.ts";
 export { FfmpegProgressParser, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.ts";
-export { isTlsVerificationFailure, redactUrlsInText, runFfmpeg } from "./ffmpeg/runner.ts";
+export type { FfmpegStream } from "./ffmpeg/runner.ts";
+export {
+  isTlsVerificationFailure,
+  redactUrlsInText,
+  runFfmpeg,
+  streamFfmpeg,
+} from "./ffmpeg/runner.ts";
 export type { PreviewFrameOptions } from "./ffmpeg/preview-frame.ts";
 export {
   buildPreviewFrameArgs,
@@ -762,6 +782,7 @@ export {
   formatMapArg,
   mux,
   normalizeCodecName,
+  streamingContainerArgs,
 } from "./mux.ts";
 export type { GcReport, StorageOptions } from "./storage.ts";
 export {

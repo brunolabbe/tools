@@ -170,6 +170,11 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
     async removeJob(jobId: string): Promise<void> {
       await storage.removeJob(jobId);
     },
+    // dl-53: nothing in the API calls `stream()` until the file route is
+    // rebuilt on it, so a call here is a bug in the harness, and loud.
+    async stream(): Promise<never> {
+      throw new AppError("INTERNAL", "The stub engine does not stream yet.");
+    },
   } satisfies DownloadEngine & { calls: number };
 
   return engine;

@@ -9,12 +9,16 @@
  *  - **Process-tree kill on abort.** See `kill.ts` for why a bare `child.kill()`
  *    is not enough.
  *
- * Progress comes from `-progress pipe:1` on stdout; stderr is kept as a bounded
- * tail so a failure carries evidence without unbounded memory or a log flood.
+ * Progress comes from `-progress pipe:1` on stdout — or on descriptor 3 when
+ * stdout is the media itself (`streamFfmpeg`, dl-53); stderr is kept as a
+ * bounded tail so a failure carries evidence without unbounded memory or a log
+ * flood.
  */
 
 import { spawn } from "node:child_process";
 import process from "node:process";
+import { PassThrough } from "node:stream";
+import type { Readable } from "node:stream";
 import { AppError, redactUrl } from "@downloader/contract";
 import type { Logger } from "../logger.ts";
 import { NOOP_LOGGER } from "../logger.ts";
@@ -120,11 +124,58 @@ export function isTlsVerificationFailure(stderr: string): boolean {
  * other non-zero exit.
  */
 export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
+  return launch(options, false).completion;
+}
+
+/**
+ * A running ffmpeg whose **output is its stdout** (dl-53).
+ *
+ * `stdout` carries the media and nothing else, so the caller's args must send
+ * `-progress` somewhere other than `pipe:1` — `STREAM_PROGRESS_ARGS` puts it on
+ * descriptor 3, which this opens. Backpressure is the pipe's own: a reader that
+ * stops reading fills the pipe, ffmpeg blocks on its write, and stops reading
+ * its input — measured on 2026-09-27 at a flat ~59 MB of ffmpeg RSS whether the
+ * reader drained 70 MB at full speed or at 1 MB/s (dl-53's Log).
+ */
+export interface FfmpegStream {
+  stdout: Readable;
+  /** Settles exactly as `runFfmpeg`'s promise does, once stdout has been drained. */
+  completion: Promise<FfmpegRunResult>;
+  /** Kills the process tree and rejects `completion` with `error`. Idempotent. */
+  terminate(error: AppError): void;
+}
+
+export function streamFfmpeg(options: FfmpegRunOptions): FfmpegStream {
+  const launched = launch(options, true);
+  if (launched.stdout === null) {
+    // Unreachable: `launch` only returns without stdout when it rejected
+    // before spawning, and then `completion` already carries the reason.
+    const stdout = new PassThrough();
+    stdout.end();
+    return { stdout, completion: launched.completion, terminate: launched.terminate };
+  }
+  return {
+    stdout: launched.stdout,
+    completion: launched.completion,
+    terminate: launched.terminate,
+  };
+}
+
+interface Launched {
+  completion: Promise<FfmpegRunResult>;
+  stdout: Readable | null;
+  terminate(error: AppError): void;
+}
+
+function launch(options: FfmpegRunOptions, streamOutput: boolean): Launched {
   const logger = options.logger ?? NOOP_LOGGER;
   const failureCode: FfmpegFailureCode = options.failureCode ?? "MUX_FAILED";
   const stderrTailBytes = options.stderrTailBytes ?? DEFAULT_STDERR_TAIL_BYTES;
+  let stdout: Readable | null = null;
+  // Null only when the signal had already fired: nothing was spawned to kill.
+  let terminateRef: ((error: AppError) => void) | null = null;
 
-  return new Promise<FfmpegRunResult>((resolve, reject) => {
+  const completion = new Promise<FfmpegRunResult>((resolve, reject) => {
     if (options.signal?.aborted === true) {
       reject(new AppError("JOB_CANCELED"));
       return;
@@ -141,10 +192,13 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
       windowsHide: true,
       // POSIX process groups only exist if we ask for one; see kill.ts.
       detached: !IS_WINDOWS,
-      stdio: ["ignore", "pipe", "pipe"],
+      // A fourth descriptor only when stdout is the media: see `FfmpegStream`.
+      stdio: streamOutput ? ["ignore", "pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
       env,
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     });
+    const progressSource = (streamOutput ? child.stdio[3] : child.stdout) as Readable | null;
+    if (streamOutput) stdout = child.stdout;
 
     const parser = new FfmpegProgressParser();
     let stderrBuffer = "";
@@ -183,6 +237,7 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
       }
       void killQuietly(pid);
     };
+    terminateRef = terminate;
 
     function onAbort(): void {
       terminate(new AppError("JOB_CANCELED"));
@@ -200,8 +255,8 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
       timer.unref?.();
     }
 
-    child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
+    progressSource?.setEncoding("utf8");
+    progressSource?.on("data", (chunk: string) => {
       for (const snapshot of parser.push(chunk)) {
         lastSnapshot = snapshot;
         if (
@@ -282,4 +337,6 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
       });
     });
   });
+
+  return { completion, stdout, terminate: (error) => terminateRef?.(error) };
 }
