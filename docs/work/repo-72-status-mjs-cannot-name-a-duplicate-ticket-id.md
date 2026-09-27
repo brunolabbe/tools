@@ -77,20 +77,33 @@ relying on `Set.prototype.add`'s return value.
   `Map` of ids already seen and throws on the first ticket whose id is in it,
   naming **both** files: the one that reached the id second leads the line,
   as every other `readTickets` error leads with its file, and the one it
-  collides with follows in parentheses (`scripts/status.mjs:307`
-  "is used by more than one ticket (also ${first.file})"). Both, rather than
+  collides with follows in parentheses. The check:
+  `scripts/status.mjs:299` "if (first) throw new Error(duplicateIdMessage"; the
+  message: `:1135` "is used by more than one ticket (also ${first.file})". Both, rather than
   the one the brief asked for, because the remedy for a collision is to
   renumber one of the two and the reader has to know which two to choose
   between. The message keeps its old text up to the parenthesis, so anything
   matching `is used by more than one ticket` still matches; nothing else in
   the output, `--json` included, and nothing about `reviewedButReady`, changed.
 
-  Red, then green, on the same two tests, appended at the end of the suite
-  (`scripts/test/status.test.ts:1675` "a duplicate id is named, with both of
-  the files that claim it", unit, two `pl-2` files in one directory; `:1685`
-  "the command reports the duplicate by name and exits non-zero, which is the
-  CI gate", the CLI with `--json` over two `repo-66` files, asserting exit 1,
-  empty stdout and no `undefined` on stderr). With `scripts/status.mjs`
+  **The message lives at the end of the file on purpose.** The first draft
+  wrote the check with its comment in place, ten lines longer than the code
+  it replaced, and preflight's citations check failed three merged records
+  whose `scripts/status.mjs` citations sit below it: `repo-12` (2 moved),
+  `repo-19` (3 moved) and `pl-26` (6 moved). Repointing `pl-26` is not open
+  to a `fix(repo)` branch — it is a path under `tools/planner/`, and
+  release-please would release the planner for it. So the check in
+  `readTickets` is exactly as many lines as the one it replaced, and the
+  message and its reason moved to `duplicateIdMessage`, after every line any
+  record cites (the highest is `printTicket`, a thousand lines in).
+
+  Red, then green, on the same two tests, appended at the end of the suite.
+  The unit, two `pl-2` files in one directory:
+  `scripts/test/status.test.ts:1675` "a duplicate id is named, with both of".
+  The CLI with `--json` over two `repo-66` files, asserting exit 1, empty
+  stdout and no `undefined` on stderr:
+  `:1685` "the command reports the duplicate by name and exits non-zero".
+  With `scripts/status.mjs`
   checked out from `origin/main`,
   `npx vitest run scripts/test/status.test.ts`: `Tests  2 failed | 127 passed (129)`,
   `Received: "undefined: "undefined" is used by more than one ticket"`. With
