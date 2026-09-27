@@ -73,7 +73,7 @@ content may itself contain single backticks. `scripts/citations.mjs`'s own
 top docblock already writes several — search it for ` ` ` `` to find real
 examples to test against, including at least one that quotes a citation-shaped
 token on purpose (the port examples this ticket is filed from, and the
-```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
+literal ```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
 
 **The reproduction is inside a fenced code block was considered and is not
 the same shape**: `extractSections`'s fence-skip is about _heading_ detection
@@ -122,10 +122,18 @@ displaced`, matching the quoted output exactly. Once repo-50 merged,
   (`/\x60\x60(?:(?!\x60\x60).)*?\x60\x60/g`) and skipping a match of
   `INLINE`, the `PIN_SHAPED` pair, `SHORTHAND` or `SHORTHAND_PIN` whose start
   falls inside one — applied to all four, not only the two the Build names,
-  since a double-backtick-quoted pin is the same defect and the corpus has
-  none today to disturb. A skipped match is never pushed into `found` at all,
-  so its `make()` never runs and it cannot set `currentFile` either — the
-  mechanism the third `Done when` line asks for.
+  since a double-backtick-quoted pin is the same defect. **Gate 1 found this
+  claim wrong** — "the corpus has none today to disturb" — and it was, on my
+  own re-run rather than taken on the gate's word:
+  `docs/work/repo-31-the-windows-leg-is-almost-all-red.md` record line 103
+  carries `` `scripts/test/citations.test.ts@fdafd1a:1331` `` (anchor omitted
+  here) inside a
+  double-backtick span, a real pinned, anchored citation, and it lost its
+  anchor under this first version of the rule. Fixed in the same round as the
+  gate-1 write-up below (the anchor carve-out); this sentence is corrected
+  rather than deleted so the mistake stays legible. A skipped match is never
+  pushed into `found` at all, so its `make()` never runs and it cannot set
+  `currentFile` either — the mechanism the third `Done when` line asks for.
 
   **The first `Done when` line's parenthetical ("no other change to that
   record") does not fully hold, and I made the change anyway.** Fixing the
@@ -161,7 +169,9 @@ does not cite it`), which is the script's own documented behavior for
   actually runs) caught as `moved` against two already-merged, already-gated
   records that cite `scripts/citations.mjs` by line with an anchor —
   `docs/work/repo-50-citations-cannot-see-a-displaced-unanchored-citation.md`
-  (4 citations, 5 occurrences) and
+  (**correction, gate 1**: 5 distinct citations across 4 record lines, not "4
+  citations, 5 occurrences" as first written here — record line 93 alone
+  repoints two) and
   `docs/work/repo-52-citations-into-claude-pages-are-pinned-or-by-heading.md`
   (2 citations, 3 occurrences). Repointed each to the line the same anchor
   text now holds — verified individually before editing — per the tool's own
@@ -172,10 +182,15 @@ does not cite it`), which is the script's own documented behavior for
   a parenthesised `` `(`:23`)` `` quoting the shorthand syntax, same shape as
   this ticket's own case, at that record's line 79 — which
   `citations-gate.mjs` reported `STALE` (holds 1 failing reference now, not
-  the 2 its `GRANDFATHERED` entry names). Tightened both `GRANDFATHERED`
-  entries, `repo-25` and `pl-32`, from 2 to 1; neither ticket's own file was
-  touched, only the ratchet's memory of it in `scripts/citations-gate.mjs`,
-  which is squarely `repo`-scoped. `pl-32` is a `tools/planner` ticket and I
+  the 2 its `GRANDFATHERED` entry names). Tightened `pl-32`'s entry from 2 to
+  1; `repo-25`'s went from 2 to 1 in this same commit, then — gate 1, med,
+  correctly — all the way out of `GRANDFATHERED`, once dropping the also-dead
+  `99999` entry from record line 204's declaration (its only remaining
+  citation, record line 469, is separately excused by the declaration at
+  record line 210) left the whole record's Review-scoped debt at zero.
+  Neither ticket's own file was touched, only the ratchet's memory of it in
+  `scripts/citations-gate.mjs`, which is squarely `repo`-scoped. `pl-32` is a
+  `tools/planner` ticket and I
   did not add a Log entry there, since no file of its own changed — flagged
   here for whoever reviews this branch to judge whether it should.
 
@@ -184,3 +199,94 @@ does not cite it`), which is the script's own documented behavior for
   493/493, `node scripts/citations.mjs docs/work/repo-25-...md
 --displaced-since origin/main` exit 0, `node scripts/citations-gate.mjs`
   "112 enforced, 0 failing; 7 grandfathered" exit 0.
+
+- 2026-09-27 — Gate 1 (FAIL) fixed. Each finding reproduced before touching
+  anything; verdicts below.
+
+  **High, fixed as the owner's chosen (a): skip a quoted reference only when
+  it carries no anchor.** Reproduced first: the unconditional skip dropped 23
+  real, anchored citations from `docs/work/repo-31-the-windows-leg-is-almost-
+all-red.md`'s Review section alone (5 references there fell to 2; the
+  whole-record `moved` count went from 6 to 0 — live drift hidden, matching
+  the gate's framing exactly). Fixed by moving the `inQuotation` check in the
+  `INLINE` and `SHORTHAND` passes to after each match's groups are read, and
+  gating the skip on `g.anchor === undefined` (`INLINE`) or `g.inner ===
+undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
+  `SHORTHAND_PIN` are left unconditional, since neither carries an anchor
+  concept at all, so the same gate would always be true there. Verified: the
+  repo-31 Review section is back to 5/5 `ok`, the whole-record run is back to
+  `exit 2 — 6 moved` (matching base exactly), repo-25's command still exits 0
+  on the same 37 references, and a corpus-wide scan (`extractCitations` at
+  base vs. head, over every `docs/work/*.md` and `tools/*/docs/work/*.md`)
+  shows a delta of exactly 39 references removed — the same number the gate
+  measured in its own scratch copy — none of them state-changed, none added.
+
+  **Med, fixed: `DOUBLE_BACKTICK`'s closing run must equal the opening
+  one's length, not merely meet it.** Reproduced: a triple-backtick span
+  closed on only the first two of its three closing backticks, leaving one
+  dangling. Fixed with a backreference, `/(\x60{2,})[\s\S]*?\1(?!\x60)/g`;
+  verified the repo-25 four-backtick reproduction, the two-spans-per-line
+  case, and the triple-backtick probe all still resolve correctly, and the
+  corpus scan above is unchanged by this half (0 hits, as the finding said).
+
+  **Med, fixed: the Done-when-3 test replaced.** Reproduced the gate's
+  mutation by hand — letting the `INLINE` pass's guard set `currentFile`
+  before its `continue` — against the _old_ fixture (a quotation holding
+  only a shorthand): stayed green, confirming the finding. The _new_ fixture
+  quotes a qualified `INLINE` citation into a second file instead; against
+  the same mutation it resolves the trailing shorthand to the quoted file
+  (`b/two.ts` rather than `a/one.ts`), red as intended, green on the
+  unmutated code and on every other test in the file.
+
+  **Med, fixed per the owner's decision (a): the Build's line 76 prefixed
+  with one word when landing this section, and the `extractSections`
+  divergence filed as `repo-63`.** Reproduced: `extractSections` on this
+  ticket's own file read `## Build` as swallowing `## Done when` and
+  `## Log` both, because CommonMark does not treat a backtick run followed
+  by more backticks on the same line as a fence opener at all (a backtick
+  info string may not contain a backtick), and this file's own reproduction
+  of `` `:99999` `` is written exactly that way. Not this ticket's to fix —
+  its own Build says not to widen into fence handling — so filed as
+  `repo-63` with the reproduction, and worked around here only by moving
+  "literal" to open the physical line instead of the backtick run (oxfmt
+  does not reflow a line that already fits the width, so a word appended to
+  the _previous_ line — my first attempt — left line 76 untouched; moving it
+  to open the line itself survives formatting). Verified:
+  `extractSections` on the fixed file finds `Build`, `Done when` and `Log`
+  each as their own section.
+
+  **Low, fixed: the prose-pass finding.** Confirmed it goes away under the
+  high's fix — verified directly, no `line 99` reference appears for
+  `repo-31` any more since the citation around it is read again.
+
+  **Low, accepted as documented, not fixed: backtick-adjacency and
+  per-line scope (two findings).** Both 0 corpus hits, both would need
+  either single-backtick span state or cross-line lexing that nothing else
+  in this scan does, disproportionate to a low with no live instance.
+  Documented in `DOUBLE_BACKTICK`'s own docblock instead, including the
+  fence-inside-quotation half, which is this same per-line limitation
+  cutting the other way (hides a citation `extractCitations` deliberately
+  still reads inside a fence) rather than a new one.
+
+  **Log corrections** (three, all confirmed by re-running rather than taken
+  on the gate's word): the entry above is corrected in place rather than
+  silently — "the corpus has none today to disturb" (a double-backtick pin)
+  was wrong, `repo-31` record line 103 has one and it was disturbed until
+  the high's fix; "(4 citations, 5 occurrences)" for `repo-50` was backwards,
+  it is 5 distinct citations across 4 record lines; and the exit-128
+  reproduction claim holds exactly as the gate re-confirmed.
+
+  **Open decisions closed by the owner, not by me**: all three were
+  answered through the coordinator's `AskUserQuestion`, each choosing the
+  gate's own recommendation. Nothing left open from this round.
+
+  **`pl-32`**: no Log entry added there, per the gate's own "dropped"
+  disposition (not a defect; a `fix(repo)` pull request touching a
+  `tools/planner` path releases that tool for a change describing nothing
+  planner-specific) — reversing the flag I raised in the entry above.
+
+  Verified after all of the above: `npx vitest run scripts/test/citations.test.ts`
+  105/105, `npm run check` exit 0, `npx vitest run --project repo` 493/493,
+  `node scripts/citations.mjs docs/work/repo-25-...md --displaced-since
+origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
+  failing; 6 grandfathered" exit 0.

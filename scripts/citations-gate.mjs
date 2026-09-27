@@ -265,7 +265,6 @@ export const SCOPE = {
 export const GRANDFATHERED = new Map([
   ["docs/work/repo-18-citations-resolve-is-not-correct.md", 3],
   ["docs/work/repo-22-grep-is-a-wrapper.md", 2],
-  ["docs/work/repo-25-citations-checker-misses-shorthand-references.md", 1],
   ["docs/work/repo-36-citations-loses-the-record-path.md", 8],
   ["tools/downloader/docs/work/dl-33-tls-fixture-certificates-fail-under-contention.md", 3],
   ["tools/planner/docs/work/pl-28-valhalla-adapter.md", 3],

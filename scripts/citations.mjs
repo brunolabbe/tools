@@ -356,19 +356,51 @@ const SHORTHAND = new RegExp(
 );
 
 /**
- * A double-backtick **quotation**, ` `` ... `` ` in CommonMark: two backticks,
- * content that may itself hold a single backtick, two backticks closing —
- * markdown's own way to quote a literal backtick, which is exactly how a
- * reviewer writes about the citation syntax itself rather than writing one
- * (repo-60). `` `:443` `` inside such a span is that reviewer's example of
- * `SHORTHAND`, not an instance of it, and `SHORTHAND`'s own single backticks
- * sit *inside* the pair this matches — invisible to a regex that never looks
- * one character further out.
+ * A backtick-fenced **quotation**, ` `` ... `` ` in CommonMark for the
+ * ordinary two-backtick case, content that may itself hold a shorter run of
+ * backticks, closed by a run of the *same* length — markdown's own way to
+ * quote a literal backtick, which is exactly how a reviewer writes about the
+ * citation syntax itself rather than writing one (repo-60). `` `:443` ``
+ * inside such a span is that reviewer's example of `SHORTHAND`, not an
+ * instance of it, and `SHORTHAND`'s own single backticks sit *inside* the
+ * pair this matches — invisible to a regex that never looks one character
+ * further out.
+ *
+ * **The closing run's length must equal the opening one's, not merely meet
+ * it** — a gate 1 finding (repo-60): the corpus's own reproduction opens on
+ * four backticks (` ```` ` ... ` ```` `, needed because its content nests a
+ * double-backtick span), and a fixed two-backtick opener would have matched
+ * only the first two of those four, misreading a valid four-backtick span as
+ * a shorter one and leaving two backticks dangling as stray text. The
+ * backreference `\1` makes the closer's length exact.
  *
  * Lazy on purpose: two spans on one line (`` `:443` ``/`` `:8443` ``) must
  * close at the nearer pair, not swallow the text between them into one.
+ *
+ * **Three more shapes not handled, none a corpus defect to date (gate 1,
+ * repo-60), all the same trade as the fence-skip already narrowed to
+ * headings in `extractSections`: a markdown-aware scan costs a parser, and
+ * this stays a regex.**
+ *
+ *   - Two adjacent *single*-backtick spans whose boundary backticks sit next
+ *     to each other with no space (`` `one``two` ``) read as one coincidental
+ *     two-backtick opener, which can swallow real content between them and a
+ *     later, unrelated pair. Telling that apart from a genuine quotation
+ *     needs tracking single-backtick span state as well.
+ *   - This scan runs per physical line, inside `extractCitations`'s own
+ *     `lines.forEach` — a quotation cannot be recognised if its two backtick
+ *     runs sit on different lines, so a shorthand inside one is still read
+ *     (unchanged from before this existed: every other pass here is
+ *     per-line too).
+ *   - Also per-line, and cutting the other way: a double-backtick span that
+ *     happens to sit inside a *fenced* code block, which `extractCitations`
+ *     deliberately still reads for citations (its own docblock says why), is
+ *     quotation-skipped exactly as it would be outside one. This scan has no
+ *     fence state to consult — `extractSections` tracks that only for
+ *     heading detection — and the ticket that added this rule was asked not
+ *     to widen into fence handling either way.
  */
-const DOUBLE_BACKTICK = /\x60\x60(?:(?!\x60\x60).)*?\x60\x60/g;
+const DOUBLE_BACKTICK = /(\x60{2,})[\s\S]*?\1(?!\x60)/g;
 
 /**
  * A **prose** reference: `line 367`, `lines 118-119`.
@@ -573,11 +605,17 @@ export function extractCitations(markdown) {
     const found = [];
 
     for (const m of text.matchAll(INLINE)) {
-      if (inQuotation(m.index)) continue;
       const g =
         /** @type {{file: string, rev?: string, start: string, end?: string, anchor?: string}} */ (
           m.groups
         );
+      // A quotation with no anchor is a reviewer showing the *syntax* — see
+      // `DOUBLE_BACKTICK`. One with an anchor is a real citation that merely
+      // sits inside a double-backtick span, often for a reason unrelated to
+      // this rule (repo-31: an anchor quoting a shell fragment that itself
+      // holds straight quotes); dropping it silently is the worse failure,
+      // so only the anchor-less shape is skipped.
+      if (inQuotation(m.index) && g.anchor === undefined) continue;
       found.push({
         at: m.index,
         until: m.index + m[0].length,
@@ -645,10 +683,12 @@ export function extractCitations(markdown) {
     }
 
     for (const m of text.matchAll(SHORTHAND)) {
-      if (inQualified(m.index) || inQuotation(m.index)) continue;
+      if (inQualified(m.index)) continue;
       const g = /** @type {{start: string, end?: string, inner?: string, outer?: string}} */ (
         m.groups
       );
+      // Same anchor-carve-out as `INLINE`, above.
+      if (inQuotation(m.index) && g.inner === undefined && g.outer === undefined) continue;
       found.push({
         at: m.index,
         until: m.index + m[0].length,

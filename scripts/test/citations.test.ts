@@ -2812,12 +2812,27 @@ test("a double-backtick quotation spanning an inline citation and a shorthand re
  * shorthand written *after* a quotation would inherit from the wrong file —
  * or from nothing at all. A citation qualifies the file before the
  * quotation; a real, unquoted shorthand after it must still resolve there.
+ *
+ * gate 1 med: a quotation wrapping only a *shorthand* cannot exercise this —
+ * `SHORTHAND`'s own `make` never touches `currentFile`, so that fixture goes
+ * red only because the quoted shorthand is counted at all, never because of
+ * a `currentFile` leak. This one's quotation instead wraps a *qualified*
+ * (`INLINE`) citation into a second file, anchor-less so it is still the
+ * skipped shape — the property under test is that skipping it doesn't run
+ * its `make` either, confirmed by mutating the guard to set `currentFile`
+ * before the `continue`: that mutant resolves the trailing shorthand to the
+ * quoted file instead of the real one, red on this assertion, green on
+ * every other test in this file.
  */
-test("a double-backtick quotation between two paragraphs does not consume or reset currentFile", () => {
+test("a double-backtick quotation wrapping a qualified citation does not leak into currentFile", () => {
   const found = extractCitations(
-    ["At `a/one.ts:5`.", "", "Quoting the syntax: `` `:443` ``.", "", "And for real, `:6`."].join(
-      "\n",
-    ),
+    [
+      "At `a/one.ts:5`.",
+      "",
+      "Quoting the syntax: `` `b/two.ts:9` ``.",
+      "",
+      "And for real, `:6`.",
+    ].join("\n"),
   );
   expect(found.map((c) => `${c.source}:${c.start}=${c.file}`)).toEqual([
     "inline:5=a/one.ts",
