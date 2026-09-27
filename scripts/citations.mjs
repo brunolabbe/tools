@@ -837,14 +837,14 @@ export function makeResolver(tracked) {
  *
  * At a rev that is the tree. In the working tree it is the index **plus
  * untracked-but-not-ignored files**, because a record routinely cites a file the
- * branch under review has just added and which nobody has staged yet. Using
- * `ls-files` alone fails those, which this script demonstrated on itself.
+ * branch under review has just added and nobody has staged; `ls-files` alone
+ * fails those. Deduplicated, since mid-merge it lists a path once per stage.
  */
 export function candidateFiles(repo, rev) {
   const run = (args) =>
     execFileSync("git", args, { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean);
   if (rev) return run(["ls-tree", "-r", "--name-only", rev]);
-  return [...run(["ls-files"]), ...run(["ls-files", "--others", "--exclude-standard"])];
+  return [...new Set(run(["ls-files"])), ...run(["ls-files", "--others", "--exclude-standard"])];
 }
 
 /**
