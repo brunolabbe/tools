@@ -86,11 +86,11 @@ async function toolPackages(name: "web" | "api"): Promise<string[]> {
 }
 
 /**
- * Two, today. Asserted so that a scan which stopped finding anything — a renamed
+ * Three, today. Asserted so that a scan which stopped finding anything — a renamed
  * `tools/`, a `workspaceDirs` that changed shape under it — fails as a scan that
  * found nothing rather than passing as a repo with nothing wrong.
  */
-const TOOLS_TODAY = 2;
+const TOOLS_TODAY = 3;
 
 test("every tool's web dev server binds HOST, and refuses a port nobody forwarded", async () => {
   const dirs = await toolPackages("web");

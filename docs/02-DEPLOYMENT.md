@@ -95,7 +95,7 @@ merging it. The separator is `:` on Linux and `;` on Windows.
 host running anything else changes it.
 
 With it set, every command on this page is a bare `docker compose ...`. Written
-out as `-f` flags instead, four of those lines are:
+out as `-f` flags instead, four such lines are:
 
 ```bash
 # the downloader alone
@@ -108,7 +108,7 @@ docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
 # the ledger alone
 docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml up -d
 
-# both tools, one tunnel
+# the downloader and the planner, one tunnel
 docker compose -f compose.downloader.yaml -f compose.prod.yaml \
                -f compose.downloader.prod.yaml -f compose.planner.prod.yaml up -d
 ```

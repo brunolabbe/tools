@@ -386,15 +386,10 @@ async function main() {
   // Checked against what would be *created*, not against the table: an
   // application that already exists is never rewritten here, so its second
   // address is whatever the dashboard says, and a run that adds nothing
-  // should not need a flag it would ignore.
+  // should not need a flag it would ignore. A plan still prints — a host that
+  // does not run the ledger can check itself without naming a second person —
+  // and only `--apply` refuses, below.
   const unadmitted = access.create.filter((a) => a.missing);
-  if (unadmitted.length > 0) {
-    fail(
-      unadmitted
-        .map((a) => `${a.missing} is required — ${a.domain} admits a second person`)
-        .join("\n"),
-    );
-  }
 
   out(`zone    ${args.domain} (${zoneId})`);
   out(`account ${accountId}`);
@@ -418,6 +413,8 @@ async function main() {
   for (const a of ingress.added) out(`ADD      ingress ${a.hostname} -> ${a.service}`);
   for (const d of dns.create) out(`ADD      dns     ${d.name} -> ${d.content} (proxied)`);
   for (const a of access.create) out(`ADD      access  ${a.domain} (${a.decision})`);
+  for (const a of unadmitted)
+    out(`MISSING  access  ${a.domain} admits a second person: ${a.missing}`);
 
   const changes = ingress.added.length + dns.create.length + access.create.length;
   out();
@@ -430,6 +427,12 @@ async function main() {
   if (!args.apply) {
     out(`${changes} change(s). Re-run with --apply to make them.`);
     return;
+  }
+
+  // Created with the owner alone, the policy would lock the other person out
+  // with nothing saying why, and no later run repairs an existing one.
+  if (unadmitted.length > 0) {
+    fail(unadmitted.map((a) => `${a.missing} is required with --apply`).join("\n"));
   }
 
   for (const op of applyOrder({ access, ingress, dns })) {

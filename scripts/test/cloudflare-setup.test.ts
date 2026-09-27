@@ -321,7 +321,8 @@ test("the ledger admits a second address, and only the ledger does", () => {
 test("a ledger application to be created without its second address is flagged, not narrowed", () => {
   // Created with the owner alone, the policy would lock the other person out
   // with nothing saying why — and since an existing application is never
-  // rewritten here, a later run would not repair it. `main` refuses on this.
+  // rewritten here, a later run would not repair it. `main` refuses on this
+  // under `--apply`, and a plan prints it as MISSING.
   const want = desiredState("example.com", "you@example.com").apps as {
     domain: string;
     missing?: string;
