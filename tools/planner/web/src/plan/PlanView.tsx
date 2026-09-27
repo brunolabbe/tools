@@ -29,7 +29,7 @@
  * would silently show the wrong diff for every later revision.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppError,
   currentBrief,
@@ -1387,11 +1387,16 @@ function BriefForm({
   // `BudgetEntry`, which re-seeds its own internal fields from `initial` the
   // same way it does on the form's first mount.
   const [budgetResetKey, setBudgetResetKey] = useState(0);
+  // Where focus goes after a reset — the button it started on unmounts the
+  // moment `budgetStuck` clears, and a browser drops focus to `<body>`
+  // rather than choosing anything else on the page.
+  const budgetGroupRef = useRef<HTMLDivElement>(null);
 
   const resetBudget = (): void => {
     setBudgetTouched(false);
     setDraftBudget(null);
     setBudgetResetKey((key) => key + 1);
+    budgetGroupRef.current?.focus();
   };
 
   const changedDates =
@@ -1438,14 +1443,16 @@ function BriefForm({
           setDraftDates(value !== null && value.kind === "dates" ? value.value : null);
         }}
       />
-      <BudgetEntry
-        key={budgetResetKey}
-        initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
-        onChange={(value) => {
-          setBudgetTouched(true);
-          setDraftBudget(value !== null && value.kind === "budget" ? value.value : null);
-        }}
-      />
+      <div ref={budgetGroupRef} tabIndex={-1}>
+        <BudgetEntry
+          key={budgetResetKey}
+          initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
+          onChange={(value) => {
+            setBudgetTouched(true);
+            setDraftBudget(value !== null && value.kind === "budget" ? value.value : null);
+          }}
+        />
+      </div>
       {budgetStuck && (
         <p className="hint">
           Save is waiting on the budget — finish it, or{" "}

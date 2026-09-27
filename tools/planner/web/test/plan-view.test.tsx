@@ -2027,3 +2027,56 @@ describe("an unanswered budget that gets stuck (gate 2)", () => {
     expect(screen.queryByRole("button", { name: "Leave the budget as it was" })).toBeNull();
   });
 });
+
+/**
+ * Gate 3's two lows: the reset button does two things besides clearing the
+ * touched flag, and neither had a test that could see it fail.
+ */
+describe("the reset behind 'leave the budget as it was' (gate 3)", () => {
+  test("restores a seeded amount rather than leaving the field empty", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "amount", currency: "CAD", amount: 1500, basis: "total" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    const amount = await screen.findByLabelText<HTMLInputElement>("Amount");
+    await user.clear(amount);
+
+    await user.click(screen.getByRole("button", { name: "Leave the budget as it was" }));
+
+    // A fresh mount seeded from the same `initial` — not the empty text this
+    // control's own draft was left holding, and not the plan's budget either
+    // (which never changed): both would pass a weaker assertion here.
+    expect(screen.getByLabelText<HTMLInputElement>("Amount").value).toBe("1500");
+    expect(screen.getByLabelText<HTMLInputElement>("Currency").value).toBe("CAD");
+  });
+
+  test("moves focus into the budget group, not to the page body", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    const { container } = show();
+    await extendNights(user);
+
+    await user.click(screen.getByRole("radio", { name: "A feeling" }));
+    await user.click(screen.getByRole("button", { name: "Leave the budget as it was" }));
+
+    // The button just unmounted; a browser with nothing told otherwise drops
+    // focus to `document.body`, which is exactly what a keyboard user loses
+    // their place to.
+    const budgetGroup = container.querySelector('[tabindex="-1"]');
+    expect(budgetGroup).not.toBeNull();
+    expect(document.activeElement).toBe(budgetGroup);
+  });
+});
