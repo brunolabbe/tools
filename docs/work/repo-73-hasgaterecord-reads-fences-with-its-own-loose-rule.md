@@ -3,7 +3,7 @@ id: repo-73
 tool: repo
 title: status.mjs's hasGateRecord reads fences with its own loose rule
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -84,6 +84,22 @@ pipeline the gate predicted — see the red run in the Log.
   reads a real one the way `status.mjs` does.
 - `npm run check`, the `repo` project's suite and
   `node scripts/citations-gate.mjs --against origin/main` pass.
+
+## Review
+
+**Gate: PASS** -- 2026-09-27 -- `1a8321ce0615059d9b9d338628b78a2d9552249a...a9a3d840c2dabeee30b637d4fe49f2a63ca0c2f6` -- code-review at high (dispatch named a detailed, per-ticket attack list; treated as above the medium default)
+
+| Done when                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A five-backtick fence quoting a four-backtick line does not hide a `## Review` below it, and `reviewedButReady` reports that ticket when `ready` | proven -- `scripts/test/status-gate-record.test.ts:56 "a shorter fence quoted inside a longer one does not close it"`; reproduced red at base (origin/main, sha 1a8321c): with the base `status.mjs` and `citations.mjs` swapped in, this and 8 other assertions in the new suite failed (9 failed, 7 passed of 16), green at head (16 passed) |
+| A `~~~` line inside a backtick fence does not expose a quoted `## Review`                                                                        | proven -- `scripts/test/status-gate-record.test.ts:68 "a tilde line inside a backtick fence does not close it"`; same red/green run as above -- this is the direction the repo-63 gate worked out from the code and did not measure, now measured and red at base                                                                              |
+| The unclosed-fence test in `status.test.ts` still passes unchanged                                                                               | proven -- `scripts/test/status.test.ts:1167 "an unclosed fence hides a real gate record below it"`, run alone: 1 passed, 126 skipped of 127                                                                                                                                                                                                    |
+| `reviewed` is unchanged for every ticket on `main` (0 of 205 differ)                                                                             | verified -- extracted origin/main docs/work plus tools/*/docs/work (205 ticket files) and ran head status.mjs --root over it, then base sha 1a8321c own status.mjs --root over the same extract; compared reviewed per id across both outputs: 205 tickets, 0 differences                                                                      |
+| Preflight review check does not count a `## Review` quoted in a fence, and reads a real one the way `status.mjs` does                            | proven -- `scripts/test/status-gate-record.test.ts:113 "review check does not count a ## Review quoted in a fence"` and `:121 "review check reads a real ## Review the way the board does"`; reproduced red at base by putting checkReview back to its old regex test: 1 failed of 2 on the fence-quoting case                                 |
+| `npm run check`, the `repo` project suite and `node scripts/citations-gate.mjs --against origin/main` pass                                       | verified -- preflight own check 1 and check 2 report ok; independently: npx vitest run --project repo -> 521 passed across 11 files; node scripts/citations-gate.mjs --against origin/main -> 118 enforced, 0 failing, 6 grandfathered, 0 raised, exit 0                                                                                       |
+
+- **findings** -- code-review at high returned 0; 0 carried, 0 dropped.
+- NFR: security n/a -- performance n/a -- reliability: the docblock trade (an unclosed fence swallows the rest of the file) is unchanged, confirmed by reading the `extractSections` fence-toggle logic and by the still-passing unclosed-fence test cited above -- maintainability: three readers of `## Review` (`status.mjs`, `preflight.mjs`, and the section-heading logic `citations.mjs` already used) now share one fence rule instead of three.
 
 ## Log
 
