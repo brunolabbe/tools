@@ -21,7 +21,8 @@ _Categories_).
 
 ## Build
 
-1. **Extend `readReceipt`** (lg-8) to return, as cents:
+1. **Extend the model reader** (lg-8), which is called when the person wants items
+   or categories, to return, as cents:
    - lines of `{ text, price, taxable, deposit? }`;
    - the subtotal, GST, QST and total;
    - a proposed category per line.

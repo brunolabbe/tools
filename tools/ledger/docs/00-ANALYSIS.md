@@ -355,13 +355,52 @@ editable list, and the person confirms or changes it. A merchant the person has
 categorised before gets that category proposed first. Categories feed the stats
 (§9) and nothing else. They never change who owes what.
 
-### What the model is trusted with
+### Who reads the receipt: local OCR first, a model when needed
 
-Reading printed text into fields, and proposing a category, both of which a
-person confirms. It never decides whether an item is shared, never computes a
-share or a tax, and never files anything. The photo is sent to the model
-provider, and that is the privacy cost of the feature, stated on the capture
-screen.
+The owner asked whether this needs AI at all. A survey on 2026-09-27 (web
+research only; nothing was run on a real receipt yet) found:
+
+- **Free, CPU-only npm OCR exists.**
+  - `ppu-paddle-ocr` (MIT, a PaddleOCR port on onnxruntime, with a Latin model
+    that covers French) was the strongest candidate.
+  - `tesseract.js` (Apache-2.0) is the classic. It is noisier on long receipts:
+    one benchmark put its character error rate on CORD receipts at 0.80,
+    against 0.48 for PaddleOCR.
+  - `scribe.js-ocr` is AGPL, which would bind this repository's licence, and
+    `ocrad.js` is dead. LayoutLM and LayoutXLM are licensed non-commercial.
+    Donut would need hundreds of labelled Québec receipts.
+  - **No published benchmark covers French or Québec receipts.**
+- **What local OCR plus a hand-written Québec parser gets right** is the
+  subtotal, GST, QST and total. They sit on keyword lines, and the arithmetic
+  checks them: GST at 5 %, QST at 9.975 %, and the parts summing to the total.
+  A misread is therefore detected, not filed.
+- **What it gets wrong** is item names (often garbled), item prices on faded
+  paper, and above all the one- or two-character taxable codes at the line's
+  edge. Those codes are exactly what excluding an item needs. It also cannot
+  categorise.
+- **Vision models are good, but not perfect either.** One study put frontier
+  models at 82–87 % field accuracy on scanned receipts. The reconciliation
+  check stays whatever reads.
+
+**Decided by the owner: measure first, then most likely a hybrid.**
+
+- The first step of lg-8 runs 10–20 of the household's real receipts through
+  `ppu-paddle-ocr`, `tesseract.js` and a Claude model on the target machine.
+  It records accuracy per field, time and cost, and the owner picks with the
+  numbers.
+- The expected outcome is a hybrid. Local OCR reads every receipt's totals and
+  taxes, for free and without the photo leaving the house. A model is called
+  only when the arithmetic fails, or when the person wants items (to exclude
+  or charge one) or categories.
+
+### What a reader is trusted with
+
+Whether it is OCR or a model, a reader turns printed text into fields, and a
+model may also propose a category. A person confirms both. No reader decides
+whether an item is shared, computes a share or a tax, or files anything.
+
+**The photo leaves the house only when a model is called.** The screen says so
+at that moment, not in a notice on the capture screen that nobody rereads.
 
 ## 7. Identity
 

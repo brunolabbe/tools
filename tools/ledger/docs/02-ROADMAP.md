@@ -49,6 +49,10 @@ detail and the numbers behind each.
 - **Everything keeps its history, and there are stats.** Salaries, ratios,
   mortgage payments, balances and spending by category are all charted.
   Nothing is overwritten.
+- **Receipts are read locally first.** Free local OCR reads the totals and
+  taxes, and a model is called only when the arithmetic fails or items or
+  categories are wanted. This is pending a measurement on real receipts, which
+  is lg-8's first step.
 - **Receipts are read line by line.** Items that are not shared come off,
   together with their taxes and deposits, and the code computes that part, not
   the model. An item can also be marked as the _other_ person's, which makes it
@@ -107,7 +111,7 @@ transcribing by hand.
 
 | Ticket                                                           | What                                                   |
 | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| [lg-8](./work/lg-8-receipts.md)                                  | photograph, confirm the total, file                    |
+| [lg-8](./work/lg-8-receipts.md)                                  | measure, read locally or with a model, file            |
 | [lg-10](./work/lg-10-receipt-items-exclusions-and-categories.md) | items: not shared, or charged to the other; categorise |
 
 ## Phase 5 — History and stats
