@@ -1,6 +1,6 @@
 ---
 name: fixer
-description: Applies review findings the orchestrator judged mechanical to an already-built branch, and lands a round whose remaining work is mechanical. Dispatched only by the orchestrate-tickets skill; never choose it for other work.
+description: Applies review findings the orchestrator judged mechanical to an already-built branch, and lands a ticket whose remaining work is mechanical. Dispatched only by the orchestrate-tickets skill; never choose it for other work.
 tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch, TodoWrite
 model: claude-sonnet-5
 effort: high
