@@ -604,6 +604,46 @@ None. Every case and control I checked — by mutation against the shipped suite
 
 **PASS.** Nothing in this round's diff, on my angle, misleads a reader or lets a defect through, as far as I could measure it. The two open items are named as open, not resolved by me: whether the address-reuse risk is truly closed for every fixture shape (I found none that breaks it, but did not exhaust the search), and the `DEMUX_READ_FAILED` decision above, which is the owner's to make between (a) and (b).
 
+### Gate 8
+
+**Round 5, angle B — the Windows fix.** Head `18ca055`, checked out detached; farmed and built after the checkout. Reviewed `git diff f1adeb4..0a6ff8f`, the fix only; the merge at `18ca055` brings in #295–#297 (`179f6f5`, `fe28fed`, `6988b65`), already gated, and I did not re-review them. On my angle: `tools/downloader/engine/src/stream.ts` (12 lines, the regex), `tools/downloader/engine/test/helpers/media.ts` (89 lines, `generateDash`), `tools/downloader/engine/test/stream.test.ts` (53 lines, two new cases).
+
+Positive control before anything: `npx vitest run tools/downloader/engine/test/stream.test.ts` at head — **28/28** (up from 26 by the two new cases). `npx vitest run --project downloader` — **1525 passed, 2 skipped, of 1527** (up from 1523/1525 by exactly 2).
+
+#### 1. Does `CONNECTION_OF` over-match?
+
+Tested `connectionOf` (`tools/downloader/engine/src/stream.ts:171 "const CONNECTION_OF = "`) against every distinct `[tag @ address]` prefix I have captured from real ffmpeg 6.1.1 stderr across all five rounds of this gate — `http`, `hls`, `dash`, `AVFormatContext`, `AVIOContext`, `NULL`, `aac`, `h264`, `aost#0:1/copy`, `in#0/hls`, `in#0/dash`, `in#0/mov,mp4,m4a,3gp,3g2,mj2`, `in#1/mov,mp4,m4a,3gp,3g2,mj2`, `extract_extradata`, `mov,mp4,m4a,3gp,3g2,mj2` — plus the Windows-shaped and synthetic edge cases below. Every real tag extracted its correct address, `0x`-prefixed or not. Lines that are not a context-tag line at all — ffmpeg's progress line (`size= ... time=...`), the `Input #0, hls, from ...:` header, a plain `Duration:` line, the `frame= ... Lsize= ...` summary, and a line that merely contains `[brackets]` and an `@` elsewhere in its text but not in the `[tag @ addr]` shape at the start — all correctly returned `null`; the `^` anchor and the required `@ ` keep it from matching anything not shaped exactly like ffmpeg's own prefix.
+
+**No swallowing found**, including on adversarial shapes: an unpadded one-digit address (`[https @ 0x1]`) extracts `1`; an uppercase `0X` variant (not something either platform actually emits, but the `iu` flags accept it) extracts the digits correctly with the prefix stripped either way. The regex cannot mistake a longer token for the address either, since `[0-9a-f]+` is immediately bounded by the literal `]`, so nothing past the closing bracket is captured. I did not find a real ffmpeg-emitted prefix, on either platform, that this pattern reads wrong.
+
+#### 2. Does the round-4 address reuse behave the same un-prefixed?
+
+Re-parsed my round-4 15-segment HLS capture (`http @ 0x...`, showing the same address reused for `seg002.ts` and later `seg004.ts`) through the new `connectionOf`, once as captured and once with every `0x` stripped to simulate the same session logged Windows-style. The two runs produced byte-identical sequences of extracted keys, and the same lines mapped to the same groups in both — reuse is a property of what ffmpeg's allocator does, not of how the pointer happens to be printed, and the regex's only change is stripping an optional prefix before comparing. Round 4's finding — the reuse is real but I found no case where a reused address's own healing (`Will reconnect`) ever answers for a different, unrelated failure on that same key — carries over unchanged to the Windows-shaped case, by this direct construction rather than by inference.
+
+#### 3. Is the `generateDash` guard able to fail?
+
+Reproduced the builder's mutation directly: inserted a deletion of `init-stream1.m4s` right after the `ffmpeg()` call and before the guard's own read, in `tools/downloader/engine/test/helpers/media.ts:136 "export async function generateDash(dir: string, seconds: number): Promise<void> {"`. Ran `engine/test/stream.test.ts`, whose `beforeAll` calls `generateDash` for its `dash8` fixture: the suite failed at collection with `the generated MPD names init-stream1.m4s, which .../dash8 does not hold. It holds: chunk-stream0-00001.m4s, ...` — the exact message the guard writes, naming the exact file I deleted. Reverted; `git status --short` clean, the suite green again. The guard is not a tautology that always passes: it can and does fail when the directory does not hold what the manifest names.
+
+#### 4. Do the two new tests fail on the old regex?
+
+Positive control: both new cases green (`tools/downloader/engine/test/stream.test.ts:987 "the connection is read off a Windows-shaped line as well as a Linux one"` and `tools/downloader/engine/test/stream.test.ts:1002 "a healed early end on a Windows-shaped connection completes, and an unanswered one still fails"`). Reverted `CONNECTION_OF` to its pre-fix, `0x`-only form and re-ran both: **both failed**, on Linux, with no Windows machine involved — the first with `expected null not to be null` (the Windows-shaped literal read nothing), the second with the healed case now rejecting `AppError: The source cut part of the video short.` instead of resolving (its own two connections, both un-prefixed, each became a distinct, never-cleared key). Reverted; both green again. The first runs on every platform (no `skipIf`); the second is `skipIf(process.platform === "win32")`, so it is a stand-in exercised on Linux and macOS runners rather than a Windows-only case — I ran it here, on Linux.
+
+#### 5. Do the DASH fixtures still produce the same bytes on Linux?
+
+Generated the same DASH fixture two ways with the same ffmpeg 6.1.1: the old shape (absolute manifest path, no `cwd`) and the new one (`cwd` at the directory, bare `manifest.mpd`) — matching `generateDash`'s own comment that Linux's muxer writes beside the manifest either way. `cmp` on all eleven output files (`manifest.mpd`, both `init-stream*.m4s`, all eight `chunk-stream*-0000*.m4s`) reported every one **byte-for-byte identical** between the two. The DASH-based tests exercise exactly the fixture content they did before this round.
+
+#### The evidence itself, checked rather than taken on trust
+
+`gh run view 35404674345 --log-failed` — a real, unrelated PR (#267, dl-56) from eight days before this one — shows the literal line the Log quotes: `[http @ 0000019e45be7ec0] HTTP error 404 Not Found`, and beside it `[dash @ 0000019e45bad940] Failed to open an initialization section`, the same signature `generateDash`'s own comment names for the manifest-path bug. Both bugs the builder diagnosed are independently visible in that one captured log, not reconstructed from the Log's paraphrase. `gh run view 36334718531 --attempt 1 --job 108663382517 --log-failed` shows the one real failure on the PR's first attempt: `scripts/test/preflight.test.ts` "…when gh fails inside check 5", `Error: Test timed out in 30000ms`, with the run summary reading `1 failed | 178 passed | 1 skipped (180)` for that file and `1 failed | 3333 passed | 11 skipped (3345)` overall — every one of this ticket's own tests passed in that same attempt; only the unrelated preflight test timed out. The current, re-run state of that job (`gh pr checks 298`) shows every check green, `test (windows-latest, informational)` included.
+
+#### New findings, in lines this round touched
+
+None.
+
+#### Verdict
+
+**PASS.** Both diagnosed causes are real, independently confirmed against a live Windows CI log rather than the builder's paraphrase of one; both fixes are exercised by tests that fail without them and pass with them, on Linux, without needing a Windows runner; the DASH fixtures are unchanged byte-for-byte; and the one CI failure the coordinator named is confirmed, from the run's own log, to be an unrelated 30 s timeout in `scripts/test/preflight.test.ts`, not anything this round's diff touches. Nothing here would mislead a reader or let a defect through, as far as I could measure it.
+
 ## Log
 
 - 2026-09-13 — Filed as `needs-decision`. Cloudflare's current terms had not
