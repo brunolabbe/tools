@@ -439,7 +439,7 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   now confirmed, the "any chain" broadening is withdrawn, and the original
   rule stands unchanged.
 
-  **low E, fixed.** `repo-66` posed no question — its Build is a measurement
+  **low E, fixed.** `repo-71` posed no question — its Build is a measurement
   step then a fix, which is dispatchable — so `needs-decision` was wrong and
   hid it from `--ready`. Set `ready`, with a dated Log entry there.
 
@@ -456,15 +456,16 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   **Snapshot updated, per the coordinator's direct instruction rather than a
   gate finding:** `#298` is now at `0df8902`; gate 8 landed the Windows-leg
   fix, and the timeout at `18ca055` that first read as a Windows regression
-  was the `repo-66` flake, confirmed by attempt 2 of the same run passing.
+  was the `repo-71` flake, confirmed by attempt 2 of the same run passing.
   Updated the history row's `tickets` field, the per-agent table's `dl-53`
   builder row, and this ticket's own Why.
 
   **Fixing findings B and E moved three of gate 2's own citations into
-  repo-65 and repo-66.** All three anchors are unchanged text, preserved
-  deliberately: repo-65's Log correction quotes the two original wrong
-  phrases verbatim (finding B's own evidence), and repo-66's Log correction
-  quotes its original `status: needs-decision` line verbatim (finding E's
+  repo-65 and repo-71 (then `repo-66`).** All three anchors are unchanged
+  text, preserved deliberately: repo-65's Log correction quotes the two
+  original wrong phrases verbatim (finding B's own evidence), and repo-71's
+  Log correction quotes its original `status: needs-decision` line verbatim
+  (finding E's
   own evidence) — so each is a coordinate-only repoint
   (`:97→:162`, `:90→:166`, `:6→:105`), never a citation whose text was
   deleted outright, which is why the lander repoints these directly rather
@@ -559,3 +560,46 @@ scripts/status.mjs --json` exit 0.
   primary source the ticket itself can point at. **Not implemented here**,
   per the coordinator's instruction. Added to the history row's filed-ticket
   list.
+
+- 2026-09-27 — **`repo-66` renumbered to `repo-71`.** #300's CI `check` job
+  failed on a merge of this branch into `origin/main` (`07862c7`, then
+  `#301`'s ledger design): #301 had merged its own
+  `docs/work/repo-66-lift-the-logger-into-core.md` after this branch filed a
+  different ticket under the same id. `node scripts/next-id.mjs repo` gave
+  `repo-71` against `main` and every open branch. Renamed the file, its `id`
+  and its heading; updated every reference in text this session wrote —
+  `reference/history.md`'s item 17 and filed-ticket note, and this ticket's
+  own Log — and added a Log line inside `repo-71` itself explaining the
+  renumbering. **Did not edit any gate record.** `repo-64`'s gate 2 and gate
+  3 name "repo-66" in prose describing that file as it existed at `f84c2a1`
+  and `ce99898`, which is true of those shas and stays as written; "repo-66"
+  there means today's `repo-71`.
+
+- 2026-09-27 — **`repo-72` filed, not fixed, per the coordinator's
+  instruction.** `scripts/status.mjs`'s duplicate-id check
+  (`tickets.find((ticket) => !seen.add(ticket.id))`) always reports
+  `undefined` for both the file and the id, because `Set.prototype.add`
+  returns the `Set` itself rather than a boolean — reproduced independently
+  with a disposable `--root` fixture (two tickets sharing one id), matching
+  the real collision's own message exactly. Evidence: CI run 36340116984 on
+  #300's merge reproduction.
+
+- 2026-09-27 — **`repo-68`, `repo-69` and `repo-70` folded into this pull
+  request instead of staying filed**, on the owner's decision through a
+  second `AskUserQuestion`, taking the orchestrator's own recommendation:
+  none carried a decision or a reproduction of its own, so the repo's own
+  rule for what earns a ticket did not apply to them. `repo-67` stays a
+  ticket — it does carry an open question for its own Build to settle or
+  raise. Removed the three ticket files; each landed on the page and
+  heading its own Build already named:
+  - `repo-68` → `SKILL.md`'s _Which model built it, and which gated it_
+    (a new pairing-table row and its dated paragraph) and `reference/sizing.md`'s
+    gate-count bullet (a dated paragraph beside it).
+  - `repo-69` → `SKILL.md` step 12 (a dated paragraph) and
+    `reference/history.md`'s schema note (a dated paragraph).
+  - `repo-70` → `SKILL.md` steps 6 and 9 (one dated paragraph each).
+
+  Every insertion was appended after the relevant existing bullet or row
+  rather than edited in place, and none moved a line any gate record cites
+  without pins — confirmed with `node scripts/citations-gate.mjs --against
+origin/main` after the merge, below.

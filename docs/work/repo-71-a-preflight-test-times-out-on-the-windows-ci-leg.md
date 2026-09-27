@@ -1,5 +1,5 @@
 ---
-id: repo-66
+id: repo-71
 tool: repo
 title: A preflight test times out on the Windows CI leg, on code that never touched it
 kind: fix
@@ -8,7 +8,7 @@ milestone: null
 depends_on: []
 ---
 
-# repo-66 — a preflight test times out on the Windows CI leg
+# repo-71 — a preflight test times out on the Windows CI leg
 
 ## Why
 
@@ -106,3 +106,11 @@ verified:
   measurement step followed by a fix, not an open question for whoever picks
   it up to answer, so `--ready` would hide a dispatchable ticket behind that
   status. Set `ready`.
+- 2026-09-27 — **Renumbered from `repo-66` to `repo-71`.** #301 (the ledger
+  design) merged `docs/work/repo-66-lift-the-logger-into-core.md` into
+  `main` after this ticket was filed under the same id, and
+  `node scripts/next-id.mjs repo` gave `repo-71` as the next free id against
+  `main` and every open branch. `repo-64`'s gate 2 and gate 3 sections name
+  "repo-66" in prose describing this file as it existed at `f84c2a1` and
+  `ce99898` — those gate records are unedited, and "repo-66" there means
+  this file, now `repo-71`.

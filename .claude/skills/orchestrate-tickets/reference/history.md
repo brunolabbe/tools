@@ -105,6 +105,13 @@ frontmatter status out of `git show <branch>:<ticket>`, re-add the token total,
 re-run `--ready` at the base, and say per field whether it was measured here or
 relayed.
 
+**2026-09-27: the orchestrator drafts the fact list this row is built from;
+the dispatch only formats it.** The dispatch's job is laying the facts out in
+the fixed shape, not reconstructing them — a fact reconstructed by a builder
+from a summary is exactly the shape that produced the `-err_detect`
+misattribution this same session's own row had to correct. A gate checks the
+fact list against the primary sources it names before the row lands.
+
 ### Citations on this page are historical, and four of them are pinned
 
 An entry's citations are a claim about the tree that session read, and
@@ -4079,7 +4086,7 @@ rule.
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **4** taken from `ready` to a gated branch: `repo-62` → #295 (merged `fe28fed`), `repo-60` → #296 (merged `179f6f5`), `pl-48` → #297 (merged `6988b65`), `dl-53` → #298, at head `18ca055` when this row was first written — **since merged as `b2009ba`** (`main` now `a9878ad`, per gate 3, correcting an earlier "open" and "gate 8 landed the fix": the fix itself is `0a6ff8f`, gate 8 gated it; the timeout that first read as a Windows regression was the `repo-66` flake, not the fix). **Measured** — `git log --oneline -5` on `origin/main` and `gh pr view 298` |
+| `tickets` | **4** taken from `ready` to a gated branch: `repo-62` → #295 (merged `fe28fed`), `repo-60` → #296 (merged `179f6f5`), `pl-48` → #297 (merged `6988b65`), `dl-53` → #298, at head `18ca055` when this row was first written — **since merged as `b2009ba`** (`main` now `a9878ad`, per gate 3, correcting an earlier "open" and "gate 8 landed the fix": the fix itself is `0a6ff8f`, gate 8 gated it; the timeout that first read as a Windows regression was the `repo-71` flake, not the fix). **Measured** — `git log --oneline -5` on `origin/main` and `gh pr view 298` |
 | `agents` / `dispatches` | **12** agents (1 seam-mapper, 4 builders, 5 reviewer instances — 2 of them on `dl-53` alone, split by kind of setup — and 2 Haiku fixers) / dispatches-and-wakes not tallied to one total. **Relayed**, with one measured exception: `dl-53`'s builder row is explicitly "last of 7 reports; non-cumulative" in the accounting table, so that agent alone had **7** wakes; every other row names 1 to 4 rounds in its own Task column rather than a wake count |
 | `builder rounds` | `repo-62` 1, `repo-60` 2 (+1 repair of the fixer's landing), `pl-48` 3 (+1 discarded fixer attempt, redone by the builder), `dl-53` **7** — its own Log runs two initial build entries then "Round three" through "Round seven", matching the per-agent row's 7 reports, not "5 rounds plus 3 landing stops" as first written here (**gate 1, finding 6**) — the first three **measured** from each ticket's own committed Log; `dl-53`'s **measured** from `origin/dl-53-stream-to-visitor`'s Log, the branch itself not yet merged. **Orchestrator's fault: 2** — the dl-53 landing dispatch ordered a byte-for-byte splice before coordinate re-resolution, which `review-record.mjs --verify` refuses; and routing `repo-60`'s record-touching landing to the Haiku fixer, which then cost a builder repair round |
 | `gates` | **15 gate rounds** across 5 reviewer instances (`repo-62` 2, `repo-60` 3, `pl-48` 3, `dl-53` 7); **14 returned findings**. **Measured**, all 15: the three merged tickets' own `## Review` sections, and `dl-53`'s from `gh pr view 298 --json comments`, whose seven `### Gate N` sections each carry a `findings` line except round 4/angle B (`### Gate 7`), whose own "New findings, in lines this round touched" reads "None" |
@@ -4107,14 +4114,22 @@ rule.
 
 The eight cold wakes all followed waits of more than an hour on owner answers.
 Filed during the batch: `pl-53`, `repo-63`, `dl-74`. This session filed
-`repo-65` from item 12 below, after independently reproducing it; `repo-66`
-from a coordinator addition (a flaky Windows `preflight.test.ts` test); and,
-on the owner's decision from an `AskUserQuestion` after reading this
-session's own process review, four process-change tickets — `repo-67`
-(land gate records once, at the end), `repo-68` (one gate for docs and
-records-only chores), `repo-69` (the orchestrator supplies the facts;
-decision tickets carry reproductions), and `repo-70` (dry-run a record
-mechanic before prescribing it) — none built here.
+`repo-65` from item 12 below, after independently reproducing it; `repo-71`
+(renumbered from `repo-66`, which collided with `main`'s own `repo-66` from
+#301) from a coordinator addition (a flaky Windows `preflight.test.ts`
+test); `repo-72`, `status.mjs`'s own duplicate-id message naming `undefined`
+for both file and id — reproduced independently, not fixed, per the
+coordinator's instruction; and, on the owner's decision from an
+`AskUserQuestion` after reading this session's own process review, one
+process-change ticket, `repo-67` (land gate records once, at the end). The
+owner's second `AskUserQuestion`, taking the orchestrator's own
+recommendation, folded the other three process changes into this pull
+request instead of filing them, since none carried a decision or a
+reproduction of its own: "one gate for docs/records-only chores" landed on
+`SKILL.md`'s pairing table and `reference/sizing.md`'s gate-count bullet;
+"the orchestrator supplies the facts" landed on `SKILL.md` step 12 and
+`reference/history.md`'s own schema note; "dry-run before prescribing"
+landed on `SKILL.md` steps 6 and 9.
 
 **what the skill got wrong**
 
@@ -4223,7 +4238,7 @@ mechanic before prescribing it) — none built here.
     `#!/bin/sh` script, and Windows does not honour a shebang
     (`.claude/rules/testing.md` documents the same gotcha for a different
     spawn), so the fake may never run and the CLI may fall through to a real
-    `gh` and real network latency instead → filed as `repo-66` with the
+    `gh` and real network latency instead → filed as `repo-71` with the
     reproduction, hypothesis stated as a hypothesis.
 
 **what went right**

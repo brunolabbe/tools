@@ -72,6 +72,14 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   not uniformly. A self-generated docs ticket deserves one builder and at most one
   gate. See _Do not cap the gate count_ in [dispatching.md](dispatching.md) for the other half of this: the economy is
   in scope, never in refusing a gate that has something to check.
+
+  **2026-09-27: this cap is now a named row in `SKILL.md`'s pairing table,
+  "a docs/records-only chore," because `repo-64` did not get it.** That
+  ticket was exactly this class, a `chore` with no source change, and still
+  ran three Opus gates and five builder rounds, $60.18 by
+  `node scripts/agent-cost.mjs`'s own reading. The cap is one gate, post-PR
+  and narrow; a second, narrow gate only once that first gate has found
+  something wrong, never a default second round.
 - **Point every verification run at the narrowest thing that can fail.** This is
   the largest single cost in a batch and the page said nothing about it for five
   sessions. Measured on this repo, warm: one spec file **2 s**, the directory that
