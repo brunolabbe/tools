@@ -160,6 +160,32 @@ New, in lines this round touched:
 - **findings** · hunt over the round returned 4; 4 carried, 0 dropped.
 - NFR: security n/a · performance — the backreference regex runs per line, negligible · reliability — the med above · maintainability — the docblock low above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-27 · `7bb2d8f..32c747c`, record commits excluded (base `c87153d`; `origin/main` had not moved at fetch) · code-review at medium, over the two rounds only
+
+Done-when rows stand as gate 2 gave them; re-run at the head, the spec is 106 of 106, and every CI check on PR #296 at `32c747c` passes.
+
+Gate 2 findings:
+
+- **med** (the anchor carve-out has no test) · **fixed** — `scripts/test/citations.test.ts:2867 "inline:9|other anchor"` and `scripts/test/citations.test.ts:2868 "shorthand:10|shorthand anchor"`. Dropping the INLINE condition alone reds 1 of 106, and dropping the SHORTHAND condition alone reds 1 of 106, the new test each time; both restored, tree clean. New low below on its docblock.
+- **low** (the regex docblock overclaims) · **fixed** — `scripts/citations.mjs:372 "shorter run, and its closer can be the tail"` and `scripts/citations.mjs:374 "this regex reads nothing where CommonMark reads a shorthand"` are now true. Re-probed at the head: three opening against two closing backticks, and two against three, each yields nothing, and under the CommonMark code-span rule (a maximal backtick run closes only on one of equal length) each is two unmatched runs around a single-backtick span holding the shorthand. The corpus inventory is unchanged from gate 2: 42 gone, 0 added, none in repo-31. The file is 2341 lines, as at `d789c86`.
+- **low** (the repo-60 Log misstates repo-31 and a grade) · **fixed** — the round-2 entry now gives 3 of the 23 in the repo-31 Review, and grades the run-length finding low. The fixer entry also claimed a repo-63 correction that its round did not make; the next entry marks that false, and the diff over that round shows repo-63 untouched.
+- **low** (the repo-63 Log reverses the owner decision) · **fixed** — `docs/work/repo-63-extractsections-reads-a-backtick-info-string-as-an-unclosed-fence.md:112 "The owner chose (a), the gate"`; two lines changed, nothing else in that file.
+
+The records and the repoints:
+
+- **checked, no finding** · The landed gate 1 and gate 2 match my own files after `oxfmt`, with gate 1 at `scripts/citations.mjs:601 "const inQuotation"` as the one coordinate changed; the only other difference is table padding and the blank line before the next heading.
+- **checked, no finding** · 11 coordinate occurrences re-repointed (repo-50 5, repo-52 3, repo-60 3). A word diff of repo-50 and repo-52 changes line numbers only, each line read at the head holds its anchor, and `node scripts/citations-gate.mjs --against origin/main` exits 0, 114 enforced and 0 failing.
+- **checked, no finding** · The branch diff against `origin/main` adds one pin, at `fdafd1a`, an ancestor of `origin/main`, inside an anchor-less quotation in the Log.
+
+New, in lines these rounds touched:
+
+- **low** · `scripts/test/citations.test.ts:2851 "If either carve-out condition is removed"` says either removal regresses the gate 1 high, with 23 anchored citations vanishing from repo-31. That holds for the INLINE half only: with only the SHORTHAND condition dropped, the corpus inventory is identical to the head (42 gone, 0 in repo-31), since those 23 are all inline. The test itself catches both halves.
+- **dropped** · The docblock credits gate 1 with the first gap and gate 2 with the second. Gate 1 found a triple span read as a double one, which is the opener backtracking; close enough to leave.
+- **findings** · hunt over the two rounds returned 2; 1 carried, 1 dropped.
+- NFR: security n/a · performance n/a, no code path changed · reliability — the carve-out is now held by a test · maintainability — the test docblock low above.
+
 ## Log
 
 - 2026-09-26 — Filed from repo-50 gate 2's med finding, on the owner's decision
@@ -423,3 +449,12 @@ scripts/test/citations.test.ts` 106/106; `npm run check` exit 0;
   `node scripts/preflight.mjs --base origin/main --title "fix(repo): stop
 reading a double-backtick quotation as a shorthand citation (repo-60)"`
   exit 0.
+
+- 2026-09-27 — Gate 3 (PASS) landed, `scripts/review-record.mjs --gate 3`,
+  verbatim (0 diffs against the section file once table padding is
+  normalised). One new low, not acted on here per the coordinator's
+  instruction: `scripts/test/citations.test.ts:2851`'s comment says either
+  carve-out condition regresses the gate 1 high; only the `INLINE` one does,
+  since all 23 vanishing citations in repo-31 are inline. The test itself
+  still catches both halves — this is a docblock-only overclaim, left for
+  the owner to decide on separately, and the gate cites it by anchor.
