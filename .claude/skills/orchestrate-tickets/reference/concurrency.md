@@ -315,6 +315,76 @@ ticket's own Log quoting a figure that stopped being true one commit later. Take
 every baseline yourself, in the worktree, at the moment you use it, and write
 figures with the commit they belong to.
 
+**When two open branches must share a file, stack them on purpose, as a
+draft.** This is the adopted answer to repo-48, which weighed Graphite, `spr`
+and GitHub's native stacks and chose process over any of them. When a seam map,
+or any later check, flags a same-file collision between two branches that both
+have to run:
+
+1. Cut the second branch from the first, `git checkout -b <B> origin/<A>`, and
+   say so in B's dispatch.
+2. Open B **as a draft against A**:
+   `gh pr create --draft --base <A> --title "<checked title>"`. If B's pull
+   request is already open, retarget it with `gh pr edit <n> --base <A>`.
+3. Keep B a draft until A has merged. The draft flag is what stops B from being
+   squash-merged into A's branch before A reaches `main`. That has happened
+   once here: #50 merged into `pl-17-image-closure` 46 minutes after that
+   branch's pull request, #49, was closed unmerged, and its commit never
+   reached `main`. This is the hazard behind `CLAUDE.md`'s "check the base
+   branch too".
+4. When A squash-merges, GitHub retargets B to `main` by itself, because this
+   repository deletes merged head branches. That happens only if A **merges**.
+   If A is closed unmerged, retarget B by hand:
+   `gh pr edit <n> --base main`.
+5. Reconcile B with `main` once, using the `--onto` rebase below, then run
+   `gh pr ready <n>`.
+
+This does not remove the post-squash reconciliation. It moves it to one known
+point after A lands, and B's conflict is then with duplicate content rather
+than with a second design. It also does nothing for gate-record citations:
+whatever moves a cited line breaks that citation on the branch behind it, so
+re-resolve the citations after the rebase.
+
+**Re-check the seams whenever an owner decision widens a branch, not only at
+intake.** An intake map cannot see a seam that a decision creates after
+dispatch, and it has missed one twice:
+
+- `dl-58`'s D1(a) moved its fix into `engine`, whose export line then collided
+  with `dl-56`. That cost one merge round.
+- `pl-39`'s first decision put it into `contract/src/errors.ts`, which
+  `pl-42` also touched. It merged clean.
+
+So when a decision you relay names a package or file the branch's Build did
+not, re-check that branch against every other branch in the batch before the
+builder resumes:
+
+- run `git diff --name-only origin/main...origin/<branch>` on each branch and
+  compare the paths;
+- run `git merge-tree --write-tree origin/<this> origin/<other>` on each pair.
+
+Preflight's merge-tree check runs the same probe, but only against open pull
+requests and only when a builder runs it. This re-check guarantees nothing. It
+gives you the notice that stacking, or holding a ticket back, can act on, and
+no stacking tool supplies that notice either.
+
+**The next time a chain forms, pilot GitHub's native stacked pull requests
+through the website, once.** They are in public preview and need no install:
+open B's pull request against A's branch and choose **Create stack**, or accept
+the banner GitHub shows on a chain that already exists. The pull requests
+step 2 above opens are exactly that chain. Do not install the `gh stack`
+extension for the pilot. It would need an allowlist entry and a deny rule for
+`gh stack merge`, and neither was decided. Record in the batch's history row
+what the pilot measured, including the three points repo-48 could not test:
+
+- whether a builder's `git merge origin/main` into a stacked branch still
+  counts as the "linear history" GitHub requires before it will merge;
+- what a server-side **Rebase stack**, or the automatic rebase after a
+  bottom merge, does to a builder whose worktree still holds the branch before
+  the rebase;
+- whether stacking works on this personal repository at all.
+
+Until the pilot has measured those, the numbered steps above are the procedure.
+
 **Unstack a branch after its parent squash-merges with `--onto`.** A squash merge
 rewrites the parent's history into one new commit, so a child branch still carries
 the parent's *original* commits — which are now duplicates of content already on

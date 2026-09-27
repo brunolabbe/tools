@@ -307,8 +307,9 @@ relayed claim (above); do not repeat that pattern.
 
 ## Evaluation
 
-Written 2026-09-27 against `origin/main` at `1a8321c`. **The choice among the
-options below is the owner's; this section recommends one and decides nothing.**
+Written 2026-09-27 against `origin/main` at `1a8321c`. The evaluation below
+recommended an option and decided nothing. **The owner has since decided; the
+decision is recorded under "Decision" at the end of this section.**
 
 **How the public claims were checked.** Every claim about a tool below comes
 from a page fetched with `curl -sL` on 2026-09-27 and read, and the URL is
@@ -382,9 +383,11 @@ during a conflict. Neither depends on how branches are managed. Graphite,
      repo-relative path correctly. The full path hits `tracked.includes(file)`
      before any suffix matching happens.
 
-   **So the false failure hits citations that use the suffix form** (the form
-   `dl-45` uses, e.g. `engine/src/index.ts:403`), not every citation of the
-   conflicted file. That narrows what the Why section says. Staging the
+   **So the false failure hits citations that use the suffix form**, not every
+   citation of the conflicted file. `dl-45`'s ticket, for example, cites the
+   suffix `engine/src/index.ts` with a line number. The example is only there
+   to show the form. That coordinate is already stale: it is past the end of
+   today's 134-line file, so resolving it literally finds nothing. That narrows what the Why section says. Staging the
    resolution clears it. The mechanism is the same whatever produced the
    conflict: a manual merge, a tool's automatic restack or a plain rebase.
 
@@ -413,8 +416,8 @@ collision between two open branches:
    has `deleteBranchOnMerge: true` (from `gh repo view --json`), and GitHub's
    documentation says that when a merged pull request's head branch is deleted,
    GitHub "automatically updates any such pull requests, changing their base
-   branch to the merged pull request's base branch". Source:
-   https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository.
+   branch to the merged pull request's base branch" (source:
+   https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository).
    That protects B only when A **merges**. It does not help when A is closed
    unmerged, which is the #50 case. There the repair is
    `gh pr edit <n> --base main`, done by hand.
@@ -649,12 +652,18 @@ Documented behaviour that matters here:
 - Merging a pull request merges every unmerged one below it, and requires "a
   fully linear history" across the stack. When `main` moves, someone has to
   click **Rebase stack** or run `gh stack rebase`, which force-pushes every
-  branch in the stack. Auto-merge is not supported.
+  branch in the stack. "Auto-merge is not supported for stacked pull
+  requests"
+  (https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-stacked-pull-requests).
 - The extension (https://raw.githubusercontent.com/github/gh-stack/HEAD/README.md,
   MIT, v0.1.1 released 2026-09-02) adds local cascading rebases and
-  `gh stack link <A> <B>`. That command "only calls the GitHub API" to link
-  existing branches, which suits this repo's branch-per-worktree layout. The
-  extension authenticates through `gh`.
+  `gh stack link <A> <B>`. GitHub's docs say that command "only calls the
+  GitHub API to create the stacked pull requests — it does not create any
+  local tracking"
+  (https://docs.github.com/en/pull-requests/reference/use-other-tools-with-stacked-pull-requests).
+  The README says the same in other words: "This command does not store or
+  modify any `gh stack` local tracking state". That suits this repo's
+  branch-per-worktree layout. The extension authenticates through `gh`.
 
 What is **unmeasured** here:
 
@@ -740,7 +749,40 @@ Why not the others:
   recognise ("a **recommendation banner** offering to turn them into a stack",
   from the creating-stacked-pull-requests page above). So adopting Option 1 now
   does not block trying 3b later. Whether to trial the website-only form of 3b
-  the next time a chain forms is a separate decision, and it is the owner's.
+  the next time a chain forms was a separate question, and the owner has
+  answered it below.
+
+### Decision
+
+**Settled 2026-09-27 by the owner: Option 1 + a 3b pilot.** The orchestrator
+asked "repo-48: which stacked-branch approach does the repo adopt?". The
+options as they were put:
+
+- **Option 1 + 3b pilot (recommended).** Process only, with the
+  decision-triggered re-check, plus one website-only pilot of GitHub's native
+  stacked pull requests the next time a chain forms.
+- Option 1 only.
+- 3b with the `gh-stack` extension.
+- Option 2: Graphite.
+
+Option 3a (`spr`) was not offered: this evaluation and gate 1 both found that
+it conflicts with one branch per ticket.
+
+The choice matches this evaluation's recommendation, and the builder's
+decisions 1 and 2 as handed up. It overrode no one. It is implemented in
+`.claude/skills/orchestrate-tickets/reference/concurrency.md` by three
+paragraphs just before the `--onto` paragraph: stack on purpose as a draft,
+re-check the seams on a widening decision, and pilot native stacks through the
+website once.
+
+The builder's other two open questions have been **disposed of, and neither
+is open**:
+
+- **The false-`ambiguous` `candidateFiles` defect.** The owner had it fixed
+  now, in a separate pull request filed as repo-73 to repo-76, not on this
+  branch.
+- **Adding `release-assets.githubusercontent.com` to the allowlist.** It is
+  moot under Option 1, and was not taken up.
 
 ## Log
 
@@ -878,3 +920,49 @@ the reproduction above already exists. I left it out for three reasons:
 Whether to file it is handed up as an open decision, not decided here.
 Adopting Option 1 (a paragraph in `concurrency.md`) was also left undone,
 because that paragraph is the adoption and the choice of option is the owner's.
+
+**2026-09-27: decision recorded, Option 1 implemented, gate 1's three findings
+answered.**
+
+The owner chose "Option 1 + 3b pilot". It is recorded under `### Decision`.
+The two other questions handed up above are recorded there as **disposed**:
+
+- The `candidateFiles` fix went to a separate pull request, repo-73 to
+  repo-76. This is the orchestrator's account. At the time of writing,
+  `gh pr list --state all` showed no pull request naming those ids, so the
+  tree does not confirm it yet.
+- The allowlist entry is moot under Option 1.
+
+Option 1 is now in
+`.claude/skills/orchestrate-tickets/reference/concurrency.md`: three
+paragraphs placed just before the existing `--onto` paragraph, which they
+point to for the reconciliation step. They carry no `file:line` citation. The
+three untested points of the pilot are the ones Option 3b named as
+unmeasured.
+
+`status` stays `ready`, and that was deliberate. `roles/builder.md` says to
+leave it as it is until a `## Review` section lands, and to set it in the
+commit that commits the gate record. Gate 1's record lands after the re-gate,
+not in this round.
+
+Gate 1's findings, each reproduced before anything changed:
+
+1. **`gh stack link` "only calls the GitHub API" as a quote: fixed, but the
+   finding is half refuted.** The phrase is verbatim. It comes from GitHub's
+   docs page, not from the README the sentence credited:
+   `grep -n 'only calls the GitHub API'` matches
+   `use-other-tools-with-stacked-pull-requests` line 9 and nothing in the
+   README. The quote was misattributed, not paraphrased. The fix names the
+   right source and adds the README's own wording next to it.
+2. **"Auto-merge is not supported" has no citation: fixed with a citation,
+   not marked unverified.** GitHub's
+   `merging-stacked-pull-requests` page says, verbatim, "Auto-merge is not
+   supported for stacked pull requests." That page was fetched during the
+   evaluation and again for this round, but it was never among the pages the
+   evaluation cited. That is why the gate's check of the cited pages found
+   nothing.
+3. **The stale suffix-form coordinate in the Evaluation: fixed.** Before the
+   fix, `node scripts/citations.mjs` on this ticket exited `1`,
+   "1 unresolvable" of 16 references, the one FAIL being that coordinate. The
+   example now names `dl-45`'s suffix without a line number, and says it is
+   only there to show the form and is already stale.
