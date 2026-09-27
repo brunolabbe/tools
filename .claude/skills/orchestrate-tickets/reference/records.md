@@ -60,15 +60,42 @@ discarded. So:
   is several subsections whose coordinates are each correct only against their
   own header's sha**, and the citations gate checks the whole `## Review`
   against one tree — so an earlier round's coordinates that a later round's
-  fixes moved are pinned to the sha that round reviewed, or the record goes red
-  the moment it is committed to a ticket file (2026-09-20, seen on a PR-thread
-  record where it was harmless). **The lander does that pinning**, when it
-  transcribes the multi-round section — unless a re-gating reviewer has already
-  returned its earlier sections re-resolved against the new head, as `roles/reviewer.md`
-  asks since 2026-09-26, in which case the lander commits those as given. Either way
-  the reviewer returns text and never edits
-  a file, and a pin changes no verdict, row or severity, so it is the same kind
-  of repair as the self-citation one and not the builder editing the record.
+  fixes moved have to be repointed, or the record goes red the moment it is
+  committed to a ticket file (2026-09-20, seen on a PR-thread record where it
+  was harmless).
+
+  **Repointed, never pinned — a pin here is exactly the branch-only sha this
+  page forbids two sections down, and this is not hypothetical.** This
+  paragraph used to say the earlier round's coordinates "are pinned to the sha
+  that round reviewed," and two builders (`pl-48`, `repo-60`) followed that
+  wording on 2026-09-27, pinning to `ac00b8d`, `f1bde60` and `247073d` — each a
+  commit that exists only on the branch being built. Both pins cost a reviewer
+  re-resolution once they were checked against a tree that could no longer
+  reach those shas, which is the identical failure the branch-only-sha rule
+  below already exists to prevent; this paragraph simply told the lander to
+  commit it. There is no reading where a multi-round record's own coordinates
+  are exempt from that rule.
+
+  **The lander repoints**, when it transcribes the multi-round section — on a
+  scratch `<ticket>.landed.md` copy of the reviewer's file, coordinate only,
+  and only where the anchor text an earlier round quoted is unchanged; every
+  change it makes goes in the ticket's Log, and the copy is what gets spliced
+  in with `scripts/review-record.mjs`. **Repoint before you splice, never
+  after**: `review-record.mjs --verify` refuses a section it finds `MOVED`
+  against the ticket at the commit it checks, so a landing dispatch that orders
+  a byte-for-byte splice first and coordinate re-resolution second is asking
+  for something the tool cannot do — measured on `dl-53`'s landing (2026-09-27),
+  where that was exactly the order given. A citation whose text a later round's
+  fix deleted outright, or whose claim it corrected even where the anchor
+  survives, is not the lander's to repoint at all — it goes back to the
+  reviewer for an amended bullet, as above.
+
+  This is unless a re-gating reviewer has already returned its earlier
+  sections re-resolved against the new head, as `roles/reviewer.md` asks since
+  2026-09-26, in which case the lander commits those as given. Either way the
+  reviewer returns text and never edits a file, and a coordinate-only repoint
+  changes no verdict, row or severity, so it is the same kind of repair as the
+  self-citation one and not the builder editing the record.
 - **A record cannot assert that its own branch is green, and this is structural
   rather than a lapse.** *"Any commit that corrects a status claim invalidates the
   status claim"* — measured 2026-09-04: a Log said "every completed run on the
@@ -110,9 +137,20 @@ discarded. So:
      more (`:96→:94`) on a fourth branch. Reviewers mis-cite systematically, in a
      consistent direction per reviewer, which is why a spot-check misses it and an
      enumeration does not. Mode 1 occurred too, on the branch whose fix moved the
-     very lines its record cited — handled not by remapping but by **pinning the
-     record to the commit the gate reviewed** and saying so, which is the cheaper
-     answer when the reviewed tree is the one the findings describe.
+     very lines its record cited — handled at the time, correctly for that
+     session, not by remapping every citation mechanically but by **pinning
+     the record to the commit the gate reviewed** (`git log -S 'pinning the
+     record' -- reference/records.md` dates that wording to `ea52f8b`,
+     2026-08-24 — this is what that session actually did, restored here
+     rather than rewritten into "repointed" — gate 2, finding A, on a rewrite
+     that also made "not by remapping but by repointing" self-contradictory,
+     since the two name the same act). **That was the cheaper answer when the
+     reviewed tree was the one the findings describe, and it is not today's
+     rule.** A pin to that commit is exactly the branch-only-sha rule below
+     forbids: this repo squash-merges and deletes the branch, so a pin to a
+     commit that exists only there goes `unresolvable` the moment it is gone
+     — see the branch-only-sha
+     rule below, and repo-64's own history row, twice.
   3. **You re-resolve, then make one more edit.** One builder ran its check clean
      at 10/10, then applied a comment fix that moved two citations. It caught this
      only by re-running. "Before committing" is not tight enough; it has to be
@@ -120,6 +158,21 @@ discarded. So:
   4. **The formatter reflows the file after you write the record.** oxfmt
      rewrapping gate tables broke a self-referential row twice on one branch and
      was confirmed on another. Format first, resolve second.
+  5. **You run the check from a checkout that is not the branch's.** By
+     default — no `--rev` — both `citations.mjs` and `citations-gate.mjs`
+     resolve every unpinned `file:line` against the working tree of the
+     process running them, never against a sha you merely name in your head.
+     `citations.mjs --rev <sha>` is the documented exception below and does
+     resolve against a named commit; `citations-gate.mjs` has no `--rev` at
+     all, so for it this mode is unconditional (**gate 1, finding 13**, on
+     this paragraph's own first draft). So a run from the orchestrator's own
+     worktree, or from a shared checkout that is on a different branch,
+     silently checks the wrong tree and reports numbers about content that is
+     not the ticket's. Measured on the 2026-09-27 batch, twice: once against
+     the orchestrator's own checkout, once inside a round-1 gate's worktree
+     that had not detached to the sha under review yet. Run it from inside a
+     worktree already checked out at the exact commit you mean to check, and
+     say which sha that was.
 
   **There is a script for this now: `node scripts/citations.mjs <ticket-file>`**,
   and `--rev <sha>` resolves against the commit the gate reviewed rather than the
@@ -294,6 +347,15 @@ discarded. So:
   fabricated on purpose as a defect's evidence, an upstream project's path, an
   ambiguous basename — and the **declaration** stands. A citation that merely
   went stale is the first case, however it reads today.
+
+  **For a gate record's own citation, run `git log origin/main -S'<...>' --`,
+  never `--all`.** `--all` walks every local ref, including the branch under
+  review itself, and a text that lived only on that branch's own earlier
+  commit still returns non-empty — answering "pin" for a sha the branch-only
+  rule below forbids pinning to. `dl-53`'s lander had to substitute this by
+  hand for gate 5's `DEMUX_READ_FAILED` citation (its Landed Log entry). A
+  gate record with no match on `origin/main` gets a declaration, not a pin to
+  wherever `--all` found it.
 
   **A pin** is written inside the location, `<file>@<rev>:<line>`, with its anchor
   after it as usual. The rev is 7 to 40 hex characters naming a commit, and it
@@ -523,12 +585,14 @@ anchor minus a length, missing the `+1` an inclusive range needs.
 
 Two things it still cannot judge, and you must. A citation that is a finding's
 own evidence ("the text is at `:94-95`, not `:93-94`") must stay as written even
-when the run calls it moved — pin it to the commit it was true at, or, if no
-commit ever held it, say so in a `<!-- citations: evidence ... -->` declaration.
-The rule for which, and the command that decides it, sit beside the declaration
-syntax above; whether the citation earns either is still yours. And an anchor is
-only as good as the fragment chosen: `"const"` is on every line of the file and
-verifies nothing.
+when the run calls it moved — pin it to a commit that survives (the base or a
+`main` commit, never the branch under review's own), or, if no such commit
+ever held it, say so in a `<!-- citations: evidence ... -->` declaration. The
+rule for which, and the command that decides it, sit beside the declaration
+syntax above — `git log origin/main -S` rather than `--all` when the citation
+is a gate record's own; whether the citation earns either is still yours. And
+an anchor is only as good as the fragment chosen: `"const"` is on every line
+of the file and verifies nothing.
 
 **A citation into the record it is written in can never be distinct**, and
 `--require-distinct-anchors` — which the citation gate always passes — reports it

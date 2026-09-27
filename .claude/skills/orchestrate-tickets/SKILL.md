@@ -97,7 +97,7 @@ you are there.
    | The round's findings | Go to |
    | --- | --- |
    | any one needs judgement — how, not only whether | **the builder, resumed** with `SendMessage`, carrying the mechanical ones in the same message: it knows why it built what it did, so it does not undo one decision fixing another, and once its wake is paid the mechanical fixes cost a few warm turns |
-   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Haiku 4.5): it starts small and stays small |
+   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Sonnet 5 since 2026-09-27): it starts small and stays small |
 
    **Why the second row exists, and why only for a whole round.** A subagent's
    prompt cache lives five minutes by default, and every subagent write measured
@@ -127,6 +127,23 @@ you are there.
    read, twice (2026-09-13). After sending, confirm with `ListAgents` and with the
    artefact the message should produce — a push, a commit — and resend if
    neither appears.
+
+   **2026-09-27: dry-run a record mechanic before writing it into a dispatch
+   or a message, the same way you check a fact before relaying it.** Three
+   of one session's own instructions were impossible or wrong as written,
+   each costing a builder a stop or a round: ordering a byte-for-byte splice
+   before coordinate re-resolution, when `review-record.mjs --verify`
+   refuses a section it finds `MOVED`; naming "declare as evidence" for a
+   citation whose text had only moved into the builder's own correction, not
+   been deleted outright, where the tool itself calls a declaration wrong
+   for a citation a tree still verifies and names repoint instead; and
+   naming "merge `main` only on a conflict," when what the citations gate
+   needed was `main`'s own `GRANDFATHERED` list, reachable independently of
+   whether a merge would conflict. Before naming a splice order, a repoint
+   or a declaration, or a merge condition in a dispatch, run it on a scratch
+   copy — `review-record.mjs` or `--verify`, the `git log -S` pin-or-declare
+   test from `records.md`, or the actual check that needs `main` — and
+   confirm it does what the dispatch is about to say it does.
 
 7. **Accept each report, or send it back — the work is not done until you do**:
    five checks, not a re-review. Does each report say what was *run*, and where
@@ -189,6 +206,12 @@ you are there.
    lines that differ (repo-62). Diffing by hand is what caught both landers that
    rewrote a gate's words on 2026-09-26; this is that diff as one exit bit.
 
+   **2026-09-27: dry-run the mechanic before you name it in a landing
+   dispatch too — see step 6's rule.** A splice order, a repoint, a
+   declaration or a merge condition prescribed here is a record mechanic
+   like any other, and the same session that had to correct all three
+   mid-batch is the reason this is stated at both steps rather than once.
+
 10. **Hold every worktree — the gate's and the fixer's as well as the
     builder's — until the ticket is finished.** "The round is over" cannot be
     evaluated: tested twice on 2026-09-03, both times it resumed. Announce any
@@ -223,6 +246,25 @@ you are there.
     (2026-09-07). Decided by the owner on 2026-09-20, against the rows' own
     precedent.
 
+    **2026-09-27: the orchestrator drafts the fact list, the builder formats
+    it, and a gate checks it against primary sources.** The history row's
+    schema table and per-agent numbers are the orchestrator's own read of the
+    batch's accounting and transcripts, handed to the builder to lay out in
+    the fixed shape — not reconstructed by the builder from a summary. The
+    `repo-64` batch got this backwards once: a builder-reconstructed claim
+    credited a reviewer with refuting its own `-err_detect` recommendation,
+    when the builder that built the fix had refuted it first and the
+    reviewer only confirmed — a fact nobody had drafted from source, and it
+    cost a round to undo once a gate re-read the primary commits. **A ticket
+    filed out of a step-12 close-out PR carries its reproduction — a command
+    and its output — not a claim reconstructed from a summary**, and where it
+    poses a decision, its options are drafted from a fresh read at the time
+    the owner is asked, never carried forward from an earlier draft that may
+    have gone stale: `repo-64`'s own `repo-65` had its decision section
+    rewritten four times inside one pull request, because each gate found
+    another premise in it that a fresh read would have caught the first
+    time.
+
 **The PR is not the end of gating; the merge is.** A branch that has already shown
 its corrections can be wrong may open its PR under conditional ship authority *and*
 take one narrow gate afterwards, scoped to the corrections. Not the default.
@@ -243,7 +285,35 @@ edits this table and those files together, and nothing else.**
 | `hard` | `builder-hard` — Opus 5.5, high | `ticket-reviewer-sonnet` |
 | absent | `builder-hard` | `ticket-reviewer-sonnet` |
 | **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
-| **a round's mechanical fixes, and its landing** | `fixer` — Haiku 4.5 | the round's gate, woken |
+| **a docs/records-only chore** — a `chore` whose whole diff is rule pages, ticket files and history rows, no source (2026-09-27) | whichever builder the dispatch names — `builder-mechanical` absent an override, or a stronger one by owner override, per `repo-64`'s own `builder-standard` | **one gate, post-PR and narrow** — `sizing.md`'s docs-ticket gate cap; a second, narrow gate only once the first has found something wrong, never a default second round |
+| **a round's mechanical fixes, and its landing** | `fixer` — Sonnet 5, high (Haiku 4.5 until 2026-09-27) | the round's gate, woken |
+
+**2026-09-27: the docs/records-only chore row exists because `repo-64` did not
+get it.** That ticket — a `chore` with no source change, only rule pages and
+ticket records — took three Opus gates plus five builder rounds, $60.18 total
+(`$45.46` builder, `$14.72` gates, from `node scripts/agent-cost.mjs`) by the
+orchestrator's own reading of that batch's accounting.
+[reference/sizing.md](reference/sizing.md) already said a self-generated docs
+ticket deserves one builder and at most one gate; this row makes that binding
+for the class rather than leaving it as unenforced guidance the multi-round
+loop's own defaults kept overriding.
+
+**2026-09-27: the `fixer` moved to Sonnet 5, on the owner's decision, overriding
+the filer's own recommendation to resume the builder for a record-touching
+landing instead.** The Haiku fixer failed both of the batch's record-touching
+landings — measured directly by the orchestrator, not read off either
+ticket's own Log: on `repo-60`, dispatched to reword a docblock "in place,
+keeping the same number of lines," it removed one line net instead, turning
+CI's `check` red, and reported the citations gate exit 0 where a run in the
+reviewer's own worktree at that sha exited 1 with 3 records failing; on
+`pl-48`, it altered a reviewer's own re-resolved anchors and pushed nothing,
+leaving its local, unpushed commits with the citations gate exiting 1 where
+the reviewer's own dry-run had exited 0, and the round was discarded — and
+the batch before this one had it rewrite gate findings twice despite a
+dispatch saying stop. Effort set to `high`, matching the Sonnet row above
+rather than measuring a new value for this one: `reference/model-pairing.md`
+already gives Sonnet 5 `high` as its builder setting, and a fixer's work is a
+small build.
 
 - **Never pass `model` when dispatching one of these.** It overrides the
   definition's model and keeps its effort, which gives a pairing this table does
@@ -407,7 +477,7 @@ instruction; where the shape has a worked example it is in
 | A **disposition** marked "accepted" | A disposition is a relay, and "accepted" is the word that hides an unmeasured one. **Gate a disposition by measuring what it claims changed**, not by checking the finding is marked closed | 2026-09-05 |
 | A claim an agent makes **about itself** | Its tools, its model, its lifecycle are self-reports, and a self-report is checked from outside — see the table below for the one-call check per field | 2026-09-03 |
 | An **option or cost you construct yourself** | A claim you are making, and it needs a measurement or an explicit "unverified" exactly as a relayed one does. An orchestrator described a closure as needing a flag that would fail the branch; the builder had already built one that did neither, reverted it on the declined mechanism, and the reversal cost two rounds | 2026-09-08 |
-| A **recommendation on an unmeasured premise** | A gate's recommendation conditioned on a fact nobody measured is not a recommendation. Measure the condition, or hand the decision up unrecommended — one such premise was measured false before it reached the owner | 2026-09-17 |
+| A **recommendation on an unmeasured premise** | A gate's recommendation conditioned on a fact nobody measured is not a recommendation. Measure the condition, or hand the decision up unrecommended — one such premise was measured false before it reached the owner | 2026-09-17, 2026-09-27 |
 
 **A claim an agent makes about itself — its tools, its model, its lifecycle — is a
 self-report, and is checked from outside.** It bites at dispatch, at gate and at

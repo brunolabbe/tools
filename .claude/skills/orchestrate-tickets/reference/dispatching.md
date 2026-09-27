@@ -71,6 +71,21 @@ What only you can supply, and what every builder prompt therefore carries:
   dispatch.** The container firewall blocks most hosts, and a builder cannot ask
   for it to be opened. dl-70's registry step was built, pushed and stopped on a
   timeout one command would have shown first, costing a round (2026-09-26).
+- **A branch touching a spawn call or an ffmpeg path is unproven on Windows
+  until you look yourself.** Ask the gate to name that CI leg `unproven (gate)`
+  in its section, but do not stop there: **a gate reviews a detached commit
+  and preflight runs locally, so neither has any CI result to read at all,
+  whatever the leg's own visibility** — that is the true mechanism, not
+  `continue-on-error` hiding the leg from any particular command (correction,
+  gate 1, finding 2: `gh pr checks` and `gh pr view --json statusCheckRollup`
+  do list `windows-latest, informational` by name once a pull request exists
+  and its CI has run — that is exactly why `SKILL.md`'s _After a merge_
+  reaches for those two rather than `gh run list`). So once the pull request
+  is open, run that same look yourself, before granting the merge, rather than
+  waiting for the after-merge one: `dl-53` introduced six failures on that leg
+  that no gate or preflight run could see before the pull request existed, and
+  a pre-merge `gh pr checks 298` on the already-open pull request is what
+  found them (2026-09-27).
 
 ### An answered decision has to be recorded even when you do not build it
 
@@ -412,12 +427,25 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
   section got narrative back, and the record was missing from the ticket until
   the builder noticed at close-out (2026-09-17). The rule sits under _Send the
   findings in full_ above; this is where the prompt has to carry it.
-- **Dry-run the section against the checker before handing it over.** Splice it
-  into a scratch copy of the ticket at the real insertion point, above `## Log`,
-  and run `node scripts/citations.mjs <copy> --section Review --require-anchors
+- **Dry-run the section against the checker before handing it over, from
+  inside your own worktree, already checked out at the head sha you reviewed
+  — never a different checkout.** Splice it into a scratch copy of the ticket
+  at the real insertion point, above `## Log`, and run
+  `node scripts/citations.mjs <copy> --section Review --require-anchors
   --require-distinct-anchors`. A reviewer that did this unprompted handed over a
   section needing no repair (2026-09-09); one that did not cost the builder a
-  round on two citations (2026-09-13).
+  round on two citations (2026-09-13); `repo-62`'s gate 1 skipped it again on
+  2026-09-27 and its section failed the lander's own splice on arrival, where
+  every gate told to do it in these words passed first time. `records.md` has
+  what running the check from the wrong checkout does instead of catching
+  anything.
+- **When a gate is split across two dispatches, name an owner for every seam
+  that could plausibly belong to either.** Splitting by kind of setup (below)
+  removes overlap in what each gate reads, not in what either might assume the
+  other covers: two gates on `dl-53`, split exactly that way, each left a
+  mid-stream SSRF-redirect reproduction to the other, and neither ran it until
+  the orchestrator noticed (2026-09-27). Say, in each prompt, which one owns
+  which reproduction that a reader could reasonably expect from either.
 - **Say which failure the positive control must plant.** "Prove your harness" is
   satisfiable by a control that moves a citation out of range, when the
   prohibited failure is a repoint that still resolves; a gate did exactly that
@@ -575,6 +603,13 @@ measurement behind it. What goes in each dispatch:
   that path, and after it reports, compare the committed section with the file
   ignoring table padding. On 2026-09-26 that comparison caught both of a batch's
   two altered records, and nothing else did.
+- **When a later round moved lines an already-committed earlier round's
+  section cites, say the order in the dispatch: repoint the coordinates on a
+  landed copy first, splice second — never a byte-for-byte splice first and
+  re-resolution after.** `review-record.mjs --verify` refuses a section it
+  finds `MOVED`, so a dispatch ordering it the other way asks for something the
+  tool cannot do; `dl-53`'s landing dispatch did exactly that (2026-09-27).
+  `records.md`'s multi-round paragraph has the mechanics the lander follows.
 
 **Which findings are mechanical is your call, and err toward the builder.** A
 finding is mechanical when its fix is fully stated by the finding and touches only

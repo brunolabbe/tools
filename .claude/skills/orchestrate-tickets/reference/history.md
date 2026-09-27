@@ -105,6 +105,13 @@ frontmatter status out of `git show <branch>:<ticket>`, re-add the token total,
 re-run `--ready` at the base, and say per field whether it was measured here or
 relayed.
 
+**2026-09-27: the orchestrator drafts the fact list this row is built from;
+the dispatch only formats it.** The dispatch's job is laying the facts out in
+the fixed shape, not reconstructing them — a fact reconstructed by a builder
+from a summary is exactly the shape that produced the `-err_detect`
+misattribution this same session's own row had to correct. A gate checks the
+fact list against the primary sources it names before the row lands.
+
 ### Citations on this page are historical, and four of them are pinned
 
 An entry's citations are a claim about the tree that session read, and
@@ -4067,4 +4074,188 @@ Median hop **42 s**; median receiving active **9m35s**; max hop **11m08s**. **Cr
 - Step 4 caught pl-51's first build reporting PASS on a deleted probe, and repo-50's missing Done-when-3 test name, each before a gate was spent.
 - Landing from the gate's own scratch file, then diffing the landed section against it, caught both fixer rewrites; nothing else would have.
 - The step-11 scratch merge ran on a `main` that had moved mid-batch (e50cf81 was merged by someone else) and found nothing.
+
+## Session 2026-09-27 — base c87153d
+
+**Written by the orchestrating session, against the batch's own accounting
+table (`node scripts/agent-cost.mjs`, rates read 2026-09-26) and re-verified
+here against the merged tickets' own files and, for the one branch still
+open, the pull request's own committed comments** — so each schema field
+below says which of the two it rests on, per the row above this one's own
+rule.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from `ready` to a gated branch: `repo-62` → #295 (merged `fe28fed`), `repo-60` → #296 (merged `179f6f5`), `pl-48` → #297 (merged `6988b65`), `dl-53` → #298, at head `18ca055` when this row was first written — **since merged as `b2009ba`** (`main` now `a9878ad`, per gate 3, correcting an earlier "open" and "gate 8 landed the fix": the fix itself is `0a6ff8f`, gate 8 gated it; the timeout that first read as a Windows regression was the `repo-71` flake, not the fix). **Measured** — `git log --oneline -5` on `origin/main` and `gh pr view 298` |
+| `agents` / `dispatches` | **12** agents (1 seam-mapper, 4 builders, 5 reviewer instances — 2 of them on `dl-53` alone, split by kind of setup — and 2 Haiku fixers) / dispatches-and-wakes not tallied to one total. **Relayed**, with one measured exception: `dl-53`'s builder row is explicitly "last of 7 reports; non-cumulative" in the accounting table, so that agent alone had **7** wakes; every other row names 1 to 4 rounds in its own Task column rather than a wake count |
+| `builder rounds` | `repo-62` 1, `repo-60` 2 (+1 repair of the fixer's landing), `pl-48` 3 (+1 discarded fixer attempt, redone by the builder), `dl-53` **7** — its own Log runs two initial build entries then "Round three" through "Round seven", matching the per-agent row's 7 reports, not "5 rounds plus 3 landing stops" as first written here (**gate 1, finding 6**) — the first three **measured** from each ticket's own committed Log; `dl-53`'s **measured** from `origin/dl-53-stream-to-visitor`'s Log, the branch itself not yet merged. **Orchestrator's fault: 2** — the dl-53 landing dispatch ordered a byte-for-byte splice before coordinate re-resolution, which `review-record.mjs --verify` refuses; and routing `repo-60`'s record-touching landing to the Haiku fixer, which then cost a builder repair round |
+| `gates` | **15 gate rounds** across 5 reviewer instances (`repo-62` 2, `repo-60` 3, `pl-48` 3, `dl-53` 7); **14 returned findings**. **Measured**, all 15: the three merged tickets' own `## Review` sections, and `dl-53`'s from `gh pr view 298 --json comments`, whose seven `### Gate N` sections each carry a `findings` line except round 4/angle B (`### Gate 7`), whose own "New findings, in lines this round touched" reads "None" |
+| `wrong findings` | **3, and none reached a commit — the first below is corrected here after gate 1 named the correction wrong.** (1) `dl-53`'s **builder**, not its reviewer, refuted `-err_detect explode` first, in its own Round-three Log entry committed in `8ac378c` at 05:39Z ("does not do it, and the gate's evidence for it was an artefact… without `-bsf:a aac_adtstoasc` the same command exits 255"); the reviewer's own round 2 (`### Gate 4`, committed in `536e1d6` at 14:09Z, headed "The disputed high finding, settled by measurement") then re-ran the same measurement and confirmed the builder's refutation — "the refutation holds completely; my original Option A recommendation was wrong" is the reviewer agreeing its **own** proposal from round 1 was wrong, not claiming to have found the builder's error. The `SEGMENT_SKIPPED` docblock the builder wrote in `8ac378c` credits "the gate" only for the proposal and its faulty exit 255, which is accurate — the gate wrote no code and made no correction to credit itself with; this row's own prior wording ("the same reviewer only caught this on its own next round… wrote the correction into shipped code") was the error, not the dispatch it was correcting (**gate 1, finding 1**). (2) An earlier reviewer round proposed matching bare `"Stream ends prematurely"`; the **builder** refused it as unsafe on a recovering source, and `### Gate 6`'s section 4 — not `### Gate 5`, angle A's probe-timeout-ceiling round — independently reproduced the builder's own recovering control and confirmed the refusal held (**gate 1, finding 5**). (3) `pl-48` gate 1's "the day named twice" low was refuted as to scope by gate 2, real but outside the branch's diff (`tools/planner/docs/work/pl-48-change-dates-and-budget-on-the-page.md:165`); whether a scope refutation counts toward this count is a call this row did not make explicit (**gate 1, finding 7**) |
+| `subagent tokens` | **≈3,905,607**, summed from the accounting table's own Tokens column — a floor, since `dl-53`'s builder figure in that table (105,267) is stated as its last report only, not cumulative across its 7 wakes. **Relayed**, arithmetic performed here |
+| `cost` | **$315.88** over 12h33m active, from `node scripts/agent-cost.mjs`, rates read 2026-09-26. **Relayed** |
+
+### Per agent
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5 / high | seam-mapper | intake, 7 tickets | 3m28s / 3m28s | 0 | 91,230 | $0.58 |
+| #295 | merged | Opus 5.5 / high | builder-hard | repo-62 build, 1 fix round, landing | 23m32s / 1h32m | 0 | 185,302 | $5.67 |
+| #295 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-62 gates 1–2 | 38m24s / 1h11m | 0 | 294,693 | $9.54 |
+| #296 | merged | Sonnet 5 / high | builder-standard | repo-60 build, 2 rounds, repair of the fixer's round, landing | 1h14m / 3h15m | 0 | 501,603 | $32.32 |
+| #296 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-60 gates 1–3 + amendment | 27m47s / 2h48m | 0 | 280,057 | $9.96 |
+| #296 | merged | Haiku 4.5 / unrecorded | fixer | repo-60 landing; removed a line it was told to keep, opened the PR red | 12m47s / 12m47s | 0 | 120,278 | $1.25 |
+| #297 | merged | Sonnet 5 / high | builder-standard | pl-48 build, 3 rounds, landing | 1h15m / 3h23m | 1 | 587,409 | $47.07 |
+| #297 | merged | Opus 5.5 / high | ticket-reviewer-opus | pl-48 gates 1–3 | 31m57s / 1h34m | 0 | 284,981 | $9.58 |
+| #297 | merged | Haiku 4.5 / unrecorded | fixer | pl-48 landing, failed, discarded | 13m52s / 13m52s | 0 | 138,737 | $2.08 |
+| #298 | merged `b2009ba` | Opus 5.5 / high | builder-hard | dl-53 build, 7 rounds (Round three to Round seven, after two initial build entries); Windows fix (`0a6ff8f`) gated by gate 8 | 2h53m / 14h15m | 2 | 105,267 (last of 7 reports; non-cumulative) | $87.78 |
+| #298 | open | Sonnet 5 / xhigh | ticket-reviewer-sonnet | dl-53 gate A (gates 1, 3, 5) | 1h05m / 10h42m | 2 | 523,172 | $29.38 |
+| #298 | open | Sonnet 5 / xhigh | ticket-reviewer-sonnet | dl-53 gate B (gates 2, 4, 6, 7) | 1h45m / 11h40m | 2 | 792,878 | $66.53 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h48m / 14h22m | 1 | — | $14.12 (floor) |
+
+The eight cold wakes all followed waits of more than an hour on owner answers.
+Filed during the batch: `pl-53`, `repo-63`, `dl-74`. This session filed
+`repo-65` from item 12 below, after independently reproducing it; `repo-71`
+(renumbered from `repo-66`, which collided with `main`'s own `repo-66` from
+#301) from a coordinator addition (a flaky Windows `preflight.test.ts`
+test); `repo-72`, `status.mjs`'s own duplicate-id message naming `undefined`
+for both file and id — reproduced independently, not fixed, per the
+coordinator's instruction; and, on the owner's decision from an
+`AskUserQuestion` after reading this session's own process review, one
+process-change ticket, `repo-67` (land gate records once, at the end). The
+owner's second `AskUserQuestion`, taking the orchestrator's own
+recommendation, folded the other three process changes into this pull
+request instead of filing them, since none carried a decision or a
+reproduction of its own: "one gate for docs/records-only chores" landed on
+`SKILL.md`'s pairing table and `reference/sizing.md`'s gate-count bullet;
+"the orchestrator supplies the facts" landed on `SKILL.md` step 12 and
+`reference/history.md`'s own schema note; "dry-run before prescribing"
+landed on `SKILL.md` steps 6 and 9.
+
+**what the skill got wrong**
+
+1. `records.md` contradicted itself on where a multi-round record's
+   earlier-round coordinates go once a later round's fix moves them: one
+   passage said pin them "to the sha that round reviewed," another said a
+   gate record never pins to a branch-only sha. Two builders (`pl-48`,
+   `repo-60`) followed the first and pinned to branch-only shas, and each
+   cost a reviewer re-resolution → `reference/records.md`, the multi-round
+   paragraph.
+2. The Haiku fixer failed both of this batch's record-touching landings —
+   **measured directly by the orchestrator, relayed here rather than read off
+   either ticket's own Log (gate 1, finding 12: the first draft's wording
+   said more than either primary source supports)**: dispatched on `repo-60`
+   to reword a docblock "in place, keeping the same number of lines," it
+   removed one line net instead, turning CI's `check` red, and reported the
+   citations gate exit 0 where a run in the reviewer's own worktree at that
+   sha exited 1, 3 records failing; on `pl-48` it altered a reviewer's own
+   re-resolved anchors and pushed nothing, leaving its local, unpushed
+   commits with the citations gate exiting 1 where the reviewer's own
+   dry-run had exited 0, and the round was discarded — and the batch before
+   this one had it reword gate findings twice. The owner moved the role to
+   Sonnet 5, overriding the filer's own recommendation to resume the builder
+   for a record-touching landing instead → `.claude/agents/fixer.md`,
+   `SKILL.md`'s pairing table, `reference/model-pairing.md`, `roles/fixer.md`.
+3. The dl-53 landing dispatch ordered a byte-for-byte splice before
+   coordinate re-resolution, which `review-record.mjs --verify` refuses,
+   making the order impossible. What worked instead: the lander repoints
+   coordinate-only on a `<ticket>.landed.md` copy, only where the anchor text
+   is unchanged, lists each change in the Log, and splices the copy →
+   `reference/records.md`, the multi-round paragraph; `reference/dispatching.md`'s
+   Routing findings section (**gate 1, finding 10**: not also under Dispatching
+   a builder — that hunk is item 16's bullet, below).
+4. Gate prompts already said to dry-run a section against the checker, but
+   not from inside the gate's own worktree at the head specifically, and
+   `repo-62`'s gate 1 skipped it and its section failed the lander's own
+   splice on arrival, where every gate told the fuller version passed first
+   time → `reference/dispatching.md`'s gate checklist, `roles/reviewer.md`.
+5. Two gates on `dl-53`, split by kind of setup, each left a mid-stream
+   SSRF-redirect reproduction to the other, and neither ran it until the
+   orchestrator noticed → `reference/dispatching.md`: when a gate is split,
+   every shared seam needs a named owner.
+6. A gate's own evidence that `-err_detect explode` fixed a silent
+   truncation had no control run without the flag: `→ exit 255` was really a
+   missing `-bsf:a aac_adtstoasc`. The builder caught this first, in its own
+   Round-three Log; the reviewer's next round re-ran the measurement and
+   agreed its own round-1 proposal was wrong (`wrong findings`, above, has the
+   corrected attribution — gate 1, finding 1, on this row's own first draft)
+   → `reference/defect-shapes.md`, a claimed fix needs a control run with and
+   without it.
+7. A candidate failure detector needs a recovering control before adoption:
+   a bare `"Stream ends prematurely"` match also fires on a download that
+   healed on reconnect, which is why the builder refused it → `reference/defect-shapes.md`.
+8. A new detector can make an older one redundant: checking that every
+   mutation fails at least its own case found `DEMUX_READ_FAILED` already
+   caught by a later detector first → `reference/defect-shapes.md`.
+9. The first gate record committed to a `ready` ticket fails `status.test`'s
+   `reviewedButReady` check — `repo-60`'s and `dl-53`'s builders both hit
+   this cold — because this page only named `done`-at-landing and never the
+   state in between → `roles/builder.md`; `roles/fixer.md`'s own
+   `done`-at-first-record line was left unreconciled with it until gate 1
+   named the gap (**finding 11**), fixed here too.
+10. Running `citations.mjs` or `citations-gate.mjs` from a checkout other
+    than the branch's silently resolves against the wrong tree — it happened
+    to the orchestrator directly, and to one gate in round 1 →
+    `reference/records.md`.
+11. A subagent (`repo-60`'s builder) ended its report with `# Done`, despite
+    `roles/common.md` already carrying the rule → the same bullet, dated
+    again.
+12. `dl-53`'s builder reported, unverified, that `preflight.mjs` runs no
+    test suite over an uncommitted change, and so misses the `repo` project
+    when only `scripts/test/` changed uncommitted. **Reproduced
+    independently** on `origin/main` at `6988b65`: an uncommitted edit under
+    `scripts/test/next-id.test.ts` leaves `preflight.mjs --base 6988b65`
+    printing `ok npm run check` with no `npm test -- --project repo` line at
+    all, exit 0 — because `diffPaths` comes from `git diff --name-only
+    ${base}...HEAD`, which cannot see anything uncommitted. Holds → filed as
+    `repo-65` with the reproduction and an open decision on the remedy.
+13. The sandbox refused several more ordinary shapes: a git command chained
+    after any command, not only `echo $?`; `sed -i` with an insert-at-line
+    script; a large heredoc; a long `node -e` program on length alone; and
+    `pkill -f`, which can match the shell running it and kill the session
+    itself → `roles/common.md`'s sandbox list.
+14. A re-gate should probe a fix from a seed state its own new tests never
+    started from: `pl-48`'s gate 2 found a stuck Save that way, starting from
+    the e2e's own already-touched, unanswered budget rather than from any
+    fixture the round's own tests began with → `roles/reviewer.md`.
+15. The orchestrator put a gate's recommended fix to the owner without a
+    control run behind it (the `-err_detect` case above) → this date added
+    to `SKILL.md`'s relaying-table row "A recommendation on an unmeasured
+    premise."
+16. `dl-53` introduced six failures on the informational Windows CI leg that
+    no gate or preflight run could see, because both run before any pull
+    request exists to have CI results at all — not because `gh pr checks` is
+    blind to that leg (it is not, corrected at gate 1, finding 2: it lists
+    `continue-on-error` legs by name once the pull request's CI has run, which
+    is exactly why `SKILL.md`'s _After a merge_ uses it). A pre-merge run of
+    that same look, on the already-open pull request, found them; a fix is in
+    progress on #298 → `reference/dispatching.md`'s builder-dispatch
+    checklist.
+17. `scripts/test/preflight.test.ts`'s `gh`-fails-inside-check-5 test is
+    flaky on the `windows-latest, informational` leg — 6.9 s, 6.1 s, a
+    30,000 ms timeout (ran 41,330 ms), then 2.0 s on a retry of the identical
+    sha, on commits that never touch `preflight.mjs` or that test.
+    Unverified hypothesis, `dl-53`'s builder's: the test's fake `gh` is a bare
+    `#!/bin/sh` script, and Windows does not honour a shebang
+    (`.claude/rules/testing.md` documents the same gotcha for a different
+    spawn), so the fake may never run and the CLI may fall through to a real
+    `gh` and real network latency instead → filed as `repo-71` with the
+    reproduction, hypothesis stated as a hypothesis.
+
+**what went right**
+
+- `dl-53`'s gate B repeatedly ran positive and recovering controls before
+  trusting a negative — the address-reuse investigation in round 4 looked
+  specifically for a way to turn a real finding (HLS segments sharing an
+  `http @` address) into a wrong answer, did not find one, and said so as an
+  open question rather than a closed one.
+- The builder caught the reviewer's own round-1 `-err_detect` recommendation
+  wrong first, by running the exact command with and without the bitstream
+  filter the engine actually sends, and wrote the shipped code comment
+  crediting the gate's proposal and its faulty evidence rather than its own
+  correction. The reviewer's next round then re-ran the same measurement
+  independently and agreed, rather than taking the builder's Log on trust.
+- Landing from the gate's own file and diffing the committed section against
+  it, per the rule this skill picked up on 2026-09-26, is what caught
+  `repo-60`'s fixer rewriting a line — the mechanical check did its job even
+  though the model behind it did not.
 
