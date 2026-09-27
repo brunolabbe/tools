@@ -249,9 +249,8 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
           grabFrame: context.grabFrame,
           signal: controller.signal,
         });
-        // A bare probe has no job and so no `out/` directory to keep a copy
-        // beside; the in-memory store is the whole of its retention. Only the
-        // job pipeline persists (dl-44).
+        // The in-memory store is the whole of a preview's retention, for a bare
+        // probe and, since dl-53, for a job too.
         const thumbnailPath = captured?.path ?? null;
         const clientProbe = withThumbnailPath(probe, thumbnailPath);
 

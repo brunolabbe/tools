@@ -14,12 +14,12 @@ Every package named below lives under `tools/downloader/`.
 │              │ ─────────────────────────► │                            │
 │              │  GET  /api/probe/:id/events│            api             │
 │     web      │ ◄───────── SSE ─────────── │          Fastify           │
-│  React+Vite  │   POST /api/jobs           │                            │
+│  React+Vite  │   POST /api/jobs  → link   │                            │
 │              │ ─────────────────────────► │  ┌──────────────────────┐  │
 │              │   GET  /api/jobs/:id/events│  │  Job orchestrator    │  │
 │              │ ◄───────── SSE ─────────── │  │  queue · FSM · SSE   │  │
 └──────────────┘   GET  /api/files/:token   │  └──────┬───────────────┘  │
-                 ◄──────────────────────────└─────────┼──────────────────┘
+                 ◄──── streamed file ───────└─────────┼──────────────────┘
                                     ┌─────────────────┴─────────────────┐
                                     ▼                                   ▼
                     ┌───────────────────────────┐      ┌────────────────────────────┐
@@ -27,7 +27,7 @@ Every package named below lives under `tools/downloader/`.
                     │  ─────────────────────    │      │  ────────────────────      │
                     │  registry (by priority)   │      │  hls · dash · progressive  │
                     │   ├─ site-specific   (10) │      │  ffmpeg runner + progress  │
-                    │   ├─ yt-dlp adapter  (20) │      │  storage + retention GC    │
+                    │   ├─ yt-dlp adapter  (20) │      │  one ffmpeg → stdout       │
                     │   ├─ browser sniffer (50) │      │                            │
                     │   └─ direct URL      (90) │      └────────────────────────────┘
                     └───────────────────────────┘
@@ -44,8 +44,8 @@ Every package named below lives under `tools/downloader/`.
 | ----------- | ---------------------------------------------------------------------- | --------------------------- |
 | `contract`  | Types, error taxonomy, job FSM, zod API schemas. **No runtime logic.** | `@webtools/core`            |
 | `resolvers` | URL → `ProbeResult`. Registry + all resolver implementations.          | contract                    |
-| `engine`    | `ProbeResult` → file on disk. ffmpeg, segments, storage, GC.           | contract                    |
-| `api`       | Fastify HTTP surface, job orchestration, SSE, file serving.            | contract, resolvers, engine |
+| `engine`    | `ProbeResult` → a streamed body. ffmpeg, fragmented MP4, no disk.      | contract                    |
+| `api`       | Fastify HTTP surface, job orchestration, SSE, single-use links.        | contract, resolvers, engine |
 | `web`       | Single-page UI: paste URL → pick variant → watch progress → download.  | contract                    |
 
 `contract` is the seam that lets several agents build in parallel without
@@ -64,19 +64,34 @@ vocabulary.
 ```
 URL ──► [probe] ──► ProbeResult ──► [user picks variant] ──► [job created]
                                                                   │
+                                         single-use link, 15 min  │
                     ┌─────────────────────────────────────────────┘
+                    ▼   GET /api/files/:token — the visitor opens it
+             [slot]  ── per-client cap, wait line, bounded wait (≤ 100 s with both probes)
+                    │
                     ▼
              [RE-PROBE]  ← mandatory; signed URLs expire in ~30–300 s (§5)
                     │
                     ▼
-             [download]  ── HLS/DASH/progressive, replaying RequestContext
-                    │
+             [stream]  ── one ffmpeg: every input over the network, replaying
+                    │     RequestContext; -c copy; fragmented MP4 on stdout
                     ▼
-              [mux/remux]  ── ffmpeg -c copy, +faststart, subtitle embed
-                    │
-                    ▼
-              [publish]  ── opaque token → /api/files/:token, TTL'd
+             [to the visitor]  ── headers at the first byte, bytes as produced,
+                                  nothing written to disk, nothing kept
 ```
+
+**Why the file streams and nothing is stored (dl-53).** Two reasons, both the
+owner's, settled on 2026-09-13 and 2026-09-14: nobody here knows what the videos
+contain, so no copy should be kept anywhere or handed to another company's
+servers; and a stored file served later crossed the same tunnel anyway. What it
+costs, accepted with it: fragmented MP4 rather than fast-start (some players
+show the duration late or seek slowly in a long file), no resume — an
+interrupted transfer restarts from zero, re-probe included — no size or time
+left in the browser, since there is no `Content-Length`, and single-use links,
+so a shared link is a second download, not a copy. Retries and mirror failover
+happen only before the first byte; after it a failure ends the stream and the
+job row keeps the code. A visitor who leaves is `canceled`, reason
+`disconnected`, not `failed`.
 
 The re-probe step is not redundant. It is the direct consequence of §5 of the
 analysis, and skipping it produces intermittent 403s that are miserable to debug.
@@ -131,9 +146,12 @@ single replaced line and deliberately _not_ a gated bar, because the resolver
 tiers are alternatives and a bar that filled as the chain degraded would report
 failure as progress.
 
-**Capability-token file URLs.** `/api/files/:token` where the token is
-unguessable random bytes, never the job id. Job ids appear in logs and URLs; the
-download capability must not be inferable from them.
+**Capability-token links.** `/api/files/:token` where the token is unguessable
+random bytes, never the job id. Job ids appear in logs and URLs; the capability
+must not be inferable from them. Since dl-53 the token is a job's single-use
+link: the first `GET` spends it and starts the work, a second answers `410`,
+and so does one after fifteen minutes. There is no automatic `HEAD` route, so a
+preflight cannot spend it.
 
 **Preview images are fetched here, at probe time, and served by token (dl-29).**
 A resolver's `thumbnailUrl` is attacker-influenced, so the browser is never
@@ -146,7 +164,8 @@ failure is simply no preview.
 **When the source names no image at all, one frame is grabbed from the stream
 instead (dl-56).** The stream is the one source every successful probe has. One
 ffmpeg invocation (`grabPreviewFrame` in the engine) reads the cheapest
-rendition with video, seeks a tenth in (at most 3 s), and writes one JPEG, at most
+rendition with video, seeks a tenth in (at most 3 s), and writes one JPEG to its
+stdout — never to disk, since dl-53 — at most
 256 px on its longer edge. It goes out through the **ffmpeg egress proxy** with
 TLS verification on, exactly like a download, because the segments and keys a
 manifest names are URLs only that proxy ever vets. It is never attempted after a
@@ -188,10 +207,13 @@ able to say something useful instead of "something went wrong".
 
 ```
 storage/
-  tmp/<jobId>/          segments, partial muxes — deleted on terminal state
-  out/<jobId>/<file>    finished artifacts — deleted by retention GC
-data/downloader.sqlite  jobs, probe cache, file tokens
+  jobs.db               jobs, links, probe outcomes — and nothing else (dl-53)
 ```
+
+No file is written anywhere, the OS temp directory included: not a segment,
+not a working file, not a subtitle track, not a preview frame. A preview image
+lives in memory for ten minutes and nowhere else — the owner's choice of
+2026-09-27, which retired dl-44's on-disk copy.
 
 ## Configuration
 
@@ -203,17 +225,16 @@ and their defaults.
 | Variable                      | Default      | Why it matters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `PORT`                        | `3000`       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `STORAGE_DIR`                 | `./storage`  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `STORAGE_DIR`                 | `./storage`  | where the job database lives, and nothing else since `dl-53`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_CONCURRENT_JOBS`         | `2`          | ffmpeg is I/O and CPU hungry                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_CONCURRENT_BROWSERS`     | `2`          | ~300 MB each                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_JOBS_PER_CLIENT`         | `2`          | jobs one client may have running _and_ waiting at once — bounds who holds a slot, where `RATE_LIMIT_JOBS_PER_MINUTE` only bounds how fast one is claimed. Counted in flight, not per minute, so CGNAT and shared offices wait rather than get locked out (`dl-51`). `0` disables it                                                                                                                                                                                                                                                                                                                                |
 | `MAX_QUEUED_JOBS`             | `8`          | jobs allowed to be waiting at once, across every client — bounds the queue itself, which a per-client cap cannot: many client keys, each under its own cap, could otherwise still queue without limit. Past it, a new job is refused rather than accepted to wait up to `JOB_TIMEOUT_MS`. Defaults to `4 × MAX_CONCURRENT_JOBS`. `0` disables it (`dl-51`)                                                                                                                                                                                                                                                         |
 | `MAX_CONCURRENT_FRAME_GRABS`  | `2`          | preview-frame grabs in flight at once, server-wide — its own cap rather than a share of `MAX_CONCURRENT_PROBES`, because the probe gate is released before the grab runs and so never bounded it (measured: 12 grabs against a cap of 8). Defaults to `MAX_CONCURRENT_JOBS`, the other cap on concurrent ffmpegs. Past it the grab is skipped and the probe answers with no preview; there is no queue and no disabled value (`dl-56`)                                                                                                                                                                             |
 | `MAX_PROBES_PER_CLIENT`       | `2`          | the same cap as `MAX_JOBS_PER_CLIENT`, for probes against `MAX_CONCURRENT_PROBES`. `0` disables it (`dl-51`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `MAX_FILE_SIZE_MB`            | `4096`       | checked _before_ download, from bitrate × duration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `FILE_RETENTION_HOURS`        | `6`          | GC deadline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `MAX_FILE_SIZE_MB`            | `4096`       | refused before the stream starts, from bitrate × duration; a stream that passes it anyway is cut and recorded as `SIZE_LIMIT_EXCEEDED` (`dl-53`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `OUTCOME_RETENTION_DAYS`      | `90`         | how long a `probe_outcomes` row survives the same sweep; a size bound, not a privacy one — the row carries a hostname and resolver timings, never a path, a query string or an address (`dl-57`)                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow; capped at `50000`, so two probes fit before a download's first byte (`dl-53`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `FFMPEG_PATH`                 | bundled      | override system binary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `YTDLP_PATH`                  | `yt-dlp`     | absent is a fallthrough, not an error — but the image ships it, because YouTube resolves through nothing else (`dl-72`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -242,8 +263,9 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   pins the address it vetted, so a segment URI or a page subresource that no
   `ProbeResult` ever contained is still checked. `PROXY_URL`, when set, is
   chained to rather than replaced.
-- **TLS verification, and who performs it.** The engine's own fetches go through
-  undici, which verifies without being asked — against the system store **plus
+- **TLS verification, and who performs it.** The API's own fetches — the probe's,
+  the preview image's — go through undici (the engine has none since `dl-53`;
+  every media byte is ffmpeg's), which verifies without being asked — against the system store **plus
   `EGRESS_CA_FILE`** since `dl-31`, which is when that dispatcher was told about
   the operator's root at all. Until then the operator's root reached ffmpeg and
   the proxy and not the dispatcher, so a private-root deployment half worked
@@ -350,11 +372,13 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
   breadth and only breadth — a captured session cookie already crossed here
   through ffmpeg's proxy, by default, since `dl-27`.
 
-- **Path safety** — filenames sanitised, output paths confined to `STORAGE_DIR`,
-  no user string ever reaching a shell. Spawn with argument arrays, never
+- **Path safety** — filenames sanitised, though since `dl-53` a filename reaches
+  only a `Content-Disposition` header and no path is ever built from one; no
+  user string ever reaching a shell. Spawn with argument arrays, never
   `shell: true`.
-- **Resource limits** — timeouts on every stage, process-tree kill on cancel,
-  concurrency caps, disk quota check before starting.
+- **Resource limits** — timeouts on every stage, process-tree kill on cancel
+  and on a visitor disconnecting, concurrency caps, a size cap refused on the
+  estimate and enforced on the bytes.
 - **Rate limiting** — **every client-facing route has a bucket**, which since
   [`dl-46`](./work/dl-46-rate-limit-the-probe-stage-channel.md) is a property
   rather than a list to keep in step. Per-IP on `/probe`, `/jobs` and

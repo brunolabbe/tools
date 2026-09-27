@@ -104,8 +104,6 @@ export function serverEnv(options: {
     RATE_LIMIT_PROBE_PER_MINUTE: "0",
     RATE_LIMIT_JOBS_PER_MINUTE: "0",
 
-    // Nothing should be swept mid-run, and nothing should outlive the run.
-    FILE_RETENTION_HOURS: "1",
     LOG_LEVEL: "warn",
   };
 }

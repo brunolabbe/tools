@@ -1,19 +1,18 @@
 /**
- * Pre-flight size and disk checks.
+ * Pre-flight size check.
  *
  * The point is timing, not arithmetic: an eight-hour 4K manifest must be refused
  * *before* the download starts. Discovering the cap after four hours of transfer
- * has burned the bandwidth, filled the disk, and told the user nothing they
- * could not have been told immediately (analysis §7).
+ * has burned the bandwidth and told the user nothing they could not have been
+ * told immediately (analysis §7).
  *
- * When the size genuinely cannot be estimated the checks pass and the runtime
- * caps in `runner.ts` and `progressive.ts` take over. Refusing on "unknown"
+ * When the size genuinely cannot be estimated the check passes and the runtime
+ * cap in `stream.ts`, on the bytes themselves, takes over. Refusing on "unknown"
  * would reject most live and manifest-only sources.
  */
 
 import { AppError } from "@downloader/contract";
 import type { MediaVariant } from "@downloader/contract";
-import { freeDiskBytes } from "./storage.ts";
 
 export type EstimateBasis =
   /** The resolver measured it (`Content-Length`, or a `filesize` from yt-dlp). */
@@ -117,35 +116,4 @@ export function assertWithinSizeLimit(
       ...(estimate.bitrateBps === null ? {} : { bitrateBps: estimate.bitrateBps }),
     },
   });
-}
-
-export interface DiskCheckOptions {
-  /** Estimated output size. Null skips the proportional part of the check. */
-  requiredBytes: number | null;
-  /**
-   * Multiplier on `requiredBytes`. Defaults to 2 because the working copy under
-   * `tmp/` and the muxed result coexist for the duration of the mux.
-   */
-  headroomFactor?: number;
-  /** Absolute floor of free space to leave behind. */
-  minFreeBytes?: number;
-  /** Injectable for tests; production uses `statfs`. */
-  freeBytesImpl?: (dir: string) => Promise<number | null>;
-}
-
-const DEFAULT_MIN_FREE_BYTES = 512 * 1024 * 1024;
-
-/** Throws `DISK_FULL`. A platform that will not report free space passes. */
-export async function assertDiskSpace(dir: string, options: DiskCheckOptions): Promise<void> {
-  const free = await (options.freeBytesImpl ?? freeDiskBytes)(dir);
-  if (free === null) return;
-
-  const minFree = options.minFreeBytes ?? DEFAULT_MIN_FREE_BYTES;
-  const needed = (options.requiredBytes ?? 0) * (options.headroomFactor ?? 2) + minFree;
-
-  if (free < needed) {
-    throw new AppError("DISK_FULL", undefined, {
-      details: { freeBytes: free, neededBytes: Math.round(needed), dir },
-    });
-  }
 }

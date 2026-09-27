@@ -164,8 +164,10 @@ describe("job event streams", () => {
     expect(folded).toEqual(server);
     expect(server.status).toBe("completed");
     expect(server.result).not.toBeNull();
-    expect(server.result?.downloadUrl.startsWith(ROUTES.file(""))).toBe(true);
-    expect(Date.parse(server.result?.expiresAt ?? "")).toBeGreaterThan(Date.now());
+    // The link was the job's start, not its outcome, and it is spent (dl-53).
+    expect(job.link?.url.startsWith(ROUTES.file(""))).toBe(true);
+    expect(Date.parse(job.link?.expiresAt ?? "")).toBeGreaterThan(Date.now());
+    expect(server.link).toBeNull();
   });
 
   test("determinate progress is monotonic and reaches 100", async () => {
@@ -221,11 +223,16 @@ describe("job event streams", () => {
     }
   });
 
-  test("the expired scenario publishes a result already past its retention window", async () => {
+  test("the expired scenario is a link nobody opened, canceled as link-expired", async () => {
     const { job } = await run(scenarioUrl("expired"));
     const server = (await api.getJob(job.id)).job;
-    expect(server.status).toBe("completed");
-    expect(Date.parse(server.result?.expiresAt ?? "")).toBeLessThan(Date.now());
+    expect(server.status).toBe("canceled");
+    expect(server.result).toBeNull();
+    expect(server.error).toMatchObject({
+      code: "JOB_CANCELED",
+      details: { reason: "link-expired" },
+    });
+    expect(server.link).toBeNull();
   });
 });
 
@@ -278,7 +285,7 @@ describe("job lifecycle", () => {
     expect(errors).toBe(1);
   });
 
-  test("a completed job's link is on getJob, now the only way to reach one", async () => {
+  test("a completed job is on getJob, now the only way to reach one", async () => {
     // What survives dl-32 from the pair this used to be. The mock carried a
     // list method beside `getJob`, mirroring the API route both are gone with,
     // so `getJob` is the whole of how the UI reaches a finished job. There is
@@ -288,7 +295,7 @@ describe("job lifecycle", () => {
 
     const served = (await api.getJob(job.id)).job;
     expect(served.status).toBe("completed");
-    expect(served.result?.downloadUrl.startsWith(ROUTES.file(""))).toBe(true);
+    expect(served.result).not.toBeNull();
     expect(jobSchema.safeParse(served).success).toBe(true);
   });
 });
@@ -349,6 +356,13 @@ describe("scenario coverage", () => {
     // fail to parse. `api/test/routes.test.ts` proves this one too.
     const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND", "THUMBNAIL_NOT_FOUND", "BAD_REQUEST"];
     for (const code of notReachableInTheMock) fromScenarios.add(code);
+
+    // Raised by nothing since dl-53, so no scenario pretends otherwise. There is
+    // no disk to fill — `DISK_FULL` is core's and stays for the planner's sake,
+    // by the owner's decision of 2026-09-27 — and no separate mux pass to fail,
+    // since every stream is one ffmpeg that reports `DOWNLOAD_FAILED`.
+    const noLongerRaised: ErrorCode[] = ["DISK_FULL", "MUX_FAILED"];
+    for (const code of noLongerRaised) fromScenarios.add(code);
 
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));
     expect(missing).toEqual([]);

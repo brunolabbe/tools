@@ -43,8 +43,12 @@ export const GLOBAL_ARGS: readonly string[] = [
   "-y",
 ];
 
-/** Machine-readable progress on stdout; suppress the human status line. */
-export const PROGRESS_ARGS: readonly string[] = ["-progress", "pipe:1", "-nostats"];
+/**
+ * Machine-readable progress, and no human status line, on descriptor 3:
+ * stdout is the media itself since dl-53, and `streamFfmpeg` opens the
+ * descriptor. The stdout form went with the last run that wrote to a file.
+ */
+export const STREAM_PROGRESS_ARGS: readonly string[] = ["-progress", "pipe:3", "-nostats"];
 
 /**
  * Protocols a *remote* manifest is allowed to reference.

@@ -940,7 +940,7 @@ const REPRODUCTION = [
   "the `docs` line at `:27` in the same file.",
   "",
   "Also [`manifest/hls.ts:456`](../../resolvers/src/manifest/hls.ts) and then",
-  "line 367 of that file, and hls.ts:367 as a bare mention.",
+  "line 367 of that file, and events.ts:367 as a bare mention.",
 ].join("\n");
 
 test("every reference in the reproduction is extracted, not the three that are qualified", () => {
@@ -951,7 +951,7 @@ test("every reference in the reproduction is extracted, not the three that are q
     "shorthand release-please-config.json:27",
     "inline manifest/hls.ts:456",
     "prose null:367",
-    "inline hls.ts:367",
+    "inline events.ts:367",
   ]);
 });
 
@@ -969,10 +969,10 @@ test("the CLI counts all five references in the reproduction, and still refuses 
   // guess is auditable rather than presented as a fact.
   expect(result.stdout).toMatch(/:27 in release-please-config\.json \(named at record line 3\)/);
   expect(result.stdout).toMatch(/^ {2}unchecked {2}line 367 {2}\(record line 7, prose\)$/m);
-  // Build step 4: ten tracked `index.ts` and two `hls.ts` — ambiguity is the
-  // answer, and resolving it by guessing is what makes a check a rubber stamp.
+  // Build step 4: four tracked `events.ts` (the reproduction's `hls.ts` until dl-53
+  // left one) — ambiguity is the answer; resolving it by guessing is a rubber stamp.
   expect(result.status).toBe(EXIT.unresolvable);
-  expect(result.stdout).toMatch(/FAIL {7}hls\.ts:367/);
+  expect(result.stdout).toMatch(/FAIL {7}events\.ts:367/);
 
   cleanup();
 });

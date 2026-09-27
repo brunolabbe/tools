@@ -85,7 +85,8 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   ...CORE_ERROR_MESSAGES,
   SIZE_LIMIT_EXCEEDED: "This video is larger than the configured size limit.",
-  FILE_EXPIRED: "That file has been removed. Downloads are kept for a limited time.",
+  // dl-53: no file is kept, so what "expires" is the link that starts one.
+  FILE_EXPIRED: "This download link has expired or was already used. Start the download again.",
   JOB_NOT_FOUND: "That download could not be found.",
   JOB_CANCELED: "The download was canceled.",
 

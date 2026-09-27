@@ -10,7 +10,7 @@
 import { AppError, ROUTES } from "@downloader/contract";
 import { clientKey } from "@webtools/core/rate-limit";
 import { describe, expect, test } from "vitest";
-import { runRetentionSweep } from "../src/server.ts";
+import { runSweep } from "../src/server.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 
 /** One `probe_outcomes` row, everything but `host` and `createdAt` fixed. */
@@ -284,7 +284,7 @@ describe("probe_outcomes retention", () => {
       store.recordProbeOutcome(outcome("old.example"), tooOld);
       store.recordProbeOutcome(outcome("recent.example"), stillGood);
 
-      await runRetentionSweep(harness.app.context);
+      runSweep(harness.app.context);
 
       expect(store.probeOutcomes().map((row) => row.host)).toEqual(["recent.example"]);
     } finally {
@@ -303,7 +303,7 @@ describe("probe_outcomes retention", () => {
       const veryOld = new Date(clock.getTime() - 400 * 24 * 3_600_000).toISOString();
       store.recordProbeOutcome(outcome("ancient.example"), veryOld);
 
-      await runRetentionSweep(harness.app.context);
+      runSweep(harness.app.context);
 
       expect(store.probeOutcomes()).toHaveLength(1);
     } finally {

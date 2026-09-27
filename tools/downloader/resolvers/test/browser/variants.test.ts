@@ -71,7 +71,7 @@ describe("opaqueManifestVariant", () => {
   test("still claims audio, deliberately, because that path cannot fail on it", () => {
     // dl-42 left this one alone and the exclusion is worth pinning rather than
     // leaving to be re-litigated. An HLS/DASH variant is downloaded through
-    // `engine/src/download/manifest.ts`, which maps every stream with a trailing
+    // `engine/src/stream.ts` (since dl-53), which maps every stream with a trailing
     // `?` whatever `hasAudio` says — so an over-claim here cannot produce the
     // `Stream map '0:a:0' matches no streams` failure that motivated the change.
     const built = opaqueManifestVariant(hit({ kind: "hls" }), "browser-manifest-0");

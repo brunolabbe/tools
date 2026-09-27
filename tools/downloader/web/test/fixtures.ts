@@ -185,14 +185,18 @@ export function progress(overrides: Partial<JobProgress> = {}): JobProgress {
   });
 }
 
+/** A queued job's single-use link, fifteen minutes from `AT` (dl-53). */
+export const LINK = {
+  url: "/api/files/opaque-token",
+  expiresAt: "2026-08-20T12:14:00.000Z",
+} as const;
+
 export function result(overrides: Partial<JobResult> = {}): JobResult {
   return jobResultSchema.parse({
     filename: "a-sample-recording.mp4",
     sizeBytes: 418_000_000,
     container: "mp4",
     durationSec: 754,
-    downloadUrl: "/api/files/opaque-token/a-sample-recording.mp4",
-    expiresAt: "2026-08-20T14:00:00.000Z",
     ...overrides,
   });
 }
@@ -238,6 +242,8 @@ export function job(status: JobStatus = "downloading", overrides: JobOverrides =
     progress: progress({ stage: status, ...progressOverrides }),
     result: status === "completed" ? result() : null,
     error: status === "failed" ? errorPayload("DOWNLOAD_FAILED") : null,
+    // Only a job nobody has started still offers its link (dl-53).
+    link: status === "queued" ? LINK : null,
     attempts: 1,
     createdAt: AT,
     updatedAt: AT,

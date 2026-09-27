@@ -44,7 +44,8 @@ import type { ApiClient } from "./types.ts";
 
 const DOWNLOAD_TICKS = 12;
 const TICK_MS = 480;
-const RETENTION_HOURS = 6;
+/** The server's fixed link lifetime (dl-53). */
+const LINK_TTL_MS = 15 * 60_000;
 const FALLBACK_TOTAL_BYTES = 240 * 1024 * 1024;
 
 interface Step {
@@ -133,6 +134,28 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
     };
   }
 
+  /** Nobody opens the link, and the server's sweep cancels the job as expired. */
+  function linkExpirySteps(): Step[] {
+    return [
+      {
+        atMs: 2_500,
+        run: (runtime) => {
+          const error = new AppError("JOB_CANCELED", undefined, {
+            details: { reason: "link-expired" },
+          }).toPayload();
+          emit(runtime, {
+            type: "status",
+            jobId: runtime.job.id,
+            status: "canceled",
+            at: nowIso(),
+          });
+          emit(runtime, { type: "canceled", jobId: runtime.job.id, error, at: nowIso() });
+          halt(runtime);
+        },
+      },
+    ];
+  }
+
   function failStep(atMs: number, code: ErrorCode): Step {
     return {
       atMs,
@@ -206,35 +229,6 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       }
     }
 
-    t += 600;
-    steps.push(statusStep(t, "muxing"));
-
-    if (script.failAt === "muxing" && script.failWith) {
-      steps.push(failStep(t + 900, script.failWith));
-      return steps;
-    }
-
-    for (let tick = 1; tick <= 2; tick += 1) {
-      t += 600;
-      const fraction = tick / 2;
-      const progress: JobProgress = {
-        stage: "muxing",
-        percent: script.indeterminate ? null : Math.round(fraction * 100),
-        downloadedBytes: totalBytes ?? Math.round(FALLBACK_TOTAL_BYTES),
-        totalBytes,
-        segmentsDone: null,
-        segmentsTotal: null,
-        speedBps: null,
-        etaSec: null,
-        processedSec: durationSec === null ? null : Math.round(durationSec * fraction),
-      };
-      steps.push({
-        atMs: t,
-        run: (runtime) =>
-          emit(runtime, { type: "progress", jobId: runtime.job.id, progress, at: nowIso() }),
-      });
-    }
-
     t += 700;
     steps.push({
       atMs: t,
@@ -242,7 +236,7 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
         emit(runtime, {
           type: "completed",
           jobId: runtime.job.id,
-          result: buildResult(runtime, script, totalBytes, durationSec, clock),
+          result: buildResult(runtime, totalBytes, durationSec),
           at: nowIso(),
         });
         halt(runtime);
@@ -347,6 +341,14 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       // `?? null` rather than omitted, so the mock produces the shape the server
       // actually sends rather than a subtly narrower one.
       thumbnailPath: result.thumbnailPath ?? null,
+      // The real server starts nothing until this is opened (dl-53). The mock
+      // cannot see a click on a link it does not serve, so it plays the job
+      // out as though the visitor opened it at once — except in the
+      // `linkExpires` scenario, which is the one where nobody does.
+      link: {
+        url: ROUTES.file(newToken()),
+        expiresAt: new Date(clock.now() + LINK_TTL_MS).toISOString(),
+      },
     };
 
     const runtime: JobRuntime = {
@@ -359,7 +361,12 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       stopped: false,
     };
     runtimes.set(job.id, runtime);
-    schedule(runtime, buildSteps(scenario.job, result, variant));
+    schedule(
+      runtime,
+      scenario.job.linkExpires === true
+        ? linkExpirySteps()
+        : buildSteps(scenario.job, result, variant),
+    );
     return { job };
   }
 
@@ -496,22 +503,15 @@ function downloadProgress(
 
 function buildResult(
   runtime: JobRuntime,
-  script: JobScript,
   totalBytes: number | null,
   durationSec: number | null,
-  clock: Clock,
 ): JobResult {
   const container = runtime.variant?.container ?? "mp4";
-  const expiresAtMs = script.expiredResult
-    ? clock.now() - 60_000
-    : clock.now() + RETENTION_HOURS * 60 * 60 * 1000;
   return {
     filename: `${safeFilename(runtime.probe.title)}.${container}`,
     sizeBytes: totalBytes ?? FALLBACK_TOTAL_BYTES,
     container,
     durationSec,
-    downloadUrl: ROUTES.file(newToken()),
-    expiresAt: new Date(expiresAtMs).toISOString(),
   };
 }
 

@@ -20,9 +20,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { access, constants } from "node:fs/promises";
+import { access, constants, statfs } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { freeDiskBytes } from "@downloader/engine";
 import { ROUTES } from "@downloader/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
@@ -48,8 +47,6 @@ export interface HealthResponse {
     dir: string;
     /** Null when the platform will not report it. */
     freeBytes: number | null;
-    /** The configured cap, not the volume's size. Zero means no quota. */
-    quotaBytes: number;
   };
   /** Kept from the pre-dl-7 shape so an existing client does not break. */
   storageDir: string;
@@ -71,6 +68,20 @@ function readVersion(): string {
 }
 
 const VERSION = readVersion();
+
+/**
+ * Free bytes on the volume holding `dir`. Null when the platform will not say.
+ * Since dl-53 that volume holds the job database and nothing else, so this is
+ * about SQLite having room to write a row, not about videos.
+ */
+async function freeDiskBytes(dir: string): Promise<number | null> {
+  try {
+    const stats = await statfs(dir);
+    return Number(stats.bavail) * Number(stats.bsize);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Whether the configured ffmpeg is really there.
@@ -131,7 +142,6 @@ export function registerHealthRoute(app: FastifyInstance, context: AppContext): 
       storage: {
         dir: context.config.storageDir,
         freeBytes,
-        quotaBytes: context.config.maxTotalStorageBytes,
       },
       storageDir: context.config.storageDir,
     };

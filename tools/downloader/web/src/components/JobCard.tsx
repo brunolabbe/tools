@@ -80,6 +80,8 @@ export function JobCard({
         </div>
       </div>
 
+      {job.status === "queued" && job.link && <LinkOffer link={job.link} now={now} />}
+
       {active && (
         <>
           <ol className="steps" aria-label="Pipeline">
@@ -151,14 +153,18 @@ export function JobCard({
       )}
 
       {job.status === "completed" && job.result && (
-        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} now={now} />
+        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} />
       )}
 
       {job.status === "failed" && job.error && (
         <ErrorPanel error={job.error} onRetry={() => onRetry(job)} retryLabel="Analyse and retry" />
       )}
 
-      {job.status === "canceled" && <ErrorPanel error={localErrorPayload("JOB_CANCELED")} />}
+      {/* The job's own error, so its `details.reason` picks the copy (dl-53); the
+          local payload only for a record that somehow has none. */}
+      {job.status === "canceled" && (
+        <ErrorPanel error={job.error ?? localErrorPayload("JOB_CANCELED")} />
+      )}
 
       <div className="job__actions">
         {active && (
@@ -174,33 +180,49 @@ export function JobCard({
   );
 }
 
+/**
+ * The job's single-use link (dl-53). Following it is what starts the work:
+ * the file streams to this browser as it is produced, and the card follows the
+ * progress over the event stream meanwhile.
+ *
+ * `download` with no value, so the name comes from the server's
+ * `Content-Disposition` — the title is only known after the re-probe the link
+ * itself triggers — and so a refusal lands in the browser's downloads list
+ * instead of navigating this page away from the card that explains it.
+ */
+function LinkOffer({
+  link,
+  now,
+}: {
+  link: NonNullable<Job["link"]>;
+  now: number;
+}): React.JSX.Element {
+  const expiry = formatExpiry(link.expiresAt, now);
+  if (expiry.expired) return <ErrorPanel error={localErrorPayload("FILE_EXPIRED")} />;
+  return (
+    <div className="result__actions">
+      <a className="button button--primary" href={link.url} download>
+        Download
+      </a>
+      <span className="muted result__expiry">works once · {expiry.label}</span>
+    </div>
+  );
+}
+
 function CompletedResult({
   result,
   thumbnailPath,
-  now,
 }: {
   result: NonNullable<Job["result"]>;
   /** Required, not optional — `undefined` is a job recorded before dl-29. */
   thumbnailPath: string | null | undefined;
-  now: number;
 }): React.JSX.Element {
-  const expiry = formatExpiry(result.expiresAt, now);
-
-  if (expiry.expired) {
-    // No preview on this branch, and it costs nothing: an expired file is at
-    // least six hours old, the thumbnail's bytes live ten minutes, so `Preview`
-    // would render null here in every real case anyway.
-    return <ErrorPanel error={localErrorPayload("FILE_EXPIRED")} />;
-  }
-
   return (
     <div className="result">
-      {/* Grouped with the meta rather than added as a third child of `.result`,
-          which is `space-between` — a bare child would land between the meta and
-          the actions and push the filename into the middle of the row. Same
-          reason as `card__headline` and `job__headline`. `result__headline`
-          collapses to just the meta when `Preview` renders null, so the panel of
-          a job with no `og:image` is exactly what it was. */}
+      {/* Grouped with the meta rather than added as a bare child of `.result`,
+          which is `space-between`. Same reason as `card__headline` and
+          `job__headline`. `result__headline` collapses to just the meta when
+          `Preview` renders null. */}
       <div className="result__headline">
         <Preview path={thumbnailPath} size="card" />
         <div className="result__meta">
@@ -211,12 +233,9 @@ function CompletedResult({
           </p>
         </div>
       </div>
-      <div className="result__actions">
-        <a className="button button--primary" href={result.downloadUrl} download={result.filename}>
-          Download file
-        </a>
-        <span className="muted result__expiry">{expiry.label}</span>
-      </div>
+      {/* No second download: the file went to this browser and no copy exists
+          to fetch again (dl-53). Downloading again is a new analysis. */}
+      <p className="muted result__expiry">Saved by your browser. The server kept no copy.</p>
     </div>
   );
 }

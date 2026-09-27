@@ -17,7 +17,10 @@ export interface ApiConfig {
   host: string;
   port: number;
 
-  /** Root of `tmp/` and `out/`, shared with the engine. */
+  /**
+   * Where the job database lives by default. Since dl-53 that is all it holds:
+   * no file, working or finished, is written anywhere.
+   */
   storageDir: string;
   /** SQLite file. `:memory:` is honoured, and is what the tests use. */
   databasePath: string;
@@ -83,15 +86,19 @@ export interface ApiConfig {
   probeTimeoutMs: number;
   /** Ceiling on a single ffmpeg invocation. */
   stageTimeoutMs: number;
+  /**
+   * Per-job cap: refused up front on the size estimate, and a stream that
+   * passes it anyway is cut and recorded as `SIZE_LIMIT_EXCEEDED` (dl-53).
+   */
   maxFileSizeBytes: number;
-  /** Global cap on everything under `storageDir`. Zero disables the quota. */
-  maxTotalStorageBytes: number;
-  fileRetentionHours: number;
-  /** How often the retention sweep runs. */
+  /**
+   * How often the sweep runs: links that expired unopened, and old rows. A
+   * minute by default, because a link lives fifteen (dl-53).
+   */
   gcIntervalMs: number;
   /**
-   * How long a `probe_outcomes` row survives before the retention sweep prunes
-   * it. Unlike `fileRetentionHours` this is about table size, not privacy — a
+   * How long a `probe_outcomes` row survives before the sweep prunes it. This
+   * is about table size, not privacy — a
    * row carries a hostname and resolver timings, never a path, a query string
    * or an address (dl-57).
    */
@@ -310,9 +317,7 @@ export const API_DEFAULTS = {
   probeTimeoutMs: 45_000,
   stageTimeoutMs: 3_600_000,
   maxFileSizeMb: 4096,
-  maxTotalStorageGb: 50,
-  fileRetentionHours: 6,
-  gcIntervalMs: 15 * 60_000,
+  gcIntervalMs: 60_000,
   outcomeRetentionDays: 90,
   probeCacheTtlMs: 30_000,
   logLevel: "info",
@@ -344,6 +349,16 @@ const PROBES_PER_BROWSER_SLOT = 4;
  * slots, not to become a standing backlog measured in `JOB_TIMEOUT_MS`s.
  */
 const QUEUED_JOBS_PER_CONCURRENCY_SLOT = 4;
+
+/**
+ * The most `PROBE_TIMEOUT_MS` may be (dl-53). A download's first byte waits on
+ * up to two probes — the re-probe and its one retry — and both must fit in
+ * `TUNNEL_BUDGET_MS` (100 s, `jobs/links.ts`) or Cloudflare answers 524. So the
+ * ceiling is half the budget, and at it the wait for a slot is zero. Written out
+ * rather than imported, so this module does not pull in the orchestrator;
+ * `config.test.ts` holds it to `TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES + 1)`.
+ */
+export const PROBE_TIMEOUT_CEILING_MS = 50_000;
 
 /** The brief's cap. A cache that outlives the URLs it holds is worse than none. */
 export const PROBE_CACHE_TTL_CEILING_MS = 60_000;
@@ -511,21 +526,13 @@ export function loadApiConfig(
       overrides.maxConcurrentFrameGrabs ??
       int(env["MAX_CONCURRENT_FRAME_GRABS"], maxConcurrentJobs, { min: 1, max: 64 }),
     probeTimeoutMs:
-      overrides.probeTimeoutMs ?? int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs),
+      overrides.probeTimeoutMs ??
+      int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs, { max: PROBE_TIMEOUT_CEILING_MS }),
     stageTimeoutMs:
       overrides.stageTimeoutMs ?? int(env["JOB_TIMEOUT_MS"], API_DEFAULTS.stageTimeoutMs),
     maxFileSizeBytes:
       overrides.maxFileSizeBytes ??
       int(env["MAX_FILE_SIZE_MB"], API_DEFAULTS.maxFileSizeMb) * 1024 * 1024,
-    maxTotalStorageBytes:
-      overrides.maxTotalStorageBytes ??
-      int(env["MAX_TOTAL_STORAGE_GB"], API_DEFAULTS.maxTotalStorageGb, { min: 0 }) *
-        1024 *
-        1024 *
-        1024,
-    fileRetentionHours:
-      overrides.fileRetentionHours ??
-      int(env["FILE_RETENTION_HOURS"], API_DEFAULTS.fileRetentionHours),
     gcIntervalMs: overrides.gcIntervalMs ?? int(env["GC_INTERVAL_MS"], API_DEFAULTS.gcIntervalMs),
     outcomeRetentionDays:
       overrides.outcomeRetentionDays ??

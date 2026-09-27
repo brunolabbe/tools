@@ -16,7 +16,14 @@ import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import { InProcessJobQueue } from "../src/jobs/queue.ts";
 import { buildRegistry } from "../src/resolvers.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
+import {
+  createHarness,
+  openLink,
+  probeResult,
+  SOURCE_URL,
+  StubResolver,
+  waitFor,
+} from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
 let harness: Harness | undefined;
@@ -468,6 +475,7 @@ describe("graceful shutdown", () => {
         payload: { url: SOURCE_URL },
       })
     ).json() as JobResponse;
+    openLink(current, created.job);
 
     await waitFor(
       () => current.app.context.store.get(created.job.id),

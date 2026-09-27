@@ -47,6 +47,10 @@ function withStatus(job: Job, next: JobStatus, at: string): Job {
     status: next,
     updatedAt: at,
     finishedAt: TERMINAL_STATUSES.has(next) ? at : job.finishedAt,
+    // A job that has left `queued` has had its link opened, or has ended
+    // without it, and the server has withdrawn it either way (dl-53). Dropped
+    // here too, so the card stops offering a link that now answers 410.
+    ...(next === "queued" ? {} : { link: null }),
   };
 }
 
@@ -80,7 +84,7 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
   // Terminal states are facts, not snapshots — nothing may follow them, with
   // one exception: the outcome arrives in *two* frames. The server announces
   // `status: completed` and then sends `completed`, which is the half carrying
-  // the result and the download link. Rejecting everything after the first
+  // the result. Rejecting everything after the first
   // left a job showing "Ready" with no file attached to it.
   //
   // Only the payload that agrees with the status already recorded gets in, so
@@ -105,6 +109,7 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
       // which intermediate states we happened to observe.
       return {
         ...job,
+        link: null,
         status: "completed",
         result: event.result,
         error: null,
@@ -115,6 +120,7 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
     case "failed":
       return {
         ...job,
+        link: null,
         status: "failed",
         error: event.error,
         updatedAt: event.at,
@@ -125,6 +131,7 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
       // UI reads — see the note on `Job` in `shared/job.ts`.
       return {
         ...job,
+        link: null,
         status: "canceled",
         error: event.error,
         updatedAt: event.at,

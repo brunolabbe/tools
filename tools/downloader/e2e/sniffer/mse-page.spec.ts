@@ -196,17 +196,22 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   const job = page.getByRole("listitem").filter({ hasText: hls.watchUrl }).first();
   await expect(job).toBeVisible();
 
-  const link = job.getByRole("link", { name: "Download file" });
-  await expect(link).toBeVisible({ timeout: PROBE_TIMEOUT_MS });
-  await expect(job.getByText("Ready", { exact: true }).first()).toBeVisible();
+  // dl-53: the job hands out a single-use link, and opening it is what runs the
+  // re-probe and streams the file. Opened here by the test's own client, which
+  // stands where the browser's download would.
+  const link = job.getByRole("link", { name: "Download", exact: true });
+  await expect(link).toBeVisible();
 
   // --- The file -----------------------------------------------------------
   const href = await link.getAttribute("href");
   expect(href).toMatch(/^\/api\/files\//u);
 
-  const response = await request.get(href ?? "");
+  const response = await request.get(href ?? "", { timeout: PROBE_TIMEOUT_MS });
   expect(response.status()).toBe(200);
   expect(response.headers()["content-disposition"]).toContain("attachment");
+  await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
+    timeout: PROBE_TIMEOUT_MS,
+  });
 
   const body = await response.body();
   // A real MP4 and not an error page: bytes 4-8 of an MP4 are the `ftyp` box.

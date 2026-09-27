@@ -26,7 +26,14 @@ import { loadApiConfig } from "../src/config.ts";
 import { createHumanCheck, SITEVERIFY_URL } from "../src/human-check.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
+import {
+  createHarness,
+  openLink,
+  probeResult,
+  SOURCE_URL,
+  StubResolver,
+  waitFor,
+} from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
 /** Cloudflare's published test keys: the site key and secret that always pass. */
@@ -219,7 +226,11 @@ describe("a passing token changes nothing about the work", () => {
 
     const created = await postJob(h, "token-for-the-job");
     expect(created.statusCode).toBe(201);
-    const { job } = JSON.parse(created.body) as { job: { id: string } };
+    const { job } = JSON.parse(created.body) as {
+      job: { id: string; link?: { url: string } | null };
+    };
+    // Since dl-53 the link starts the work; it carries no human check of its own.
+    openLink(h, job);
     await waitFor(
       () => h.app.context.store.get(job.id).status,
       (status) => status === "completed",
@@ -368,7 +379,11 @@ describe("the token is a credential", () => {
     let h = await checked(siteverify(PASSES), { logger });
     expect((await postProbe(h, TOKEN)).statusCode).toBe(200);
     const created = await postJob(h, TOKEN);
-    const { job } = JSON.parse(created.body) as { job: { id: string } };
+    const { job } = JSON.parse(created.body) as {
+      job: { id: string; link?: { url: string } | null };
+    };
+    // Since dl-53 the link starts the work; it carries no human check of its own.
+    openLink(h, job);
     await waitFor(
       () => h.app.context.store.get(job.id).status,
       (status) => status === "completed",

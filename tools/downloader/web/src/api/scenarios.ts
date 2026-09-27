@@ -26,8 +26,8 @@ export interface JobScript {
   indeterminate?: boolean;
   /** Download tick indices at which the SSE connection is dropped. */
   dropStreamAt?: readonly number[];
-  /** Publish a result whose retention window has already closed. */
-  expiredResult?: boolean;
+  /** Nobody opens the link; the server cancels the job as expired (dl-53). */
+  linkExpires?: boolean;
 }
 
 /**
@@ -315,10 +315,11 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     keyword: "expired",
-    title: "Expired file",
-    description: "Completes, but the retention window has already closed — FILE_EXPIRED.",
+    title: "Link expired",
+    description:
+      "The download link is never opened, and the job is canceled when it expires — nothing ran, nothing was kept.",
     probeDelayMs: 1_000,
-    job: { expiredResult: true },
+    job: { linkExpires: true },
   },
   {
     keyword: "drm",
@@ -450,11 +451,12 @@ export const SCENARIOS: readonly Scenario[] = [
     job: { failWith: "DOWNLOAD_FAILED", failAt: "downloading" },
   },
   {
-    keyword: "nodisk",
-    title: "Disk full",
-    description: "Storage volume filled up while writing segments.",
+    keyword: "toobig",
+    title: "Cut at the size cap",
+    description:
+      "No size could be estimated up front, so the stream starts and is cut when it passes MAX_FILE_SIZE_MB.",
     probeDelayMs: 1_000,
-    job: { failWith: "DISK_FULL", failAt: "downloading" },
+    job: { failWith: "SIZE_LIMIT_EXCEEDED", failAt: "downloading" },
   },
   {
     keyword: "jobtimeout",
@@ -469,13 +471,6 @@ export const SCENARIOS: readonly Scenario[] = [
     description: "The CDN's certificate failed verification mid-download. Not retryable.",
     probeDelayMs: 1_000,
     job: { failWith: "TLS_VERIFICATION_FAILED", failAt: "downloading" },
-  },
-  {
-    keyword: "muxfail",
-    title: "Mux failed",
-    description: "ffmpeg exits non-zero while joining the streams.",
-    probeDelayMs: 1_000,
-    job: { failWith: "MUX_FAILED", failAt: "muxing" },
   },
 ];
 
