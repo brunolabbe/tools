@@ -127,6 +127,39 @@ Amended at `7bb2d8f`, replacing the copy committed at `c49f0d5`: every coordinat
 - **findings** · defect hunt at medium returned 11; 9 carried in 8 bullets (1 high, 3 med, 5 low, two of them sharing a bullet), 2 dropped.
 - NFR: security n/a · performance — the quotation check is a linear scan per match per line, negligible · reliability — the high above · maintainability — the Done-when 3 test above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-09-27 · `247073d..7bb2d8f` (base `c87153d`; `origin/main` had not moved at fetch) · code-review at medium, over the round only
+
+| Done when                                                                                                 | Proof                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The repo-25 command exits 0 (no other change to that record), the port quotation absent from the count | **verified** — exit 0 at `7bb2d8f` on the same 37 references. The parenthetical stays unmet, as the owner accepted on 2026-09-27 by option (a)                                                                                                           |
+| 2. A quoted shorthand (the 99999 reproduction) is not read                                                | **proven** — `scripts/test/citations.test.ts:2807 "expect(found).toEqual([]);"`, unchanged by the round                                                                                                                                                  |
+| 3. A real shorthand after a quotation still resolves against the right file                               | **proven** — `scripts/test/citations.test.ts:2839 "shorthand:6=a/one.ts"`; letting a skipped quoted inline citation set the current file reds exactly this test, 1 of 105                                                                                |
+| 4. A fixture shows the double-backtick token uncounted and the single-backtick one counted                | **proven** — `scripts/test/citations.test.ts:2783 "expect(quoted.map((c) =>"` and `scripts/test/citations.test.ts:2788 "expect(unquoted.map((c) =>"`, unchanged; the rule is now narrowed to an anchor-less quotation, by the owner decision on the high |
+| 5. The spec and `npm run check` pass                                                                      | **verified** — spec 105 of 105; `preflight.mjs` exit 0, `npm run check` and `--project repo` inside it                                                                                                                                                   |
+
+Gate 1 findings:
+
+- **high** (quotation rule drops anchored citations) · **fixed** — the skip is now conditional at `scripts/citations.mjs:617 "g.anchor === undefined) continue;"` and `scripts/citations.mjs:690 "g.outer === undefined) continue;"`. Corpus inventory, base extractor against head over 202 files: 42 gone, 0 added, 0 changed. The 25 gone from the seven records this round left unchanged are the same 25 as gate 1; the other 17 are quotations in repo-60 (16, its text having grown) and repo-63 (1). repo-31 loses none: its Review reads 5 verified, and the whole-record run is back to exit 2 with 6 moved, as at base. No test holds the fix (new med below).
+- **med** (repo-25 allowance holds a stale declaration) · **fixed** — the entry is gone. A `gate()` run with no allowance: 120 records in scope, 6 failing, and their counts (3, 2, 8, 3, 3, 1) match the 6 remaining entries exactly; repo-25 passes with 10 verified and 1 evidence.
+- **med** (the Done-when 3 test cannot fail) · **fixed** — the gate 1 mutation, re-applied at the head, reds 1 of 105, the replacement test only.
+- **med** (the record is invisible to the gate) · **fixed** per the owner decision (a) — the Build line is prefixed; `extractSections` at the head finds Build, Done when, Review, Gate 1 and Log, and the gate scopes 120 records with repo-60 passing. repo-63 is filed with the reproduction, which re-runs at `247073d` to the three sections it quotes; `extractSections` is not in the diff, and `node scripts/next-id.mjs repo --rev origin/main` shows repo-63 claimed by this branch only.
+- **low** (the prose pass) · **fixed** — 0 references added in the corpus inventory; the anchored quoted citation is read again and covers its line-number phrase.
+- **low** (run length) · **half fixed** — a triple-backtick span now closes on a triple run; a single-backtick span holding a double backtick still swallows the citation between two of them (probe unchanged), now documented in the docblock. Accepted as documented. New low below on the docblock.
+- **low** (per physical line, two findings) · **not fixed, documented** — both probes unchanged, both named in the docblock. Accepted as documented.
+- **low** (Log accuracy) · **fixed** — both claims corrected in place, confirmed against the diff.
+
+New, in lines this round touched:
+
+- **med** · The anchor carve-out, the whole of the high fix, has no test. Removing both conditions at the head keeps `npx vitest run --project repo` at 493 of 493 and `node scripts/citations-gate.mjs --against origin/main` at exit 0 (114 enforced, 0 failing), since a dropped citation fails nothing. A regression to the gate 1 high would pass every local and CI gate. Needs a fixture reading an anchored citation inside a double-backtick span, for both the INLINE and the SHORTHAND pass.
+- **low** · The regex docblock overclaims. Lines 361 and 375 of `scripts/citations.mjs` at `7bb2d8f` say the closer length is exact, but the opener can backtrack to a shorter run and the closer can be the tail of a longer one: a probe reads nothing out of a shorthand between three opening and two closing backticks, or two opening and three closing, where CommonMark reads a code span holding a shorthand. 0 corpus hits.
+- **low** · The round-2 entry in this ticket Log says the unconditional skip dropped 23 anchored citations from the repo-31 Review section alone, with 5 references there falling to 2; the 23 are the whole record, 3 of them in its Review. It also calls the run-length finding a med; gate 1 graded it low.
+- **low** · Line 112 of the repo-63 ticket at `d789c86` ("The owner chose (a) over the gate") says the owner went against the gate recommendation; (a) was the gate recommendation, as the repo-60 Log says correctly.
+- **checked, no finding** · repo-50 and repo-52 re-repointed: 7 coordinates into `scripts/citations.mjs` now 40 lines on from `247073d`, 5 into `scripts/citations-gate.mjs` one line back after the removed entry; each read at the head holds its anchor.
+- **findings** · hunt over the round returned 4; 4 carried, 0 dropped.
+- NFR: security n/a · performance — the backreference regex runs per line, negligible · reliability — the med above · maintainability — the docblock low above.
+
 ## Log
 
 - 2026-09-26 — Filed from repo-50 gate 2's med finding, on the owner's decision
