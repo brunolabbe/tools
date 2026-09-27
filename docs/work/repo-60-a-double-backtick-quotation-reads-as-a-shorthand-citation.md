@@ -73,7 +73,7 @@ content may itself contain single backticks. `scripts/citations.mjs`'s own
 top docblock already writes several — search it for ` ` ` `` to find real
 examples to test against, including at least one that quotes a citation-shaped
 token on purpose (the port examples this ticket is filed from, and the
-literal ```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
+```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
 
 **The reproduction is inside a fenced code block was considered and is not
 the same shape**: `extractSections`'s fence-skip is about _heading_ detection
@@ -171,7 +171,7 @@ Gate 2 findings:
 - **med** (the anchor carve-out has no test) · **fixed** — `scripts/test/citations.test.ts:2867 "inline:9|other anchor"` and `scripts/test/citations.test.ts:2868 "shorthand:10|shorthand anchor"`. Dropping the INLINE condition alone reds 1 of 106, and dropping the SHORTHAND condition alone reds 1 of 106, the new test each time; both restored, tree clean. New low below on its docblock.
 - **low** (the regex docblock overclaims) · **fixed** — `scripts/citations.mjs:372 "shorter run, and its closer can be the tail"` and `scripts/citations.mjs:374 "this regex reads nothing where CommonMark reads a shorthand"` are now true. Re-probed at the head: three opening against two closing backticks, and two against three, each yields nothing, and under the CommonMark code-span rule (a maximal backtick run closes only on one of equal length) each is two unmatched runs around a single-backtick span holding the shorthand. The corpus inventory is unchanged from gate 2: 42 gone, 0 added, none in repo-31. The file is 2341 lines, as at `d789c86`.
 - **low** (the repo-60 Log misstates repo-31 and a grade) · **fixed** — the round-2 entry now gives 3 of the 23 in the repo-31 Review, and grades the run-length finding low. The fixer entry also claimed a repo-63 correction that its round did not make; the next entry marks that false, and the diff over that round shows repo-63 untouched.
-- **low** (the repo-63 Log reverses the owner decision) · **fixed** — `docs/work/repo-63-extractsections-reads-a-backtick-info-string-as-an-unclosed-fence.md:112 "The owner chose (a), the gate"`; two lines changed, nothing else in that file.
+- **low** (the repo-63 Log reverses the owner decision) · **fixed** — `docs/work/repo-63-extractsections-reads-a-backtick-info-string-as-an-unclosed-fence.md@1a8321c:112 "The owner chose (a), the gate"`; two lines changed, nothing else in that file.
 
 The records and the repoints:
 
@@ -458,3 +458,10 @@ reading a double-backtick quotation as a shorthand citation (repo-60)"`
   since all 23 vanishing citations in repo-31 are inline. The test itself
   still catches both halves — this is a docblock-only overclaim, left for
   the owner to decide on separately, and the gate cites it by anchor.
+
+- 2026-09-27 — `repo-63` landed `extractSections`'s fix, so this record's own
+  Build line 76 no longer needs the one-word `literal` prefix worked around
+  above; removed it here as `repo-63`'s Done-when asks, restoring the line to
+  open with the backtick run itself. `extractSections` now reads `Build`,
+  `Done when` and `Log` as their own sections again on this file unchanged —
+  verified by `repo-63`'s own new test, which plants this exact line shape.

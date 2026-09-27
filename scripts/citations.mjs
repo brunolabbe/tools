@@ -1782,7 +1782,13 @@ export function extractSections(markdown) {
     // A closing fence matches the opening one's character and is at least as
     // long, which is what lets a fenced block quote a shorter fence.
     const mark = /^ {0,3}(`{3,}|~{3,})/.exec(text);
-    if (mark) {
+    // Per CommonMark, a backtick fence's info string may not itself contain a
+    // backtick — a line whose backtick run is followed later on the same line
+    // by another backtick never opens (or closes) a fence at all, unlike a
+    // tilde fence, which has no such restriction.
+    const disqualified =
+      mark !== null && mark[1][0] === "`" && text.slice(mark[0].length).includes("`");
+    if (mark && !disqualified) {
       const char = mark[1][0];
       const length = mark[1].length;
       if (fence === null) fence = { char, length };
