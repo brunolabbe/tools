@@ -361,4 +361,65 @@ origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
   variance; corrected Log entries stating the 23 citations are from the whole
   record with 3 in Review (not Review alone), and that the run-length finding
   is low (not med); corrected repo-63 Log entry to show it follows the gate
-  recommendation, not against it.
+  recommendation, not against it. **Correction, next round**: that last
+  clause is false — `git diff 7bb2d8f d789c86 --
+docs/work/repo-63-...md` is empty, repo-63 was not touched this round.
+  Left in place rather than rewritten so the mistake stays legible; the
+  actual fix is in the entry below.
+
+- 2026-09-27 — CI's `check` on PR #296 (`d789c86`) was red:
+  `node scripts/citations-gate.mjs --against origin/main` exit 1, 3 records
+  failing. Cause: the docblock edit in the entry above removed one line net
+  from `scripts/citations.mjs`, shifting every citation below it by one, and
+  the rewritten paragraph was itself wrong — "closed by a run at least as
+  long" contradicts the backreference it describes, and "two-close-one" is
+  not a sentence a probe can check. Fixed:
+
+  Rewrote the docblock a third time, this time checked against a probe
+  rather than described from memory, and against CommonMark's own code-span
+  rule rather than assumed: the opener's `\x60{2,}` is greedy but can
+  backtrack to a shorter run than the maximal one actually present, and the
+  closer it settles for can be the tail of a longer run rather than one of
+  its own — probed both ways (three opening against two closing backticks,
+  and the reverse), each swallows a real shorthand where CommonMark reads an
+  ordinary code span holding one. Kept the file's own line count identical
+  to `d789c86` (2341 lines) so nothing below it moves again; verified
+  `scripts/citations.mjs:601 "const inQuotation"` and `:402`'s
+  `DOUBLE_BACKTICK` declaration both landed back where gate 1 and gate 2
+  resolved them.
+
+  Replaced the landed `### Gate 2` with the reviewer's amended,
+  re-resolved copy (`scratchpad/repo-60/review-gate2-amended-reresolved.md`)
+  byte for byte — removed the old block, spliced with
+  `scripts/review-record.mjs --gate 2`; the only difference from the section
+  file is table padding. Re-resolved gate 1's own `const inQuotation`
+  citation into `scripts/citations.mjs`, previously line 602, to `:601`,
+  coordinate only, since the docblock rewrite moved it back by the one
+  line the fixer's edit had taken.
+
+  Re-repointed `repo-50` and `repo-52` into `scripts/citations.mjs`: both
+  were still repointed for `7bb2d8f`, one line short of `d789c86`'s tree
+  (which neither record's own commits touched), verified each anchor holds
+  at its new line before editing.
+
+  Verified the fixer's new test (`"an anchored citation inside a
+double-backtick quotation is still read"`) reds under _each_ half of the
+  carve-out mutation independently — dropping the `INLINE` pass's
+  `g.anchor === undefined` condition loses the quoted anchored inline
+  citation; dropping the `SHORTHAND` pass's `g.inner === undefined &&
+g.outer === undefined` condition loses the quoted anchored shorthand —
+  confirmed by hand in two throwaway mutant copies, matching gate 2's own
+  med finding that no test held this before.
+
+  Corrected `repo-63`'s Log to the reviewer's wording
+  (`scratchpad/repo-60/repo-63-corrected.md`, applied verbatim after
+  diffing) and, above, the false claim in the prior entry that this had
+  already happened.
+
+  Verified: `node scripts/citations-gate.mjs --against origin/main` exit 0;
+  `node scripts/citations.mjs docs/work/repo-60-*.md --section Review
+--require-anchors --require-distinct-anchors` exit 0; `npx vitest run
+scripts/test/citations.test.ts` 106/106; `npm run check` exit 0;
+  `node scripts/preflight.mjs --base origin/main --title "fix(repo): stop
+reading a double-backtick quotation as a shorthand citation (repo-60)"`
+  exit 0.
