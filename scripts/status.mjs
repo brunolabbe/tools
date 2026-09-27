@@ -14,8 +14,7 @@
  * to be unsafe, noisy or racy — so the projection is computed on demand and
  * never kept.
  *
- * Plain `.mjs`, no dependencies, matching `commit-message.mjs` — the two are
- * the repo's tooling and neither should need a build step to answer.
+ * Plain `.mjs`, no build step and no package dependencies — sibling scripts only.
  *
  * See docs/adr/003-the-status-page-is-generated.md and its amendment.
  */
@@ -25,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { extractSections } from "./citations.mjs";
 
 /** Every field a ticket's frontmatter may carry, and whether it is required. */
 const FIELDS = {
@@ -320,16 +320,16 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
  * typo, and guessing wrong turns a missed row on the board into a red pipeline
  * for every reader. It falls on the tolerable side of the asymmetry below.
  *
+ * **Which lines are fences is `extractSections`' rule, shared** (repo-73). A
+ * loose one of its own here — any three backticks or tildes toggled — hid
+ * repo-63's gate record behind a quoted shorter fence, and a `~~~` inside a
+ * backtick fence exposed a quoted one. One reader, so they cannot disagree.
+ *
  * @param {string} text The whole file, frontmatter included.
  * @returns {boolean}
  */
 function hasGateRecord(text) {
-  let fenced = false;
-  for (const line of text.split("\n")) {
-    if (line.startsWith("```") || line.startsWith("~~~")) fenced = !fenced;
-    else if (!fenced && /^##\s+Review\b/.test(line)) return true;
-  }
-  return false;
+  return extractSections(text).some((s) => s.level === 2 && /^Review\b/.test(s.title));
 }
 
 /**
