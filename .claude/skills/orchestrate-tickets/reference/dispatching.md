@@ -68,9 +68,12 @@ What only you can supply, and what every builder prompt therefore carries:
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
 - **A Build step that fetches an external host: `curl` it once before you
-  dispatch.** The container firewall blocks most hosts, and a builder cannot ask
-  for it to be opened. dl-70's registry step was built, pushed and stopped on a
-  timeout one command would have shown first, costing a round (2026-09-26).
+  dispatch.** Check whether the container firewall is open to that host first
+  — the allowlist may block it even if the host is reachable — and if it is
+  not, ask the owner to open it before dispatch. The container firewall blocks
+  most hosts, and a builder cannot ask for it to be opened. dl-70's registry
+  step was built, pushed and stopped on a timeout one command would have shown
+  first, costing a round (2026-09-26).
 - **A branch touching a spawn call or an ffmpeg path is unproven on Windows
   until you look yourself.** Ask the gate to name that CI leg `unproven (gate)`
   in its section, but do not stop there: **a gate reviews a detached commit
