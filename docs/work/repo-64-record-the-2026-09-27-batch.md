@@ -316,7 +316,9 @@ statusCheckRollup` both name `test (windows-latest, informational)`
     `git log origin/main -S` carve-out for a gate record's own citation; and
     corrected the run-output section to name a surviving commit.
   - **med 4, fixed.** `repo-65`'s decision rested on two false premises:
-    `roles/builder.md:116` and `roles/fixer.md:39` (unchanged on this branch)
+    `roles/builder.md@1a8321c:116` "Fix, run the narrowest checks, then preflight"
+    and `roles/fixer.md@6988b65:39` "Run the checks your fixes touch, narrowest first"
+    (unchanged on this branch; pinned by repo-67, see its Log)
     both prescribe preflight _before_ the commit, not after; and check 2
     (`checkCitations`) reads the working tree unconditionally — reproduced:
     prepending an uncommitted line to `scripts/citations.mjs` made

@@ -242,8 +242,9 @@ stays because the failure mode is silent.
 
 ### Send the findings in full; the lander writes the section down
 
-**The gate returns a `## Review` block, and whoever lands the round — the
-builder, or the fixer — commits it verbatim. You carry it between them by
+**The gate returns a `## Review` block, and whoever lands the ticket — the
+builder, or the fixer — commits it verbatim, with every other gate's, once, at
+the landing (`records.md`, since `repo-67`). You carry it between them by
 pasting it, never by describing it. That is the rule, settled by the owner on repo-38 (2026-09-09), and
 this page used to argue the opposite.** An orchestrator instructed exactly that
 on 2026-09-03, on a reading of `docs/01-TICKETS.md:351`'s *"the reviewer reports
@@ -590,7 +591,7 @@ measurement behind it. What goes in each dispatch:
   `origin/<branch>` first, since a fixer may have pushed in between.
 - **A fresh `fixer`**, only when every finding of the round is mechanical, or
   the landing is all that is left: the branch, the base, the findings, pasted,
-  and the scratch directory; ship authority when the round's gate records and
+  and the scratch directory; ship authority when the gate records and the
   pull request are all that remains. **A fixer and a resumed builder never work
   one branch at the same time** — both push to it, and the second push is
   rejected as non-fast-forward — which is one more reason a round is never
@@ -603,13 +604,18 @@ measurement behind it. What goes in each dispatch:
   that path, and after it reports, compare the committed section with the file
   ignoring table padding. On 2026-09-26 that comparison caught both of a batch's
   two altered records, and nothing else did.
-- **When a later round moved lines an already-committed earlier round's
-  section cites, say the order in the dispatch: repoint the coordinates on a
-  landed copy first, splice second — never a byte-for-byte splice first and
-  re-resolution after.** `review-record.mjs --verify` refuses a section it
-  finds `MOVED`, so a dispatch ordering it the other way asks for something the
-  tool cannot do; `dl-53`'s landing dispatch did exactly that (2026-09-27).
-  `records.md`'s multi-round paragraph has the mechanics the lander follows.
+- **A round's dispatch carries no gate record to commit.** Every gate's
+  section is held in its file until the landing (`records.md`, _A multi-round
+  record lands once, at the end_). The landing dispatch hands over **the set
+  the final gate returned** — every earlier section re-issued by it, one file
+  per gate, all resolved against the tip it reviewed — and never a mix of
+  rounds. Say in it that the lander repoints nothing: if `review-record.mjs`
+  finds a section `MOVED`, the tip moved after the final gate, and the repair
+  is waking that gate to re-issue against the new sha (`roles/reviewer.md`).
+  Until `repo-67` an earlier round's section was already committed by the time
+  a later round moved its lines, and `dl-53`'s landing dispatch ordered a
+  byte-for-byte splice before re-resolution, which `review-record.mjs`
+  refuses (2026-09-27); under this rule there is nothing to re-resolve.
 
 **Which findings are mechanical is your call, and err toward the builder.** A
 finding is mechanical when its fix is fully stated by the finding and touches only
@@ -636,5 +642,8 @@ the gate count_). The message carries:
 
 Its role page tells it to give each named finding a verdict, raise new findings
 only in the lines the round touched, re-sweep nothing already settled, and return
-a new `### Gate <n>` subsection. After two re-gates that each raise a new `high`,
-`SKILL.md` step 8 hands the state to the user.
+a new `### Gate <n>` subsection **with every earlier section re-issued beside
+it**, re-resolved against the new head, because nothing has been committed yet
+and the last set a gate returns is the one that lands. Hold the paths of that
+set, and only that set, for the landing dispatch. After two re-gates that each
+raise a new `high`, `SKILL.md` step 8 hands the state to the user.

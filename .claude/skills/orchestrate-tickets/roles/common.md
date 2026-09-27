@@ -10,8 +10,8 @@ nobody reviewing the skill sees it; that is why the bodies are a pointer.
 
 They are pinned in your agent definition's frontmatter, chosen by the
 orchestrator from the ticket's `difficulty` — the table is in the skill's
-`SKILL.md` under _Which model built it_. You do not need it to work. A builder's
-or a gate's definition also pins a **1-hour prompt-cache TTL**
+`.claude/skills/orchestrate-tickets/SKILL.md` under _Which model built it_.
+You do not need it to work. A builder's or a gate's definition also pins a **1-hour prompt-cache TTL**
 (`experimental: cacheTtl: 1h`), because both are woken after idling past the
 5-minute default; it needs Claude Code v2.1.248 or later, and Claude Code
 ignores it while the subscription is on usage credits. **If your
@@ -93,8 +93,9 @@ shape rather than reporting a broken channel.**
 ## Point every run at the narrowest thing that can fail
 
 One spec file, not its directory: measured warm here at 2 s against 41 s for
-the directory and ~50 s for the project (`sizing.md`). Run the spec while you
-work and the project once at the end.
+the directory and ~50 s for the project
+(`.claude/skills/orchestrate-tickets/reference/sizing.md`). Run the spec while
+you work and the project once at the end.
 
 ## Your report
 
