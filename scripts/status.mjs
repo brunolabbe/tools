@@ -293,11 +293,21 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     }
   }
 
-  const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
-  if (byId.size !== tickets.length) {
-    const seen = new Set();
-    const duplicate = tickets.find((ticket) => !seen.add(ticket.id));
-    throw new Error(`${duplicate?.file}: "${duplicate?.id}" is used by more than one ticket`);
+  // Both files are named, because the fix for a collision is renumbering one of
+  // them and the reader has to know which two to choose between. This used to
+  // test `!seen.add(id)`, which is never true — `Set.prototype.add` returns the
+  // set — so the message read `undefined: "undefined"` on a real collision
+  // (repo-72).
+  /** @type {Map<string, (typeof tickets)[number]>} */
+  const firstById = new Map();
+  for (const ticket of tickets) {
+    const first = firstById.get(ticket.id);
+    if (first) {
+      throw new Error(
+        `${ticket.file}: "${ticket.id}" is used by more than one ticket (also ${first.file})`,
+      );
+    }
+    firstById.set(ticket.id, ticket);
   }
   return tickets.toSorted(byIdOrder);
 }

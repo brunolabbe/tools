@@ -73,3 +73,47 @@ relying on `Set.prototype.add`'s return value.
   incident (run 36340116984) that exposed it: a real `repo-66` id collision
   between this branch and `main`'s #301. Reproduced independently with a
   disposable `--root` fixture, above. Not fixed here, per instruction.
+- 2026-09-27 — Built. `readTickets` now walks the tickets with a
+  `Map` of ids already seen and throws on the first ticket whose id is in it,
+  naming **both** files: the one that reached the id second leads the line,
+  as every other `readTickets` error leads with its file, and the one it
+  collides with follows in parentheses (`scripts/status.mjs:307`
+  "is used by more than one ticket (also ${first.file})"). Both, rather than
+  the one the brief asked for, because the remedy for a collision is to
+  renumber one of the two and the reader has to know which two to choose
+  between. The message keeps its old text up to the parenthesis, so anything
+  matching `is used by more than one ticket` still matches; nothing else in
+  the output, `--json` included, and nothing about `reviewedButReady`, changed.
+
+  Red, then green, on the same two tests, appended at the end of the suite
+  (`scripts/test/status.test.ts:1675` "a duplicate id is named, with both of
+  the files that claim it", unit, two `pl-2` files in one directory; `:1685`
+  "the command reports the duplicate by name and exits non-zero, which is the
+  CI gate", the CLI with `--json` over two `repo-66` files, asserting exit 1,
+  empty stdout and no `undefined` on stderr). With `scripts/status.mjs`
+  checked out from `origin/main`,
+  `npx vitest run scripts/test/status.test.ts`: `Tests  2 failed | 127 passed (129)`,
+  `Received: "undefined: "undefined" is used by more than one ticket"`. With
+  the fix: `Tests  129 passed (129)`.
+
+  The brief's own `--root` reproduction, re-run on the fix over a scratch
+  fixture of two `repo-66` tickets:
+
+  ```
+  $ node scripts/status.mjs --root <fixture> --json
+  docs/work/repo-66-theirs.md: "repo-66" is used by more than one ticket (also docs/work/repo-66-mine.md)
+  exit=1
+  ```
+
+  **What the brief had wrong, or left out.** Its evidence dates the defect to
+  #300's CI run, but it had been seen and deliberately left before: `repo-36`'s
+  Log ("Observed but deliberately not fixed here … worth its own ticket") and
+  the orchestrate-tickets history page both record it from the `repo-33` →
+  `repo-36` renumber, where the clashing id "had to be recovered by hand". So
+  this is the second time a real collision paid for it, not the first. Those
+  two records are left as written; they are history of what was seen then.
+
+  **Fold-in considered, not taken.** The only adjacent work either record
+  names is the window in which two sessions can take the same id before
+  either publishes it; that needs a decision about how ids are reserved, not
+  a line here, so it is not free and is not folded in.
