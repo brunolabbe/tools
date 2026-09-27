@@ -3,7 +3,7 @@ id: repo-75
 tool: repo
 title: spawn-safety.test.ts never scans scripts/, though CLAUDE.md says the rule is enforced repo-wide
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -134,6 +134,20 @@ ticket.** Filed as repo-77 in this pull request, with no fix.
   `shell: false` in each of its `spawnSync` calls.
 - `npm run check`, the `core` and `repo` suites, and
   `node scripts/citations-gate.mjs --against origin/main` pass.
+
+## Review
+
+**Gate: PASS** -- 2026-09-27 -- `1a8321ce0615059d9b9d338628b78a2d9552249a...a9a3d840c2dabeee30b637d4fe49f2a63ca0c2f6` -- code-review at high (dispatch named a detailed, per-ticket attack list; treated as above the medium default)
+
+| Done when                                                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The scan reads every source file, `scripts/` and `.mjs` included, and a scan narrowed back to workspaces `src` fails a test  | proven -- `packages/core/test/spawn-safety.test.ts:45 "the scan reaches past the workspaces, into scripts/ and .mjs"`; reproduced by swapping SOURCES back to the old workspaceDirs/sourcesUnder expression: 1 failed of 5, only this test, restoring `repoSources()` returns 5 of 5; further reproduced by planting a bare `spawn(` with no `shell: false` in `scripts/`, in `.claude/scripts/`, and in a workspace `test/` dir (`packages/core/test/`); all three were caught by `packages/core/test/spawn-safety.test.ts:78 "every file that spawns says"`, then removed |
+| Every check passes over the wider roots, with `scripts/preflight.mjs` saying `shell: false` in each of its `spawnSync` calls | proven -- full suite `packages/core/test/spawn-safety.test.ts`: 5 of 5 passed; each call site: `scripts/preflight.mjs:100-101 "function runGit(command, args, options = {})"`, `scripts/preflight.mjs:265-266 "function runBuildCommand(command, args, options = {})"`, `scripts/preflight.mjs:529-530 "function spawnRaw(command, args, options = {})"`, the line immediately below each now reading shell: false                                                                                                                                                          |
+| `npm run check`, the `core` and `repo` suites, and `node scripts/citations-gate.mjs --against origin/main` pass              | verified -- preflight own check 1 and check 2 report ok; independently: npx vitest run --project core -> 24 passed across 5 files; npx vitest run --project repo -> 521 passed across 11 files; node scripts/citations-gate.mjs --against origin/main -> 118 enforced, 0 failing, 6 grandfathered, 0 raised, exit 0                                                                                                                                                                                                                                                         |
+
+- **low** -- `packages/core/test/support/workspaces.ts:133 "new Set(listed.split"` de-duplicates `git ls-files --cached --others --exclude-standard` for the same reason repo-74 de-duplicates `candidateFiles`, but unlike repo-74 it has no test that runs it mid-merge-conflict; every current spawn-safety assertion uses `.some()` or a `.filter().toEqual([])` shape that a duplicated file entry cannot break, so this is precautionary symmetry rather than a proven need. Not required to fix; naming it so the next reader does not read the absent test as an oversight.
+- **findings** -- code-review at high returned 1; 1 carried, 0 dropped.
+- NFR: security n/a -- performance: scan now reads 484 files instead of 247, no measured regression (core project ran in under a second) -- reliability: see the low finding above -- maintainability: one extension list and one git-driven file list replace two workspace-shaped walks, and CLAUDE.md own claim of the scan is now checked by a test that fails on narrowing rather than only by a comment.
 
 ## Log
 
