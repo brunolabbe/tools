@@ -2868,3 +2868,42 @@ test("an anchored citation inside a double-backtick quotation is still read", ()
     "shorthand:10|shorthand anchor",
   ]);
 });
+
+/**
+ * CommonMark: a backtick fence's info string may not itself contain a
+ * backtick, so a line whose backtick run is followed later on the same line
+ * by another backtick never opens a fence at all — a reader does not skip
+ * past it looking for a closer. `extractSections` used to check only the
+ * opening run, which silently swallowed every heading below a line shaped
+ * like this (repo-60's own Build, before it worked around the divergence).
+ */
+test("extractSections does not read a backtick info string as an unclosed fence", () => {
+  const md = [
+    "## Build",
+    "```` ` `` `:99999` `` ` ```` reproduction",
+    "## Done when",
+    "a",
+    "## Log",
+    "b",
+  ].join("\n");
+  expect(extractSections(md)).toEqual([
+    { title: "Build", level: 2, start: 1, end: 2 },
+    { title: "Done when", level: 2, start: 3, end: 4 },
+    { title: "Log", level: 2, start: 5, end: 6 },
+  ]);
+});
+
+/**
+ * The rule is specific to a backtick info string. An ordinary fence — no
+ * backtick after the opening run, or a tilde fence even with one — still
+ * hides headings inside it, unchanged.
+ */
+test("extractSections still hides headings inside an ordinary backtick or tilde fence", () => {
+  const backtick = ["## Real", "```md", "## Not a heading", "```", "tail"].join("\n");
+  expect(extractSections(backtick)).toEqual([{ title: "Real", level: 2, start: 1, end: 5 }]);
+
+  // A tilde fence has no backtick-info-string restriction, so a backtick in
+  // its info string does not disqualify it as a fence.
+  const tilde = ["## Real", "~~~`md", "## Not a heading", "~~~", "tail"].join("\n");
+  expect(extractSections(tilde)).toEqual([{ title: "Real", level: 2, start: 1, end: 5 }]);
+});

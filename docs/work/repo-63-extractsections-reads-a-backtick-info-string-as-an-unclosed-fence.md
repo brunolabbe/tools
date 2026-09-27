@@ -113,3 +113,40 @@ narrowly the backtick-info-string rule, not a general CommonMark fence rewrite.
   recommendation, over fixing `extractSections` in the same branch — filed here
   instead, so repo-60 does not widen past the citation-extraction change its
   own Build asked for.
+
+- 2026-09-27 — Built. `extractSections` (`scripts/citations.mjs`) now checks,
+  for a matched fence line whose character is a backtick, whether the text
+  after the matched run itself contains another backtick; if it does, the line
+  disqualifies as a fence opener or closer and scanning continues normally. A
+  tilde fence is untouched, per the Build's own scope note. Two tests added at
+  the end of `scripts/test/citations.test.ts` (new tests go at the end of the
+  suite so they do not shift the line numbers merged `## Review` sections cite
+  — an earlier mid-file draft of this same change failed
+  `node scripts/citations-gate.mjs --against origin/main` on four unrelated
+  records for exactly that reason, moved rather than fixed): one plants
+  repo-60's own backtick-run-then-more-backticks shape and shows every heading
+  after it is found; the other confirms an ordinary backtick fence and a tilde
+  fence with a backtick in its info string still hide headings inside them.
+
+  Checked `scripts/review-record.mjs`'s `## Log` anchor against a record shaped
+  this way, per the Build's ask: with the pre-fix `extractSections` (copied
+  from `origin/main` into scratch and driven directly, since the fix already
+  lands in the same file otherwise), `selectSection(level2, "Log")` throws `no
+section matches "Log"`, and `planInsertion` wraps that in `cannot find the
+"## Log" heading to anchor the splice on: …` — a loud, named failure, not a
+  silent wrong-place insertion. No change to `review-record.mjs` was needed;
+  the underlying `extractSections` fix is what removes the failure mode.
+
+  Folded in: `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md`'s
+  own Build line no longer needs the one-word `literal` prefix it was worked
+  around with (repo-60's Log, gate 1 med) — removed it and logged the removal
+  there, satisfying this ticket's third Done-when directly rather than only
+  citing the shape in a synthetic fixture.
+
+  Verified: `npx vitest run scripts/test/citations.test.ts` 108/108;
+  `npm run format` then `npm run check` exit 0;
+  `node scripts/citations-gate.mjs --against origin/main` — `118 enforced, 0
+failing; 6 grandfathered, holding 1 unresolvable, 19 unanchored. 6
+entr(y/ies) compared against origin/main: 0 raised.`, exit 0;
+  `npx vitest run --project repo` 506/506;
+  `node scripts/preflight.mjs --base origin/main` exit 0.

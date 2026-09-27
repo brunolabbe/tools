@@ -73,7 +73,7 @@ content may itself contain single backticks. `scripts/citations.mjs`'s own
 top docblock already writes several — search it for ` ` ` `` to find real
 examples to test against, including at least one that quotes a citation-shaped
 token on purpose (the port examples this ticket is filed from, and the
-literal ```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
+```` ` `` `:99999` `` ` ```` reproduction a few lines above them in `repo-25`'s own record).
 
 **The reproduction is inside a fenced code block was considered and is not
 the same shape**: `extractSections`'s fence-skip is about _heading_ detection
@@ -458,3 +458,10 @@ reading a double-backtick quotation as a shorthand citation (repo-60)"`
   since all 23 vanishing citations in repo-31 are inline. The test itself
   still catches both halves — this is a docblock-only overclaim, left for
   the owner to decide on separately, and the gate cites it by anchor.
+
+- 2026-09-27 — `repo-63` landed `extractSections`'s fix, so this record's own
+  Build line 76 no longer needs the one-word `literal` prefix worked around
+  above; removed it here as `repo-63`'s Done-when asks, restoring the line to
+  open with the backtick run itself. `extractSections` now reads `Build`,
+  `Done when` and `Log` as their own sections again on this file unchanged —
+  verified by `repo-63`'s own new test, which plants this exact line shape.
