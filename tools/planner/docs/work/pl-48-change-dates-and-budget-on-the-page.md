@@ -136,7 +136,8 @@ code at `origin/main` `d3fca5e`:
   `exact`. Step 8 first read a return date off the page. pl-47's filing gate
   caught it, and the step now uses Nights.
 
-**2026-09-27 — built (dispatched, model not stated in the dispatch).** Branched
+**2026-09-27 — built (dispatched as Sonnet 5, per this session's own system
+prompt rather than the dispatch text itself).** Branched
 from `origin/main` at `c87153d`, matching `depends_on`: pl-45, pl-46 and pl-47
 were already `done` on that base.
 
