@@ -120,10 +120,7 @@ you are there.
    **Until 2026-09-26 the gate sent its findings to the builder directly**,
    because both relay corruptions this repo recorded were introduced when the
    orchestrator retyped a finding. Routing through you is safe only because you
-   paste; the moment you paraphrase, that failure is back. **This routing is a
-   one-batch trial** — [repo-59](../../../docs/work/repo-59-findings-routed-through-the-orchestrator-is-a-one-batch-trial.md)
-   names what the first batch's history row must carry, the hop measurement,
-   and the revert criterion; the orchestrator of that batch closes it at step 12.
+   paste; the moment you paraphrase, that failure is back. Measured on the first batch routed this way (2026-09-26): the hop from a gate to the next agent had a median of 42 s, against a median 9m35s of the work it delivered, and the two long hops were waiting on the owner.
 
    **A message to a running or resumed agent is not delivered until something
    shows it was.** A reply queued "for delivery at its next tool round" was never
@@ -208,10 +205,6 @@ you are there.
     six, all only because it was asked). **Ask every agent for it in its
     dispatch**, not at close-out: three sessions running asked late or not at all,
     and the field came back thinner each time (2026-09-13 to 2026-09-18).
-    **The first batch under the 2026-09-26 definitions also closes repo-59**:
-    its row carries the hop and wall figures that ticket names, and its Log
-    evaluates the revert criterion.
-
     **A defect that stops at the history entry has not been fixed.** Every item in
     that field either edits the page that holds the rule, in the same pull
     request, or files a ticket carrying the reproduction. A row "scoped to this

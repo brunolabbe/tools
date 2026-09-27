@@ -63,7 +63,10 @@ discarded. So:
   fixes moved are pinned to the sha that round reviewed, or the record goes red
   the moment it is committed to a ticket file (2026-09-20, seen on a PR-thread
   record where it was harmless). **The lander does that pinning**, when it
-  transcribes the multi-round section: the reviewer returns text and never edits
+  transcribes the multi-round section — unless a re-gating reviewer has already
+  returned its earlier sections re-resolved against the new head, as `roles/reviewer.md`
+  asks since 2026-09-26, in which case the lander commits those as given. Either way
+  the reviewer returns text and never edits
   a file, and a pin changes no verdict, row or severity, so it is the same kind
   of repair as the self-citation one and not the builder editing the record.
 - **A record cannot assert that its own branch is green, and this is structural

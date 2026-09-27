@@ -4054,7 +4054,7 @@ Median hop **42 s**; median receiving active **9m35s**; max hop **11m08s**. **Cr
 3. A fixer's PR Summary described its own round (#287) → the orchestrator rewrote it → `roles/fixer.md`.
 4. Gate reports arrive HTML-escaped in orchestrator's notification; one gate also split its section across two files → `roles/reviewer.md` (write each section to one file) and `reference/dispatching.md` (land from that file).
 5. Re-gate: re-resolving earlier gate coordinates, and citations whose text a later round deleted or whose claim it corrected, are uncovered; every re-gate this batch had to be told → `roles/reviewer.md` re-gate section.
-6. The seam map predicts collisions between candidates, but the hazard this batch was a candidate displacing an already-merged record's citation (dl-45, dl-57, dl-68, repo-52); dl-69 moved ten citations where three were predicted → `agents/seam-mapper.md`.
+6. The seam map predicts collisions between candidates, but the hazard this batch was a candidate displacing an already-merged record's citation (dl-57, dl-63, dl-55, dl-68, repo-52); dl-69 moved ten citations where three were predicted → `agents/seam-mapper.md`.
 7. A Build step needing an external host was dispatched blind (dl-70, www.iana.org blocked) → `reference/dispatching.md` _Dispatching a builder_.
 8. The orchestrator put a builder's unverified premise into an owner question; rule exists (SKILL.md relaying table); add this date and premise-inside-option case → `SKILL.md`.
 9. The fixer definition lacks the 1-hour cache TTL the builder and gate definitions carry; its one late wake was cold → `agents/fixer.md` frontmatter.

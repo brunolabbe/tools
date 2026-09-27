@@ -64,8 +64,7 @@ Nothing but this, and keep it under about forty lines:
 
   The second record in that collision is usually **not a candidate at all**: it
   is an already-merged ticket whose `## Review` cites a line a candidate will
-  move. On 2026-09-26 every hit was that shape (dl-45, dl-57, dl-68, and
-  repo-52), and dl-69 moved ten citations across two merged records where the
+  move. On 2026-09-26 every hit was that shape (dl-57 and dl-63 by dl-70, dl-55 and dl-68 by dl-69, and repo-52 by repo-50), and dl-69 moved ten citations across two merged records where the
   map named three — relocating or rewrapping a docstring breaks anchors even
   when every word survives. Name the merged records, not only the candidates'.
 - **Ordering constraints inside a Build**, as distinct from open decisions. An

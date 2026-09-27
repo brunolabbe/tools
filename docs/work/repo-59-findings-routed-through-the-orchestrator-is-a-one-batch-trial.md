@@ -122,3 +122,8 @@ did not set a number. Correct it here before the batch if it is wrong.
   +8 m); repo-50 3 rounds ~2h32m total (record repaired +10 m). The routing
   stays. This dispatch closed repo-59 and filed two follow-up tickets (`repo-61`,
   `repo-62`) from the skill's findings.
+- 2026-09-27 — **Correction to the entry above:** `repo-61` was withdrawn before
+  merge and never landed — `scripts/preflight.mjs` already takes `--title`, and
+  `orchestrate-tickets` step 9 now passes it. Only `repo-62` was filed. The step 6
+  sentence naming this ticket is removed per this ticket's third Done-when line,
+  which the first push of this branch missed (gate 1, high).
