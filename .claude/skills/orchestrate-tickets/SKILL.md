@@ -120,10 +120,7 @@ you are there.
    **Until 2026-09-26 the gate sent its findings to the builder directly**,
    because both relay corruptions this repo recorded were introduced when the
    orchestrator retyped a finding. Routing through you is safe only because you
-   paste; the moment you paraphrase, that failure is back. **This routing is a
-   one-batch trial** — [repo-59](../../../docs/work/repo-59-findings-routed-through-the-orchestrator-is-a-one-batch-trial.md)
-   names what the first batch's history row must carry, the hop measurement,
-   and the revert criterion; the orchestrator of that batch closes it at step 12.
+   paste; the moment you paraphrase, that failure is back. Measured on the first batch routed this way (2026-09-26): the hop from a gate to the next agent had a median of 42 s, against a median 9m35s of the work it delivered, and the two long hops were waiting on the owner.
 
    **A message to a running or resumed agent is not delivered until something
    shows it was.** A reply queued "for delivery at its next tool round" was never
@@ -171,7 +168,7 @@ you are there.
    artefact does.
 
    **One command before granting the ship:**
-   `node scripts/preflight.mjs --base origin/main` on the branch, exit 0 as a
+   `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
    ship condition. It is the check and the touched tools' suites, the citations
    gate, the `## Review` presence test, the title-type-against-paths test and a
    `git merge-tree` probe against every other open pull request head, one exit
@@ -181,6 +178,8 @@ you are there.
    #228 went red on a line an older gate record cited (2026-09-13); a `feat`
    title over markdown-only `tools/` paths would have cut a tool's changelog and
    version, because release-please routes by path (2026-09-12, 2026-09-14).
+
+   Without `--title`, check 4 reads the branch's last commit subject, which is not the title that lands; every landing on 2026-09-26 ran it that way.
 
 10. **Hold every worktree — the gate's and the fixer's as well as the
     builder's — until the ticket is finished.** "The round is over" cannot be
@@ -206,10 +205,6 @@ you are there.
     six, all only because it was asked). **Ask every agent for it in its
     dispatch**, not at close-out: three sessions running asked late or not at all,
     and the field came back thinner each time (2026-09-13 to 2026-09-18).
-    **The first batch under the 2026-09-26 definitions also closes repo-59**:
-    its row carries the hop and wall figures that ticket names, and its Log
-    evaluates the revert criterion.
-
     **A defect that stops at the history entry has not been fixed.** Every item in
     that field either edits the page that holds the rule, in the same pull
     request, or files a ticket carrying the reproduction. A row "scoped to this
@@ -391,7 +386,7 @@ instruction; where the shape has a worked example it is in
 | --- | --- | --- |
 | A relayed **option** | Read the options out of the ticket yourself before putting them to the user. A relayed *finding* travels safely marked unverified; an option does not, because the user acts on it | 2026-09-03 |
 | An option's stated **mechanism** | A proposal, not a fact, and answering the decision does not verify it. Dispatch the outcome — *this must fail fast with a typed code* — and say the named route is unverified | 2026-09-03 |
-| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it | 2026-08-22 |
+| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it — and a premise inside an option you put to the owner is the same claim: "the planner has no `@fastify/static`" went from a build report into a question unchecked, and one grep of its `package.json` refuted it | 2026-08-22, 2026-09-26 |
 | A **caveat** where a command would do | Where checking is one command — a file count, a config flag, a quoted line — spend it rather than caveating. Reserve the caveat for what genuinely cannot be checked from here | 2026-08-24 |
 | An **unmarked** relay | "The ticket says X; I have not checked" costs a sentence and stops the chain. Without it three links formed silently and only the middle one was cheap to break | 2026-08-23 |
 | Your own **summary**, sent downstream | Relay the reproduction, not the verdict, and say the builder should push back rather than transcribe. Every builder in the fourth session corrected something | 2026-08-23 |

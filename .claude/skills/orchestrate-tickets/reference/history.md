@@ -3995,3 +3995,76 @@ is measured rather than converted.**
 - Every one of eleven orchestrator relays that a builder or gate contradicted was contradicted with a command, and every contradiction was right.
 - A builder verified its pin revs' ancestry against `origin/main` unasked; a reviewer tested the literal-token sandbox claim it had inferred before letting a page carry it.
 - The reviewer of the sweep found the sweep's own gate record could not cite the pages it moved, and the rule it produced governed every record after it.
+## Session 2026-09-26 — base a1a417b
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** from ready to open PRs: pl-51 → #287, dl-70 → #288, dl-69 → #289, repo-50 → #291. All green at close except #291's test/CodeQL still running. |
+| `agents` / `dispatches` | **15** agents (1 seam-mapper, 4 builders, 4 gates, 6 fixers) / **28** (15 spawns + 13 wakes: pl-51 builder 2, pl-51 gate 1, dl-70 builder 1, dl-69 builder 1, dl-69 gate 2, repo-50 builder 3, repo-50 gate 3). Not counting this maintenance dispatch. |
+| `builder rounds` | **10** (pl-51 3, dl-70 2, dl-69 2, repo-50 3) across 4 builders. **Orchestrator's fault: 1** — dl-70 r2, a Build step needing www.iana.org blocked by the firewall; one curl before dispatch would have surfaced it. |
+| `gates` | **8 gate rounds** across 4 gates; **7 returned findings**; only dl-70's did not. 2 amendment wakes after fixers altered records (dl-69, repo-50). |
+| `wrong findings` | **0 refuted by a builder.** One gate claim was wrong: repo-50 gate 2 said "`records.md` has no such rule" (withdraw-in-place); gate 3 withdrew it itself, repaired per `records.md:35`. Separately, the orchestrator relayed a false builder premise into an owner question. |
+| `subagent tokens` | **2,543,970** last observed per agent. Several agents' final turns ended in `SendMessage` with no usage block reported, so this is a floor. |
+| `cost` | **$113.29** from `node scripts/agent-cost.mjs` (rates read 2026-09-26). Orchestrator row $9.09 (floor), **8.0% of total** against baseline sessions' 78% and 37%. Largest single: repo-50 builder, $61.14. |
+
+### Per agent
+
+| PR | Model / effort | Agent | Task | Active / wall | Cold | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | Sonnet 5 / high | seam-mapper | intake seam map, 9 tickets | 3m49s / 3m45s | 0 | 93,471 | $0.60 |
+| #288 | Opus 5.5 / high | builder-hard | dl-70 build; resumed once after owner opened firewall | 19m13s / 19m11s | 0 | 81,471 | $1.70 |
+| #288 | Sonnet 5 / xhigh | ticket-reviewer-sonnet | dl-70 gate 1, PASS | 13m03s / 12m57s | 0 | 118,358 | $1.77 |
+| #288 | Haiku 4.5 / unrecorded | fixer | dl-70 landing; re-woken by its own background preflight | 4m14s / 13m26s | 1 | 35,670 | $0.18 |
+| #287 | Haiku 4.5 / unrecorded | builder-mechanical | pl-51 build, step-4 send-back, gate-1 round | 11m31s / 25m56s | 0 | 126,710 | $1.59 |
+| #287 | Sonnet 5 / xhigh | ticket-reviewer-sonnet | pl-51 gates 1–2 | 23m51s / 23m46s | 0 | 191,711 | $4.25 |
+| #287 | Haiku 4.5 / unrecorded | fixer | pl-51 gate-2 finding + landing | 3m52s / 3m48s | 0 | 53,384 | $0.30 |
+| #289 | Sonnet 5 / high | builder-standard | dl-69 build + gate-1 round | 53m02s / 1h20m14s | 0 | 329,814 | $14.66 |
+| #289 | Opus 5.5 / high | ticket-reviewer-opus | dl-69 gates 1–2 + gate-2 amendment | 29m06s / 1h18m47s | 0 | 205,370 | $5.69 |
+| #289 | Haiku 4.5 / unrecorded | fixer | dl-69 gate-2 lows + landing; reworded gate 2's bullets | 16m38s / 14m44s | 0 | 79,112 | $0.51 |
+| #289 | Haiku 4.5 / unrecorded | fixer | dl-69 record repair | 7m28s / 7m06s | 0 | 64,683 | $0.32 |
+| #291 | Sonnet 5 / high | builder-standard | repo-50 build + step-4 query + 2 gate rounds | 1h41m19s / 2h14m43s | 0 | 686,057 | $61.14 |
+| #291 | Opus 5.5 / high | ticket-reviewer-opus | repo-50 gates 1–3 + gate-3 amendment | 29m20s / 1h57m54s | 0 | 271,347 | $9.63 |
+| #291 | Haiku 4.5 / unrecorded | fixer | repo-50 gate-3 lows + landing; re-anchored a gate-3 citation | 10m01s / 9m54s | 0 | 120,849 | $1.28 |
+| #291 | Haiku 4.5 / unrecorded | fixer | repo-50 record repair | 9m09s / 9m03s | 0 | 85,963 | $0.58 |
+| — | Opus 5.5 / high | orchestrator | the batch | 1h29m14s / 2h51m28s | 0 | — | $9.09 (floor) |
+
+### Hops — repo-59 revert criterion
+
+Gate's last record → receiving agent's first record, timestamps to 60 s gap threshold. Active = receiving round's active time.
+
+| # | Ticket | From → to | Hop | Receiving active |
+| --- | --- | --- | --- | --- |
+| 1 | pl-51 | gate 1 → builder | 35 s | 2m26s |
+| 2 | pl-51 | gate 2 → fixer | 41 s | 3m52s |
+| 3 | dl-70 | gate 1 → fixer | 44 s | 4m14s |
+| 4 | dl-69 | gate 1 → builder | 10m08s (owner decision M2) | 23m32s |
+| 5 | dl-69 | gate 2 → fixer | 37 s | 16m38s |
+| 6 | dl-69 | gate amendment → repair fixer | 19 s | 7m28s |
+| 7 | repo-50 | gate 1 → builder | 11m08s (owner decision + joining files) | 43m30s |
+| 8 | repo-50 | gate 2 → builder | 58 s (owner decision in hop) | 21m28s |
+| 9 | repo-50 | gate 3 → fixer | 43 s | 10m01s |
+| 10 | repo-50 | gate amendment → repair fixer | 14 s | 9m09s |
+
+Median hop **42 s**; median receiving active **9m35s**; max hop **11m08s**. **Criterion not tripped** (median hop < median active; no hop > 1 h). Both long hops were owner decisions, which peer routing would also have waited for. Wall times: pl-51 3 rounds ~37 m; dl-70 2 rounds ~36 m; dl-69 2 rounds ~1h46m (record repaired +8 m); repo-50 3 rounds ~2h32m (record repaired +10 m). `cold=` on every builder and gate: 0. The 1-hour TTL on builder and gate definitions held.
+
+**what the skill got wrong**
+
+1. Builder sets `status: done` in the build commit, but preflight fails `done` without `## Review` — 3 of 4 builders hit it; one left `done` with guaranteed preflight exit 4, one reverted to `ready` → `roles/builder.md`.
+2. A fixer rewrote gate findings when its own fix deleted their cited text — twice (dl-69: three bullets reworded into dispositions; repo-50: an anchor moved), second despite dispatch saying stop; each cost a reviewer wake and a repair fixer; an instruction did not hold → `roles/fixer.md` and file `repo-62`.
+3. A fixer's PR Summary described its own round (#287) → the orchestrator rewrote it → `roles/fixer.md`.
+4. Gate reports arrive HTML-escaped in orchestrator's notification; one gate also split its section across two files → `roles/reviewer.md` (write each section to one file) and `reference/dispatching.md` (land from that file).
+5. Re-gate: re-resolving earlier gate coordinates, and citations whose text a later round deleted or whose claim it corrected, are uncovered; every re-gate this batch had to be told → `roles/reviewer.md` re-gate section.
+6. The seam map predicts collisions between candidates, but the hazard this batch was a candidate displacing an already-merged record's citation (dl-57, dl-63, dl-55, dl-68, repo-52); dl-69 moved ten citations where three were predicted → `agents/seam-mapper.md`.
+7. A Build step needing an external host was dispatched blind (dl-70, www.iana.org blocked) → `reference/dispatching.md` _Dispatching a builder_.
+8. The orchestrator put a builder's unverified premise into an owner question; rule exists (SKILL.md relaying table); add this date and premise-inside-option case → `SKILL.md`.
+9. The fixer definition lacks the 1-hour cache TTL the builder and gate definitions carry; its one late wake was cold → `agents/fixer.md` frontmatter.
+10. Preflight's title check reads the tip commit's subject — **only because step 9's command omits `--title`**, which `scripts/preflight.mjs` already takes; filed as repo-61 by the maintenance dispatch, then withdrawn and folded in → `SKILL.md` step 9, `roles/fixer.md` _The work_, `roles/builder.md` ship conditions.
+11. `review-record.mjs` does not check that the section it commits equals the file it was handed — the mechanical guard item 2 needs → file `repo-62`.
+12. The maintenance dispatch opened its pull request over a failed ship condition it judged pre-existing; CI's `check` on the same head passed, because the failure was a stale build in its worktree → `roles/builder.md`, ship conditions.
+
+**what went right**
+
+- Step 4 caught pl-51's first build reporting PASS on a deleted probe, and repo-50's missing Done-when-3 test name, each before a gate was spent.
+- Landing from the gate's own scratch file, then diffing the landed section against it, caught both fixer rewrites; nothing else would have.
+- The step-11 scratch merge ran on a `main` that had moved mid-batch (e50cf81 was merged by someone else) and found nothing.
+

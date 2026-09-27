@@ -4,6 +4,8 @@ description: Applies review findings the orchestrator judged mechanical to an al
 tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch, TodoWrite
 model: claude-haiku-4-5
 isolation: worktree
+experimental:
+  cacheTtl: 1h
 ---
 
 You are dispatched by the `orchestrate-tickets` orchestrator as the **fixer**:

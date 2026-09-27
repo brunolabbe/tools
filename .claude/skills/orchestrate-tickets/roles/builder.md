@@ -66,9 +66,13 @@ the sentinelle repository, 2026-09-23).
   because a pathspec ending at the directory matches nothing and says so
   nowhere (2026-09-20).
 
-Append a dated entry to the ticket's Log and set `status: done` in its
-frontmatter, in the commit that earns it. **The Log's shape is a claim, its
-command, and that command's output** (`records.md`).
+Append a dated entry to the ticket's Log in the commit that earns it. **The
+Log's shape is a claim, its command, and that command's output** (`records.md`).
+**Leave `status` as it is**: `done` goes in with the first gate record, set by
+whoever lands it, because preflight fails a ticket marked `done` that has no
+`## Review` section and before a gate there is none. Three of four builders on
+2026-09-26 set `done` on this page's older wording and resolved preflight's
+failure three different ways.
 
 **Push the branch before you report** — `git push -u origin <branch>`. The gate
 checks out the sha you report, and a fixer, if one is dispatched, starts from
@@ -114,7 +118,7 @@ orchestrator, never relayed through anyone else's message (2026-09-12,
    not compose one. **The gate record is committed whatever else is held**: a
    hold on committing while a decision is open does not cover it (`dl-58`,
    2026-09-17).
-2. `node scripts/preflight.mjs --base origin/<base>`, exit 0.
+2. `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`, exit 0.
 3. Push, open the pull request with the title checked by
    `node scripts/commit-message.mjs --text "<title>"`, and post each gate's full
    report to the thread with `gh pr comment <n> --body-file <f>`.
@@ -122,3 +126,5 @@ orchestrator, never relayed through anyone else's message (2026-09-12,
    as your dispatch states them. Nothing else in the branch records them: the
    `Co-Authored-By` trailer is built from the session tree's model and has named
    an Opus model on a Haiku subagent's commit (2026-09-06).
+
+**A ship condition that fails is a stop, even when you judge the failure pre-existing.** Report it with its output and let the orchestrator measure. On 2026-09-26 a maintenance builder opened a pull request over an `npm run check` exit 2 it called pre-existing, and CI's `check` on the same head passed: the failure was its own worktree's stale build.
