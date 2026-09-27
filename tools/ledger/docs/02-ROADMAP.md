@@ -14,20 +14,23 @@ analysis exists is a guess the next agent inherits as a plan.
 ## What the owner has decided
 
 Answers given on 2026-09-27, before any code. They are the premises
-`00-ANALYSIS.md` starts from rather than questions it reopens.
+`00-ANALYSIS.md` starts from rather than questions it reopens, and it holds the
+detail and the numbers behind each.
 
 - **Two buckets, two splits.** The mortgage bucket is split 50/50. The
-  shared-expenses bucket is split by the ratio of the two salaries,
-  recalculated yearly — and only the **percentage** is stored, with the date it
-  takes effect, never the salaries themselves.
+  shared-expenses bucket is split by the ratio of the two salaries — and only
+  the **percentage** is stored, with the date it takes effect, never the
+  salaries themselves.
 - **Each deposit is one transfer to one bucket.** So a rule classifies a whole
   row, from its description and its amount; a deposit is never split across
   buckets.
 - **Receipts arrive both ways.** One paid on the joint account's card is matched
-  to the imported row it explains. One paid on a personal card is an
-  out-of-pocket credit to whoever paid it.
-- **History is imported once.** A one-off importer reads the existing Excel
-  file. The real file stays out of the repository; its fixtures are synthetic.
+  to the imported row it explains. Shared spending on a personal card is
+  gathered in **periods**, as the spreadsheet does, and closing a period
+  computes what to deposit into the joint account.
+- **History is imported once, all of it since 2022.** A one-off importer reads
+  the existing Excel file. The real file stays out of the repository; its
+  fixtures are synthetic.
 - **Both people use it, identified by Cloudflare Access** — two addresses on one
   policy, and no login of the tool's own.
 
@@ -40,7 +43,7 @@ policy. See [`CLAUDE.md`](../CLAUDE.md) for the layout.
 
 ## Phase 1 — The analysis
 
-`00-ANALYSIS.md`, and it cannot be written from the armchair: it needs **a
+`00-ANALYSIS.md`, and it cannot be written from the armchair: it rests on **a
 sample AccèsD paste** and **a copy of the Excel file**, both from the owner, both
 read and neither committed. What it has to settle, at least:
 
