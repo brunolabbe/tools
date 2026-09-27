@@ -3,7 +3,7 @@ id: repo-64
 tool: repo
 title: Record the 2026-09-27 batch and fold its defects into the rule pages
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 ---
@@ -17,7 +17,8 @@ deliverable, the rule change is — every item in "what the skill got wrong"
 either edits the page holding the rule, in the same pull request, or files a
 ticket carrying the reproduction. This is that close-out for the batch that
 produced #295 (`repo-62`), #296 (`repo-60`) and #297 (`pl-48`), merged, and
-#298 (`dl-53`), still open with a Windows-leg fix in progress.
+#298 (`dl-53`), still open — its Windows-leg fix landed at gate 8 (now at
+`0df8902`) after this row was first written.
 
 ## Build
 
@@ -213,14 +214,14 @@ Procedure read from `origin/main`. The branch's own `roles/reviewer.md` and `rol
 
 - **med · B · repo-65's recommendation gets the tree-agreement argument backwards, and misstates (b)'s cost.**
   - Premise: (a) refuses a dirty tree, so under (a) every check reads the committed tree and all five agree.
-  - The recommendation still argues that (a) would leave check 1 on its own: `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:97 "alone out of step with check 2"`. That is false under (a).
-  - (b)'s stated downside, that it leaves the checks on three different trees rather than two (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:90 "different trees rather than two"`), contradicts the Why, which says they split three ways today (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:59 "split three ways, not two"`). Under (b), check 1's test selection would read what check 2 reads, which leaves two trees, not three.
+  - The recommendation still argues that (a) would leave check 1 on its own: `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:162 "alone out of step with check 2"`. That is false under (a).
+  - (b)'s stated downside, that it leaves the checks on three different trees rather than two (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:166 "different trees rather than two"`), contradicts the Why, which says they split three ways today (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:59 "split three ways, not two"`). Under (b), check 1's test selection would read what check 2 reads, which leaves two trees, not three.
   - The same Why line says check 1 reads only committed diffs. Only its test selection does; `npm run check` and the suites run on the working tree.
   - The order premise alone still supports (b). But the owner should get the trade-off the right way round: (a) makes every check agree and needs both role pages changed to commit first; (b) keeps the order the pages prescribe and leaves checks 3 and 4 on committed state. It stays `needs-decision`, with options and a recommendation.
 - **low · A · records.md's mode 2 now rewrites the history it reports and contradicts itself.** It says the fourth session's case was handled "not by remapping but by repointing", but remapping is repointing. `git log -S` dates the wording "pinning the record" to `ea52f8b` (2026-08-24): that session pinned. Remedy: keep the history as a pin, and state repoint as today's rule.
 - **low · C · owned by gate 1, and repeated by the fix.** Gate 1's finding 9 called one refusal the session's only one. That session had a second: one heredoc carrying the whole gate 1 section was refused as too complex to verify, and eight smaller appended heredocs then worked. So common.md's new text is wrong twice: it names one refusal where there were two, and it calls the large-heredoc clause not reproduced. This session also had a refusal: one call chaining five git commands, ending in `echo anc=$?`, was refused as naming git in a form too complex to verify. That is consistent with the older `echo $?` rule.
 - **low · D · the lander repointed two citations whose claims this same round corrected.** repo-64's Log (Gate 1 fixed entry, med 4) justifies it by naming only the deleted-outright case. The branch's records.md, in its multi-round paragraph, also sends a citation back when the round corrected its claim even though the anchor survives. Remedy: land the attached corrected copy of gate 1.
-- **low · E · repo-66 is `needs-decision` but asks no question**: `docs/work/repo-66-a-preflight-test-times-out-on-the-windows-ci-leg.md:6 "status: needs-decision"`. The definition is a ticket that poses a question which `docs/01-TICKETS.md:149 "poses a question its own page says must not be settled"` by whoever picks it up. repo-66's Build is a measurement, then a fix, so the ticket is dispatchable, yet `--ready` will hide it.
+- **low · E · repo-66 is `needs-decision` but asks no question**: `docs/work/repo-66-a-preflight-test-times-out-on-the-windows-ci-leg.md:105 "status: needs-decision"`. The definition is a ticket that poses a question which `docs/01-TICKETS.md:149 "poses a question its own page says must not be settled"` by whoever picks it up. repo-66's Build is a measurement, then a fix, so the ticket is dispatchable, yet `--ready` will hide it.
 - **low · F · repo-65's decision section cites `.claude/` pages by bare line number** (repo-65 line 73, roles/builder.md line 116; and roles/fixer.md line 39). records.md, under its `.claude/` citation rule, calls that a finding: it is not a Review section, so no gate enforces it, and the next edit to those pages will move the lines under it.
 
 - **dropped** · the per-agent row in finding 6's verdict is gate 1's carried finding, not a new one.
@@ -347,3 +348,79 @@ the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
 
   `node scripts/review-record.mjs --verify docs/work/repo-64-record-the-2026-09-27-batch.md
 <gate 2 file> --gate 2` exits 0 once committed.
+
+- 2026-09-27 — Gate 2 (CONCERNS) fixed. Every finding reproduced before
+  changing anything; none refuted.
+
+  **med B, fixed.** `repo-65`'s recommendation had the trade-off backwards:
+  under (a) every check would read the same committed tree and agree (not
+  leave check 1 "alone out of step with check 2"), and under (b) check 1
+  joins check 2 on the working tree, leaving **two** trees, not three as
+  first written (contradicting the Why's own "split three ways… today").
+  Also fixed the Why's "check 1 reads committed diffs only" — only its test
+  _selection_ does; the build and suites it runs read the working tree.
+  Rewrote both the decision section and the recommendation with the
+  trade-off stated correctly; kept `needs-decision`, options and a
+  recommendation, per instruction.
+
+  **low A, fixed.** `records.md`'s mode 2 said the fourth session's fix was
+  "handled not by remapping but by repointing" — self-contradictory, since
+  remapping and repointing name the same act, and false to history:
+  `git log -S 'pinning the record' -- reference/records.md` dates that
+  wording to `ea52f8b` (2026-08-24), and that session pinned, not repointed.
+  Restored the history as a pin; added a separate sentence stating repoint
+  as today's rule, since a pin to that commit is exactly what the
+  branch-only-sha rule forbids.
+
+  **low C, fixed.** `common.md`'s sandbox bullet undercounted gate 1's own
+  session (two refusals, not one — a `bash <script>` compound and one large
+  heredoc carrying a whole gate section, the latter contradicting this
+  page's own "not reproduced" label for the large-heredoc report) and
+  overstated the git-chain claim as a new, broader rule. Gate 2's own
+  refusal — a five-git-command chain ending `echo anc=$?` — is consistent
+  with the _original_, narrower rule (a git command followed by `echo $?`)
+  already on this page, not a distinct one. Reworded: the large heredoc is
+  now confirmed, the "any chain" broadening is withdrawn, and the original
+  rule stands unchanged.
+
+  **low E, fixed.** `repo-66` posed no question — its Build is a measurement
+  step then a fix, which is dispatchable — so `needs-decision` was wrong and
+  hid it from `--ready`. Set `ready`, with a dated Log entry there.
+
+  **low F, fixed.** `repo-65`'s two bare `.claude/…:<line>` citations
+  (into `roles/builder.md` and `roles/fixer.md`) are findings under
+  `records.md`'s own `.claude/` citation rule. Reworded both as the page and
+  the heading they sit under, no line number: `roles/builder.md` under
+  _When you are resumed with findings_, `roles/fixer.md` under _The work_.
+
+  **Finding 6's remainder, fixed.** The per-agent table's `dl-53` builder row
+  still read "5 rounds, 3 landing stops"; corrected to "7 rounds (Round three
+  to Round seven…)", matching the schema row's own fix from gate 1.
+
+  **Snapshot updated, per the coordinator's direct instruction rather than a
+  gate finding:** `#298` is now at `0df8902`; gate 8 landed the Windows-leg
+  fix, and the timeout at `18ca055` that first read as a Windows regression
+  was the `repo-66` flake, confirmed by attempt 2 of the same run passing.
+  Updated the history row's `tickets` field, the per-agent table's `dl-53`
+  builder row, and this ticket's own Why.
+
+  **Fixing findings B and E moved three of gate 2's own citations into
+  repo-65 and repo-66.** All three anchors are unchanged text, preserved
+  deliberately: repo-65's Log correction quotes the two original wrong
+  phrases verbatim (finding B's own evidence), and repo-66's Log correction
+  quotes its original `status: needs-decision` line verbatim (finding E's
+  own evidence) — so each is a coordinate-only repoint
+  (`:97→:162`, `:90→:166`, `:6→:105`), never a citation whose text was
+  deleted outright, which is why the lander repoints these directly rather
+  than sending them back. One of the two repo-65 repoints also collided with
+  an already-distinct citation (`:59`, unmoved) once the correction's own
+  paraphrase reused its exact fragment — reworded the paraphrase, not the
+  citation, to restore distinctness.
+
+  Verified: `npm run check` exit 0; `node scripts/citations-gate.mjs
+--against origin/main` exit 0; `node scripts/citations.mjs
+docs/work/repo-64-*.md --section Review --require-anchors
+--require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable;
+  `node scripts/preflight.mjs --base origin/main --title "chore(repo):
+record the 2026-09-27 batch and fold its defects into the rule pages
+(repo-64)"` exit 0; `node scripts/status.mjs --json` exit 0.

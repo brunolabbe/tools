@@ -56,10 +56,12 @@ exactly as it sees a committed one. Reproduced: prepending one uncommitted
 comment line to `scripts/citations.mjs` (which many gate records cite by
 line) made `node scripts/citations-gate.mjs --against origin/main` exit 1
 with 3 records failing, on `origin/main` at `6988b65`, reverted after. So the
-checks split three ways, not two: check 1 reads committed diffs only, check 2
-reads the working tree unconditionally, and checks 3–4 read committed state.
-Check 5 (`checkMergeTree`) is unaffected either way — it compares committed
-heads.
+checks split three ways, not two: check 1's _test selection_ is decided from
+committed diffs only, though the build and the suites it runs execute
+against the working tree like any other local command; check 2 reads the
+working tree unconditionally, in both what it selects and what it runs; and
+checks 3–4 read committed state throughout. Check 5 (`checkMergeTree`) is
+unaffected either way — it compares committed heads.
 
 ## The decision this ticket carries
 
@@ -68,12 +70,16 @@ Two ways to close the gap, and they trade differently:
 - **(a) Make `preflight.mjs` refuse to run over a dirty working tree.** Check
   `git status --porcelain` before computing `diffPaths` and fail fast (a new
   `EXIT` bit, or fold into `setup`) naming the uncommitted paths, telling the
-  caller to commit first. **Real cost, corrected at gate 1: both role pages
-  prescribe the opposite order, and (a) would refuse it.**
-  `.claude/skills/orchestrate-tickets/roles/builder.md:116 "Fix, run the
-narrowest checks, then preflight, then commit a"` and
-  `.claude/skills/orchestrate-tickets/roles/fixer.md:39 "Run the checks your
-fixes touch, narrowest first, then"` both say preflight runs **before** the
+  caller to commit first. **Gains every check's agreement, at the cost of
+  both role pages' prescribed order (corrected at gate 2, finding B, from an
+  earlier draft that stated this the wrong way round).** Refusing a dirty
+  tree means all five checks end up reading the same, single, committed
+  tree — the internal consistency (a) actually buys. But
+  `.claude/skills/orchestrate-tickets/roles/builder.md`, under _When you are
+  resumed with findings_ ("Fix, run the narrowest checks, then preflight,
+  then commit and push"), and `.claude/skills/orchestrate-tickets/roles/fixer.md`,
+  under _The work_ ("Run the checks your fixes touch, narrowest first,
+  then" `preflight.mjs`), both say preflight runs **before** the
   commit, every round — so (a) would fail preflight on the ordinary case
   both pages already tell every builder and fixer to follow, not only on a
   caller who skipped a step. It is no longer the smaller change once that is
@@ -82,24 +88,26 @@ fixes touch, narrowest first, then"` both say preflight runs **before** the
 - **(b) Extend `diffPaths` to include the working tree, at least for check
   1's test selection.** Union `git diff --name-only ${base}...HEAD` with
   `git status --porcelain` (staged, unstaged and untracked paths, relative to
-  `repo`). Matches what check 2 already does unconditionally and what both
-  role pages' own prescribed order needs — preflight run before the commit
+  `repo`). Matches what check 2 already does unconditionally and keeps the
+  order both role pages already prescribe — preflight run before the commit
   that would otherwise make the change visible. Downside: check 3 and check 4
   still read committed state only (`git show HEAD:...`, the last commit
-  subject), so widening only check 1 makes the three checks read three
-  different trees rather than two; widening all of them is a larger,
-  contract-adjacent change to a script every builder's report leans on.
+  subject), so this leaves the checks split across **two** trees rather than
+  today's three — checks 1–2 on the working tree, checks 3–4 on committed
+  state — not eliminating the split, only narrowing it; widening all of them
+  to one tree is a larger, contract-adjacent change to a script every
+  builder's report leans on.
 
-**Recommendation, corrected at gate 1: (b), reversing the filer's own (a).**
-Both premises behind (a) were wrong — the role pages prescribe preflight
-_before_ the commit, not after, and check 2 already reads the working tree
-unconditionally, so (a) would not "match what checks 2 and 4 already assume";
-it would put check 1 alone out of step with check 2 and with the very order
-`roles/builder.md` and `roles/fixer.md` tell every dispatch to follow. (b)
-brings check 1 into line with check 2's existing behaviour and with that
-order, at the cost named above. Still `needs-decision`: the owner may prefer
-widening checks 3 and 4 too, over living with three checks reading three
-different trees.
+**Recommendation, corrected at gate 2: still (b), for the trade-off's real
+shape rather than the one first written.** (a) makes every check agree, but
+only by requiring both role pages to be rewritten to commit before
+preflighting — reversing an order this skill prescribes throughout, not a
+caller's mistake to correct. (b) leaves two trees instead of one, but keeps
+that order intact and brings check 1 into line with check 2's own existing
+behaviour, which is the narrower, more localised change. Still
+`needs-decision`: the owner may judge the one-tree consistency (a) buys
+worth rewriting both role pages for, over living with the two-tree split (b)
+leaves.
 
 ## Build
 
@@ -144,3 +152,20 @@ Whichever of (a) or (b) is chosen:
   clause was itself evidence a later reader needs verbatim — the mechanism
   each was wrong about is restated correctly in place of it. Still
   `needs-decision`.
+- 2026-09-27 — **Correction from repo-64's gate 2 (finding B).** The
+  rewritten Why and decision sections still got the trade-off backwards in
+  three places, each fixed below rather than reworded a third time in place:
+  (1) the Why said check 1 "reads committed diffs only" without qualifying
+  that this is its _test-selection_ logic — the build and the suites
+  `checkBuild` runs execute against the working tree exactly like every other
+  local command does; only which suites to run is decided from the committed
+  diff. (2) The decision section argued (a) "would put check 1 alone out of
+  step with check 2," which is false under (a) itself: refusing a dirty tree
+  makes every check read the same, single, committed tree, so all five agree
+  with each other — the point (a) actually has going for it. (3) (b)'s stated
+  downside — "three different trees rather than two" — contradicted the
+  Why's own count of today's split (three, stated a few lines above); under (b), check
+  1's test selection reads what check 2 already reads, so widening only check
+  1 leaves **two** trees (checks 1–2 on the working tree, checks 3–4 on
+  committed state), an improvement on today's three-way split, not a
+  regression to one.

@@ -61,17 +61,27 @@ warns you. Refused (2026-09-12 to 2026-09-20): a git command followed by
 `echo $?`; a heredoc, whether a commit message or a script body; a variable
 holding a path; a `for` loop over `git`, `gh` or `sed`; an `awk` program
 containing `>>`; `python3`; and the literal token `git` anywhere inside a
-`node -e` program, even in a string that never runs. Also refused
-(2026-09-27, one dispatch's own report, not reproduced here): a git command
-chained after any other command, not only after `echo $?` — **and this one
-did not hold in a later session the same day**, which ran `echo … && git -C
-<worktree> log …`, several `cd <worktree> && git …` and `git …; git …` chains
-without incident; what that session's one refusal actually was is a compound
-running `bash <script>`, a construct too complex to verify rather than a git
-chain specifically. Also reported (2026-09-27, same caveat): `sed -i` with a
-`Na\…` insert-at-line script; a large heredoc, past some size this repo has
-not pinned; and a long `node -e` program, on its length alone rather than any
-token inside it — none reproduced independently. **`pkill -f` can match the
+`node -e` program, even in a string that never runs. Also reported
+(2026-09-27, one dispatch's own report): a git command chained after any
+other command, not only after `echo $?`. **Corrected across two later
+sessions the same day, gate 1's and gate 2's own (gate 2, finding C, on this
+paragraph's own second draft, which still had it wrong): neither session's
+own refusal was a general git-chain rule.** A session gating this ticket ran
+`echo … && git -C <worktree> log …`, several `cd <worktree> && git …` and
+`git …; git …` chains without incident, and had **two** refusals of its own —
+not the one first recorded here — a compound running `bash <script>`, too
+complex to verify, and **one large heredoc carrying a whole gate section**,
+refused, where eight smaller heredocs appended afterward all worked; that
+confirms the large-heredoc report below rather than leaving it
+unreproduced. A later gate's own session had one refusal too: a single call
+chaining five git commands and ending `echo anc=$?` was refused — naming
+`git` in a form too complex to verify, which is consistent with the
+**original**, narrower rule above (a git command followed by `echo $?`), not
+evidence of a separate one. So: the large heredoc is confirmed; the "any
+chain" broadening is not, and the original narrower rule stands unchanged.
+Also reported (2026-09-27, relayed, not independently reproduced): `sed -i`
+with a `Na\…` insert-at-line script, and a long `node -e` program, on its
+length alone rather than any token inside it. **`pkill -f` can match the
 shell that is running it and kill your own session** — never reach for it
 here; find the pid and `kill` it by number instead. What holds: one plain
 command per

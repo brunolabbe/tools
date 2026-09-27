@@ -137,12 +137,19 @@ discarded. So:
      more (`:96→:94`) on a fourth branch. Reviewers mis-cite systematically, in a
      consistent direction per reviewer, which is why a spot-check misses it and an
      enumeration does not. Mode 1 occurred too, on the branch whose fix moved the
-     very lines its record cited — handled not by remapping but by **repointing
-     each citation to the line that now holds the same text**, which is the
-     cheaper answer when the reviewed tree is the one the findings describe. A
-     pin naming that commit would look cheaper still and is not available: this
-     repo squash-merges and deletes the branch, so a pin to a commit that exists
-     only there goes `unresolvable` the moment it is gone — see the branch-only-sha
+     very lines its record cited — handled at the time, correctly for that
+     session, not by remapping every citation mechanically but by **pinning
+     the record to the commit the gate reviewed** (`git log -S 'pinning the
+     record' -- reference/records.md` dates that wording to `ea52f8b`,
+     2026-08-24 — this is what that session actually did, restored here
+     rather than rewritten into "repointed" — gate 2, finding A, on a rewrite
+     that also made "not by remapping but by repointing" self-contradictory,
+     since the two name the same act). **That was the cheaper answer when the
+     reviewed tree was the one the findings describe, and it is not today's
+     rule.** A pin to that commit is exactly the branch-only-sha rule below
+     forbids: this repo squash-merges and deletes the branch, so a pin to a
+     commit that exists only there goes `unresolvable` the moment it is gone
+     — see the branch-only-sha
      rule below, and repo-64's own history row, twice.
   3. **You re-resolve, then make one more edit.** One builder ran its check clean
      at 10/10, then applied a comment fix that moved two citations. It caught this

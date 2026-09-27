@@ -3,7 +3,7 @@ id: repo-66
 tool: repo
 title: A preflight test times out on the Windows CI leg, on code that never touched it
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 ---
@@ -101,3 +101,8 @@ verified:
   re-run here. The Windows-shebang hypothesis is `dl-53`'s builder's,
   relayed as a hypothesis to test — filed rather than fixed because nothing
   here yet confirms it.
+- 2026-09-27 — **Correction, `repo-64` gate 2, finding E.** Filed with
+  `status: needs-decision`, which this ticket does not carry: its Build is a
+  measurement step followed by a fix, not an open question for whoever picks
+  it up to answer, so `--ready` would hide a dispatchable ticket behind that
+  status. Set `ready`.
