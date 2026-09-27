@@ -356,6 +356,52 @@ const SHORTHAND = new RegExp(
 );
 
 /**
+ * A backtick-fenced **quotation**, ` `` ... `` ` in CommonMark for the
+ * ordinary two-backtick case, content that may itself hold a shorter run of
+ * backticks, closed by a run of the same length, matched lazily — markdown's
+ * own way to quote a literal backtick, which is exactly how a reviewer writes
+ * about the citation syntax itself rather than writing one (repo-60).
+ * `` `:443` `` inside such a span is that reviewer's example of `SHORTHAND`,
+ * not an instance of it, and `SHORTHAND`'s own single backticks sit *inside*
+ * the pair this matches — invisible to a regex that never looks one
+ * character further out.
+ *
+ * **Two gaps against CommonMark's own rule (gate 1 found the first, gate 2
+ * the second; repo-60).** A backtick string there is a *maximal* run at
+ * each end, equal length, no backtracking; `\x60{2,}` can backtrack to a
+ * shorter run, and its closer can be the tail of a longer one. Probed both
+ * ways — three opening against two closing backticks, and the reverse —
+ * this regex reads nothing where CommonMark reads a shorthand. 0 corpus hits.
+ *
+ * Lazy on purpose: two spans on one line (`` `:443` ``/`` `:8443` ``) must
+ * close at the nearer pair, not swallow the text between them into one.
+ *
+ * **Three more shapes not handled, none a corpus defect to date (gate 1,
+ * repo-60), all the same trade as the fence-skip already narrowed to
+ * headings in `extractSections`: a markdown-aware scan costs a parser, and
+ * this stays a regex.**
+ *
+ *   - Two adjacent *single*-backtick spans whose boundary backticks sit next
+ *     to each other with no space (`` `one``two` ``) read as one coincidental
+ *     two-backtick opener, which can swallow real content between them and a
+ *     later, unrelated pair. Telling that apart from a genuine quotation
+ *     needs tracking single-backtick span state as well.
+ *   - This scan runs per physical line, inside `extractCitations`'s own
+ *     `lines.forEach` — a quotation cannot be recognised if its two backtick
+ *     runs sit on different lines, so a shorthand inside one is still read
+ *     (unchanged from before this existed: every other pass here is
+ *     per-line too).
+ *   - Also per-line, and cutting the other way: a double-backtick span that
+ *     happens to sit inside a *fenced* code block, which `extractCitations`
+ *     deliberately still reads for citations (its own docblock says why), is
+ *     quotation-skipped exactly as it would be outside one. This scan has no
+ *     fence state to consult — `extractSections` tracks that only for
+ *     heading detection — and the ticket that added this rule was asked not
+ *     to widen into fence handling either way.
+ */
+const DOUBLE_BACKTICK = /(\x60{2,})[\s\S]*?\1(?!\x60)/g;
+
+/**
  * A **prose** reference: `line 367`, `lines 118-119`.
  *
  * Detected so it can be *counted*, never resolved. The nearest preceding file
@@ -472,13 +518,18 @@ export function extractCitations(markdown) {
    * put a blank line between the items — and the same two bullets stop sharing a
    * file.
    *
-   * The example is real and it is in this repository. repo-25's own gate record
-   * has a tight list whose second bullet quotes `` `:8443` `` while the first
-   * cites `scripts/citations.mjs`; the port is read as a line in that file and
-   * fails, which is why that record carries an evidence declaration for it. The
-   * reviewer writing that record hit this while reviewing the rule that causes
-   * it — the tool caught its own gate record, which is the case for trusting the
-   * rule rather than against it.
+   * The example was real and it was in this repository. repo-25's own gate
+   * record has a tight list whose second bullet quoted `` `:8443` `` while the
+   * first cited `scripts/citations.mjs`; the port was read as a line in that
+   * file and failed, excused only by an evidence declaration. The reviewer
+   * writing that record hit this while reviewing the rule that causes it — the
+   * tool caught its own gate record, which was the case for trusting the rule
+   * rather than against it. Both bullets quote the syntax in a *double*-backtick
+   * span, though, which is a quotation rather than a citation (repo-60) — so as
+   * of that fix neither is read at all, and the evidence declaration excusing
+   * the port was dropped in the same commit as stale. The paragraph rule this
+   * documents still holds; it is demonstrated in `citations.test.ts` now rather
+   * than by this record.
    */
   let paragraph = 0;
   let currentFileParagraph = /** @type {number | null} */ (null);
@@ -537,6 +588,18 @@ export function extractCitations(markdown) {
       }
     }
 
+    // A double-backtick quotation of a citation-shaped token is a reviewer
+    // writing about the syntax, not writing one — see `DOUBLE_BACKTICK`. Every
+    // pass below that reads a backtick-delimited or path-and-colon token skips
+    // a match that starts inside one of these spans, and — because a skipped
+    // match is never pushed into `found` at all — never runs its `make`, so a
+    // quoted citation cannot set `currentFile` either.
+    const quotations = [];
+    for (const m of text.matchAll(DOUBLE_BACKTICK)) {
+      quotations.push({ at: m.index, until: m.index + m[0].length });
+    }
+    const inQuotation = (at) => quotations.some((q) => at >= q.at && at < q.until);
+
     /** @type {{at: number, until: number, rev: string | null, make: () => (typeof out)[number]}[]} */
     const found = [];
 
@@ -545,6 +608,13 @@ export function extractCitations(markdown) {
         /** @type {{file: string, rev?: string, start: string, end?: string, anchor?: string}} */ (
           m.groups
         );
+      // A quotation with no anchor is a reviewer showing the *syntax* — see
+      // `DOUBLE_BACKTICK`. One with an anchor is a real citation that merely
+      // sits inside a double-backtick span, often for a reason unrelated to
+      // this rule (repo-31: an anchor quoting a shell fragment that itself
+      // holds straight quotes); dropping it silently is the worse failure,
+      // so only the anchor-less shape is skipped.
+      if (inQuotation(m.index) && g.anchor === undefined) continue;
       found.push({
         at: m.index,
         until: m.index + m[0].length,
@@ -578,6 +648,7 @@ export function extractCitations(markdown) {
     // and is left alone for the reason a shorthand there is.
     for (const pattern of PIN_SHAPED) {
       for (const m of text.matchAll(pattern)) {
+        if (inQuotation(m.index)) continue;
         const same = found.filter((f) => f.at === m.index);
         if (same.some((f) => f.rev !== null)) continue;
         if (same.length === 0 && inQualified(m.index)) continue;
@@ -615,6 +686,8 @@ export function extractCitations(markdown) {
       const g = /** @type {{start: string, end?: string, inner?: string, outer?: string}} */ (
         m.groups
       );
+      // Same anchor-carve-out as `INLINE`, above.
+      if (inQuotation(m.index) && g.inner === undefined && g.outer === undefined) continue;
       found.push({
         at: m.index,
         until: m.index + m[0].length,
@@ -634,7 +707,7 @@ export function extractCitations(markdown) {
     }
 
     for (const m of text.matchAll(SHORTHAND_PIN)) {
-      if (inQualified(m.index)) continue;
+      if (inQualified(m.index) || inQuotation(m.index)) continue;
       const token = /** @type {{token: string}} */ (m.groups).token;
       const [, start, end] = /:(\d+)(?:[-–](\d+))?/.exec(token) ?? [];
       found.push({

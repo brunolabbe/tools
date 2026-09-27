@@ -2762,3 +2762,109 @@ test("--displaced-since refuses a ref this repository does not have", () => {
 
   cleanup();
 });
+
+/**
+ * repo-60. A double-backtick span, `` ` ... ` `` in CommonMark, is a
+ * quotation — markdown's own way to escape a literal backtick inside quoted
+ * text — and a reviewer writes one to show the citation *syntax* rather than
+ * to cite anything. `dl-38`'s port numbers are the corpus's own example: a
+ * gate record quoting `` `:443` `` and `` `:8443` `` to describe the defect
+ * those exact tokens caused, byte-identical to `docs/work/repo-25-citations-
+ * checker-misses-shorthand-references.md`'s own text.
+ *
+ * The same token in a *single*-backtick span, right below, is still read —
+ * the fix is "double-backtick is a quotation", not "this token never
+ * parses", and the second fixture pins that half.
+ */
+test("a double-backtick quotation of a shorthand is not read as a citation", () => {
+  const quoted = extractCitations(
+    ["At `a/one.ts:5`.", "Ports (`` `:443` ``/`` `:8443` ``) collided."].join("\n"),
+  );
+  expect(quoted.map((c) => `${c.source}:${c.start}`)).toEqual(["inline:5"]);
+
+  const unquoted = extractCitations(
+    ["At `a/one.ts:5`.", "Ports (`:443`/`:8443`) collided."].join("\n"),
+  );
+  expect(unquoted.map((c) => `${c.source}:${c.start}`)).toEqual([
+    "inline:5",
+    "shorthand:443",
+    "shorthand:8443",
+  ]);
+});
+
+/**
+ * The same quotation, but wrapping an *inline* citation rather than a
+ * shorthand — repo-25's own record does both on one line: `` `scripts/
+ * citations.mjs:5` to `:99999` after the refactor. `` is a single double-
+ * backtick span holding one of each. Neither may be read, and — since a
+ * skipped match is never pushed at all — neither may set `currentFile` for
+ * whatever follows.
+ */
+test("a double-backtick quotation spanning an inline citation and a shorthand reads neither", () => {
+  const found = extractCitations(
+    ["Reproduced (`` `a/one.ts:5` to `:9999` after the refactor. `` -> unchecked."].join("\n"),
+  );
+  expect(found).toEqual([]);
+});
+
+/**
+ * The double-backtick span must not reset `currentFile` either, or a real
+ * shorthand written *after* a quotation would inherit from the wrong file —
+ * or from nothing at all. A citation qualifies the file before the
+ * quotation; a real, unquoted shorthand after it must still resolve there.
+ *
+ * gate 1 med: a quotation wrapping only a *shorthand* cannot exercise this —
+ * `SHORTHAND`'s own `make` never touches `currentFile`, so that fixture goes
+ * red only because the quoted shorthand is counted at all, never because of
+ * a `currentFile` leak. This one's quotation instead wraps a *qualified*
+ * (`INLINE`) citation into a second file, anchor-less so it is still the
+ * skipped shape — the property under test is that skipping it doesn't run
+ * its `make` either, confirmed by mutating the guard to set `currentFile`
+ * before the `continue`: that mutant resolves the trailing shorthand to the
+ * quoted file instead of the real one, red on this assertion, green on
+ * every other test in this file.
+ */
+test("a double-backtick quotation wrapping a qualified citation does not leak into currentFile", () => {
+  const found = extractCitations(
+    [
+      "At `a/one.ts:5`.",
+      "",
+      "Quoting the syntax: `` `b/two.ts:9` ``.",
+      "",
+      "And for real, `:6`.",
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}=${c.file}`)).toEqual([
+    "inline:5=a/one.ts",
+    "shorthand:6=a/one.ts",
+  ]);
+});
+
+/**
+ * gate 2 med: the anchor carve-out is a condition on the citation read in
+ * INLINE and SHORTHAND passes, gating the skip on `g.anchor === undefined`
+ * or `g.inner === undefined && g.outer === undefined`, so an *anchored*
+ * citation inside a double-backtick quotation is still read. This fixture
+ * wraps an anchored `INLINE` citation and an anchored `SHORTHAND` citation
+ * in double backticks. Both are read, both pass through despite the quotation.
+ *
+ * If either carve-out condition is removed, this test fails and the gate 1
+ * high is regressed — 23 anchored citations vanish from `docs/work/repo-31-
+ * the-windows-leg-is-almost-all-red.md`.
+ */
+test("an anchored citation inside a double-backtick quotation is still read", () => {
+  const found = extractCitations(
+    [
+      'At `a/one.ts:5 "anchor text"`.',
+      "",
+      'Quoting an anchored inline: `` `b/two.ts:9 "other anchor"` ``.',
+      "",
+      'And `` `:10 "shorthand anchor"` ``.',
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}|${c.anchor}`)).toEqual([
+    "inline:5|anchor text",
+    "inline:9|other anchor",
+    "shorthand:10|shorthand anchor",
+  ]);
+});

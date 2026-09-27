@@ -203,7 +203,12 @@ last round.
    that into the Log as the disclosure note — say that you transcribed it and
    what, if anything, differs, "nothing" included — in the same commit. That is
    the check CI is about to run; catching it here costs one command, and
-   catching it in CI costs a push. Where a citation is deliberately
+   catching it in CI costs a push. Once it is committed,
+   `node scripts/review-record.mjs --verify <ticket> <section-file> [--gate <n>]`
+   compares the committed record with the file, ignoring table padding and what
+   the formatter rewrites, and exits 1 naming every ticket line that differs; a
+   difference is a change to the reviewer's words, which goes back to the
+   reviewer and never into the record (repo-62). Where a citation is deliberately
    unresolvable — a coordinate quoted as the evidence of a finding — declare it
    with `<!-- citations: evidence file.ts:120 -->` in the section file before
    running the script, and the declaration is itself an error if it excuses
