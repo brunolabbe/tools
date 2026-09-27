@@ -3,7 +3,7 @@ id: repo-48
 tool: repo
 title: Whether this repo should adopt a stacked-branch tool, and which one
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -783,6 +783,89 @@ is open**:
   branch.
 - **Adding `release-assets.githubusercontent.com` to the allowlist.** It is
   moot under Option 1, and was not taken up.
+
+## Review
+
+### Gate 1
+
+**Gate: PASS** -- 2026-09-27, one fix round re-checked -- reviewed against `origin/main` (`1a8321ce0615059d9b9d338628b78a2d9552249a`, re-fetched at both passes, no drift). First pass: `1a8321c...033c786` (492 insertions, the Evaluation). This round: `033c786..806005c` (2 files, 170 insertions/12 deletions: `.claude/skills/orchestrate-tickets/reference/concurrency.md`, +70, and the ticket itself, adding a `### Decision` section and answering this record's three findings). Code-review at medium plus full external verification, both passes.
+
+This ticket has no tests; every row is proven or refuted by re-fetching the primary source cited (`curl -sL`, URL given) or by reproducing the repo-internal mechanism directly with a command, not by reading the prose.
+
+### Done when
+
+| Done when (paraphrased)                                                                                                                     | Verdict | Where                                                                                       | Checked by                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Opens with the decision-creates-seams finding ahead of the three options, naming both batches, stating no option closes the gap             | proven  | Evaluation, "The headline: a decision can create a seam after dispatch" (precedes Option 1) | read; unchanged by this round                                                                                                                                                                                          |
+| Names a concrete cost (command/path) for each of the three options                                                                          | proven  | each option's own "Cost." paragraph and the costs table                                     | every cell checked against a primary source in the first pass; unchanged by this round                                                                                                                                 |
+| States plainly whether spr's one-commit-per-PR model is in tension with this repo's flow, and which of real/avoidable holds, with reasoning | proven  | Option 3a, "Is the tension...real or avoidable? It is real."                                | spr's actual model confirmed in the first pass; unchanged by this round                                                                                                                                                |
+| States both citations-gate caveats as limitations that hold regardless of option                                                            | proven  | "What no option fixes: two limits of the citation gate"                                     | both mechanisms reproduced directly in the first pass; unchanged by this round                                                                                                                                         |
+| Ends in a recommendation naming exactly one option, rejections argued with the same rigor                                                   | proven  | "Recommendation: Option 1" / "Why not the others", now followed by "### Decision"           | read; the owner's decision (Option 1 + a 3b pilot) matches the recommendation and does not override it                                                                                                                 |
+| Nothing installed, no container file edited, no rebuild run, checkable by `git diff --stat`                                                 | proven  | n/a (a property of the branch)                                                              | `git diff --stat`/`--name-only` against the base sha touch only `concurrency.md` and the ticket; `.devcontainer/Dockerfile`, `.devcontainer/allowed-domains.txt`, `.claude/settings.json` still byte-identical to base |
+
+### External verification (first pass, unchanged by this round)
+
+Every option's Cost paragraph and every cell of the costs table was checked; counting distinct external or repo-internal factual claims across the four options, roughly 35 were checked against a primary source, of which 32 confirmed exactly (several to the byte, e.g. the Graphite Linux binary's `unpackedSize` of 99279476 from `registry.npmjs.org` matches the evaluation's own figure) and 3 could not be confirmed (Findings, below). A sample of what was re-fetched rather than trusted:
+
+- Graphite: `https://graphite.com/docs/merge-pull-requests.md` ("This feature does not work when merging from GitHub" -- verbatim), `.../multiple-worktrees.md`, `.../install-the-cli.md` (npm command, git >= 2.38.0 -- verbatim), `.../authenticate-with-github-app.md`, `.../privacy-and-security.md` (the App's "Read & write: actions, checks, contents, pull requests, workflows" scope, the "Metadata about which branches were pushed..." sentence -- both verbatim), `.../command-reference.md` (`gt merge`), `.../pricing`; the npm registry for `@withgraphite/graphite-cli` (license `None`) and `@withgraphite/graphite-cli-linux-x64@1.8.6` (`unpackedSize` 99279476); the binary itself, downloaded and read with `strings` (not run), which embeds `https://api.graphite.com/v1` and the three routes the ticket names; DNS for `api.graphite.com` (three AWS addresses, exact match, and absent from `.devcontainer/allowed-domains.txt`).
+- spr: `https://raw.githubusercontent.com/ejoffe/spr/HEAD/readme.md`, `git/helpers.go` (branch-name format, `spr_reword_helper`), `github/githubclient/client.go` (`findToken`'s exact order), the v0.17.6 release via the GitHub API (published 2026-04-22, still latest), and the release-asset redirect (`curl -sI -L` on `spr_linux_x86_64.tar.gz`, lands on `release-assets.githubusercontent.com`, not on `.devcontainer/allowed-domains.txt`, same four addresses as `objects.githubusercontent.com`/`raw.githubusercontent.com` by IP coincidence, confirmed with `getent ahostsv4`).
+- GitHub native stacks and `gh stack`: five `docs.github.com` pages (public preview, no setup, the squash-creates-n-commits line, the closed-PR-blocks-the-stack line, the linear-history and force-push lines, the recommendation-banner line -- all verbatim), `github/gh-stack`'s README (MIT, v0.1.1 published 2026-09-02 per the GitHub API, `gh stack link`'s no-local-tracking behaviour), `ezyang/ghstack`'s README (the normal-GitHub-UI line, verbatim), `git-town.com/stacked-changes` ("phantom conflicts", tied explicitly to squash-merge, verbatim), and `timothyandrew/gh-stack` (archived, confirming it is superseded).
+- Repo-internal, reproduced rather than read: `scripts/citations.mjs`'s `candidateFiles` (`scripts/citations.mjs:843 "export function candidateFiles"`) and `makeResolver` (`scripts/citations.mjs:824 "tracked.includes(file)"`) -- fed a tracked-files array with one path repeated three times (the shape a mid-merge `git ls-files` produces, reproduced in a throwaway repo: 3 entries mid-conflict, 1 after `git add`), the suffix form reports `ambiguous -- 3 tracked files match`, the full repo-relative path resolves clean -- exactly as claimed. `scripts/status.mjs`'s `readTickets` (`scripts/status.mjs:287 "entries.toSorted()"`) fed a scratch `docs/work/` file with no frontmatter and threw `no frontmatter -- the first line must be ---`, confirming a standalone evaluation file there would have had to carry ticket frontmatter. `release-please-config.json:23 "tools/ledger"` -- `packages` names three tools, not two. `.claude/settings.json@43670a2:6 "gh pr merge"` (and lines 8-9 there) -- no existing deny rule matches `gt merge`, `git spr merge` or `gh stack merge`, confirming each option's claimed new deny rule is actually needed. `gh repo view --json` -- `deleteBranchOnMerge` true, `squashMergeAllowed` true, the other two false, owner `brunolabbe`, matching the evaluation exactly. `gh pr view` on 49/50/267 -- the 49/50 timeline (close and merge 46 minutes apart, merge commit `c305c207` not an ancestor of `origin/main`, confirmed by `git merge-base --is-ancestor`) and 267's merge commit and timestamp all match to the second and to the commit. `pull_request:` in `ci.yml`/`downloader.yml`/`planner.yml` carries no `branches:` filter, confirmed by reading each workflow. `CLAUDE.md:189-191 "Check the base branch too" sits there on this base sha, not at 188-190 as the Build cites -- the evaluation already caught this itself in its own closing "what the brief had wrong" note, and the re-check confirms it is right to do so.
+- `.claude/skills/orchestrate-tickets/reference/history.md@fdafd1a` -- both pinned quotes (the squash-produces-a-new-commit line and the pl-39/pl-42 row) resolve at exactly the lines the evaluation names **at that pinned commit**, even though the same text has since moved on the current tip -- the pin is doing exactly the job the citation rules ask of it, and was used correctly here.
+
+### The concurrency.md paragraphs
+
+Read against the evaluation they implement, and against a primary source for every command, not against the prose alone.
+
+- `gh pr create --draft --base <A> --title` and `gh pr edit <n> --base <A>` -- both real, `--help` confirms the flags; match the evaluation's own step 2 verbatim.
+- "GitHub retargets B to `main` by itself, because this repository deletes merged head branches" -- re-fetched: `docs.github.com`'s branch-deletion page still says, verbatim, "GitHub automatically updates any such pull requests, changing their base branch to the merged pull request's base branch"; `gh repo view --json deleteBranchOnMerge` is still `true`.
+- The `#49`/`#50` example ("46 minutes... its commit never reached `main`") -- re-confirmed: `#49` closed 2026-08-22T00:26:37Z, `#50` merged 01:12:42Z (46 minutes), merge commit `c305c207...`, and `git merge-base --is-ancestor c305c207... origin/main` still exits 1.
+- `gh pr ready <n>` -- real command (`--help` confirms).
+- "Preflight's merge-tree check runs the same probe, but only against open pull requests and only when a builder runs it" -- re-confirmed against `scripts/preflight.mjs`'s `defaultListOpenHeads`, which calls `gh pr list --state open`, at this head.
+- The pilot paragraph's claims (public preview, no install, "Create stack", the recommendation banner) and its three "could not test" points restate the evaluation's Option 3b section and its "unmeasured" list respectively -- matched line for line, nothing added that the evaluation did not already argue.
+- The paragraphs cite nothing in `.claude/` by a bare line number themselves -- confirmed by reading the diff; they name `CLAUDE.md` (not under `.claude/`) and describe `scripts/preflight.mjs` by name only, no coordinate.
+
+### Findings, with disposition
+
+1. **`gh stack link` "only calls the GitHub API": REFUTED (and separately fixed).** My original finding said the phrase was not literal in the README and read as "a paraphrase presented as a direct quote." That is wrong: the phrase is a verbatim quote, just from a different page than the one I checked. Re-fetched: `https://docs.github.com/en/pull-requests/reference/use-other-tools-with-stacked-pull-requests` line 9 reads, verbatim, "The `gh stack link` command only calls the GitHub API to create the stacked pull requests -- it does not create any local tracking." My review searched `github/gh-stack`'s README and did not find it there (correctly -- it isn't there), but did not search further for the exact phrase before concluding it was a paraphrase; that step was missing. The ticket's fix now cites the correct page for the quote and keeps the README's paraphrase alongside it, which is strictly better than either alone.
+2. **"Auto-merge is not supported": FIXED.** My original finding said this line had no citation and that none of the five `docs.github.com` stacked-PR pages the evaluation itself cited said so -- that was accurate as far as it went; I did not check pages the evaluation had not cited. The fix adds a sixth page, `https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-stacked-pull-requests`, re-fetched here and confirmed to read, verbatim, "Auto-merge is not supported for stacked pull requests." The sentence is now quoted and cited.
+3. **Stale `engine/src/index.ts` line-403 coordinate: FIXED.** `node scripts/citations.mjs docs/work/repo-48-should-this-repo-adopt-a-stacked-branch-tool.md` at `806005c` now exits `0` (previously `1`, "1 unresolvable" of 16). The text now names the suffix `engine/src/index.ts` without a line number and says the example is illustrative and already stale, which removes the false coordinate rather than repairing it to a real one -- an acceptable fix, since no real, current line number would make the illustrative point any better.
+4. **New, found in a line this round touched: low -- a citation the round itself broke.** The Evaluation's pre-existing sentence "The repo's own prescription is `git rebase --onto origin/main <A's old tip> <B>` (pointing at `.claude/skills/orchestrate-tickets/reference/concurrency.md`, line 318)" was accurate against `033c786` (line 318 was the start of the `--onto` paragraph, verified in gate 1). This round inserted 70 new lines into `concurrency.md` **before** that paragraph, which is now at line 388. Line 318 now falls inside the round's own new "stack them on purpose" paragraph instead. The citation carries no anchor, so `scripts/citations.mjs` reports it `unanchored` rather than `moved` -- exactly the failure mode the citations-gate rules exist to prevent, reproduced here by the very ticket that is about that failure mode. Not a CI blocker (this coordinate sits in the Evaluation, not a `## Review` section), but it should be corrected to line 388 or given an anchor the next time this ticket is touched.
+
+### The premise behind the recommendation (unchanged by this round)
+
+The recommendation for Option 1 follows from measured costs for its own adoption (a paragraph, no install) and from independently sourced costs for rejecting Option 2 (a third-party account, a GitHub App with write access to `contents`/`workflows`, PR metadata leaving the machine -- all quoted verbatim from Graphite's own privacy page) and Option 3a (the commit-per-PR model's conflict with this repo's branch-per-ticket flow, argued point by point against spr's actual source). Those do not rest on an unmeasured premise. Two narrower premises were named as premises in the first pass and still hold: "the need is rare" is scoped honestly by the evaluation's own words ("That is not a census of every batch"), and "the owner merges on GitHub" (used to blunt Graphite's automatic-restack benefit) is an assumption about future behaviour rather than a measured fact, though it is not load-bearing since Option 2's rejection is given cost-and-privacy grounds first.
+
+### The Decision section and the two disposed questions
+
+The `### Decision` section records the owner's choice, "Option 1 + a 3b pilot," among four options the orchestrator relayed (the fourth being Option 2, Graphite) plus a stated reason `spr` was never offered (conflicts with one branch per ticket, per this evaluation and gate 1). That matches this evaluation's own recommendation and does not override anything in it. Two follow-on questions the builder had handed up are recorded as disposed:
+
+- The `candidateFiles` de-duplication fix is said to be filed separately as "repo-73 to repo-76." Checked rather than trusted: `gh pr list --state all --limit 400` and `node scripts/status.mjs --show repo-73` both show nothing by those ids yet. The ticket's own Log already says the same ("the tree does not confirm it yet") and marks it as the orchestrator's account -- correctly hedged, not a finding.
+- The `release-assets.githubusercontent.com` allowlist addition is called moot under Option 1, which is true by construction: Option 1 needs no install and no new host.
+
+### Reproduced commands (verbatim, trimmed, at `806005c`)
+
+`node scripts/citations.mjs docs/work/repo-48-should-this-repo-adopt-a-stacked-branch-tool.md`:
+
+```
+0 verified, 0 moved, 14 unanchored, 0 unresolvable, 2 unchecked, 0 evidence -- of 16 references, 8 pinned
+exit 0 -- nothing to fix
+```
+
+Finding 3 is fixed (0 unresolvable, was 1). Finding 4 above is among the 14 `unanchored` references this run cannot tell moved from correct, which is exactly why it survived uncaught.
+
+`node scripts/citations-gate.mjs --against origin/main`: unchanged from the first pass (`118 enforced, 0 failing; 6 grandfathered...`) -- this ticket still carries no `## Review` section, so nothing in it is enforced yet.
+
+`node scripts/preflight.mjs --base origin/main --title "docs(repo): evaluate stacked-branch tools and adopt process-only stacking (repo-48)"` at `806005c`: exits 0 -- `check`, `citations`, `review`, `title` and `mergeTree` (7 other open pull request heads, no conflicts) all `ok`.
+
+### NFR sweep
+
+- security -- n/a for this round's own diff (a skill-reference doc and a ticket); unchanged from the first pass otherwise.
+- performance -- n/a.
+- reliability -- n/a.
+- maintainability -- three of four findings fixed or refuted; one new low finding (4, above), itself a small irony given the ticket's own subject.
+
+- **findings** -- 3 carried from the first pass (1 refuted, 2 fixed) + 1 new this round (low) = 4 total; 4 carried, 0 dropped.
 
 ## Log
 
