@@ -1667,3 +1667,48 @@ function toolsWithTickets(): string[] {
     return fs.existsSync(work) && fs.readdirSync(work).some((entry) => entry.endsWith(".md"));
   });
 }
+
+// repo-72. The check fired on a real collision — #300's `repo-66` against
+// `main`'s — and named neither side: `undefined: "undefined" is used by more than
+// one ticket`, because it asked `!seen.add(id)`, and `Set.prototype.add` returns
+// the set. Two files sharing one id in one directory is the shape that arrived.
+test("a duplicate id is named, with both of the files that claim it", () => {
+  const root = repoWith({
+    "tools/planner/docs/work/pl-2-first.md": pl("pl-2"),
+    "tools/planner/docs/work/pl-2-second.md": pl("pl-2"),
+  });
+  expect(() => readTickets(root)).toThrow(
+    'tools/planner/docs/work/pl-2-second.md: "pl-2" is used by more than one ticket (also tools/planner/docs/work/pl-2-first.md)',
+  );
+});
+
+test("the command reports the duplicate by name and exits non-zero, which is the CI gate", () => {
+  const root = repoWith({
+    "docs/work/repo-66-mine.md": ticket({
+      id: "repo-66",
+      tool: "repo",
+      title: "mine",
+      kind: "chore",
+      status: "ready",
+      milestone: "null",
+      depends_on: "[]",
+    }),
+    "docs/work/repo-66-theirs.md": ticket({
+      id: "repo-66",
+      tool: "repo",
+      title: "theirs",
+      kind: "chore",
+      status: "ready",
+      milestone: "null",
+      depends_on: "[]",
+    }),
+  });
+  const { stdout, stderr, status } = run(["--json"], root);
+  expect(status).toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toContain(
+    'docs/work/repo-66-theirs.md: "repo-66" is used by more than one ticket',
+  );
+  expect(stderr).toContain("(also docs/work/repo-66-mine.md)");
+  expect(stderr).not.toContain("undefined");
+});

@@ -293,11 +293,11 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     }
   }
 
-  const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
-  if (byId.size !== tickets.length) {
-    const seen = new Set();
-    const duplicate = tickets.find((ticket) => !seen.add(ticket.id));
-    throw new Error(`${duplicate?.file}: "${duplicate?.id}" is used by more than one ticket`);
+  const firstById = new Map();
+  for (const ticket of tickets) {
+    const first = firstById.get(ticket.id);
+    if (first) throw new Error(duplicateIdMessage(ticket, first));
+    firstById.set(ticket.id, ticket);
   }
   return tickets.toSorted(byIdOrder);
 }
@@ -1114,6 +1114,25 @@ export function ignoreClosedPipe(streams) {
       if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
     });
   }
+}
+
+/**
+ * What `readTickets` says when two tickets share an id: the file that reached
+ * it second, the id, and the file it collides with. Both files, because the
+ * remedy is renumbering one of them and the reader has to know which two to
+ * choose between.
+ *
+ * The check used to be `tickets.find((t) => !seen.add(t.id))`, which never
+ * matches — `Set.prototype.add` returns the set, always truthy — so a real
+ * collision read `undefined: "undefined" is used by more than one ticket`
+ * (repo-72). Down here rather than beside `readTickets` so the lines merged
+ * review records cite in between do not move.
+ *
+ * @param {{file: string, id: string}} ticket
+ * @param {{file: string}} first
+ */
+function duplicateIdMessage(ticket, first) {
+  return `${ticket.file}: "${ticket.id}" is used by more than one ticket (also ${first.file})`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
