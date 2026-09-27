@@ -89,8 +89,8 @@ const SOURCES = (seconds: number): string[] => [
 const H264 = ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-g", "15"];
 const AAC = ["-c:a", "aac", "-b:a", "64k"];
 
-/** `index.m3u8` of 2 s MPEG-TS segments, plus a `master.m3u8` naming it. */
-export async function generateHls(dir: string, seconds: number): Promise<void> {
+/** `index.m3u8` of MPEG-TS segments (2 s unless told), plus a `master.m3u8` naming it. */
+export async function generateHls(dir: string, seconds: number, segmentSeconds = 2): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
   await ffmpeg([
     ...SOURCES(seconds),
@@ -99,7 +99,7 @@ export async function generateHls(dir: string, seconds: number): Promise<void> {
     "-f",
     "hls",
     "-hls_time",
-    "2",
+    String(segmentSeconds),
     "-hls_list_size",
     "0",
     "-hls_playlist_type",

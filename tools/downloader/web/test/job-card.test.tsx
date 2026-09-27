@@ -28,7 +28,7 @@ import { JobList } from "../src/components/JobList.tsx";
 import { UNKNOWN } from "../src/lib/format.ts";
 import { applyJobEvent, markWatched } from "../src/lib/job-reducer.ts";
 import type { StreamState } from "../src/lib/job-stream.ts";
-import { NOW, SOURCE_URL, job, progress, result, variant } from "./fixtures.ts";
+import { NOW, SOURCE_URL, errorPayload, job, progress, result, variant } from "./fixtures.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -859,4 +859,35 @@ test("a list with nothing finished offers no clear button", () => {
     />,
   );
   expect(screen.queryByRole("button", { name: /Clear/u })).toBeNull();
+});
+
+/**
+ * dl-53's second gate: the server says *why* a job was canceled, on
+ * `error.details.reason`, and the card said the same thing for all three. Each
+ * reason now reads as what happened, and each is its own test so a card that
+ * collapses two of them back together fails by name.
+ */
+function canceledFor(reason: string): Job {
+  return job("canceled", { error: errorPayload("JOB_CANCELED", { details: { reason } }) });
+}
+
+test("a job the visitor canceled says they stopped it", () => {
+  mount(canceledFor("requested"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Canceled" })).toBeDefined();
+  expect(within(notice).getByText(/You stopped this download\./u)).toBeDefined();
+});
+
+test("a job whose connection closed mid-download says it was interrupted", () => {
+  mount(canceledFor("disconnected"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Download interrupted" })).toBeDefined();
+  expect(within(notice).getByText(/connection closed before the file finished/u)).toBeDefined();
+});
+
+test("a job whose link nobody opened says the link expired", () => {
+  mount(canceledFor("link-expired"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Link expired" })).toBeDefined();
+  expect(within(notice).getByText(/was not opened within fifteen minutes/u)).toBeDefined();
 });

@@ -137,7 +137,7 @@ export function buildPreviewFrameArgs(
       // a stream that already dropped the connection once.
       reconnect: false,
       // No `readTimeoutMs` of its own: a stall timeout does nothing against a
-      // stream that trickles a byte a second, so the bound is `runFfmpeg`'s
+      // stream that trickles a byte a second, so the bound is `streamFfmpeg`'s
       // timer and its process-tree kill, and nothing else pretends to be.
     }),
     // **Output-side, measured against input-side** (dl-56's Log has the table).
@@ -226,7 +226,7 @@ export async function grabPreviewFrame(options: PreviewFrameOptions): Promise<Bu
     if (!STREAM_SIDE_FAILURES.has(appError.code)) throw appError;
     logger.debug("no preview frame: ffmpeg did not produce one", {
       code: appError.code,
-      // `runFfmpeg` builds `stderr` from the redacted tail.
+      // `streamFfmpeg` builds `stderr` from the redacted tail.
       ...(typeof appError.details?.["stderr"] === "string"
         ? { stderr: appError.details["stderr"] }
         : {}),

@@ -67,7 +67,7 @@ URL ──► [probe] ──► ProbeResult ──► [user picks variant] ─�
                                          single-use link, 15 min  │
                     ┌─────────────────────────────────────────────┘
                     ▼   GET /api/files/:token — the visitor opens it
-             [slot]  ── per-client cap, wait line, bounded wait (≤ 100 s with the probe)
+             [slot]  ── per-client cap, wait line, bounded wait (≤ 100 s with both probes)
                     │
                     ▼
              [RE-PROBE]  ← mandatory; signed URLs expire in ~30–300 s (§5)

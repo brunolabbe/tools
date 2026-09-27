@@ -11,6 +11,7 @@ import { AppError, ROUTES } from "@downloader/contract";
 import type { AppErrorPayload } from "@downloader/contract";
 import type { JobStore } from "../db/job-store.ts";
 import type { JobEventHub } from "./events.ts";
+import { MAX_REPROBE_RETRIES } from "./orchestrator.ts";
 import { createFileToken } from "./tokens.ts";
 
 /**
@@ -32,11 +33,18 @@ export const TUNNEL_BUDGET_MS = 100_000;
 
 /**
  * How long a `GET` may wait in line for a job slot (owner decision 6): what the
- * budget leaves once the probe has had its full timeout. Zero when the probe
- * timeout alone uses it all, which means "a slot now, or 429".
+ * budget leaves once **every** probe the job may run has had its full timeout.
+ * Zero when the probes alone use it all, which means "a slot now, or 429".
+ *
+ * Every probe, not one: a retryable failure before the first byte re-probes
+ * (`MAX_REPROBE_RETRIES`), and that second probe happens after the wait, on
+ * the same response. Sized for one probe, the cap let a full wait and two slow
+ * probes reach 145 s at the defaults, past Cloudflare's 125 s — dl-53's first
+ * gate found it, and the owner chose this sizing on 2026-09-27. With the 45 s
+ * default the wait is 10 s.
  */
 export function maxLinkWaitMs(probeTimeoutMs: number): number {
-  return Math.max(0, TUNNEL_BUDGET_MS - probeTimeoutMs);
+  return Math.max(0, TUNNEL_BUDGET_MS - probeTimeoutMs * (MAX_REPROBE_RETRIES + 1));
 }
 
 /**

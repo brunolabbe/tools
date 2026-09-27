@@ -14,8 +14,8 @@
  *  2. **Admission before the link is spent.** The wait line and dl-51's
  *     per-client cap are checked first, so a refusal leaves the link usable.
  *  3. **The link is claimed atomically**; of two racing `GET`s one wins.
- *  4. **A bounded wait for a slot** (owner decision 6): long enough that the
- *     wait plus the probe's own timeout stays under 100 s, since Cloudflare
+ *  4. **A bounded wait for a slot** (owner decision 6): short enough that the
+ *     wait plus every probe the job may run stays under 100 s, since Cloudflare
  *     answers `524` at 125 s with no response. Past it, the link is given back
  *     and the answer is `429` with `Retry-After`.
  *  5. **Headers at the first byte.** Until then an error is the usual JSON

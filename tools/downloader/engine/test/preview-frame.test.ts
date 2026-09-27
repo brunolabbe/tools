@@ -9,7 +9,7 @@
  *
  * The bound is the part the tests are most about. A stream that trickles its
  * bytes defeats every stall timeout ffmpeg has, so the only thing standing
- * between a slow origin and a probe that never answers is `runFfmpeg`'s timer
+ * between a slow origin and a probe that never answers is `streamFfmpeg`'s timer
  * and its process-tree kill. "Leaves no process behind" is asserted by finding
  * the ffmpeg process by a marker in its argv while it runs, and not finding it
  * afterwards — the positive half is what keeps the negative half from passing

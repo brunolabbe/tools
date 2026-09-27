@@ -160,7 +160,11 @@ export function JobCard({
         <ErrorPanel error={job.error} onRetry={() => onRetry(job)} retryLabel="Analyse and retry" />
       )}
 
-      {job.status === "canceled" && <ErrorPanel error={localErrorPayload("JOB_CANCELED")} />}
+      {/* The job's own error, so its `details.reason` picks the copy (dl-53); the
+          local payload only for a record that somehow has none. */}
+      {job.status === "canceled" && (
+        <ErrorPanel error={job.error ?? localErrorPayload("JOB_CANCELED")} />
+      )}
 
       <div className="job__actions">
         {active && (

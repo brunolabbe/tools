@@ -439,7 +439,7 @@ and code; `egress-proxy.test.ts:506` "a tunnel is requested from the upstream, a
 (`not.toBe(403)`) is the one true near-miss and is a weak negative, but it asserts
 no security property and is the control half of a two-host test whose other half is
 fully discriminating. Correctly left alone. `proxied-https.test.ts`: assertions at
-`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`tools/downloader/api/test/proxied-https.test.ts:682-702` "an origin the proxy does not trust is refused, and the status line says why", `:705-729` "a certificate valid for another name does not pass either") both
+`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`tools/downloader/api/test/proxied-https.test.ts@c87153d:682-702` "an origin the proxy does not trust is refused, and the status line says why", `:705-729` "a certificate valid for another name does not pass either") both
 pair status with `statusLine` matched against `/certificate/iu` plus a specific
 error-code substring. **No sibling of the original defect survives uncaught.**
 

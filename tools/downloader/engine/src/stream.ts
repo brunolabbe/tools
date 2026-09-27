@@ -52,7 +52,7 @@ import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
 import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./ffmpeg/args.ts";
 import { RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 import type { FfmpegStream } from "./ffmpeg/runner.ts";
-import { streamFfmpeg } from "./ffmpeg/runner.ts";
+import { isTlsVerificationFailure, streamFfmpeg } from "./ffmpeg/runner.ts";
 import type { Logger } from "./logger.ts";
 import type { OutputContainer, StreamMap, TranscodeNotice } from "./mux.ts";
 import { buildOutputArgs, CONTAINER_EXTENSIONS } from "./mux.ts";
@@ -102,6 +102,38 @@ export interface MediaStream {
 }
 
 const SUBTITLE_DEMUXERS: Readonly<Record<string, string>> = { vtt: "webvtt", srt: "srt" };
+
+/**
+ * What ffmpeg's HLS demuxer says when it gives up on a segment and drops it.
+ *
+ * Left to its defaults it retries a segment it cannot fetch, logs this, and
+ * carries on — and when the source stops answering for good it **exits 0**
+ * having written only what it got. dl-53's second gate found it, and it is
+ * reproduced in `stream.test.ts`: six 1 s segments, every connection from the
+ * third on reset, and the stream ended as a clean response two seconds long
+ * with no error anywhere. A stored file could be checked afterwards; a stream
+ * is already on the visitor's disk, so the honest outcome is to cut the
+ * connection and record `DOWNLOAD_FAILED` the moment data is lost.
+ *
+ * **Read off stderr, because no flag makes ffmpeg fail here.** The gate
+ * proposed `-err_detect explode`, and it does not: on ffmpeg 6.1.1, on the
+ * gate's own fixture, it exits 0 with 39,487 bytes as an input option, an
+ * output option, both, and as `-f_err_detect`; so does `-xerror`. The gate's
+ * exit 255 came from its command lacking `-bsf:a aac_adtstoasc`, which fails
+ * the mux whatever else is set — measured, with the same bytes, on 2026-09-27.
+ * The line below is what the demuxer writes at `-loglevel warning`, which
+ * `GLOBAL_ARGS` asks for; the same bind `isTlsVerificationFailure` is in.
+ *
+ * **Not measured against real-world sources for false failures.** A source
+ * whose segments ffmpeg used to skip over quietly now fails where it used to
+ * finish short; that is the price the owner accepted on 2026-09-27 over a
+ * silent truncation. A segment that fails and then loads on a retry is not a
+ * loss and does not match: only the giving-up line does.
+ */
+export const SEGMENT_SKIPPED = /failed too many times, skipping/iu;
+
+/** The evidence a `SEGMENT_SKIPPED` failure carries, like the runner's 4 KB tail. */
+const STDERR_TAIL_CHARS = 4096;
 
 /** `source` keeps the origin container when we can hold it; otherwise MP4. */
 export function resolveContainer(
@@ -422,6 +454,9 @@ async function attempt(
   const mediaDurationSec = context.liveDurationSec ?? context.durationSec;
   const rate = new RateTracker();
   let sent = 0;
+  // For `SEGMENT_SKIPPED`: what ffmpeg said before it gave up on a segment.
+  let stderrTail = "";
+  let sawCertificateRejection = false;
 
   const ffmpeg: FfmpegStream = streamFfmpeg({
     ffmpegPath: config.ffmpegPath,
@@ -450,6 +485,22 @@ async function attempt(
     },
     onStderrLine: (line) => {
       logger.debug("ffmpeg", { line });
+      stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_CHARS);
+      if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
+      if (SEGMENT_SKIPPED.test(line)) {
+        // A segment refused on its certificate is skipped the same way, and
+        // says so first: that is a certificate failure, which is not retried
+        // and must not read as a dead link (dl-27). Anything else is lost data.
+        ffmpeg.terminate(
+          sawCertificateRejection
+            ? new AppError("TLS_VERIFICATION_FAILED", undefined, {
+                details: { stderr: stderrTail },
+              })
+            : new AppError("DOWNLOAD_FAILED", "The source stopped serving part of the video.", {
+                details: { stderr: stderrTail },
+              }),
+        );
+      }
     },
   });
   // Observed here so a rejection before anyone awaits `done` is never unhandled.

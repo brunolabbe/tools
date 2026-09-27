@@ -94,7 +94,7 @@ export interface OrchestratorOptions {
  * the problem is not expiry and looping would just burn a browser probe per
  * attempt.
  */
-const MAX_REPROBE_RETRIES = 1;
+export const MAX_REPROBE_RETRIES = 1;
 
 /**
  * A retry sends the job back to `probing`, and that is a real status move.

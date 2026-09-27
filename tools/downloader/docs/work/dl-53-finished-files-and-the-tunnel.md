@@ -3,7 +3,7 @@ id: dl-53
 tool: downloader
 title: Stream each finished file to its visitor as ffmpeg produces it, and keep no copy anywhere
 kind: work-package
-status: ready
+status: in-flight
 milestone: M5
 depends_on: [dl-50, dl-51]
 difficulty: hard
@@ -555,3 +555,84 @@ origin/main` exits 0.
     records; each is pinned to `c87153d`, where it held. `scripts/test/citations.test.ts`
     keeps its line count, so repo-25 and repo-50 cite it unchanged.
     `node scripts/citations-gate.mjs --against origin/main` exits 0.
+
+- 2026-09-27 — **Round three: both gates' findings, on the owner's answers of
+  the same day** (every answer took the gate's or the builder's
+  recommendation). The two gate records were committed first, verbatim, with
+  `scripts/review-record.mjs`; the formatter's only changes were blank lines
+  and `*emphasis*` to `_emphasis_`.
+
+  **Gate 2, high — a source that fails after the first byte ended as a short
+  success. Reproduced, fixed, but not the way the finding proposed.**
+  - Red first: `engine/test/stream.test.ts`'s new last case ("a source that
+    fails after the first byte fails the stream, not a truncated success")
+    serves six 1 s segments and resets every connection from the third.
+    Before the fix it failed with `expected false to be true` on
+    `received.aborted`: the client got a clean, complete response.
+  - **`-err_detect explode` does not do it, and the gate's evidence for it was
+    an artefact.** On distro ffmpeg 6.1.1, on the gate's own fixture
+    (`gate-b/midfail-fixture`), with the stream's output flags: exit 0 and
+    39,487 bytes with no flag; the same with `-err_detect explode` as an input
+    option, as an output option, on both sides, as `-f_err_detect explode`,
+    and with `-xerror`. Without `-bsf:a aac_adtstoasc` the same command exits
+    **255** with no flag at all — `Malformed AAC bitstream … Error muxing a
+packet` — which is the exit the gate recorded. The fix the owner chose
+    ("`-err_detect explode` or equivalent") is therefore the equivalent: the
+    engine watches ffmpeg's stderr for the HLS demuxer's giving-up line,
+    `failed too many times, skipping`, and ends the stream with
+    `DOWNLOAD_FAILED` the moment it appears (`SEGMENT_SKIPPED` in
+    `engine/src/stream.ts`). A retry that succeeds does not match; only the
+    give-up does. The case is green after it.
+  - **Not checked against real-world sources for false failures.** A source
+    whose segments ffmpeg used to skip quietly now fails where it used to
+    finish short. **A segment refused on its certificate is skipped the same
+    way**, and the first draft reported it as `DOWNLOAD_FAILED`: two cases in
+    `api/test/two-origin-tls.test.ts` failed on exactly that (`expected
+'DOWNLOAD_FAILED' to be 'TLS_VERIFICATION_FAILED'`). The skip now ends the
+    stream as `TLS_VERIFICATION_FAILED` when a certificate line came first, as
+    the runner classifies an exit. DASH was not reproduced the same way: its demuxer fails at
+    open on the equivalent fixture (exit 183) rather than skipping, so no
+    pattern is claimed for it.
+
+  **Gate 1, med — the wait cap did not allow for the re-probe. Fixed as
+  decided.** `maxLinkWaitMs` is now `100 s − PROBE_TIMEOUT_MS ×
+(MAX_REPROBE_RETRIES + 1)`: 10 s at the 45 s default, and 0 from 50 s up.
+  Red first: the new case at the end of `api/test/stream-link.test.ts` failed
+  with `expected 55000 to be 10000`, and passes after. The deployment doc,
+  the architecture diagram and the route's header say "both probes" now.
+
+  **Gate 2, med — the card ignored `details.reason`. Fixed as decided.** The
+  card renders `job.error`, and `presentError` picks the title and detail
+  from a closed table keyed by `requested`, `disconnected` and
+  `link-expired` ("Canceled", "Download interrupted", "Link expired"). Three
+  new cases at the end of `web/test/job-card.test.tsx`, one per reason; all
+  three failed before the change.
+
+  **Gate 2, med — `runFfmpeg` had no production caller. Removed.**
+  `streamFfmpeg` is the runner's only entry now, `PROGRESS_ARGS` (stdout
+  progress) went with it for the same reason, and `FfmpegFailureCode` is
+  `DOWNLOAD_FAILED` alone, so `MUX_FAILED` cannot be raised by construction
+  rather than by accident. `ffmpeg-runner.test.ts` and `proxied-https.test.ts`
+  drive `streamFfmpeg` through a three-line helper, with every assertion as
+  it was.
+
+  **Gate 2, low — "nothing written" proves less than it says. Narrowed, not
+  widened.** Listing more directories cannot close it: a write to a
+  hard-coded path lands wherever it lands, and the gate's own mutation showed
+  exactly that. So Done-when 2's verdict is now "the storage directory and
+  the process's temp directory are unchanged", which is what the tests list,
+  and the rest of the claim rests on Done-when 8's source search, which finds
+  no file write under `tools/downloader/*/src` beyond the boot-time CA files
+  of the TLS interception.
+
+  **The builder's three calls, accepted:** files stored by older builds stay
+  and are logged; `RATE_LIMIT_FILES_PER_MINUTE` stays at 600; and removing
+  `MUX_FAILED` is filed as
+  [dl-74](./dl-74-retire-mux-failed.md) — the next free id, checked against
+  every remote branch as well as `main` (the highest anywhere was dl-73) —
+  and not implemented.
+
+  **`status: in-flight`**, set in this round: with a `## Review` section the
+  ticket can no longer read `ready` — `npm run status -- --json` exits 1 on
+  exactly that (`reviewedButReady` in `scripts/status.mjs`) — and it is not
+  `done` until the re-gate and the landing.

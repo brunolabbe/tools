@@ -30,9 +30,9 @@ import {
   createEngine,
   isTlsVerificationFailure,
   resolveFfmpegPath,
-  runFfmpeg,
+  streamFfmpeg,
 } from "@downloader/engine";
-import type { StreamRequest } from "@downloader/engine";
+import type { FfmpegRunOptions, FfmpegRunResult, StreamRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -298,11 +298,17 @@ async function startEngine(
   };
 }
 
+/** The runner as every caller uses it since dl-53: stdout drained, completion awaited. */
+function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
+  const ffmpeg = streamFfmpeg(options);
+  ffmpeg.stdout.resume();
+  return ffmpeg.completion;
+}
+
 /**
  * The production argv for the HLS job below, writing to `destPath` instead of
- * stdout so `runFfmpeg` can run it: the stream's progress descriptor is
- * pointed back at stdout and its output at the file. Everything a test here
- * asserts on — the whitelist, the TLS flags — is untouched.
+ * stdout, so a test can read the result back. Everything a test here asserts
+ * on — the whitelist, the TLS flags — is untouched.
  */
 function manifestArgs(options: { destPath: string; tlsCaFile?: string; tlsVerify?: boolean }): {
   args: string[];
@@ -317,7 +323,7 @@ function manifestArgs(options: { destPath: string; tlsCaFile?: string; tlsVerify
     ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
     ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
   });
-  const toFile = args.map((arg) => (arg === "pipe:3" ? "pipe:1" : arg));
+  const toFile = [...args];
   toFile[toFile.length - 1] = options.destPath;
   return { args: toFile };
 }

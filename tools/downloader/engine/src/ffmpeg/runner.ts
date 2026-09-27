@@ -9,7 +9,7 @@
  *  - **Process-tree kill on abort.** See `kill.ts` for why a bare `child.kill()`
  *    is not enough.
  *
- * Progress comes from `-progress pipe:1` on stdout — or on descriptor 3 when
+ * Progress comes from `-progress pipe:3`, a descriptor of its own, because
  * stdout is the media itself (`streamFfmpeg`, dl-53); stderr is kept as a
  * bounded tail so a failure carries evidence without unbounded memory or a log
  * flood.
@@ -26,8 +26,12 @@ import { IS_WINDOWS, killProcessTree } from "./kill.ts";
 import type { FfmpegProgressSnapshot } from "./progress.ts";
 import { FfmpegProgressParser } from "./progress.ts";
 
-/** Which failure a non-zero exit means depends on what ffmpeg was doing. */
-export type FfmpegFailureCode = "MUX_FAILED" | "DOWNLOAD_FAILED";
+/**
+ * What a non-zero exit is reported as. Only one since dl-53: every ffmpeg run
+ * fetches its own input, so any failure it has is a failure to download.
+ * `MUX_FAILED` went with the separate mux pass and the file-writing runner.
+ */
+export type FfmpegFailureCode = "DOWNLOAD_FAILED";
 
 export interface FfmpegRunOptions {
   ffmpegPath: string;
@@ -115,19 +119,6 @@ export function isTlsVerificationFailure(stderr: string): boolean {
 }
 
 /**
- * Runs ffmpeg to completion.
- *
- * Rejects with `AppError`: `JOB_CANCELED` on abort, `TIMEOUT` past
- * `timeoutMs`, `SIZE_LIMIT_EXCEEDED` past `maxOutputBytes`, `INTERNAL` when the
- * binary is missing, `TLS_VERIFICATION_FAILED` when any stderr line says a
- * certificate was rejected, and `failureCode` (default `MUX_FAILED`) on any
- * other non-zero exit.
- */
-export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
-  return launch(options, false).completion;
-}
-
-/**
  * A running ffmpeg whose **output is its stdout** (dl-53).
  *
  * `stdout` carries the media and nothing else, so the caller's args must send
@@ -139,14 +130,20 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
  */
 export interface FfmpegStream {
   stdout: Readable;
-  /** Settles exactly as `runFfmpeg`'s promise does, once stdout has been drained. */
+  /**
+   * Settles once ffmpeg has exited and stdout has been drained. Rejects with
+   * `AppError`: `JOB_CANCELED` on abort, `TIMEOUT` past `timeoutMs`,
+   * `SIZE_LIMIT_EXCEEDED` past `maxOutputBytes`, `INTERNAL` when the binary is
+   * missing, `TLS_VERIFICATION_FAILED` when any stderr line says a certificate
+   * was rejected, and `DOWNLOAD_FAILED` on any other non-zero exit.
+   */
   completion: Promise<FfmpegRunResult>;
   /** Kills the process tree and rejects `completion` with `error`. Idempotent. */
   terminate(error: AppError): void;
 }
 
 export function streamFfmpeg(options: FfmpegRunOptions): FfmpegStream {
-  const launched = launch(options, true);
+  const launched = launch(options);
   if (launched.stdout === null) {
     // Unreachable: `launch` only returns without stdout when it rejected
     // before spawning, and then `completion` already carries the reason.
@@ -167,9 +164,9 @@ interface Launched {
   terminate(error: AppError): void;
 }
 
-function launch(options: FfmpegRunOptions, streamOutput: boolean): Launched {
+function launch(options: FfmpegRunOptions): Launched {
   const logger = options.logger ?? NOOP_LOGGER;
-  const failureCode: FfmpegFailureCode = options.failureCode ?? "MUX_FAILED";
+  const failureCode: FfmpegFailureCode = options.failureCode ?? "DOWNLOAD_FAILED";
   const stderrTailBytes = options.stderrTailBytes ?? DEFAULT_STDERR_TAIL_BYTES;
   let stdout: Readable | null = null;
   // Null only when the signal had already fired: nothing was spawned to kill.
@@ -192,13 +189,13 @@ function launch(options: FfmpegRunOptions, streamOutput: boolean): Launched {
       windowsHide: true,
       // POSIX process groups only exist if we ask for one; see kill.ts.
       detached: !IS_WINDOWS,
-      // A fourth descriptor only when stdout is the media: see `FfmpegStream`.
-      stdio: streamOutput ? ["ignore", "pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
+      // A fourth descriptor, because stdout is the media: see `FfmpegStream`.
+      stdio: ["ignore", "pipe", "pipe", "pipe"],
       env,
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     });
-    const progressSource = (streamOutput ? child.stdio[3] : child.stdout) as Readable | null;
-    if (streamOutput) stdout = child.stdout;
+    const progressSource = child.stdio[3] as Readable | null;
+    stdout = child.stdout;
 
     const parser = new FfmpegProgressParser();
     let stderrBuffer = "";

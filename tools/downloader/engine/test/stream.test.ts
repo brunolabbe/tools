@@ -84,6 +84,8 @@ beforeAll(async () => {
   await Promise.all([
     generateHls(path.join(fixtureRoot, "hls6"), 6),
     generateHls(path.join(fixtureRoot, "hls11"), 11),
+    // Gate 2's reproduction: six 1 s segments, of which the origin serves two.
+    generateHls(path.join(fixtureRoot, "midfail"), 6, 1),
     generateDash(path.join(fixtureRoot, "dash8"), 8),
     generateProgressive(path.join(fixtureRoot, "prog9"), 9),
     generateProgressive(path.join(fixtureRoot, "prog4"), 4),
@@ -101,6 +103,12 @@ beforeAll(async () => {
       return;
     }
     const pathname = new URL(request.url ?? "/", "http://x").pathname;
+    // From the third segment on, every connection is reset: a source that
+    // fails mid-stream, after the first byte has gone.
+    if (/^\/midfail\/seg0*[2-9]\d*\.ts$/u.test(pathname)) {
+      request.socket.destroy();
+      return;
+    }
     const file = path.join(fixtureRoot, ...pathname.split("/").filter((part) => part !== ".."));
     let body: Buffer;
     try {
@@ -641,5 +649,31 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     media.body.resume();
     controller.abort();
     await expect(media.done).rejects.toMatchObject({ code: "JOB_CANCELED" });
+  });
+
+  test("a source that fails after the first byte fails the stream, not a truncated success", async () => {
+    // Gate 2's high finding, reproduced: ffmpeg's HLS demuxer retries a failed
+    // segment, logs "failed too many times, skipping" and, left to itself,
+    // exits 0 with the segments it got — a clean response carrying two
+    // seconds of a six-second video. The stream must end as a failure the
+    // job records, never as a short success.
+    const engine = engineWith();
+    let media: MediaStream | undefined;
+    const received = await exchange(
+      "midfail",
+      () =>
+        engine.stream({
+          jobId: "midfail",
+          variant: hlsVariant("midfail", 6),
+          requestContext: CONTEXT,
+        }),
+      (opened) => {
+        media = opened;
+      },
+    );
+
+    expect(received.status).toBe(200);
+    expect(received.aborted).toBe(true);
+    await expect(media?.done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
   });
 });

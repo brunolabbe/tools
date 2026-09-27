@@ -605,10 +605,11 @@ alternatives that were refused, are in
 [dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md).
 
 **Cloudflare answers `524` if the origin sends no response within 125 s.** A
-download's response starts only once its job has a slot and has re-probed, so
-the API bounds the wait for a slot so that it and `PROBE_TIMEOUT_MS` together
-stay under 100 s, and answers `429` past it. Raising `PROBE_TIMEOUT_MS`
-shortens that wait; at 100 s or more there is none.
+download's response starts only once its job has a slot and has re-probed —
+twice, when the first attempt fails in a way a fresh probe can fix — so the API
+bounds the wait for a slot so that it and two `PROBE_TIMEOUT_MS` together stay
+under 100 s, and answers `429` past it. At the 45 s default that is a 10 s wait;
+raising `PROBE_TIMEOUT_MS` shortens it, and at 50 s or more there is none.
 
 ### Tightening it past one user
 

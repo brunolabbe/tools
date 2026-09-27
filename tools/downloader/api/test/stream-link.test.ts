@@ -29,6 +29,8 @@ import {
   probeMedia,
   topLevelBoxes,
 } from "../../engine/test/helpers/media.ts";
+import { maxLinkWaitMs, TUNNEL_BUDGET_MS } from "../src/jobs/links.ts";
+import { MAX_REPROBE_RETRIES } from "../src/jobs/orchestrator.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp, runSweep } from "../src/server.ts";
 import type { App } from "../src/server.ts";
@@ -619,5 +621,20 @@ describe("a fresh volume", () => {
       await app.shutdown();
       await fs.rm(parent, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the wait for a slot leaves room for the retry (dl-53, gate 1)", () => {
+  test("the cap is the budget less a probe timeout per attempt, re-probe included", () => {
+    // A GET that waited the whole cap and then re-probed once, both probes
+    // near their timeout, must still reach its first byte inside the budget.
+    const attempts = MAX_REPROBE_RETRIES + 1;
+    expect(attempts).toBe(2);
+    expect(maxLinkWaitMs(45_000)).toBe(TUNNEL_BUDGET_MS - 2 * 45_000);
+    expect(maxLinkWaitMs(45_000)).toBe(10_000);
+    expect(maxLinkWaitMs(45_000) + attempts * 45_000).toBeLessThanOrEqual(TUNNEL_BUDGET_MS);
+    // A probe timeout that leaves nothing means no waiting at all, never a negative.
+    expect(maxLinkWaitMs(50_000)).toBe(0);
+    expect(maxLinkWaitMs(99_000)).toBe(0);
   });
 });

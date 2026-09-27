@@ -246,6 +246,31 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
   },
 };
 
+/**
+ * Why a job was canceled, as the server records it on `error.details.reason`
+ * (dl-53), and the copy each one earns. The three are different events — the
+ * visitor chose to stop, the connection went, nobody ever started — and one
+ * sentence for all of them told the visitor nothing they did not already know.
+ * An absent or unknown reason (a record from before dl-53, or a newer server)
+ * falls back to the `JOB_CANCELED` entry above.
+ */
+const CANCEL_REASON_PRESENTATION: Readonly<Record<string, { title: string; detail: string }>> = {
+  requested: {
+    title: "Canceled",
+    detail: "You stopped this download. Nothing was kept on the server.",
+  },
+  disconnected: {
+    title: "Download interrupted",
+    detail:
+      "The connection closed before the file finished — a closed tab, a lost network or a stopped browser download. Nothing was kept; start it again from the page.",
+  },
+  "link-expired": {
+    title: "Link expired",
+    detail:
+      "The download link was not opened within fifteen minutes, so nothing was downloaded. Start it again from the page.",
+  },
+};
+
 export interface ErrorView {
   code: ErrorCode;
   title: string;
@@ -265,6 +290,16 @@ export interface ErrorView {
    * carried — see the veto in `presentError`.
    */
   retryAfterSec: number | null;
+}
+
+/** The copy for a canceled job's reason, or `null` to use the code's own. */
+function readCancelReason(
+  code: ErrorCode,
+  details: Record<string, unknown> | undefined,
+): { title: string; detail: string } | null {
+  if (code !== "JOB_CANCELED") return null;
+  const reason = details?.["reason"];
+  return typeof reason === "string" ? (CANCEL_REASON_PRESENTATION[reason] ?? null) : null;
 }
 
 /**
@@ -299,11 +334,14 @@ export function presentError(payload: AppErrorPayload): ErrorView {
   // says a retry is possible, and the wait is worth stating even where this
   // particular panel has no button. That case is deliberate and tested.
   const retryable = entry.allowRetry && payload.retryable === true;
+  // The one other field read by name: a canceled job's `reason` picks the
+  // title and detail from a closed table, never from the payload's text.
+  const reason = readCancelReason(payload.code, payload.details);
   return {
     code: payload.code,
-    title: entry.title,
+    title: reason?.title ?? entry.title,
     message,
-    detail: entry.detail,
+    detail: reason?.detail ?? entry.detail,
     tone: entry.tone,
     retryable,
     final: entry.final === true,
