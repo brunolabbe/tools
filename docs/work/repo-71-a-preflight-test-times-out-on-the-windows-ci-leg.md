@@ -3,7 +3,7 @@ id: repo-71
 tool: repo
 title: A preflight test times out on the Windows CI leg, on code that never touched it
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 ---
@@ -314,3 +314,10 @@ ticket is about."
   - **Done when, line 2, stays open until a pull request's CI runs:** three
     consecutive `windows-latest` runs of this spec without a timeout. Given
     the 13 s stall above, the leg may still time out on something else.
+- 2026-09-27, after landing: `Done when` 2 met — `test (windows-latest,
+informational)` passed three consecutive times on PR #303 at `818bab2`
+  (run 36344053801, attempts 1–3, jobs 108689610119 / 108703255144 /
+  108706939302, each `completed success`, read by the orchestrator with
+  `gh run view --json`); gate 1's `unproven (gate)` on that line is
+  superseded by this CI evidence. The open decision this ticket's builder
+  raised for a Windows leg that still timed out is moot.
