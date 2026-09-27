@@ -223,13 +223,12 @@ the day it is added. Worked examples and measurements:
 ## What is denied
 
 `.claude/settings.json` denies merging a pull request, cutting a release,
-`gh api`, printing the gh auth token, `npm publish`, pushing to `main`, and
-reading a real `.env` (`.env.example` stays readable). **A deny rule binds in
-every permission mode, `--dangerously-skip-permissions` included** — it is the
-only rule that still holds in the devcontainer, where prompts are off. Merging and
-releasing are denied because they are **yours to decide**: the gate workflow
-deliberately ends at "open the PR", and releases are cut by release-please from
-merged commits.
+`gh api`, printing the gh auth token, `npm publish`, and pushing to `main`.
+**A deny rule binds in every permission mode, `--dangerously-skip-permissions`
+included** — it is the only rule that still holds in the devcontainer, where
+prompts are off. Merging and releasing are denied because they are **yours to
+decide**: the gate workflow deliberately ends at "open the PR", and releases are
+cut by release-please from merged commits.
 
 **It is a guardrail, not a boundary** — a string-prefix match with no
 understanding of intent, and measured escapes exist (`/bin/echo` defeats a deny on
