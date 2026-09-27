@@ -3,7 +3,7 @@ id: repo-72
 tool: repo
 title: status.mjs detects a duplicate ticket id but cannot name it
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -66,6 +66,19 @@ relying on `Set.prototype.add`'s return value.
 - A test locks it: two fixture tickets sharing an id, asserting the error
   message names one of the two real files and the real id.
 - `npm run check` and the `repo` project's suite pass.
+
+## Review
+
+**Gate: PASS** — 2026-09-27 · `origin/main...HEAD` (base `1a8321c`, head `5f24f5b`) · code-review at medium
+
+| Done when                                                                                                                       | Proof                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `readTickets` throws an error naming a real file and a real id, not `undefined` for either, when two tickets share one          | `scripts/test/status.test.ts:1675` "a duplicate id is named, with both of" ✓ — reproduced red against base's `status.mjs` (2 failed, 127 passed) and green at head (129 passed)                     |
+| A test locks it: two fixture tickets sharing an id, asserting the error message names one of the two real files and the real id | `scripts/test/status.test.ts:1675` "a duplicate id is named, with both of" and `:1685` "the command reports the duplicate by name" ✓ — names **both** files, going past the line's "one of the two" |
+| `npm run check` and the `repo` project's suite pass                                                                             | verified — `npm run check` exit 0; `npx vitest run --project repo` → 506 passed (10 files)                                                                                                          |
+
+- **findings** · code-review at medium returned 0; 0 carried, 0 dropped.
+- NFR: security n/a · performance n/a (same O(n) walk, one `Map` instead of one `Map` plus one `Set`) · reliability ✓ (the fix's own subject) · maintainability ✓ — `duplicateIdMessage` is documented at its call site and at its definition, and the Log gives the reason it sits at the end of the file rather than beside `readTickets`.
 
 ## Log
 
