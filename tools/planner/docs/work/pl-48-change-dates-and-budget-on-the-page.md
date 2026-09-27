@@ -170,6 +170,23 @@ Positive control first: `plan-view.test.tsx` 59 of 59 at `f1bde60`. Each gate 1 
 - Also run at `f1bde60`: planner 1,287 of 1,287 (+7 over `ac00b8d`); `npm run e2e:planner` 5 of 5 passed; `scripts/preflight.mjs` exit 0. The `planner.yml` e2e row remains **unproven (gate)**, with no pull request yet.
 - NFR: security n/a · performance n/a · reliability — the new med · maintainability ✓.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-27 · `f1bde60..4cb75e3` only (`origin/main` still `c87153d`) · code-review at medium, on the lines this round touched
+
+Positive control first: `plan-view.test.tsx` 63 of 63 at `4cb75e3`. Every mutation below was applied, run and reverted.
+
+- **med, stuck Save: fixed** by the owner’s option (a). Gate 2’s three reproductions still disable Save, now with the line `tools/planner/web/src/plan/PlanView.tsx:1451 "Save is waiting on the budget"` and its reset (`tools/planner/web/src/plan/PlanView.tsx:1452 "onClick={resetBudget}"`). Each recovers to a dates-only body, pinned by `tools/planner/web/test/plan-view.test.tsx:1985 "typing an amount and clearing it back to nothing gets stuck"`, `tools/planner/web/test/plan-view.test.tsx:1998 "clicking 'A feeling' alone gets stuck"` and `tools/planner/web/test/plan-view.test.tsx:2009 "clicking 'A feeling' then 'A figure' gets stuck"`, through `tools/planner/web/test/plan-view.test.tsx:1969 "async function expectStuckThenRecovered("`. Dropping `tools/planner/web/src/plan/PlanView.tsx:1392 "setBudgetTouched(false);"` reddens all three (60 of 63).
+- **The fix from other seeds, by probe:** a seeded 1500 CAD amount cleared, then reset, shows 1500 and CAD again and sends dates only. A seeded band switched to A figure, then reset, is checked again and sends dates only. After an `INVALID_DATES` refusal, the banner stays, the reset returns the budget to the plan’s own (unanswered) and the retry sends dates only. A budget-only change reset back to its seed leaves Save disabled.
+- **low, pl-53’s Log: fixed** — `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md:93 "is called three places, not one"`.
+- **Fold-in of the day named twice: holds, and is the narrowest change.** `tools/planner/web/src/plan/PlanView.tsx:185 "function findingLine(finding: InfeasibleFinding): string {"` drops the prefix only when the detail names its own day. Two producers reach it. The dropped-pin copy names the day it is filed under (`tools/planner/itinerary/src/brief-edit.ts:93 "which the new dates drop. Unpin it to shorten the trip."`). The critic findings passed through `tools/planner/itinerary/src/compose.ts:350 "export function refuseHardFindings("` name no day number, only this or any day (`tools/planner/itinerary/src/critic.ts:143 "Nothing could be placed on any day of this trip."`), so they keep the prefix. Always prefixing reddens `tools/planner/web/test/plan-view.test.tsx:1613 "PLAN_INFEASIBLE from a dropped pin renders the composer"`; never prefixing reddens `tools/planner/web/test/plan-view.test.tsx:1417 "Day 1: Over capacity."`. The alternatives are wider: a check by `kind` needs `infeasibleFindings` to keep a field it drops today, and new server copy would edit pl-47’s itinerary package and its tests.
+- **low · new** — nothing holds the remount behind the reset: deleting `tools/planner/web/src/plan/PlanView.tsx:1442 "key={budgetResetKey}"` leaves 63 of 63 green, because every committed case starts from an unanswered budget, where empty fields equal the seed. Under that mutation, a seeded 1500 CAD amount cleared and reset shows an empty Amount while the budget stays 1500 CAD, which is gate 1’s med in another shape.
+- **low · new** — pressing Leave the budget as it was unmounts the button that has focus, and focus falls to the page body (probe: `document.activeElement` is `BODY`). A keyboard user loses their place in the form.
+- **dropped** · after a refusal, the reset discards a band chosen before it and returns to the plan’s own budget, not the last complete choice. That is what the button says. Not a defect.
+- **findings** · gate 3 returned 6: 3 verdicts (the stuck-Save med and the pl-53 low fixed, the fold-in holds), 2 new lows carried, 1 dropped.
+- Also run at `4cb75e3`: planner 1,291 of 1,291 (+4 over `f1bde60`); `npm run e2e:planner` 5 of 5 passed; `scripts/preflight.mjs` exit 0. The `planner.yml` e2e row remains **unproven (gate)**, with no pull request yet.
+- NFR: security n/a · performance n/a · reliability ✓ · maintainability — the two lows.
+
 ## Log
 
 **2026-09-13 — filed** beside pl-47, on the owner's cut. Checked against the
