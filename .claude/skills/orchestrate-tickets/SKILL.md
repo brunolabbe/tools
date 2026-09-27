@@ -181,6 +181,14 @@ you are there.
 
    Without `--title`, check 4 reads the branch's last commit subject, which is not the title that lands; every landing on 2026-09-26 ran it that way.
 
+   **And one per gate once the records are committed**, against the file the
+   gate wrote rather than any copy the lander was handed:
+   `node scripts/review-record.mjs --verify <ticket> <the gate's section file> [--gate <n>] --rev origin/<branch>`,
+   exit 0. It compares the committed record with that file, ignoring table
+   padding and what the formatter rewrites, and a non-zero exit names the ticket
+   lines that differ (repo-62). Diffing by hand is what caught both landers that
+   rewrote a gate's words on 2026-09-26; this is that diff as one exit bit.
+
 10. **Hold every worktree — the gate's and the fixer's as well as the
     builder's — until the ticket is finished.** "The round is over" cannot be
     evaluated: tested twice on 2026-09-03, both times it resumed. Announce any

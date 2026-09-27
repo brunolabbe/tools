@@ -636,3 +636,284 @@ test("refuses to run when the ticket is not tracked by git yet, and touches noth
     cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// repo-62 — the committed record against the file it came from. Appended with
+// its own import, not added to the one at the top, because merged gate records
+// cite this file by line and a line added above them displaces every one.
+// ---------------------------------------------------------------------------
+
+import {
+  compareRecord,
+  differingLines,
+  formatMarkdown,
+  locateGateBlock,
+  parseVerifyArgs,
+  VERIFY_USAGE,
+} from "../review-record.mjs";
+
+test("parseVerifyArgs reads --gate and --rev around the positionals, HEAD by default", () => {
+  expect(parseVerifyArgs(["--verify", "t.md", "s.md"])).toEqual({
+    ticket: "t.md",
+    sectionFile: "s.md",
+    gate: null,
+    rev: "HEAD",
+  });
+  expect(parseVerifyArgs(["t.md", "--verify", "--gate", "2", "--rev", "abc123", "s.md"])).toEqual({
+    ticket: "t.md",
+    sectionFile: "s.md",
+    gate: 2,
+    rev: "abc123",
+  });
+  expect(() => parseVerifyArgs(["--verify", "t.md", "s.md", "--gate", "0"])).toThrow(
+    /positive integer/,
+  );
+  expect(() => parseVerifyArgs(["--verify", "t.md", "s.md", "--rev"])).toThrow(/needs a value/);
+  expect(() => parseVerifyArgs(["--verify", "t.md"])).toThrow(VERIFY_USAGE);
+});
+
+const reviewedTicket = [
+  "## Why",
+  "",
+  "## Review",
+  "",
+  "### Gate 1",
+  "",
+  "one.",
+  "",
+  "### Gate 2",
+  "",
+  "two.",
+  "",
+  "### A heading inside gate 2's own body",
+  "",
+  "more of two.",
+  "",
+  "### Gate 3",
+  "",
+  "three.",
+  "",
+  "## Log",
+  "",
+].join("\n");
+
+const linesOf = (markdown: string, block: { start: number; end: number }) =>
+  markdown
+    .split("\n")
+    .slice(block.start - 1, block.end)
+    .join("\n");
+
+test("locateGateBlock ends an earlier gate at the next gate heading, not at the end of Review", () => {
+  const first = linesOf(
+    reviewedTicket,
+    locateGateBlock(reviewedTicket, null, "## Review\n\n### Gate 1\n\none.\n"),
+  );
+  expect(first).toContain("### Gate 1");
+  expect(first).not.toContain("### Gate 2");
+
+  const second = linesOf(
+    reviewedTicket,
+    locateGateBlock(reviewedTicket, 2, "### Gate 2\n\n### A heading inside gate 2's own body\n"),
+  );
+  expect(second).toContain("### A heading inside gate 2's own body");
+  expect(second).not.toContain("### Gate 3");
+
+  const third = linesOf(reviewedTicket, locateGateBlock(reviewedTicket, 3, "### Gate 3\n"));
+  expect(third).toContain("three.");
+  expect(third).not.toContain("## Log");
+
+  expect(() => locateGateBlock(reviewedTicket, 4, "### Gate 4\n")).toThrow(/no "### Gate 4"/);
+});
+
+test("compareRecord accepts what the formatter rewrites and rejects a reworded bullet", () => {
+  const section = [
+    "### Gate 2",
+    "",
+    "| Finding | Verdict |",
+    "|---|---|",
+    "| med · x | fixed |",
+    "",
+    "* **low** · the assertion proves nothing, *as measured*.",
+    "",
+  ].join("\n");
+  const formatted = formatMarkdown(section);
+  // The formatter really did rewrite more than padding — otherwise this test
+  // could not tell a formatter-aware comparison from a byte comparison.
+  expect(formatted).toMatch(/^- \*\*low\*\* · the assertion proves nothing, _as measured_\./m);
+
+  expect(compareRecord(section, formatted, formatted)).toEqual({ matches: true, diff: "" });
+  expect(compareRecord(section, section, formatted)).toEqual({ matches: true, diff: "" });
+
+  const reworded = formatted.replace("proves nothing", "was removed; fixed");
+  const result = compareRecord(section, reworded, formatted);
+  expect(result.matches).toBe(false);
+  expect(result.diff).toMatch(/^\+- \*\*low\*\* · the assertion was removed; fixed/m);
+  expect(result.diff).toMatch(/^-- \*\*low\*\* · the assertion proves nothing/m);
+});
+
+test("differingLines maps the diff's new side onto the ticket's own line numbers", () => {
+  const section = "### Gate 2\n\nkeep.\n\nthe reviewer's words.\n";
+  const landed = "### Gate 2\n\nkeep.\n\nthe lander's words.";
+  const { diff } = compareRecord(section, landed, section);
+  // Block starting on ticket line 40: its fifth line is ticket line 44.
+  expect(differingLines(diff, 40)).toEqual({
+    ticket: [{ line: 44, text: "the lander's words." }],
+    section: [{ line: 5, text: "the reviewer's words." }],
+  });
+});
+
+test("--verify passes a committed record, then fails naming the line once a lander rewords it", () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const first = writeSectionFile(
+      dir,
+      "gate1.md",
+      '## Review\n\n### Gate 1 — 2026-09-19\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    expect(runCli(dir, [ticketAbs, first]).status).toBe(0);
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "gate 1 lands");
+
+    // Unpadded table and `*` markers: the formatter rewrites all of them, and
+    // none of that is a change to the reviewer's words.
+    const second = writeSectionFile(
+      dir,
+      "gate2.md",
+      [
+        "### Gate 2 — 2026-09-20",
+        "",
+        "| Gate 1 finding | Verdict |",
+        "|---|---|",
+        "| low · the comment | fixed |",
+        "",
+        "* **low** · the lazy-mount assertion proves nothing, *measured on the base*.",
+        '* Still proof: `src/tls.ts:2 "Defence in depth"`.',
+        "",
+      ].join("\n"),
+    );
+    const spliced = runCli(dir, [ticketAbs, "--gate", "2", second]);
+    expect(spliced.status).toBe(0);
+    expect(spliced.stdout).toMatch(/--verify .* --gate 2/);
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "gate 2 lands verbatim");
+
+    const clean = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2"]);
+    expect(clean.stderr).toBe("");
+    expect(clean.status).toBe(0);
+    expect(clean.stdout).toMatch(/at HEAD \(lines \d+-\d+\) is /);
+    // Gate 1 is still its own file once gate 2 sits below it.
+    expect(runCli(dir, ["--verify", ticketAbs, first]).status).toBe(0);
+
+    // The dl-69 shape: the lander rewords a finding into its own disposition
+    // after the splice, and commits.
+    const committed = fs.readFileSync(ticketAbs, "utf8");
+    const rewordedLine =
+      committed.split("\n").findIndex((l) => l.includes("the lazy-mount assertion")) + 1;
+    fs.writeFileSync(
+      ticketAbs,
+      committed.replace("proves nothing, _measured on the base_", "was removed; fixed"),
+    );
+    gitIn(dir, "commit", "-qam", "gate 2 reworded by its lander");
+
+    const caught = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2"]);
+    expect(caught.status).toBe(1);
+    expect(caught.stderr).toMatch(/at HEAD is .*gate2\.md — it differs beyond table padding/);
+    expect(caught.stderr).toContain(
+      `  ${rewordedLine}: "- **low** · the lazy-mount assertion was removed; fixed."`,
+    );
+    expect(caught.stderr).toMatch(/proves nothing, _measured on the base_/);
+
+    // The commit before the rewording still verifies, so the failure is the
+    // rewording and not the comparison.
+    const earlier = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2", "--rev", "HEAD~1"]);
+    expect(earlier.status).toBe(0);
+
+    // Verified from a checkout that lacks the ticket — main, when the ticket
+    // was filed on the branch being landed: the rev is read, not the disk.
+    fs.rmSync(ticketAbs);
+    const offDisk = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2", "--rev", "HEAD~1"]);
+    expect(offDisk.stderr).toBe("");
+    expect(offDisk.status).toBe(0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("a splice whose block does not come back as the section file is restored to HEAD, exit 1", () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const before = fs.readFileSync(ticketAbs, "utf8");
+    // An unclosed fence swallows "## Log" once spliced above it, so the
+    // "## Review" block runs to the end of the ticket and carries the Log in
+    // with it: the landed block is no longer the file the gate wrote.
+    const section = writeSectionFile(
+      dir,
+      "section.md",
+      "## Review\n\n### Gate 1 — 2026-09-20\n\n```\nan unclosed fence\n",
+    );
+    const result = runCli(dir, [ticketAbs, section]);
+    expect(result.stderr).toMatch(/after splicing is not .*section\.md/);
+    expect(result.stderr).toContain("2026-09-20 — Filed.");
+    expect(result.status).toBe(1);
+    expect(fs.readFileSync(ticketAbs, "utf8")).toBe(before);
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 — a ticket-reviewer gate on repo-62, gate 1 (2026-09-27): a heading
+// inside a gate's body whose title starts "Gate <n>" must not move either end
+// of any gate's block.
+// ---------------------------------------------------------------------------
+
+test("a gate body quoting a '### Gate <n> …' heading moves neither end of any gate's block", () => {
+  const gate1 = [
+    "## Review",
+    "",
+    "### Gate 1",
+    "",
+    "one.",
+    "",
+    "### Gate 2 style findings quoted from elsewhere",
+    "",
+    "quoted.",
+    "",
+  ].join("\n");
+  const gate2 = "### Gate 2\n\ntwo.\n";
+  const gate3 = "### Gate 3\n\nthree.\n";
+  const ticket = ["## Why", "", gate1, gate2, gate3, "## Log", ""].join("\n");
+
+  const first = locateGateBlock(ticket, null, gate1);
+  expect(linesOf(ticket, first)).toContain("quoted.");
+  expect(linesOf(ticket, first)).not.toContain("two.");
+  expect(compareRecord(gate1, linesOf(ticket, first), formatMarkdown(gate1)).matches).toBe(true);
+
+  // The quoted heading is the first one that starts "Gate 2"; it is not gate 2.
+  const second = locateGateBlock(ticket, 2, gate2);
+  expect(linesOf(ticket, second)).toBe("### Gate 2\n\ntwo.\n");
+  expect(compareRecord(gate2, linesOf(ticket, second), formatMarkdown(gate2)).matches).toBe(true);
+
+  // A lander who drops the quoted heading from gate 1 still fails: the block
+  // then runs one heading further, into gate 2.
+  const dropped = ticket.replace("### Gate 2 style findings quoted from elsewhere\n\n", "");
+  const moved = locateGateBlock(dropped, null, gate1);
+  expect(compareRecord(gate1, linesOf(dropped, moved), formatMarkdown(gate1)).matches).toBe(false);
+});
+
+test("differingLines skips git's no-newline marker without miscounting the lines after it", () => {
+  const diff = [
+    "--- section-file",
+    "+++ inserted-block",
+    "@@ -1,2 +1,2 @@",
+    " same",
+    "-old ending",
+    "\\ No newline at end of file",
+    "+new ending",
+    "\\ No newline at end of file",
+  ].join("\n");
+  expect(differingLines(diff, 10)).toEqual({
+    ticket: [{ line: 11, text: "new ending" }],
+    section: [{ line: 2, text: "old ending" }],
+  });
+});
