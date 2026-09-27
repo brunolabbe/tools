@@ -1131,3 +1131,14 @@ zero wait. `.env.example`, the settings table and the deployment doc say so.
   No gate-record citation moved. `stream.ts` keeps its line count, the new
   cases sit after every cited line of `stream.test.ts`, and no record cites
   `engine/test/helpers/media.ts`.
+
+- 2026-09-27 — **Gate 8 landed: gate B's re-gate of round seven, PASS with no
+  new findings.** Spliced with `scripts/review-record.mjs --gate 8` from the
+  reviewer's own file, verbatim (the normalised diff against the section file
+  is empty), as its own commit. No coordinate was repointed and nothing was
+  declared evidence. To carry `main`'s `GRANDFATHERED` list, which
+  `citations-gate.mjs --against origin/main` reads, the branch took a clean
+  merge of `origin/main` at `6988b65`. CI's Windows leg then passed on the
+  orchestrator's re-run at `18ca055`. The one failure before that re-run was a
+  timeout in `scripts/test/preflight.test.ts`, which is not this ticket's; it
+  is being filed separately. `status: done`.
