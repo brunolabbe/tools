@@ -88,7 +88,7 @@
  * `commit-message.mjs`.
  *
  * Usage:
- *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins]
+ *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins] [--displaced-since <ref>]
  *
  * `--rev` resolves the citation **targets** against a commit rather than the
  * working tree. Pinning the record to the commit the gate actually reviewed is
@@ -180,6 +180,51 @@
  * self-citation still fails under the flag and still cannot be declared — what
  * changed is that the run names it, and gives the repair that works: point the
  * citation at the real subject, or write it as prose.
+ *
+ * `--displaced-since <ref>` reports an **unanchored, unpinned** citation whose
+ * cited line or range reads differently at `<ref>` than it does in the tree the
+ * run is checking (repo-50). An unanchored citation resolves as long as the file
+ * has that many lines, so an edit that inserts text *above* the cited region
+ * shifts it silently — the coordinates stay valid, the state stays `unanchored`,
+ * and nothing before this flag noticed. That is `--rev`'s own defect one layer
+ * up: `--rev` tells the record from the tree it describes; this tells the *tree*
+ * from an earlier version of itself, for exactly the citations `--rev` cannot
+ * help — the ones with no anchor to verify against a range.
+ *
+ * **Anchored, pinned and declared-evidence citations are out of scope, on
+ * purpose.** An anchored citation already reports `moved` the moment the text
+ * it quotes leaves the range — that is what an anchor is for. A pinned citation
+ * is read at the commit it names, not at the tree this flag compares, so
+ * "displaced since a ref" is not a question its own citation asks. A citation
+ * inside a `<!-- citations: evidence -->` line is never extracted at all, so
+ * there is nothing here for the flag to see.
+ *
+ * **Nothing is reported when the ref cannot supply a baseline** — the file did
+ * not reach that line yet, or the bare name resolves to nothing there. Guessing
+ * at a verdict from a range that never existed is the same mistake `--rev`'s own
+ * docblock refuses, so such a citation is left `unanchored`, exactly as it
+ * always was.
+ *
+ * **That is not the whole of "postdates the ref", and this used to claim it
+ * was.** A citation the *record* gained after `<ref>`, onto a line the *file*
+ * already had then, is a baseline the ref can supply — so it is compared, and
+ * reported if the text differs. Nothing here reads the record's own history, so
+ * there is no way to tell a citation written to describe the ref's tree
+ * (correctly `displaced` once that tree moves on) from one written fresh
+ * against the tip, whose match against the ref's older text is coincidence. The
+ * first is real, and measured rather than hypothetical: `dl-72`'s own record,
+ * which did not exist before its own branch, cites `compose.downloader.yaml:37`
+ * and `.github/workflows/downloader.yml:148` bare — both lines its own fix
+ * rewrote — and `--displaced-since 6f1f6bf` (`7156967`'s parent, the commit
+ * before dl-72 merged) correctly flags both. The second is a false positive
+ * this mode cannot distinguish from the first. Read a `displaced` report on a
+ * citation newer than `<ref>` with that in mind, rather than as settled either
+ * way.
+ *
+ * `displaced` sets its own exit bit, unconditionally — unlike `unanchored`,
+ * which needs `--require-anchors` to be fatal. There is no policy question here:
+ * a citation this flag catches has already been shown to point somewhere the
+ * record did not describe, which is what `moved` is fatal for too.
  *
  * `--require-claude-pins` reports an unpinned citation into a `.claude/` page as
  * its own state, `unpinned-volatile` (repo-52). Those pages are the ones the
@@ -898,6 +943,7 @@ const STATES = /** @type {const} */ ([
   "malformed-pin",
   "unresolvable",
   "moved",
+  "displaced",
   "unchecked",
   "unanchored",
   "unpinned-volatile",
@@ -914,6 +960,25 @@ const STATES = /** @type {const} */ ([
  *
  * `evidence` is deliberately absent: a declared citation is not a failure, and
  * exit 0 is the whole point of declaring one.
+ *
+ * **`displaced` (128, repo-50) is the last bit a process exit code can carry,
+ * and that is a ceiling on this table rather than on the check.** A process
+ * exit code is one byte: `process.exitCode = 256` exits `0`, silently, which is
+ * how Node reports "no such code" for a value outside `0`-`255` — measured
+ * rather than assumed. So a ninth failure class needs a different mechanism
+ * (a second exit code, a JSON summary) rather than the next bit, `256`, which
+ * this table cannot use. **The existing bits already collide with a shell's own
+ * reading of a high exit code**, and this predates `displaced`: any code at or
+ * above `128` — `displaced` alone, or any combination that reaches it — reads
+ * to a POSIX shell as "terminated by signal `code - 128`", the convention a
+ * shell uses for a process a signal actually killed. Nothing here was
+ * signalled; `128` is `displaced`'s own bit, `129` is `displaced |
+ * unresolvable`, and so on. A CI step that greps `$?` against that convention
+ * rather than reading the `exitLine` this script prints would misname the
+ * failure — measured on `repo-21`'s historical run, which exits `131`
+ * (`displaced | moved | unresolvable`) and would read as `SIGQUIT` to a naive
+ * check. Read the `exitLine`, not the bare code, for the same reason the
+ * summary line exists at all.
  */
 export const EXIT = /** @type {const} */ ({
   unresolvable: 1,
@@ -923,7 +988,60 @@ export const EXIT = /** @type {const} */ ({
   indistinct: 16,
   malformedPin: 32,
   unpinnedVolatile: 64,
+  displaced: 128,
 });
+
+/**
+ * Whether an unanchored, unpinned citation's cited range reads differently at
+ * `ref` than it does in the tree `content` was read from — repo-50's
+ * `--displaced-since`.
+ *
+ * Returns `null` for "nothing to report", and that covers two different facts on
+ * purpose: the two versions agree, or `ref` cannot supply a baseline at all — no
+ * such commit, no file there a bare name resolves to, or the range runs past
+ * what the file held then. The last of those is deliberate rather than a missed
+ * case: a citation the record gained after `ref` did not exist at that commit in
+ * any range-shaped sense, so there is no "differs" to report, only "postdates" —
+ * the same distinction `recordDrift` already draws for the record's whole
+ * reference list, drawn here for one citation's own text.
+ *
+ * Reports the **first** differing line, not every one: the point is to tell a
+ * reader which line to go read, not to diff the whole range, and the first
+ * difference is where an inserted block first shows up.
+ *
+ * @param {{read: (file: string) => string[] | null, resolve: (file: string) => {path: string} | {error: string}} | null} refTree
+ * @param {{file: string, start: number, end: number}} c
+ * @param {string[]} content The cited file, already read from the tree this run
+ *   is checking — passed in rather than re-read, since `checkCitations` already
+ *   has it cached for this citation.
+ * @returns {{reason: string} | null}
+ */
+function checkDisplacement(refTree, c, content) {
+  if (refTree === null) return null;
+  const resolved = refTree.resolve(c.file);
+  if ("error" in resolved) return null;
+  const before = refTree.read(resolved.path);
+  if (before === null) return null;
+  if (c.start < 1 || c.end > before.length) return null;
+
+  const now = content.slice(c.start - 1, c.end);
+  const then = before.slice(c.start - 1, c.end);
+  // Compared normalised, the same collapse the printed message already uses
+  // (repo-50 gate 1, low): a re-indent or a line-ending change alone is not a
+  // citation reading something else, and comparing raw strings reported one as
+  // `displaced` with identical text printed on both sides of "before" and
+  // "now" — the exact tell that the comparison, not the message, was wrong.
+  const at = then.findIndex((line, i) => normalize(line) !== normalize(now[i] ?? ""));
+  if (at === -1) return null;
+
+  const lineNo = c.start + at;
+  const show = (line) => normalize(line ?? "").slice(0, 100);
+  return {
+    reason:
+      `line ${lineNo} read "${show(then[at])}" before, and reads "${show(now[at])}" now — an edit ` +
+      `moved what this citation points at without touching its coordinates`,
+  };
+}
 
 /**
  * Resolve each citation, and where it carries anchor text, check the claim.
@@ -944,17 +1062,21 @@ export const EXIT = /** @type {const} */ ({
  *   rather than inferred from the default, which typed the parameter as one that
  *   can only succeed — so `makeResolver`, the one implementation that exists, was
  *   not assignable to it and a test passing it failed to compile.
- * @param {{record?: string | null, trees?: ReturnType<typeof makeTrees>, requireClaudePins?: boolean}} [options]
+ * @param {{record?: string | null, trees?: ReturnType<typeof makeTrees>, requireClaudePins?: boolean, displacedSince?: string | null}} [options]
  *   `record` is the record being checked, named as git names it — see
  *   `locateRecord` — so a citation that resolves to it can be told apart as a
- *   self-citation; omitted, nothing is. `trees` supplies the commit a pin names;
- *   omitted, every pin is `unresolvable` and none is ever read through `read`.
+ *   self-citation; omitted, nothing is. `trees` supplies the commit a pin names,
+ *   and is also where `displacedSince` reads its baseline tree from; omitted,
+ *   every pin is `unresolvable` and none is ever read through `read`.
  *   `requireClaudePins` turns on the `unpinned-volatile` override below; omitted
- *   or false, nothing here changes (repo-52).
+ *   or false, nothing here changes (repo-52). `displacedSince` turns on the
+ *   `displaced` state below for a citation with no anchor and no pin; omitted or
+ *   null, nothing here changes (repo-50).
  */
 export function checkCitations(citations, read, resolve = (f) => ({ path: f }), options = {}) {
   const record = options.record ?? null;
   const trees = options.trees ?? (() => null);
+  const displacedSince = options.displacedSince ?? null;
   const cache = new Map();
   const results = citations.map((c) => {
     // Refused before anything else, file or no file: a malformed pin names no
@@ -1096,6 +1218,27 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f }), 
     const text = content[c.start - 1].trim();
     const range = c.start === c.end ? `${c.start}` : `${c.start}-${c.end}`;
     if (c.anchor === null || normalizeAnchor(c.anchor) === "") {
+      // repo-50: an unanchored, unpinned citation resolves as long as the file
+      // has that many lines, which an insertion above it does not disturb — so
+      // this is the one state a plain `--rev` comparison of the record's own
+      // reference list cannot catch. `checkDisplacement` asks a narrower
+      // question than `--rev` does: not "did the record change" but "does this
+      // one citation's own text still say what it said at the ref".
+      const displaced =
+        displacedSince !== null && pin === null
+          ? checkDisplacement(trees(displacedSince), c, content)
+          : null;
+      if (displaced !== null) {
+        return {
+          ...c,
+          state: "displaced",
+          reason: self ? `${displaced.reason}; ${SELF_CITATION}` : displaced.reason,
+          text,
+          foundAt: null,
+          occurrences: null,
+          self,
+        };
+      }
       // Short on purpose. This repeats once per citation across a whole legacy
       // record, and the sentence explaining how to fix it is worth reading once,
       // so it is on stderr at the end instead.
@@ -1274,6 +1417,23 @@ export const isIndistinct = (r) =>
  * refusing it: an exit code a reader has no reason to doubt while a citation
  * fails under it. So it is refused instead, and the refusal is why the stale
  * message below has a branch of its own for this state.
+ *
+ * **`displaced` (repo-50) is absent for the identical reason, considered and
+ * rejected once already.** A `displaced` citation reads as though it always
+ * has the one clean repair `unpinned-volatile` has — repoint against the tree
+ * being committed, or pin to the commit it was true of — and an early version
+ * of this file excused it anyway, reasoning that an *illustrative* citation
+ * quoting a known false positive (a shorthand line number colliding with a
+ * backticked port, `extractCitations`'s own docblock names the collision) has
+ * no line left to repoint to. Measured against the live case that motivated
+ * it, `repo-25`'s own Review section, that reasoning did not survive contact:
+ * the citation still had a pin available — `` `:443` `` pinned to the commit
+ * the finding was written against reads there exactly what the reviewer's
+ * prose describes, permanently, same as `unpinned-volatile`'s one clean
+ * repair — so declaring it would have been the rubber stamp standing in for
+ * an edit that existed all along. `repo-14`'s own drift-demonstration
+ * citations resolved the same way, for the same reason. Left here as a record
+ * that the exception was tried, not only asserted against.
  */
 const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
 
@@ -1311,9 +1471,10 @@ const key = (file, start, end, rev) =>
  * edit is refused on the declaration bit while the citation goes on failing as
  * `moved`. A citation whose anchor is nowhere in the file may be either a
  * rewritten file or a fabricated anchor; telling those apart needs history,
- * and is left to the author. And `unpinned-volatile` (repo-52), for the same
- * reason as the second: the fix is a pin, and `FAILING`'s own docblock says
- * why leaving it excusable would be worse than refusing it outright.
+ * and is left to the author. And `unpinned-volatile` (repo-52) and `displaced`
+ * (repo-50), for the same reason as the second: the fix is a pin or a repoint,
+ * and `FAILING`'s own docblock says why leaving either excusable would be
+ * worse than refusing it outright.
  *
  * @param {ReturnType<typeof checkCitations>} results
  * @param {ReturnType<typeof extractDeclarations>} declarations
@@ -1363,9 +1524,11 @@ export function applyDeclarations(results, declarations) {
             ? `record line ${d.line}: "${d.text}" is declared evidence, but ${why} — that tree verifies it, so a declaration is not what it needs: repoint it, or pin it to the commit where it held`
             : match?.state === "unpinned-volatile"
               ? `record line ${d.line}: "${d.text}" is declared evidence, but it fails as unpinned-volatile, which no declaration excuses — pin it as file.ts@<rev>:120, or cite the page and the heading it sits under instead`
-              : match !== undefined
-                ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
-                : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
+              : match?.state === "displaced"
+                ? `record line ${d.line}: "${d.text}" is declared evidence, but it fails as displaced, which no declaration excuses — repoint it against the tree you are committing, or pin it to the commit it was true of, as file.ts@<rev>:120`
+                : match !== undefined
+                  ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
+                  : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
       };
     });
 
@@ -1455,6 +1618,10 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
   if (counts["unpinned-volatile"] > 0) {
     set("unpinnedVolatile", `${counts["unpinned-volatile"]} unpinned-volatile`);
   }
+  // Always fatal, for the same reason `unpinned-volatile` is: this count can
+  // only be non-zero when the caller passed `--displaced-since`, so there is no
+  // second flag here agreeing with the one `checkCitations` already read.
+  if (counts.displaced > 0) set("displaced", `${counts.displaced} displaced`);
 
   // Counted across states rather than as one of them: a pinned citation is still
   // verified, moved or whatever else it came out as.
@@ -1470,6 +1637,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
       counts.unresolvable +
       counts["malformed-pin"] +
       counts["unpinned-volatile"] +
+      counts.displaced +
       (requireAnchors ? counts.unanchored : 0) +
       (requireDistinct ? indistinct.length : 0),
     exit,
@@ -1486,7 +1654,8 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
     // unconditionally would change every record's output in the tree.
     // `unpinned-volatile` can only be non-zero when the caller opted in, so an
     // unconditional field here would do the same thing to every record checked
-    // without the flag.
+    // without the flag. `displaced` (repo-50) joins them for the identical
+    // reason: it is non-zero only under `--displaced-since`.
     line:
       `${counts.verified} verified, ${counts.moved} moved, ` +
       `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable, ` +
@@ -1495,6 +1664,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
       (counts["unpinned-volatile"] > 0
         ? `, ${counts["unpinned-volatile"]} unpinned-volatile`
         : "") +
+      (counts.displaced > 0 ? `, ${counts.displaced} displaced` : "") +
       ` — of ${results.length} reference${results.length === 1 ? "" : "s"}` +
       (pinned > 0 ? `, ${pinned} pinned` : "") +
       (requireAnchors ? ", anchors required" : "") +
@@ -1648,6 +1818,7 @@ export const FLAGS = new Map([
   ["--require-anchors", { option: "requireAnchors", takesValue: false }],
   ["--require-distinct-anchors", { option: "requireDistinct", takesValue: false }],
   ["--require-claude-pins", { option: "requireClaudePins", takesValue: false }],
+  ["--displaced-since", { option: "displacedSince", takesValue: true }],
 ]);
 
 /**
@@ -1658,7 +1829,7 @@ export const FLAGS = new Map([
  * repo-14's open question answered by an error message.
  */
 export const USAGE =
-  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins]";
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors] [--require-claude-pins] [--displaced-since <ref>]";
 
 /**
  * Parse argv into the ticket file and its options.
@@ -1677,7 +1848,7 @@ export const USAGE =
  * needing a fourth arm here.
  *
  * @param {string[]} argv
- * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean, requireDistinct: boolean, requireClaudePins: boolean}}
+ * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean, requireDistinct: boolean, requireClaudePins: boolean, displacedSince: string | null}}
  */
 export function parseArgs(argv) {
   /** @type {string | null} */
@@ -1689,6 +1860,7 @@ export function parseArgs(argv) {
     requireAnchors: false,
     requireDistinct: false,
     requireClaudePins: false,
+    displacedSince: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -1813,13 +1985,26 @@ export function locateRecord(repo, file) {
 }
 
 function main() {
-  const { file, rev, section, requireAnchors, requireDistinct, requireClaudePins } = parseArgs(
-    process.argv.slice(2),
-  );
+  const { file, rev, section, requireAnchors, requireDistinct, requireClaudePins, displacedSince } =
+    parseArgs(process.argv.slice(2));
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
   const relative = locateRecord(repo, file);
+
+  // Verified up front, loudly, rather than left to `makeTrees`'s own try/catch —
+  // which exists to turn a missing *pin* into `unresolvable` for one citation,
+  // not to turn a typo'd `--displaced-since` into a silent "nothing displaced".
+  if (displacedSince !== null) {
+    try {
+      execFileSync("git", ["rev-parse", "--verify", "--quiet", `${displacedSince}^{commit}`], {
+        cwd: repo,
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+    } catch {
+      throw new Error(`--displaced-since ${displacedSince}: no such commit`);
+    }
+  }
 
   // The record at the rev, when there is one. `makeReader` already returns null
   // for a path a commit does not have, which is the ordinary case for a gate
@@ -1846,6 +2031,7 @@ function main() {
       record: relative,
       trees: makeTrees(repo),
       requireClaudePins,
+      displacedSince,
     }),
     declarations,
   );
@@ -1883,10 +2069,12 @@ function main() {
     // which is the right choice there and one more reason not to grep across the
     // two. `unpinned-volatile` prints `UNPINNED` for the same reason `moved`
     // prints `MOVED`: upper case is always a failure, and this one always is.
+    // `displaced` (repo-50) prints `DISPLACED`, for the identical reason.
     const mark = {
       "malformed-pin": "MALFORMED",
       verified: "ok",
       moved: "MOVED",
+      displaced: "DISPLACED",
       unanchored: "unanchored",
       "unpinned-volatile": "UNPINNED",
       unresolvable: "FAIL",
@@ -2016,6 +2204,15 @@ function main() {
         `\`file.ts@<rev>:120\`, or cite the page and the heading it sits under instead, with no line number.\n` +
         `There is no evidence declaration for this: the fix is a pin, and a waiver standing in for it would\n` +
         `be a rubber stamp.`,
+    );
+  }
+  if (summary.displaced > 0) {
+    advice.push(
+      `${summary.displaced} unanchored citation(s) point at a line or range that read differently at\n` +
+        `${displacedSince} than they do now — an edit likely moved what they mean without moving their\n` +
+        `coordinates, and nothing checked them because they carry no anchor. Anchor each with a fragment of\n` +
+        `the line it should point at, which is what lets this script tell a moved citation from a correct\n` +
+        `one; or repoint it at the line that now holds what it meant to say.`,
     );
   }
   // Split, because the two have different repairs and the old single paragraph

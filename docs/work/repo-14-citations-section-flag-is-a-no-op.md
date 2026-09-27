@@ -234,9 +234,9 @@ becomes a loud error rather than the silent no-op it is now.
   **Read this ticket's Reproduction section with `--rev 91c117b`.** Two of its
   four citations drifted on this branch and now point at unrelated code while
   still resolving, which is the exact failure this script exists to catch and
-  cannot catch: `citations.mjs:226` was `const file = argv.find(…)` and is now a
-  `return` inside `checkCitations`; `:229` was the usage `throw` and is now
-  blank. They are the finding's own evidence, so they stay as written.
+  cannot catch: `citations.mjs@91c117b:226` was `const file = argv.find(…)` and
+  is now a `return` inside `checkCitations`; `:229` was the usage `throw` and is
+  now blank. They are the finding's own evidence, so they stay as written.
 
   **Not done, deliberately:** step 3, and with it Done-when 3. The docblock, the
   usage string and the parsed set now name the same flags but not the same
@@ -357,3 +357,20 @@ becomes a loud error rather than the silent no-op it is now.
   state that answers neither.
 
 - **2026-09-13 — repo-44: 6 failing references down to 0.** The four test citations are repointed by name, and the plain-text assertion ranges beside them are moved by the same offset, checked line by line against `a888fd9` and today. The declined header finding's range is repointed to where the scope-beside-the-count code stands now. Outside the gate record, the Why's pointer to the existing spawnSync test is repointed; the Reproduction's coordinates describe the script before this fix and are left as written.
+
+- **2026-09-26 — pinned, by repo-50's gate 1.** repo-50's own `--displaced-since`
+  now finds the two deliberately-stale citations the 2026-09-03 entry above
+  quotes and reports them `displaced`, since neither carried a pin and both
+  read differently at `origin/main` than they did when written. `displaced`
+  cannot be excused by an evidence declaration — the same rule
+  `unpinned-volatile` already holds to, and for the same reason: the fix is a
+  pin or a repoint, and a waiver standing in for either is the rubber stamp
+  every other refusal in `citations.mjs` exists to prevent. Repointing would
+  erase the drift these two citations exist to demonstrate, so pinned instead,
+  to the commit the 2026-09-03 entry already names for this exact reason
+  (`--rev 91c117b`): `citations.mjs@91c117b:226`, with `:229` inheriting the
+  same pin as a shorthand under it. Verified against that commit directly —
+  `git show 91c117b:scripts/citations.mjs` — lines 226 and 229 read exactly
+  what the 2026-09-03 entry says they did. `node scripts/citations.mjs
+docs/work/repo-14-....md --displaced-since origin/main` now reports 0
+  displaced for this record.

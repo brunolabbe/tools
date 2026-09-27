@@ -76,13 +76,24 @@
  * repo's tooling answers without a build step.
  *
  * Usage:
- *   node scripts/citations-gate.mjs [--against <ref>]
+ *   node scripts/citations-gate.mjs [--against <ref>] [--displaced-since <ref>]
  *
  * `--against` is the ratchet's memory: it compares this tree's `GRANDFATHERED`
  * with the one at `ref` and fails on any entry whose number went up, an absent
  * entry counting as zero. Without it this reads only the current tree, which is
  * the right default for a local run and is exactly why an accurate number could
  * silence a regression until the owner asked for this.
+ *
+ * `--displaced-since` is `citations.mjs`'s own flag of the same name (repo-50),
+ * threaded through to every record this gate reaches — both roots `SCOPE`
+ * already walks, the top-level work root and the one under each tool. (Spelled
+ * in prose rather than quoted, for `SCOPE`'s own reason: the literal pathspec
+ * carries the two characters that end a block comment.) It answers "what did
+ * this branch silently redirect" for the whole corpus in one run, which is the
+ * question a per-record invocation cannot answer without a caller enumerating
+ * every record by hand. Off by default: a bare push of this flag over the whole
+ * grandfathered corpus is a migration of its own, exactly as `--require-anchors`
+ * was, and this gate does not decide that here.
  */
 
 import { execFileSync } from "node:child_process";
@@ -267,7 +278,9 @@ export const GRANDFATHERED = new Map([
  * is a citation nothing checked. `unpinned-volatile` (repo-52) only exists at
  * all because `checkCitations` is called with `requireClaudePins: true` above —
  * it cannot appear otherwise, so listing it here costs this gate nothing on a
- * record with no `.claude` citations.
+ * record with no `.claude` citations. `displaced` (repo-50) is the same shape
+ * again: it cannot appear unless the caller passed `--displaced-since`, so it
+ * costs nothing on an ordinary run.
  */
 const FAILING = new Set([
   "unanchored",
@@ -275,6 +288,7 @@ const FAILING = new Set([
   "unresolvable",
   "malformed-pin",
   "unpinned-volatile",
+  "displaced",
 ]);
 
 /** This file, as git names it — the thing `--against` reads an older copy of. */
@@ -494,6 +508,32 @@ export function findRecords(repo, pathspecs) {
  * An **ambiguous** name is still an error, and is reported as a failure: two
  * `## Review` sections in one record is a record to fix, not a scope to skip.
  *
+ * **Under `displacedSince`, extraction widens to the whole record** (repo-50
+ * gate 1, high). The Build's own question is "what did this branch displace,
+ * for the whole corpus", and every incident that motivated it — repo-38's Log,
+ * dl-57's Log — sat outside `## Review`. So a record with no matching section
+ * at all is no longer skipped when the flag is set, and a record that has one
+ * still has every citation *outside* it read. What changes is only which rule
+ * applies to what is read: inside the section (or always, when `section` is
+ * `null`), the full `FAILING` set governs, exactly as before; outside it, only
+ * `displaced` is fatal among a citation's own *states* — an ordinary
+ * unanchored citation in a Log or a Why section is not new debt this flag
+ * created, and failing on it would flood every un-reviewed record in the
+ * corpus the moment the flag is passed.
+ *
+ * **A stale evidence declaration is fatal wherever it is written, section or
+ * not, and that is deliberate rather than an oversight the widened read
+ * introduced** (repo-50 gate 2, low). A declaration is excused above by the
+ * same reasoning `citations.mjs`'s own `applyDeclarations` docblock gives: it
+ * is a claim the record itself makes, that a named citation fails for a
+ * reason no commit would fix — not a fact about the corpus a flag can widen
+ * into new debt, the way an unanchored citation's mere existence is. Stale
+ * means that claim is false today, in a Log exactly as much as in a Review,
+ * and a false claim is not the kind of thing this flag's "do not flood the
+ * corpus" carve-out exists to tolerate. So `declarations` is read across the
+ * whole widened scope unconditionally, and `checkRecord`'s `failing` count
+ * adds every stale one whatever section it sits in.
+ *
  * @param {string} repo
  * @param {string} record
  * @param {string | null} section
@@ -502,6 +542,9 @@ export function findRecords(repo, pathspecs) {
  * @param {boolean} [requireDistinct]
  * @param {ReturnType<typeof makeTrees>} [trees] The commits pins name. Made per
  *   call when omitted; `gate` passes one for the whole run instead.
+ * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
+ *   passed straight through; omitted or null, nothing here changes except that
+ *   a record with no matching section is skipped exactly as it always was.
  */
 export function checkRecord(
   repo,
@@ -511,6 +554,7 @@ export function checkRecord(
   resolve,
   requireDistinct = true,
   trees = makeTrees(repo),
+  displacedSince = null,
 ) {
   const markdown = fs.readFileSync(path.join(repo, record), "utf8");
 
@@ -518,15 +562,27 @@ export function checkRecord(
   if (section !== null) {
     const sections = extractSections(markdown);
     const matches = sections.filter((s) => s.title.toLowerCase() === section.toLowerCase());
-    if (matches.length === 0) return { record, skipped: true };
-    try {
-      chosen = selectSection(sections, section);
-    } catch (error) {
-      return { record, skipped: false, error: /** @type {Error} */ (error).message };
+    if (matches.length === 0) {
+      // Under the flag this is not a skip — see the docblock above — but
+      // without it this is the ordinary "not gated yet" shape, unchanged.
+      if (displacedSince === null) return { record, skipped: true };
+    } else {
+      try {
+        chosen = selectSection(sections, section);
+      } catch (error) {
+        return { record, skipped: false, error: /** @type {Error} */ (error).message };
+      }
     }
   }
 
-  const inScope = (line) => chosen === null || (line >= chosen.start && line <= chosen.end);
+  // Whether a line sits where the gate's full rule set applies: everywhere,
+  // when no section was requested at all (corpus-wide mode); otherwise only
+  // inside the section that was actually found. Named apart from `inScope`
+  // below because the two answer different questions once `displacedSince`
+  // widens what is *read* without widening what is *enforced* everywhere.
+  const inFullScope = (line) =>
+    section === null || (chosen !== null && line >= chosen.start && line <= chosen.end);
+  const inScope = (line) => displacedSince !== null || inFullScope(line);
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
   // `requireClaudePins` is always on here, unconditionally, the same way
@@ -536,13 +592,33 @@ export function checkRecord(
   // has to be pinned or dropped in favour of a heading, from the day this landed
   // (repo-52).
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve, { record, trees, requireClaudePins: true }),
+    checkCitations(citations, read, resolve, {
+      record,
+      trees,
+      requireClaudePins: true,
+      displacedSince,
+    }),
     declarations,
   );
 
   /** @type {Record<string, number>} */
   const counts = {};
   for (const r of results) counts[r.state] = (counts[r.state] ?? 0) + 1;
+
+  // The same tally, restricted to the section the gate actually enforces
+  // (repo-50 gate 2, low). `counts` above is deliberately the whole widened
+  // read under `displacedSince` — a `FAIL`/`WORSE` line prints it so a reader
+  // sees the full record a failure was found in — but the corpus-wide debt
+  // tally `gate()` reports for a grandfathered record means "how much
+  // pre-existing enforced debt", and summing `counts` there under the flag
+  // pulls in every ordinary Log citation the widened read touches, which was
+  // never debt in the first place. `scopedCounts` is what that tally sums.
+  /** @type {Record<string, number>} */
+  const scopedCounts = {};
+  for (const r of results) {
+    if (!inFullScope(r.line)) continue;
+    scopedCounts[r.state] = (scopedCounts[r.state] ?? 0) + 1;
+  }
 
   // An indistinct anchor is `verified` and still a failure here, which is the
   // one place a state and a verdict come apart. `citations.mjs` keeps the state
@@ -551,9 +627,18 @@ export function checkRecord(
   // predicate is imported rather than restated, so the number `citations.mjs`
   // prints beside "lines" is by construction the one this gate failed on — and
   // a self-citation, which no fragment can make distinct, fails both the same way.
-  const indistinct = requireDistinct ? results.filter(isIndistinct) : [];
+  // Scoped to `inFullScope` for the same reason the failing rule below is: an
+  // indistinct anchor outside the section is not a new defect the flag found.
+  const indistinct = requireDistinct
+    ? results.filter((r) => inFullScope(r.line) && isIndistinct(r))
+    : [];
   if (indistinct.length > 0) counts.indistinct = indistinct.length;
-  const failures = [...results.filter((r) => FAILING.has(r.state)), ...indistinct];
+  const failures = [
+    ...results.filter((r) =>
+      inFullScope(r.line) ? FAILING.has(r.state) : r.state === "displaced",
+    ),
+    ...indistinct,
+  ];
 
   return {
     record,
@@ -561,6 +646,7 @@ export function checkRecord(
     error: null,
     total: results.length,
     counts,
+    scopedCounts,
     failures,
     stale,
     // The number the grandfather list ratchets on. Declarations have already
@@ -577,8 +663,10 @@ export function checkRecord(
  * @param {string} repo
  * @param {{records: string[], section: string | null}} scope
  * @param {Map<string, number>} grandfathered
+ * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
+ *   passed to every record `scope` reaches; omitted or null, nothing changes.
  */
-export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
+export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displacedSince = null) {
   const read = makeReader(repo, null);
   const resolve = makeResolver(candidateFiles(repo, null));
   const trees = makeTrees(repo);
@@ -591,11 +679,27 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const debt = {};
 
   for (const record of findRecords(repo, scope.records)) {
-    const result = checkRecord(repo, record, scope.section, read, resolve, true, trees);
+    const result = checkRecord(
+      repo,
+      record,
+      scope.section,
+      read,
+      resolve,
+      true,
+      trees,
+      displacedSince,
+    );
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
-    if (!grandfathered.has(record)) {
+    // `displaced` is never absorbed by the grandfathered allowance (repo-50
+    // gate 1, med 1) — `EXIT.displaced`'s own docblock in citations.mjs says
+    // "unconditionally", and the debt list is the corpus's pre-existing
+    // unanchored backlog, not a budget for a displacement this very run
+    // measured. A record holding one fails outright, naming every failure it
+    // has, whatever its entry allows.
+    const displaced = (result.failures ?? []).some((f) => f.state === "displaced");
+    if (displaced || !grandfathered.has(record)) {
       failed.push(result);
       continue;
     }
@@ -609,7 +713,7 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
       continue;
     }
     excused.push(result);
-    for (const [state, n] of Object.entries(result.counts ?? {})) {
+    for (const [state, n] of Object.entries(result.scopedCounts ?? result.counts ?? {})) {
       if (FAILING.has(state) || state === "indistinct") debt[state] = (debt[state] ?? 0) + n;
     }
   }
@@ -644,6 +748,7 @@ const countLine = (counts) =>
     "malformed-pin",
     "unresolvable",
     "moved",
+    "displaced",
     "unanchored",
     "unpinned-volatile",
     "indistinct",
@@ -655,32 +760,73 @@ const countLine = (counts) =>
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
 
-const USAGE = "usage: node scripts/citations-gate.mjs [--against <ref>]";
+const USAGE = "usage: node scripts/citations-gate.mjs [--against <ref>] [--displaced-since <ref>]";
 
 function main() {
   const argv = process.argv.slice(2);
   let against = null;
+  let displacedSince = null;
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== "--against") {
-      process.stderr.write(`unknown argument ${argv[i]}\n${USAGE}\n`);
-      process.exitCode = 1;
-      return;
-    }
     // A flag that takes a value must consume one, or it swallows nothing and
     // reports success having compared against undefined — repo-14, one flag over.
-    against = argv[++i];
-    if (against === undefined) {
-      process.stderr.write(`--against needs a value\n${USAGE}\n`);
+    if (argv[i] === "--against") {
+      against = argv[++i];
+      if (against === undefined) {
+        process.stderr.write(`--against needs a value\n${USAGE}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      continue;
+    }
+    if (argv[i] === "--displaced-since") {
+      displacedSince = argv[++i];
+      if (displacedSince === undefined) {
+        process.stderr.write(`--displaced-since needs a value\n${USAGE}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      continue;
+    }
+    process.stderr.write(`unknown argument ${argv[i]}\n${USAGE}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  // Verified up front, loudly, for the same reason `citations.mjs` does: a typo'd
+  // ref here would otherwise silently report "0 displaced" over the whole corpus,
+  // which is indistinguishable from a clean run.
+  if (displacedSince !== null) {
+    try {
+      execFileSync("git", ["rev-parse", "--verify", "--quiet", `${displacedSince}^{commit}`], {
+        cwd: repo,
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+    } catch {
+      process.stderr.write(`--displaced-since ${displacedSince}: no such commit\n`);
       process.exitCode = 1;
       return;
     }
   }
-
-  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(repo);
+  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(
+    repo,
+    SCOPE,
+    GRANDFATHERED,
+    displacedSince,
+  );
   const history = against === null ? null : compareAgainst(repo, against, GRANDFATHERED);
 
-  const scope = SCOPE.section === null ? "every citation" : `the "${SCOPE.section}" section`;
+  // The scope this run actually reads, not only the one it enforces
+  // everywhere (repo-50 gate 2, low): under `--displaced-since` a record's
+  // whole text is read, `## Review` included, even though only `displaced`
+  // is fatal outside it — a header that still said "the Review section" read
+  // as a claim the widened run does not make.
+  const scope =
+    SCOPE.section === null
+      ? "every citation"
+      : displacedSince !== null
+        ? `every section (displaced fatal outside "${SCOPE.section}")`
+        : `the "${SCOPE.section}" section`;
   process.stdout.write(
     `citation gate — ${scope} of ${inScope.length} record(s), distinct anchors required\n\n`,
   );
