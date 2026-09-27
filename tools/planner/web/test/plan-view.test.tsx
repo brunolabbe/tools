@@ -1644,7 +1644,11 @@ describe("changing the dates or budget", () => {
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     const alert = await waitFor(() => screen.getByRole("alert"));
-    expect(within(alert).getByText(/Day 8: “A long walk” is pinned/)).toBeDefined();
+    expect(
+      within(alert).getByText(
+        "“A long walk” is pinned to day 8, which the new dates drop. Unpin it to shorten the trip.",
+      ),
+    ).toBeDefined();
   });
 
   test("the diff captions a brief edit with both ends of each change, and 'not given' for an unasked budget", async () => {
@@ -1922,5 +1926,104 @@ describe("editPlan's own narrowing (pl-48)", () => {
     // same as a re-plan; `editPlan`'s own narrowing must refuse it exactly as
     // `startReplan`'s does the opposite way.
     void editPlan("plan-1", briefRequest);
+  });
+});
+
+/**
+ * Gate 2's med, owner's choice (a): once a budget that was never answered is
+ * touched, `BudgetEntry` can emit only `null` (incomplete) or a complete
+ * answer — it has no way to say "back to unanswered" — so `budgetTouched`
+ * stays `true` and Save is stuck disabled for a dates change too, with no
+ * copy explaining why. "Leave the budget as it was" clears `budgetTouched`
+ * and remounts `BudgetEntry` (a fresh key), the same reseed `BriefForm`'s own
+ * `key={latest.id}` already does at the form's level, done here at the
+ * control's.
+ */
+async function extendNights(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+  await user.clear(nights);
+  await user.type(nights, "6");
+}
+
+describe("an unanswered budget that gets stuck (gate 2)", () => {
+  function setUpUnanswered(): void {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    replanned.mockResolvedValue({
+      id: "run-30",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    });
+  }
+
+  /** Every case below reaches this same stuck state and the same way out. */
+  async function expectStuckThenRecovered(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    const button = screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" });
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText(/Save is waiting on the budget/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Leave the budget as it was" }));
+
+    expect(button.disabled).toBe(false);
+    await user.click(button);
+    expect(replanned).toHaveBeenCalledWith("plan-1", {
+      kind: "brief",
+      baseRevisionId: "rev-1",
+      dates: { kind: "open", nights: 6 },
+    });
+  }
+
+  test("typing an amount and clearing it back to nothing gets stuck, and 'leave it as it was' recovers", async () => {
+    setUpUnanswered();
+    const user = userEvent.setup();
+    show();
+    await extendNights(user);
+
+    const amount = screen.getByLabelText<HTMLInputElement>("Amount");
+    await user.type(amount, "2");
+    await user.clear(amount);
+
+    await expectStuckThenRecovered(user);
+  });
+
+  test("clicking 'A feeling' alone gets stuck, and 'leave it as it was' recovers", async () => {
+    setUpUnanswered();
+    const user = userEvent.setup();
+    show();
+    await extendNights(user);
+
+    await user.click(screen.getByRole("radio", { name: "A feeling" }));
+
+    await expectStuckThenRecovered(user);
+  });
+
+  test("clicking 'A feeling' then 'A figure' gets stuck, and 'leave it as it was' recovers", async () => {
+    setUpUnanswered();
+    const user = userEvent.setup();
+    show();
+    await extendNights(user);
+
+    await user.click(screen.getByRole("radio", { name: "A feeling" }));
+    await user.click(screen.getByRole("radio", { name: "A figure" }));
+
+    await expectStuckThenRecovered(user);
+  });
+
+  test("the explanatory line and the reset button are both absent while the budget is untouched", async () => {
+    setUpUnanswered();
+    show();
+    await screen.findByLabelText("Nights");
+
+    expect(screen.queryByText(/Save is waiting on the budget/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Leave the budget as it was" })).toBeNull();
   });
 });

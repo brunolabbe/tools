@@ -171,6 +171,24 @@ function infeasibleFindings(details: Record<string, unknown> | undefined): Infea
 }
 
 /**
+ * The line for one finding — `Day N: {detail}`, unless `detail` already names
+ * its own day.
+ *
+ * **pl-47's `droppedPinsRefusal` does** ("…is pinned to day 8, which the new
+ * dates drop…"); the critic's own findings (`itinerary/src/critic.ts`) never
+ * do, every one reading "this day" or "any day" and trusting this heading for
+ * the number. Gate 2's finding on this ticket: naming the day twice reads as
+ * a stutter rather than emphasis. Checked by content rather than by finding
+ * `kind`, so a future finding that also names its own day is covered without
+ * a second case here.
+ */
+function findingLine(finding: InfeasibleFinding): string {
+  const day = String(finding.dayIndex + 1);
+  const namesItsOwnDay = new RegExp(`\\bday ${day}\\b`, "i").test(finding.detail);
+  return namesItsOwnDay ? finding.detail : `Day ${day}: ${finding.detail}`;
+}
+
+/**
  * What `details` adds beside the message, per step 9 — **only for the codes
  * this file has an actual shape for.** `ITEM_NOT_FOUND.details` is `{ item:
  * <id> }` (`api`'s orchestrator), an id nobody typed and not a sentence for a
@@ -195,9 +213,7 @@ function ActionErrorDetails({
       {findings.map((finding) => (
         // No stable id on a finding — it is not stored, only ever the shape of
         // one failed attempt — so its content is the only handle there is.
-        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>
-          Day {String(finding.dayIndex + 1)}: {finding.detail}
-        </li>
+        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>{findingLine(finding)}</li>
       ))}
     </ul>
   );
@@ -1335,6 +1351,16 @@ function budgetEqual(a: TripBudget, b: TripBudget): boolean {
  * screen with a different latest revision (a restore, a move, a remove) must
  * reseed this form rather than keep stale local state pointed at a brief that
  * is no longer current.
+ *
+ * **An unanswered budget, once touched, can get stuck disabled for good —
+ * gate 2's finding, closed by the owner's own option (a).** `BudgetEntry` has
+ * no control that emits "unanswered": every interaction is either `null`
+ * (incomplete) or a complete answer, so once `budgetTouched` is `true` there
+ * is no way back to the "never touched" reading that lets a dates-only change
+ * save. "Leave the budget as it was" clears `budgetTouched` and remounts
+ * `BudgetEntry` under a fresh key — the same trick the whole form's own key
+ * (below, keyed on the latest revision's id) already plays one level up,
+ * done here at the one control that can dead-end.
  */
 function BriefForm({
   brief,
@@ -1357,6 +1383,16 @@ function BriefForm({
   // Save that only sends the sibling slot's change looks like it succeeded.
   const [datesTouched, setDatesTouched] = useState(false);
   const [budgetTouched, setBudgetTouched] = useState(false);
+  // Bumped only by "Leave the budget as it was" — a fresh key remounts
+  // `BudgetEntry`, which re-seeds its own internal fields from `initial` the
+  // same way it does on the form's first mount.
+  const [budgetResetKey, setBudgetResetKey] = useState(0);
+
+  const resetBudget = (): void => {
+    setBudgetTouched(false);
+    setDraftBudget(null);
+    setBudgetResetKey((key) => key + 1);
+  };
 
   const changedDates =
     draftDates !== null && (seededDates === null || !datesEqual(draftDates, seededDates));
@@ -1365,8 +1401,13 @@ function BriefForm({
   // The wizard's own rule for a composite control's `null` (`controls.tsx`'s
   // `QuestionField` doc comment): it disables the button rather than letting
   // "half filled" pass as "unanswered". Here that means Save, not Next.
-  const incomplete =
-    (datesTouched && draftDates === null) || (budgetTouched && draftBudget === null);
+  //
+  // `budgetStuck` is its own name because it is also the one way out: an
+  // unanswered budget touched into this state has no control that emits
+  // "unanswered" again, so "Leave the budget as it was" (below) is what
+  // clears it — see the doc comment above.
+  const budgetStuck = budgetTouched && draftBudget === null;
+  const incomplete = (datesTouched && draftDates === null) || budgetStuck;
 
   const submit = (): void => {
     onSubmit({
@@ -1398,12 +1439,22 @@ function BriefForm({
         }}
       />
       <BudgetEntry
+        key={budgetResetKey}
         initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
         onChange={(value) => {
           setBudgetTouched(true);
           setDraftBudget(value !== null && value.kind === "budget" ? value.value : null);
         }}
       />
+      {budgetStuck && (
+        <p className="hint">
+          Save is waiting on the budget — finish it, or{" "}
+          <button type="button" onClick={resetBudget}>
+            Leave the budget as it was
+          </button>
+          .
+        </p>
+      )}
 
       <div className="actions">
         <button

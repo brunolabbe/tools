@@ -127,19 +127,19 @@ the plan page would drift from the first.
 | Done when                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Fieldset on the latest revision only, seeded from the latest revision’s brief, submit disabled until something changes, only changed slots sent | proven — absent on an older one `tools/planner/web/test/plan-view.test.tsx:1477-1490 "the fieldset is absent on an older revision"`; seeded against a disagreeing `plan.brief` `tools/planner/web/test/plan-view.test.tsx:1451-1474 "seeds from the shown revision"`; disabled then enabled, body without the untouched budget `tools/planner/web/test/plan-view.test.tsx:1493-1537 "stays disabled until something changes"`; dates returned to seed not sent `tools/planner/web/test/plan-view.test.tsx:1547-1585 "a slot touched and returned to its seeded value is not sent"`. Narrower than the line for a budget returned to its seed, and for a plan with more than one revision — see the med and low below |
-| `INVALID_DATES` and a `PLAN_INFEASIBLE` carrying `pin-on-dropped-day` each render distinctly                                                    | proven — `tools/planner/web/test/plan-view.test.tsx:1609 "longest this tool will plan/i"`, `tools/planner/web/test/plan-view.test.tsx:1647 "Day 8: “A long walk” is pinned"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| A `brief` revision’s diff captions both ends of each change, "not given" for an unanswered budget                                               | proven for dates and for the unanswered budget — `tools/planner/web/test/plan-view.test.tsx:1677 "Dates: 5 nights, whenever is best → 6 nights, whenever is best"`, `tools/planner/web/test/plan-view.test.tsx:1680 "getByText(/not given/)"`, fixture `tools/planner/web/test/plan-view.test.tsx:1665 "budget: { from: slot.unknown()"`. The from-end of an **answered** budget is asserted nowhere — med below                                                                                                                                                                                                                                                                                                     |
+| `INVALID_DATES` and a `PLAN_INFEASIBLE` carrying `pin-on-dropped-day` each render distinctly                                                    | proven — `tools/planner/web/test/plan-view.test.tsx:1609 "longest this tool will plan/i"`, `tools/planner/web/test/plan-view.test.tsx:1613-1652 "PLAN_INFEASIBLE from a dropped pin renders the composer's finding"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| A `brief` revision’s diff captions both ends of each change, "not given" for an unanswered budget                                               | proven for dates and for the unanswered budget — `tools/planner/web/test/plan-view.test.tsx:1681 "Dates: 5 nights, whenever is best → 6 nights, whenever is best"`, `tools/planner/web/test/plan-view.test.tsx:1684 "getByText(/not given/)"`, fixture `tools/planner/web/test/plan-view.test.tsx:1669 "budget: { from: slot.unknown()"`. The from-end of an **answered** budget is asserted nowhere — med below                                                                                                                                                                                                                                                                                                     |
 | `DatesEntry` and `BudgetEntry` exported, wizard tests pass unchanged                                                                            | verified — `tools/planner/web/src/wizard/controls.tsx:354 "export function DatesEntry({"`, `tools/planner/web/src/wizard/controls.tsx:514 "export function BudgetEntry({"`; no wizard, controls or app test file in the diff; `controls.test.tsx` + `wizard.test.tsx` 25 of 25, with `app.test.tsx` 27 of 27                                                                                                                                                                                                                                                                                                                                                                                                         |
 | e2e extends a trip by a night, asserts version and day count before and after a reload; local run; `planner.yml` e2e on the PR                  | local: **verified** — `tools/planner/e2e/revise.spec.ts:208 "const dayCountBefore = await dayArticles(page).count();"`, `tools/planner/e2e/revise.spec.ts:209 "nights.fill(String(nightsBefore + 1))"`, crumb and day count after the run and after the reload in `tools/planner/e2e/revise.spec.ts:199-224 "Change the dates: extend the trip by one night"`; `npm run e2e:planner` 5 of 5 passed at `ac00b8d`. CI: **unproven (gate)** — no pull request yet                                                                                                                                                                                                                                                       |
 | `npm run check` and `npm test -- --project planner` pass                                                                                        | verified — `scripts/preflight.mjs` exit 0 at `ac00b8d` (check ok, planner tests ok); planner 1,280 of 1,280 at head, 1,273 at `c87153d`, +7 = the 7 new tests; the one edited test moves its brief onto the revision and now proves the shown-revision read                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-- **med** · open decision — an incomplete budget or dates entry is silently dropped while the other slot’s change is saved. `BriefForm` maps a control’s `null` (incomplete or invalid) to “unchanged” (`tools/planner/web/src/plan/PlanView.tsx:1404 "setDraftBudget(value !== null && value.kind ==="`), so with Nights changed, an Amount of 2000 typed beside an empty Currency (whose placeholder reads CAD) saves dates only, and so does clearing a seeded amount (`tools/planner/web/src/wizard/controls.tsx:605 "placeholder="`). The wizard never has this, because a `null` there disables Next. Options: (a) disable Save while a touched control emits `null` — recommended, the wizard’s own rule; (b) keep it and say on the page that an incomplete field is ignored.
-- **med** · the budget half of “compared by value” is untested: replacing `tools/planner/web/src/plan/PlanView.tsx:1364 "!budgetEqual(draftBudget, seededBudget)"` with `draftBudget !== null` leaves `plan-view.test.tsx` 52 of 52 green. That is the Trap’s own case — a budget clicked away and back, resent beside a dates change, re-packs every day.
-- **med** · the from-end of an answered budget in the caption is untested: rendering `not given` in place of `tools/planner/web/src/plan/PlanView.tsx:1071 "? describeBudget(operation.budget.from.value)"` leaves 52 of 52 green; the only fixture has an unknown from.
+- **med** · open decision — an incomplete budget or dates entry is silently dropped while the other slot’s change is saved. `BriefForm` maps a control’s `null` (incomplete or invalid) to “unchanged” (`tools/planner/web/src/plan/PlanView.tsx:1446 "setDraftBudget(value !== null && value.kind ==="`), so with Nights changed, an Amount of 2000 typed beside an empty Currency (whose placeholder reads CAD) saves dates only, and so does clearing a seeded amount (`tools/planner/web/src/wizard/controls.tsx:605 "placeholder="`). The wizard never has this, because a `null` there disables Next. Options: (a) disable Save while a touched control emits `null` — recommended, the wizard’s own rule; (b) keep it and say on the page that an incomplete field is ignored.
+- **med** · the budget half of “compared by value” is untested: replacing `tools/planner/web/src/plan/PlanView.tsx:1400 "!budgetEqual(draftBudget, seededBudget)"` with `draftBudget !== null` leaves `plan-view.test.tsx` 52 of 52 green. That is the Trap’s own case — a budget clicked away and back, resent beside a dates change, re-packs every day.
+- **med** · the from-end of an answered budget in the caption is untested: rendering `not given` in place of `tools/planner/web/src/plan/PlanView.tsx:1087 "? describeBudget(operation.budget.from.value)"` leaves 52 of 52 green; the only fixture has an unknown from.
 - **low** · nothing committed holds `editPlan`’s narrowing (`tools/planner/web/src/api/plan.ts:110 "request: Exclude<ReviseRequest, { kind:"`): reverting it to the base type compiles the whole tree; only a scratch `@ts-expect-error` probe went red (TS2578).
-- **low** · the reseed key is untested: deleting `tools/planner/web/src/plan/PlanView.tsx:525 "key={latest.id}"` leaves 52 of 52 green. It is load-bearing only for a move or remove on the latest page, which with the key discards a typed draft and without it keeps it; a restore always remounts the form, since restore runs from an older page where the form is absent.
-- **low** · the seed test has one revision, so seeding from the first revision instead of the latest (`tools/planner/web/src/plan/PlanView.tsx:526 "brief={currentBrief(plan)}"` → `plan.revisions[0]!.brief`) leaves 52 of 52 green. Seeding from `plan.brief`, the Trap, does go red.
-- **low** · a dropped-pin refusal names the day twice, “Day 8: “A long walk” is pinned to day 8, …”: `tools/planner/web/src/plan/PlanView.tsx:199 "Day {String(finding.dayIndex + 1)}: {finding.detail}"` prefixes a detail that already names it at `tools/planner/itinerary/src/brief-edit.ts:93 "which the new dates drop. Unpin it to shorten the trip."`.
+- **low** · the reseed key is untested: deleting `tools/planner/web/src/plan/PlanView.tsx:541 "key={latest.id}"` leaves 52 of 52 green. It is load-bearing only for a move or remove on the latest page, which with the key discards a typed draft and without it keeps it; a restore always remounts the form, since restore runs from an older page where the form is absent.
+- **low** · the seed test has one revision, so seeding from the first revision instead of the latest (`tools/planner/web/src/plan/PlanView.tsx:542 "brief={currentBrief(plan)}"` → `plan.revisions[0]!.brief`) leaves 52 of 52 green. Seeding from `plan.brief`, the Trap, does go red.
+- **low** · a dropped-pin refusal names the day twice, “Day 8: “A long walk” is pinned to day 8, …”: `tools/planner/web/src/plan/PlanView.tsx@ac00b8d:199 "Day {String(finding.dayIndex + 1)}: {finding.detail}"` prefixes a detail that already names it at `tools/planner/itinerary/src/brief-edit.ts:93 "which the new dates drop. Unpin it to shorten the trip."`.
 - **low** · open decision, outside this diff — the plan’s title keeps the first draft’s length. After the e2e walk’s edit the API still answers `Montréal — a road trip for 5 nights` over a revision of 6 nights and 7 days, and the page’s heading renders `plan.title`, set once from `tools/planner/api/src/intakes/title.ts:93 "export function intakeTitle(brief: TripBrief)"`. Options: (a) file a planner ticket for the API to retitle on a brief edit — recommended; (b) fold into pl-48 by deriving the heading on the page.
 - **dropped** · the error banner stays up while the form is edited after a refusal, until the next submit — pl-45’s re-plan does the same, and the retry clears it. Not a defect.
 - **dropped** · a remove or move on the latest page discards a typed dates draft — the documented intent of the key; its lack of a test is carried above.
@@ -153,15 +153,15 @@ the plan page would drift from the first.
 Positive control first: `plan-view.test.tsx` 59 of 59 at `f1bde60`. Each gate 1 mutation was re-applied, run and reverted.
 
 - **med, incomplete entry: fixed** by the owner’s option (a). The gate 1 reproductions now leave Save disabled: Nights 6 with Amount 2000 and an empty Currency, and a seeded amount cleared beside Nights 6. Pinned by `tools/planner/web/test/plan-view.test.tsx:1694-1715 "a touched control left incomplete disables Save"` and `tools/planner/web/test/plan-view.test.tsx:1718-1743 "clearing a seeded amount back to nothing is incomplete"`.
-- **med, budget compared by value: fixed.** M4b now reddens `tools/planner/web/test/plan-view.test.tsx:1748 "a budget touched away and back to its seeded band is not sent"` (58 of 59).
-- **med, answered from-budget in the caption: fixed.** M7b now reddens `tools/planner/web/test/plan-view.test.tsx:1825 "Budget: shoestring → 500 CAD total"` (58 of 59).
-- **low, editPlan narrowing: fixed.** Reverting it to the base type fails `npm run check` with exit 1 and TS2578 on the directive above `tools/planner/web/test/plan-view.test.tsx:1924 "void editPlan("`.
-- **low, reseed key: fixed.** M10 now reddens `tools/planner/web/test/plan-view.test.tsx:1836 "a remove that appends a new latest reseeds the fieldset"`.
-- **low, one-revision seed: fixed.** M2c now reddens `tools/planner/web/test/plan-view.test.tsx:1877 "seeds from the latest revision, not the first"`.
+- **med, budget compared by value: fixed.** M4b now reddens `tools/planner/web/test/plan-view.test.tsx:1752 "a budget touched away and back to its seeded band is not sent"` (58 of 59).
+- **med, answered from-budget in the caption: fixed.** M7b now reddens `tools/planner/web/test/plan-view.test.tsx:1829 "Budget: shoestring → 500 CAD total"` (58 of 59).
+- **low, editPlan narrowing: fixed.** Reverting it to the base type fails `npm run check` with exit 1 and TS2578 on the directive above `tools/planner/web/test/plan-view.test.tsx:1928 "void editPlan("`.
+- **low, reseed key: fixed.** M10 now reddens `tools/planner/web/test/plan-view.test.tsx:1840 "a remove that appends a new latest reseeds the fieldset"`.
+- **low, one-revision seed: fixed.** M2c now reddens `tools/planner/web/test/plan-view.test.tsx:1881 "seeds from the latest revision, not the first"`.
 - **low, the day named twice: refuted as to scope.** The rendering is real, but neither line is in this branch. `git diff c87153d...f1bde60` over `PlanView.tsx` and `itinerary/src/brief-edit.ts` has 0 matching lines. `git log -S` dates the wrapper to pl-45 (#246) and the copy to pl-47 (#279). Withdrawn from this gate; nothing on main records it yet.
 - **low, stale title: decided (a), filed, not implemented.** `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md:32 "**Reproduced**"` carries the gate’s measurement. `git diff --stat c87153d...f1bde60` over `api`, `contract`, `intake` and `itinerary` is empty.
-- **med · new, in this round’s lines · open decision** — once touched, a budget whose seed is unanswered cannot go back to “unchanged”, so Save stays disabled for a dates change with nothing on the page saying why. `tools/planner/web/src/plan/PlanView.tsx:1369 "(budgetTouched && draftBudget === null)"` holds after the fields return to empty, because `BudgetEntry` emits `null` for empty and partial alike (`tools/planner/web/src/wizard/controls.tsx:534 "next.band === null ? null"`), and only a remount clears `tools/planner/web/src/plan/PlanView.tsx:1403 "setBudgetTouched(true);"`. Reproduced on an unasked budget, which is the e2e walk’s own plan, with Nights set to 6: typing 2 into Amount and clearing it, or clicking A feeling alone, or A feeling then A figure, each leaves Save disabled. Untouched, the same edit sends dates only. Options: (a) a per-slot “leave the budget as it was” reset that clears the flag and remounts that control, plus one line saying why Save waits — recommended, confined to `PlanView.tsx`; (b) have `BudgetEntry` report empty apart from partial, which changes a wizard control that Build step 1 exports unchanged; (c) keep it and add only the explanatory line.
-- **low · new** — pl-53’s Log says `intakeTitle` `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md:93 "is called from exactly one"` place. It is also called twice in `api/src/intakes/state.ts`, for the intake’s own title. `tools/planner/api/src/runs/orchestrator.ts:201 "title: intakeTitle(brief) ?? UNTITLED,"` is the only call that writes a plan’s title, which is what the sentence means.
+- **med · new, in this round’s lines · open decision** — once touched, a budget whose seed is unanswered cannot go back to “unchanged”, so Save stays disabled for a dates change with nothing on the page saying why. `tools/planner/web/src/plan/PlanView.tsx@f1bde60:1369 "(budgetTouched && draftBudget === null)"` holds after the fields return to empty, because `BudgetEntry` emits `null` for empty and partial alike (`tools/planner/web/src/wizard/controls.tsx:534 "next.band === null ? null"`), and only a remount clears `tools/planner/web/src/plan/PlanView.tsx:1445 "setBudgetTouched(true);"`. Reproduced on an unasked budget, which is the e2e walk’s own plan, with Nights set to 6: typing 2 into Amount and clearing it, or clicking A feeling alone, or A feeling then A figure, each leaves Save disabled. Untouched, the same edit sends dates only. Options: (a) a per-slot “leave the budget as it was” reset that clears the flag and remounts that control, plus one line saying why Save waits — recommended, confined to `PlanView.tsx`; (b) have `BudgetEntry` report empty apart from partial, which changes a wizard control that Build step 1 exports unchanged; (c) keep it and add only the explanatory line.
+- **low · new** — pl-53’s Log says `intakeTitle` `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md@f1bde60:93 "is called from exactly one"` place. It is also called twice in `api/src/intakes/state.ts`, for the intake’s own title. `tools/planner/api/src/runs/orchestrator.ts:201 "title: intakeTitle(brief) ?? UNTITLED,"` is the only call that writes a plan’s title, which is what the sentence means.
 - **findings** · gate 2 returned 10: 8 gate-1 verdicts (7 closed, 1 refuted) and 2 new, both carried, 0 dropped.
 - Also run at `f1bde60`: planner 1,287 of 1,287 (+7 over `ac00b8d`); `npm run e2e:planner` 5 of 5 passed; `scripts/preflight.mjs` exit 0. The `planner.yml` e2e row remains **unproven (gate)**, with no pull request yet.
 - NFR: security n/a · performance n/a · reliability — the new med · maintainability ✓.
@@ -361,3 +361,85 @@ correct (only its missing test was carried, and is now closed above).
   citations (`:1381`→`:1404`, `:1348`→`:1364`); repointed. A new test's doc
   comment quoting an earlier test's title verbatim made one gate-1 anchor
   indistinct across two lines; reworded the quote rather than the record.
+
+**2026-09-27 — gate 2 (Opus, `ac00b8d..f1bde60`): CONCERNS, 2 new (1 med, 1
+low), 8 gate-1 verdicts (7 closed, 1 refuted as to scope).** Recorded verbatim
+via `node scripts/review-record.mjs --gate 2`, in its own commit, before
+anything else this round. **`--verify` is not available on this branch**:
+`grep -n verify scripts/review-record.mjs` on this checkout returns nothing —
+it is repo-62's addition, on a branch this ticket's own `main` base (`c87153d`)
+predates, so `node scripts/review-record.mjs --verify` was not run. The
+splice step's own check served the same purpose: "Normalised diff against the
+section file … empty means verbatim survived the formatter" printed empty,
+confirming the same 37-of-37 the gate itself dry-ran.
+
+The owner answered both open decisions the gate raised, both times taking the
+gate's own recommendation — and on the second, overriding the orchestrator's
+own recommendation to file rather than fold in:
+
+- **The stuck-Save med, option (a).** An unanswered budget, once touched, had
+  no way back to "unchanged": `BudgetEntry` emits only `null` (incomplete) or
+  a complete answer, never "unanswered" again, so `budgetTouched` stayed
+  `true` forever and a dates-only Save stayed disabled with no explanation.
+  `BriefForm` now has a per-slot escape: "Leave the budget as it was" clears
+  `budgetTouched`, clears `draftBudget`, and remounts `BudgetEntry` under a
+  fresh key (`budgetResetKey`) — the same reseed trick the whole form's own
+  key already plays one level up, applied here to the one control that could
+  dead-end. A line of copy ("Save is waiting on the budget…") explains the
+  wait while it lasts. Proven red-first with the three named repro cases,
+  each from an unanswered budget with Nights set to 6: typing an amount and
+  clearing it, clicking "A feeling" alone, and "A feeling" then "A figure" —
+  all three left Save disabled with no recovery before the fix, and all three
+  recover through the new button after it.
+- **The doubled "Day 8" refusal, folded into pl-48 — the owner's decision
+  overrode the orchestrator's own recommendation to file it separately.**
+  This is pl-45's `Day N:` wrapper (`ActionErrorDetails`,
+  `git log -S` dates it to #246) and pl-47's finding copy
+  (`droppedPinsRefusal`, #279) — neither line was in this branch before this
+  commit, and the fix is recorded here only because the owner chose to fold
+  it in rather than because it was already this ticket's to own. The
+  narrowest change that holds for every finding kind `ActionErrorDetails`
+  renders: a new `findingLine` helper skips the `Day N:` prefix when a
+  finding's own `detail` already names that day (a case-insensitive `\bday
+N\b` test), which is true today only of `pin-on-dropped-day`'s detail — the
+  critic's own findings (`itinerary/src/critic.ts`) never name their day in
+  prose, trusting the wrapper for it, and keep the prefix unchanged. Checked
+  by content rather than by `kind`, so a future finding that also names its
+  own day is covered without a second case here. The one existing test
+  asserting the old, doubled text was updated to assert the fixed, undoubled
+  one — its own citation into this record could not simply move, since the
+  exact text it once quoted no longer occurs anywhere in the file once the
+  bug is fixed; it is pinned to the commit it was true of instead
+  (`PlanView.tsx@ac00b8d:199`), per `records.md`'s rule for a citation that
+  is not moved but genuinely superseded.
+- **pl-53's Log, line 93, fixed per the low.** `intakeTitle` is called three
+  times, not one: `api/src/intakes/state.ts:173` and `:338` for the intake's
+  own title, beside `runs/orchestrator.ts:201`'s `startRun`, which is the
+  only one of the three that writes a _plan's_ title — the claim the
+  sentence was actually making, now said correctly. This record's own
+  citation into pl-53's Log (line 164, quoting the now-corrected sentence's
+  old wording) is pinned the same way, to `pl-53...md@f1bde60:93`.
+
+**Re-verification after this round**, each figure from the command beside it:
+
+- `npx tsc --build tools/planner/web tools/planner/web/test`: clean, no
+  output.
+- `npx oxlint tools/planner/web/src tools/planner/web/test`: clean after one
+  fix — `extendNights` (a new helper with no closure over its describe
+  block) moved to module scope, per `unicorn/consistent-function-scoping`.
+- `npx oxfmt --check tools/planner/web/src tools/planner/web/test`: clean
+  after `npm run format`.
+- `npx vitest run tools/planner/web/test/plan-view.test.tsx`: 63 tests, all
+  passing (59 prior + 4 new, all in `describe("an unanswered budget that
+gets stuck (gate 2)")`).
+- `npx vitest run --project planner`: 75 files, 1,291 tests, all passing.
+- `npx playwright test -c tools/planner/playwright.config.ts`: 5 specs, all
+  passing.
+- `npm run check`: exit 0.
+- `node scripts/citations-gate.mjs --against origin/main`: 113 enforced, 0
+  failing. This round moved or superseded 16 citations across pl-45 (1),
+  pl-46 (1), pl-48 (13, one of them requiring a new anchor rather than a
+  moved one — see the `PLAN_INFEASIBLE from a dropped pin` test, whose
+  literal fixture and expected text became identical once the fix landed,
+  so the citation now anchors on the test's own title over the full range
+  instead) and pl-53 (1, pinned).

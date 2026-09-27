@@ -90,8 +90,13 @@ option (a), file a ticket for the API to retitle on a brief edit, over (b)
 folding a page-side derivation into pl-48. Checked against the code at
 `origin/main` `c87153d`:
 
-- `intakeTitle` (`api/src/intakes/title.ts`) is called from exactly one
-  place, `runs/orchestrator.ts`'s `startRun`, at draft time.
+- `intakeTitle` (`api/src/intakes/title.ts`) is called three places, not one
+  — this Log first said one, and gate 2 of [pl-48](./pl-48-change-dates-and-budget-on-the-page.md)
+  caught it: `api/src/intakes/state.ts:173` and `:338`, for the intake's own
+  title before it is a plan, beside `runs/orchestrator.ts:201`'s
+  `startRun`. **Only `startRun`'s call writes a `plan`'s title**, at draft
+  time — the other two write an intake row, a different table this ticket
+  does not touch.
 - `runs/revise.ts` writes no `title`; grepping it for the word finds only a
   candidate's own `title` field, unrelated.
 - The reproduction above was read off `pl-48`'s own e2e fixtures
