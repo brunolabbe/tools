@@ -430,16 +430,24 @@ N\b` test), which is true today only of `pin-on-dropped-day`'s detail — the
   asserting the old, doubled text was updated to assert the fixed, undoubled
   one — its own citation into this record could not simply move, since the
   exact text it once quoted no longer occurs anywhere in the file once the
-  bug is fixed; it is pinned to the commit it was true of instead
-  (`PlanView.tsx@ac00b8d:199`), per `records.md`'s rule for a citation that
-  is not moved but genuinely superseded.
+  bug is fixed; it is pinned to the commit it was true of instead —
+  `PlanView.tsx@c87153d:192`, this code's own line on `origin/main` before
+  this ticket, per `records.md`'s rule for a citation that is not moved but
+  genuinely superseded. Not `ac00b8d`: a branch-only sha fails once this
+  branch is squash-merged and deleted (`records.md:148`), and `c87153d` holds
+  the identical text at line 192, not 199 — the wrapper had not yet grown
+  the doc comment and helper this ticket later added above it.
 - **pl-53's Log, line 93, fixed per the low.** `intakeTitle` is called three
   times, not one: `api/src/intakes/state.ts:173` and `:338` for the intake's
   own title, beside `runs/orchestrator.ts:201`'s `startRun`, which is the
   only one of the three that writes a _plan's_ title — the claim the
   sentence was actually making, now said correctly. This record's own
   citation into pl-53's Log (line 164, quoting the now-corrected sentence's
-  old wording) is pinned the same way, to `pl-53...md@f1bde60:93`.
+  old wording) cannot be pinned the same way: pl-53's file does not exist on
+  `origin/main` at any commit, so no `@<sha>` there is an ancestor of `main`
+  either. Named in prose instead — the sentence read this way at this
+  branch's `f1bde60`, before this round corrected it — rather than as a
+  citation nothing on `main` could ever resolve.
 
 **Re-verification after this round**, each figure from the command beside it:
 
