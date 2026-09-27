@@ -234,6 +234,54 @@ _Re-resolved at `ce99898` for round 3: round 3 corrected the claims behind three
 - **Did not:** re-sweep what gate 1 settled outside these lines; re-run repo-65's reproduction (scripts/ is unchanged since gate 1 ran it); verify the three relayed fixer facts beyond what is named above.
 - NFR: security n/a · performance n/a · reliability: B · maintainability: A, C to F.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-09-27 · `git diff 694edcd..ce99898` only · head `ce99898ad09462cb2031aac9c63a3bfde660c244`, detached, rebuilt; `origin/main` moved during the review to `a9878ad` (it carries #298 as `b2009ba`, and #299), and `git merge-tree --write-tree HEAD origin/main` is clean · narrow re-gate of two questions and five one-line verdicts, as dispatched
+
+**1. Finding B: partly fixed.** Checked against `scripts/preflight.mjs`, `scripts/citations-gate.mjs` and both role pages, not against the ticket's account of them. What is now right:
+
+- The direction of the trade-off: (a) refuses a dirty tree, so all five checks read one committed tree.
+- The count of trees: three today, two under (b), one under (a).
+- What check 1 reads: only `testPlan`'s selection comes from the committed diff, and `npm run check` always runs, on the working tree.
+- (b)'s cost: checks 3 and 4 stay on committed state.
+- repo-65 is still `needs-decision`, with options (a) and (b) and a recommendation.
+
+Two things are still wrong, and both tilt the decision.
+
+- **med · (a)'s cost is overstated.**
+  - The recommendation says (a) means "reversing an order this skill prescribes throughout": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:104 "reversing an order this skill prescribes throughout"`. Option (a) says the same at `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:83 "commit, every round"`.
+  - Only the fix round runs preflight before committing: builder.md under When you are resumed with findings, step 2, and fixer.md under The work.
+  - Both pages' Landing sections already commit first and preflight second. builder.md's Landing section has commit as step 1 and preflight as step 2; fixer.md's Landing section lists commit, then preflight exit 0, then push. A landing leaves a clean tree, so (a) already fits it.
+  - (a)'s real cost is the fix-round order in two places, not a skill-wide reversal.
+  - This is gate 1 finding 4's and gate 2 finding B's miss as much as the builder's: both my earlier sections said "both role pages" without reading the Landing sections.
+- **low · check 2 does not select from the working tree.**
+  - The Why says check 2 reads the working tree "in both what it selects and what it runs": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 "in both what it selects and what it runs"`. It selects records with `git ls-files` (`scripts/citations-gate.mjs:489 "ls-files"`), which lists the index, and it reads their contents from disk.
+  - Measured at `ce99898`: I wrote an untracked ticket whose Review citation fails. `node scripts/citations.mjs` on it exits 2. `node scripts/citations-gate.mjs --against origin/main` exits 0 and never names it. After `git add`, the gate exits 1 and names it. Then I unstaged and deleted it, and `git status --short` is empty.
+  - So under (b), whose union includes untracked paths, check 1 would select for an untracked file that check 2 never reads. "Checks 1–2 on the working tree" is close, not exact.
+
+**2. Finding D, repeated: three of gate 2's citations have been repointed onto text that corrects them.**
+
+- `review-record.mjs --verify` against gate 2's file exits 0 at `694edcd` and 1 at `ce99898`. The only differences are the three coordinates the builder named; every anchor is unchanged.
+- **repo-65 `:97→:162`, "alone out of step with check 2": corrected.** Gate 2 cited it as the recommendation's argument. Line 162 is the new Log entry quoting that argument in order to refute it.
+- **repo-65 `:90→:166`, "different trees rather than two": corrected.** Gate 2 cited it as (b)'s stated downside. Line 166 is the same Log entry quoting it as a contradiction.
+- **repo-66 `:6→:105`, "status: needs-decision": corrected.** Gate 2 cited it as repo-66's status. The frontmatter now reads `ready`, and line 105 is the correction entry quoting the old status.
+- **repo-65 line 59, "split three ways, not two": stands.** Its coordinate did not move, and the Why still says today's checks split three ways, which is what gate 2 cited it for.
+- `review-gate2-corrected.md` gives the three corrected citations as prose naming `f84c2a1`, with one preamble sentence saying so; nothing else changed. The landed gate 1 matches `review-gate1-corrected.md`: `--verify` exits 0 at `ce99898`.
+
+**The other one-line verdicts:**
+
+- **A: fixed.** records.md mode 2 now restores the historical pin, dated to `ea52f8b`, and separately says a pin is not today's rule. Cosmetic only: "is exactly the branch-only-sha rule below forbids" is missing a "what", and the pointer to that rule appears twice.
+- **C: fixed.** common.md now records two refusals, including the large heredoc, which confirms that clause. It keeps the `echo $?` rule narrow and drops the any-chain broadening as unconfirmed.
+- **E: fixed.** repo-66 is `ready`, with a dated Log entry.
+- **F: fixed.** repo-65 now cites the role pages by heading and quoted text.
+- **Finding 6's remainder: fixed.** The per-agent dl-53 row now reads 7 rounds.
+
+- **dropped** · the history row's `tickets` cell says "gate 8 landed the Windows-leg fix". On `origin/dl-53-stream-to-visitor`, the fix is `0a6ff8f` and gate 8's record is `6083b1c`: gate 8 gated the fix, it did not land it. #298 has since merged as `b2009ba`, so "open" is stale too. Both are outside the two questions dispatched.
+- **findings** · this narrow round returned 3; 2 carried (1 med, 1 low), 1 dropped. Of the five one-line verdicts, 5 are fixed.
+- **Commands at `ce99898`.** `npm run check` exit 0. `node scripts/citations-gate.mjs --against origin/main` exit 0: 117 enforced, 0 failing, 0 raised. `node scripts/preflight.mjs --base origin/main --title "chore(repo): record the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"` exit 0: repo-64 is `done` and carries a Review section.
+- **Did not:** review anything else in the diff, re-sweep earlier rounds, or re-run repo-65's reproduction.
+- NFR: reliability — the med above, which is the decision's premise · the rest n/a for a narrow round.
+
 ## Log
 
 - 2026-09-27 — Filed and built in the same dispatch, on the owner's
