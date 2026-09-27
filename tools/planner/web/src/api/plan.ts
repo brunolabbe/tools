@@ -68,13 +68,14 @@ export async function pinItem(planId: string, itemId: string, pinned: boolean): 
 }
 
 /**
- * Re-plan some days. Always a run — pl-42's step 6 rule that re-packing with
- * no specialists is still work that needs somewhere to report to and a cancel
- * button beside it.
+ * Re-plan some days, or edit the dates or the budget (pl-48). Both answer
+ * `{ kind: "run" }` — a brief edit is a run for the same reason a re-plan is
+ * (pl-47): added or re-packed days need grounding, which belongs in
+ * something that can report progress and be canceled.
  *
  * Typed to the one response kind it can honestly return, rather than to the
- * whole `ReviseResponse`: a `replan` request answers `{ kind: "run" }` and
- * never `{ kind: "revision" }`. **This is a compile-time narrowing only**,
+ * whole `ReviseResponse`: `replan` and `brief` both answer `{ kind: "run" }`
+ * and never `{ kind: "revision" }`. **This is a compile-time narrowing only**,
  * the same as every other function in this file — `requestJson` casts the
  * parsed body to the type given it (`client.ts`) rather than validating it —
  * so a server that broke the contract and sent the other kind would still
@@ -85,7 +86,7 @@ export async function pinItem(planId: string, itemId: string, pinned: boolean): 
  */
 export async function startReplan(
   planId: string,
-  request: Extract<ReviseRequest, { kind: "replan" }>,
+  request: Extract<ReviseRequest, { kind: "replan" | "brief" }>,
 ): Promise<Run> {
   const response = await requestJson<Extract<ReviseResponse, { kind: "run" }>>(
     planRevisionsUrl(planId),
@@ -100,11 +101,13 @@ export async function startReplan(
  * gets.
  *
  * Typed to `{ kind: "revision" }`, the mirror of `startReplan`'s narrowing and
- * for the same reason.
+ * for the same reason. **Excludes `brief` as well as `replan`** — a brief
+ * edit answers `{ kind: "run" }` too (pl-47), so it goes through `startReplan`,
+ * never through here.
  */
 export async function editPlan(
   planId: string,
-  request: Exclude<ReviseRequest, { kind: "replan" }>,
+  request: Exclude<ReviseRequest, { kind: "replan" | "brief" }>,
 ): Promise<PlanView> {
   const response = await requestJson<Extract<ReviseResponse, { kind: "revision" }>>(
     planRevisionsUrl(planId),

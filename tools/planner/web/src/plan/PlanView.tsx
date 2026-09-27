@@ -29,9 +29,10 @@
  * would silently show the wrong diff for every later revision.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppError,
+  currentBrief,
   isAnswered,
   latestRevision,
   MAX_REVISION_NOTE_CHARS,
@@ -47,14 +48,20 @@ import {
   type PlanView as PlanViewDocument,
   type ReviseRequest,
   type RevisionDiff,
+  type RevisionOperation,
   type Run,
   type Source,
   type Specialist,
+  type TripBrief,
+  type TripBudget,
+  type TripDates,
   type TripShape,
   uncheckedConstraintKey,
   type UncheckedConstraint,
 } from "@planner/contract";
 import { editPlan, fetchPlan, pinItem, startReplan } from "../api/plan.ts";
+import { BudgetEntry, DatesEntry } from "../wizard/controls.tsx";
+import { describeBudget, describeDates } from "../wizard/format.ts";
 import { describeCost, describeLocation, dayHeading, humanise } from "./format.ts";
 import { ProvenanceNote } from "./Provenance.tsx";
 
@@ -164,6 +171,24 @@ function infeasibleFindings(details: Record<string, unknown> | undefined): Infea
 }
 
 /**
+ * The line for one finding — `Day N: {detail}`, unless `detail` already names
+ * its own day.
+ *
+ * **pl-47's `droppedPinsRefusal` does** ("…is pinned to day 8, which the new
+ * dates drop…"); the critic's own findings (`itinerary/src/critic.ts`) never
+ * do, every one reading "this day" or "any day" and trusting this heading for
+ * the number. Gate 2's finding on this ticket: naming the day twice reads as
+ * a stutter rather than emphasis. Checked by content rather than by finding
+ * `kind`, so a future finding that also names its own day is covered without
+ * a second case here.
+ */
+function findingLine(finding: InfeasibleFinding): string {
+  const day = String(finding.dayIndex + 1);
+  const namesItsOwnDay = new RegExp(`\\bday ${day}\\b`, "i").test(finding.detail);
+  return namesItsOwnDay ? finding.detail : `Day ${day}: ${finding.detail}`;
+}
+
+/**
  * What `details` adds beside the message, per step 9 — **only for the codes
  * this file has an actual shape for.** `ITEM_NOT_FOUND.details` is `{ item:
  * <id> }` (`api`'s orchestrator), an id nobody typed and not a sentence for a
@@ -188,9 +213,7 @@ function ActionErrorDetails({
       {findings.map((finding) => (
         // No stable id on a finding — it is not stored, only ever the shape of
         // one failed attempt — so its content is the only handle there is.
-        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>
-          Day {String(finding.dayIndex + 1)}: {finding.detail}
-        </li>
+        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>{findingLine(finding)}</li>
       ))}
     </ul>
   );
@@ -279,7 +302,7 @@ export function PlanView({
    * only ever run while the latest is on screen — see `editable` below.
    */
   const submitEdit = useCallback(
-    (request: Exclude<ReviseRequest, { kind: "replan" }>): void => {
+    (request: Exclude<ReviseRequest, { kind: "replan" | "brief" }>): void => {
       setWriteBusy(true);
       setActionError(null);
       editPlan(planId, request)
@@ -297,7 +320,7 @@ export function PlanView({
   );
 
   const submitReplan = useCallback(
-    (request: Extract<ReviseRequest, { kind: "replan" }>): void => {
+    (request: Extract<ReviseRequest, { kind: "replan" | "brief" }>): void => {
       setWriteBusy(true);
       setActionError(null);
       startReplan(planId, request)
@@ -378,14 +401,12 @@ function Document({
   actionError: ActionError | null;
   onReload: () => void;
   onWatchRun: (runId: string) => void;
-  onEdit: (request: Exclude<ReviseRequest, { kind: "replan" }>) => void;
-  onReplan: (request: Extract<ReviseRequest, { kind: "replan" }>) => void;
+  onEdit: (request: Exclude<ReviseRequest, { kind: "replan" | "brief" }>) => void;
+  onReplan: (request: Extract<ReviseRequest, { kind: "replan" | "brief" }>) => void;
   onExit: () => void;
 }): React.ReactElement {
   const { plan } = view;
   const latest = latestRevision(plan);
-  const shape = isAnswered(plan.brief.shape) ? plan.brief.shape.value : null;
-  const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
 
   if (latest === null) {
     return (
@@ -410,6 +431,11 @@ function Document({
       : plan.revisions.find((each) => each.revision === shownRevisionNumber)) ?? latest;
   const isLatest = shownRevision.revision === plan.latestRevision;
   const diff = view.diffs.find((each) => each.revisionId === shownRevision.id);
+  // The shown revision's own brief, not `plan.brief` — after pl-47 a version
+  // can change the dates and the budget, and `plan.brief` is only ever the
+  // first draft's.
+  const shape = isAnswered(shownRevision.brief.shape) ? shownRevision.brief.shape.value : null;
+  const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
 
   return (
     <section className="panel plan">
@@ -505,11 +531,19 @@ function Document({
       )}
 
       {isLatest ? (
-        <ReplanForm
-          days={shownRevision.days}
-          busy={writeBusy}
-          onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
-        />
+        <>
+          <ReplanForm
+            days={shownRevision.days}
+            busy={writeBusy}
+            onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
+          />
+          <BriefForm
+            key={latest.id}
+            brief={currentBrief(plan)}
+            busy={writeBusy}
+            onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
+          />
+        </>
       ) : (
         <p className="notice" role="note">
           Editing works on the latest version. Restore this one to bring it back, or open the latest
@@ -1028,8 +1062,37 @@ function RouteReading({ reading }: { reading: readonly Source[] }): React.ReactE
  * **The caption is `shownRevision.reason`, and it is not repeated here** — the
  * crumb line above already renders it. What is not shown anywhere else is a
  * re-plan's own `note`, so that is what this section adds, marked plainly as
- * what the user wrote and not as the tool's own words.
+ * what the user wrote and not as the tool's own words. A `brief` operation
+ * (pl-47/pl-48) adds a caption of its own, beside the note rather than
+ * inside it: both ends of whichever slot changed, in `describeDates`'s and
+ * `describeBudget`'s words (`wizard/format.ts`) — never here, so the brief and
+ * the wizard say the same thing about the same value.
  */
+function BriefCaption({
+  operation,
+}: {
+  operation: Extract<RevisionOperation, { kind: "brief" }>;
+}): React.ReactElement {
+  return (
+    <>
+      {operation.dates !== null && (
+        <p className="hint">
+          Dates: {describeDates(operation.dates.from)} → {describeDates(operation.dates.to)}
+        </p>
+      )}
+      {operation.budget !== null && (
+        <p className="hint">
+          Budget:{" "}
+          {isAnswered(operation.budget.from)
+            ? describeBudget(operation.budget.from.value)
+            : "not given"}{" "}
+          → {describeBudget(operation.budget.to)}
+        </p>
+      )}
+    </>
+  );
+}
+
 function Diff({
   diff,
   candidates,
@@ -1054,6 +1117,7 @@ function Diff({
           <span className="mark">What was asked</span> “{note}”
         </p>
       )}
+      {operation.kind === "brief" && <BriefCaption operation={operation} />}
       <DiffList label="Added" entries={added} candidates={candidates} />
       <DiffList label="Removed" entries={removed} candidates={candidates} />
       <DiffList label="Moved" entries={moved} candidates={candidates} />
@@ -1217,6 +1281,196 @@ function ReplanForm({
           onClick={submit}
         >
           Re-plan these days
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** What this form can honestly build; `Document` supplies `baseRevisionId`. */
+type BriefDraft = Omit<Extract<ReviseRequest, { kind: "brief" }>, "baseRevisionId">;
+
+function datesEqual(a: TripDates, b: TripDates): boolean {
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case "exact":
+      return b.kind === "exact" && a.departure === b.departure && a.return === b.return;
+    case "window":
+      return (
+        b.kind === "window" &&
+        a.earliest === b.earliest &&
+        a.latest === b.latest &&
+        a.nights === b.nights
+      );
+    case "open":
+      return b.kind === "open" && a.nights === b.nights;
+  }
+}
+
+function budgetEqual(a: TripBudget, b: TripBudget): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === "amount"
+    ? b.kind === "amount" &&
+        a.currency === b.currency &&
+        a.amount === b.amount &&
+        a.basis === b.basis
+    : b.kind === "band" && a.band === b.band;
+}
+
+/**
+ * Change the dates or the budget of the plan itself, on the latest revision
+ * only — pl-47's edit reaching the page.
+ *
+ * **Seeded from `currentBrief(plan)`, never from `plan.brief`** (`Document`'s
+ * caller passes it): after a dates or budget edit, `plan.brief` is only ever
+ * the first draft's, and `currentBrief` is pl-47's own rule for "the brief as
+ * it stands now". An answered slot seeds `DatesEntry`/`BudgetEntry`'s own
+ * `initial`; a declined or unasked budget seeds `null` — the same rule
+ * `QuestionField` follows in the wizard.
+ *
+ * **Sends only what actually changed, compared by value rather than by
+ * whether the control was touched.** `DatesEntry` and `BudgetEntry` call
+ * `onChange` only from a user interaction, so a slot nobody touched never
+ * reaches `draftDates`/`draftBudget` at all; and a slot touched back to its
+ * seeded value compares equal by `datesEqual`/`budgetEqual` and is dropped
+ * too. Sending an unchanged slot is not harmless — a budget resent alongside
+ * a dates change turns a dates edit into a full re-pack (pl-47's Trap; pl-48's
+ * own Trap repeats it).
+ *
+ * **A touched control left incomplete or invalid disables Save, rather than
+ * being read as "unchanged".** `datesTouched`/`budgetTouched` are separate
+ * from the draft itself for exactly this: a control's `null` means both "never
+ * opened" and "opened and not finished" (an amount typed beside an empty
+ * currency, a seeded amount cleared to nothing), and collapsing the two would
+ * let Save quietly drop the incomplete slot while still saving its sibling's
+ * change — the wizard's own `null`-disables-Next rule, applied to Save
+ * instead of Next (gate 1's finding on this ticket).
+ *
+ * **Keyed by the caller on the latest revision's id.** The same convention
+ * `QuestionField` uses for a question id: a write that leaves `PlanView` on
+ * screen with a different latest revision (a restore, a move, a remove) must
+ * reseed this form rather than keep stale local state pointed at a brief that
+ * is no longer current.
+ *
+ * **An unanswered budget, once touched, can get stuck disabled for good —
+ * gate 2's finding, closed by the owner's own option (a).** `BudgetEntry` has
+ * no control that emits "unanswered": every interaction is either `null`
+ * (incomplete) or a complete answer, so once `budgetTouched` is `true` there
+ * is no way back to the "never touched" reading that lets a dates-only change
+ * save. "Leave the budget as it was" clears `budgetTouched` and remounts
+ * `BudgetEntry` under a fresh key — the same trick the whole form's own key
+ * (below, keyed on the latest revision's id) already plays one level up,
+ * done here at the one control that can dead-end.
+ */
+function BriefForm({
+  brief,
+  busy,
+  onSubmit,
+}: {
+  brief: TripBrief;
+  busy: boolean;
+  onSubmit: (request: BriefDraft) => void;
+}): React.ReactElement {
+  const seededDates = isAnswered(brief.dates) ? brief.dates.value : null;
+  const seededBudget = isAnswered(brief.budget) ? brief.budget.value : null;
+
+  const [draftDates, setDraftDates] = useState<TripDates | null>(null);
+  const [draftBudget, setDraftBudget] = useState<TripBudget | null>(null);
+  // Separate from the draft itself: a control's `null` means "incomplete or
+  // invalid" as much as it means "never touched", and the two must not
+  // collapse into one state. Without `touched`, typing an amount beside an
+  // empty currency reads exactly like never opening "A figure" at all, and a
+  // Save that only sends the sibling slot's change looks like it succeeded.
+  const [datesTouched, setDatesTouched] = useState(false);
+  const [budgetTouched, setBudgetTouched] = useState(false);
+  // Bumped only by "Leave the budget as it was" — a fresh key remounts
+  // `BudgetEntry`, which re-seeds its own internal fields from `initial` the
+  // same way it does on the form's first mount.
+  const [budgetResetKey, setBudgetResetKey] = useState(0);
+  // Where focus goes after a reset — the button it started on unmounts the
+  // moment `budgetStuck` clears, and a browser drops focus to `<body>`
+  // rather than choosing anything else on the page.
+  const budgetGroupRef = useRef<HTMLDivElement>(null);
+
+  const resetBudget = (): void => {
+    setBudgetTouched(false);
+    setDraftBudget(null);
+    setBudgetResetKey((key) => key + 1);
+    budgetGroupRef.current?.focus();
+  };
+
+  const changedDates =
+    draftDates !== null && (seededDates === null || !datesEqual(draftDates, seededDates));
+  const changedBudget =
+    draftBudget !== null && (seededBudget === null || !budgetEqual(draftBudget, seededBudget));
+  // The wizard's own rule for a composite control's `null` (`controls.tsx`'s
+  // `QuestionField` doc comment): it disables the button rather than letting
+  // "half filled" pass as "unanswered". Here that means Save, not Next.
+  //
+  // `budgetStuck` is its own name because it is also the one way out: an
+  // unanswered budget touched into this state has no control that emits
+  // "unanswered" again, so "Leave the budget as it was" (below) is what
+  // clears it — see the doc comment above.
+  const budgetStuck = budgetTouched && draftBudget === null;
+  const incomplete = (datesTouched && draftDates === null) || budgetStuck;
+
+  const submit = (): void => {
+    onSubmit({
+      kind: "brief",
+      ...(changedDates ? { dates: draftDates! } : {}),
+      ...(changedBudget ? { budget: draftBudget! } : {}),
+    });
+  };
+
+  return (
+    <fieldset className="brief-edit">
+      <legend>Change the dates or budget</legend>
+
+      <ul className="hint">
+        <li>A longer trip plans the days it adds.</li>
+        <li>
+          A shorter trip drops days from the end, with what is on them — “Restore this version”
+          brings them back.
+        </li>
+        <li>A pinned item on a dropped day stops the change.</li>
+        <li>A budget change re-packs every day except what is pinned.</li>
+      </ul>
+
+      <DatesEntry
+        initial={seededDates === null ? null : { kind: "dates", value: seededDates }}
+        onChange={(value) => {
+          setDatesTouched(true);
+          setDraftDates(value !== null && value.kind === "dates" ? value.value : null);
+        }}
+      />
+      <div ref={budgetGroupRef} tabIndex={-1}>
+        <BudgetEntry
+          key={budgetResetKey}
+          initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
+          onChange={(value) => {
+            setBudgetTouched(true);
+            setDraftBudget(value !== null && value.kind === "budget" ? value.value : null);
+          }}
+        />
+      </div>
+      {budgetStuck && (
+        <p className="hint">
+          Save is waiting on the budget — finish it, or{" "}
+          <button type="button" onClick={resetBudget}>
+            Leave the budget as it was
+          </button>
+          .
+        </p>
+      )}
+
+      <div className="actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || incomplete || !(changedDates || changedBudget)}
+          onClick={submit}
+        >
+          Save changes
         </button>
       </div>
     </fieldset>

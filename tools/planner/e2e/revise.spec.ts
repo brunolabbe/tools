@@ -195,4 +195,31 @@ test("re-plan, move, reload, restore, reload — the plan keeps every version", 
     plan.locator("section.diff").getByRole("heading", { level: 4, name: "Moved" }),
   ).toBeVisible();
   await expect(plan.locator("section.diff li", { hasText: moved })).toBeVisible();
+
+  // --- Change the dates: extend the trip by one night (pl-48) --------------
+  // Through the Nights field, never a typed literal date. `draftAPlan`
+  // answers the dates question in `open` mode (`intake-walk.ts`, "the one
+  // that needs no invented date"), so the plan's dates are `open` and
+  // `DatesEntry` shows Nights and no date inputs. This is a step in this
+  // walk, not a second spec — the suite's path and spec count do not change.
+  const briefFieldset = plan.getByRole("group", { name: "Change the dates or budget" });
+  const nights = briefFieldset.getByLabel("Nights");
+  const nightsBefore = Number(await nights.inputValue());
+  const dayCountBefore = await dayArticles(page).count();
+  await nights.fill(String(nightsBefore + 1));
+  await briefFieldset.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(page.getByRole("heading", { name: "Done", exact: true })).toBeVisible({
+    timeout: RUN_TIMEOUT,
+  });
+  await page.getByRole("button", { name: "Read the plan" }).click();
+  await expect(plan).toBeVisible();
+  await expect(plan.locator("p.crumb")).toContainText("Version 5 of 5");
+  await expect(dayArticles(page)).toHaveCount(dayCountBefore + 1);
+
+  // --- The reload -------------------------------------------------------
+  await reopenFromTheList(page, title);
+
+  await expect(plan.locator("p.crumb")).toContainText("Version 5 of 5");
+  await expect(dayArticles(page)).toHaveCount(dayCountBefore + 1);
 });
