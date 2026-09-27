@@ -11,15 +11,11 @@
  * where no socket should be opened at all.
  */
 
-import fsp from "node:fs/promises";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
-import nodePath from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, ProbeResponse, ProbeResult } from "@downloader/contract";
-import { Storage } from "@downloader/engine";
 import { afterEach, describe, expect, test } from "vitest";
 import { createGuardedFetch } from "../src/guarded-fetch.ts";
 import { createLogger } from "../src/logger.ts";
@@ -30,14 +26,13 @@ import { ConcurrencyGate } from "@webtools/core/rate-limit";
 import {
   captureThumbnail,
   limitFrameGrabs,
-  persistThumbnail,
-  readPersistedThumbnail,
   ThumbnailStore,
   withThumbnailPath,
 } from "../src/thumbnails.ts";
 import type { CapturedThumbnail, FrameGrabber, FrameGrabRequest } from "../src/thumbnails.ts";
 import {
   createHarness,
+  openLink,
   probeResult,
   SOURCE_URL,
   StubResolver,
@@ -368,64 +363,6 @@ describe("ThumbnailStore", () => {
   });
 });
 
-describe("the copy that goes on disk", () => {
-  let root: string | undefined;
-
-  afterEach(async () => {
-    if (root !== undefined) await fsp.rm(root, { recursive: true, force: true });
-    root = undefined;
-  });
-
-  async function storage(): Promise<Storage> {
-    root = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "downloader-thumb-"));
-    const store = new Storage({ storageDir: root, fileRetentionHours: 6 });
-    await store.init();
-    return store;
-  }
-
-  test("the bytes land inside the job's own out directory, which is what the sweep deletes", async () => {
-    // The whole retention design in one assertion: the path is under
-    // `out/<jobId>/`, so `Storage.removeJob` and `Storage.collectGarbage` both
-    // already take it and nothing new has to know when to.
-    const store = await storage();
-    const written = await persistThumbnail({
-      storage: store,
-      jobId: "job-7",
-      thumbnail: { contentType: "image/gif", bytes: GIF },
-    });
-
-    expect(written).toBe(nodePath.join(store.outDir("job-7"), "preview.gif"));
-    expect(await readPersistedThumbnail(store, written)).toEqual(GIF);
-
-    await store.removeJob("job-7");
-    expect(await readPersistedThumbnail(store, written)).toBeNull();
-  });
-
-  test("a path outside the storage root is refused rather than answered", async () => {
-    // A row naming somewhere else was not written by this process, so "no
-    // preview" would be the wrong answer — it would hide the bug. `files.ts`
-    // re-confines its own recorded path at the point of use for the same reason.
-    const store = await storage();
-    const outside = nodePath.join(store.root, "..", "escape.gif");
-    await expect(readPersistedThumbnail(store, outside)).rejects.toMatchObject({
-      code: "INTERNAL",
-    });
-  });
-
-  test("a content type outside the allowlist is refused rather than given an extension", async () => {
-    // Unreachable through `captureThumbnail`, which allowlists before storing.
-    // Asserted so the two lists cannot drift into writing an unnamed file.
-    const store = await storage();
-    await expect(
-      persistThumbnail({
-        storage: store,
-        jobId: "job-8",
-        thumbnail: { contentType: "image/svg+xml", bytes: GIF },
-      }),
-    ).rejects.toMatchObject({ code: "INTERNAL" });
-  });
-});
-
 /**
  * dl-56: a frame grabbed from the stream, for a source that names no image.
  *
@@ -637,7 +574,8 @@ describe("the frame fallback, when the source names no image (dl-56)", () => {
         url: ROUTES.jobs,
         payload: { url: SOURCE_URL },
       });
-      const { id } = (response.json() as JobResponse).job;
+      const { id, link } = (response.json() as JobResponse).job;
+      openLink(harness, { link });
       const finished = await waitFor(
         () => harness?.app.context.store.get(id) as Job,
         (job) => job.status === "completed" || job.status === "failed",

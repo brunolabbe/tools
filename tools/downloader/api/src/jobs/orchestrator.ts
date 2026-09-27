@@ -1,5 +1,7 @@
 /**
- * The job pipeline: `queued → probing → downloading → muxing → completed`.
+ * The job pipeline: `queued → probing → downloading → completed`, run on the
+ * request of the visitor who opened the job's link, with the file streamed to
+ * that visitor as ffmpeg produces it and no copy kept (dl-53).
  *
  * Three rules shape everything here, and each comes from a specific finding in
  * `tools/downloader/docs/00-ANALYSIS.md`:
@@ -16,6 +18,10 @@
  * 3. **DRM stops here.** `probe.drm.protected` is terminal. No licence
  *    acquisition, no key extraction, no "try anyway".
  *
+ * 4. **Nothing is retried after the first byte** (dl-53). A re-probe before it
+ *    is free; after it there is no restarting a response that already holds
+ *    half a file, so a later failure ends the job with its code.
+ *
  * The FSM lives in `JobStore.transition`, which rejects illegal moves. This
  * file decides *which* transitions to ask for; it does not get to bend them.
  */
@@ -31,7 +37,7 @@ import type {
   RequestContext,
   ResolveOptions,
 } from "@downloader/contract";
-import type { DownloadEngine } from "@downloader/engine";
+import type { DownloadEngine, MediaStream } from "@downloader/engine";
 import type { ResolverRegistry } from "@downloader/resolvers";
 import { initialProgress } from "../db/job-store.ts";
 import type { JobStore } from "../db/job-store.ts";
@@ -41,10 +47,9 @@ import type { AppLogger } from "../logger.ts";
 import { probeForClient } from "../probe-out.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
-import { captureThumbnail, persistThumbnail, withThumbnailPath } from "../thumbnails.ts";
-import type { CapturedThumbnail, FrameGrabber, ThumbnailStore } from "../thumbnails.ts";
+import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
+import type { FrameGrabber, ThumbnailStore } from "../thumbnails.ts";
 import type { JobEventHub } from "./events.ts";
-import { createFileToken } from "./tokens.ts";
 import { chooseVariant } from "./variant-selection.ts";
 
 export interface OrchestratorOptions {
@@ -55,15 +60,12 @@ export interface OrchestratorOptions {
   events: JobEventHub;
   logger: AppLogger;
   probeTimeoutMs: number;
-  fileRetentionHours: number;
   /**
    * The loopback egress proxy the resolver tiers fetch through, not the
    * operator's — the browser and yt-dlp tiers are subprocesses and this is the
    * only check that reaches them. See `egress-proxy.ts` and dl-12.
    */
   proxyUrl?: string | undefined;
-  /** Builds the `downloadUrl` on a `JobResult`. Injected so routes own the path. */
-  fileUrl: (token: string) => string;
   /** Where a captured preview image is held. See `thumbnails.ts`. */
   thumbnails: ThumbnailStore;
   /** The redirect-re-checking fetch the preview capture uses. */
@@ -81,13 +83,12 @@ export interface OrchestratorOptions {
  * How many times a job re-probes and retries after a *retryable* failure.
  *
  * One. The brief says "on `VARIANT_GONE`, re-probe once and retry", and the
- * same reasoning covers `DOWNLOAD_FAILED` during `downloading`: a manifest
- * download is ffmpeg doing the fetching, so any failure it has is a
- * `DOWNLOAD_FAILED` (`tools/downloader/engine/src/download/manifest.ts`) — an
- * expiry included, because ffmpeg reports HTTP status only as text on stderr.
- * The engine's own fetches classify better and raise `VARIANT_GONE`
- * (`tools/downloader/engine/src/download/http.ts`). Refusing to retry
+ * same reasoning covers `DOWNLOAD_FAILED` during `downloading`: ffmpeg does
+ * all the fetching since dl-53, so any failure it has is a `DOWNLOAD_FAILED`
+ * (`tools/downloader/engine/src/stream.ts`) — an expiry included, because
+ * ffmpeg reports HTTP status only as text on stderr. Refusing to retry
  * `DOWNLOAD_FAILED` would therefore leave the commonest expiry case unhandled.
+ * Only before the first byte: see rule 4 above.
  *
  * Not more than one, because if a second fresh probe also produces dead URLs
  * the problem is not expiry and looping would just burn a browser probe per
@@ -107,9 +108,19 @@ const MAX_REPROBE_RETRIES = 1;
  * is legal, `MAX_REPROBE_RETRIES` says how often it may be made.
  */
 
-/** Per-run correlation, carried into the job's logger. See `registerRequestLogging`. */
+/**
+ * What a run needs from the request that started it. See `registerRequestLogging`
+ * for `requestId`, and `routes/files.ts` for `deliver`.
+ */
 export interface RunContext {
   requestId?: string | undefined;
+  /**
+   * Hands the stream to the visitor, at its first byte (dl-53): sends the
+   * headers, pipes the body, and resolves once the response has finished or
+   * the connection has gone. Absent in a run with nobody to deliver to, which
+   * reads the stream to its end and discards it — tests use that.
+   */
+  deliver?: ((media: MediaStream) => Promise<void>) | undefined;
 }
 
 /** Codes where a *fresh probe* is a plausible fix, as opposed to plain retrying. */
@@ -130,7 +141,7 @@ export class JobOrchestrator {
    * job stuck in `downloading` forever with nothing to explain it.
    */
   async run(jobId: string, signal: AbortSignal, context: RunContext = {}): Promise<void> {
-    const { store, events, logger } = this.#options;
+    const { events, logger } = this.#options;
     // The request id rides along so every line this job writes — minutes later,
     // on a queue worker, with the HTTP call long gone — still points back at
     // the call that created it.
@@ -141,13 +152,15 @@ export class JobOrchestrator {
 
     try {
       for (let attempt = 0; ; attempt++) {
+        const progress = { started: false };
         try {
           // oxlint-disable-next-line no-await-in-loop
-          await this.#attempt(jobId, signal, attempt, log);
+          await this.#attempt(jobId, signal, attempt, log, context, progress);
           return;
         } catch (error: unknown) {
           const appError = AppError.from(error);
           const canRetry =
+            !progress.started &&
             attempt < MAX_REPROBE_RETRIES &&
             !signal.aborted &&
             REPROBE_WORTHY.has(appError.code) &&
@@ -159,17 +172,8 @@ export class JobOrchestrator {
         }
       }
     } catch (error: unknown) {
-      this.#recordFailure(jobId, error, log);
+      this.#recordFailure(jobId, error, signal, log);
     } finally {
-      // A canceled or failed job must leave nothing on disk. The engine already
-      // cleans up its own tmp/out on throw; this covers the paths where we
-      // failed before or after the engine ran.
-      const finished = store.find(jobId);
-      if (finished !== null && finished.status !== "completed") {
-        await this.#options.engine.removeJob(jobId).catch((error: unknown) => {
-          log.warn("could not clean up after a non-completed job", { error: String(error) });
-        });
-      }
       events.emit({ type: "heartbeat", at: this.#now().toISOString() });
     }
   }
@@ -179,6 +183,8 @@ export class JobOrchestrator {
     signal: AbortSignal,
     attempt: number,
     log: AppLogger,
+    context: RunContext,
+    progress: { started: boolean },
   ): Promise<void> {
     const { store, events, engine, guard } = this.#options;
     throwIfAborted(signal);
@@ -193,9 +199,6 @@ export class JobOrchestrator {
     // not progress towards this one, and leaving them would show a percentage
     // that no longer refers to anything being downloaded.
     //
-    // The fallback is for a failure that surfaced once `muxing` had begun —
-    // there is no back-edge from there, so that job re-probes in place as
-    // every retry used to.
     const attempts = attempt + 1;
     if (canTransition(job.status, "probing")) {
       const reset = initialProgress("probing");
@@ -269,13 +272,13 @@ export class JobOrchestrator {
     // reason `withoutEgressProxy` is applied in `#probe`.
     events.probed(jobId, probeForClient(withThumbnailPath(probe, thumbnailPath)));
 
-    // --- downloading / muxing -------------------------------------------
+    // --- downloading ----------------------------------------------------
     throwIfAborted(signal);
     if (canTransition(store.get(jobId).status, "downloading")) {
       this.#transition(jobId, "downloading");
     }
 
-    const outcome = await engine.download({
+    const media = await engine.stream({
       jobId,
       variant,
       requestContext: probe.requestContext,
@@ -285,31 +288,43 @@ export class JobOrchestrator {
       subtitles: probe.subtitles,
       options,
       signal,
-      onProgress: (progress: JobProgress) => {
-        this.#onProgress(jobId, progress);
-      },
-      onStage: (stage) => {
-        // The engine reports which phase it is in; the FSM stays ours.
-        if (stage === "muxing") this.#transition(jobId, "muxing");
+      onProgress: (value: JobProgress) => {
+        this.#onProgress(jobId, value);
       },
     });
-
+    // The first byte exists. From here a failure is the job's end, not a
+    // reason to re-probe: the visitor already holds the start of this file.
+    progress.started = true;
+    if (context.deliver === undefined) {
+      media.body.resume();
+    } else {
+      await context.deliver(media);
+    }
+    // A connection that went away before the last byte is the visitor's
+    // choice, and the signal carries it; see `routes/files.ts`.
+    throwIfAborted(signal);
+    const outcome = await media.done;
     throwIfAborted(signal);
 
     // --- completed -------------------------------------------------------
-    const result = this.#publish(jobId, outcome);
-    // Before the transition, so a client that sees `completed` is looking at a
-    // preview that already outlives the in-memory store. The bytes are the ones
-    // captured above rather than a re-read of that store, because a download
-    // may well have taken longer than `THUMBNAIL_TTL_MS` (dl-44).
-    await this.#persist(jobId, captured, log);
+    const result: JobResult = {
+      filename: media.filename,
+      sizeBytes: outcome.bytes,
+      container: media.container,
+      durationSec: outcome.durationSec,
+    };
     const done = store.transition(
       jobId,
       "completed",
       {
         result,
         error: null,
-        progress: { ...store.get(jobId).progress, stage: "completed", percent: 100 },
+        progress: {
+          ...store.get(jobId).progress,
+          stage: "completed",
+          percent: 100,
+          downloadedBytes: outcome.bytes,
+        },
       },
       this.#iso(),
     );
@@ -318,36 +333,9 @@ export class JobOrchestrator {
     log.info("job completed", {
       sizeBytes: result.sizeBytes,
       container: result.container,
-      transcodes: outcome.transcodes.length,
+      transcodes: media.transcodes.length,
       attempts: done.attempts,
     });
-  }
-
-  /**
-   * Writes the captured preview beside the finished file, and records where.
-   *
-   * **Never fails the job.** A download that produced a file is complete
-   * whatever happened to a decorative image, and the only cost of the write
-   * failing is that the preview goes back to being a ten-minute one. Logged at
-   * `warn` rather than `debug` because, unlike a capture failure, this is our
-   * disk and our bug rather than a hostile page.
-   */
-  async #persist(jobId: string, captured: CapturedThumbnail | null, log: AppLogger): Promise<void> {
-    if (captured === null) return;
-    const { store, engine } = this.#options;
-    try {
-      const path = await persistThumbnail({
-        storage: engine.storage,
-        jobId,
-        thumbnail: captured.thumbnail,
-      });
-      store.saveThumbnail(
-        { token: captured.token, jobId, path, contentType: captured.thumbnail.contentType },
-        this.#iso(),
-      );
-    } catch (error: unknown) {
-      log.warn("could not persist the preview image beside the file", { error: String(error) });
-    }
   }
 
   async #probe(sourceUrl: string, signal: AbortSignal, log: AppLogger): Promise<ProbeResult> {
@@ -371,43 +359,6 @@ export class JobOrchestrator {
       requestContext: probe.requestContext,
     });
     return probe;
-  }
-
-  /** Mints the capability token and turns an engine outcome into a `JobResult`. */
-  #publish(
-    jobId: string,
-    outcome: {
-      path: string;
-      filename: string;
-      sizeBytes: number;
-      container: string;
-      durationSec: number | null;
-    },
-  ): JobResult {
-    const { store, fileUrl, fileRetentionHours } = this.#options;
-    const expiresAt = new Date(
-      this.#now().getTime() + fileRetentionHours * 3_600_000,
-    ).toISOString();
-    const token = createFileToken();
-    store.saveToken(
-      {
-        token,
-        jobId,
-        path: outcome.path,
-        filename: outcome.filename,
-        sizeBytes: outcome.sizeBytes,
-        expiresAt,
-      },
-      this.#iso(),
-    );
-    return {
-      filename: outcome.filename,
-      sizeBytes: outcome.sizeBytes,
-      container: outcome.container,
-      durationSec: outcome.durationSec,
-      downloadUrl: fileUrl(token),
-      expiresAt,
-    };
   }
 
   #onProgress(jobId: string, progress: JobProgress): void {
@@ -435,7 +386,7 @@ export class JobOrchestrator {
     this.#options.store.patch(jobId, { error: null }, this.#iso());
   }
 
-  #recordFailure(jobId: string, error: unknown, log: AppLogger): void {
+  #recordFailure(jobId: string, error: unknown, signal: AbortSignal, log: AppLogger): void {
     const { store, events } = this.#options;
     const appError = AppError.from(error);
     const canceled = appError.code === "JOB_CANCELED" || appError.code === "CANCELED";
@@ -445,8 +396,15 @@ export class JobOrchestrator {
       if (canceled) {
         // `status` is authoritative for cancellation; `error` is populated so a
         // listen-only client has copy. See the note on `Job` in shared/job.ts.
+        // The signal's own reason first: it is the one that says *why* — a
+        // visitor who disconnected (dl-53) — where the engine only knows that
+        // something aborted it.
         const reason =
-          appError.code === "JOB_CANCELED" ? payload : new AppError("JOB_CANCELED").toPayload();
+          signal.reason instanceof AppError && signal.reason.code === "JOB_CANCELED"
+            ? signal.reason.toPayload()
+            : appError.code === "JOB_CANCELED"
+              ? payload
+              : new AppError("JOB_CANCELED").toPayload();
         store.transition(jobId, "canceled", { error: reason }, this.#iso());
         events.status(jobId, "canceled");
         events.canceled(jobId, reason);

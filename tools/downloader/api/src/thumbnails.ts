@@ -55,37 +55,25 @@
  * Fetching where the credentials already are is the only shape that serves the
  * probe panel and the downloads list from one code path.
  *
- * ## Why there are two copies, and which owns what (dl-44)
+ * ## One copy, in memory (dl-53)
  *
- * The in-memory store below is the **probe-only** path: a probe that has not
- * become a job — or has not finished being one — has no file on disk to keep a
- * preview beside, and `/api/thumbnail/:token` has to answer for it anyway. It
- * keeps its ten minutes.
- *
- * A **completed** job gets `persistThumbnail`, which writes the same bytes into
- * that job's `out/<jobId>/` directory. That is the whole of the retention rule:
- * the image is in the directory the retention sweep already deletes at
- * `fileRetentionHours`, so it lives exactly as long as the file it depicts and
- * is unlinked on the same pass. Nothing new has to know when to delete it.
- *
- * The token does not change between the two. `thumbnailPath` still means
- * `/api/thumbnail/<token>` and nothing else, so a client — or a `localStorage`
- * record written before any of this — keeps working across the hand-off and
- * across a restart. The route decides which copy answers; see
- * `routes/thumbnail.ts`.
+ * The store below holds every capture for ten minutes, and that is the only
+ * copy. dl-44 used to write a completed job's preview beside its file in
+ * `out/<jobId>/`, so the downloads list kept a picture for as long as the file
+ * lived. dl-53 removed the stored files, and the owner chose on 2026-09-27 not
+ * to keep the image on disk either: a frame grabbed from a video nobody has
+ * checked is a copy of that video's content. A preview therefore lasts ten
+ * minutes, after which the downloads list renders the job without one — the
+ * case it already renders for any source that named no image.
  *
  * Everything here is decorative and every failure is non-fatal. Nothing in this
- * file throws into the probe path, and `persistThumbnail`'s caller must treat a
- * failure the same way: a download that succeeded is not undone by a picture
- * that could not be written.
+ * file throws into the probe path.
  */
 
 import { randomBytes } from "node:crypto";
-import fs from "node:fs/promises";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { ProbeResult, RequestContext } from "@downloader/contract";
-import { assertRealPathInside, choosePreviewVariant, grabPreviewFrame } from "@downloader/engine";
-import type { Storage } from "@downloader/engine";
+import { choosePreviewVariant, grabPreviewFrame } from "@downloader/engine";
 import type { MediaVariant } from "@downloader/contract";
 import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { AppLogger } from "./logger.ts";
@@ -181,9 +169,8 @@ export interface ThumbnailStoreOptions {
 /**
  * A bounded, TTL'd, in-memory store, modelled on `ProbeCache`.
  *
- * Deliberately **not** `STORAGE_DIR`: that directory has a retention sweep and
- * a token table built for multi-gigabyte media, and a preview image that
- * outlives the process is worth nothing.
+ * Deliberately never on disk: since dl-53 nothing here is, and a preview image
+ * that outlives the process is worth nothing.
  */
 export class ThumbnailStore {
   readonly #entries = new Map<string, Entry>();
@@ -468,8 +455,6 @@ export interface FrameGrabberOptions {
   /** `ffmpegEgress.tlsCaFile` — the other half of the same pair. */
   tlsCaFile?: string | undefined;
   tlsVerify: boolean;
-  /** The storage `tmp/` root. */
-  tmpRoot: string;
   logger: AppLogger;
   timeoutMs?: number;
   maxBytes?: number;
@@ -491,103 +476,11 @@ export function createFrameGrabber(options: FrameGrabberOptions): FrameGrabber {
       proxyUrl: options.proxyUrl,
       tlsVerify: options.tlsVerify,
       ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
-      tmpRoot: options.tmpRoot,
       timeoutMs: options.timeoutMs ?? FRAME_GRAB_TIMEOUT_MS,
       maxOutputBytes: options.maxBytes ?? MAX_THUMBNAIL_BYTES,
       signal,
       logger: options.logger,
     });
-}
-
-/**
- * Extension per allowed content type.
- *
- * The set is closed — it is `ALLOWED_CONTENT_TYPES` — so this is a total map and
- * not a guess about what an origin said. The extension is cosmetic: the served
- * `Content-Type` comes from the recorded row, never from the name on disk.
- */
-const PERSISTED_EXTENSIONS: Readonly<Record<string, string>> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-};
-
-/**
- * The stem the persisted copy takes inside `out/<jobId>/`.
- *
- * It cannot collide with the media file the engine puts in the same directory:
- * that name always ends in a container extension (`.mp4`, `.mkv`, `.webm`,
- * `.m4a` — `outputExtension` in the engine), and none of those is in
- * `PERSISTED_EXTENSIONS`. A page titled "preview" produces `preview.mp4`.
- */
-const PERSISTED_THUMBNAIL_STEM = "preview";
-
-export interface PersistThumbnailOptions {
-  /** The engine's storage, so the path is built and confined by its own rules. */
-  storage: Storage;
-  jobId: string;
-  thumbnail: StoredThumbnail;
-}
-
-/**
- * Writes a captured preview into the job's own output directory, and returns
- * the absolute path it was written to.
- *
- * **Beside the file on purpose.** `out/<jobId>/` is what the retention sweep
- * deletes at `fileRetentionHours` — both through `Storage.removeJob`, which the
- * API calls for an expired token, and through `Storage.collectGarbage`, which
- * removes the whole directory by age. Putting the image there is the entire
- * implementation of "the image goes when the file goes"; there is no second
- * rule to keep in step with the first, which is the one thing a directory of
- * its own would have cost.
- *
- * Throws on an I/O failure rather than swallowing it — unlike `captureThumbnail`,
- * this one has a caller that knows what to do (log it, keep the download).
- */
-export async function persistThumbnail(options: PersistThumbnailOptions): Promise<string> {
-  const { storage, jobId, thumbnail } = options;
-  const extension = PERSISTED_EXTENSIONS[thumbnail.contentType];
-  if (extension === undefined) {
-    // Unreachable: the type was checked against the allowlist before the bytes
-    // were kept. Loud rather than a mystery file, if the two ever drift apart.
-    throw new AppError("INTERNAL", "Refusing to persist a preview of an unknown type.", {
-      details: { contentType: thumbnail.contentType },
-    });
-  }
-
-  await storage.createOutDir(jobId);
-  // `outPath` sanitises and confines textually; `assertRealPathInside` repeats
-  // the check after symlinks, for the same reason `files.ts` does it at the
-  // moment of use. The name is a constant, but the confinement is about the
-  // *directory*, whose segment comes from a job id.
-  const target = storage.outPath(jobId, `${PERSISTED_THUMBNAIL_STEM}${extension}`);
-  await assertRealPathInside(storage.root, target);
-  await fs.writeFile(target, thumbnail.bytes);
-  return target;
-}
-
-/**
- * Reads a persisted preview back.
- *
- * Returns `null` when the bytes are not there — which is the ordinary case once
- * the retention sweep has run, and must read as "gone" rather than as an error.
- *
- * A path *outside* the storage root is not that case, and it throws: the row
- * was written by this process, so a row naming somewhere else is a bug or a
- * tampered database, and `/api/files/:token` treats its own equivalent the same
- * way rather than quietly answering "no".
- */
-export async function readPersistedThumbnail(
-  storage: Storage,
-  filePath: string,
-): Promise<Buffer | null> {
-  await assertRealPathInside(storage.root, filePath);
-  try {
-    return await fs.readFile(filePath);
-  } catch {
-    return null;
-  }
 }
 
 /**

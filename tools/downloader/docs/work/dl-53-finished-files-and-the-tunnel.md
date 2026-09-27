@@ -85,6 +85,34 @@ The alternatives, so they are not re-opened as oversights:
 - **Single-use links.** A link starts a new probe and a new ffmpeg each time it
   is opened, so a shared link is a second download, not a copy.
 
+## Decisions — answered 2026-09-27 by the owner, not open
+
+Raised by the builder after Build steps 1 and 2, before the contract was
+touched, and put to the owner by the orchestrator. Every answer is the
+builder's recommendation, accepted — owner, 2026-09-27, via the orchestrator.
+
+1. **Where the single-use link lives.** (a) a new `JobLink { url, expiresAt }`
+   and an optional `Job.link`, null once opened or expired, with `JobResult`
+   losing `downloadUrl` and `expiresAt`; (b) the link only on the `POST`
+   response, kept by the web app on its own. **Chose (a).**
+2. **The `muxing` state.** (a) removed, with a migration moving `muxing` rows
+   to `failed`; (b) kept as a state nothing enters. **Chose (a).**
+3. **A used or expired link.** (a) `410` with core's `FILE_EXPIRED`, the
+   downloader's message reworded; (b) a new downloader code, `LINK_USED`.
+   **Chose (a).**
+4. **`DISK_FULL`.** (a) the downloader stops raising it and it stays in core,
+   with no core edit here; (b) removed from `packages/core`. **Chose (a).**
+5. **dl-44's thumbnails on disk.** (a) no longer saved, keeping dl-29's
+   ten-minute in-memory preview; (b) moved to a directory of their own with its
+   own retention. **Chose (a).** This reverses what dl-44 shipped.
+6. **A `GET` that finds no free job slot.** (a) waits in line, capped so the
+   wait plus the probe timeout stays under 100 s, then `429` with
+   `Retry-After`; (b) refused at once with `429`; (c) waits with no cap.
+   **Chose (a).**
+7. **How long a link lives.** (a) a fixed fifteen minutes, not a setting, and
+   an unopened link expires its job `queued → canceled`, reason
+   `link-expired`; (b) a setting, `DOWNLOAD_LINK_TTL_MINUTES`. **Chose (a).**
+
 ## Build
 
 **Contract first.** Steps 1 and 5 change `@downloader/contract`: the job
@@ -279,3 +307,87 @@ origin/main` exits 0.
   thumbnails (they are written into the output directory this ticket removes),
   how long a link lives, and whether a `GET` waits for a slot. Steps 3 to 6
   wait on the answers.
+
+- 2026-09-27 — **Steps 3 to 6 built on the owner's seven answers** (the section
+  above). Same branch, on top of `bffbb5c`.
+
+  **What changed, by package.**
+  - **contract**: the diff raised before, applied as proposed — `JobLink` and
+    an optional `Job.link`; `JobResult` without `downloadUrl` and `expiresAt`;
+    no `muxing`; `FILE_EXPIRED`'s copy reworded. `canceled` now says why on
+    `error.details.reason`: `requested`, `disconnected` or `link-expired`.
+  - **engine**: `stream()` is the whole surface. `download()`, `Storage`, the
+    retention sweep, the quota, the disk check, the manual segment path and the
+    engine's own fetch and retry code are deleted, with their suites. The
+    preview-frame grab writes its JPEG to stdout rather than to `tmp/`, which
+    is what lets "nothing on disk" include `STORAGE_DIR/tmp` (a fold-in: the
+    alternative was keeping a tmp directory and an orphan sweep for one JPEG).
+  - **api**: `POST /api/jobs` creates the row and a fifteen-minute link and
+    takes no slot. `GET /api/files/:token` checks the wait line and dl-51's
+    per-client cap **before** spending the link, claims it atomically, waits
+    for a slot for at most `100 s − PROBE_TIMEOUT_MS` (then gives the link back
+    and answers `429`), and sends headers at the first byte. A disconnect
+    before or after it cancels the job, reason `disconnected`. No automatic
+    `HEAD` route. Migration 6 adds `job_links` and `jobs.link_json`, drops
+    `file_tokens` and `thumbnail_files`, and fails `muxing` rows — including
+    a `muxing` left in `progress_json.stage`, which the first draft missed and
+    `schema.test.ts` caught. The sweep now runs every minute and cancels
+    expired links; `report.ts` leaves `canceled` jobs out of the download rate.
+  - **web**: the card offers the link while the job is queued, with its
+    expiry, and says "Saved by your browser. The server kept no copy." when it
+    completes. Progress is bytes sent; `percent` comes from media time when the
+    duration is known and is `null` otherwise, never from a byte total.
+  - **docs**: `01-ARCHITECTURE.md`, `.env.example`, `docs/02-DEPLOYMENT.md`
+    ("Operating it", the accepted risk and its relay fallback, and two
+    sentences elsewhere that named settings this build no longer reads), the
+    e2e download and sniffer specs, `compose.downloader.yaml` and the tool's
+    `CLAUDE.md`.
+
+  **dl-44's shipped behaviour is reversed, on purpose.** A completed job's
+  preview no longer lasts as long as its file, because there is no file: it
+  lasts ten minutes in memory, like a probe's. dl-44's Log says so.
+
+  **What the brief or the first round had wrong.**
+  - **A fresh volume would not boot.** The engine used to create `STORAGE_DIR`
+    for its working files, and the database relied on it. The e2e run failed
+    at boot with `Cannot open database because the directory does not exist`;
+    `createApp` now makes the database's directory, and
+    `api/test/stream-link.test.ts`'s "a fresh volume" case fails without it.
+  - **Deleting the engine's `hls.ts` broke a repo test.**
+    `scripts/test/citations.test.ts` used `hls.ts` as its ambiguous bare
+    basename; it now uses `events.ts`, of which four are tracked.
+  - **Stored files from before this ticket stay on an upgraded volume.** The
+    API reports `out/` and `tmp/` at boot and does not delete them; the
+    deployment doc gives the one command. Deleting them automatically was the
+    alternative, not taken: a recursive delete keyed on a configured path is
+    one wrong `STORAGE_DIR` from deleting something that was never ours.
+
+  **Could have folded in, and did not.** `MUX_FAILED` is now raised by
+  nothing — every stream is one ffmpeg reporting `DOWNLOAD_FAILED` — but
+  removing a code is a contract change nobody decided. `RATE_LIMIT_FILES_PER_MINUTE`'s
+  default of 600 was sized for seeking in a stored file and is now far above
+  what a single-use link needs; lowering it is a setting's default, and the
+  owner's to choose.
+
+  **Evidence.**
+  - `npx vitest run --project downloader`: 1,507 passed, 2 skipped, of 1,509.
+  - `npm test`, after the last change: 3,293 passed, 2 skipped, of 3,295, in
+    179 files. One earlier full run failed the engine's "error after the first
+    byte" case under load — its 1.5 s timeout could land before the first byte.
+    Both such cases now stall only from the third segment on, with a 4 s budget.
+  - `npx playwright test -c tools/downloader/playwright.config.ts`: 9 passed,
+    `download.spec.ts` included — a real browser follows the link, Playwright
+    saves the download, its bytes 4–8 are `ftyp`, the card reaches "Saved by
+    your browser", and a second `GET` on the link answers `410`.
+  - `npx playwright test -c tools/downloader/playwright.sniffer.config.ts`: 1
+    passed.
+  - Mutations, each reverted: no `exposeHeadRoute: false` failed the `HEAD`
+    case; no cancel on `close` failed both disconnect cases and the
+    waiting-visitor case; no `mkdir` failed the fresh-volume case with the
+    production error.
+  - The container-build line is `unproven (gate)`: nothing here builds the
+    image.
+  - The deletions and moves reached 157 more `## Review` citations in 29 merged
+    records; each is pinned to `c87153d`, where it held. `scripts/test/citations.test.ts`
+    keeps its line count, so repo-25 and repo-50 cite it unchanged.
+    `node scripts/citations-gate.mjs --against origin/main` exits 0.

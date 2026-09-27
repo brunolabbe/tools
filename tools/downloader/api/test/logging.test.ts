@@ -217,22 +217,27 @@ describe("correlation, end to end", () => {
     expect(response.headers["x-request-id"]).toBe("req-under-test");
 
     const job = (response.json() as JobResponse).job;
+    // Since dl-53 the work runs on the link's request, so that is the id the
+    // orchestrator's lines carry: the request a failed download happened on.
+    await harness.app.server.inject({
+      method: "GET",
+      url: job.link?.url ?? "",
+      headers: { "x-request-id": "req-link-opened" },
+    });
     await waitFor(
       () => harness?.app.context.store.get(job.id) as Job,
       (current) => current.status === "completed" || current.status === "failed",
       { label: "job to finish" },
     );
 
-    const correlated = lines.filter((line) => line["requestId"] === "req-under-test");
-    // The acceptance line ties the two ids together...
-    expect(correlated.some((line) => line.msg === "job accepted" && line["jobId"] === job.id)).toBe(
+    // The acceptance line ties the creating request to the job...
+    const created = lines.filter((line) => line["requestId"] === "req-under-test");
+    expect(created.some((line) => line.msg === "job accepted" && line["jobId"] === job.id)).toBe(
       true,
     );
-    // ...and the orchestrator's own lines, written after the response was
-    // sent, still carry both.
-    expect(
-      correlated.filter((line) => line["jobId"] === job.id && line.msg !== "job accepted").length,
-    ).toBeGreaterThan(0);
+    // ...and the orchestrator's own lines carry the job and the link's request.
+    const worked = lines.filter((line) => line["requestId"] === "req-link-opened");
+    expect(worked.filter((line) => line["jobId"] === job.id).length).toBeGreaterThan(0);
   });
 
   /**
@@ -287,6 +292,7 @@ describe("correlation, end to end", () => {
       payload: { url: SOURCE_URL },
     });
     const job = (response.json() as JobResponse).job;
+    await harness.app.server.inject({ method: "GET", url: job.link?.url ?? "" });
     await waitFor(
       () => harness?.app.context.store.get(job.id) as Job,
       (current) => current.status === "completed" || current.status === "failed",
@@ -548,7 +554,7 @@ describe("what boot says about how far the operator's CA reaches", () => {
   });
 });
 
-/** Runs a job to completion and returns the link and its bare token. */
+/** Creates a job and returns its link and bare token (dl-53: the link is issued at once). */
 async function issuedToken(current: Harness): Promise<{ url: string; token: string }> {
   const created = (
     await current.app.server.inject({
@@ -557,12 +563,7 @@ async function issuedToken(current: Harness): Promise<{ url: string; token: stri
       payload: { url: SOURCE_URL },
     })
   ).json() as JobResponse;
-  const finished = await waitFor(
-    () => current.app.context.store.get(created.job.id),
-    (job) => job.status === "completed" || job.status === "failed",
-    { label: "job to finish" },
-  );
-  const url = finished.result?.downloadUrl ?? "";
+  const url = created.job.link?.url ?? "";
   return { url, token: url.slice(url.lastIndexOf("/") + 1) };
 }
 
@@ -621,12 +622,16 @@ describe("a file token never reaches a log line", () => {
     // The pre-existing error paths on this route, which leaked the token long
     // before there was a rate limiter on it.
     const { logger, lines } = capturing();
-    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+    let clock = new Date("2026-09-27T10:00:00.000Z");
+    harness = await createHarness({
+      logger,
+      resolver: new StubResolver(probeResult()),
+      now: () => clock,
+    });
 
     const { url, token } = await issuedToken(harness);
-    const record = harness.app.context.store.findToken(token);
-    harness.app.context.store.deleteToken(token);
-    harness.app.context.store.saveToken({ ...record!, expiresAt: "2020-01-01T00:00:00.000Z" });
+    // Past the link's fifteen minutes (dl-53).
+    clock = new Date(clock.getTime() + 16 * 60_000);
 
     expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(410);
     expect(lines.map((line) => JSON.stringify(line)).filter((l) => l.includes(token))).toEqual([]);

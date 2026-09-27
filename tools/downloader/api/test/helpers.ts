@@ -11,10 +11,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { Storage } from "@downloader/engine";
-import type { DownloadEngine, DownloadOutcome, DownloadRequest } from "@downloader/engine";
+import { PassThrough } from "node:stream";
+import { finished } from "node:stream/promises";
+import type { DownloadEngine, MediaStream, StreamOutcome, StreamRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { MediaVariant, ProbeResult, Resolver, ResolveOptions } from "@downloader/contract";
+import type { LightMyRequestResponse } from "fastify";
 import { createApp } from "../src/server.ts";
 import type { App, CreateAppOptions } from "../src/server.ts";
 import { createLogger } from "../src/logger.ts";
@@ -87,48 +89,45 @@ export class StubResolver implements Resolver {
 
 export interface StubEngineOptions {
   storageRoot: string;
-  /** Return an error to fail the download, or undefined to succeed. */
+  /** Return an error to fail before the first byte, or undefined to succeed. */
   failWith?: (call: number) => AppError | undefined;
-  /** Called with each download request, for assertions on what was handed over. */
-  onDownload?: (request: DownloadRequest, call: number) => void;
-  /** Emits progress and stage callbacks before returning. */
+  /** Return an error to cut the stream after its first chunk, with that code. */
+  failAfterFirstChunk?: (call: number) => AppError | undefined;
+  /** Called with each stream request, for assertions on what was handed over. */
+  onStream?: (request: StreamRequest, call: number) => void;
+  /** Emits a progress callback before the first byte. */
   emitProgress?: boolean;
+  /** The body, chunk by chunk. Defaults to one small chunk. */
+  chunks?: readonly Buffer[];
+  /** Delay before each chunk after the first, so a test can act mid-stream. */
+  chunkDelayMs?: number;
 }
 
+export const STUB_BODY = Buffer.from("stub-video-bytes-0123456789");
+
 /**
- * An engine that writes a real (tiny) file, so the file-serving route can be
- * tested end to end without ffmpeg.
+ * An engine that streams a few real bytes, so the link route can be tested end
+ * to end without ffmpeg — including a cut after the first byte, and a reader
+ * that goes away. It writes nothing anywhere, as the real one does not.
  */
 export function createStubEngine(options: StubEngineOptions): DownloadEngine & { calls: number } {
-  const root = options.storageRoot;
   let calls = 0;
-  // The real `Storage`, not a `{ root }` cast: the API builds paths under
-  // `out/<jobId>/` through it now — `persistThumbnail` does — so a stub that
-  // only carried `root` would be testing a different layout from production.
-  // `collectGarbage` is still overridden below; nothing here sweeps by age.
-  const storage = new Storage({ storageDir: root, fileRetentionHours: 6 });
 
   const engine = {
     // `/api/health` stats this path before calling ffmpeg available, so it has
     // to be a real executable. Node's own binary is the one guaranteed to
     // exist wherever the tests run; the stub never actually runs it.
     config: { ffmpegPath: process.execPath } as DownloadEngine["config"],
-    storage,
     get calls() {
       return calls;
     },
-    async init(): Promise<void> {
-      await storage.init();
-    },
-    async download(request: DownloadRequest): Promise<DownloadOutcome> {
+    async stream(request: StreamRequest): Promise<MediaStream> {
       const call = calls++;
-      options.onDownload?.(request, call);
-
-      if (request.signal?.aborted === true) {
-        throw request.signal.reason instanceof AppError
-          ? request.signal.reason
-          : new AppError("JOB_CANCELED");
-      }
+      options.onStream?.(request, call);
+      const { signal } = request;
+      const aborted = (): AppError =>
+        signal?.reason instanceof AppError ? signal.reason : new AppError("JOB_CANCELED");
+      if (signal?.aborted === true) throw aborted();
 
       const failure = options.failWith?.(call);
       if (failure !== undefined) throw failure;
@@ -138,42 +137,56 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
           stage: "downloading",
           percent: 50,
           downloadedBytes: 512,
-          totalBytes: 1024,
-          segmentsDone: 1,
-          segmentsTotal: 2,
+          totalBytes: null,
+          segmentsDone: null,
+          segmentsTotal: null,
           speedBps: 1024,
           etaSec: 1,
           processedSec: 30,
         });
-        request.onStage?.("muxing");
       }
 
-      const dir = path.join(root, "out", request.jobId);
-      await fs.mkdir(dir, { recursive: true });
-      const filePath = path.join(dir, "video.mp4");
-      const contents = Buffer.from("stub-video-bytes-0123456789");
-      await fs.writeFile(filePath, contents);
+      const chunks = options.chunks ?? [STUB_BODY];
+      const late = options.failAfterFirstChunk?.(call);
+      const body = new PassThrough();
+      body.on("error", () => undefined);
+      let sent = 0;
+
+      const done = (async (): Promise<StreamOutcome> => {
+        for (const [index, chunk] of chunks.entries()) {
+          if (index > 0 && (options.chunkDelayMs ?? 0) > 0) {
+            // oxlint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, options.chunkDelayMs));
+          }
+          if (signal?.aborted === true || body.destroyed) throw aborted();
+          body.write(chunk);
+          sent += chunk.length;
+          if (index === 0 && late !== undefined) {
+            // Later than the first byte, as a real failure is: the headers
+            // have gone by the time it lands.
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            throw late;
+          }
+        }
+        body.end();
+        await finished(body, { readable: false });
+        return { bytes: sent, durationSec: 120 };
+      })().catch((error: unknown) => {
+        const appError = AppError.from(error);
+        body.destroy(appError);
+        throw appError;
+      });
+      done.catch(() => undefined);
+      signal?.addEventListener("abort", () => body.destroy(aborted()), { once: true });
 
       return {
-        jobId: request.jobId,
-        path: filePath,
+        body,
+        contentType: "video/mp4",
         filename: "video.mp4",
-        sizeBytes: contents.byteLength,
         container: "mp4",
-        durationSec: 120,
         transcodes: [],
+        done,
       };
-    },
-    async collectGarbage() {
-      return { removedOutDirs: [], removedTmpDirs: [], freedBytes: 0 };
-    },
-    async removeJob(jobId: string): Promise<void> {
-      await storage.removeJob(jobId);
-    },
-    // dl-53: nothing in the API calls `stream()` until the file route is
-    // rebuilt on it, so a call here is a bug in the harness, and loud.
-    async stream(): Promise<never> {
-      throw new AppError("INTERNAL", "The stub engine does not stream yet.");
     },
   } satisfies DownloadEngine & { calls: number };
 
@@ -255,6 +268,20 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       await fs.rm(storageRoot, { recursive: true, force: true });
     },
   };
+}
+
+/**
+ * Opens a job's link the way a visitor clicking it would, and does not wait
+ * for the file: since dl-53 nothing runs until this happens. The response is
+ * returned for a test that wants it.
+ */
+export function openLink(
+  current: Harness,
+  job: { link?: { url: string } | null | undefined },
+): Promise<LightMyRequestResponse> {
+  const opened = current.app.server.inject({ method: "GET", url: job.link?.url ?? "" });
+  opened.catch(() => undefined);
+  return opened;
 }
 
 /** Polls until a predicate holds, so tests never sleep a fixed duration. */

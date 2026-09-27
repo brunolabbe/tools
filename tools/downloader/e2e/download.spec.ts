@@ -8,11 +8,13 @@
  *  - the built bundle talks to the real API rather than to its own mock;
  *  - SSE actually reaches a browser, so the progress a user sees is progress
  *    that happened, not a timer;
- *  - the download link at the end returns a playable file;
+ *  - the link the job hands out streams a playable file to the browser, once
+ *    (dl-53), and the card follows it to the end;
  *  - the API and the UI coexist on one origin, which is how the container
  *    serves them.
  */
 
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { collectCspViolations, cspViolationsOn } from "./csp-violations.ts";
 import { startHlsOrigin } from "./fixtures/hls-origin.ts";
@@ -68,28 +70,32 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   const job = page.getByRole("listitem").filter({ hasText: hls.masterUrl }).first();
   await expect(job).toBeVisible();
 
-  // The download link, not the word "Ready": the pipeline strip lists every
-  // stage by name, so "Ready" is on the page from the moment the job starts
-  // and asserting on it passes while the job is still queued.
-  //
-  // Terminal state, however it got there — asserting on an intermediate status
-  // would be racing a download that legitimately finishes in under a second.
-  const link = job.getByRole("link", { name: "Download file" });
-  await expect(link).toBeVisible({ timeout: 120_000 });
-  await expect(job.getByText("Ready", { exact: true }).first()).toBeVisible();
-
-  // --- The file ----------------------------------------------------------
+  // dl-53: creating the job does nothing but hand out a single-use link. The
+  // card offers it; following it is what re-probes, runs ffmpeg and streams the
+  // file to this browser as it is produced.
+  const link = job.getByRole("link", { name: "Download", exact: true });
+  await expect(link).toBeVisible();
   const href = await link.getAttribute("href");
   expect(href).toMatch(/^\/api\/files\//u);
 
-  const response = await request.get(href ?? "");
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-disposition"]).toContain("attachment");
-
-  const body = await response.body();
-  // A real MP4 and not an error page: bytes 4-8 of an MP4 are the `ftyp` box.
+  // --- The file ----------------------------------------------------------
+  const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
+  const saved = await download.path();
+  expect(await download.failure()).toBeNull();
+  const body = await readFile(saved);
+  // A real MP4 and not an error page: bytes 4-8 of an MP4 are the `ftyp` box,
+  // and the box after it is the empty `moov` of a fragmented one.
   expect(body.subarray(4, 8).toString("latin1")).toBe("ftyp");
   expect(body.byteLength).toBeGreaterThan(10_000);
+  expect(download.suggestedFilename()).toMatch(/\.mp4$/u);
+
+  // The card followed the stream to its end over SSE, and the link is spent.
+  await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
+    timeout: 120_000,
+  });
+  await expect(job.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
+  const again = await request.get(href ?? "");
+  expect(again.status()).toBe(410);
 
   // ffmpeg pulled the segments itself rather than just the playlist — the
   // failure mode where a "download" is a manifest saved to disk.
@@ -99,7 +105,7 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   // Last, so it covers everything above: the whole journey ran under the CSP
   // and the browser refused none of it. Most of the directives already have a
   // louder witness here — a refused bundle is a blank page and a refused
-  // `EventSource` is a job that never reaches "Ready" — so what this adds is
+  // `EventSource` is a job that never reaches "Downloaded" — so what this adds is
   // the quiet case: something the policy stopped that the UI shrugged off.
   expect(await cspViolationsOn(page)).toEqual([]);
 });

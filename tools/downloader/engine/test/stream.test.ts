@@ -8,8 +8,9 @@
  * client. The result is then read back by `ffprobe` — its container, its
  * streams and its length — rather than trusted from the arguments.
  *
- * "Nothing written" is asserted, not assumed: the engine's storage directory
- * and the process's temp directory are listed before and after every stream.
+ * "Nothing written" is asserted, not assumed: the process's temp directory is
+ * listed before and after every stream. The engine has no storage directory
+ * any more; `STORAGE_DIR` is the API's, and its suite lists that one.
  * The temp directory is a private one this file points `TMPDIR` at, so a
  * sibling suite writing to the shared `/tmp` cannot make the listing lie in
  * either direction — and it is what `os.tmpdir()` returns to Node and what
@@ -55,12 +56,17 @@ const CONTEXT: RequestContext = {
 const TOLERANCE_SEC = 0.6;
 
 let fixtureRoot: string;
-let storageDir: string;
 let privateTmp: string;
 let outputDir: string;
 let origin: FixtureServer;
 /** Per-request delay at the origin, for the cases that need a stream to take time. */
 let originDelayMs = 0;
+/**
+ * A delay on the third segment onwards only, so the first byte comes at full
+ * speed and the stream then stalls — "after the first byte" by construction,
+ * rather than by a timing margin a loaded machine can eat.
+ */
+let lateSegmentDelayMs = 0;
 const savedTmp: Record<string, string | undefined> = {};
 
 const TYPES: Record<string, string> = {
@@ -104,6 +110,9 @@ beforeAll(async () => {
       return;
     }
     if (originDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, originDelayMs));
+    if (lateSegmentDelayMs > 0 && /seg0*[2-9]\d*\.ts$/u.test(file)) {
+      await new Promise((resolve) => setTimeout(resolve, lateSegmentDelayMs));
+    }
     const type = TYPES[path.extname(file)] ?? "application/octet-stream";
     // Ranges, because ffmpeg seeks a progressive MP4 whose index is at the end.
     const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
@@ -131,7 +140,6 @@ beforeAll(async () => {
     response.end(body);
   });
 
-  storageDir = await fs.mkdtemp(path.join(os.tmpdir(), "engine-stream-storage-"));
   outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "engine-stream-received-"));
   privateTmp = await fs.mkdtemp(path.join(os.tmpdir(), "engine-stream-tmpdir-"));
   for (const key of ["TMPDIR", "TMP", "TEMP"]) {
@@ -146,17 +154,18 @@ afterAll(async () => {
     else process.env[key] = value;
   }
   await origin?.close();
-  for (const dir of [fixtureRoot, storageDir, outputDir, privateTmp]) {
+  for (const dir of [fixtureRoot, outputDir, privateTmp]) {
     if (dir !== undefined) await fs.rm(dir, { recursive: true, force: true });
   }
 });
 
 afterEach(() => {
   originDelayMs = 0;
+  lateSegmentDelayMs = 0;
 });
 
 function engineWith(overrides: EngineConfigInput = {}) {
-  return createEngine({ storageDir, maxFileSizeBytes: 256 * 1024 * 1024, ...overrides });
+  return createEngine({ maxFileSizeBytes: 256 * 1024 * 1024, ...overrides });
 }
 
 function hlsVariant(name: string, seconds: number): MediaVariant {
@@ -313,8 +322,8 @@ function ffmpegProcessesForOrigin(): number[] {
   return found;
 }
 
-async function snapshotDirs(): Promise<{ storage: string[]; tmp: string[] }> {
-  return { storage: await listTree(storageDir), tmp: await listTree(privateTmp) };
+async function snapshotDirs(): Promise<{ tmp: string[] }> {
+  return { tmp: await listTree(privateTmp) };
 }
 
 describe("dl-53: streaming each rendition to a real HTTP client", () => {
@@ -538,8 +547,8 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   });
 
   test("an error after the first byte cuts the connection and rejects `done` with its code", async () => {
-    originDelayMs = 300;
-    const engine = engineWith({ stageTimeoutMs: 1500 });
+    lateSegmentDelayMs = 10_000;
+    const engine = engineWith({ stageTimeoutMs: 4_000 });
     let media: MediaStream | undefined;
     const received = await exchange(
       "late-failure",

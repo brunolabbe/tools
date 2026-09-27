@@ -10,8 +10,8 @@
  *  - **Explicit `-map`.** Without it ffmpeg picks one stream per type by its own
  *    rules and silently drops the rest — the usual symptom is a DASH download
  *    with no audio.
- *  - **`-movflags +faststart`.** Moves `moov` ahead of `mdat` so the file plays
- *    while it downloads instead of after.
+ *  - **Fragmented MP4.** The output is a pipe (dl-53), so the index cannot be
+ *    moved to the front after the fact; see `streamingContainerArgs`.
  *  - **`-bsf:a aac_adtstoasc`.** Required moving AAC out of MPEG-TS into MP4.
  *    Without it the audio plays in VLC and nowhere else. Modern ffmpeg's mov
  *    muxer inserts it automatically; passing it explicitly costs nothing and
@@ -20,16 +20,7 @@
  *    and irreversible; the user asked for a download, not a re-render.
  */
 
-import fs from "node:fs/promises";
-import { AppError } from "@downloader/contract";
-import type { JobProgress } from "@downloader/contract";
-import { buildDurationLimitArgs, GLOBAL_ARGS, PROGRESS_ARGS } from "./ffmpeg/args.ts";
-import { buildLocalInputArgs } from "./ffmpeg/args.ts";
-import type { FfmpegProgressSnapshot } from "./ffmpeg/progress.ts";
-import { toJobProgress } from "./ffmpeg/progress.ts";
-import { runFfmpeg } from "./ffmpeg/runner.ts";
-import type { Logger } from "./logger.ts";
-import { NOOP_LOGGER } from "./logger.ts";
+import { buildDurationLimitArgs } from "./ffmpeg/args.ts";
 
 export type OutputContainer = "mp4" | "mkv" | "webm";
 
@@ -173,11 +164,6 @@ export interface OutputArgsOptions {
    */
   sourceMayBeMpegTs?: boolean;
   title?: string | undefined;
-  /**
-   * The output is a pipe, not a file (dl-53): nothing can be rewritten once it
-   * has gone out, so the muxer is named explicitly and MP4 is fragmented.
-   */
-  streaming?: boolean;
 }
 
 /**
@@ -277,11 +263,7 @@ export function buildOutputArgs(options: OutputArgsOptions): OutputArgsResult {
     args.push("-bsf:a", "aac_adtstoasc");
   }
 
-  if (options.streaming === true) {
-    args.push(...streamingContainerArgs(options.container, hasVideo));
-  } else if (options.container === "mp4") {
-    args.push("-movflags", "+faststart");
-  }
+  args.push(...streamingContainerArgs(options.container, hasVideo));
 
   if (options.title !== undefined && options.title.length > 0) {
     args.push("-metadata", `title=${options.title}`);
@@ -289,140 +271,4 @@ export function buildOutputArgs(options: OutputArgsOptions): OutputArgsResult {
 
   args.push(...buildDurationLimitArgs(options.durationLimitSec));
   return { args, transcodes };
-}
-
-export interface MuxInputFile {
-  path: string;
-  /** Which streams to take. Order across inputs defines output stream order. */
-  take: readonly ("video" | "audio" | "subtitle")[];
-  /**
-   * Kinds in `take` whose presence nobody verified — mapped with a trailing `?`
-   * so ffmpeg keeps them when they are there and does not abort when they are
-   * not. This is where `MediaVariant.hasAudio === undefined` lands (dl-42).
-   * Subtitles are always optional and need no entry here.
-   */
-  unverified?: readonly ("video" | "audio" | "subtitle")[] | undefined;
-  /** BCP-47 tag applied when `take` includes a subtitle. */
-  language?: string;
-}
-
-/**
- * The stream maps one input contributes, in `take` order.
- *
- * Pure and exported so the trailing `?` is testable without spawning ffmpeg:
- * subtitles are always optional, and anything the caller listed as `unverified`
- * joins them (dl-42).
- */
-export function buildInputMaps(input: MuxInputFile, inputIndex: number): StreamMap[] {
-  return input.take.map((kind) => ({
-    inputIndex,
-    kind,
-    streamIndex: 0,
-    optional: kind === "subtitle" || (input.unverified?.includes(kind) ?? false),
-  }));
-}
-
-export interface MuxOptions {
-  inputs: readonly MuxInputFile[];
-  destPath: string;
-  container: OutputContainer;
-  videoCodec?: string | undefined;
-  audioCodec?: string | undefined;
-  audioOnly?: boolean;
-  sourceMayBeMpegTs?: boolean;
-  title?: string | undefined;
-  durationSec?: number | null;
-  ffmpegPath: string;
-  signal?: AbortSignal | undefined;
-  timeoutMs?: number | undefined;
-  maxOutputBytes?: number | undefined;
-  onProgress?: ((progress: JobProgress) => void) | undefined;
-  logger?: Logger | undefined;
-}
-
-export interface MuxResult {
-  path: string;
-  bytes: number;
-  durationSec: number | null;
-  transcodes: TranscodeNotice[];
-}
-
-/** Joins local files into one container. Inputs must already be on disk. */
-export async function mux(options: MuxOptions): Promise<MuxResult> {
-  const logger = options.logger ?? NOOP_LOGGER;
-
-  if (options.inputs.length === 0) {
-    throw new AppError("MUX_FAILED", "Nothing to assemble.", { details: { inputs: 0 } });
-  }
-
-  const args: string[] = [...GLOBAL_ARGS, ...PROGRESS_ARGS];
-  const maps: StreamMap[] = [];
-  const subtitleLanguages: string[] = [];
-
-  for (const [inputIndex, input] of options.inputs.entries()) {
-    args.push(...buildLocalInputArgs(input.path));
-    maps.push(...buildInputMaps(input, inputIndex));
-    for (const kind of input.take) {
-      if (kind === "subtitle") subtitleLanguages.push(input.language ?? "");
-    }
-  }
-
-  const output = buildOutputArgs({
-    container: options.container,
-    maps,
-    videoCodec: options.videoCodec,
-    audioCodec: options.audioCodec,
-    ...(options.audioOnly === undefined ? {} : { audioOnly: options.audioOnly }),
-    subtitleLanguages,
-    ...(options.sourceMayBeMpegTs === undefined
-      ? {}
-      : { sourceMayBeMpegTs: options.sourceMayBeMpegTs }),
-    title: options.title,
-  });
-
-  for (const notice of output.transcodes) {
-    logger.warn("transcoding a stream — this is slow and lossy", {
-      kind: notice.kind,
-      from: notice.from,
-      to: notice.to,
-      container: options.container,
-      reason: notice.reason,
-    });
-  }
-
-  args.push(...output.args, options.destPath);
-
-  const durationSec = options.durationSec ?? null;
-  const result = await runFfmpeg({
-    ffmpegPath: options.ffmpegPath,
-    args,
-    signal: options.signal,
-    timeoutMs: options.timeoutMs,
-    maxOutputBytes: options.maxOutputBytes,
-    failureCode: "MUX_FAILED",
-    logger,
-    onProgress: (snapshot: FfmpegProgressSnapshot) => {
-      options.onProgress?.(
-        toJobProgress(snapshot, {
-          stage: "muxing",
-          durationSec,
-          totalBytes: null,
-          speedBps: null,
-        }),
-      );
-    },
-  });
-
-  const stat = await fs.stat(options.destPath);
-  const observedSec =
-    result.lastSnapshot?.outTimeUs === null || result.lastSnapshot?.outTimeUs === undefined
-      ? null
-      : result.lastSnapshot.outTimeUs / 1_000_000;
-
-  return {
-    path: options.destPath,
-    bytes: stat.size,
-    durationSec: observedSec ?? durationSec,
-    transcodes: output.transcodes,
-  };
 }

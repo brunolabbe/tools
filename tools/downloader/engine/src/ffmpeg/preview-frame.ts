@@ -15,15 +15,12 @@
  * proxy — the same one the engine downloads through — or this reopens dl-11.
  */
 
-import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { AppError } from "@downloader/contract";
 import type { MediaVariant, RequestContext, StreamProtocol } from "@downloader/contract";
 import type { Logger } from "../logger.ts";
 import { NOOP_LOGGER } from "../logger.ts";
-import { buildNetworkInputArgs, GLOBAL_ARGS, PROGRESS_ARGS } from "./args.ts";
-import { runFfmpeg } from "./runner.ts";
+import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./args.ts";
+import { streamFfmpeg } from "./runner.ts";
 
 /**
  * The longest edge of a grabbed frame, in pixels.
@@ -95,12 +92,6 @@ export interface PreviewFrameOptions {
   /** Defaults to on, as for a download. */
   tlsVerify?: boolean | undefined;
   tlsCaFile?: string | undefined;
-  /**
-   * The storage `tmp/` root. The frame is written to a fresh directory under
-   * it, removed before this returns; one left by a crash is the retention
-   * sweep's, like any other orphaned working directory.
-   */
-  tmpRoot: string;
   /** Hard ceiling on the invocation. Past it, the process tree is killed. */
   timeoutMs: number;
   /** A frame larger than this is refused, however it got that large. */
@@ -130,15 +121,13 @@ export function buildPreviewFrameArgs(
     PreviewFrameOptions,
     "url" | "protocol" | "requestContext" | "durationSec" | "tlsVerify" | "tlsCaFile"
   >,
-  destPath: string,
 ): string[] {
   const seek = previewSeekSec(options.durationSec);
   const edge = String(PREVIEW_FRAME_MAX_EDGE_PX);
   return [
     ...GLOBAL_ARGS,
-    // Not optional: `runFfmpeg` reads the output size off the progress stream,
-    // and that is what enforces `maxOutputBytes` while ffmpeg is still running.
-    ...PROGRESS_ARGS,
+    // On descriptor 3, because stdout carries the frame itself (dl-53).
+    ...STREAM_PROGRESS_ARGS,
     ...buildNetworkInputArgs(options.url, {
       requestContext: options.requestContext,
       ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
@@ -175,11 +164,11 @@ export function buildPreviewFrameArgs(
     "mjpeg",
     "-q:v",
     "4",
-    // The raw MJPEG muxer writes exactly one JPEG for one frame. Not stdout:
-    // `PROGRESS_ARGS` already claims `pipe:1`.
+    // The raw MJPEG muxer writes exactly one JPEG for one frame — to stdout,
+    // since dl-53: the frame never touches a disk, as nothing else here does.
     "-f",
     "mjpeg",
-    destPath,
+    "pipe:1",
   ];
 }
 
@@ -192,88 +181,68 @@ export function buildPreviewFrameArgs(
  * at `debug`. It throws for `JOB_CANCELED` and for a binary that will not start,
  * which say nothing about the stream.
  *
- * A timeout kills the process tree, through `runFfmpeg`, before this returns.
+ * The frame arrives on stdout and is held in memory, counted as it arrives: the
+ * cap is enforced on the bytes themselves, so a frame larger than it is cut off
+ * and the process tree killed before the excess reaches memory. A timeout
+ * kills the tree too, before this returns.
  */
 export async function grabPreviewFrame(options: PreviewFrameOptions): Promise<Buffer | null> {
   const logger = options.logger ?? NOOP_LOGGER;
-  const workDir = path.join(options.tmpRoot, `preview-${randomUUID()}`);
-  await fs.mkdir(workDir, { recursive: true });
-  const destPath = path.join(workDir, "frame.jpg");
+  const ffmpeg = streamFfmpeg({
+    ffmpegPath: options.ffmpegPath,
+    args: buildPreviewFrameArgs(options),
+    signal: options.signal,
+    timeoutMs: options.timeoutMs,
+    maxOutputBytes: options.maxOutputBytes,
+    proxyUrl: options.proxyUrl,
+    failureCode: "DOWNLOAD_FAILED",
+    logger,
+    // Already through `redactUrlsInText`: ffmpeg echoes input URLs, and a
+    // signed URL's query string is a credential.
+    onStderrLine: (line) => {
+      logger.debug("ffmpeg (preview frame)", { line });
+    },
+  });
+
+  const chunks: Buffer[] = [];
+  let received = 0;
+  ffmpeg.stdout.on("data", (chunk: Buffer) => {
+    received += chunk.length;
+    if (received > options.maxOutputBytes) {
+      ffmpeg.terminate(
+        new AppError("SIZE_LIMIT_EXCEEDED", undefined, {
+          details: { writtenBytes: received, limitBytes: options.maxOutputBytes },
+        }),
+      );
+      return;
+    }
+    chunks.push(chunk);
+  });
 
   try {
-    const args = buildPreviewFrameArgs(options, destPath);
-    try {
-      await runFfmpeg({
-        ffmpegPath: options.ffmpegPath,
-        args,
-        signal: options.signal,
-        timeoutMs: options.timeoutMs,
-        maxOutputBytes: options.maxOutputBytes,
-        proxyUrl: options.proxyUrl,
-        failureCode: "DOWNLOAD_FAILED",
-        logger,
-        // Already through `redactUrlsInText`: ffmpeg echoes input URLs, and a
-        // signed URL's query string is a credential.
-        onStderrLine: (line) => {
-          logger.debug("ffmpeg (preview frame)", { line });
-        },
-      });
-    } catch (error: unknown) {
-      const appError = AppError.from(error);
-      if (!STREAM_SIDE_FAILURES.has(appError.code)) throw appError;
-      logger.debug("no preview frame: ffmpeg did not produce one", {
-        code: appError.code,
-        // `runFfmpeg` builds `stderr` from the redacted tail.
-        ...(typeof appError.details?.["stderr"] === "string"
-          ? { stderr: appError.details["stderr"] }
-          : {}),
-      });
-      return null;
-    }
-
-    let bytes: Buffer;
-    try {
-      // **One handle, opened once, measured and read through.** A `stat` on the
-      // path followed by a `readFile` of the path is two lookups of a name, and
-      // what answers the second is not necessarily what answered the first —
-      // the file-system race CodeQL flags, and a cap that measures one file and
-      // returns another is not a cap. `fstat` here asks the open description,
-      // so the size checked and the bytes read are the same file.
-      //
-      // Checked at all rather than trusted to the progress stream, because a
-      // single frame can be written and flushed between two progress reports.
-      const handle = await fs.open(destPath, "r");
-      try {
-        const stat = await handle.stat();
-        if (stat.size > options.maxOutputBytes) {
-          logger.debug("no preview frame: larger than the cap", {
-            bytes: stat.size,
-            maxBytes: options.maxOutputBytes,
-          });
-          return null;
-        }
-        // Exactly the bytes that were measured, from the same description, so
-        // the cap bounds what reaches memory even if something were still
-        // appending. ffmpeg has already exited here, so a short read means a
-        // truncated file, which the JPEG check below then refuses.
-        const buffer = Buffer.alloc(stat.size);
-        const { bytesRead } = await handle.read(buffer, 0, stat.size, 0);
-        bytes = bytesRead === stat.size ? buffer : buffer.subarray(0, bytesRead);
-      } finally {
-        await handle.close();
-      }
-    } catch {
-      // Exit 0 with no file: a stream whose video never decoded a frame.
-      logger.debug("no preview frame: ffmpeg exited without writing one");
-      return null;
-    }
-
-    if (bytes.length < JPEG_SOI.length || bytes[0] !== JPEG_SOI[0] || bytes[1] !== JPEG_SOI[1]) {
-      logger.debug("no preview frame: the output is not a JPEG", { bytes: bytes.length });
-      return null;
-    }
-    return bytes;
-  } finally {
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    await ffmpeg.completion;
+  } catch (error: unknown) {
+    const appError = AppError.from(error);
+    if (!STREAM_SIDE_FAILURES.has(appError.code)) throw appError;
+    logger.debug("no preview frame: ffmpeg did not produce one", {
+      code: appError.code,
+      // `runFfmpeg` builds `stderr` from the redacted tail.
+      ...(typeof appError.details?.["stderr"] === "string"
+        ? { stderr: appError.details["stderr"] }
+        : {}),
+    });
+    return null;
   }
+
+  const bytes = Buffer.concat(chunks);
+  if (bytes.length === 0) {
+    // Exit 0 with nothing written: a stream whose video never decoded a frame.
+    logger.debug("no preview frame: ffmpeg exited without writing one");
+    return null;
+  }
+  if (bytes.length < JPEG_SOI.length || bytes[0] !== JPEG_SOI[0] || bytes[1] !== JPEG_SOI[1]) {
+    logger.debug("no preview frame: the output is not a JPEG", { bytes: bytes.length });
+    return null;
+  }
+  return bytes;
 }

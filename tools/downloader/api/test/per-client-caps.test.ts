@@ -71,13 +71,57 @@ function slowResolver(): { resolver: StubResolver; release: () => void } {
   return { resolver, release: () => release?.() };
 }
 
-async function createJob(harness: Harness, remoteAddress: string, url: string = SOURCE_URL) {
-  return harness.app.server.inject({
+interface Admission {
+  statusCode: number;
+  headers: Record<string, unknown>;
+  json(): any;
+}
+
+/**
+ * Creates a job and opens its link from `remoteAddress`, and reports whether
+ * the link was **admitted** (201) or refused (the refusal's own response).
+ *
+ * Since dl-53 admission is the link's `GET`, not the `POST` — that is where
+ * dl-51's cap and the wait line now apply — and an admitted `GET` holds its
+ * response open until the file has streamed. So "admitted" is read off the
+ * link being claimed rather than off a response that may not come for a
+ * while; a refusal answers at once. `201` keeps the tests below reading as
+ * they did.
+ */
+async function createJob(
+  harness: Harness,
+  remoteAddress: string,
+  url: string = SOURCE_URL,
+): Promise<Admission> {
+  const created = await harness.app.server.inject({
     method: "POST",
     url: ROUTES.jobs,
     payload: { url },
     remoteAddress,
   });
+  if (created.statusCode !== 201) return created;
+  const { job } = created.json() as JobResponse;
+  const token = (job.link?.url ?? "").split("/").at(-1) ?? "";
+
+  let answered: Admission | null = null;
+  void harness.app.server.inject({ method: "GET", url: job.link?.url ?? "", remoteAddress }).then(
+    (response) => {
+      answered = response;
+      return undefined;
+    },
+    () => undefined,
+  );
+  await waitFor(
+    () => ({ answered, claimed: harness.app.context.store.findLink(token)?.usedAt ?? null }),
+    (state) => state.answered !== null || state.claimed !== null,
+    { label: "the link to be admitted or refused" },
+  );
+  // Claimed means admitted, whatever the `GET` later answered: a job that
+  // failed fast answers with its failure, which is not a refusal.
+  const claimed = harness.app.context.store.findLink(token)?.usedAt ?? null;
+  const refused = answered as Admission | null;
+  if (claimed === null && refused !== null) return refused;
+  return { statusCode: 201, headers: created.headers, json: () => created.json() };
 }
 
 describe("job admission (dl-51)", () => {

@@ -18,19 +18,21 @@
  */
 
 import { X509Certificate } from "node:crypto";
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import tls from "node:tls";
 import {
-  buildManifestDownloadArgs,
+  buildStreamArgs,
   createEngine,
   isTlsVerificationFailure,
   resolveFfmpegPath,
   runFfmpeg,
 } from "@downloader/engine";
-import type { DownloadRequest } from "@downloader/engine";
+import type { StreamRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -153,7 +155,7 @@ afterAll(async () => {
   await fs.rm(storageDir, { recursive: true, force: true });
 });
 
-/** Top-level MP4 box names in file order — `ftyp` first, `moov` before `mdat`. */
+/** Top-level MP4 box names in file order — `ftyp`, an empty `moov`, then fragments. */
 async function topLevelBoxes(file: string): Promise<string[]> {
   const buffer = await fs.readFile(file);
   const names: string[] = [];
@@ -265,23 +267,63 @@ async function getThroughTunnel(
   return { body, peerCertificate };
 }
 
-/** An engine wired to the fixture proxy, with dl-19's TLS settings on top. */
+interface Received {
+  path: string;
+  sizeBytes: number;
+  container: string;
+}
+
+/**
+ * An engine wired to the fixture proxy, with dl-19's TLS settings on top, and
+ * a `download` that does what a visitor's browser does since dl-53: reads the
+ * stream into a file of its own. The engine writes nothing; this test does.
+ */
 async function startEngine(
   proxyUrl: string,
   tlsOptions: { tlsVerify?: boolean; tlsCaFile?: string } = {},
-): Promise<ReturnType<typeof createEngine>> {
+): Promise<{ download(request: StreamRequest): Promise<Received> }> {
   const engine = createEngine({
-    storageDir,
     proxyUrl,
     maxFileSizeBytes: 256 * 1024 * 1024,
     ...tlsOptions,
   });
-  await engine.init();
-  return engine;
+  return {
+    async download(request: StreamRequest): Promise<Received> {
+      const media = await engine.stream(request);
+      const target = path.join(storageDir, `${request.jobId}.mp4`);
+      await pipeline(media.body, createWriteStream(target));
+      const { bytes } = await media.done;
+      return { path: target, sizeBytes: bytes, container: media.container };
+    },
+  };
+}
+
+/**
+ * The production argv for the HLS job below, writing to `destPath` instead of
+ * stdout so `runFfmpeg` can run it: the stream's progress descriptor is
+ * pointed back at stdout and its output at the file. Everything a test here
+ * asserts on — the whitelist, the TLS flags — is untouched.
+ */
+function manifestArgs(options: { destPath: string; tlsCaFile?: string; tlsVerify?: boolean }): {
+  args: string[];
+} {
+  const { args } = buildStreamArgs({
+    url: masterUrl(),
+    variant: downloadRequest("argv").variant,
+    requestContext: CONTEXT,
+    container: "mp4",
+    audioOnly: false,
+    subtitles: [],
+    ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
+    ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
+  });
+  const toFile = args.map((arg) => (arg === "pipe:3" ? "pipe:1" : arg));
+  toFile[toFile.length - 1] = options.destPath;
+  return { args: toFile };
 }
 
 /** The same HLS job every download test in this file runs. */
-function downloadRequest(jobId: string, url: string = masterUrl()): DownloadRequest {
+function downloadRequest(jobId: string, url: string = masterUrl()): StreamRequest {
   return {
     jobId,
     variant: {
@@ -318,8 +360,8 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
     expect(outcome.sizeBytes).toBeGreaterThan(10_000);
 
     const boxes = await topLevelBoxes(outcome.path);
-    expect(boxes[0]).toBe("ftyp");
-    expect(boxes.indexOf("moov")).toBeLessThan(boxes.indexOf("mdat"));
+    expect(boxes.slice(0, 2)).toEqual(["ftyp", "moov"]);
+    expect(boxes).toContain("moof");
     await assertDecodable(FFMPEG, outcome.path);
 
     // The bytes came from the fixture over TLS, and the segments did too — a
@@ -339,17 +381,7 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
     const proxy = await startPinnedProxy();
     const destPath = path.join(storageDir, "whitelist-check.mp4");
 
-    const { args } = buildManifestDownloadArgs({
-      url: masterUrl(),
-      destPath,
-      container: "mp4",
-      protocol: "hls",
-      requestContext: CONTEXT,
-      hasVideo: true,
-      hasAudio: true,
-      durationSec: CLIP_SECONDS,
-      ffmpegPath: FFMPEG,
-    });
+    const { args } = manifestArgs({ destPath });
 
     const whitelistAt = args.indexOf("-protocol_whitelist") + 1;
     const whitelist = args[whitelistAt];
@@ -382,24 +414,13 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
 
   test("ffmpeg verifies the origin's own certificate through the tunnel", async () => {
     // dl-14 spliced `-tls_verify 1 -ca_file` into the argv by hand, because
-    // `buildManifestDownloadArgs` did not emit them. It does now, so this is the
+    // the manifest argv builder did not emit them. It does now, so this is the
     // production argv unedited — the certificate that survives to ffmpeg is the
     // origin's, which is the property a proxy that intercepted TLS would break.
     const proxy = await startPinnedProxy();
     const destPath = path.join(storageDir, "verified.mp4");
 
-    const { args } = buildManifestDownloadArgs({
-      url: masterUrl(),
-      destPath,
-      container: "mp4",
-      protocol: "hls",
-      requestContext: CONTEXT,
-      hasVideo: true,
-      hasAudio: true,
-      durationSec: CLIP_SECONDS,
-      ffmpegPath: FFMPEG,
-      tlsCaFile: certificate.caPath,
-    });
+    const { args } = manifestArgs({ destPath, tlsCaFile: certificate.caPath });
     expect(args[args.indexOf("-tls_verify") + 1]).toBe("1");
 
     const result = await runFfmpeg({
@@ -487,14 +508,8 @@ describe("ffmpeg verifies the certificates it is encrypting to", () => {
     const outcome = await engine.download(downloadRequest("verification-off"));
     expect(outcome.sizeBytes).toBeGreaterThan(10_000);
 
-    const { args } = buildManifestDownloadArgs({
-      url: masterUrl(),
+    const { args } = manifestArgs({
       destPath: path.join(storageDir, "argv-only.mp4"),
-      container: "mp4",
-      protocol: "hls",
-      hasVideo: true,
-      hasAudio: true,
-      ffmpegPath: FFMPEG,
       tlsVerify: false,
     });
     expect(args[args.indexOf("-tls_verify") + 1]).toBe("0");

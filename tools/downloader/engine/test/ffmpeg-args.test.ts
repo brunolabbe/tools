@@ -5,7 +5,7 @@ import {
   buildDurationLimitArgs,
   buildNetworkInputArgs,
   GLOBAL_ARGS,
-  PROGRESS_ARGS,
+  STREAM_PROGRESS_ARGS,
 } from "../src/ffmpeg/args.ts";
 import {
   buildFetchHeaders,
@@ -14,7 +14,7 @@ import {
   normalizeHeaders,
 } from "../src/ffmpeg/headers.ts";
 import { buildTaskkillArgs, taskkillPath } from "../src/ffmpeg/kill.ts";
-import { buildManifestDownloadArgs } from "../src/download/manifest.ts";
+import { buildStreamArgs } from "../src/stream.ts";
 
 const CONTEXT: RequestContext = {
   headers: {
@@ -187,34 +187,40 @@ const HLS_VARIANT: MediaVariant = {
   label: "1080p",
 };
 
-function hlsArgs(overrides: Record<string, unknown> = {}): string[] {
-  return buildManifestDownloadArgs({
+function hlsArgs(
+  overrides: {
+    audioUrl?: string;
+    tlsCaFile?: string;
+    tlsVerify?: boolean;
+    liveDurationSec?: number;
+    audioOnly?: boolean;
+  } = {},
+): string[] {
+  const { audioUrl, audioOnly, ...rest } = overrides;
+  return buildStreamArgs({
     url: HLS_VARIANT.url,
-    destPath: "/storage/tmp/j/media.mp4",
-    container: "mp4",
-    protocol: "hls",
+    variant: audioUrl === undefined ? HLS_VARIANT : { ...HLS_VARIANT, audioUrl },
     requestContext: CONTEXT,
-    hasVideo: true,
-    hasAudio: true,
-    videoCodec: HLS_VARIANT.videoCodec,
-    audioCodec: HLS_VARIANT.audioCodec,
-    ffmpegPath: "/bin/ffmpeg",
-    ...overrides,
+    container: "mp4",
+    audioOnly: audioOnly === true,
+    subtitles: [],
+    ...rest,
   }).args;
 }
 
-describe("manifest download arguments", () => {
+describe("stream arguments (dl-53; the manifest download's before it)", () => {
   test("carries the non-obvious flags the analysis calls out", () => {
     const args = hlsArgs();
 
     expect(args.slice(0, GLOBAL_ARGS.length)).toEqual([...GLOBAL_ARGS]);
-    for (const arg of PROGRESS_ARGS) expect(args).toContain(arg);
+    for (const arg of STREAM_PROGRESS_ARGS) expect(args).toContain(arg);
 
     expect(args).toContain("-c");
     expect(args[args.indexOf("-c") + 1]).toBe("copy");
     expect(args[args.indexOf("-bsf:a") + 1]).toBe("aac_adtstoasc");
-    expect(args[args.indexOf("-movflags") + 1]).toBe("+faststart");
-    expect(args.at(-1)).toBe("/storage/tmp/j/media.mp4");
+    expect(args[args.indexOf("-movflags") + 1]).toBe("frag_keyframe+empty_moov+default_base_moof");
+    expect(args[args.indexOf("-f") + 1]).toBe("mp4");
+    expect(args.at(-1)).toBe("pipe:1");
   });
 
   test("maps one video and one audio stream explicitly", () => {
@@ -261,16 +267,18 @@ describe("manifest download arguments", () => {
   });
 
   test("DASH does not get the ADTS bitstream filter", () => {
-    const args = buildManifestDownloadArgs({
+    const args = buildStreamArgs({
       url: "https://cdn.example/manifest.mpd",
-      audioUrl: "https://cdn.example/audio.mpd",
-      destPath: "/storage/tmp/j/media.mp4",
-      container: "mp4",
-      protocol: "dash",
+      variant: {
+        ...HLS_VARIANT,
+        protocol: "dash",
+        url: "https://cdn.example/manifest.mpd",
+        audioUrl: "https://cdn.example/audio.mpd",
+      },
       requestContext: CONTEXT,
-      hasVideo: true,
-      hasAudio: true,
-      ffmpegPath: "/bin/ffmpeg",
+      container: "mp4",
+      audioOnly: false,
+      subtitles: [],
     }).args;
 
     expect(args).not.toContain("-bsf:a");

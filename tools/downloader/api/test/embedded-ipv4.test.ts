@@ -15,6 +15,7 @@
  * with either one removed and fails only with both gone.
  */
 
+import { randomUUID } from "node:crypto";
 import http from "node:http";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
@@ -467,6 +468,7 @@ describe("every entry point refuses a mapped-loopback URL", () => {
       sourceUrl: `http://[${MAPPED_LOOPBACK}]/`,
       options: {},
       variantId: null,
+      link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
       createdAt: context.now().toISOString(),
     });
 
@@ -493,6 +495,7 @@ describe("every entry point refuses a mapped-loopback URL", () => {
       sourceUrl: SOURCE_URL,
       options: {},
       variantId: null,
+      link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
       createdAt: context.now().toISOString(),
     });
 

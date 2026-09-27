@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { AppError } from "@downloader/contract";
 import type { MediaVariant } from "@downloader/contract";
-import { assertDiskSpace, assertWithinSizeLimit, estimateVariantBytes } from "../src/estimate.ts";
+import { assertWithinSizeLimit, estimateVariantBytes } from "../src/estimate.ts";
 
 function variant(overrides: Partial<MediaVariant> = {}): MediaVariant {
   return {
@@ -145,48 +145,5 @@ describe("assertWithinSizeLimit", () => {
       1,
     );
     expect(checked).toBe(false);
-  });
-});
-
-describe("assertDiskSpace", () => {
-  test("throws DISK_FULL when the estimate plus headroom does not fit", async () => {
-    await expect(
-      assertDiskSpace("/storage", {
-        requiredBytes: 1_000_000_000,
-        headroomFactor: 2,
-        minFreeBytes: 0,
-        freeBytesImpl: async () => 1_500_000_000,
-      }),
-    ).rejects.toMatchObject({ code: "DISK_FULL" });
-  });
-
-  test("passes when there is room for the working copy and the result", async () => {
-    await expect(
-      assertDiskSpace("/storage", {
-        requiredBytes: 1_000_000_000,
-        headroomFactor: 2,
-        minFreeBytes: 0,
-        freeBytesImpl: async () => 3_000_000_000,
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  test("enforces the absolute free-space floor even for a tiny download", async () => {
-    await expect(
-      assertDiskSpace("/storage", {
-        requiredBytes: 1024,
-        minFreeBytes: 512 * 1024 * 1024,
-        freeBytesImpl: async () => 10 * 1024 * 1024,
-      }),
-    ).rejects.toMatchObject({ code: "DISK_FULL" });
-  });
-
-  test("passes when the platform will not report free space", async () => {
-    await expect(
-      assertDiskSpace("/storage", {
-        requiredBytes: 10 ** 15,
-        freeBytesImpl: async () => null,
-      }),
-    ).resolves.toBeUndefined();
   });
 });

@@ -24,7 +24,7 @@
  *     pinning never applies and the pre-flight answer is not binding.
  *
  * Parsing manifests ourselves and pre-vetting each URI is the obvious answer and
- * the wrong one — it gives up why `download/manifest.ts` exists (analysis §6)
+ * the wrong one — it gives up why ffmpeg reads the manifest itself (analysis §6)
  * and still misses key URIs and nested playlists. Nor is there any version of it
  * for a page's subresources. The check belongs at the socket, and a proxy is
  * where all three of these will accept one.

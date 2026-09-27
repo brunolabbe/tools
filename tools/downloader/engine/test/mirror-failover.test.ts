@@ -25,14 +25,16 @@
  */
 
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { MediaVariant, RequestContext } from "@downloader/contract";
 import { resolveFfmpegPath } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
+import type { DownloadEngine, StreamRequest } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
 import { startFixtureServer } from "./helpers/http.ts";
 
@@ -229,19 +231,33 @@ function ytdlpMirroredVariant(): MediaVariant {
   };
 }
 
+/**
+ * What a visitor would have saved: the stream, written by *this test* to its
+ * own directory, so ffmpeg can decode it afterwards. The engine writes nothing.
+ */
+async function streamToFile(
+  engine: DownloadEngine,
+  request: StreamRequest,
+): Promise<{ path: string; bytes: number }> {
+  const media = await engine.stream(request);
+  const target = path.join(storageDir, `${request.jobId}.mp4`);
+  await pipeline(media.body, createWriteStream(target));
+  const { bytes } = await media.done;
+  return { path: target, bytes };
+}
+
 test("the engine fails over to a yt-dlp mirror exactly as it does to an HLS one (dl-47)", async () => {
   // dl-45 gave the HLS parser its mirrors and the engine a failover; dl-47 gave
   // the second producer the same thing. The engine has no idea which tier a
   // variant came from and must not — this test exists because "the field is
   // populated" and "a download really recovers" are different claims, and only
   // the second one is worth anything to a user.
-  const engine = createEngine({ storageDir, maxFileSizeBytes: 64 * 1024 * 1024 });
-  await engine.init();
+  const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 });
 
   const fromTier = ytdlpMirroredVariant();
   const before = { mirror: mirror.requests.length, expired: expired.requests.length };
 
-  const outcome = await engine.download({
+  const outcome = await streamToFile(engine, {
     jobId: "mirror-ytdlp",
     variant: fromTier,
     requestContext: CONTEXT,
@@ -250,7 +266,7 @@ test("the engine fails over to a yt-dlp mirror exactly as it does to an HLS one 
   });
 
   // A finished file that ffmpeg can decode, not merely a resolved promise.
-  expect(outcome.sizeBytes).toBeGreaterThan(1000);
+  expect(outcome.bytes).toBeGreaterThan(1000);
   await runFfmpeg([
     "-hide_banner",
     "-nostdin",
@@ -273,11 +289,10 @@ test("the engine fails over to a yt-dlp mirror exactly as it does to an HLS one 
 });
 
 test("a host that refuses the connection is failed over to the mirror", async () => {
-  const engine = createEngine({ storageDir, maxFileSizeBytes: 64 * 1024 * 1024 });
-  await engine.init();
+  const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 });
 
   const before = mirror.requests.length;
-  const outcome = await engine.download({
+  const outcome = await streamToFile(engine, {
     jobId: "mirror-ok",
     variant: variant(deadOrigin),
     requestContext: CONTEXT,
@@ -286,7 +301,7 @@ test("a host that refuses the connection is failed over to the mirror", async ()
   });
 
   // A finished file, not merely a promise that resolved.
-  expect(outcome.sizeBytes).toBeGreaterThan(1000);
+  expect(outcome.bytes).toBeGreaterThan(1000);
   await runFfmpeg([
     "-hide_banner",
     "-nostdin",
@@ -308,12 +323,11 @@ test("a host that refuses the connection is failed over to the mirror", async ()
 });
 
 test("an expired signed URL never reaches the mirror — it is expired there too", async () => {
-  const engine = createEngine({ storageDir });
-  await engine.init();
+  const engine = createEngine();
 
   const before = mirror.requests.length;
   await expect(
-    engine.download({
+    engine.stream({
       jobId: "mirror-expired",
       variant: variant(expired.origin),
       requestContext: CONTEXT,
@@ -339,12 +353,11 @@ test("the last candidate's own failure is what reaches the caller", async () => 
   // the *second* host's, which is the half that would be silently lost if the
   // loop remembered the first error instead. It also proves the loop stops:
   // there is no third candidate and no third request.
-  const engine = createEngine({ storageDir });
-  await engine.init();
+  const engine = createEngine();
 
   const before = { mirror: mirror.requests.length, expired: expired.requests.length };
   await expect(
-    engine.download({
+    engine.stream({
       jobId: "mirror-last-error",
       variant: { ...variant(deadOrigin), alternateUrls: [`${expired.origin}/index.m3u8`] },
       requestContext: CONTEXT,
@@ -361,14 +374,13 @@ test("the last candidate's own failure is what reaches the caller", async () => 
 });
 
 test("with no mirror to try, a dead host fails as it always did", async () => {
-  const engine = createEngine({ storageDir });
-  await engine.init();
+  const engine = createEngine();
 
   const alone = { ...variant(deadOrigin) };
   delete alone.alternateUrls;
 
   await expect(
-    engine.download({
+    engine.stream({
       jobId: "mirror-none",
       variant: alone,
       requestContext: CONTEXT,

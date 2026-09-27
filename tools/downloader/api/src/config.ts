@@ -17,7 +17,10 @@ export interface ApiConfig {
   host: string;
   port: number;
 
-  /** Root of `tmp/` and `out/`, shared with the engine. */
+  /**
+   * Where the job database lives by default. Since dl-53 that is all it holds:
+   * no file, working or finished, is written anywhere.
+   */
   storageDir: string;
   /** SQLite file. `:memory:` is honoured, and is what the tests use. */
   databasePath: string;
@@ -83,15 +86,19 @@ export interface ApiConfig {
   probeTimeoutMs: number;
   /** Ceiling on a single ffmpeg invocation. */
   stageTimeoutMs: number;
+  /**
+   * Per-job cap: refused up front on the size estimate, and a stream that
+   * passes it anyway is cut and recorded as `SIZE_LIMIT_EXCEEDED` (dl-53).
+   */
   maxFileSizeBytes: number;
-  /** Global cap on everything under `storageDir`. Zero disables the quota. */
-  maxTotalStorageBytes: number;
-  fileRetentionHours: number;
-  /** How often the retention sweep runs. */
+  /**
+   * How often the sweep runs: links that expired unopened, and old rows. A
+   * minute by default, because a link lives fifteen (dl-53).
+   */
   gcIntervalMs: number;
   /**
-   * How long a `probe_outcomes` row survives before the retention sweep prunes
-   * it. Unlike `fileRetentionHours` this is about table size, not privacy — a
+   * How long a `probe_outcomes` row survives before the sweep prunes it. This
+   * is about table size, not privacy — a
    * row carries a hostname and resolver timings, never a path, a query string
    * or an address (dl-57).
    */
@@ -310,9 +317,7 @@ export const API_DEFAULTS = {
   probeTimeoutMs: 45_000,
   stageTimeoutMs: 3_600_000,
   maxFileSizeMb: 4096,
-  maxTotalStorageGb: 50,
-  fileRetentionHours: 6,
-  gcIntervalMs: 15 * 60_000,
+  gcIntervalMs: 60_000,
   outcomeRetentionDays: 90,
   probeCacheTtlMs: 30_000,
   logLevel: "info",
@@ -517,15 +522,6 @@ export function loadApiConfig(
     maxFileSizeBytes:
       overrides.maxFileSizeBytes ??
       int(env["MAX_FILE_SIZE_MB"], API_DEFAULTS.maxFileSizeMb) * 1024 * 1024,
-    maxTotalStorageBytes:
-      overrides.maxTotalStorageBytes ??
-      int(env["MAX_TOTAL_STORAGE_GB"], API_DEFAULTS.maxTotalStorageGb, { min: 0 }) *
-        1024 *
-        1024 *
-        1024,
-    fileRetentionHours:
-      overrides.fileRetentionHours ??
-      int(env["FILE_RETENTION_HOURS"], API_DEFAULTS.fileRetentionHours),
     gcIntervalMs: overrides.gcIntervalMs ?? int(env["GC_INTERVAL_MS"], API_DEFAULTS.gcIntervalMs),
     outcomeRetentionDays:
       overrides.outcomeRetentionDays ??

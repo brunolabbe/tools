@@ -9,6 +9,7 @@
  * `formatReport`'s text against hand-computed expectations.
  */
 
+import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import { beforeEach, describe, expect, test } from "vitest";
 import { JobStore } from "../src/db/job-store.ts";
@@ -33,6 +34,7 @@ function createCompletedJob(id: string, durationMs: number): void {
     sourceUrl: "https://site.example/x",
     options: {},
     variantId: null,
+    link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
     createdAt: WINDOW_START,
   });
   store.transition(id, "probing", {}, WINDOW_START);
@@ -156,6 +158,7 @@ function seed(): void {
     sourceUrl: "https://site.example/a",
     options: {},
     variantId: null,
+    link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
     createdAt: WINDOW_START,
   });
   store.transition(
@@ -169,6 +172,7 @@ function seed(): void {
     sourceUrl: "https://site.example/b",
     options: {},
     variantId: null,
+    link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
     createdAt: WINDOW_START,
   });
   store.transition(
@@ -187,6 +191,7 @@ function seed(): void {
     sourceUrl: "https://site.example/c",
     options: {},
     variantId: null,
+    link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
     createdAt: beforeWindow,
   });
   store.transition("job-old", "probing", {}, beforeWindow);
@@ -198,6 +203,7 @@ function seed(): void {
     sourceUrl: "https://site.example/d",
     options: {},
     variantId: null,
+    link: { token: randomUUID(), url: "/api/files/t", expiresAt: "2099-01-01T00:00:00.000Z" },
     createdAt: WINDOW_START,
   });
   store.transition("job-unfinished", "probing", {}, WINDOW_START);
@@ -262,16 +268,11 @@ describe("buildReport against a seeded database", () => {
   test("counts downloads: total, successes, code breakdown, p50 duration", () => {
     expect(report.downloads.total).toBe(4);
     expect(report.downloads.successes).toBe(2);
-    expect(report.downloads.successRate).toBeCloseTo(0.5);
-    // Both codes have count 1, and this report does not promise a tie-break
-    // order — compared as a set, not a sequence.
-    expect(report.downloads.codeCounts).toHaveLength(2);
-    expect(report.downloads.codeCounts).toEqual(
-      expect.arrayContaining([
-        { code: "DOWNLOAD_FAILED", count: 1 },
-        { code: "JOB_CANCELED", count: 1 },
-      ]),
-    );
+    // dl-53: the canceled job is the visitor leaving, not the tool failing, so
+    // it is out of the rate and out of the failure codes — 2 of 3, not 2 of 4.
+    expect(report.downloads.canceled).toBe(1);
+    expect(report.downloads.successRate).toBeCloseTo(2 / 3);
+    expect(report.downloads.codeCounts).toEqual([{ code: "DOWNLOAD_FAILED", count: 1 }]);
     // [60000, 180000]: nearest-rank p50 is the lower one, index ceil(0.5*2)-1 = 0.
     expect(report.downloads.p50DurationMs).toBe(60_000);
   });
@@ -307,9 +308,9 @@ describe("formatReport against the same seed", () => {
     expect(text).toContain("direct: p50=200 p95=400 (n=4)");
     expect(text).toContain("browser: p50=9005 p95=9005 (n=1)");
     expect(text).toContain("Downloads");
-    expect(text).toContain("success rate: 50.0% (2/4)");
+    expect(text).toContain("success rate: 66.7% (2/3, 1 canceled by the visitor)");
     expect(text).toContain("DOWNLOAD_FAILED: 1");
-    expect(text).toContain("JOB_CANCELED: 1");
+    expect(text).not.toContain("JOB_CANCELED: 1");
     expect(text).toContain("p50 download duration: 60000 ms");
   });
 
@@ -321,7 +322,7 @@ describe("formatReport against the same seed", () => {
     expect(text).toContain("no successful probe in this window");
     expect(text).toContain("hosts that fail most:\n    none");
     expect(text).toContain("no timed probe in this window");
-    expect(text).toContain("success rate: n/a (0/0)");
+    expect(text).toContain("success rate: n/a (0/0, 0 canceled by the visitor)");
     expect(text).toContain("no failed download in this window");
     expect(text).toContain("p50 download duration: n/a");
   });

@@ -194,7 +194,7 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
   },
   JOB_CANCELED: {
     title: "Canceled",
-    detail: "You stopped this download. Partial files were removed.",
+    detail: "The download stopped before it finished. Nothing was kept on the server.",
     tone: "unavailable",
     allowRetry: false,
     final: true,
@@ -220,8 +220,9 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     allowRetry: false,
   },
   FILE_EXPIRED: {
-    title: "File removed",
-    detail: "Finished files are kept for a limited time and this one is past its retention window.",
+    title: "Link used or expired",
+    detail:
+      "A download link works once, for fifteen minutes, and the server keeps no copy of the file. Start the download again.",
     tone: "unavailable",
     allowRetry: false,
   },

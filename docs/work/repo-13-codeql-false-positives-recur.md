@@ -405,7 +405,7 @@ Sonnet reviewing an Opus build.
 **Reproductions run**, all edits reverted and the worktree confirmed clean:
 `npm run build` / `npm run check` / `npm test -- --project downloader` at `196fd28`
 (845/845); removing both `guard.assertAllowed` calls → 5 failed, names matching;
-removing `files.ts:86` "{ onRequest: rateLimit }" → 5 failed, names matching; removing `lookup` from
+removing `files.ts@c87153d:86` "{ onRequest: rateLimit }" → 5 failed, names matching; removing `lookup` from
 `connectOptions` → 6 failed; disabling only `isBlockedAddress` inside
 `createPinningLookup` → 1 failed; the register grep → one match;
 `git show ec1dd6b -- egress-proxy.ts` → confirmed dl-27 never touched the

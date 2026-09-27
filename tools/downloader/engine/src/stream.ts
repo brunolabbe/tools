@@ -56,7 +56,7 @@ import { streamFfmpeg } from "./ffmpeg/runner.ts";
 import type { Logger } from "./logger.ts";
 import type { OutputContainer, StreamMap, TranscodeNotice } from "./mux.ts";
 import { buildOutputArgs, CONTAINER_EXTENSIONS } from "./mux.ts";
-import { sanitizeFilename } from "./storage.ts";
+import { sanitizeFilename } from "./filename.ts";
 
 export interface StreamRequest {
   /** For logs only. Nothing is named after it, because nothing is written. */
@@ -251,7 +251,6 @@ export function buildStreamArgs(options: StreamArgsOptions): {
     // MP4 already carry AAC in the form MP4 wants.
     sourceMayBeMpegTs: hls,
     title: options.title,
-    streaming: true,
   });
 
   args.push(...output.args, "pipe:1");

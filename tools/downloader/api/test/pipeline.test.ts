@@ -16,11 +16,12 @@ import { AppError, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { initialProgress } from "../src/db/job-store.ts";
-import { runRetentionSweep } from "../src/server.ts";
+import type { LightMyRequestResponse as Response } from "fastify";
 import {
   createHarness,
   probeResult,
   SOURCE_URL,
+  STUB_BODY,
   StubResolver,
   variant,
   waitFor,
@@ -38,16 +39,37 @@ let harness: Harness | undefined;
 afterEach(async () => {
   await harness?.dispose();
   harness = undefined;
+  downloads.clear();
 });
 
-async function createJob(current: Harness, payload: Record<string, unknown> = {}): Promise<Job> {
+/**
+ * The download each job's link started, by job id. Since dl-53 a job does
+ * nothing until its link is opened, so `createJob` opens it: the request is
+ * the visitor, and its response is the file.
+ */
+const downloads = new Map<string, Promise<Response>>();
+
+async function createJob(
+  current: Harness,
+  payload: Record<string, unknown> = {},
+  { open = true } = {},
+): Promise<Job> {
   const response = await current.app.server.inject({
     method: "POST",
     url: ROUTES.jobs,
     payload: { url: SOURCE_URL, ...payload },
   });
   expect(response.statusCode).toBe(201);
-  return (response.json() as JobResponse).job;
+  const job = (response.json() as JobResponse).job;
+  if (open) openLink(current, job);
+  return job;
+}
+
+/** Opens a job's link, as a visitor clicking it would. */
+function openLink(current: Harness, job: Job): void {
+  const opened = current.app.server.inject({ method: "GET", url: job.link?.url ?? "" });
+  opened.catch(() => undefined);
+  downloads.set(job.id, opened);
 }
 
 function readJob(current: Harness, id: string): Job {
@@ -79,7 +101,7 @@ async function runToTerminal(current: Harness, id: string): Promise<Job> {
 }
 
 describe("the happy path", () => {
-  test("a job runs to completed and its file is downloadable from the token", async () => {
+  test("a job runs to completed, streamed on its link's response", async () => {
     harness = await createHarness({
       resolver: new StubResolver(probeResult()),
       engineOptions: { emitProgress: true },
@@ -95,16 +117,28 @@ describe("the happy path", () => {
     expect(finished.result?.filename).toBe("video.mp4");
     expect(finished.finishedAt).not.toBeNull();
 
-    // The download URL is a capability, not a job id in disguise.
-    const downloadUrl = finished.result?.downloadUrl ?? "";
-    expect(downloadUrl.startsWith("/api/files/")).toBe(true);
-    expect(downloadUrl).not.toContain(created.id);
+    expect(finished.result?.sizeBytes).toBe(STUB_BODY.byteLength);
 
-    const file = await harness.app.server.inject({ method: "GET", url: downloadUrl });
+    // The link is a capability, not a job id in disguise, and it was spent.
+    const link = created.link?.url ?? "";
+    expect(link.startsWith("/api/files/")).toBe(true);
+    expect(link).not.toContain(created.id);
+    expect(finished.link).toBeNull();
+
+    const file = await (downloads.get(created.id) as Promise<Response>);
     expect(file.statusCode).toBe(200);
-    expect(file.body).toBe("stub-video-bytes-0123456789");
+    expect(file.body).toBe(STUB_BODY.toString());
+    expect(file.headers["content-type"]).toBe("video/mp4");
     expect(file.headers["content-disposition"]).toContain("attachment");
-    expect(file.headers["accept-ranges"]).toBe("bytes");
+    expect(file.headers["cache-control"]).toBe("private, no-store");
+    // No length is known when the headers go, and there is no file to seek in.
+    expect(file.headers["content-length"]).toBeUndefined();
+    expect(file.headers["accept-ranges"]).toBeUndefined();
+
+    // Single use: the second open is `410`, with the code a client renders.
+    const again = await harness.app.server.inject({ method: "GET", url: link });
+    expect(again.statusCode).toBe(410);
+    expect(again.json()).toMatchObject({ error: { code: "FILE_EXPIRED" } });
   });
 
   test("the variant the client picked is the one the engine is handed", async () => {
@@ -113,7 +147,7 @@ describe("the happy path", () => {
     harness = await createHarness({
       resolver: new StubResolver(probeResult({ variants: [variant(), wanted] })),
       engineOptions: {
-        onDownload: (request) => handed.push(request.variant.id),
+        onStream: (request) => handed.push(request.variant.id),
       },
     });
 
@@ -136,7 +170,7 @@ describe("the happy path", () => {
           ],
         }),
       ),
-      engineOptions: { onDownload: (request) => handed.push(request.variant.id) },
+      engineOptions: { onStream: (request) => handed.push(request.variant.id) },
     });
 
     const created = await createJob(harness);
@@ -224,13 +258,12 @@ describe("the preview a job keeps", () => {
     expect(finished.thumbnailPath).toBeNull();
   });
 
-  // --- dl-44: the preview lives as long as the file it depicts -------------
+  // --- dl-53: one copy, in memory, for ten minutes -------------------------
 
-  test("the preview outlives the in-memory store's ten minutes", async () => {
-    // Done-when 1. The whole of dl-44's reason to exist: the result panel lives
-    // six hours and the in-memory bytes lived ten minutes, so for ~97% of that
-    // panel's life the image was silently absent. The clock is advanced past
-    // `THUMBNAIL_TTL_MS` rather than the behaviour being read off the code.
+  test("a job's preview keeps only its ten minutes too, and nothing is written", async () => {
+    // dl-44 kept a completed job's preview on disk beside its file. dl-53
+    // removed the files, and the owner chose on 2026-09-27 to remove that copy
+    // with them: this is the behaviour dl-44 shipped, reversed on purpose.
     let clock = new Date("2026-09-07T10:00:00.000Z");
     const image = await imageOrigin();
     try {
@@ -242,186 +275,15 @@ describe("the preview a job keeps", () => {
       const finished = await runToTerminal(harness, (await createJob(harness)).id);
       expect(finished.status).toBe("completed");
       const thumbnailPath = finished.thumbnailPath ?? "";
-      expect(thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+      expect(
+        (await harness.app.server.inject({ method: "GET", url: thumbnailPath })).statusCode,
+      ).toBe(200);
 
-      // The in-memory store is on the same injected clock, so this is the real
-      // expiry and not a stubbed one: eleven minutes on, `get` drops the entry.
       clock = new Date(clock.getTime() + 11 * 60_000);
-      const token = thumbnailPath.slice(ROUTES.thumbnail("").length);
-      expect(harness.app.context.thumbnails.get(token)).toBeNull();
-
-      // Before dl-44 this was a 404 with nothing logged, which is exactly the
-      // failure the ticket calls silent.
-      const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
-      expect(served.statusCode).toBe(200);
-      expect(served.headers["content-type"]).toBe("image/png");
-      expect(served.headers["x-content-type-options"]).toBe("nosniff");
-      expect(served.rawPayload.equals(PNG)).toBe(true);
-    } finally {
-      await image.close();
-    }
-  });
-
-  test("the retention sweep unlinks the preview with the file", async () => {
-    // Done-when 2, asserted on the bytes rather than on the route: the image
-    // sits inside `out/<jobId>/`, which is what the sweep deletes, so "the
-    // image goes when the file goes" has no second rule to fall out of step.
-    let clock = new Date("2026-09-07T10:00:00.000Z");
-    const image = await imageOrigin();
-    try {
-      harness = await createHarness({
-        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
-        now: () => clock,
-        config: { fileRetentionHours: 6 },
-      });
-
-      const created = await createJob(harness);
-      const finished = await runToTerminal(harness, created.id);
-      const thumbnailPath = finished.thumbnailPath ?? "";
-      // Where `persistThumbnail` puts it: inside the job's own out directory,
-      // named for its content type. See `PERSISTED_THUMBNAIL_STEM`.
-      const onDisk = path.join(harness.storageRoot, "out", created.id, "preview.png");
-      // The write happened at all — otherwise the unlink below proves nothing.
-      expect((await fs.stat(onDisk)).size).toBe(PNG.byteLength);
-
-      // Seven hours on, past `fileRetentionHours`, so the file token has lapsed
-      // and the sweep takes the job's output directory.
-      clock = new Date(clock.getTime() + 7 * 3_600_000);
-      await runRetentionSweep(harness.app.context);
-
-      await expect(fs.stat(onDisk)).rejects.toThrow();
-      // And the route agrees, which is the half a user sees.
       const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
       expect(served.statusCode).toBe(404);
-      // The row went too, so nothing is left pointing at deleted bytes.
-      expect(
-        harness.app.context.store.findThumbnail(thumbnailPath.slice(ROUTES.thumbnail("").length)),
-      ).toBeNull();
-    } finally {
-      await image.close();
-    }
-  });
-
-  test("a restart does not lose the preview of a job whose file survived it", async () => {
-    // Done-when 3. Two apps over one database and one storage directory, which
-    // is what a redeploy is: the in-memory store is empty in the second, and
-    // the token the first minted still resolves because the bytes are on disk.
-    const dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-dl44-db-"));
-    const databasePath = path.join(dbDir, "jobs.sqlite");
-    const image = await imageOrigin();
-    let first: Harness | undefined;
-    try {
-      first = await createHarness({
-        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
-        config: { databasePath },
-      });
-      const created = await createJob(first);
-      const finished = await runToTerminal(first, created.id);
-      const thumbnailPath = finished.thumbnailPath ?? "";
-      expect(thumbnailPath).not.toBe("");
-
-      // Down. Not `dispose()`, which would take the storage directory with it —
-      // a restart that loses the file is a different test.
-      await first.app.shutdown();
-
-      // Up again on the same database and the same storage.
-      harness = await createHarness({
-        config: { databasePath, storageDir: first.storageRoot },
-        engineOptions: { storageRoot: first.storageRoot },
-      });
-      // Nothing carried over in memory; only the row and the bytes did.
-      expect(harness.app.context.thumbnails.size).toBe(0);
-
-      const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
-      expect(served.statusCode).toBe(200);
-      expect(served.rawPayload.equals(PNG)).toBe(true);
-    } finally {
-      await image.close();
-      // **Close both databases before unlinking anything.** This is the first
-      // (dl-59 added a second, at the end of this file) test backed by a real
-      // SQLite file rather than `:memory:`, and it is the one that has to say this out loud.
-      //
-      // The second app is still up here: `afterEach` is what disposes it, and
-      // `afterEach` runs *after* this `finally`. Measured on Linux by counting
-      // `/proc/self/fd` at each point — 3 descriptors on `jobs.sqlite`, `-wal`
-      // and `-shm` are open at this line and drop to 0 only inside `afterEach`.
-      // POSIX unlinks an open file happily, so this cost nothing here and
-      // failed on Windows, where an open handle refuses `unlink` with `EBUSY`.
-      // `shutdown()` is idempotent, so disposing again in `afterEach` is a
-      // no-op and the first app's second shutdown below is free.
-      await harness?.app.shutdown();
-      await first?.app.shutdown();
-      if (first !== undefined) await fs.rm(first.storageRoot, { recursive: true, force: true });
-      await fs.rm(dbDir, { recursive: true, force: true });
-    }
-  });
-
-  test("a row naming a type outside the allowlist is refused, bytes or no bytes", async () => {
-    // The read path re-checks `record.contentType` because the value becomes a
-    // `Content-Type` on our own origin, and the row is a boundary: a build that
-    // did not agree with this one, or a hand-edited database, is the case it is
-    // for. Without this test, deleting that check is green across the whole
-    // downloader project — measured, not assumed.
-    //
-    // The row is written by hand rather than captured, because `captureThumbnail`
-    // allowlists before storing and so cannot produce one. Everything else about
-    // it is valid: a real job, a real file on disk, a well-formed token — which
-    // is what isolates the branch under test from the three refusals above it.
-    const image = await imageOrigin();
-    try {
-      harness = await createHarness({
-        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
-      });
-      const created = await createJob(harness);
-      const finished = await runToTerminal(harness, created.id);
-      const onDisk = path.join(harness.storageRoot, "out", created.id, "preview.png");
-      expect((await fs.stat(onDisk)).size).toBe(PNG.byteLength);
-
-      const store = harness.app.context.store;
-      // Well formed: 43 base64url characters, so it passes the shape guard and
-      // reaches the check this test is about.
-      const servable = "a".repeat(43);
-      const refused = "b".repeat(43);
-      store.saveThumbnail({
-        token: servable,
-        jobId: created.id,
-        path: onDisk,
-        contentType: "image/png",
-      });
-      store.saveThumbnail({
-        token: refused,
-        jobId: created.id,
-        path: onDisk,
-        // An SVG is a document that can carry script; serving one from this
-        // origin would be a stored XSS. See `ALLOWED_CONTENT_TYPES`.
-        contentType: "image/svg+xml",
-      });
-
-      // The control, so a 404 below cannot be blamed on the hand-written row:
-      // the same bytes under an allowed type serve.
-      const ok = await harness.app.server.inject({
-        method: "GET",
-        url: ROUTES.thumbnail(servable),
-      });
-      expect(ok.statusCode).toBe(200);
-      expect(ok.headers["content-type"]).toBe("image/png");
-
-      const blocked = await harness.app.server.inject({
-        method: "GET",
-        url: ROUTES.thumbnail(refused),
-      });
-      expect(blocked.statusCode).toBe(404);
-      expect(blocked.headers["content-type"]).not.toContain("image/svg+xml");
-
-      // The finished job's own preview is untouched by any of this.
-      expect(
-        (
-          await harness.app.server.inject({
-            method: "GET",
-            url: finished.thumbnailPath ?? "",
-          })
-        ).statusCode,
-      ).toBe(200);
+      expect(served.json()).toMatchObject({ error: { code: "THUMBNAIL_NOT_FOUND" } });
+      expect(await fs.readdir(harness.storageRoot)).toEqual([]);
     } finally {
       await image.close();
     }
@@ -456,7 +318,7 @@ describe("the preview a job keeps", () => {
         (await harness.app.server.inject({ method: "GET", url: thumbnailPath })).statusCode,
       ).toBe(404);
       // Nothing was written to disk for it, so nothing is left to own.
-      expect(await fs.readdir(path.join(harness.storageRoot, "out"))).toEqual([]);
+      expect(await fs.readdir(harness.storageRoot)).toEqual([]);
     } finally {
       await image.close();
     }
@@ -530,19 +392,20 @@ describe("re-probing", () => {
       },
     });
 
-    const created = await createJob(harness);
+    const created = await createJob(harness, {}, { open: false });
     const frames: JobStatus[] = [];
     harness.app.context.events.subscribe(created.id, (event) => {
       if (event.type === "status") frames.push(event.status);
     });
+    openLink(harness, created);
     firstProbe.open();
 
     const finished = await runToTerminal(harness, created.id);
     expect(finished.status).toBe("completed");
     expect(statusAtProbe[1]).toBe("probing");
-    // `queued → probing` went out before the subscription; everything from the
-    // held probe onwards is here, and the back-edge is the second entry.
-    expect(frames).toEqual(["downloading", "probing", "downloading", "completed"]);
+    // Subscribed before the link was opened (dl-53), so the whole run is here,
+    // and the back-edge is the third entry.
+    expect(frames).toEqual(["probing", "downloading", "probing", "downloading", "completed"]);
   });
 
   test("the re-probe resets progress rather than carrying the dead attempt's bytes", async () => {
@@ -555,7 +418,7 @@ describe("re-probing", () => {
       engineOptions: {
         // Report bytes, then fail: an expiry mid-download leaves a percentage
         // on screen that refers to an attempt being abandoned.
-        onDownload: (request, call) => {
+        onStream: (request, call) => {
           if (call === 0)
             request.onProgress?.({
               ...initialProgress("downloading"),
@@ -568,26 +431,27 @@ describe("re-probing", () => {
       },
     });
 
-    const created = await createJob(harness);
+    const created = await createJob(harness, {}, { open: false });
     const bytes: number[] = [];
     harness.app.context.events.subscribe(created.id, (event) => {
       if (event.type === "progress") bytes.push(event.progress.downloadedBytes);
     });
+    openLink(harness, created);
     firstProbe.open();
 
     const finished = await runToTerminal(harness, created.id);
     expect(finished.status).toBe("completed");
-    // 512 from the dead attempt, then a frame telling the client it is back to
-    // zero — not a stale bar sitting at 50% under "Re-analysing".
-    expect(bytes).toEqual([512, 0]);
+    // The first probe's reset, 512 from the dead attempt, then a frame telling
+    // the client it is back to zero — not a stale bar at 50% under "Re-analysing".
+    expect(bytes).toEqual([0, 512, 0]);
     expect(finished.progress.percent).toBe(100);
   });
 
   test("a DOWNLOAD_FAILED during downloading is re-probe-worthy too", async () => {
     // ffmpeg does its own fetching and reports an expired manifest only as text
     // on stderr, so an expiry surfaces as DOWNLOAD_FAILED rather than
-    // VARIANT_GONE — tools/downloader/engine/src/download/manifest.ts maps every
-    // ffmpeg failure to that one code. Not retrying it would leave the commonest
+    // VARIANT_GONE — tools/downloader/engine/src/stream.ts runs ffmpeg with
+    // `failureCode: "DOWNLOAD_FAILED"`, so every ffmpeg failure is that code. Not retrying it would leave the commonest
     // expiry case unhandled; MAX_REPROBE_RETRIES in
     // tools/downloader/api/src/jobs/orchestrator.ts carries the rest.
     harness = await createHarness({
@@ -639,7 +503,7 @@ describe("re-probing", () => {
     const handed: string[] = [];
     harness = await createHarness({
       resolver: new StubResolver(probeResult({ variants: [variant({ id: "renumbered-9" })] })),
-      engineOptions: { onDownload: (request) => handed.push(request.variant.id) },
+      engineOptions: { onStream: (request) => handed.push(request.variant.id) },
     });
 
     const created = await createJob(harness, { options: { variantId: "gone-forever" } });
