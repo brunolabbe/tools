@@ -86,6 +86,15 @@ assert on what the tool *did* to a file, never on the words it printed: a
 third-party diagnostic is not yours to depend on, and the exit code alone cannot
 tell "excluded" from "clean".
 
+**The same gap swallows a fake command planted on `PATH`.** On Windows, libuv's
+search appends only `.com` and `.exe` to a bare name, so an extension-less
+`#!/bin/sh` fake named `gh` is never found — and the spawn does not fail, it
+reaches whatever real `gh` the machine carries (repo-71, a test that timed out
+on the Windows leg only). Make the fake a real executable on every platform
+(`scripts/test/preflight.test.ts`'s `plantFakeGh` reaches `process.execPath`
+under the fake's name) and **have it print a marker the test asserts**, so a
+real binary answering in its place fails the test instead of passing it.
+
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only
