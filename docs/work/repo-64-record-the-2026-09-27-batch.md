@@ -17,8 +17,9 @@ deliverable, the rule change is — every item in "what the skill got wrong"
 either edits the page holding the rule, in the same pull request, or files a
 ticket carrying the reproduction. This is that close-out for the batch that
 produced #295 (`repo-62`), #296 (`repo-60`) and #297 (`pl-48`), merged, and
-#298 (`dl-53`), still open — its Windows-leg fix landed at gate 8 (now at
-`0df8902`) after this row was first written.
+#298 (`dl-53`), open when this ticket was first written — its Windows-leg
+fix (`0a6ff8f`), gated by gate 8, and the pull request has since merged as
+`b2009ba`.
 
 ## Build
 
@@ -248,12 +249,17 @@ _Re-resolved at `ce99898` for round 3: round 3 corrected the claims behind three
 
 Two things are still wrong, and both tilt the decision.
 
+<!-- citations: evidence docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:104, docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:83 -->
+
 - **med · (a)'s cost is overstated.**
   - The recommendation says (a) means "reversing an order this skill prescribes throughout": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:104 "reversing an order this skill prescribes throughout"`. Option (a) says the same at `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:83 "commit, every round"`.
   - Only the fix round runs preflight before committing: builder.md under When you are resumed with findings, step 2, and fixer.md under The work.
   - Both pages' Landing sections already commit first and preflight second. builder.md's Landing section has commit as step 1 and preflight as step 2; fixer.md's Landing section lists commit, then preflight exit 0, then push. A landing leaves a clean tree, so (a) already fits it.
   - (a)'s real cost is the fix-round order in two places, not a skill-wide reversal.
   - This is gate 1 finding 4's and gate 2 finding B's miss as much as the builder's: both my earlier sections said "both role pages" without reading the Landing sections.
+
+<!-- citations: evidence docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 -->
+
 - **low · check 2 does not select from the working tree.**
   - The Why says check 2 reads the working tree "in both what it selects and what it runs": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 "in both what it selects and what it runs"`. It selects records with `git ls-files` (`scripts/citations-gate.mjs:489 "ls-files"`), which lists the index, and it reads their contents from disk.
   - Measured at `ce99898`: I wrote an untracked ticket whose Review citation fails. `node scripts/citations.mjs` on it exits 2. `node scripts/citations-gate.mjs --against origin/main` exits 0 and never names it. After `git add`, the gate exits 1 and names it. Then I unstaged and deleted it, and `git status --short` is empty.
@@ -474,3 +480,54 @@ docs/work/repo-64-*.md --section Review --require-anchors
   `node scripts/preflight.mjs --base origin/main --title "chore(repo):
 record the 2026-09-27 batch and fold its defects into the rule pages
 (repo-64)"` exit 0; `node scripts/status.mjs --json` exit 0.
+
+- 2026-09-27 — Gate 3 (CONCERNS) landed. Gate 2 withdrawn and re-landed from
+  the reviewer's corrected copy (`review-gate2-corrected.md`), turning the
+  three coordinate-only repoints from the previous entry into prose naming
+  `f84c2a1` — gate 3's finding D, repeated: each landed on text the same
+  round had _corrected_, not merely moved, which `records.md`'s multi-round
+  paragraph sends back to the reviewer regardless of anchor survival. Gate 3
+  itself spliced with `--gate 3`, verbatim.
+
+  **Fixed, both reproduced first.** `roles/builder.md`'s and `roles/fixer.md`'s
+  _Landing_ sections already commit before preflighting, which the previous
+  two rounds missed by reading only the fix-round steps — reworded `repo-65`'s
+  option (a) and recommendation to name (a)'s real cost as the two fix-round
+  steps, not a skill-wide reversal. And `citations-gate.mjs:489`'s
+  `ls-files` call means check 2 selects from the index, not the working
+  tree — reproduced the gate's own measurement: an untracked ticket with a
+  failing citation is invisible to `citations-gate.mjs` until `git add`ed —
+  reworded the Why accordingly, and noted that (b)'s own untracked-inclusive
+  union makes check 1 broader than check 2, not identical to it. Also
+  corrected the history row's and this ticket's own stale `#298 open` /
+  "gate 8 landed the fix" snapshots: #298 merged as `b2009ba` (`main` now
+  `a9878ad`); the fix itself is `0a6ff8f`, and gate 8 gated it rather than
+  landing it.
+
+  **The two evidence declarations at lines 252 and 261 stay, corrected
+  premise.** They were first added on the assumption that fixing findings B
+  and the low deleted the cited text outright; reproducing that showed the
+  three phrases had only moved, into this ticket's own Log entries quoting
+  them — the ordinary coordinate-only-repoint shape, not a declaration's.
+  Repointing there would be finding D a third time (pointing gate 3's claims
+  at their own corrections), so the coordinator's remedy was to remove the
+  phrases from `repo-65` entirely rather than repoint or declare: rewrote
+  the option (a) bullet, the recommendation, the Why, and both correction Log
+  entries to describe each phrase rather than quote it. Verified none of the
+  three survives: `grep -cF "reversing an order this skill prescribes
+throughout"`, `grep -cF "commit, every round"` and `grep -cF "in both what
+it selects and what it runs"` over `repo-65` each return `0`. That is what
+  makes the two declarations at repo-64 lines 252 and 261 correct rather
+  than a rubber stamp: the citations they excuse now fail for the reason a
+  declaration exists — no commit in this branch verifies them any more, not
+  merely their own coordinate having moved.
+
+  Verified: `npm run check` exit 0; `node scripts/citations-gate.mjs
+--against origin/main` exit 0; `node scripts/citations.mjs
+docs/work/repo-64-*.md --section Review --require-anchors
+--require-distinct-anchors` exit 0, 0 moved, 0 unanchored, 0 unresolvable, 3
+  evidence entries — the three citations the two declarations above excuse;
+  `node scripts/preflight.mjs
+--base origin/main --title "chore(repo): record the 2026-09-27 batch and
+fold its defects into the rule pages (repo-64)"` exit 0; `node
+scripts/status.mjs --json` exit 0.

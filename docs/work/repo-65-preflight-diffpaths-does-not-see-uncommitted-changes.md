@@ -58,10 +58,20 @@ line) made `node scripts/citations-gate.mjs --against origin/main` exit 1
 with 3 records failing, on `origin/main` at `6988b65`, reverted after. So the
 checks split three ways, not two: check 1's _test selection_ is decided from
 committed diffs only, though the build and the suites it runs execute
-against the working tree like any other local command; check 2 reads the
-working tree unconditionally, in both what it selects and what it runs; and
-checks 3–4 read committed state throughout. Check 5 (`checkMergeTree`) is
-unaffected either way — it compares committed heads.
+against the working tree like any other local command; check 2 **selects**
+its records from the git index (`git ls-files`, `scripts/citations-gate.mjs:489`)
+and **reads their contents** from disk. The earlier wording here said check
+2 read the working tree unconditionally for both halves, selection
+included; corrected at gate 3, which measured it directly: an untracked
+ticket carrying a failing
+citation is invisible to `citations-gate.mjs` until `git add`ed, after which
+it is named. So check 2's _selection_ is index-based, not working-tree-based
+— an untracked path is as invisible to it as to check 1's diff — even
+though its selection criterion differs from check 1's (every tracked ticket
+file in scope, not only ones the diff touches); only its _reading_ of a
+selected file's contents is unconditional. Checks 3–4 read committed state
+throughout. Check 5 (`checkMergeTree`) is unaffected either
+way — it compares committed heads.
 
 ## The decision this ticket carries
 
@@ -70,21 +80,24 @@ Two ways to close the gap, and they trade differently:
 - **(a) Make `preflight.mjs` refuse to run over a dirty working tree.** Check
   `git status --porcelain` before computing `diffPaths` and fail fast (a new
   `EXIT` bit, or fold into `setup`) naming the uncommitted paths, telling the
-  caller to commit first. **Gains every check's agreement, at the cost of
-  both role pages' prescribed order (corrected at gate 2, finding B, from an
-  earlier draft that stated this the wrong way round).** Refusing a dirty
-  tree means all five checks end up reading the same, single, committed
-  tree — the internal consistency (a) actually buys. But
+  caller to commit first. **Gains every check's agreement, at a narrower cost
+  than either earlier draft named (corrected at gate 3, on both gate 1
+  finding 4's and gate 2 finding B's own miss: neither had read the Landing
+  sections).** Refusing a dirty tree means all five checks end up reading
+  the same, single, committed tree — the internal consistency (a) actually
+  buys. Only two places prescribe the opposite order, and both are the
+  **fix-round** steps, not the whole of either page:
   `.claude/skills/orchestrate-tickets/roles/builder.md`, under _When you are
-  resumed with findings_ ("Fix, run the narrowest checks, then preflight,
-  then commit and push"), and `.claude/skills/orchestrate-tickets/roles/fixer.md`,
-  under _The work_ ("Run the checks your fixes touch, narrowest first,
-  then" `preflight.mjs`), both say preflight runs **before** the
-  commit, every round — so (a) would fail preflight on the ordinary case
-  both pages already tell every builder and fixer to follow, not only on a
-  caller who skipped a step. It is no longer the smaller change once that is
-  named: it would need those two pages rewritten too, to commit first and
-  preflight second, before it could ship without contradicting them.
+  resumed with findings_, step 2 ("Fix, run the narrowest checks, then
+  preflight, then commit and push"), and
+  `.claude/skills/orchestrate-tickets/roles/fixer.md`, under _The work_ ("Run
+  the checks your fixes touch, narrowest first, then" `preflight.mjs`). Both
+  pages' own **Landing** sections already commit first and preflight
+  second — `builder.md`'s Landing lists "commit each gate record verbatim"
+  as step 1 and preflight as step 2; `fixer.md`'s Landing lists commit, then
+  "preflight exit 0," then push — so a landing already fits (a) with nothing
+  to change. (a)'s real cost is rewriting the fix-round order in exactly
+  those two places, not a reversal of an order the whole skill prescribes.
 - **(b) Extend `diffPaths` to include the working tree, at least for check
   1's test selection.** Union `git diff --name-only ${base}...HEAD` with
   `git status --porcelain` (staged, unstaged and untracked paths, relative to
@@ -98,16 +111,19 @@ Two ways to close the gap, and they trade differently:
   to one tree is a larger, contract-adjacent change to a script every
   builder's report leans on.
 
-**Recommendation, corrected at gate 2: still (b), for the trade-off's real
-shape rather than the one first written.** (a) makes every check agree, but
-only by requiring both role pages to be rewritten to commit before
-preflighting — reversing an order this skill prescribes throughout, not a
-caller's mistake to correct. (b) leaves two trees instead of one, but keeps
-that order intact and brings check 1 into line with check 2's own existing
-behaviour, which is the narrower, more localised change. Still
-`needs-decision`: the owner may judge the one-tree consistency (a) buys
-worth rewriting both role pages for, over living with the two-tree split (b)
-leaves.
+**Recommendation, corrected at gate 3: still (b), for the trade-off's real
+shape rather than either earlier draft's.** (a) makes every check agree, at
+the cost named above — rewriting the fix-round steps in `builder.md` and
+`fixer.md`, not "an order this skill prescribes throughout"; their Landing
+sections already fit (a) as written. (b) leaves two trees instead of one,
+and keeps that narrower, already-`preflight`-only change: it does not need
+either role page touched, and it brings check 1's selection closer to check
+2's, though not identical — check 2 selects records with `git ls-files`
+(the index), so an _untracked_ file is invisible to it, while (b)'s own
+`git status --porcelain` union would include one for check 1's selection.
+Still `needs-decision`: the owner may judge the one-tree consistency (a)
+buys, at the cost of two rewritten fix-round steps, worth it over the
+two-tree split (b) leaves.
 
 ## Build
 
@@ -169,3 +185,29 @@ Whichever of (a) or (b) is chosen:
   1 leaves **two** trees (checks 1–2 on the working tree, checks 3–4 on
   committed state), an improvement on today's three-way split, not a
   regression to one.
+- 2026-09-27 — **Correction from repo-64's gate 3.** Two more things wrong,
+  both narrowing (not reversing) the previous correction:
+  1. **(a)'s cost was overstated as skill-wide.** The earlier recommendation
+     called (a) a reversal of an order the whole skill prescribes, and the
+     earlier option (a) said the same about every round's commit; both
+     overreached: only the _fix-round_ steps in `builder.md` (_When you are
+     resumed with findings_, step 2) and `fixer.md` (_The work_) run preflight
+     before committing. Both pages' own _Landing_ sections already commit
+     first and preflight second, so a landing already fits (a) as written.
+     Reworded both the option and the recommendation to name the real cost:
+     rewriting
+     two fix-round steps, not the skill throughout.
+  2. **Check 2 does not select from the working tree.** It selects records
+     with `git ls-files` — the git index — and only reads their contents
+     from disk; an untracked file is invisible to its selection exactly as
+     it is to check 1's. Measured by the gate directly: an untracked ticket
+     with a failing citation was unseen by `citations-gate.mjs` until
+     `git add`ed. Reworded the Why, and noted under (b) that its own
+     `git status --porcelain` union, which does include untracked paths,
+     would make check 1 broader than check 2 rather than identical to it.
+
+  Both fixes deleted the exact text three of `repo-64`'s gate 3 citations
+  quoted as evidence (former lines 104, 83 and 62) — not merely moved, since
+  the wrong claims themselves are gone. Per this branch's own `records.md`,
+  those citations are not repointed or reworded here; the gate's own record
+  carries an evidence declaration for each instead.
