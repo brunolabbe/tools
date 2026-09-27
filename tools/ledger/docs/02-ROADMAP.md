@@ -18,9 +18,12 @@ Answers given on 2026-09-27, before any code. They are the premises
 detail and the numbers behind each.
 
 - **Two buckets, two splits.** The mortgage bucket is split 50/50. The
-  shared-expenses bucket is split by the ratio of the two salaries — and only
-  the **percentage** is stored, with the date it takes effect, never the
-  salaries themselves.
+  shared-expenses bucket is split by the ratio of the two salaries.
+  - _Amended later on 2026-09-27:_ the salaries **are** stored, dated by year,
+    and the ratio is derived from them. The owner wants their history charted.
+  - The earlier answer had been to store the percentage only.
+  - The ratio is still stored alongside the salaries, with its effective date,
+    so a past settlement stays recomputable.
 - **Each deposit is one transfer to one bucket.** So a rule classifies a whole
   row, from its description and its amount; a deposit is never split across
   buckets.
@@ -31,6 +34,21 @@ detail and the numbers behind each.
 - **History is imported once, all of it since 2022.** A one-off importer reads
   the existing Excel file. The real file stays out of the repository; its
   fixtures are synthetic.
+- **Settlements go into the buffer, sized by the matching rule.** Whoever is
+  short tops up until the two contributions stand at the ratio. It is computed
+  cumulatively, since the last point where the two were even.
+  - This replaces the workbook's current formula, which is right only for a
+    direct payment.
+  - A catch-up for the past folds into the open period.
+- **History is imported as it happened.** The two historical settlement formulas
+  are kept, each with a note on its row, and an owner's correction is also a
+  note, never a silent rewrite.
+- **Everything keeps its history, and there are stats.** Salaries, ratios,
+  mortgage payments, balances and spending by category are all charted.
+  Nothing is overwritten.
+- **Receipts are read line by line.** Items that are not shared come off,
+  together with their taxes and deposits, and the code computes that part, not
+  the model. Items are categorised for the stats.
 - **Both people use it, identified by Cloudflare Access** — two addresses on one
   policy, and no login of the tool's own.
 
@@ -41,22 +59,55 @@ health and the served bundle, a `web` shell, an `e2e` project with no spec, the
 image and its gate, the release entry, and the deployment fragment and Access
 policy. See [`CLAUDE.md`](../CLAUDE.md) for the layout.
 
-## Phase 1 — The analysis
+## Phase 1 — The analysis ✅
 
-`00-ANALYSIS.md`, and it cannot be written from the armchair: it rests on **a
-sample AccèsD paste** and **a copy of the Excel file**, both from the owner, both
-read and neither committed. What it has to settle, at least:
+[`00-ANALYSIS.md`](./00-ANALYSIS.md) was written from a real AccèsD paste and
+the real workbook, both read and neither committed. It settles:
 
-- the paste's real shape — columns, date and amount formats, the running
-  balance, and what a pending row looks like — and what the parser refuses;
-- what the running-balance chain proves, and what a break in it means to a user;
-- the classification rules' form, and who edits them;
-- what "who owes what" is computed over — per bucket, per year, since forever —
-  and how a split's effective date applies to rows either side of it;
-- a receipt's lifecycle, matched and out-of-pocket, and what the model is and is
-  not trusted to read;
-- how the API reads the Access identity, and what it does with a request that
-  has none — the loopback port bypasses Access entirely.
+- the paste's shape (§2);
+- what the running-balance chain proves (§2);
+- the rules' form (§3);
+- what "who owes what" is computed over (§4–5);
+- a receipt's lifecycle and the model's limits (§6);
+- the Access identity (§7);
+- the import (§8).
 
-`01-ARCHITECTURE.md` follows it, and so do the planned `books` and `receipts`
-packages. The tickets come out of both.
+**Still open:** what a pending row and a joint-account card purchase look like
+in a paste. Neither was in the sample, and lg-1 refuses both by name until a
+sample shows them.
+
+`01-ARCHITECTURE.md` is not written yet. The tickets carry the structure they
+need, and the page arrives when two tickets would otherwise repeat it.
+
+## Phase 2 — Replace the account sheet
+
+The paste, the rules and the two bucket views. At the end, a paste replaces
+transcribing by hand.
+
+| Ticket                                                   | What                                     |
+| -------------------------------------------------------- | ---------------------------------------- |
+| [lg-1](./work/lg-1-parse-an-accesd-paste.md)             | parse a paste, proved by its own balance |
+| [lg-2](./work/lg-2-store-a-pasted-statement.md)          | store it, chained onto what is stored    |
+| [lg-3](./work/lg-3-verify-the-access-identity.md)        | verify the Access token                  |
+| [lg-4](./work/lg-4-rules-and-the-inbox.md)               | rules, and the inbox                     |
+| [lg-5](./work/lg-5-people-ratios-and-the-two-buckets.md) | salaries, ratios, and the two buckets    |
+
+## Phase 3 — Replace the period sheets, and retire the workbook
+
+| Ticket                                                     | What                                   |
+| ---------------------------------------------------------- | -------------------------------------- |
+| [lg-6](./work/lg-6-periods-and-the-matching-settlement.md) | periods, closed with the matching rule |
+| [lg-7](./work/lg-7-import-the-workbook.md)                 | import the history since 2022          |
+
+## Phase 4 — Receipts
+
+| Ticket                                                           | What                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| [lg-8](./work/lg-8-receipts.md)                                  | photograph, confirm the total, file            |
+| [lg-10](./work/lg-10-receipt-items-exclusions-and-categories.md) | items: take out what is not shared, categorise |
+
+## Phase 5 — History and stats
+
+| Ticket                                   | What                           |
+| ---------------------------------------- | ------------------------------ |
+| [lg-9](./work/lg-9-history-and-stats.md) | the charts, over every history |
