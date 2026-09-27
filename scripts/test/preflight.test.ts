@@ -28,17 +28,24 @@ import path from "node:path";
 import process from "node:process";
 import { expect, test } from "vitest";
 import {
+  CI_WORKFLOW_PATH,
   EXIT,
+  buildScratchMerge,
   checkBuild,
+  checkCiCommands,
   checkCitations,
   checkMergeTree,
   checkReview,
+  checkScratchMergeCitations,
   checkTitle,
+  deriveExtraCiCommands,
+  extractCheckJobCommands,
   grandfatheredFor,
   isTicketPath,
   mergeTreeConflicts,
   parseArgs,
   parseMergeTreeConflicts,
+  parseShellCommand,
   preflight,
   runBuildCommand,
   scriptsTouched,
@@ -48,6 +55,13 @@ import {
 } from "../preflight.mjs";
 
 const CLI = path.join(import.meta.dirname, "..", "preflight.mjs");
+
+/** This checkout's own root, so repo-79's new checks can be measured against its real ci.yml. */
+const REPO_ROOT = path.join(import.meta.dirname, "..", "..");
+const REAL_CI_YAML = fs.readFileSync(
+  path.join(REPO_ROOT, ".github", "workflows", "ci.yml"),
+  "utf8",
+);
 
 /**
  * A throwaway repository this file controls end to end, the way
@@ -917,3 +931,450 @@ function plantFakeGh(shimDir: string, cwd: string): void {
     fs.copyFileSync(process.execPath, ghPath);
   }
 }
+
+// --- repo-79: every ci.yml check-job command, plus citations on a scratch merge ---
+
+/**
+ * Read off the real `ci.yml`, not a copy — a fixture's own text could drift
+ * from the file it exists to track, which is exactly the risk this ticket
+ * closes. A step this job gains or changes should move this test, on purpose.
+ */
+test("extractCheckJobCommands reads this repo's own ci.yml check job, in order", () => {
+  expect(extractCheckJobCommands(REAL_CI_YAML)).toEqual([
+    "npm ci",
+    "npm run check",
+    "node scripts/status.mjs --json > /dev/null",
+    "node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors",
+    "node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
+  ]);
+});
+
+test("extractCheckJobCommands throws rather than silently report nothing when ci.yml has no check job", () => {
+  expect(() => extractCheckJobCommands("name: CI\njobs:\n  build:\n    steps:\n")).toThrow(
+    /no top-level "check:" job/,
+  );
+});
+
+/**
+ * A shape this parser cannot read must fail loudly — a `run: |` block scalar
+ * inside the check job — rather than being silently skipped, which would make
+ * `deriveExtraCiCommands` under-report what CI runs without anyone noticing.
+ */
+test("extractCheckJobCommands throws rather than silently skip a block-scalar run step", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - run: |",
+    "          echo one",
+    "  changes:",
+    "    steps:",
+    "      - run: echo hi",
+    "",
+  ].join("\n");
+  expect(() => extractCheckJobCommands(yaml)).toThrow(/block scalar/);
+});
+
+/**
+ * The two commands this file actually runs for real: `npm ci` (setup, not a
+ * check), `npm run check` (check 1's own first command) and
+ * `citations-gate.mjs --against` (check 2, called as functions) are all
+ * excluded by name, over the real ci.yml — so a step ci.yml adds to that job
+ * later is picked up here automatically, and only a step this file already
+ * covers some other way has to be told apart by hand.
+ */
+test("deriveExtraCiCommands runs only what no other check already covers", () => {
+  expect(deriveExtraCiCommands(REAL_CI_YAML)).toEqual([
+    ["node", ["scripts/status.mjs", "--json"]],
+    [
+      "node",
+      ["scripts/citations.mjs", ".claude/skills/orchestrate-tickets/SKILL.md", "--require-anchors"],
+    ],
+  ]);
+});
+
+test("parseShellCommand tokenizes a plain command and drops a shell redirection", () => {
+  expect(parseShellCommand("node scripts/status.mjs --json > /dev/null")).toEqual([
+    "node",
+    ["scripts/status.mjs", "--json"],
+  ]);
+});
+
+test("parseShellCommand keeps a double-quoted argument as one token", () => {
+  expect(parseShellCommand('node scripts/citations-gate.mjs --against "origin/main"')).toEqual([
+    "node",
+    ["scripts/citations-gate.mjs", "--against", "origin/main"],
+  ]);
+});
+
+/**
+ * `ALREADY_COVERED` excludes every command ci.yml carries a template in
+ * today, so this is a defence for the day a new one is added rather than a
+ * live path — and it is exactly what stands between that day and a spawn
+ * that receives the four literal characters `${{` as an argument.
+ */
+test("parseShellCommand throws rather than spawn a templated expression verbatim", () => {
+  expect(() =>
+    parseShellCommand("node scripts/x.mjs --against \"origin/${{ github.base_ref || 'main' }}\""),
+  ).toThrow(/templated command/);
+});
+
+/**
+ * `status.mjs` walks `<repo>/tools` itself with no guard for it being absent,
+ * so every fixture below that actually runs it for real needs the directory
+ * to exist, empty though it is — the same reason `plantCiCheckScripts` makes
+ * it alongside `scripts/`.
+ */
+function plantCiCheckScripts(dir: string): void {
+  fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+  fs.copyFileSync(
+    path.join(REPO_ROOT, "scripts", "citations.mjs"),
+    path.join(dir, "scripts", "citations.mjs"),
+  );
+  fs.copyFileSync(
+    path.join(REPO_ROOT, "scripts", "status.mjs"),
+    path.join(dir, "scripts", "status.mjs"),
+  );
+  fs.mkdirSync(path.join(dir, "tools"), { recursive: true });
+}
+
+/** A minimal `ci.yml` carrying the same five `check`-job commands as the real one. */
+const FIXTURE_CI_YAML = [
+  "name: CI",
+  "on: push",
+  "jobs:",
+  "  check:",
+  "    runs-on: ubuntu-latest",
+  "    steps:",
+  "      - run: npm ci",
+  "      - run: npm run check",
+  "      - run: node scripts/status.mjs --json > /dev/null",
+  "      - run: node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors",
+  "      - run: node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
+  "  changes:",
+  "    runs-on: ubuntu-latest",
+  "    steps:",
+  "      - run: echo hi",
+  "",
+].join("\n");
+
+test("checkCiCommands has nothing to check in a repository with no ci.yml", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("base");
+    const result = checkCiCommands(repo.dir);
+    expect(result).toMatchObject({ ok: true, bit: 0 });
+    expect(result.lines.join("\n")).toBe(`ok    no ${CI_WORKFLOW_PATH} here — nothing to check`);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** Both derived commands run for real, over a repository that has nothing wrong. */
+test("checkCiCommands runs the ci.yml commands no other check covers, for real, and passes on a clean repo", () => {
+  const repo = makeRepo();
+  try {
+    plantCiCheckScripts(repo.dir);
+    repo.write(CI_WORKFLOW_PATH, FIXTURE_CI_YAML);
+    repo.write(
+      ".claude/skills/orchestrate-tickets/SKILL.md",
+      "# Orchestration\n\nNo citations here.\n",
+    );
+    repo.commitAll("seed a clean repo");
+
+    const result = checkCiCommands(repo.dir);
+    expect(result).toMatchObject({ ok: true, bit: 0 });
+    expect(result.lines.join("\n")).toMatch(/^ok {4}node scripts\/status\.mjs --json$/m);
+    expect(result.lines.join("\n")).toMatch(
+      /^ok {4}node scripts\/citations\.mjs \.claude\/skills\/orchestrate-tickets\/SKILL\.md --require-anchors$/m,
+    );
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Done when's first planted failure, reproduced exactly: #305 passed preflight
+ * twice and then failed CI on this same command, over a `SKILL.md` carrying a
+ * citation with no anchor text.
+ */
+test("checkCiCommands fails on a branch shaped like #305's first head — an unanchored SKILL.md citation", () => {
+  const repo = makeRepo();
+  try {
+    plantCiCheckScripts(repo.dir);
+    repo.write(CI_WORKFLOW_PATH, FIXTURE_CI_YAML);
+    repo.write("src/foo.ts", "export const one = 1;\n");
+    repo.write(
+      ".claude/skills/orchestrate-tickets/SKILL.md",
+      "# Orchestration\n\nSee `src/foo.ts:1`.\n",
+    );
+    repo.commitAll("seed a SKILL.md with an unanchored citation");
+
+    const result = checkCiCommands(repo.dir);
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.ciCommands);
+    expect(result.lines.join("\n")).toMatch(
+      /FAIL {2}node scripts\/citations\.mjs \.claude\/skills\/orchestrate-tickets\/SKILL\.md --require-anchors/,
+    );
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** `status.mjs --json`'s own gate, over a ticket this file did not previously reach. */
+test("checkCiCommands fails when status.mjs --json finds a dangling depends_on", () => {
+  const repo = makeRepo();
+  try {
+    plantCiCheckScripts(repo.dir);
+    repo.write(CI_WORKFLOW_PATH, FIXTURE_CI_YAML);
+    repo.write(
+      ".claude/skills/orchestrate-tickets/SKILL.md",
+      "# Orchestration\n\nNo citations here.\n",
+    );
+    repo.write(
+      "docs/work/repo-1.md",
+      [
+        "---",
+        "id: repo-1",
+        "tool: repo",
+        "title: a fixture ticket",
+        "kind: chore",
+        "status: ready",
+        "milestone: null",
+        'depends_on: ["repo-999"]',
+        "---",
+        "",
+        "# repo-1",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+    );
+    repo.commitAll("seed a dangling dependency");
+
+    const result = checkCiCommands(repo.dir);
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.ciCommands);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}node scripts\/status\.mjs --json/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+// --- repo-79: check 5's other half — citations over a scratch merge of every open head ---
+
+test("checkScratchMergeCitations says explicitly that an empty list checked nothing", () => {
+  const result = checkScratchMergeCitations(
+    "/does-not-matter",
+    "0".repeat(40),
+    [],
+    "main",
+    new Map(),
+  );
+  expect(result).toMatchObject({ ok: true });
+  expect(result.lines.join("\n")).toMatch(
+    /no other open pull request to fold into a scratch merge/,
+  );
+});
+
+/**
+ * `buildScratchMerge`'s own conflict path: folding in two heads that both
+ * touch the same line of the same file the way `checkMergeTree`'s pairwise
+ * probe already would, so this only has to prove the *fold* reports it, not
+ * that a conflict can exist.
+ */
+test("buildScratchMerge reports which head it could not fold in on a genuine conflict", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "one\n");
+    repo.commitAll("base");
+    const headOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "a");
+    repo.write("f.txt", "one-from-a\n");
+    repo.commitAll("edit from a");
+    const oidA = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("f.txt", "one-from-b\n");
+    repo.commitAll("edit from b");
+    const oidB = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    const result = buildScratchMerge(repo.dir, headOid, [
+      { number: 1, headRefName: "a", oid: oidA },
+      { number: 2, headRefName: "b", oid: oidB },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.conflictHead.headRefName).toBe("b");
+      expect(result.paths).toEqual(["f.txt"]);
+    }
+    // The scratch worktree is gone either way, not left behind for the next run.
+    expect(repo.git("worktree", "list")).not.toMatch(/preflight-scratch-/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test("buildScratchMerge folds every reachable head in and cleans the worktree up when the caller is done", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "one\n");
+    repo.commitAll("base");
+    const headOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "a");
+    repo.write("other.md", "from a\n");
+    repo.commitAll("add from a");
+    const oidA = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    const result = buildScratchMerge(repo.dir, headOid, [
+      { number: 1, headRefName: "a", oid: oidA },
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(fs.readFileSync(path.join(result.dir, "other.md"), "utf8")).toBe("from a\n");
+      removeWorktreeForTest(repo.dir, result.dir);
+    }
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** Not exported — `buildScratchMerge`'s own cleanup is proven by the conflict test above. */
+function removeWorktreeForTest(repo: string, dir: string): void {
+  spawnSync("git", ["worktree", "remove", "--force", dir], { cwd: repo });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/**
+ * Done when's second planted failure: a pair of heads that each pass the
+ * citations gate alone but fail together, reproducing repo-60's record
+ * against repo-63's splice. `HEAD` (as "mine") adds an anchored record citing
+ * `src/tls.ts:2`, untouched by "mine" itself — passes alone, trivially, since
+ * nothing it changed can move a citation. "b" independently inserts a line
+ * above that same region — its own citations gate has nothing to check,
+ * since "b" carries no `## Review` record, so it too "passes alone". Neither
+ * touches a file the other does, so `git merge-tree` reports the pair clean;
+ * only the citation gate, run over the actual fold, catches that "mine"'s
+ * anchor no longer points at line 2 in the merged state.
+ */
+test("checkScratchMergeCitations fails on a citation two clean-merging heads move between them", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("insert a line above the cited region");
+    const oidB = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 7, headRefName: "b", oid: oidB }],
+      mainOid,
+      new Map(),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** The positive control: the same shape, but "b"'s change does not touch the cited file at all. */
+test("checkScratchMergeCitations passes when the fold does not move any cited line", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("other.md", "unrelated\n");
+    repo.commitAll("an unrelated change");
+    const oidB = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 7, headRefName: "b", oid: oidB }],
+      mainOid,
+      new Map(),
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.lines.join("\n")).toMatch(/clean over/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** `checkMergeTree`'s own wiring: the scratch-merge step only runs when a `base` is given. */
+test("checkMergeTree skips the scratch-merge citations step when no base is given", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
+    repo.commitAll("base");
+
+    const result = checkMergeTree(repo.dir, { listOpenHeads: () => [] });
+    expect(result).toMatchObject({ ok: true, bit: 0 });
+    expect(result.lines.join("\n")).not.toMatch(/scratch merge/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** And runs it, folding it into the same bit, when one is. */
+test("checkMergeTree runs the scratch-merge citations step and fails on the same bit when it does", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("insert a line above the cited region");
+    const oidB = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkMergeTree(repo.dir, {
+      base: mainOid,
+      grandfathered: new Map(),
+      listOpenHeads: () => [{ number: 7, headRefName: "b", oid: oidB }],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.mergeTree);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
+  } finally {
+    repo.cleanup();
+  }
+});
