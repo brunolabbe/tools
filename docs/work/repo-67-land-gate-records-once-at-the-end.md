@@ -3,7 +3,7 @@ id: repo-67
 tool: repo
 title: Land gate records once, at the end, not every round
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -97,6 +97,24 @@ batch.
   explicit open decision.
 - `npm run check` and the `repo` project's suite pass, including any test
   changes `review-record.mjs`'s own behaviour needs.
+
+## Review
+
+**Gate: PASS** — 2026-09-27 · `1a8321ce0615059d9b9d338628b78a2d9552249a...8c2667893496ecfe9077afb2c00919884e09eada` · code-review at medium (dispatch named no depth)
+
+| Done when                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The role pages and `records.md` describe committing gate records once, at the landing commit, not per round       | **verified** — `.claude/skills/orchestrate-tickets/reference/records.md`, the bullet "Nothing is committed per round" under its new "A multi-round record lands once, at the end" heading; `.claude/skills/orchestrate-tickets/roles/builder.md`, the bullet "Leave `status` as it is until the landing"; `roles/fixer.md` and `roles/reviewer.md` carry the matching rule (see findings for one place this did not reach) |
+| The `reviewedButReady`/`## Review`-presence question is settled with its reasoning, or raised as an open decision | **verified** — settled in the ticket's own Build, the paragraph starting "Settled by the builder, 2026-09-27"; independently re-derived from `scripts/status.mjs:389 "filter((ticket) => ticket.reviewed && ticket.status"`, `scripts/preflight.mjs:408 "exec(content)?.[1]"` and `scripts/preflight.mjs:410 "test(content)) {"`, and reproduced below                                                                     |
+| `npm run check` and the `repo` project's suite pass                                                               | **verified** — `npm run check` exit 0; `npm test -- --project repo`: `Tests 504 passed (504)`, 10 files, matching the ticket's own Log figure                                                                                                                                                                                                                                                                              |
+
+**Reproduction of the settled question (task-specified).** Built a scratch fixture (`docs/work/repo-90..92`) and ran `node scripts/status.mjs --root <fixture> --json`: a `ready` ticket carrying `## Review` is the only one flagged (`reviewed-but-ready`, exit 1); an `in-flight` ticket carrying `## Review` is not flagged, matching `scripts/test/status.test.ts:1123 "a gate record on an in-flight ticket is a report on work in "`. Called `checkReview` from `scripts/preflight.mjs` directly against a one-commit git fixture with `status: done` and no `## Review`: it correctly returns `FAIL ... is marked done but has no ## Review section`. Under the sequence the pages now describe — status is edited in the same commit as the first gate's splice (`roles/builder.md`'s bullet "Set the status in the first of these commits"), and push happens only after every gate's commit plus a local `preflight.mjs` pass — no commit in the sequence can reach a pushed tip with a record on a `ready` ticket, or `done` with no record; both would require an agent to push before finishing its own Landing steps, which nothing in the sequence does before all record commits exist.
+
+- **low** · `.claude/agents/fixer.md`'s own `description` frontmatter still reads "lands a round whose remaining work is mechanical," unchanged by this branch, while `roles/fixer.md` — the page it points to — now reads (its opening paragraph) "You also land a ticket whose remaining work is mechanical." The two disagree on the unit this branch's whole point is about, in a file the dispatched fixer's own definition carries.
+- **dropped** · an apparent sequencing gap where a fixer applying fixes under conditional ship authority would dirty the working tree before splicing records, which could make `review-record.mjs`'s own citations check fail to run — reproduced that it does not: `scripts/review-record.mjs`'s uncommitted-changes guard runs `git diff --quiet HEAD` scoped to the ticket path only (`scripts/review-record.mjs:367 "git diff --quiet HEAD"`), and its internal citations check reads target files with a plain read against the working tree (`scripts/citations.mjs:868 "readFileSync(path.join(repo, file)"`), so a fix that moved a cited line is caught at the splice itself, before any commit — the pages' "splice records first, commit fixes after" holds regardless of how the agent stages the eventual commits.
+- **dropped** · leftover per-round language, swept for: `grep -rniE` across `.claude/skills` and `.claude/agents` for round/landing/commit phrasing (excluding `reference/history.md`) found nothing else stale beyond the low above; `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md`'s sentence "Retire a reviewer when its record is committed and the [ticket's last round has landed]" is imprecise now that the two conditions become simultaneous under this branch's model, but not incorrect — it does not admit an early retirement it should forbid, so not carried as a finding, only noted; that page is untouched by this branch and outside its named file list.
+- **findings** · code-review at medium returned 3; 1 carried, 2 dropped (both explained above).
+- NFR: security n/a · performance n/a · reliability ✓ (the sequencing risk above is closed by an existing guard, reproduced) · maintainability — the one `low` above.
 
 ## Log
 
