@@ -4058,8 +4058,9 @@ Median hop **42 s**; median receiving active **9m35s**; max hop **11m08s**. **Cr
 7. A Build step needing an external host was dispatched blind (dl-70, www.iana.org blocked) → `reference/dispatching.md` _Dispatching a builder_.
 8. The orchestrator put a builder's unverified premise into an owner question; rule exists (SKILL.md relaying table); add this date and premise-inside-option case → `SKILL.md`.
 9. The fixer definition lacks the 1-hour cache TTL the builder and gate definitions carry; its one late wake was cold → `agents/fixer.md` frontmatter.
-10. Preflight's title check reads the tip commit's subject, not the PR title (relayed from dl-70 builder; verified by reading `scripts/preflight.mjs:443`) → file `repo-61`.
+10. Preflight's title check reads the tip commit's subject — **only because step 9's command omits `--title`**, which `scripts/preflight.mjs` already takes; filed as repo-61 by the maintenance dispatch, then withdrawn and folded in → `SKILL.md` step 9, `roles/fixer.md` _The work_, `roles/builder.md` ship conditions.
 11. `review-record.mjs` does not check that the section it commits equals the file it was handed — the mechanical guard item 2 needs → file `repo-62`.
+12. The maintenance dispatch opened its pull request over a failed ship condition it judged pre-existing; CI's `check` on the same head passed, because the failure was a stale build in its worktree → `roles/builder.md`, ship conditions.
 
 **what went right**
 

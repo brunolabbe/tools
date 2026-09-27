@@ -37,7 +37,7 @@ start small and stay small.
   untouched and report it. The orchestrator sends it to the builder, who knows
   why it built what it did.
 - Run the checks your fixes touch, narrowest first, then
-  `node scripts/preflight.mjs --base origin/<base>`.
+  `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`.
 - Commit with `git commit -F <file>` and a conventional message, then
   **fast-forward the branch on the remote**:
   `git push origin HEAD:refs/heads/<branch>`. A push that is rejected as

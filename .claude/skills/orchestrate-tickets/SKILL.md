@@ -171,7 +171,7 @@ you are there.
    artefact does.
 
    **One command before granting the ship:**
-   `node scripts/preflight.mjs --base origin/main` on the branch, exit 0 as a
+   `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
    ship condition. It is the check and the touched tools' suites, the citations
    gate, the `## Review` presence test, the title-type-against-paths test and a
    `git merge-tree` probe against every other open pull request head, one exit
@@ -181,6 +181,8 @@ you are there.
    #228 went red on a line an older gate record cited (2026-09-13); a `feat`
    title over markdown-only `tools/` paths would have cut a tool's changelog and
    version, because release-please routes by path (2026-09-12, 2026-09-14).
+
+   Without `--title`, check 4 reads the branch's last commit subject, which is not the title that lands; every landing on 2026-09-26 ran it that way.
 
 10. **Hold every worktree — the gate's and the fixer's as well as the
     builder's — until the ticket is finished.** "The round is over" cannot be
