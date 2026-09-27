@@ -3,7 +3,7 @@ id: repo-64
 tool: repo
 title: Record the 2026-09-27 batch and fold its defects into the rule pages
 kind: chore
-status: ready
+status: in-flight
 milestone: null
 depends_on: []
 ---
