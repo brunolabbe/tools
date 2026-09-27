@@ -125,6 +125,36 @@ did not set a number. Correct it here before the batch if it is wrong.
 - **findings** · code-review at medium returned 5; 5 carried, 0 dropped.
 - NFR: security n/a (no source change) · performance n/a · reliability — a future orchestrator reading step 6 as it stands is told the trial is still live, contradicting a done ticket · maintainability — the reviewer.md/records.md conflict above is the concern.
 
+### Gate 2
+
+**Verdict: FAIL** — 2026-09-27 · `f350477..423e8ad` · re-gate of gate 1 findings only, code-review at medium on the lines this round touched
+
+Gate 1 findings, verdicts:
+
+- **high** (SKILL.md step 6 sentence not removed) — **fixed**. Verified `grep -c repo-59 .claude/skills/orchestrate-tickets/SKILL.md` = 0 (matches the coordinator own check). Step 6 paragraph replaced with an inline measurement, no ticket link; step 12 lost its own repo-59 sentence too, which was the low finding below.
+- **med** (`roles/reviewer.md` re-gate bullet contradicts `records.md`'s "the lander does that pinning") — **fixed**. `records.md` now reads: "The lander does that pinning, when it transcribes the multi-round section — unless a re-gating reviewer has already returned its earlier sections re-resolved against the new head, as `roles/reviewer.md` asks since 2026-09-26, in which case the lander commits those as given." This names the reviewer.md bullet as the exception path rather than leaving two silent, conflicting instructions. `roles/reviewer.md` itself is unchanged this round and still agrees with the new text.
+- **med** (`agents/seam-mapper.md`'s "dl-45" example does not match any branch in the batch) — **fixed**, and more accurate than gate 1 asked for. The line now reads "(dl-57 and dl-63 by dl-70, dl-55 and dl-68 by dl-69, and repo-52 by repo-50)". I had verified dl-55 and dl-68 for dl-69 and repo-52 for repo-50 at gate 1; re-checked dl-63 now: `git diff a1a417b 512fcb5 -- tools/downloader/docs/work/dl-63-ipv6-special-ranges.md` shows the same shape — a pin repointed from `1a502348816d545aae3ca1656d29163e7de03c78:132` to `a1a417b:132` in a merged record dl-70 displaced. The corrected list is fully accurate; gate 1 itself missed that dl-63 was also omitted, and this round fixed that too.
+- **med** (this ticket Log claims "filed two follow-up tickets (`repo-61`, `repo-62`)" without noting `repo-61`'s withdrawal in the same branch) — **fixed**. A new dated Log entry ("2026-09-27 — Correction to the entry above") states the true state without deleting the original, consistent with `records.md`'s withdrawn-in-place discipline even though it does not use the literal `WITHDRAWN` marker.
+- **low** (`SKILL.md` step 12 stale "also closes repo-59" sentence) — **fixed** as a side effect of the same edit that fixed the high finding; both paragraphs naming this ticket are gone from `SKILL.md`.
+
+Cross-check requested by the coordinator: `roles/reviewer.md`'s re-gate bullet and `records.md`'s new sentence now agree — reviewer.md says a re-gating gate returns "a corrected copy of each as a file... coordinates re-resolved against the new head," and records.md says that when it has, "the lander commits those as given." I swept `.claude/skills/orchestrate-tickets/` for every other mention of "lander" and "re-resolv" (`grep -rn`): `.claude/skills/orchestrate-tickets/reference/history.md@e50cf81:3982 "cannot be re-resolved by the reviewer"`, from the twentieth session (2026-09-20, superseded), still states the old rule — but that page is dated provenance, not an active instruction (its own preamble says it is kept out of SKILL.md because it is evidence rather than instruction), and it predates this branch change by six sessions. No other active rule page in roles, reference/dispatching.md or agents/fixer.md asserts the lander alone re-resolves at re-gate.
+
+Gate 1 own section cited nothing on the branch tip: all three substantive citations named there were pinned to the main commit this ticket was based on, which this round cannot move. No corrected copy is needed; the words and verdicts in gate 1 are unchanged.
+
+New problem in the file this round touched:
+
+- **high** · **Gate 1's `## Review` section was never committed.** The ticket carries `status: done` and, per this diff, the round edited `docs/work/repo-59-findings-routed-through-the-orchestrator-is-a-one-batch-trial.md` (the Log correction) — but the file has no `## Review` heading anywhere: `grep -n "^## Review\|^## Log"` finds only `## Log`. `node scripts/preflight.mjs --base origin/main --title "chore(repo): record the 2026-09-26 batch and fold its defects into the role pages (repo-59)"` exits 5: `review FAIL docs/work/repo-59-...md is marked done but has no ## Review section`. This is precisely the failure `roles/builder.md`'s own new rule (this batch's own item 1 fix) exists to prevent, and it blocks this round from shipping regardless of the five findings above all being fixed. None of the fixer's four claimed commands (`oxfmt --check`, `citations-gate.mjs`, `status.mjs --json`, `git diff --stat`) is `preflight.mjs`; all four reproduce true, and none of them was sufficient. Landing this round requires committing gate 1's section (unedited: `/tmp/claude-1000/-workspaces-tools/211b7201-90ab-4171-9754-2cfed46f95af/scratchpad/repo-59/records/gate1-review.md`) and this `### Gate 2` subsection together, above `## Log`.
+
+Fixer claims, reproduced:
+
+- `npx oxfmt --check .` → 0. Reproduced: exit 0, "All matched files use the correct format."
+- `node scripts/citations-gate.mjs --against origin/main` → 0. Reproduced: exit 0, "106 enforced, 0 failing... 0 raised."
+- `node scripts/status.mjs --json` → 0. Reproduced: exit 0.
+- `git diff --stat f350477..423e8ad` → 5 files. Reproduced: 5 files exactly (seam-mapper.md, SKILL.md, history.md, records.md, the repo-59 ticket).
+
+- **findings** — 5 named findings from gate 1: 5 fixed, 0 refuted. 1 new finding this round: 1 carried (high), 0 dropped.
+- NFR: security n/a · performance n/a · reliability — unchanged from gate 1 other than the new finding above · maintainability — the records.md/reviewer.md reconciliation is a real improvement; the missing `## Review` section is the opposite.
+
 ## Log
 
 - 2026-09-26 — filed on the owner's decision to accept the routing reversal as a
