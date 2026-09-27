@@ -27,9 +27,13 @@ down the salary and ratio history the owner wants charted (§9).
      salary records it came from, if any.
      All three are append-only, and a correction supersedes the earlier record.
 2. `books`, pure:
-   - **mortgage:** each person's cumulative deposits to the mortgage bucket, the
-     gap between them, and the bucket's common surplus (balance − gap). All of
-     it is as of any date.
+   - **mortgage:** each person's own money in the bucket, which is their
+     deposits − ½ × payments, as of any date.
+     - The bucket is **not** shared (analysis §4). The two amounts sum to its
+       balance exactly, and nothing in it is common.
+     - Rounding: an odd-cent payment's halves differ by a cent. Give the extra
+       cent to one person by a fixed rule, and assert that the sum still
+       equals the balance.
    - **buffer:** the current-expenses balance as of any date, and each person's
      cumulative contributions to it.
    - **ratio from salaries:** parts per million, rounded half-up, with the two
@@ -37,7 +41,8 @@ down the salary and ratio history the owner wants charted (§9).
 3. Money is integer cents throughout. No `number` holding dollars crosses a
    function boundary.
 4. `web`:
-   - the home screen: the mortgage gap and who is ahead, and the buffer's
+   - the home screen: each person's own money in the mortgage bucket, who has
+     paid extra and by how much, and the buffer's
      balance;
    - a screen for entering a year's salaries, which proposes the derived ratio
      and its effective date for the person to confirm.
@@ -45,7 +50,8 @@ down the salary and ratio history the owner wants charted (§9).
 ## Done when
 
 1. Unit tests on a synthetic history prove:
-   - the mortgage gap and common surplus;
+   - each person's own money in the mortgage bucket, and that the two sum
+     to its balance to the cent, including after an odd-cent payment;
    - the buffer's balance as of a past date, where a later row changes the
      present one;
    - that a derived ratio's two halves sum to 1 000 000.

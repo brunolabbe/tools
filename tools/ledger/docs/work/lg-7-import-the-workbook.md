@@ -51,7 +51,8 @@ prove it reproduces the workbook's own figures before it writes a row.
    lands with a note on its row.
 8. **The report**, printed before anything is written:
    - counts of rows imported, repaired, skipped and corrected;
-   - the mortgage gap and the cumulative catch-up, each beside the figure the
+   - each person's own money in the mortgage bucket, and the cumulative
+     catch-up, each beside the figure the
      workbook shows;
    - a nonzero exit when a verification fails.
      `--write` performs the import; without it, the command is a dry run.
@@ -66,7 +67,8 @@ period and a v2 period.
    nothing. A test asserts the database is unchanged.
 2. A carry-over that disagrees with the previous year fails the import, with a
    nonzero exit.
-3. `--write` reproduces the synthetic workbook's mortgage gap and buffer balance
+3. `--write` reproduces the synthetic workbook's mortgage gap (`own_A − own_B`)
+   and buffer balance
    exactly.
 4. A correction moves its row and leaves a note on it.
 5. Imported period settlements keep their historical amounts and their formula

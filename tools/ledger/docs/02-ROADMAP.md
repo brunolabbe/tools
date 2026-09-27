@@ -34,6 +34,9 @@ detail and the numbers behind each.
 - **History is imported once, all of it since 2022.** A one-off importer reads
   the existing Excel file. The real file stays out of the repository; its
   fixtures are synthetic.
+- **The mortgage bucket is not shared money.** Each person's own part is their
+  deposits minus half of every payment, and the two parts are the whole
+  balance. Who has paid extra, and how much, is the view's headline.
 - **Settlements go into the buffer, sized by the matching rule.** Whoever is
   short tops up until the two contributions stand at the ratio. It is computed
   cumulatively, since the last point where the two were even.

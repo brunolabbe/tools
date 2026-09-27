@@ -136,14 +136,28 @@ repository. Caisse names identify a household.
 ## 4. The mortgage bucket
 
 The mortgage is split 50/50. The workbook compares **cumulative deposits since
-2022**, person against person, and ignores payments, because both halves of
-every payment are owed equally. The figure it shows is the difference between
-the two totals, plus whatever is left in the bucket beyond that difference, which
-is common surplus.
+2022**, person against person. It shows the difference between the two totals,
+and calls whatever the bucket holds beyond that difference common surplus.
 
-The tool keeps that model. The mortgage view shows each person's cumulative
-deposits, the gap between them and the bucket's common surplus. It is
-recomputed from rows on every read and never stored.
+**The owner corrected that: the mortgage bucket is not shared money.** Unlike
+the buffer (§5), nothing in it belongs to both people. Every dollar in it is one
+person's deposit that no payment has used yet. Knowing who has paid extra, and
+how much, is the point of the view. So the tool attributes the whole balance:
+
+```
+own_A = deposits_A − ½ × payments
+own_B = deposits_B − ½ × payments
+own_A + own_B = the bucket's balance
+```
+
+The workbook's gap is `own_A − own_B`, and it falls out of the model. On the
+real file, all three rows of that model held exactly since 2022, and the bucket
+held no row that was neither a deposit nor a payment. The model has no "common"
+part.
+
+The mortgage view leads with **each person's own money in the bucket** and who
+is ahead by how much. It is recomputed from rows on every read and never
+stored.
 
 The two schedules differ on purpose: one person transfers every two weeks and
 the other monthly. So the gap moves within a year by design, and the view shows
@@ -364,7 +378,8 @@ What the importer does with that:
   as moving a row to the other bucket. Each correction lands with a note on the
   row. Nothing is silently rewritten.
 - **The result is a report:** rows imported, repaired, skipped and corrected, and
-  the two cumulative figures (the mortgage gap and the catch-up) set against what
+  the two cumulative figures (each person's own money in the mortgage
+  bucket, and the catch-up) set against what
   the workbook shows.
 
 ## 9. History and stats
@@ -377,8 +392,8 @@ dated rows and nothing is kept as a running total:
   chart on its `Hypothèque` sheet. The payment changes at each renewal, and the
   rows show exactly when.
 - **The ratio and the salaries over time**, from their dated records.
-- **Each person's cumulative contributions**, per bucket, and the mortgage gap
-  as a line.
+- **Each person's cumulative contributions**, per bucket, and each person's own
+  money in the mortgage bucket as a line.
 - **The buffer's balance over time**, with what paid for each large drop.
 - **Spending per period and per category**, down to the receipt item: how
   much went to groceries or to alcohol, and the fixed items' cost month by month.

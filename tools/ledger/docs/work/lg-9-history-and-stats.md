@@ -22,7 +22,8 @@ append-only records, so this ticket computes and draws. It stores nothing new.
 1. `books`, pure — time series, each computed from rows:
    - the mortgage payment over time, marking each change (renewals);
    - salaries and ratio by year;
-   - each person's cumulative contributions per bucket, and the mortgage gap;
+   - each person's cumulative contributions per bucket, and each person's own
+     money in the mortgage bucket;
    - the buffer's balance, with the rows behind its large drops;
    - spending per period and per category, and the fixed items month by
      month. Receipt items carry categories once
