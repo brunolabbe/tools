@@ -135,6 +135,34 @@ export const SEGMENT_SKIPPED = /failed too many times, skipping/iu;
 /** The evidence a `SEGMENT_SKIPPED` failure carries, like the runner's 4 KB tail. */
 const STDERR_TAIL_CHARS = 4096;
 
+/**
+ * The DASH demuxer's word for a fragment it could not open. **It never
+ * retries**: measured on ffmpeg 6.1.1 (dl-53's fourth gate, then the builder),
+ * a fragment reset once and served on a second request is still lost, because
+ * the second request is never made — so this line always means a hole. The
+ * container still declares the full duration around it, which is why a
+ * duration check could not have caught it.
+ */
+export const FRAGMENT_LOST = /Failed to open fragment of playlist/iu;
+
+/**
+ * ffmpeg's own report that an input's demuxer failed to read — the progressive
+ * case, where a body cut mid-transfer is reconnected, the reconnects are
+ * refused, and the file ends at the cut. It is written by the ffmpeg CLI for
+ * any input, and only for a read error, never at an ordinary end.
+ *
+ * **Not "Stream ends prematurely".** The gate named it as a candidate, and it
+ * cannot be: ffmpeg writes that line for a transfer it then reconnects and
+ * completes, measured with a body cut at 40% once and served whole on the
+ * reconnect — full length, exit 0, and the line present all the same.
+ */
+export const DEMUX_READ_FAILED = /Error during demuxing|Error retrieving a packet from demuxer/iu;
+
+/** True for a line that says the source lost data this stream will not get. */
+export function losesSourceData(line: string): boolean {
+  return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line) || DEMUX_READ_FAILED.test(line);
+}
+
 /** `source` keeps the origin container when we can hold it; otherwise MP4. */
 export function resolveContainer(
   variant: MediaVariant,
@@ -487,7 +515,7 @@ async function attempt(
       logger.debug("ffmpeg", { line });
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_CHARS);
       if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
-      if (SEGMENT_SKIPPED.test(line)) {
+      if (losesSourceData(line)) {
         // A segment refused on its certificate is skipped the same way, and
         // says so first: that is a certificate failure, which is not retried
         // and must not read as a dead link (dl-27). Anything else is lost data.

@@ -739,3 +739,66 @@ packet` — which is the exit the gate recorded. The fix the owner chose
   ticket can no longer read `ready` — `npm run status -- --json` exits 1 on
   exactly that (`reviewedButReady` in `scripts/status.mjs`) — and it is not
   `done` until the re-gate and the landing.
+
+- 2026-09-27 — **Round four: gate 4's narrowed high, gate 3's low and gate 4's
+  low, on the owner's answers of the same day.** The committed `## Review` was
+  withdrawn in one commit and the four sections — gates 1 and 2 re-resolved at
+  `8ac378c`, then gates 3 and 4 — landed verbatim with
+  `scripts/review-record.mjs`, one commit each.
+
+  **Truncation after the first byte, for DASH and progressive. Reproduced,
+  fixed with two more stderr patterns, one of the gate's candidates refused.**
+  Measured first with `scratchpad/dl-53/explore*.mts`: the argv from
+  `buildStreamArgs`, the fixtures from `engine/test/helpers/media.ts`, ffmpeg
+  6.1.1.
+  - **DASH**, `chunk-stream0-00003.m4s` reset: exit 0, 171,334 bytes against
+    206,414 whole, and one line, `Failed to open fragment of playlist`. The
+    DASH demuxer never retries: the same fragment reset **once** and served on
+    a second request gives the same 171,334 bytes, because it asks once. So the
+    line always means a hole, and is `FRAGMENT_LOST` in `engine/src/stream.ts`.
+  - **Progressive**, the body read cut at 40% and every reconnect refused:
+    exit 0, 96,079 bytes, ending in `Error during demuxing: Input/output error`
+    and `Error retrieving a packet from demuxer: Input/output error` —
+    `DEMUX_READ_FAILED`.
+  - **"Stream ends prematurely" is refused as a signal.** The same cut, served
+    whole on the reconnect, completes at 233,063 bytes (the full file) and
+    still writes `Stream ends prematurely at …` and `Will reconnect at …`.
+    Matching it would fail a download that succeeded.
+  - Red first: the two new cases at the end of `engine/test/stream.test.ts`
+    ("a DASH fragment that cannot be fetched after the first byte" and "a
+    progressive body cut after the first byte and never served again") failed
+    with `expected false to be true` on `received.aborted`. Controls, green
+    before and after: a progressive cut resumed on reconnect, and an HLS
+    segment refused once and served on the retry, each complete and within
+    0.6 s of its length. Mutations, each reverted by the script that made it
+    (`scratchpad/dl-53/mutate.cjs`): dropping `FRAGMENT_LOST` fails only the
+    DASH case; dropping `DEMUX_READ_FAILED` fails only the progressive case.
+  - The progressive case refuses reconnects with `404`, not a reset: ffmpeg
+    gives up on a 404 in 11 s and on resets in 55, and both end in the same
+    lines.
+  - **Not checked against real-world sources for false failures**, as before.
+
+  **A shape neither gate named, measured and not fixed: a segment or fragment
+  whose body is cut short, rather than refused.** An HLS segment cut at 40%
+  once loses data — 141,503 bytes against 157,114 for the same fixture served
+  whole — and so does a DASH fragment cut at 40% (185,160 against 206,414).
+  Neither demuxer re-requests it, and neither writes any line matched above:
+  both write `Stream ends prematurely` (which cannot be the signal, see above)
+  and `corrupt input packet in stream 0`. Raised to the orchestrator as an open
+  decision rather than closed here, because the one line that would catch it
+  is also what a source with genuinely corrupt packets produces.
+
+  **`PROBE_TIMEOUT_MS` is capped at 50 s (gate 3's low, fixed as decided).**
+  `PROBE_TIMEOUT_CEILING_MS` in `api/src/config.ts` is the `max` on its `int()`
+  call; `config.test.ts`'s new last case failed first with `expected 120000 to
+be 50000`, and holds the ceiling to `TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES
+  - 1)`. An override passed in code is not capped — tests use one to reach a
+zero wait. `.env.example`, the settings table and the deployment doc say so.
+
+  **The certificate precedence has an engine-level case (gate 4's low).** A
+  real refused segment needs the API's egress proxy, which the engine cannot
+  import, so the case stands ffmpeg in with a script that writes the proxy's
+  refusal line and then the skip line: `TLS_VERIFICATION_FAILED`, and
+  `DOWNLOAD_FAILED` without the refusal line. Skipped on Windows, where a
+  script cannot be spawned without a shell. Making the precedence branch
+  always false fails it; reverted.

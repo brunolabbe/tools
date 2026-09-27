@@ -609,7 +609,7 @@ download's response starts only once its job has a slot and has re-probed —
 twice, when the first attempt fails in a way a fresh probe can fix — so the API
 bounds the wait for a slot so that it and two `PROBE_TIMEOUT_MS` together stay
 under 100 s, and answers `429` past it. At the 45 s default that is a 10 s wait;
-raising `PROBE_TIMEOUT_MS` shortens it, and at 50 s or more there is none.
+raising `PROBE_TIMEOUT_MS` shortens it. It is capped at 50 s, where there is none.
 
 ### Tightening it past one user
 

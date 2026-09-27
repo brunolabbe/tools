@@ -350,6 +350,16 @@ const PROBES_PER_BROWSER_SLOT = 4;
  */
 const QUEUED_JOBS_PER_CONCURRENCY_SLOT = 4;
 
+/**
+ * The most `PROBE_TIMEOUT_MS` may be (dl-53). A download's first byte waits on
+ * up to two probes — the re-probe and its one retry — and both must fit in
+ * `TUNNEL_BUDGET_MS` (100 s, `jobs/links.ts`) or Cloudflare answers 524. So the
+ * ceiling is half the budget, and at it the wait for a slot is zero. Written out
+ * rather than imported, so this module does not pull in the orchestrator;
+ * `config.test.ts` holds it to `TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES + 1)`.
+ */
+export const PROBE_TIMEOUT_CEILING_MS = 50_000;
+
 /** The brief's cap. A cache that outlives the URLs it holds is worse than none. */
 export const PROBE_CACHE_TTL_CEILING_MS = 60_000;
 
@@ -516,7 +526,8 @@ export function loadApiConfig(
       overrides.maxConcurrentFrameGrabs ??
       int(env["MAX_CONCURRENT_FRAME_GRABS"], maxConcurrentJobs, { min: 1, max: 64 }),
     probeTimeoutMs:
-      overrides.probeTimeoutMs ?? int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs),
+      overrides.probeTimeoutMs ??
+      int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs, { max: PROBE_TIMEOUT_CEILING_MS }),
     stageTimeoutMs:
       overrides.stageTimeoutMs ?? int(env["JOB_TIMEOUT_MS"], API_DEFAULTS.stageTimeoutMs),
     maxFileSizeBytes:

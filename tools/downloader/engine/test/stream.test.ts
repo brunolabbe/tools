@@ -67,6 +67,41 @@ let originDelayMs = 0;
  * rather than by a timing margin a loaded machine can eat.
  */
 let lateSegmentDelayMs = 0;
+/**
+ * A fault a test injects at the origin: answers the request itself and returns
+ * true, or returns false to let it be served normally. `count` is how many
+ * times this path has been asked for, this test included.
+ */
+type Fault = (
+  pathname: string,
+  count: number,
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  body: Buffer,
+) => boolean;
+let fault: Fault | null = null;
+const requestCounts = new Map<string, number>();
+
+/** Sends `fraction` of what was asked for, then resets the connection. */
+function cutShort(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  body: Buffer,
+  fraction: number,
+): void {
+  const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
+  const start = range === null ? 0 : Number(range[1]);
+  const end = range === null || range[2] === "" ? body.length - 1 : Number(range[2]);
+  const length = end - start + 1;
+  response.writeHead(range === null ? 200 : 206, {
+    "accept-ranges": "bytes",
+    ...(range === null ? {} : { "content-range": `bytes ${start}-${end}/${body.length}` }),
+    "content-length": String(length),
+  });
+  response.write(body.subarray(start, start + Math.floor(length * fraction)), () => {
+    request.socket.destroy();
+  });
+}
 const savedTmp: Record<string, string | undefined> = {};
 
 const TYPES: Record<string, string> = {
@@ -117,6 +152,9 @@ beforeAll(async () => {
       response.writeHead(404).end();
       return;
     }
+    const count = (requestCounts.get(pathname) ?? 0) + 1;
+    requestCounts.set(pathname, count);
+    if (fault?.(pathname, count, request, response, body) === true) return;
     if (originDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, originDelayMs));
     if (lateSegmentDelayMs > 0 && /seg0*[2-9]\d*\.ts$/u.test(file)) {
       await new Promise((resolve) => setTimeout(resolve, lateSegmentDelayMs));
@@ -168,6 +206,8 @@ afterAll(async () => {
 });
 
 afterEach(() => {
+  fault = null;
+  requestCounts.clear();
   originDelayMs = 0;
   lateSegmentDelayMs = 0;
 });
@@ -676,4 +716,156 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     expect(received.aborted).toBe(true);
     await expect(media?.done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
   });
+
+  /**
+   * Gate 4's two reproductions, and the controls that keep them honest: each
+   * source below fails after the first byte, and each control recovers from a
+   * failure of the same shape and must not be failed for it.
+   */
+  async function streamed(
+    label: string,
+    variant: MediaVariant,
+  ): Promise<{
+    received: Received;
+    done: Promise<unknown> | undefined;
+  }> {
+    const engine = engineWith();
+    let media: MediaStream | undefined;
+    const received = await exchange(
+      label,
+      () => engine.stream({ jobId: label, variant, requestContext: CONTEXT }),
+      (opened) => {
+        media = opened;
+      },
+    );
+    return { received, done: media?.done };
+  }
+
+  const dash8 = (): MediaVariant => ({
+    id: "dash8",
+    protocol: "dash",
+    url: `${origin.origin}/dash8/manifest.mpd`,
+    hasVideo: true,
+    hasAudio: true,
+    durationSec: 8,
+    label: "dash8",
+  });
+  const prog9 = (): MediaVariant => ({
+    id: "prog9",
+    protocol: "progressive",
+    url: `${origin.origin}/prog9/moov-end.mp4`,
+    hasVideo: true,
+    durationSec: 9,
+    label: "prog9",
+  });
+
+  test("a DASH fragment that cannot be fetched after the first byte fails the stream", async () => {
+    // The DASH demuxer never retries a fragment: one failure is a hole in the
+    // middle, and the container still declares the full length around it.
+    fault = (pathname, _count, request) => {
+      if (!pathname.endsWith("/dash8/chunk-stream0-00003.m4s")) return false;
+      request.socket.destroy();
+      return true;
+    };
+    const { received, done } = await streamed("dash-gap", dash8());
+    expect(received.status).toBe(200);
+    expect(received.aborted).toBe(true);
+    await expect(done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+  });
+
+  test("a progressive body cut after the first byte and never served again fails the stream", async () => {
+    // The third request is the sequential body read, after ffmpeg has found the
+    // index at the end; it stops at 40%, and every reconnect finds the URL gone
+    // (a 404 — a signed link expiring mid-download — rather than a reset, only
+    // because ffmpeg gives up on it in 11 s rather than 55).
+    fault = (pathname, count, request, response, body) => {
+      if (!pathname.endsWith("/prog9/moov-end.mp4") || count < 3) return false;
+      if (count === 3) cutShort(request, response, body, 0.4);
+      else response.writeHead(404).end();
+      return true;
+    };
+    const { received, done } = await streamed("prog-cut", prog9());
+    expect(received.status).toBe(200);
+    expect(received.aborted).toBe(true);
+    await expect(done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+  }, 60_000);
+
+  test("control: a progressive body cut once and resumed on reconnect completes whole", async () => {
+    // ffmpeg logs "Stream ends prematurely" here too, and then reconnects and
+    // gets the rest — which is why that line cannot be the signal.
+    fault = (pathname, count, request, response, body) => {
+      if (!pathname.endsWith("/prog9/moov-end.mp4") || count !== 3) return false;
+      cutShort(request, response, body, 0.4);
+      return true;
+    };
+    const { received, done } = await streamed("prog-heal", prog9());
+    expect(received.aborted).toBe(false);
+    await expect(done).resolves.toMatchObject({ bytes: received.bytes });
+    const probed = await probeMedia(received.file);
+    expect(Math.abs((probed.durationSec ?? 0) - 9)).toBeLessThan(TOLERANCE_SEC);
+  }, 60_000);
+
+  test("control: an HLS segment refused once and served on the retry completes whole", async () => {
+    fault = (pathname, count, request) => {
+      if (!pathname.endsWith("/hls6/seg002.ts") || count !== 1) return false;
+      request.socket.destroy();
+      return true;
+    };
+    const { received, done } = await streamed("hls-heal", hlsVariant("hls6", 6));
+    expect(received.aborted).toBe(false);
+    await expect(done).resolves.toMatchObject({ bytes: received.bytes });
+    const probed = await probeMedia(received.file);
+    expect(Math.abs((probed.durationSec ?? 0) - 6)).toBeLessThan(TOLERANCE_SEC);
+  });
+
+  /**
+   * Gate 4's low: a segment refused on its certificate is skipped the same way
+   * as a lost one, and must say which. A real refusal needs the API's egress
+   * proxy, which this package cannot import, so ffmpeg is stood in for by a
+   * script that writes the lines the proxy's refusal produces
+   * (`api/test/two-origin-tls.test.ts` is the real one, end to end).
+   */
+  async function standIn(lines: readonly string[]): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-"));
+    const script = path.join(dir, "ffmpeg");
+    await fs.writeFile(
+      script,
+      [
+        `#!${process.execPath}`,
+        "process.stdout.write(Buffer.alloc(4096, 1));",
+        "setTimeout(() => {",
+        `  for (const line of ${JSON.stringify(lines)}) process.stderr.write(line + "\\n");`,
+        "  setTimeout(() => process.exit(0), 5000);",
+        "}, 100);",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    return script;
+  }
+
+  test.skipIf(process.platform === "win32")(
+    "a segment skipped after a certificate refusal is TLS_VERIFICATION_FAILED, not DOWNLOAD_FAILED",
+    async () => {
+      const refusal =
+        "[httpproxy @ 0x1] HTTP error 502 TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)";
+      const skipped = "[hls @ 0x2] Segment 2 of playlist 0 failed too many times, skipping";
+
+      for (const [lines, code] of [
+        [[refusal, skipped], "TLS_VERIFICATION_FAILED"],
+        [[skipped], "DOWNLOAD_FAILED"],
+      ] as const) {
+        const engine = engineWith({ ffmpegPath: await standIn(lines) });
+        // oxlint-disable-next-line no-await-in-loop
+        const media = await engine.stream({
+          jobId: `stand-in-${code}`,
+          variant: hlsVariant("hls6", 6),
+          requestContext: CONTEXT,
+        });
+        media.body.resume();
+        // oxlint-disable-next-line no-await-in-loop
+        await expect(media.done).rejects.toMatchObject({ code });
+      }
+    },
+  );
 });

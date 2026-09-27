@@ -8,7 +8,9 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { loadApiConfig } from "../src/config.ts";
+import { loadApiConfig, PROBE_TIMEOUT_CEILING_MS } from "../src/config.ts";
+import { maxLinkWaitMs, TUNNEL_BUDGET_MS } from "../src/jobs/links.ts";
+import { MAX_REPROBE_RETRIES } from "../src/jobs/orchestrator.ts";
 import { createLogger } from "../src/logger.ts";
 import { buildRegistry } from "../src/resolvers.ts";
 
@@ -47,5 +49,20 @@ describe("ENABLE_AGE_CONFIRMATION", () => {
       // Nothing was launched: the pool starts a browser on first lease.
       await browser?.dispose();
     }
+  });
+});
+
+describe("PROBE_TIMEOUT_MS fits the tunnel budget (dl-53, gate 3)", () => {
+  test("a value past what two probes can spend in 100 s is capped, not taken", () => {
+    // Every probe a job may run has to fit before the first byte, or Cloudflare
+    // answers 524 whatever the wait for a slot was sized at.
+    const ceiling = TUNNEL_BUDGET_MS / (MAX_REPROBE_RETRIES + 1);
+    expect(PROBE_TIMEOUT_CEILING_MS).toBe(ceiling);
+    expect(loadApiConfig({}, { PROBE_TIMEOUT_MS: "120000" }).probeTimeoutMs).toBe(ceiling);
+    expect(loadApiConfig({}, { PROBE_TIMEOUT_MS: "50000" }).probeTimeoutMs).toBe(50_000);
+    expect(loadApiConfig({}, { PROBE_TIMEOUT_MS: "30000" }).probeTimeoutMs).toBe(30_000);
+    expect(loadApiConfig({}, {}).probeTimeoutMs).toBe(45_000);
+    // At the ceiling the wait is zero, never negative.
+    expect(maxLinkWaitMs(loadApiConfig({}, { PROBE_TIMEOUT_MS: "120000" }).probeTimeoutMs)).toBe(0);
   });
 });
