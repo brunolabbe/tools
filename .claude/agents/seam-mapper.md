@@ -61,6 +61,13 @@ Nothing but this, and keep it under about forty lines:
   merge conflict was in a gate record, none in source, and the map had reported
   zero overlap — and that `git merge-tree` over finished heads is the
   orchestrator's check for those.
+
+  The second record in that collision is usually **not a candidate at all**: it
+  is an already-merged ticket whose `## Review` cites a line a candidate will
+  move. On 2026-09-26 every hit was that shape (dl-45, dl-57, dl-68, and
+  repo-52), and dl-69 moved ten citations across two merged records where the
+  map named three — relocating or rewrapping a docstring breaks anchors even
+  when every word survives. Name the merged records, not only the candidates'.
 - **Ordering constraints inside a Build**, as distinct from open decisions. An
   open decision blocks a build; an ordering constraint — "put X to the owner
   *before* the parser is written" — permits it and binds the sequence, and a

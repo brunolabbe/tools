@@ -79,6 +79,12 @@ round re-verifies against the same base, and rebuilding the extract was most of
 what made one later round cost an hour where the one that kept it cost ten
 minutes (repo-57, 2026-09-20).
 
+**Write each section you return to one file in your scratch directory, and name
+the path.** The orchestrator lands from that file: your report's text reaches it
+HTML-escaped (`&lt;`, `&gt;`, `&amp;`), so a section copied out of the report is
+not the section you wrote, and a section split across two files has to be
+joined by hand (2026-09-26).
+
 ## When you are woken to re-gate
 
 The orchestrator wakes you after a round of fixes, with the sha you gated, the
@@ -95,7 +101,15 @@ not get their narrative, for the same reason you did not get the build's report.
 - **A new problem in the lines this round touched is a finding; nothing else is
   in scope.** Do not re-run the whole review, do not re-sweep what an earlier
   round settled, and say so under "did not".
-- Return a new `### Gate <n>` subsection, never an edit to an earlier one.
+- Return a new `### Gate <n>` subsection, never an edit to an earlier one's
+  words. **If the round moved lines your earlier sections cite, return a
+  corrected copy of each as a file** — words and verdicts unchanged, coordinates
+  re-resolved against the new head. A citation whose text the round deleted, or
+  whose claim the round corrected though its anchor survives, becomes prose
+  naming the sha you gated (branch-only, so never a pin), and one preamble
+  sentence says which. Every re-gate on 2026-09-26 had to be told this.
+- When `origin/main` moves while you review, keep the base you were dispatched
+  with in your header and say that `main` moved.
 
 ## Check the ticket's premise, not only its code
 

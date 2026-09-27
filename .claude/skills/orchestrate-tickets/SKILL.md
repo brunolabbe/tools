@@ -391,7 +391,7 @@ instruction; where the shape has a worked example it is in
 | --- | --- | --- |
 | A relayed **option** | Read the options out of the ticket yourself before putting them to the user. A relayed *finding* travels safely marked unverified; an option does not, because the user acts on it | 2026-09-03 |
 | An option's stated **mechanism** | A proposal, not a fact, and answering the decision does not verify it. Dispatch the outcome — *this must fail fast with a typed code* — and say the named route is unverified | 2026-09-03 |
-| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it | 2026-08-22 |
+| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it — and a premise inside an option you put to the owner is the same claim: "the planner has no `@fastify/static`" went from a build report into a question unchecked, and one grep of its `package.json` refuted it | 2026-08-22, 2026-09-26 |
 | A **caveat** where a command would do | Where checking is one command — a file count, a config flag, a quoted line — spend it rather than caveating. Reserve the caveat for what genuinely cannot be checked from here | 2026-08-24 |
 | An **unmarked** relay | "The ticket says X; I have not checked" costs a sentence and stops the chain. Without it three links formed silently and only the middle one was cheap to break | 2026-08-23 |
 | Your own **summary**, sent downstream | Relay the reproduction, not the verdict, and say the builder should push back rather than transcribe. Every builder in the fourth session corrected something | 2026-08-23 |

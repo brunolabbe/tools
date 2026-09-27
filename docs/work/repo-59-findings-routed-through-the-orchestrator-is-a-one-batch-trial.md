@@ -3,7 +3,7 @@ id: repo-59
 tool: repo
 title: Findings routed through the orchestrator is a one-batch trial, with a revert criterion
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -112,3 +112,13 @@ did not set a number. Correct it here before the batch if it is wrong.
 - 2026-09-26 — filed on the owner's decision to accept the routing reversal as a
   one-batch trial. The assessment and baseline above were taken in the session
   that reviewed the rework; nothing has run under the new definitions yet.
+- 2026-09-26 — the trial ran on the 2026-09-26 batch (4 tickets, 8 gates, 28
+  dispatches including wakes). **Criterion not tripped.** Median hop 42 s,
+  median receiving active 9m35s, maximum hop 11m08s (owner decisions, both
+  times). Orchestrator share 8.0% against baseline 78% and 37%; both halves
+  from `node scripts/agent-cost.mjs` at the batch's task files. `cold=` on
+  every builder and gate: 0 — the 1-hour TTL held. Wall times: pl-51 3 rounds
+  ~37 m; dl-70 2 rounds ~36 m; dl-69 2 rounds ~1h46m total (record repaired
+  +8 m); repo-50 3 rounds ~2h32m total (record repaired +10 m). The routing
+  stays. This dispatch closed repo-59 and filed two follow-up tickets (`repo-61`,
+  `repo-62`) from the skill's findings.

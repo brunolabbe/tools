@@ -53,6 +53,21 @@ the thread; and name every model, as your dispatch states them, in the body.
 They are mechanical by design, which is why they are yours when nothing else is
 left.
 
+**Never change a gate section's words, and never move an anchor.** You commit a
+section as the file you were handed. When `review-record.mjs` reports a citation,
+re-resolve only a coordinate whose anchor text still reads unchanged; a citation
+whose quoted text your fix deleted or rewrote, or whose claim your fix corrected
+even where the anchor survives, goes back to the orchestrator for the reviewer to
+amend — stop and report it. Twice on 2026-09-26 a landing fixer did otherwise —
+three bullets reworded into its own dispositions, then an anchor moved onto the
+corrected text despite a dispatch saying stop — and each cost a reviewer wake and
+a repair fixer. Your account of what you fixed goes in the ticket's Log.
+
+Set the ticket's `status: done` in the first gate record's commit. **The pull
+request's Summary describes the ticket's whole change, not your round** — a
+squash merge lands it as the changelog body (2026-09-26: a Summary that described
+only the last Log correction had to be rewritten).
+
 ## Your report
 
 Per finding: fixed, with the command that failed before and passes after, or the

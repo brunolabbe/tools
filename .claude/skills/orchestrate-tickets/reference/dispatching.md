@@ -67,6 +67,10 @@ What only you can supply, and what every builder prompt therefore carries:
 - **The narrowest thing that can fail**, for verification runs. Agents reach for
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
+- **A Build step that fetches an external host: `curl` it once before you
+  dispatch.** The container firewall blocks most hosts, and a builder cannot ask
+  for it to be opened. dl-70's registry step was built, pushed and stopped on a
+  timeout one command would have shown first, costing a round (2026-09-26).
 
 ### An answered decision has to be recorded even when you do not build it
 
@@ -572,6 +576,11 @@ measurement behind it. What goes in each dispatch:
 - **Neither gets your judgement of a finding.** If you think one is wrong, say
   so as a question the agent answers by reproducing it; a verdict of yours is a
   relay, and `SKILL.md`'s relaying table says what those cost.
+- **Land from the gate's own file, and diff what landed against it.** The gate
+  writes each section to a named file (`roles/reviewer.md`); hand the lander
+  that path, and after it reports, compare the committed section with the file
+  ignoring table padding. On 2026-09-26 that comparison caught both of a batch's
+  two altered records, and nothing else did.
 
 **Which findings are mechanical is your call, and err toward the builder.** A
 finding is mechanical when its fix is fully stated by the finding and touches only
