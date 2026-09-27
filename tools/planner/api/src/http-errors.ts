@@ -10,6 +10,7 @@
 import { AppError, type ErrorCode, type ErrorResponse } from "@planner/contract";
 
 const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
+  BAD_REQUEST: 400,
   INVALID_URL: 400,
   INVALID_DATES: 400,
   INVALID_ANSWER: 400,
@@ -52,10 +53,60 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   TIMEOUT: 504,
 };
 
-export function toErrorResponse(error: unknown): { status: number; body: ErrorResponse } {
-  const appError = AppError.from(error);
+/**
+ * Any error that is not one of ours but still carries a 4xx `statusCode` —
+ * Fastify's own content-type parser (empty JSON, malformed JSON, an
+ * unsupported media type, a body over the configured cap) never reaches a
+ * route handler, so it can never be an `AppError`, and it is not the only
+ * source: `@fastify/static` raises 412 (precondition failed) and 416 (range
+ * not satisfiable) the same way. **Measured, not assumed** (pl-51): every one
+ * of these cases was confirmed to reach here rather than a route. The rule is
+ * deliberately this wide rather than enumerating `FST_ERR_CTP_*` codes one by
+ * one — decision recorded in this ticket's Log — because the diagnosis "the
+ * request itself could not be understood, and it is not this service's fault"
+ * holds for all of them, even where a more specific status (413, 415, 412, 416)
+ * is thrown away in favour of the generic 400. This pattern originates in dl-66,
+ * which performed the same width analysis for the downloader.
+ */
+function isClientRequestStatusError(error: unknown): boolean {
+  if (error instanceof AppError) return false;
+  const statusCode = (error as { statusCode?: unknown } | null)?.statusCode;
+  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
+}
+
+/**
+ * The one place that decides what `AppError` a failure *is*. `toErrorResponse`
+ * below hands its answer back to the caller precisely so nothing needs to call
+ * this a second time — `server.ts`'s `registerErrorHandling` used to call
+ * `AppError.from` on its own for its log line, which put the widened
+ * `BAD_REQUEST` in the response but left the log reporting `INTERNAL` for the
+ * same request (dl-66) — exactly the "log reads as a server fault" failure
+ * this ticket exists to fix, just moved from the response to the line an
+ * operator actually reads.
+ */
+function toAppError(error: unknown): AppError {
+  return isClientRequestStatusError(error)
+    ? new AppError("BAD_REQUEST", undefined, { cause: error })
+    : AppError.from(error);
+}
+
+/**
+ * `appError` rides along on the return value precisely so a caller that also
+ * needs to log the failure — `registerErrorHandling` in `server.ts` is the
+ * one — reads it from here rather than computing its own with a second
+ * `AppError.from`/`toAppError` call. Two independent computations of "what
+ * `AppError` is this" is exactly how the response and the log line disagreed
+ * about a `BAD_REQUEST`'s code (dl-66).
+ */
+export function toErrorResponse(error: unknown): {
+  status: number;
+  body: ErrorResponse;
+  appError: AppError;
+} {
+  const appError = toAppError(error);
   return {
     status: STATUS_BY_CODE[appError.code] ?? 500,
     body: { error: appError.toPayload() },
+    appError,
   };
 }
