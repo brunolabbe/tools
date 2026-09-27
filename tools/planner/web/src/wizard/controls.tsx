@@ -351,7 +351,10 @@ const DATE_MODE_LABELS: Record<DateMode, string> = {
  * A control that only takes a departure and a return forces every user to invent
  * one, and the tool then plans against a date nobody meant.
  */
-function DatesEntry({ initial, onChange }: Omit<FieldProps, "question">): React.ReactElement {
+export function DatesEntry({
+  initial,
+  onChange,
+}: Omit<FieldProps, "question">): React.ReactElement {
   const draft = draftOf("dates", initial)?.value ?? null;
   const [mode, setMode] = useState<DateMode>(draft?.kind ?? "exact");
   const [departure, setDeparture] = useState(draft?.kind === "exact" ? draft.departure : "");
@@ -508,7 +511,10 @@ const BASIS_LABELS: Record<BudgetBasis, string> = {
   "per-day": "per day",
 };
 
-function BudgetEntry({ initial, onChange }: Omit<FieldProps, "question">): React.ReactElement {
+export function BudgetEntry({
+  initial,
+  onChange,
+}: Omit<FieldProps, "question">): React.ReactElement {
   const draft = draftOf("budget", initial)?.value ?? null;
   const [asAmount, setAsAmount] = useState(draft?.kind !== "band");
   const [amount, setAmount] = useState(draft?.kind === "amount" ? String(draft.amount) : "");

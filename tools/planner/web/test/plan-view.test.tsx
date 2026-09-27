@@ -27,6 +27,7 @@ import userEvent from "@testing-library/user-event";
 import {
   AppError,
   location,
+  slot,
   uncheckedConstraintKey,
   type Provenance,
   type Run,
@@ -516,9 +517,14 @@ describe("safety", () => {
     const hike = candidate({ title: "The col" });
     fetched.mockResolvedValue(
       planView({
-        brief: brief({ shape: "backcountry" }),
         candidates: [hike],
-        revisions: [revision([day(0, [item({ candidateId: hike.id })])])],
+        // The shown revision's own brief, not `plan.brief` (pl-48's rule) —
+        // `plan.brief` alone would pass this test for the wrong reason.
+        revisions: [
+          revision([day(0, [item({ candidateId: hike.id })])], [], [], [], {
+            brief: brief({ shape: "backcountry" }),
+          }),
+        ],
       }),
     );
 
@@ -1432,5 +1438,249 @@ describe("revise errors", () => {
     // no findings list, and the raw id is never shown to a reader.
     expect(within(alert).queryByRole("listitem")).toBeNull();
     expect(within(alert).queryByText(/item-1/)).toBeNull();
+  });
+});
+
+describe("changing the dates or budget", () => {
+  /**
+   * `plan.brief` is the first draft's only (pl-47's trap, restated for pl-48):
+   * seeding from it after an edit would show the wrong dates and budget. This
+   * plan's two briefs disagree on both slots, so seeding from the wrong one
+   * fails visibly rather than by coincidence.
+   */
+  test("seeds from the shown revision's own brief, never plan.brief", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        brief: brief({ dates: { kind: "open", nights: 2 } }),
+        candidates: [activity],
+        revisions: [
+          revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+            brief: brief({
+              dates: { kind: "open", nights: 9 },
+              budget: { kind: "band", band: "shoestring" },
+            }),
+          }),
+        ],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByLabelText<HTMLInputElement>("Nights")).toHaveProperty("value", "9");
+    expect(screen.getByRole<HTMLInputElement>("radio", { name: "Shoestring" })).toHaveProperty(
+      "checked",
+      true,
+    );
+  });
+
+  test("the fieldset is absent on an older revision", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.selectOptions(await screen.findByLabelText("Version"), "1");
+
+    expect(screen.queryByRole("group", { name: "Change the dates or budget" })).toBeNull();
+  });
+
+  test("the submit button stays disabled until something changes, and hands the run to onReplan", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "band", band: "moderate" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    const run: Run = {
+      id: "run-20",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    };
+    replanned.mockResolvedValue(run);
+    const onReplan = vi.fn();
+
+    const user = userEvent.setup();
+    show({ onReplan });
+
+    const button = await screen.findByRole<HTMLButtonElement>("button", { name: "Save changes" });
+    expect(button.disabled).toBe(true);
+
+    const nights = screen.getByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "6");
+    expect(button.disabled).toBe(false);
+
+    await user.click(button);
+
+    // Only the changed slot reaches the request — the budget was never
+    // touched, so it is absent rather than resent unchanged (pl-47's Trap).
+    expect(replanned).toHaveBeenCalledWith("plan-1", {
+      kind: "brief",
+      baseRevisionId: rev.id,
+      dates: { kind: "open", nights: 6 },
+    });
+    await waitFor(() => {
+      expect(onReplan).toHaveBeenCalledWith(run);
+    });
+  });
+
+  /**
+   * The trap this ticket's own Traps section names: sending a slot back at
+   * its seeded value is not harmless, because pl-47's route re-packs every
+   * day the moment a budget is present at all. So this asserts what is
+   * *absent* from the body, not merely what is present.
+   */
+  test("a slot touched and returned to its seeded value is not sent, even though the control fired", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "band", band: "moderate" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    replanned.mockResolvedValue({
+      id: "run-21",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    });
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "6");
+    await user.clear(nights);
+    await user.type(nights, "5");
+
+    await user.click(screen.getByRole("radio", { name: "Shoestring" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(replanned).toHaveBeenCalledWith("plan-1", {
+      kind: "brief",
+      baseRevisionId: rev.id,
+      budget: { kind: "band", band: "shoestring" },
+    });
+  });
+
+  test("INVALID_DATES renders its message, naming the failure", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    replanned.mockRejectedValue(
+      new AppError(
+        "INVALID_DATES",
+        "This trip is longer than 60 nights, the longest this tool will plan.",
+      ),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "90");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/longest this tool will plan/i);
+    });
+  });
+
+  test("PLAN_INFEASIBLE from a dropped pin renders the composer's finding", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 9 } }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    replanned.mockRejectedValue(
+      new AppError(
+        "PLAN_INFEASIBLE",
+        "This trip cannot be planned as described — something has to give.",
+        {
+          details: {
+            findings: [
+              {
+                kind: "pin-on-dropped-day",
+                dayIndex: 7,
+                detail:
+                  "“A long walk” is pinned to day 8, which the new dates drop. Unpin it to shorten the trip.",
+              },
+            ],
+          },
+        },
+      ),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "3");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const alert = await waitFor(() => screen.getByRole("alert"));
+    expect(within(alert).getByText(/Day 8: “A long walk” is pinned/)).toBeDefined();
+  });
+
+  test("the diff captions a brief edit with both ends of each change, and 'not given' for an unasked budget", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev1 = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    const rev2 = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      reason: "Changed the dates and the budget, and re-packed every day.",
+      brief: brief({
+        dates: { kind: "open", nights: 6 },
+        budget: { kind: "band", band: "moderate" },
+      }),
+      operation: {
+        kind: "brief",
+        dates: { from: { kind: "open", nights: 5 }, to: { kind: "open", nights: 6 } },
+        budget: { from: slot.unknown(), to: { kind: "band", band: "moderate" } },
+        days: [0],
+      },
+    });
+    const diff = revisionDiff(rev2.id, rev1.id, []);
+    fetched.mockResolvedValue(
+      planView({ candidates: [activity], revisions: [rev1, rev2], diffs: [diff] }),
+    );
+
+    show();
+
+    expect(
+      await screen.findByText("Dates: 5 nights, whenever is best → 6 nights, whenever is best"),
+    ).toBeDefined();
+    expect(screen.getByText(/Budget:/)).toBeDefined();
+    expect(screen.getByText(/not given/)).toBeDefined();
+    // Case-sensitive on purpose: `BudgetEntry`'s own "Moderate" radio label is
+    // on the page too, and only the caption's lower-case band name is this
+    // assertion's business.
+    expect(screen.getByText(/moderate/)).toBeDefined();
   });
 });

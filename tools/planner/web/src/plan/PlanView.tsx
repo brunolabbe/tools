@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AppError,
+  currentBrief,
   isAnswered,
   latestRevision,
   MAX_REVISION_NOTE_CHARS,
@@ -47,14 +48,20 @@ import {
   type PlanView as PlanViewDocument,
   type ReviseRequest,
   type RevisionDiff,
+  type RevisionOperation,
   type Run,
   type Source,
   type Specialist,
+  type TripBrief,
+  type TripBudget,
+  type TripDates,
   type TripShape,
   uncheckedConstraintKey,
   type UncheckedConstraint,
 } from "@planner/contract";
 import { editPlan, fetchPlan, pinItem, startReplan } from "../api/plan.ts";
+import { BudgetEntry, DatesEntry } from "../wizard/controls.tsx";
+import { describeBudget, describeDates } from "../wizard/format.ts";
 import { describeCost, describeLocation, dayHeading, humanise } from "./format.ts";
 import { ProvenanceNote } from "./Provenance.tsx";
 
@@ -279,7 +286,7 @@ export function PlanView({
    * only ever run while the latest is on screen — see `editable` below.
    */
   const submitEdit = useCallback(
-    (request: Exclude<ReviseRequest, { kind: "replan" }>): void => {
+    (request: Exclude<ReviseRequest, { kind: "replan" | "brief" }>): void => {
       setWriteBusy(true);
       setActionError(null);
       editPlan(planId, request)
@@ -297,7 +304,7 @@ export function PlanView({
   );
 
   const submitReplan = useCallback(
-    (request: Extract<ReviseRequest, { kind: "replan" }>): void => {
+    (request: Extract<ReviseRequest, { kind: "replan" | "brief" }>): void => {
       setWriteBusy(true);
       setActionError(null);
       startReplan(planId, request)
@@ -378,14 +385,12 @@ function Document({
   actionError: ActionError | null;
   onReload: () => void;
   onWatchRun: (runId: string) => void;
-  onEdit: (request: Exclude<ReviseRequest, { kind: "replan" }>) => void;
-  onReplan: (request: Extract<ReviseRequest, { kind: "replan" }>) => void;
+  onEdit: (request: Exclude<ReviseRequest, { kind: "replan" | "brief" }>) => void;
+  onReplan: (request: Extract<ReviseRequest, { kind: "replan" | "brief" }>) => void;
   onExit: () => void;
 }): React.ReactElement {
   const { plan } = view;
   const latest = latestRevision(plan);
-  const shape = isAnswered(plan.brief.shape) ? plan.brief.shape.value : null;
-  const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
 
   if (latest === null) {
     return (
@@ -410,6 +415,11 @@ function Document({
       : plan.revisions.find((each) => each.revision === shownRevisionNumber)) ?? latest;
   const isLatest = shownRevision.revision === plan.latestRevision;
   const diff = view.diffs.find((each) => each.revisionId === shownRevision.id);
+  // The shown revision's own brief, not `plan.brief` — after pl-47 a version
+  // can change the dates and the budget, and `plan.brief` is only ever the
+  // first draft's.
+  const shape = isAnswered(shownRevision.brief.shape) ? shownRevision.brief.shape.value : null;
+  const caution = shape === null ? undefined : AUTHORITATIVE_SOURCES[shape];
 
   return (
     <section className="panel plan">
@@ -505,11 +515,19 @@ function Document({
       )}
 
       {isLatest ? (
-        <ReplanForm
-          days={shownRevision.days}
-          busy={writeBusy}
-          onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
-        />
+        <>
+          <ReplanForm
+            days={shownRevision.days}
+            busy={writeBusy}
+            onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
+          />
+          <BriefForm
+            key={latest.id}
+            brief={currentBrief(plan)}
+            busy={writeBusy}
+            onSubmit={(request) => onReplan({ ...request, baseRevisionId: latest.id })}
+          />
+        </>
       ) : (
         <p className="notice" role="note">
           Editing works on the latest version. Restore this one to bring it back, or open the latest
@@ -1028,8 +1046,37 @@ function RouteReading({ reading }: { reading: readonly Source[] }): React.ReactE
  * **The caption is `shownRevision.reason`, and it is not repeated here** — the
  * crumb line above already renders it. What is not shown anywhere else is a
  * re-plan's own `note`, so that is what this section adds, marked plainly as
- * what the user wrote and not as the tool's own words.
+ * what the user wrote and not as the tool's own words. A `brief` operation
+ * (pl-47/pl-48) adds a caption of its own, beside the note rather than
+ * inside it: both ends of whichever slot changed, in `describeDates`'s and
+ * `describeBudget`'s words (`wizard/format.ts`) — never here, so the brief and
+ * the wizard say the same thing about the same value.
  */
+function BriefCaption({
+  operation,
+}: {
+  operation: Extract<RevisionOperation, { kind: "brief" }>;
+}): React.ReactElement {
+  return (
+    <>
+      {operation.dates !== null && (
+        <p className="hint">
+          Dates: {describeDates(operation.dates.from)} → {describeDates(operation.dates.to)}
+        </p>
+      )}
+      {operation.budget !== null && (
+        <p className="hint">
+          Budget:{" "}
+          {isAnswered(operation.budget.from)
+            ? describeBudget(operation.budget.from.value)
+            : "not given"}{" "}
+          → {describeBudget(operation.budget.to)}
+        </p>
+      )}
+    </>
+  );
+}
+
 function Diff({
   diff,
   candidates,
@@ -1054,6 +1101,7 @@ function Diff({
           <span className="mark">What was asked</span> “{note}”
         </p>
       )}
+      {operation.kind === "brief" && <BriefCaption operation={operation} />}
       <DiffList label="Added" entries={added} candidates={candidates} />
       <DiffList label="Removed" entries={removed} candidates={candidates} />
       <DiffList label="Moved" entries={moved} candidates={candidates} />
@@ -1217,6 +1265,131 @@ function ReplanForm({
           onClick={submit}
         >
           Re-plan these days
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** What this form can honestly build; `Document` supplies `baseRevisionId`. */
+type BriefDraft = Omit<Extract<ReviseRequest, { kind: "brief" }>, "baseRevisionId">;
+
+function datesEqual(a: TripDates, b: TripDates): boolean {
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case "exact":
+      return b.kind === "exact" && a.departure === b.departure && a.return === b.return;
+    case "window":
+      return (
+        b.kind === "window" &&
+        a.earliest === b.earliest &&
+        a.latest === b.latest &&
+        a.nights === b.nights
+      );
+    case "open":
+      return b.kind === "open" && a.nights === b.nights;
+  }
+}
+
+function budgetEqual(a: TripBudget, b: TripBudget): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === "amount"
+    ? b.kind === "amount" &&
+        a.currency === b.currency &&
+        a.amount === b.amount &&
+        a.basis === b.basis
+    : b.kind === "band" && a.band === b.band;
+}
+
+/**
+ * Change the dates or the budget of the plan itself, on the latest revision
+ * only — pl-47's edit reaching the page.
+ *
+ * **Seeded from `currentBrief(plan)`, never from `plan.brief`** (`Document`'s
+ * caller passes it): after a dates or budget edit, `plan.brief` is only ever
+ * the first draft's, and `currentBrief` is pl-47's own rule for "the brief as
+ * it stands now". An answered slot seeds `DatesEntry`/`BudgetEntry`'s own
+ * `initial`; a declined or unasked budget seeds `null` — the same rule
+ * `QuestionField` follows in the wizard.
+ *
+ * **Sends only what actually changed, compared by value rather than by
+ * whether the control was touched.** `DatesEntry` and `BudgetEntry` call
+ * `onChange` only from a user interaction, so a slot nobody touched never
+ * reaches `draftDates`/`draftBudget` at all; and a slot touched back to its
+ * seeded value compares equal by `datesEqual`/`budgetEqual` and is dropped
+ * too. Sending an unchanged slot is not harmless — a budget resent alongside
+ * a dates change turns a dates edit into a full re-pack (pl-47's Trap; pl-48's
+ * own Trap repeats it).
+ *
+ * **Keyed by the caller on the latest revision's id.** The same convention
+ * `QuestionField` uses for a question id: a write that leaves `PlanView` on
+ * screen with a different latest revision (a restore, a move, a remove) must
+ * reseed this form rather than keep stale local state pointed at a brief that
+ * is no longer current.
+ */
+function BriefForm({
+  brief,
+  busy,
+  onSubmit,
+}: {
+  brief: TripBrief;
+  busy: boolean;
+  onSubmit: (request: BriefDraft) => void;
+}): React.ReactElement {
+  const seededDates = isAnswered(brief.dates) ? brief.dates.value : null;
+  const seededBudget = isAnswered(brief.budget) ? brief.budget.value : null;
+
+  const [draftDates, setDraftDates] = useState<TripDates | null>(null);
+  const [draftBudget, setDraftBudget] = useState<TripBudget | null>(null);
+
+  const changedDates =
+    draftDates !== null && (seededDates === null || !datesEqual(draftDates, seededDates));
+  const changedBudget =
+    draftBudget !== null && (seededBudget === null || !budgetEqual(draftBudget, seededBudget));
+
+  const submit = (): void => {
+    onSubmit({
+      kind: "brief",
+      ...(changedDates ? { dates: draftDates! } : {}),
+      ...(changedBudget ? { budget: draftBudget! } : {}),
+    });
+  };
+
+  return (
+    <fieldset className="brief-edit">
+      <legend>Change the dates or budget</legend>
+
+      <ul className="hint">
+        <li>A longer trip plans the days it adds.</li>
+        <li>
+          A shorter trip drops days from the end, with what is on them — “Restore this version”
+          brings them back.
+        </li>
+        <li>A pinned item on a dropped day stops the change.</li>
+        <li>A budget change re-packs every day except what is pinned.</li>
+      </ul>
+
+      <DatesEntry
+        initial={seededDates === null ? null : { kind: "dates", value: seededDates }}
+        onChange={(value) =>
+          setDraftDates(value !== null && value.kind === "dates" ? value.value : null)
+        }
+      />
+      <BudgetEntry
+        initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
+        onChange={(value) =>
+          setDraftBudget(value !== null && value.kind === "budget" ? value.value : null)
+        }
+      />
+
+      <div className="actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || !(changedDates || changedBudget)}
+          onClick={submit}
+        >
+          Save changes
         </button>
       </div>
     </fieldset>

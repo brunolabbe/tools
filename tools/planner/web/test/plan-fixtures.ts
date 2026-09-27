@@ -29,6 +29,7 @@ import {
   type RevisionOperation,
   type Source,
   type TripBrief,
+  type TripBudget,
   type TripDates,
   type TripShape,
   type UncheckedConstraint,
@@ -36,7 +37,14 @@ import {
 
 const CREATED = "2027-01-01T00:00:00.000Z";
 
-export function brief(overrides: { shape?: TripShape; dates?: TripDates } = {}): TripBrief {
+/**
+ * `budget` is left unknown unless given — the same "unasked" state
+ * `emptyBrief()` seeds — so a caller testing pl-48's "not given" fallback
+ * gets it for free, and one testing a seeded budget passes it explicitly.
+ */
+export function brief(
+  overrides: { shape?: TripShape; dates?: TripDates; budget?: TripBudget } = {},
+): TripBrief {
   const shape = overrides.shape ?? "road-trip";
   return {
     ...emptyBrief(),
@@ -44,6 +52,7 @@ export function brief(overrides: { shape?: TripShape; dates?: TripDates } = {}):
     dates: slot.answered(
       overrides.dates ?? { kind: "exact", departure: "2027-07-05", return: "2027-07-06" },
     ),
+    ...(overrides.budget === undefined ? {} : { budget: slot.answered(overrides.budget) }),
     details: emptyShapeDetails(shape),
   };
 }
