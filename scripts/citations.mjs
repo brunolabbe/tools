@@ -358,21 +358,20 @@ const SHORTHAND = new RegExp(
 /**
  * A backtick-fenced **quotation**, ` `` ... `` ` in CommonMark for the
  * ordinary two-backtick case, content that may itself hold a shorter run of
- * backticks, closed by a run of the *same* length — markdown's own way to
- * quote a literal backtick, which is exactly how a reviewer writes about the
+ * backticks, closed by a run at least as long — markdown's own way to quote
+ * a literal backtick, which is exactly how a reviewer writes about the
  * citation syntax itself rather than writing one (repo-60). `` `:443` ``
  * inside such a span is that reviewer's example of `SHORTHAND`, not an
  * instance of it, and `SHORTHAND`'s own single backticks sit *inside* the
  * pair this matches — invisible to a regex that never looks one character
  * further out.
  *
- * **The closing run's length must equal the opening one's, not merely meet
- * it** — a gate 1 finding (repo-60): the corpus's own reproduction opens on
- * four backticks (` ```` ` ... ` ```` `, needed because its content nests a
- * double-backtick span), and a fixed two-backtick opener would have matched
- * only the first two of those four, misreading a valid four-backtick span as
- * a shorter one and leaving two backticks dangling as stray text. The
- * backreference `\1` makes the closer's length exact.
+ * **The backreference ensures the matched run at close equals the matched run
+ * at open, not merely meets it** — a gate 1 finding (repo-60): a doubled
+ * opener and tripled closer are read as two-close-one; this regex lets a
+ * shorter run inside a longer one misparse, but CommonMark reads the full span
+ * as one quotation. Neither case appears in the corpus; a gate 2 finding flags
+ * the limitation without fixing it, as fence handling is outside this ticket.
  *
  * Lazy on purpose: two spans on one line (`` `:443` ``/`` `:8443` ``) must
  * close at the nearer pair, not swallow the text between them into one.

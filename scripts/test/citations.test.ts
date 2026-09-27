@@ -2839,3 +2839,32 @@ test("a double-backtick quotation wrapping a qualified citation does not leak in
     "shorthand:6=a/one.ts",
   ]);
 });
+
+/**
+ * gate 2 med: the anchor carve-out is a condition on the citation read in
+ * INLINE and SHORTHAND passes, gating the skip on `g.anchor === undefined`
+ * or `g.inner === undefined && g.outer === undefined`, so an *anchored*
+ * citation inside a double-backtick quotation is still read. This fixture
+ * wraps an anchored `INLINE` citation and an anchored `SHORTHAND` citation
+ * in double backticks. Both are read, both pass through despite the quotation.
+ *
+ * If either carve-out condition is removed, this test fails and the gate 1
+ * high is regressed — 23 anchored citations vanish from `docs/work/repo-31-
+ * the-windows-leg-is-almost-all-red.md`.
+ */
+test("an anchored citation inside a double-backtick quotation is still read", () => {
+  const found = extractCitations(
+    [
+      "At `a/one.ts:5 \"anchor text\"`.",
+      "",
+      "Quoting an anchored inline: `` `b/two.ts:9 \"other anchor\"` ``.",
+      "",
+      "And `` `:10 \"shorthand anchor\"` ``.",
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}|${c.anchor}`)).toEqual([
+    "inline:5|anchor text",
+    "inline:9|other anchor",
+    "shorthand:10|shorthand anchor",
+  ]);
+});

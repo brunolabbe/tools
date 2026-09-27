@@ -3,7 +3,7 @@ id: repo-60
 tool: repo
 title: A double-backtick quotation of a port number reads as a shorthand line citation
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -269,7 +269,7 @@ does not cite it`), which is the script's own documented behavior for
   **High, fixed as the owner's chosen (a): skip a quoted reference only when
   it carries no anchor.** Reproduced first: the unconditional skip dropped 23
   real, anchored citations from `docs/work/repo-31-the-windows-leg-is-almost-
-all-red.md`'s Review section alone (5 references there fell to 2; the
+all-red.md` (3 of them in its Review, where 5 references fell to 2; the
   whole-record `moved` count went from 6 to 0 — live drift hidden, matching
   the gate's framing exactly). Fixed by moving the `inQuotation` check in the
   `INLINE` and `SHORTHAND` passes to after each match's groups are read, and
@@ -284,7 +284,7 @@ undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
   shows a delta of exactly 39 references removed — the same number the gate
   measured in its own scratch copy — none of them state-changed, none added.
 
-  **Med, fixed: `DOUBLE_BACKTICK`'s closing run must equal the opening
+  **Low, fixed: `DOUBLE_BACKTICK`'s closing run must equal the opening
   one's length, not merely meet it.** Reproduced: a triple-backtick span
   closed on only the first two of its three closing backticks, leaving one
   dangling. Fixed with a backreference, `/(\x60{2,})[\s\S]*?\1(?!\x60)/g`;
@@ -353,3 +353,12 @@ undefined && g.outer === undefined` (`SHORTHAND`); `PIN_SHAPED` and
   `node scripts/citations.mjs docs/work/repo-25-...md --displaced-since
 origin/main` exit 0, `node scripts/citations-gate.mjs` "113 enforced, 0
   failing; 6 grandfathered" exit 0.
+
+- 2026-09-27 — Gate 2 (CONCERNS) landed. Gate 1 record replaced by the
+  reviewer's amended version after a lander edit. Mechanical fixes applied:
+  added test for the anchor carve-out (both INLINE and SHORTHAND passes);
+  corrected regex docblock to acknowledge opener backtrack and closer length
+  variance; corrected Log entries stating the 23 citations are from the whole
+  record with 3 in Review (not Review alone), and that the run-length finding
+  is low (not med); corrected repo-63 Log entry to show it follows the gate
+  recommendation, not against it.

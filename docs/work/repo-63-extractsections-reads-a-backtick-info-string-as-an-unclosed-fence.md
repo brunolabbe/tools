@@ -109,7 +109,7 @@ narrowly the backtick-info-string rule, not a general CommonMark fence rewrite.
 
 - 2026-09-27 — Filed from repo-60 gate 1's med finding (code-review at medium,
   `c87153d...247073d`): present at the base, in repo-60's own brief, not
-  introduced by that ticket's fix. The owner chose (a) over the gate's own
-  recommendation to fix `extractSections` in the same branch — filed here
-  instead, so repo-60 does not widen past the citation-extraction change its
-  own Build asked for.
+  introduced by that ticket's fix. Following the gate's own recommendation (a),
+  filed here instead of widening repo-60 past the citation-extraction change
+  its own Build asked for: `extractSections` is narrower than the tickets that
+  cite it.
