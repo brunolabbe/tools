@@ -146,6 +146,26 @@ the plan page would drift from the first.
 - **findings** · code-review at medium returned 10; 8 carried, 2 dropped.
 - NFR: security n/a · performance n/a · reliability — the first med · maintainability — the four untested behaviours above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-09-27 · `ac00b8d..f1bde60` only (`origin/main` still `c87153d`) · code-review at medium, on the lines this round touched
+
+Positive control first: `plan-view.test.tsx` 59 of 59 at `f1bde60`. Each gate 1 mutation was re-applied, run and reverted.
+
+- **med, incomplete entry: fixed** by the owner’s option (a). The gate 1 reproductions now leave Save disabled: Nights 6 with Amount 2000 and an empty Currency, and a seeded amount cleared beside Nights 6. Pinned by `tools/planner/web/test/plan-view.test.tsx:1694-1715 "a touched control left incomplete disables Save"` and `tools/planner/web/test/plan-view.test.tsx:1718-1743 "clearing a seeded amount back to nothing is incomplete"`.
+- **med, budget compared by value: fixed.** M4b now reddens `tools/planner/web/test/plan-view.test.tsx:1748 "a budget touched away and back to its seeded band is not sent"` (58 of 59).
+- **med, answered from-budget in the caption: fixed.** M7b now reddens `tools/planner/web/test/plan-view.test.tsx:1825 "Budget: shoestring → 500 CAD total"` (58 of 59).
+- **low, editPlan narrowing: fixed.** Reverting it to the base type fails `npm run check` with exit 1 and TS2578 on the directive above `tools/planner/web/test/plan-view.test.tsx:1924 "void editPlan("`.
+- **low, reseed key: fixed.** M10 now reddens `tools/planner/web/test/plan-view.test.tsx:1836 "a remove that appends a new latest reseeds the fieldset"`.
+- **low, one-revision seed: fixed.** M2c now reddens `tools/planner/web/test/plan-view.test.tsx:1877 "seeds from the latest revision, not the first"`.
+- **low, the day named twice: refuted as to scope.** The rendering is real, but neither line is in this branch. `git diff c87153d...f1bde60` over `PlanView.tsx` and `itinerary/src/brief-edit.ts` has 0 matching lines. `git log -S` dates the wrapper to pl-45 (#246) and the copy to pl-47 (#279). Withdrawn from this gate; nothing on main records it yet.
+- **low, stale title: decided (a), filed, not implemented.** `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md:32 "**Reproduced**"` carries the gate’s measurement. `git diff --stat c87153d...f1bde60` over `api`, `contract`, `intake` and `itinerary` is empty.
+- **med · new, in this round’s lines · open decision** — once touched, a budget whose seed is unanswered cannot go back to “unchanged”, so Save stays disabled for a dates change with nothing on the page saying why. `tools/planner/web/src/plan/PlanView.tsx:1369 "(budgetTouched && draftBudget === null)"` holds after the fields return to empty, because `BudgetEntry` emits `null` for empty and partial alike (`tools/planner/web/src/wizard/controls.tsx:534 "next.band === null ? null"`), and only a remount clears `tools/planner/web/src/plan/PlanView.tsx:1403 "setBudgetTouched(true);"`. Reproduced on an unasked budget, which is the e2e walk’s own plan, with Nights set to 6: typing 2 into Amount and clearing it, or clicking A feeling alone, or A feeling then A figure, each leaves Save disabled. Untouched, the same edit sends dates only. Options: (a) a per-slot “leave the budget as it was” reset that clears the flag and remounts that control, plus one line saying why Save waits — recommended, confined to `PlanView.tsx`; (b) have `BudgetEntry` report empty apart from partial, which changes a wizard control that Build step 1 exports unchanged; (c) keep it and add only the explanatory line.
+- **low · new** — pl-53’s Log says `intakeTitle` `tools/planner/docs/work/pl-53-retitle-a-plan-after-a-brief-edit.md:93 "is called from exactly one"` place. It is also called twice in `api/src/intakes/state.ts`, for the intake’s own title. `tools/planner/api/src/runs/orchestrator.ts:201 "title: intakeTitle(brief) ?? UNTITLED,"` is the only call that writes a plan’s title, which is what the sentence means.
+- **findings** · gate 2 returned 10: 8 gate-1 verdicts (7 closed, 1 refuted) and 2 new, both carried, 0 dropped.
+- Also run at `f1bde60`: planner 1,287 of 1,287 (+7 over `ac00b8d`); `npm run e2e:planner` 5 of 5 passed; `scripts/preflight.mjs` exit 0. The `planner.yml` e2e row remains **unproven (gate)**, with no pull request yet.
+- NFR: security n/a · performance n/a · reliability — the new med · maintainability ✓.
+
 ## Log
 
 **2026-09-13 — filed** beside pl-47, on the owner's cut. Checked against the
