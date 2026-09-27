@@ -174,6 +174,63 @@ Procedure read from `origin/main`. The branch's own `roles/reviewer.md` and `rol
 - **For the lander:** the ticket is `status: ready` at the head. Committing this section onto it fails reviewedButReady, per the branch's own builder.md.
 - NFR: security n/a, pages only · performance n/a · reliability: findings 2, 3 and 4 each leave a rule that misdirects the next dispatch · maintainability: findings 1 and 5 to 13.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-09-27 · `git diff 32b7e0b..f84c2a1` excluding `4f09c85` (status to `in-flight`) and `4002e27` (gate 1's record) · head `f84c2a10000fff75f63e2222adf4b4cc20d53a1a`, detached, rebuilt; `origin/main` still `6988b65` · code-review at medium, on the lines this round touched only
+
+**Gate 1's findings, each re-checked at `f84c2a1` against its primary source:**
+
+| #   | Verdict                                                              | How verified                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | fixed                                                                | The `wrong findings` cell, item 6 and the second what-went-right bullet now credit the builder's Round-three Log at `8ac378c` (05:39Z) with refuting the flag first, and Gate 4 at `536e1d6` (14:09Z) with confirming it. Re-read against the dl-53 branch's ticket and stream.ts at `8ac378c`                                                                                                                                 |
+| 2   | fixed                                                                | Re-ran `gh pr checks 298`: it lists the Windows leg by name, now `pending` at #298's new head `0df8902`. dispatching.md's builder-dispatch bullet and item 16 now give the true mechanism: no CI result exists before the pull request does. Two notes follow the table                                                                                                                                                        |
+| 3   | fixed                                                                | records.md: mode 2 now says repoint, not pin (but see new finding A); a new paragraph puts `git log origin/main -S` before `--all` for a gate record; the run-output section now asks for a surviving commit. Re-grepped the 20 files under `.claude/skills/orchestrate-tickets/` and `.claude/agents/`: nothing else pins a gate record to a branch sha. Out of scope, see dropped: the checker's own failure hint still does |
+| 4   | fixed as to premises; the recommendation's argument is new finding B | repo-65's Why and decision section now say both role pages run preflight before the commit, and that check 2 reads the working tree                                                                                                                                                                                                                                                                                            |
+| 5   | fixed                                                                | The cell now names Gate 6, its section 4                                                                                                                                                                                                                                                                                                                                                                                       |
+| 6   | partly fixed                                                         | The schema's `builder rounds` row now says 7 and the `tickets` row dropped the count. The per-agent table's dl-53 builder row still reads "dl-53 build, 5 rounds, 3 landing stops"                                                                                                                                                                                                                                             |
+| 7   | fixed                                                                | A third wrong finding (pl-48's scope refutation), with the counting question stated rather than decided                                                                                                                                                                                                                                                                                                                        |
+| 8   | fixed                                                                | model-pairing.md now dates the role from 2026-09-26 and names the `git log --diff-filter=A` that shows it                                                                                                                                                                                                                                                                                                                      |
+| 9   | fixed as written                                                     | but the fix repeats gate 1's own incomplete claim: new finding C                                                                                                                                                                                                                                                                                                                                                               |
+| 10  | fixed                                                                | Item 3 now names only the Routing findings section                                                                                                                                                                                                                                                                                                                                                                             |
+| 11  | fixed                                                                | roles/fixer.md now sets `done` in the commit that lands the round, never in an earlier `in-flight` record commit. That matches builder.md                                                                                                                                                                                                                                                                                      |
+| 12  | fixed; labels correct                                                | See the note after the table                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 13  | fixed                                                                | Mode 5 now names `citations.mjs --rev` as the exception and says `citations-gate.mjs` has no `--rev`; a grep for `--rev` in citations-gate.mjs counts 0                                                                                                                                                                                                                                                                        |
+
+**Finding 2, two notes.** The `fail` that gate 1 quoted from `gh pr checks 298` at `18ca055` was attempt 1 of run 36334718531. That attempt failed only `scripts/test/preflight.test.ts`, the repo-66 flake; attempt 2 passed. The six streaming failures were at `f1adeb4`, run 36333161971, and its log has the 6 FAIL lines. The finding still stands, because the leg appeared in the command's output either way. Separately, dispatching.md now says a pre-merge `gh pr checks 298` found the six. Its earlier wording said `gh run view --log-failed`. No primary source I read says which command found them, so that is unverified.
+
+**Finding 12, what each fact now rests on.** Verified here from git: `git diff --numstat e4617b4~1 e4617b4` shows scripts/citations.mjs `8 9`, one line net removed. From a primary source: CI's `check` red at `d789c86` with 3 records failing is in repo-60's Log. Still the orchestrator's alone, and all four pages now label it as measured by the orchestrator and relayed: the dispatch wording "in place, keeping the same number of lines", the fixer's own reported exit 0, and pl-48's unpushed "1 moved, 5 unanchored". Consistent with the last, though not proof of it: pl-48's committed record now reads 49 verified, 0 unanchored.
+
+**Gate 1's two citations into repo-65.** The coordinator asked whether only the line numbers moved, and they did. `node scripts/review-record.mjs --verify` against gate 1's file exits 0 at `4002e27` and 1 at `f84c2a1`. The only difference is on record line 153: `:76→:140` and `:50→:134`, with both anchors unchanged. But both lines now sit in repo-65's Log correction, which quotes the corrected sentences. So the anchors survive while the claims they carried were corrected. The branch's own records.md sends exactly that case back to the reviewer (new finding D). A corrected copy is attached: `review-gate1-corrected.md`, with those two citations as prose naming `32b7e0b` and one preamble sentence saying so.
+
+**repo-66's figures, against the job logs.**
+
+- All four timings verified from the Windows job logs: 6867 ms (run 36333161971, `f1adeb4`); 6081 ms (run 36333555081, `6988b65`); 41330 ms with "Test timed out in 30000ms" (run 36334718531, attempt 1, the only failed test file, 1 of 180); 2024 ms (attempt 2).
+- `git diff --stat` over preflight.mjs and preflight.test.ts is empty for `c87153d..f1adeb4`, `179f6f5..6988b65` and `6988b65..18ca055`.
+- The shebang idea is labelled a hypothesis and attributed to dl-53's builder. Its three open questions and a confirm-or-refute step come before any fix.
+- The test is `scripts/test/preflight.test.ts:838 "id-sweep wording when gh fails inside check 5"`. The gotcha exists: `.claude/rules/testing.md@6988b65:70 "because Windows does not honour a shebang"`.
+
+**New, in the lines this round touched:**
+
+- **med · B · repo-65's recommendation gets the tree-agreement argument backwards, and misstates (b)'s cost.**
+  - Premise: (a) refuses a dirty tree, so under (a) every check reads the committed tree and all five agree.
+  - The recommendation still argues that (a) would leave check 1 on its own: `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:97 "alone out of step with check 2"`. That is false under (a).
+  - (b)'s stated downside, that it leaves the checks on three different trees rather than two (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:90 "different trees rather than two"`), contradicts the Why, which says they split three ways today (`docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:59 "split three ways, not two"`). Under (b), check 1's test selection would read what check 2 reads, which leaves two trees, not three.
+  - The same Why line says check 1 reads only committed diffs. Only its test selection does; `npm run check` and the suites run on the working tree.
+  - The order premise alone still supports (b). But the owner should get the trade-off the right way round: (a) makes every check agree and needs both role pages changed to commit first; (b) keeps the order the pages prescribe and leaves checks 3 and 4 on committed state. It stays `needs-decision`, with options and a recommendation.
+- **low · A · records.md's mode 2 now rewrites the history it reports and contradicts itself.** It says the fourth session's case was handled "not by remapping but by repointing", but remapping is repointing. `git log -S` dates the wording "pinning the record" to `ea52f8b` (2026-08-24): that session pinned. Remedy: keep the history as a pin, and state repoint as today's rule.
+- **low · C · owned by gate 1, and repeated by the fix.** Gate 1's finding 9 called one refusal the session's only one. That session had a second: one heredoc carrying the whole gate 1 section was refused as too complex to verify, and eight smaller appended heredocs then worked. So common.md's new text is wrong twice: it names one refusal where there were two, and it calls the large-heredoc clause not reproduced. This session also had a refusal: one call chaining five git commands, ending in `echo anc=$?`, was refused as naming git in a form too complex to verify. That is consistent with the older `echo $?` rule.
+- **low · D · the lander repointed two citations whose claims this same round corrected.** repo-64's Log (Gate 1 fixed entry, med 4) justifies it by naming only the deleted-outright case. The branch's records.md, in its multi-round paragraph, also sends a citation back when the round corrected its claim even though the anchor survives. Remedy: land the attached corrected copy of gate 1.
+- **low · E · repo-66 is `needs-decision` but asks no question**: `docs/work/repo-66-a-preflight-test-times-out-on-the-windows-ci-leg.md:6 "status: needs-decision"`. The definition is a ticket that poses a question which `docs/01-TICKETS.md:149 "poses a question its own page says must not be settled"` by whoever picks it up. repo-66's Build is a measurement, then a fix, so the ticket is dispatchable, yet `--ready` will hide it.
+- **low · F · repo-65's decision section cites `.claude/` pages by bare line number** (repo-65 line 73, roles/builder.md line 116; and roles/fixer.md line 39). records.md, under its `.claude/` citation rule, calls that a finding: it is not a Review section, so no gate enforces it, and the next edit to those pages will move the lines under it.
+
+- **dropped** · the per-agent row in finding 6's verdict is gate 1's carried finding, not a new one.
+- **dropped** · scripts/citations.mjs's failure hint still advises pinning to the commit the gate reviewed. It sits outside this round's lines and scripts/ is untouched; it belongs in a ticket.
+- **dropped** · the history row's `18ca055` and "Windows-leg fix in progress" are now stale (#298 is at `0df8902`, and `18ca055`'s leg passed on attempt 2). The row names its sha; it is a snapshot, not a defect.
+- **findings** · code-review at medium on this round returned 9; 6 carried (1 med, 5 low), 3 dropped. Of gate 1's 13: 10 fixed, 2 fixed as far as they go with their remainder carried as B and C (findings 4 and 9), 1 partly fixed (finding 6).
+- **Commands at `f84c2a1`.** `npm run check` exit 0. `node scripts/citations-gate.mjs --against origin/main` exit 0: 117 enforced, 0 failing, 0 raised. `node scripts/preflight.mjs --base origin/main --title "chore(repo): record the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"` exit 0, every check ok. `node scripts/status.mjs --json` exit 0. The only `@sha` this round adds is `@6988b65`, and `git merge-base --is-ancestor 6988b65 origin/main` exits 0.
+- **Did not:** re-sweep what gate 1 settled outside these lines; re-run repo-65's reproduction (scripts/ is unchanged since gate 1 ran it); verify the three relayed fixer facts beyond what is named above.
+- NFR: security n/a · performance n/a · reliability: B · maintainability: A, C to F.
+
 ## Log
 
 - 2026-09-27 — Filed and built in the same dispatch, on the owner's
@@ -263,3 +320,30 @@ statusCheckRollup` both name `test (windows-latest, informational)`
   `node scripts/preflight.mjs --base origin/main --title "chore(repo): record
 the 2026-09-27 batch and fold its defects into the rule pages (repo-64)"`
   exit 0.
+
+- 2026-09-27 — Gate 2 (CONCERNS) landed. Gate 1 withdrawn and re-landed from
+  the reviewer's corrected copy (`review-gate1-corrected.md`), which turns
+  this round's own two repoints into repo-65 (`:76→:140`, `:50→:134`) into
+  prose naming `32b7e0b` — gate 2's finding D: those two lines now quote
+  sentences this same round _corrected_, not merely moved, so a
+  coordinate-only repoint was not the right remedy; the citation goes back to
+  the reviewer, per `records.md`'s multi-round paragraph. `review-record.mjs
+--verify` on the corrected copy exits 0. Gate 2 itself spliced with
+  `--gate 2`, verbatim; the tool's own disclosure note is non-empty (a blank
+  line oxfmt inserted before a bullet list, no word changed):
+
+  ```
+  diff --git section-file inserted-block
+  index 4974021..96547da 100644
+  --- section-file
+  +++ inserted-block
+  @@ -27,6 +27,7 @@
+   **Gate 1's two citations into repo-65.** The coordinator asked whether only the line numbers moved, and they did. `node scripts/review-record.mjs --verify` against gate 1's file exits 0 at `4002e27` and 1 at `f84c2a1`. The only difference is on record line 153: `:76→:140` and `:50→:134`, with both anchors unchanged. But both lines now sit in repo-65's Log correction, which quotes the corrected sentences. So the anchors survive while the claims they carried were corrected. The branch's own records.md sends exactly that case back to the reviewer (new finding D). A corrected copy is attached: `review-gate1-corrected.md`, with those two citations as prose naming `32b7e0b` and one preamble sentence saying so.
+
+   **repo-66's figures, against the job logs.**
+  +
+   - All four timings verified from the Windows job logs: 6867 ms (run 36333161971, `f1adeb4`); 6081 ms (run 36333555081, `6988b65`); 41330 ms with "Test timed out in 30000ms" (run 36334718531, attempt 1, the only failed test file, 1 of 180); 2024 ms (attempt 2).
+  ```
+
+  `node scripts/review-record.mjs --verify docs/work/repo-64-record-the-2026-09-27-batch.md
+<gate 2 file> --gate 2` exits 0 once committed.
