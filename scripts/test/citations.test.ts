@@ -2855,11 +2855,11 @@ test("a double-backtick quotation wrapping a qualified citation does not leak in
 test("an anchored citation inside a double-backtick quotation is still read", () => {
   const found = extractCitations(
     [
-      "At `a/one.ts:5 \"anchor text\"`.",
+      'At `a/one.ts:5 "anchor text"`.',
       "",
-      "Quoting an anchored inline: `` `b/two.ts:9 \"other anchor\"` ``.",
+      'Quoting an anchored inline: `` `b/two.ts:9 "other anchor"` ``.',
       "",
-      "And `` `:10 \"shorthand anchor\"` ``.",
+      'And `` `:10 "shorthand anchor"` ``.',
     ].join("\n"),
   );
   expect(found.map((c) => `${c.source}:${c.start}|${c.anchor}`)).toEqual([

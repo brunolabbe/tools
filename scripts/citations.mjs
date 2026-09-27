@@ -358,20 +358,20 @@ const SHORTHAND = new RegExp(
 /**
  * A backtick-fenced **quotation**, ` `` ... `` ` in CommonMark for the
  * ordinary two-backtick case, content that may itself hold a shorter run of
- * backticks, closed by a run at least as long — markdown's own way to quote
- * a literal backtick, which is exactly how a reviewer writes about the
- * citation syntax itself rather than writing one (repo-60). `` `:443` ``
- * inside such a span is that reviewer's example of `SHORTHAND`, not an
- * instance of it, and `SHORTHAND`'s own single backticks sit *inside* the
- * pair this matches — invisible to a regex that never looks one character
- * further out.
+ * backticks, closed by a run of the same length, matched lazily — markdown's
+ * own way to quote a literal backtick, which is exactly how a reviewer writes
+ * about the citation syntax itself rather than writing one (repo-60).
+ * `` `:443` `` inside such a span is that reviewer's example of `SHORTHAND`,
+ * not an instance of it, and `SHORTHAND`'s own single backticks sit *inside*
+ * the pair this matches — invisible to a regex that never looks one
+ * character further out.
  *
- * **The backreference ensures the matched run at close equals the matched run
- * at open, not merely meets it** — a gate 1 finding (repo-60): a doubled
- * opener and tripled closer are read as two-close-one; this regex lets a
- * shorter run inside a longer one misparse, but CommonMark reads the full span
- * as one quotation. Neither case appears in the corpus; a gate 2 finding flags
- * the limitation without fixing it, as fence handling is outside this ticket.
+ * **Two gaps against CommonMark's own rule (gate 1 found the first, gate 2
+ * the second; repo-60).** A backtick string there is a *maximal* run at
+ * each end, equal length, no backtracking; `\x60{2,}` can backtrack to a
+ * shorter run, and its closer can be the tail of a longer one. Probed both
+ * ways — three opening against two closing backticks, and the reverse —
+ * this regex reads nothing where CommonMark reads a shorthand. 0 corpus hits.
  *
  * Lazy on purpose: two spans on one line (`` `:443` ``/`` `:8443` ``) must
  * close at the nearer pair, not swallow the text between them into one.
