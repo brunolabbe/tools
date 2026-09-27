@@ -114,3 +114,59 @@ verified:
   "repo-66" in prose describing this file as it existed at `f84c2a1` and
   `ce99898` — those gate records are unedited, and "repo-66" there means
   this file, now `repo-71`.
+- 2026-09-27 — **Built, by a builder dispatch (Opus 5.5). The Windows leg's
+  result is `unproven`: this container is Linux, and nothing below ran on
+  Windows.** Each claim is labelled with where it comes from.
+  - **The hypothesis is half right.** _Source-derived, not measured on
+    Windows:_ libuv's Windows `PATH` search appends only `.com` and `.exe` to
+    a bare name and starts no shell, so the extension-less `#!/bin/sh` file
+    named `gh` is never a candidate and `spawnSync("gh", …)` reaches the
+    runner's own `gh.exe`. _Measured here:_ the test could not tell — the
+    base test, copied with its shim set to `0o644` so it never runs, **passes**
+    (`npx vitest run` on the copy: `1 passed | 44 skipped (45)`), because the
+    real `/usr/bin/gh` in a remote-less fixture also exits 1 — `no git remotes found` — and every assertion held either way.
+  - **The "real network latency" half is refuted where it could be
+    measured.** `ci.yml`'s test job sets no `GH_TOKEN`. A real, unauthenticated
+    `gh` 2.101.0, spawned as preflight spawns it in a remote-less repository
+    with an empty `GH_CONFIG_DIR` and `CI=true GITHUB_ACTIONS=true`, exits 4
+    (`To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN…`) in
+    63–126 ms over ten runs, and routed through a logging proxy it made **0
+    requests** (`gh exited 4 in 71 ms; proxy saw 0`). The Windows runner's
+    `gh` version and its cold-start cost were not measured.
+  - **So the 41 s is not explained, only its uncontrolled binary removed.**
+    From the CI logs (`gh run view --job … --log`): in the same attempt that
+    timed out (run 36334718531 attempt 1), a test that spawns no `gh` at all —
+    `checkTitle fails a subject commit-message.mjs bypasses: squash! …` — took
+    **13,083 ms**, against 313–403 ms in the three other runs. The leg stalls
+    on tests this ticket does not touch; a slow `gh.exe` cold start (a fresh
+    VM every run) is a plausible share of this test's own 2–7 s, and is
+    unmeasured. vitest's 30 s timeout cannot interrupt a synchronous
+    `spawnSync`, which is why the failure reads 41,330 ms.
+  - **The Build's proposed fix would not have worked.** A `.cmd` shim is
+    invisible to the same `.com`/`.exe`-only search, and Node refuses to spawn
+    a `.cmd` or `.bat` without `shell: true` (its 2024 fix for
+    CVE-2024-27980), which this repo forbids. _Both from documentation and
+    source, not run._
+  - **What was built instead.** The fake is now a real executable on every
+    platform: this process's own `node` under the name `gh` — a symlink on
+    POSIX, a hard link or copy named `gh.exe` on Windows — with `pr.js`
+    planted in the fixture, since `gh pr list …` makes node run `pr` from its
+    `cwd`. `pr.js` prints a marker and exits 1, and the test asserts it,
+    `scripts/test/preflight.test.ts:889 "exited 1\n\s+fake gh"`, plus
+    `scripts/test/preflight.test.ts:887 "expect(result.error).toBeUndefined()"`.
+    _Measured here:_ forcing the Windows branch on Linux (which names the file
+    `gh.exe`, so Linux's search misses it the way Windows missed `gh`) fails
+    the new test on the real `gh`'s `no git remotes found`; the same branch
+    renamed to `gh` passes — the hard link is refused here (`EPERM`, a
+    root-owned node) so that run proved the copy fallback, not the link.
+  - **The shim pattern is unique to this test.** A grep for `#!/bin/sh`, `chmodSync` and a
+    templated `PATH:` over every `*.ts` and `*.mjs` outside `node_modules` and
+    `dist` found only this test; the one other hit is `ytdlp.test.ts` handing
+    `findExecutable` a `PATH` string as an argument.
+  - **Folded in:** a paragraph in `.claude/rules/testing.md` after the
+    shebang one, naming the `PATH` variant of the same gap — the rule this
+    ticket's brief leaned on covered spawning a `bin` directly, not a fake
+    reached by `PATH`.
+  - **Done when, line 2, stays open until a pull request's CI runs:** three
+    consecutive `windows-latest` runs of this spec without a timeout. Given
+    the 13 s stall above, the leg may still time out on something else.
