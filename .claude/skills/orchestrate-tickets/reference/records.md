@@ -252,19 +252,70 @@ discarded. So:
   fetched the branch still holds the object until gc, so the check passes
   locally and fails in CI**; a fresh clone, or a squash plus
   `git gc --prune=now`, is the only valid test, and `git branch -r --contains
-  <sha>` printing nothing is the tell. Pinning to the base is no better: a record
-  cites the tests the branch *introduced*, which do not exist there. So:
+  <sha>` printing nothing is the tell. **Pinning to the base has one blind
+  spot, not a general failure: a record cites the tests *this* branch
+  introduces, and those do not exist at the base yet.** Everything else a
+  record cites — pre-existing code, another ticket's own file, a shared script,
+  a rule page — already exists there, and pinning it there is strictly better
+  than the alternative below, because a pin is read at its own commit
+  regardless of what the working tree holds later. So, since repo-78:
 
-  - **A gate record cites the tip it reviewed by coordinate with an anchor, and
-    is re-resolved as the last action before commit.** After the squash those
-    lines are on `main` under the same content, so an unpinned, anchored
-    citation survives the merge where a pin does not.
+  - **A citation of content that already existed at the base pins to the
+    base — or to any other `main` commit that holds it — by default, not only
+    for a Log passage citing pre-existing code, which is the case this page
+    used to single out.** A gate's own `## Review` section cites exactly as
+    much pre-existing content as a Log entry does, and until repo-78 those
+    citations were left unpinned, anchored, and "re-resolved as the last
+    action before commit" — which only proves the citation true *at that
+    instant*, and every one of the four incidents below is the same failure:
+    a citation true when written, broken by a commit its own branch never
+    touched.
+    - repo-60's merged record cited a line in repo-63's own ticket file;
+      repo-63's landing splice moved it (#306).
+    - repo-67's record cited `scripts/preflight.mjs:410`, which #308 rewrote
+      in place, same number, new text (#304).
+    - repo-48's evaluation cited line 318 of this skill's own
+      `reference/concurrency.md`, moved by its own later round (#307).
+    - `SKILL.md` cited `CLAUDE.md`'s "## Handing back" by line; #305's edit
+      moved it.
+
+    Each repair turned the coordinate into a pin at the base by hand, because
+    the base is a `main` commit and stays reachable — the property that
+    already made it safe for a Log citing pre-existing code, below, and the
+    same reason a pin does not launder anything: it is checked exactly as
+    hard as an unpinned citation, just against a rev that does not move.
+    Write it that way from the day the citation is written rather than after
+    the first drift finds it — `file@<base sha>:line`, anchor after it as
+    always. Proven end to end against a citation that moved for exactly this
+    reason, one record with both forms of the same claim over the same
+    drifted commit — unpinned reports `MOVED`, pinned to the base reports
+    `ok`: `scripts/test/citations.test.ts:2934` "a citation pinned to the base survives".
+  - **A citation of content the branch under review itself introduces has
+    nothing on `main` to pin to yet, so it stays unpinned, anchored, and
+    re-resolved as the last action before commit** — the rule this page
+    always gave, kept for exactly the case it was written for. After the
+    squash those lines are on `main` under the same content, so an unpinned,
+    anchored citation survives the merge where a pin to the branch's own tip
+    does not; it is still exposed to an *unrelated* later edit of the same
+    file, the same as any unpinned citation is, and the repair is the
+    ordinary one two bullets down — repoint it, or pin it once the content is
+    reachable from `main`.
+  - **This settles repo-81's gap 6 — whose repoint it is when a landing's own
+    splice moves a line another, already-merged ticket's record cites.**
+    Nobody's, once that citation names a base pin: the pin is read at the
+    base commit, which no later splice on any branch — the cited ticket's own
+    included — can move, so there is nothing to repoint. The question only
+    had force under the rule this page used to give, which left that class of
+    citation unpinned; it does not survive the rule above. The one case a
+    repoint is still somebody's is the one the first bullet does not cover —
+    a fix that moves the lines its *own* branch's freshly-introduced citation
+    names — and that is unchanged: `roles/builder.md`'s and this page's
+    existing *A fix that lands after the records are committed*, below,
+    where the builder that owns the branch repoints it, coordinate only.
   - **Where a later commit deleted the cited text outright, rewrite the citation
     as prose naming the reviewed sha, or declare it as evidence.** `dl-58`'s
     owner decision D4(b) is the worked example: pins dropped from the record in
     favour of prose plus declarations (2026-09-17).
-  - **A Log passage citing pre-existing code pins to a sha that survives** — the
-    base, or a `main` commit — as before.
   - A tag on the reviewed commit would also keep pins reachable, exit 0 in the
     same simulation; the owner chose prose (2026-09-15). Do not re-derive the tag
     remedy without re-asking.
@@ -674,6 +725,23 @@ eleven merged records by hand before repo-52 pinned the rest. The checker
 reports the bare form as `unpinned-volatile` under `--require-claude-pins`,
 off by default; a citation failing for a more specific reason keeps that
 state.
+
+**Since repo-78 the same pin-to-a-surviving-sha rule applies to a citation
+into pre-existing content anywhere, not only under `.claude/`** — the
+paragraph above two sections up, _A gate record never pins to a branch-only
+sha_, is where that generalisation lives; `.claude/` is the one place it is
+also **mechanically enforced**, because `--require-claude-pins` and
+`citations-gate.mjs` only ever check a citation's *target* path against that
+one prefix. A citation elsewhere that a reviewer leaves unpinned against
+pre-existing content is caught by drift, the same way it always was, and not
+by CI before that: extending `citations-gate.mjs` to know, for an arbitrary
+citation, whether its target predates the branch under review needs a base
+sha threaded through a corpus-wide sweep that does not carry one per ticket
+today, and that is real machinery this ticket did not build. `--displaced-since`
+already answers the narrower question — does an unanchored, unpinned citation
+read differently at a named ref — for one ticket's own record, run by hand;
+wiring it into `citations-gate.mjs`'s CI sweep, repo-wide, is left for a ticket
+of its own.
 
 **Anchor every citation in a record you are writing now.** That is the whole
 migration: the population that matters is the records still being read against

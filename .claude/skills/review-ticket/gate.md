@@ -71,12 +71,22 @@ the section that the acceptance came from the prompt.
      cell's inline-code parsing, and the formatter then rewrites the text
      around it — measured on a gate's own first draft, 2026-09-20. Pick a
      substring free of both.
-   - **A citation into any file under `.claude/` is pinned or names a
-     heading, never a bare line number.** Those pages move every few sessions
-     and an unanchored coordinate into them is silently redirected by the next
-     edit; write `<file>@<rev>:<line>` with a `main` commit, or the page and
-     the heading (repo-52). `citations.mjs --require-claude-pins` reports the
-     bare form as `unpinned-volatile`.
+   - **A citation of content that predates the branch under review pins to
+     the base, never a bare line number — not only inside `.claude/`, where
+     this began** (repo-52, generalised repo-78): `<file>@<base sha>:<line>`,
+     anchor after it as always. Those pages, and pre-existing content wherever
+     it lives, move every few sessions and an unanchored coordinate into them
+     is silently redirected by the next edit — on this branch, or on any
+     other one that merges before yours does. `.claude/` alone keeps the
+     page-and-heading alternative, for a fact better named by a heading than
+     a line (repo-52); `citations.mjs --require-claude-pins` reports a bare
+     citation into `.claude/` as `unpinned-volatile`, and `citations-gate.mjs`
+     enforces it, in CI, for every merged record — a citation into
+     pre-existing content elsewhere is not yet enforced the same mechanical
+     way, so hold yourself to the rule rather than relying on a red build to
+     catch a miss. **A citation of content this branch's own diff introduces
+     has nothing on `main` to pin to yet**: cite it unpinned, against the tip
+     you reviewed, and re-resolve it as the last action before you commit.
    - **Quote enough of the line to be unique, and know that the line wrap bounds
      what you can quote.** `verified` means *some* occurrence of your fragment
      starts inside the range you named — not that only one does. In prose files

@@ -2907,3 +2907,50 @@ test("extractSections still hides headings inside an ordinary backtick or tilde 
   const tilde = ["## Real", "~~~`md", "## Not a heading", "~~~", "tail"].join("\n");
   expect(extractSections(tilde)).toEqual([{ title: "Real", level: 2, start: 1, end: 5 }]);
 });
+
+/**
+ * **repo-78.** `records.md`'s Why section names four gate records whose
+ * citation went stale from a commit their own branch never touched — a
+ * landing splice into another ticket's file, an unrelated in-place rewrite of
+ * a script, a rule page's own later round, an edit to a heading's file from a
+ * different pull request entirely. Every one of those is "another open PR
+ * editing the cited line" and none of them is the drift `--rev` already
+ * answers (a fix on the *same* branch moving the *same* citation).
+ *
+ * Reused against the same two-commit tree the pin tests above use — the
+ * second commit there ("the fix, which inserted three lines above the cited
+ * region") stands in for that other, unrelated PR, since a citation checker
+ * cannot tell "my own branch's fix" from "somebody else's merge" apart: both
+ * are just a later commit that moved the line.
+ *
+ * Red, under the rule this ticket replaces — cite the tip, unpinned,
+ * anchored, "re-resolved as the last action before commit": true when
+ * written, `MOVED` the moment the other PR lands. Green, under the rule this
+ * ticket sets — pin the same claim to the base — because a pin is read at its
+ * own rev regardless of what the working tree now holds, proven generally by
+ * "a pinned citation is checked at its own rev" above; this test is that
+ * property under repo-78's own framing, so `records.md` can cite it by name.
+ */
+test("a citation pinned to the base survives another open PR editing the cited line", () => {
+  const { dir, before, cleanup } = withInsertionRepo();
+  const record = path.join(dir, "repo-78.md");
+  fs.writeFileSync(
+    record,
+    [
+      "## Review",
+      "",
+      'Cited against the tip, the rule this ticket replaces: `src/tls.ts:2-3 "Defence in depth"`.',
+      `Pinned to the base, the rule this ticket sets: \`src/tls.ts@${before}:2-3 "Defence in depth"\`.`,
+      "",
+    ].join("\n"),
+  );
+  try {
+    const result = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+    expect(result.stdout).toMatch(summary(1, 1, 0, 0, 2));
+    expect(result.status).toBe(EXIT.moved);
+    expect(result.stdout).toContain('MOVED      src/tls.ts:2-3 "Defence in depth"');
+    expect(result.stdout).toContain(`ok         src/tls.ts@${before}:2-3 "Defence in depth"`);
+  } finally {
+    cleanup();
+  }
+});

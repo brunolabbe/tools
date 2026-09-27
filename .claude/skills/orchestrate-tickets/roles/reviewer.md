@@ -75,9 +75,15 @@ is only real from the worktree you already detached to
 contain a double quote, and a coordinate into the ticket's own file can never
 be distinct — name the section instead.
 
-**Cite line numbers against the tip you reviewed**, and name that sha in the
-section. **Never write a `@sha` pin to a branch-only commit**: the branch is
-deleted on merge and the pin goes `unresolvable` in CI for everyone (2026-09-14).
+**Pin a citation of content that already existed at the base to the base sha
+your dispatch names** — `file@<base sha>:line`, anchor after it as always
+(repo-78) — since the base is a `main` commit and stays reachable whatever
+this branch, or any other branch merged after you write the section, does to
+the same file. **Cite content the branch under review itself introduces
+unpinned, against the tip you reviewed**, and name that sha in the section —
+there is nothing on `main` yet to pin it to. **Never write a `@sha` pin to a
+branch-only commit**: the branch is deleted on merge and the pin goes
+`unresolvable` in CI for everyone (2026-09-14).
 `.claude/skills/orchestrate-tickets/reference/records.md` has the forms that
 survive.
 
