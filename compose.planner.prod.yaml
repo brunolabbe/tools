@@ -85,10 +85,9 @@ services:
       # the whole hostname — see that ticket's Log if this line is ever missing
       # again.
       #
-      # This value is `compose.prod.yaml`'s `edge` subnet, named a third time —
-      # see the `networks.edge.ipam` comment there, which now names
-      # `compose.downloader.prod.yaml` as the other one. Change all three
-      # together.
+      # This value is `compose.prod.yaml`'s `edge` subnet, named again — see
+      # the `networks.edge.ipam` comment there, which names every copy. Change
+      # them all together.
       TRUST_PROXY: "172.30.42.0/24"
 
       # --- What is deliberately NOT set here ------------------------------

@@ -4,10 +4,11 @@ A repo of small, independent web tools that share a toolchain, a CI pipeline and
 a set of conventions. They do not share a domain — each one is its own service,
 its own image and its own version, and none of them imports from another.
 
-| Tool                                           | What it does                                              | Released                                     |
-| ---------------------------------------------- | --------------------------------------------------------- | -------------------------------------------- |
-| [**downloader**](./tools/downloader/README.md) | Page URL in, video stream found and downloaded, link out  | [changelog](./tools/downloader/CHANGELOG.md) |
-| [**planner**](./tools/planner/README.md)       | Describe a trip, plan it with an assistant, keep the plan | [changelog](./tools/planner/CHANGELOG.md)    |
+| Tool                                           | What it does                                                | Released                                                          |
+| ---------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| [**downloader**](./tools/downloader/README.md) | Page URL in, video stream found and downloaded, link out    | [changelog](./tools/downloader/CHANGELOG.md)                      |
+| [**planner**](./tools/planner/README.md)       | Describe a trip, plan it with an assistant, keep the plan   | [changelog](./tools/planner/CHANGELOG.md)                         |
+| [**ledger**](./tools/ledger/README.md)         | A household's shared account, its buckets and who owes what | [changelog](./tools/ledger/CHANGELOG.md) — from its first release |
 
 **Each tool's README is that tool**: what it does, how to run it on its own, and
 where its documentation lives. This page is what they have in common — running
@@ -23,6 +24,7 @@ Requires Node ≥ 22.
 npm install
 npm run dev:downloader   # API on :8080, UI on :5173
 npm run dev:planner      # API on :8090, UI on :5183
+npm run dev:ledger       # API on :8100, UI on :5193
 ```
 
 The ports differ on purpose, so every tool can run at once without any of them
@@ -44,11 +46,12 @@ front, and no port opened on the router.
 tools it runs** ([adr/004](./docs/adr/004-one-compose-fragment-per-tool.md)), and
 the list lives in `COMPOSE_FILE` in `.env`:
 
-| The host runs  | `COMPOSE_FILE`                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                           |
-| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                      |
-| both           | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml` |
+| The host runs  | `COMPOSE_FILE`                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
+| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                                               |
+| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                                                |
+| all three      | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
 
 `compose.prod.yaml` is the tunnel and the network and names no tool; each
 `compose.<tool>.prod.yaml` adds one tool's released image. With the list set, a
@@ -63,7 +66,7 @@ docker compose up -d
 Every tag is an exact version rather than `latest`, on purpose: a host following
 a moving tag cannot answer what it is running, and each tool's `/api/health`
 reports its version so the two can be compared. The tools release independently,
-so `DOWNLOADER_TAG` and `PLANNER_TAG` are unrelated numbers.
+so `DOWNLOADER_TAG`, `PLANNER_TAG` and `LEDGER_TAG` are unrelated numbers.
 
 **Pulling needs a login, once.** A package's visibility is its own setting — the
 first push creates it private, and making the repository public does not change

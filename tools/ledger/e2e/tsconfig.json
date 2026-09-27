@@ -1,0 +1,21 @@
+{
+  // The Playwright surface, third copy: Playwright transpiles specs without
+  // checking them, so a helper that has drifted from the DOM it drives fails
+  // after a browser launch rather than at the terminal. The twin of
+  // `tools/planner/e2e/tsconfig.json`, whose note says why it is a file per tool.
+  //
+  // `playwright.config.ts` is pulled in from a directory up, and today it is the
+  // only file here: the suite has no spec yet (see README.md). Without this
+  // project that config — which decides `WEB_DIR`, the port and the database —
+  // would be in no project at all, and nothing would say so.
+  "extends": "../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["**/*.ts", "../playwright.config.ts"],
+  // Replaces the root's `exclude` rather than adding to it — `extends` inherits
+  // the whole array, and the root's entry is about its own program, not this
+  // one.
+  "exclude": [".artifacts"]
+}

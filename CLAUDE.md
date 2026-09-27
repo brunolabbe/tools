@@ -20,6 +20,7 @@ a set of conventions. They do not share a domain. Today:
 
 - `tools/downloader` — page URL in, video stream found and downloaded, link out.
 - `tools/planner` — describe a trip, plan it with an assistant, keep the plan.
+- `tools/ledger` — a household's shared account, its buckets, who owes what.
 
 ## Layout
 
@@ -152,7 +153,7 @@ the ticket format, and ADRs for decisions binding more than one tool. A document
 that describes two tools is where two tools start to fuse.
 
 **Work is one file per ticket** in `tools/<tool>/docs/work/`, carrying its brief
-and its log together. Ids are prefixed per tool (`dl-`, `pl-`), and repo-wide work
+and its log together. Ids are prefixed per tool (`dl-`, `pl-`, `lg-`), and repo-wide work
 — the toolchain, the conventions, CI — is `repo-` in `docs/work/`. The format, the
 fields and the preamble to hand an agent are in
 [docs/01-TICKETS.md](./docs/01-TICKETS.md).

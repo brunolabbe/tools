@@ -36,9 +36,10 @@ aspirational.
 `tools/planner/e2e` are the same surface and still need one file each, because a
 project's `include` is rooted at its own directory — there is no way to write one
 that spans both without moving the specs. The same is true of the `web` surface
-since pl-12: `tools/downloader/web/test` and `tools/planner/web/test` are twins.
-So the count of surfaces is three and the count of files is five, and a second
-tool's e2e or `web` suite costs a file of its own copied from the first. That is
+since pl-12: `tools/downloader/web/test`, `tools/planner/web/test` and
+`tools/ledger/web/test` are triplets. So the count of surfaces is three and the
+count of files is seven, and each further tool's e2e or `web` suite costs a file
+of its own copied from an existing one. That is
 not the per-package `test/tsconfig.json` shape below returning: it is one file
 per _tool's_ suite on a shared surface, of which there are as many as there are
 tools with one.

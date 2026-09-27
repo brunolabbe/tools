@@ -1,0 +1,104 @@
+name: ledger
+
+# This tool's slow gate: the image that ships it.
+#
+# It exists so that the first time the ledger's container is built is not the
+# day it is released. `release.yml` pushes to a registry from a tag, and a
+# Dockerfile that has never been exercised fails there — after the version is
+# cut and the changelog is written.
+#
+# Path-filtered, so work on another tool does not pay for it. `packages/**` is
+# included deliberately: this image is built on `@webtools/core`, so a change
+# there can break it without touching a ledger file.
+#
+# **No e2e job yet**, because there is no spec to run: a job that launches a
+# browser to find nothing is a green check proving nothing. It arrives with the
+# first spec, in the planner's shape — see `tools/ledger/e2e/README.md`.
+#
+# `push` is `main` only. See the note in `ci.yml`: a branch with an open pull
+# request fires both events into separate concurrency groups, so it used to pay
+# twice for the same answer.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/ledger/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ledger.yml"
+      # Last, so it overrides the globs above — `tools/ledger/**` otherwise
+      # pulls this tool's own `docs/` in. See the note in `ci.yml`.
+      - "!**.md"
+  pull_request:
+    paths:
+      - "tools/ledger/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ledger.yml"
+      # Last, so it overrides the globs above — `tools/ledger/**` otherwise
+      # pulls this tool's own `docs/` in. See the note in `ci.yml`.
+      - "!**.md"
+  # So a failure can be re-run without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  group: ledger-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+
+      # Built and started, not just built. `better-sqlite3` is a native addon
+      # crossing from the build stage's Debian to the runtime stage's slim one,
+      # and a mismatch there surfaces at the first query rather than at compile.
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tools/ledger/Dockerfile
+          push: false
+          load: true
+          tags: ledger:ci
+          cache-from: type=gha,scope=ledger
+          # Read always, written only from `main` — see the note in
+          # `downloader.yml`.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=ledger' || '' }}
+
+      - name: Wait for the service to report healthy
+        run: |
+          set -euo pipefail
+          docker run -d --name ledger -p 127.0.0.1:8100:8100 ledger:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8100/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the service never became healthy"
+          docker logs ledger
+          exit 1
+
+      # The planner's image served no UI at all until pl-13 while health
+      # answered perfectly, so the page is asked for by a client that says it
+      # wants one.
+      - name: The image serves the UI, not only the API
+        run: |
+          set -euo pipefail
+          curl -fsS -H 'Accept: text/html' http://127.0.0.1:8100/ > /tmp/index.html
+          # The bundle's own root element, so an error page or a JSON body
+          # cannot satisfy this the way a 200 alone would.
+          grep -q '<div id="root">' /tmp/index.html
+          curl -fsS http://127.0.0.1:8100/api/health > /dev/null
+
+      - if: always()
+        run: docker rm -f ledger || true

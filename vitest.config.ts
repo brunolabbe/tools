@@ -78,6 +78,16 @@ export default defineConfig({
           globals: false,
         },
       },
+      {
+        test: {
+          name: "ledger",
+          include: ["tools/ledger/*/test/**/*.test.{ts,tsx}"],
+          environment: "node",
+          // No browser and no network in any unit suite. The receipt reader
+          // that will talk to a model gets a fake here, as the planner's does.
+          globals: false,
+        },
+      },
     ],
   },
 });

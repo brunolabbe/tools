@@ -15,12 +15,13 @@
   // **With one exception, and it is a mechanical one:** a surface that two tools
   // both need costs a file per tool, because an `include` is rooted at the
   // config's own directory and cannot span both. That is true of the Playwright
-  // surface — `tools/downloader/e2e` and `tools/planner/e2e` — and since pl-12
-  // it is true of the `web` one too, `tools/downloader/web/test` and
-  // `tools/planner/web/test`. Four surfaces, six projects, and a third tool with
-  // either suite makes it seven. That is expected rather than a smell: it is the
-  // one place where "not a project, one more glob" cannot apply, since a glob
-  // here would pull those files onto the node surface and fail on `document`.
+  // surface — one `tools/<tool>/e2e` per tool — and since pl-12 it is true of
+  // the `web` one too, one `tools/<tool>/web/test` each. With the ledger that is
+  // three of each: four surfaces, eight projects, and every further tool with
+  // either suite adds one per suite. That is expected rather than a smell: it
+  // is the one place where "not a project, one more glob" cannot apply, since a
+  // glob here would pull those files onto the node surface and fail on
+  // `document`.
   //
   // That is also the one thing the split buys, and it is enforced rather than
   // aspirational: naming `document` in a node suite fails to compile, because
@@ -110,7 +111,11 @@
   //
   // Anything extending this file must restate `exclude`: `extends` inherits it,
   // and it would otherwise exclude that project's own files.
-  "exclude": ["tools/downloader/web/test/**", "tools/planner/web/test/**"],
+  "exclude": [
+    "tools/downloader/web/test/**",
+    "tools/planner/web/test/**",
+    "tools/ledger/web/test/**"
+  ],
   "references": [
     { "path": "./packages/core" },
     { "path": "./tools/downloader/contract" },
@@ -121,6 +126,8 @@
     { "path": "./tools/planner/intake" },
     { "path": "./tools/planner/itinerary" },
     { "path": "./tools/planner/agent" },
-    { "path": "./tools/planner/api" }
+    { "path": "./tools/planner/api" },
+    { "path": "./tools/ledger/contract" },
+    { "path": "./tools/ledger/api" }
   ]
 }

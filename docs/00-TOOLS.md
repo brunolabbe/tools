@@ -7,10 +7,11 @@ tools is the first place they start to fuse.
 
 ## Per tool
 
-| Tool         | Docs                                                | What it is                                                |
-| ------------ | --------------------------------------------------- | --------------------------------------------------------- |
-| `downloader` | [tools/downloader/docs/](../tools/downloader/docs/) | Page URL in, video stream found and downloaded, link out  |
-| `planner`    | [tools/planner/docs/](../tools/planner/docs/)       | Describe a trip, plan it with an assistant, keep the plan |
+| Tool         | Docs                                                | What it is                                                  |
+| ------------ | --------------------------------------------------- | ----------------------------------------------------------- |
+| `downloader` | [tools/downloader/docs/](../tools/downloader/docs/) | Page URL in, video stream found and downloaded, link out    |
+| `planner`    | [tools/planner/docs/](../tools/planner/docs/)       | Describe a trip, plan it with an assistant, keep the plan   |
+| `ledger`     | [tools/ledger/docs/](../tools/ledger/docs/)         | A household's shared account, its buckets and who owes what |
 
 Each tool's `docs/` has the same spine, so an agent that has read one tool knows
 where to look in the next:
