@@ -85,7 +85,13 @@ Two ways to close the gap, and they trade differently:
   finding 4's and gate 2 finding B's own miss: neither had read the Landing
   sections).** Refusing a dirty tree means all five checks end up reading
   the same, single, committed tree — the internal consistency (a) actually
-  buys. Only two places prescribe the opposite order, and both are the
+  buys. **Three places prescribe the opposite order** (corrected again at
+  gate 3, this time from the orchestrator's own read of `main` rather than
+  from another gate round): `builder.md`'s own **Gates before you report**
+  has every builder run `node scripts/preflight.mjs --base origin/<base>`
+  before it reports, with nothing there about committing first — this is
+  the section and the shape of run that `dl-53`'s builder actually hit,
+  which is this ticket's own reproduction. The other two are the
   **fix-round** steps, not the whole of either page:
   `.claude/skills/orchestrate-tickets/roles/builder.md`, under _When you are
   resumed with findings_, step 2 ("Fix, run the narrowest checks, then
@@ -96,8 +102,10 @@ Two ways to close the gap, and they trade differently:
   second — `builder.md`'s Landing lists "commit each gate record verbatim"
   as step 1 and preflight as step 2; `fixer.md`'s Landing lists commit, then
   "preflight exit 0," then push — so a landing already fits (a) with nothing
-  to change. (a)'s real cost is rewriting the fix-round order in exactly
-  those two places, not a reversal of an order the whole skill prescribes.
+  to change. (a)'s real cost is adding a "commit first" line to
+  **Gates before you report** and rewriting the two fix-round steps — three
+  places across `builder.md` and `fixer.md`, not a reversal of an order the
+  whole skill prescribes.
 - **(b) Extend `diffPaths` to include the working tree, at least for check
   1's test selection.** Union `git diff --name-only ${base}...HEAD` with
   `git status --porcelain` (staged, unstaged and untracked paths, relative to
@@ -111,19 +119,22 @@ Two ways to close the gap, and they trade differently:
   to one tree is a larger, contract-adjacent change to a script every
   builder's report leans on.
 
-**Recommendation, corrected at gate 3: still (b), for the trade-off's real
-shape rather than either earlier draft's.** (a) makes every check agree, at
-the cost named above — rewriting the fix-round steps in `builder.md` and
-`fixer.md`, not "an order this skill prescribes throughout"; their Landing
-sections already fit (a) as written. (b) leaves two trees instead of one,
-and keeps that narrower, already-`preflight`-only change: it does not need
-either role page touched, and it brings check 1's selection closer to check
-2's, though not identical — check 2 selects records with `git ls-files`
-(the index), so an _untracked_ file is invisible to it, while (b)'s own
-`git status --porcelain` union would include one for check 1's selection.
-Still `needs-decision`: the owner may judge the one-tree consistency (a)
-buys, at the cost of two rewritten fix-round steps, worth it over the
-two-tree split (b) leaves.
+**Recommendation, corrected once more: still (b), and the third place found
+this round only widens the gap.** (a) makes every check agree, at the cost
+named above — adding one line to `builder.md`'s **Gates before you report**
+and rewriting its own fix-round step plus `fixer.md`'s, three edits across
+two role pages rather than either of the two smaller counts this ticket
+carried before; their Landing sections already fit (a) as written, so that
+part of the cost has not grown. (b) leaves two trees instead of one, and
+stays the same size it always was — a change to `preflight.mjs` alone,
+touching neither role page — so the gap between (a)'s cost and (b)'s has
+only widened as (a)'s own count grew from two places to three. It brings
+check 1's selection closer to check 2's, though not identical — check 2
+selects records with `git ls-files` (the index), so an _untracked_ file is
+invisible to it, while (b)'s own `git status --porcelain` union would
+include one for check 1's selection. Still `needs-decision`: the owner may
+judge the one-tree consistency (a) buys, at the cost of three rewritten
+role-page places, worth it over the two-tree split (b) leaves.
 
 ## Build
 
@@ -211,3 +222,16 @@ Whichever of (a) or (b) is chosen:
   the wrong claims themselves are gone. Per this branch's own `records.md`,
   those citations are not repointed or reworded here; the gate's own record
   carries an evidence declaration for each instead.
+
+- 2026-09-27 — **Correction from the orchestrator**, found by reading
+  `builder.md`'s **Gates before you report** section on `main` directly,
+  not from a gate round. The previous entry's count of where the opposite
+  order is prescribed was still short by one: that section has every
+  builder run `preflight.mjs` before reporting, with no line about
+  committing first, and it is the section `dl-53`'s builder actually hit —
+  this ticket's own reproduction. So (a)'s cost is three places, not two:
+  that section, plus the same two fix-round steps already found. Reworded
+  option (a) and the recommendation to name the third place and its cost;
+  re-checked whether (b) still holds now that (a) costs more, not less —
+  it does, more clearly than before, since (b) never touches either role
+  page and (a)'s count only grew. Still `needs-decision`.
