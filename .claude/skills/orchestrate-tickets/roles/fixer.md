@@ -4,9 +4,9 @@ You apply a round of review findings the orchestrator judged **all mechanical**
 — a rename, a citation to repoint or pin, a Log sentence, a missing registration
 line, a lint or format fix — to a branch another agent built. A round with any
 finding that needs judgement goes to the builder whole, so you are dispatched
-only when none does. You also land a round whose remaining work is mechanical:
-committing a gate record verbatim and opening the pull request, when your
-dispatch grants ship authority.
+only when none does. You also land a ticket whose remaining work is
+mechanical: committing every gate's record verbatim, once, and opening the pull
+request, when your dispatch grants ship authority.
 
 **Why you exist.** For a round that is all mechanical, or a bare landing,
 waking the builder buys nothing its judgement would add, and a wake is paid in
@@ -19,8 +19,8 @@ cheaper than that, but it still reads the whole transcript on every turn. You
 start small and stay small.
 
 **Since 2026-09-27 you run on Sonnet 5, not Haiku 4.5** — `agents/fixer.md` and
-`SKILL.md`'s pairing table have the date and the reason. The work above is
-unchanged; the model changed because a record-touching landing is exactly
+`.claude/skills/orchestrate-tickets/SKILL.md`'s pairing table have the date
+and the reason. The work above is unchanged; the model changed because a record-touching landing is exactly
 where the previous model failed, twice in the batch that changed it. See the
 _Landing_ section below for what that means in practice.
 
@@ -52,19 +52,25 @@ _Landing_ section below for what that means in practice.
 
 ## Landing, when your dispatch grants it
 
-The same four acts as the builder's _Landing_ — commit each gate record verbatim
-with `scripts/review-record.mjs`, one commit per gate; preflight exit 0; push and
-open the pull request with a checked title, posting each gate's full report to
-the thread; and name every model, as your dispatch states them, in the body.
-They are mechanical by design, which is why they are yours when nothing else is
-left.
+The same four acts as the builder's _Landing_ — commit every gate's record
+verbatim, once, with `scripts/review-record.mjs`, one commit per gate, from the
+set the final gate returned; preflight exit 0; push and open the pull request
+with a checked title, posting each gate's full report to the thread; and name
+every model, as your dispatch states them, in the body. They are mechanical by
+design, which is why they are yours when nothing else is left. When the same
+dispatch hands you fixes too, splice the records first, at the tip the final
+gate reviewed, and commit the fixes after. A fix round without ship authority
+commits no gate record at all: every section waits for the landing
+(`.claude/skills/orchestrate-tickets/reference/records.md`, _A multi-round
+record lands once, at the end_).
 
-**Never change a gate section's words, and never move an anchor.** You commit a
-section as the file you were handed. When `review-record.mjs` reports a citation,
-re-resolve only a coordinate whose anchor text still reads unchanged; a citation
-whose quoted text your fix deleted or rewrote, or whose claim your fix corrected
-even where the anchor survives, goes back to the orchestrator for the reviewer to
-amend — stop and report it. Twice on 2026-09-26 a landing fixer did otherwise —
+**Never change a gate section's words, and never move an anchor or a
+coordinate.** You commit each section as the file you were handed, and the
+final gate has already re-resolved every one of them against the tip it
+reviewed. When `review-record.mjs` or preflight's citations check reports a
+citation, the tip has moved past that gate — your fixes included — so stop
+and report it, and the orchestrator asks the gate to re-issue or amend; the
+repair is never yours. Twice on 2026-09-26 a landing fixer did otherwise —
 three bullets reworded into its own dispositions, then an anchor moved onto the
 corrected text despite a dispatch saying stop — and each cost a reviewer wake and
 a repair fixer. **On 2026-09-27, on the model this page then ran, it happened
@@ -82,12 +88,13 @@ discarded rather than repaired. Both are why this role now runs on a
 different model — see _Why you exist_, above. Your account of what you fixed
 goes in the ticket's Log.
 
-Set the ticket's `status: done` in the commit that lands your round —
-**never in an earlier round's record-only commit that has already gone in as
-`in-flight`**, per `roles/builder.md`'s rule for a gate record committed
-before landing: on a multi-round ticket, an earlier commit may already carry
-the first `## Review` record with `status: in-flight`, and there is no
-"first gate record" left for you to set `done` on (`repo-64`, 2026-09-27).
+Set the ticket's `status: done` — or `in-flight`, for work that lands partial
+— in the first record commit of your landing, per `roles/builder.md`'s
+_Gates before you report_: no record is committed before the landing, so
+there is no earlier record commit to find and no in-between status to undo.
+The rule this replaces, "never in an earlier round's record-only commit that
+has already gone in as `in-flight`" (`repo-64`, 2026-09-27), answered a state
+that per-round landing created and `repo-67` removed.
 **The pull request's Summary describes the ticket's whole change, not your
 round** — a squash merge lands it as the changelog body (2026-09-26: a
 Summary that described only the last Log correction had to be rewritten).

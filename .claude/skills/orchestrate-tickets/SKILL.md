@@ -170,19 +170,23 @@ you are there.
    refutation the builder or fixer returned as a command and its output. Not
    their narrative, for step 5's reason. It reviews
    `git diff <gated sha>..<new sha>` only, gives each named finding a verdict,
-   and raises new findings only in the lines the round touched. Then step 7
-   again. **After two re-gates that each raise a new `high`, stop and put the
+   and raises new findings only in the lines the round touched, and it
+   re-issues every earlier section beside its new one, re-resolved against the
+   new head — nothing is committed before step 9. Then step 7 again. **After two re-gates that each raise a new `high`, stop and put the
    state to the user** rather than looping — an escalation, not a cap: the
    gates go on once the user has chosen.
 
 9. **Land it.** Whoever holds the last round lands it — the builder if it was
    resumed for it, otherwise a `fixer` dispatched as maintenance — **on ship
-   authority in its own dispatch or a direct message from you**: each gate
-   record committed verbatim with `scripts/review-record.mjs`, one commit per
-   gate, the pull request opened, and each gate's report posted to the thread.
-   Paste the sections to it; do not describe them. **The PR body names every
-   model — which built, which gated, which fixed** — because nothing else in the
-   artefact does.
+   authority in its own dispatch or a direct message from you**: every gate
+   record committed verbatim with `scripts/review-record.mjs`, once, now — one
+   commit per gate, from **the set the final gate returned**, every earlier
+   section re-issued by it against the tip it reviewed — the pull request
+   opened, and each gate's report posted to the thread. Nothing was committed
+   in an earlier round (`reference/records.md`, _A multi-round record lands
+   once, at the end_, since `repo-67`). Hand it the set's files; do not
+   describe them. **The PR body names every model — which built, which gated,
+   which fixed** — because nothing else in the artefact does.
 
    **One command before granting the ship:**
    `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
@@ -199,7 +203,7 @@ you are there.
    Without `--title`, check 4 reads the branch's last commit subject, which is not the title that lands; every landing on 2026-09-26 ran it that way.
 
    **And one per gate once the records are committed**, against the file the
-   gate wrote rather than any copy the lander was handed:
+   final gate wrote for that gate rather than any copy the lander was handed:
    `node scripts/review-record.mjs --verify <ticket> <the gate's section file> [--gate <n>] --rev origin/<branch>`,
    exit 0. It compares the committed record with that file, ignoring table
    padding and what the formatter rewrites, and a non-zero exit names the ticket
@@ -350,7 +354,7 @@ gates, none gated by a different model than built it** (2026-08-30).
 | Failure | Its test |
 | --- | --- |
 | **A pair that agrees too easily** — two agents that want to be done converge on "addressed" without either running anything | Structural since 2026-09-26: the gate never sees the build's claims (step 5) and you compare the two accounts (step 7). Before the fact, the gate prompt still demands reproductions and a positive control |
-| **A record nobody landed** — every report says finished, `npm run status` reads `done`, the branch is pushed, and no gate record is on it. Under the old builder↔gate exchange each treated the record as the other's next move (2026-09-04); now it is the lander you forgot to grant | One command per ticket: `git show <branch>:<ticket-path>` piped to `grep '^## Review'`. Empty means the round is not landed, whatever any agent told you; preflight runs the same test |
+| **A record nobody landed** — every report says finished, `npm run status` reads `done`, the branch is pushed, and no gate record is on it. Under the old builder↔gate exchange each treated the record as the other's next move (2026-09-04); now it is the lander you forgot to grant | One command per ticket: `git show <branch>:<ticket-path>` piped to `grep '^## Review'`. Empty means the ticket is not landed, whatever any agent told you — and before step 9 it is empty by design, since no round commits its record; preflight runs the same test |
 | **A decision relayed without its provenance** — no agent can verify authority from inside its own sandbox, so "the owner directed this" is unwarranted on its face (2026-09-04: a gate correctly declined to extend a PASS over such a commit, and the round was lost) | The record, not a command. A relayed decision names the question asked, the options, which was chosen, and **whose recommendation it overrode** |
 
 `^## Review` is right for a *live* branch because the gate role returns a
@@ -433,10 +437,15 @@ as blocking a decision you owe the user — and ask once, with the number attach
 **A running builder can produce that measurement too, and the line to hold is
 committing, not measuring**: ask for the reproduction freely, and say explicitly
 that nothing is committed or pushed while either decision is open (2026-09-04) —
-**except the gate record, which is committed whatever is open.** A hold with no
-carve-out left `dl-58`'s gate-1 record uncommitted, the next gate raised the
-missing record as a med finding, and three rounds went to a record everyone
-already held; the same hold lost gate 4's record on the same ticket (2026-09-17).
+**except the gate records, which are committed whatever is open** once the
+ticket lands or its branch is parked unlanded. A hold with no carve-out left
+`dl-58`'s gate-1 record uncommitted, the next gate raised the missing record as
+a med finding, and three rounds went to a record everyone already held; the
+same hold lost gate 4's record on the same ticket (2026-09-17). Since `repo-67`
+no round commits its record mid-flight (`reference/records.md`), so an
+uncommitted record before the landing is the rule and not a finding; what the
+carve-out still protects is the landing, and the parked branch whose scratch
+directory would not survive a rebuild.
 
 **"Accept the baseline" is rarely zero work.** An option that reads *do nothing*
 usually leaves the ticket's unconditional steps standing — read the Build for the

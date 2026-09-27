@@ -13,9 +13,11 @@ and only one of them is already built — so this skill runs `code-review` for t
 first question and spends its own effort on the rest.
 
 The output is a `## Review` section **committed to the ticket file by the
-session that lands the round** — the builder, or `orchestrate-tickets`' fixer —
+session that lands the ticket** — the builder, or `orchestrate-tickets`' fixer —
 because `docs/01-TICKETS.md` already holds that the file is the unit of work
-from brief to record. A verdict that lives in a terminal scrollback is not a
+from brief to record. Under `orchestrate-tickets` every gate's section is
+committed once, at the landing, rather than round by round (its `records.md`,
+since `repo-67`). A verdict that lives in a terminal scrollback is not a
 record — and neither is one written into a worktree that is about to be deleted,
 which is the sharper version of the same rule and the reason the lander commits
 it rather than the reviewer.
@@ -185,7 +187,9 @@ code, and dropped: it found less than one gate, at 2.7× the cost
 Steps 1 to 7 are the gate's, and live in [gate.md](gate.md), which only the gate
 agents read. Step 8 is the lander's — the session that commits to the branch
 under review: the builder, or in `orchestrate-tickets` the fixer on a mechanical
-last round.
+last round. Under `orchestrate-tickets` it runs once per ticket, at the
+landing, over the set of sections the final gate returned, one
+`review-record.mjs` call and one commit per gate in gate order.
 
 8. **Commit the section, post the report, then say what would clear it.** This
    step is the builder's, and it has three acts. First, write the reviewer's

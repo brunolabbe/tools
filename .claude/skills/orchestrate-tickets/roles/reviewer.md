@@ -62,20 +62,24 @@ So read in this order:
 from inside this worktree — already checked out at the head sha you are
 reviewing, never a different checkout.** You have no `Write`, so build the
 scratch copy with Bash and `node -e` in the ticket's scratch directory: the
-ticket as it is on the branch, your section spliced in above `## Log`, then
+ticket as it is on the branch, every section you are returning spliced in above
+`## Log` in gate order — on a re-gate, the earlier ones you re-issued too, since
+the lander commits them together — then
 `node scripts/citations.mjs <copy> --section Review --require-anchors
 --require-distinct-anchors`. A section that fails there costs a round
 (2026-09-13); skipping it costs the same round later, on the lander's own
 splice this time (`repo-62`, 2026-09-27). `citations.mjs` resolves every
 `file:line` against whatever tree the process running it sits in, so the check
-is only real from the worktree you already detached to (`records.md`). An
-anchor cannot contain a double quote, and a coordinate into the ticket's own
-file can never be distinct — name the section instead.
+is only real from the worktree you already detached to
+(`.claude/skills/orchestrate-tickets/reference/records.md`). An anchor cannot
+contain a double quote, and a coordinate into the ticket's own file can never
+be distinct — name the section instead.
 
 **Cite line numbers against the tip you reviewed**, and name that sha in the
 section. **Never write a `@sha` pin to a branch-only commit**: the branch is
 deleted on merge and the pin goes `unresolvable` in CI for everyone (2026-09-14).
-`records.md` has the forms that survive.
+`.claude/skills/orchestrate-tickets/reference/records.md` has the forms that
+survive.
 
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep
@@ -89,7 +93,10 @@ minutes (repo-57, 2026-09-20).
 the path.** The orchestrator lands from that file: your report's text reaches it
 HTML-escaped (`&lt;`, `&gt;`, `&amp;`), so a section copied out of the report is
 not the section you wrote, and a section split across two files has to be
-joined by hand (2026-09-26).
+joined by hand (2026-09-26). Put the gate number and the sha the coordinates
+resolve against in each file's name — `gate-2@<sha>.md` — because a re-gate
+re-issues every earlier section, and the lander must be handed one set from
+one sha, never a mix of rounds.
 
 ## When you are woken to re-gate
 
@@ -116,12 +123,22 @@ not get their narrative, for the same reason you did not get the build's report.
   clearing it back to empty left Save disabled with nothing on the page saying
   why, a combination none of the round's tests began from (2026-09-27).
 - Return a new `### Gate <n>` subsection, never an edit to an earlier one's
-  words. **If the round moved lines your earlier sections cite, return a
-  corrected copy of each as a file** — words and verdicts unchanged, coordinates
-  re-resolved against the new head. A citation whose text the round deleted, or
-  whose claim the round corrected though its anchor survives, becomes prose
-  naming the sha you gated (branch-only, so never a pin), and one preamble
-  sentence says which. Every re-gate on 2026-09-26 had to be told this.
+  words, **and re-issue every earlier section with it, each as its own file,
+  whether or not the round moved a line it cites** — words, rows and verdicts
+  unchanged, coordinates re-resolved against the new head. Nothing is committed
+  until the landing, and the lander commits the last set a gate returned as
+  given and repoints nothing, so the set has to be complete and resolve at one
+  sha; you cannot know your round is the last until the orchestrator has routed
+  your findings (`.claude/skills/orchestrate-tickets/reference/records.md`,
+  _A multi-round record lands once, at the end_, since `repo-67`). A citation
+  whose text the round deleted, or whose claim the round corrected though its
+  anchor survives, becomes prose naming the sha that section gated
+  (branch-only, so never a pin), and one preamble sentence says which. Every
+  re-gate on 2026-09-26 had to be told the corrected-copy half of this.
+- **Woken only to re-issue** — the tip moved after your last round and a
+  lander's `review-record.mjs` found a section `MOVED` — re-resolve every
+  section against the new sha the same way and return the set; review nothing
+  else unless the orchestrator names a diff.
 - When `origin/main` moves while you review, keep the base you were dispatched
   with in your header and say that `main` moved.
 

@@ -47,15 +47,18 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
 978 k against a sibling's 322 k, and the difference was rounds, not difficulty. So:
 
 - **End every relay with conditional ship authority** — to the builder or the
-  fixer, whichever lands the round. "Apply these, and **if**
+  fixer, whichever takes the round. "Apply these, and **if**
   `npm run check` is green, the suite is green and the diff scope is unchanged,
-  open the PR yourself (**or, on a branch with no PR yet, commit the gate record
+  open the PR yourself (**or, on a branch with no PR yet, commit the gate records
   yourself** — the same clause, and the state this skill's default produces) — do not check back. If any condition fails, stop and tell
   me." This removes an entire round and gives up no gating, because the conditions
   are mechanical. It worked on three branches in the second session and four of
   five in the third. **Know when you cannot give it:** a FAIL whose fix is real
   work needs a real check, and that branch will cost you a round no matter how the
-  relay is written. Budget for it rather than trying to write around it.
+  relay is written. Budget for it rather than trying to write around it. Since
+  `repo-67` the lander splices every gate's record first, at the tip the final
+  gate reviewed, and commits the fixes after them (`records.md`, _A multi-round
+  record lands once, at the end_).
 
   **Running the conditions is mechanical; writing them is not.** Derive each
   condition from the words of a `Done when` line, not from the command that seems

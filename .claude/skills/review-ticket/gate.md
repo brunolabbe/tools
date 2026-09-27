@@ -180,7 +180,9 @@ the section that the acceptance came from the prompt.
 7. **Decide the gate by the rule below, not by feel**, and **return** the section
    as text. Do not write it to the ticket yourself: your worktree is discarded
    when you report, so a file you edit here goes nowhere. Whoever lands the
-   round commits it, in step 8.
+   ticket commits it with every other gate's, once, in step 8 — so on a
+   re-gate, an earlier gate's record missing from the branch is expected, not
+   a finding (`orchestrate-tickets`' `records.md`, since `repo-67`).
 
 ### A shape-level finding goes onto the siblings too
 

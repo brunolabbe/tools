@@ -23,13 +23,19 @@ discarded. So:
   have wrong stays in the Log, as a claim with its command like any other. Judge a
   Log by whether a later agent can re-run it, not by whether it reads well.
 
-- The reviewer returns the section; **whoever lands the round — the builder, or
-  the fixer — commits the short form of it**
-  (the two bullets above say which form) to the ticket, above
-  `## Log`, one subsection per gate, never overwriting an earlier one.
-- The lander then posts the reviewer's report to the PR thread
-  (`gh pr comment <n> --body-file <f>`). That is what makes a self-transcribed
-  verdict falsifiable, and it is the only check on it.
+- The reviewer returns the section; **whoever lands the ticket — the builder, or
+  the fixer — commits the short form of every gate's section once, at the
+  landing** (the two bullets above say which form), to the ticket, above
+  `## Log`, one subsection per gate, never overwriting an earlier one. **Until
+  the landing, a round's section is held, not committed**: in the gate's own
+  file in the ticket's scratch directory, and on the PR thread when one is open.
+  _A multi-round record lands once, at the end_, below, says why and what the
+  final gate returns (repo-67, 2026-09-27).
+- Each gate's report goes to the PR thread
+  (`gh pr comment <n> --body-file <f>`): posted by whoever takes the round, as
+  it comes back, when a pull request is already open, and otherwise by the
+  lander, every one of them, when it opens the pull request. That is what makes
+  a self-transcribed verdict falsifiable, and it is the only check on it.
 - Verdicts are recorded **as given**. "FAIL, since addressed" is a verdict softened
   in place; put the addressing in the dispositions.
 - **A claim that reached a record is withdrawn in place, never deleted.** Two
@@ -50,51 +56,87 @@ discarded. So:
   the opposite with equal confidence. Swapping one unsupported claim for another is
   the same failure in different clothes, and it is the pull after a retraction.
 - Every finding is listed, including those needing no change.
-- **A fix that lands after the verbatim section is committed does not edit the
-  section.** The section stays as a description of the sha it reviewed; the
-  builder adds a dated post-gate Log entry naming the new sha and saying the
-  record above describes the earlier one; and a citation the fix deleted
-  outright cannot be repointed — it goes back to the reviewer for an amended
-  bullet, marked in place as amended at the new sha, because a finding's words
-  are the reviewer's to change (2026-09-13, 2026-09-18). **A multi-round record
-  is several subsections whose coordinates are each correct only against their
-  own header's sha**, and the citations gate checks the whole `## Review`
-  against one tree — so an earlier round's coordinates that a later round's
-  fixes moved have to be repointed, or the record goes red the moment it is
-  committed to a ticket file (2026-09-20, seen on a PR-thread record where it
-  was harmless).
+- **A multi-round record lands once, at the end.** A multi-round record is
+  several subsections whose coordinates are each correct only against the tree
+  they were resolved against, and the citations gate checks the whole
+  `## Review` against one tree (2026-09-20). Until 2026-09-27 each round's
+  section was committed as it came back, so every later fix round moved or
+  corrected lines an already-committed section cited, and each move cost a
+  repoint, a pin or a trip back to the reviewer. On the 2026-09-27 batch — the
+  orchestrator's own measurement, relayed in `repo-67`'s Why rather than read
+  off one ticket — that was re-resolutions and repoints on `pl-48`, `repo-60`
+  and `repo-64`, `dl-53`'s three landing stops, and on `repo-64` one shape (a
+  citation repointed onto the very correction it should have gone back for)
+  three times across three gate rounds. `citations-gate.mjs` refused each
+  correctly; the cost was committing mid-flight. So, since `repo-67`:
 
-  **Repointed, never pinned — a pin here is exactly the branch-only sha this
-  page forbids two sections down, and this is not hypothetical.** This
-  paragraph used to say the earlier round's coordinates "are pinned to the sha
-  that round reviewed," and two builders (`pl-48`, `repo-60`) followed that
-  wording on 2026-09-27, pinning to `ac00b8d`, `f1bde60` and `247073d` — each a
-  commit that exists only on the branch being built. Both pins cost a reviewer
+  - **Nothing is committed per round.** Each gate writes each section it
+    returns to a file in the ticket's scratch directory (`roles/reviewer.md`),
+    and the orchestrator holds the paths. A round's dispatch to a builder or a
+    fixer carries findings, never a record to commit.
+  - **Every re-gate re-issues every earlier section**, alongside its own new
+    `### Gate <n>`, re-resolved against the tip it reviewed: words, rows and
+    verdicts unchanged, and a citation whose text a later round deleted, or
+    whose claim a later round corrected though its anchor survives, rewritten
+    by the gate as prose naming the sha that round gated, with one preamble
+    sentence saying which. **Every re-gate, not only the last**: a gate cannot
+    know its round is the last until the orchestrator has routed its findings,
+    and the alternative is one more wake of the gate whenever it is.
+  - **The lander commits the last set as given and repoints nothing**: gate 1's
+    file without `--gate`, each later one with `--gate <n>`, one commit per
+    gate, all at the tip the final gate reviewed. `review-record.mjs` refuses a
+    section it finds `MOVED`; at a landing that means the tip moved after the
+    final gate, so stop and report, and the orchestrator asks the gate for a
+    re-issue. It is never the lander's to repoint — `dl-53`'s landing was
+    ordered to splice byte-for-byte first and re-resolve second (2026-09-27),
+    which the tool cannot do, and under this rule there is nothing to
+    re-resolve. The lander's own Log entry moves no cited line, because a
+    record never cites its own ticket file by coordinate (`dispatching.md`,
+    _Send the findings in full_, on self-citation).
+  - **Under conditional ship authority the records go in before the fixes.**
+    A lander told to apply a last round of fixes and ship if the checks hold
+    (`sizing.md`) lands past the tip the final gate reviewed. So it splices
+    every record first, at that tip, where they resolve as given, and
+    commits the fixes after — which makes them the case _A fix that lands
+    after the records are committed_, below. Splicing after the fixes would
+    meet a `MOVED` with no gate left to send it back to.
+  - **The status goes in with the landing's first record commit** — `done`,
+    or `in-flight` for work that lands partial — so no commit carries a record
+    on a `ready` ticket. Before the landing there is no record, and neither
+    `status.test`'s `reviewedButReady` nor preflight's `## Review` presence
+    check has anything to read; `roles/builder.md` has the reasoning.
+  - **A branch parked without landing still commits what it holds.** The
+    scratch directory does not survive a container rebuild (the scratchpad
+    bullet below), so when a batch ends with a branch unlanded — an open
+    decision, a FAIL whose author stops — the last set the gate returned is
+    committed then, with `in-flight`. That is `dl-58`'s "the gate record is
+    committed whatever else is held" (2026-09-17), which still binds.
+
+  **Re-resolved, never pinned — a pin here is exactly the branch-only sha this
+  page forbids two sections down, and this is not hypothetical.** This page
+  used to say an earlier round's coordinates "are pinned to the sha that round
+  reviewed," and two builders (`pl-48`, `repo-60`) followed that wording on
+  2026-09-27, pinning to `ac00b8d`, `f1bde60` and `247073d` — each a commit
+  that exists only on the branch being built. Both pins cost a reviewer
   re-resolution once they were checked against a tree that could no longer
-  reach those shas, which is the identical failure the branch-only-sha rule
-  below already exists to prevent; this paragraph simply told the lander to
-  commit it. There is no reading where a multi-round record's own coordinates
-  are exempt from that rule.
+  reach those shas. There is no reading where a multi-round record's own
+  coordinates are exempt from that rule.
 
-  **The lander repoints**, when it transcribes the multi-round section — on a
-  scratch `<ticket>.landed.md` copy of the reviewer's file, coordinate only,
-  and only where the anchor text an earlier round quoted is unchanged; every
-  change it makes goes in the ticket's Log, and the copy is what gets spliced
-  in with `scripts/review-record.mjs`. **Repoint before you splice, never
-  after**: `review-record.mjs --verify` refuses a section it finds `MOVED`
-  against the ticket at the commit it checks, so a landing dispatch that orders
-  a byte-for-byte splice first and coordinate re-resolution second is asking
-  for something the tool cannot do — measured on `dl-53`'s landing (2026-09-27),
-  where that was exactly the order given. A citation whose text a later round's
-  fix deleted outright, or whose claim it corrected even where the anchor
-  survives, is not the lander's to repoint at all — it goes back to the
-  reviewer for an amended bullet, as above.
-
-  This is unless a re-gating reviewer has already returned its earlier
-  sections re-resolved against the new head, as `roles/reviewer.md` asks since
-  2026-09-26, in which case the lander commits those as given. Either way the
-  reviewer returns text and never edits a file, and a coordinate-only repoint
-  changes no verdict, row or severity, so it is the same kind of repair as the
+- **A fix that lands after the records are committed does not edit a
+  section.** Two cases are left where a committed record meets a later fix,
+  both conditional ship: a last round of fixes applied after the records, and
+  a pull request opened and then one narrow gate (`SKILL.md`, _The PR is not
+  the end of gating_). The section stays as a description of the sha it
+  reviewed; the builder adds a dated post-gate Log entry naming the new sha and
+  saying the record above describes the earlier one; a coordinate the fix moved
+  is repointed by the builder, coordinate only and only where the anchor text
+  still reads unchanged, each change named in the Log — a fixer stops and
+  reports instead (`roles/fixer.md`); and a citation the fix deleted outright, or whose claim it corrected
+  even where the anchor survives, goes back to the reviewer for an amended
+  bullet, marked in place as amended at the new sha, because a finding's words
+  are the reviewer's to change (2026-09-13, 2026-09-18). The reviewer returns
+  text and never edits a file, and a coordinate-only repoint changes no
+  verdict, row or severity, so it is the same kind of repair as the
   self-citation one and not the builder editing the record.
 - **A record cannot assert that its own branch is green, and this is structural
   rather than a lapse.** *"Any commit that corrects a status claim invalidates the
@@ -492,9 +534,9 @@ The skill's own default produces this state every time — builders stop before 
 PR — and three rules on these pages assume it away. What to do instead, measured
 on a gated-but-unopened branch on 2026-09-02:
 
-- **Both halves of the gate go in the ticket**, short form and reasoning, with a
-  one-line preamble saying the long form is here because no PR thread existed to
-  hold it. The two-locations rule exists so the copies cannot drift; one location
+- **Both halves of each gate go in the ticket at the landing**, short form and
+  reasoning, with a one-line preamble saying the long form is here because no
+  PR thread existed to hold it. The two-locations rule exists so the copies cannot drift; one location
   cannot drift.
 - **Ship authority becomes authority to _commit_**, not to open. `sizing.md`
   phrases it as "open the PR yourself"; on a pre-PR branch the equivalent is
