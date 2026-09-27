@@ -308,13 +308,13 @@ function buildDiff(oldText, newText) {
         "diff",
         "--no-index",
         "--no-color",
-        "--src-prefix=section-file/",
-        "--dst-prefix=inserted-block/",
+        "--src-prefix=",
+        "--dst-prefix=",
         "--",
-        before,
-        after,
+        "section-file",
+        "inserted-block",
       ],
-      { encoding: "utf8" },
+      { cwd: dir, encoding: "utf8" },
     );
     if (result.error) throw result.error;
     // --no-index exits 0 when the files are identical and 1 when they differ;
@@ -476,7 +476,28 @@ function main() {
     normalizeForDiff(blockText),
   );
 
+  // Step 5 (repo-62): the block that landed must be the section file as the
+  // formatter renders it and nothing more. The splice inserted it verbatim, so
+  // this can only fail on the script's own locating or on the formatter doing
+  // something context-dependent — but when it does, the ticket goes back to
+  // HEAD before anyone can commit it.
+  const comparison = compareRecord(sectionText, blockText, formatMarkdown(sectionText));
+  if (!comparison.matches) {
+    restoreFromHead();
+    process.stderr.write(
+      describeMismatch(comparison, block.start, relative, "after splicing", sectionFile),
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   process.stdout.write(check.stdout);
+  // Before the disclosure note, never after it: everything below that header
+  // is the diff a lander pastes into the Log.
+  process.stdout.write(
+    `\nOnce committed, check the record against the file it came from with:\n` +
+      `  node scripts/review-record.mjs --verify ${ticket} ${sectionFile}${gate === null ? "" : ` --gate ${gate}`}\n`,
+  );
   process.stdout.write(
     `\nSpliced into ${relative}.\n\n` +
       "Normalised diff against the section file (table padding and rule width ignored) — empty means\n" +
@@ -485,9 +506,287 @@ function main() {
   process.stdout.write(diff);
 }
 
+// ---------------------------------------------------------------------------
+// --verify — the committed record against the file it came from (repo-62)
+// ---------------------------------------------------------------------------
+
+/*
+ * Everything from here down is appended below `main` rather than threaded
+ * through `parseArgs` and the helpers above it, because merged gate records
+ * (repo-55's among them) cite this file by line and anchor, and a line added
+ * above one of those coordinates displaces it and fails the citations gate on
+ * a ticket this change never touched.
+ *
+ * Why a separate mode at all: the splice never commits. The lander commits,
+ * and on 2026-09-26 two landers committed a gate record whose words were not
+ * the reviewer's — three bullets reworded into the lander's own dispositions
+ * (dl-69, ebd9649), a citation re-anchored onto text the lander's own fix had
+ * written (repo-50, d0389bb). Nothing the splice checks can see an edit made
+ * to the ticket after the splice ran. The only comparison that can is the
+ * committed blob against the file the gate wrote — run by whoever holds that
+ * file, which is the orchestrator, not the lander.
+ */
+
+export const VERIFY_USAGE =
+  "usage: node scripts/review-record.mjs --verify <ticket-file> <section-file> [--gate <n>] [--rev <rev>]";
+
+/**
+ * Parse `--verify`'s argv: the same two positionals and `--gate` as a splice,
+ * plus `--rev` — the commit whose copy of the ticket is compared, `HEAD` by
+ * default, because the claim being checked is about what was committed, not
+ * what is on disk.
+ *
+ * @param {string[]} argv
+ * @returns {{ticket: string, sectionFile: string, gate: number | null, rev: string}}
+ */
+export function parseVerifyArgs(argv) {
+  const positional = [];
+  let gate = null;
+  let rev = "HEAD";
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--verify") continue;
+    if (arg === "--gate") {
+      const value = argv[++i];
+      if (value === undefined) throw new Error(`--gate needs a value\n${VERIFY_USAGE}`);
+      if (!/^[1-9]\d*$/.test(value)) {
+        throw new Error(
+          `--gate must be a positive integer, got ${JSON.stringify(value)}\n${VERIFY_USAGE}`,
+        );
+      }
+      gate = Number(value);
+      continue;
+    }
+    if (arg === "--rev") {
+      const value = argv[++i];
+      if (value === undefined || value.startsWith("-")) {
+        throw new Error(`--rev needs a value\n${VERIFY_USAGE}`);
+      }
+      rev = value;
+      continue;
+    }
+    if (arg.startsWith("-")) throw new Error(`unknown option ${arg}\n${VERIFY_USAGE}`);
+    positional.push(arg);
+  }
+  if (positional.length !== 2) throw new Error(VERIFY_USAGE);
+  const [ticket, sectionFile] = positional;
+  return { ticket, sectionFile, gate, rev };
+}
+
+/** `### Gate <n>` numbers a text opens as headings of its own. */
+const gateNumbersIn = (text) =>
+  new Set(
+    extractSections(text)
+      .filter((s) => s.level === 3)
+      .map((s) => /^Gate (\d+)(?!\d)/.exec(s.title.trim()))
+      .filter((m) => m !== null)
+      .map((m) => Number(m[1])),
+  );
+
+/**
+ * The block one gate occupies in a ticket that may already carry later gates.
+ *
+ * `locateInsertedBlock` runs right after a splice, when the gate just added is
+ * always the last thing under `## Review`, so it can run to the end of the
+ * section. A verify runs any time afterwards — gate 1 checked once gate 3 has
+ * landed below it — so the block ends at the first `### Gate <m>` heading
+ * that the section file does not open itself. Bounding by the section file's
+ * own gate headings, rather than by any `###`, keeps a heading inside a gate's
+ * body (the repo-55 case `locateInsertedBlock` documents) inside its block,
+ * and lets a first review whose file opens `### Gate 1` keep that heading.
+ *
+ * @param {string} markdown
+ * @param {number | null} gate
+ * @param {string} sectionText
+ * @returns {{start: number, end: number}}
+ */
+export function locateGateBlock(markdown, gate, sectionText) {
+  const sections = extractSections(markdown);
+  const review = selectSection(
+    sections.filter((s) => s.level === 2),
+    "Review",
+  );
+  const own = gateNumbersIn(sectionText);
+  if (gate !== null) own.add(gate);
+
+  let start = review.start;
+  if (gate !== null) {
+    const heading = sections.find(
+      (s) =>
+        s.level === 3 &&
+        s.start >= review.start &&
+        s.end <= review.end &&
+        new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
+    );
+    if (heading === undefined) {
+      throw new Error(`there is no "### Gate ${gate}" heading under "## Review"`);
+    }
+    start = heading.start;
+  }
+
+  const next = sections.find((s) => {
+    if (s.level !== 3 || s.start <= start || s.start > review.end) return false;
+    const m = /^Gate (\d+)(?!\d)/.exec(s.title.trim());
+    return m !== null && !own.has(Number(m[1]));
+  });
+  return { start, end: next === undefined ? review.end : next.start - 1 };
+}
+
+/**
+ * Render markdown the way `oxfmt` would render it inside the ticket, by
+ * formatting it alone in a temporary `.md` file. `oxfmt` legitimately rewrites
+ * more than table padding — `*` bullets to `-`, `*emphasis*` to `_emphasis_`,
+ * `***` to `---` — so a committed record can differ from a reviewer's raw file
+ * in all of those and still be every word the reviewer wrote.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function formatMarkdown(text) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-fmt-"));
+  try {
+    const file = path.join(dir, "section.md");
+    fs.writeFileSync(file, text);
+    const fmt = spawnSync(process.execPath, [OXFMT, file], {
+      cwd: dir,
+      encoding: "utf8",
+      shell: false,
+    });
+    if (fmt.error) throw fmt.error;
+    if (fmt.status !== 0) {
+      throw new Error(`oxfmt could not format the section file: ${fmt.stderr || fmt.stdout}`);
+    }
+    return fs.readFileSync(file, "utf8");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Whether a landed block is the section file: equal, after table padding is
+ * collapsed on both sides, to the raw file or to the formatter's rendering of
+ * it. Anything else — a word, a coordinate, an anchor, a line added or
+ * dropped — is a mismatch, and the diff is taken against the formatted file so
+ * that it shows only that, never the formatter's own rewrites.
+ *
+ * @param {string} sectionText the file the gate wrote
+ * @param {string} blockText the block as it stands in the ticket
+ * @param {string} formattedSectionText `formatMarkdown(sectionText)`
+ * @returns {{matches: boolean, diff: string}}
+ */
+export function compareRecord(sectionText, blockText, formattedSectionText) {
+  const landed = normalizeForDiff(blockText);
+  const raw = normalizeForDiff(sectionText.replace(/\n+$/, ""));
+  const formatted = normalizeForDiff(formattedSectionText.replace(/\n+$/, ""));
+  if (landed === raw || landed === formatted) return { matches: true, diff: "" };
+  return { matches: false, diff: buildDiff(formatted, landed) };
+}
+
+/**
+ * The ticket's own line numbers for every line a diff from `compareRecord`
+ * adds or changes, and the section file's lines it drops — the lines a reader
+ * has to go and look at. The normalisation changes no line count above the
+ * trailing blanks it trims, so a line in the diff's new side is exactly line
+ * `blockStart + n - 1` of the ticket.
+ *
+ * @param {string} diff
+ * @param {number} blockStart
+ * @returns {{ticket: {line: number, text: string}[], section: {line: number, text: string}[]}}
+ */
+export function differingLines(diff, blockStart) {
+  const ticket = [];
+  const section = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let inHunk = false;
+  for (const line of diff.split("\n")) {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk || line.startsWith("\\")) continue;
+    if (line.startsWith("+")) {
+      ticket.push({ line: blockStart + newLine - 1, text: line.slice(1) });
+      newLine++;
+    } else if (line.startsWith("-")) {
+      section.push({ line: oldLine, text: line.slice(1) });
+      oldLine++;
+    } else {
+      oldLine++;
+      newLine++;
+    }
+  }
+  return { ticket, section };
+}
+
+/**
+ * The error a mismatch prints: which lines of the ticket differ, which lines
+ * of the section file are missing from it, then the diff itself.
+ *
+ * @param {{diff: string}} comparison
+ * @param {number} blockStart
+ * @param {string} relative
+ * @param {string} where
+ * @param {string} sectionFile
+ */
+export function describeMismatch(comparison, blockStart, relative, where, sectionFile) {
+  const { ticket, section } = differingLines(comparison.diff, blockStart);
+  const show = (entries) =>
+    entries.map((e) => `  ${e.line}: ${JSON.stringify(e.text)}`).join("\n") || "  (none)";
+  return (
+    `the gate record in ${relative} ${where} is not ${sectionFile} — it differs beyond ` +
+    `table padding and the formatter's own rewrites.\n` +
+    `A gate record is committed as the file the gate wrote; a word, a coordinate or an anchor ` +
+    `the gate did not write goes back to the gate for amendment, never into the record.\n\n` +
+    `Lines of ${relative} that the section file does not have:\n${show(ticket)}\n\n` +
+    `Lines of the section file (as formatted) missing from ${relative}:\n${show(section)}\n\n` +
+    comparison.diff
+  );
+}
+
+function verifyMain(argv) {
+  const { ticket, sectionFile, gate, rev } = parseVerifyArgs(argv);
+  const ticketAbsolutePath = path.resolve(ticket);
+  const sectionText = fs.readFileSync(path.resolve(sectionFile), "utf8");
+  validateFirstLine(sectionText, gate);
+
+  const ticketRepoRoot = repoRootFor(ticketAbsolutePath);
+  const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
+  const show = spawnSync("git", ["-C", ticketRepoRoot, "show", `${rev}:${relative}`], {
+    encoding: "utf8",
+  });
+  if (show.error) throw show.error;
+  if (show.status !== 0) {
+    throw new Error(`could not read ${relative} at ${rev}: ${show.stderr || "git show failed"}`);
+  }
+
+  const committed = show.stdout;
+  const block = locateGateBlock(committed, gate, sectionText);
+  const blockText = committed
+    .split("\n")
+    .slice(block.start - 1, block.end)
+    .join("\n");
+  const comparison = compareRecord(sectionText, blockText, formatMarkdown(sectionText));
+  if (!comparison.matches) {
+    process.stderr.write(
+      describeMismatch(comparison, block.start, relative, `at ${rev}`, sectionFile),
+    );
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write(
+    `the gate record in ${relative} at ${rev} (lines ${block.start}-${block.end}) is ${sectionFile}, ` +
+      `up to table padding and the formatter's own rewrites.\n`,
+  );
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    main();
+    if (process.argv.slice(2).includes("--verify")) verifyMain(process.argv.slice(2));
+    else main();
   } catch (error) {
     process.stderr.write(`${/** @type {Error} */ (error).message}\n`);
     process.exitCode = 1;
