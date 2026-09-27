@@ -14,8 +14,7 @@
  * to be unsafe, noisy or racy — so the projection is computed on demand and
  * never kept.
  *
- * Plain `.mjs`, no dependencies, matching `commit-message.mjs` — the two are
- * the repo's tooling and neither should need a build step to answer.
+ * Plain `.mjs`, no build step and no package dependencies — sibling scripts only.
  *
  * See docs/adr/003-the-status-page-is-generated.md and its amendment.
  */
@@ -25,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { extractSections } from "./citations.mjs";
 
 /** Every field a ticket's frontmatter may carry, and whether it is required. */
 const FIELDS = {
@@ -323,13 +323,13 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
  * @param {string} text The whole file, frontmatter included.
  * @returns {boolean}
  */
-function hasGateRecord(text) {
-  let fenced = false;
-  for (const line of text.split("\n")) {
-    if (line.startsWith("```") || line.startsWith("~~~")) fenced = !fenced;
-    else if (!fenced && /^##\s+Review\b/.test(line)) return true;
-  }
-  return false;
+export function hasGateRecord(text) {
+  // Which lines are fences is `extractSections`' rule, shared (repo-73). A
+  // loose one of its own here — any three backticks or tildes toggled — hid
+  // repo-63's gate record behind a quoted shorter fence, and a `~~~` inside a
+  // backtick fence exposed a quoted one. Exported for `preflight.mjs`' check 3,
+  // so no two readers of `## Review` can disagree about where it is.
+  return extractSections(text).some((s) => s.level === 2 && /^Review\b/.test(s.title));
 }
 
 /**
@@ -463,7 +463,7 @@ function validate(fields, tool, entry, file) {
       `${file}: "${ticket.difficulty}" is not a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
     );
   }
-  const match = /^[a-z]+-(?<number>\d+)$/.exec(ticket.id);
+  const match = /^[a-z]+-(?<number>[1-9]\d*)$/.exec(ticket.id);
   if (match?.groups === undefined) throw new Error(`${file}: "${ticket.id}" is not "<prefix>-<n>"`);
   ticket.number = Number(match.groups.number);
   ticket.note ??= null;

@@ -1090,3 +1090,36 @@ test("the CLI reports the header correctly when --displaced-since is used", () =
     cleanup();
   }
 });
+
+/**
+ * **repo-74.** Mid-merge, `git ls-files` lists a conflicted path once per stage
+ * — three times for a both-modified file — so `candidateFiles` handed
+ * `makeResolver` one path three times, and the suffix form of a citation read
+ * `ambiguous — 3 tracked files match` naming the same file thrice. The full
+ * repo-relative path hid it, because `tracked.includes(file)` wins first. A
+ * conflict is exactly when someone runs the gate by hand to check a resolution.
+ */
+test("a path in merge conflict is one candidate, and its bare name still resolves", () => {
+  const { dir, cleanup } = withRepo({});
+  try {
+    const edit = (text: string) =>
+      fs.writeFileSync(path.join(dir, "src", "tls.ts"), `// ${text}\n`, { flag: "a" });
+    gitIn(dir, "checkout", "-q", "-b", "side");
+    edit("side");
+    gitIn(dir, "commit", "-qam", "side");
+    gitIn(dir, "checkout", "-q", "main");
+    edit("main");
+    gitIn(dir, "commit", "-qam", "main");
+    const merge = spawnSync("git", ["-C", dir, "merge", "-q", "side"], { encoding: "utf8" });
+    expect(merge.status).not.toBe(0);
+    // The precondition, so this cannot pass by the conflict never happening.
+    expect(gitIn(dir, "ls-files").split("\n")).toEqual(["src/tls.ts", "src/tls.ts", "src/tls.ts"]);
+
+    const files = candidateFiles(dir, null);
+    expect(files.filter((f: string) => f === "src/tls.ts")).toHaveLength(1);
+    expect(makeResolver(files)("tls.ts")).toEqual({ path: "src/tls.ts" });
+    expect(makeResolver(files)("src/tls.ts")).toEqual({ path: "src/tls.ts" });
+  } finally {
+    cleanup();
+  }
+});
