@@ -887,3 +887,50 @@ zero wait. `.env.example`, the settings table and the deployment doc say so.
   `DOWNLOAD_FAILED` without the refusal line. Skipped on Windows, where a
   script cannot be spawned without a shell. Making the precedence branch
   always false fails it; reverted.
+
+- 2026-09-27 — **Round five: the cut-body shape, on the owner's answer of the
+  same day** — gate 6's option (b), which overrode the builder's (a), because
+  gate 6 measured (a)'s `corrupt input packet` firing on a segment delivered
+  whole with damaged bytes. The committed `## Review` was withdrawn and the
+  six sections landed verbatim, one commit each.
+
+  **The rule.** An early end — "Stream ends prematurely" — fails the stream
+  when no "Will reconnect" from the **same connection** answers it; it is
+  decided when ffmpeg exits, before the body is ended, so the visitor sees a
+  cut connection and the job records `DOWNLOAD_FAILED` (`STREAM_ENDED_EARLY`
+  and `connectionOf` in `engine/src/stream.ts`).
+
+  **Attribution, measured rather than assumed** (`scratchpad/dl-53/explore4.mts`,
+  ffmpeg 6.1.1, raw lines): the early end and its reconnect carry the same
+  `[http @ 0x…]` address — `0x557cbe02b840` for both in the healed
+  progressive case — and a separate video and audio input each get their own:
+  audio cut once gave `0x558f9e5993c0` on both lines, video cut once
+  `0x55f2d7d73a00`, and both files came back whole at 233,063 bytes. The
+  interleaving itself is tested with the stand-in: early ends on two
+  connections, reconnects in the other order, completes; the same with one
+  reconnect missing fails.
+
+  **Red first**, each `expected false to be true` on `received.aborted` or, for
+  the stand-in, `promise resolved … instead of rejecting`: "an HLS segment
+  whose body is cut short", "a DASH fragment whose body is cut short", and the
+  interleaving case, all at the end of `engine/test/stream.test.ts`.
+  **Controls**, green before and after: the healed progressive reconnect, the
+  HLS retry, a segment delivered whole with 4 KB inverted (new), and a
+  separate audio rendition cut once and resumed (new). The progressive cut
+  never served again was red first last round and stays green.
+
+  **Mutations** (`scratchpad/dl-53/mutate2.cjs`, the whole spec each time, the
+  file restored after):
+  - no early end recorded: fails the HLS and DASH cut-body cases and the
+    interleaving case — the three cases the rule exists for;
+  - a reconnect answering for every connection: fails only the interleaving
+    case;
+  - a reconnect answering for none: fails only the two healed controls and the
+    healed half of the interleaving case;
+  - `FRAGMENT_LOST` dropped: fails only the DASH refused-fragment case;
+  - **`DEMUX_READ_FAILED` dropped: fails nothing.** The progressive case it was
+    added for last round now also ends in an early end that no reconnect
+    answers — the last refused reconnect writes one (raw lines in
+    `scratchpad/dl-53/explore5.mts`'s run) — so the new rule catches it at
+    exit. Kept, with that said at the constant, and raised to the orchestrator
+    as a decision rather than removed: the owner added it last round.

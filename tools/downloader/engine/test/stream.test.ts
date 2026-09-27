@@ -868,4 +868,115 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
       }
     },
   );
+
+  /**
+   * Gate 6's cut-body shape, on the owner's answer of 2026-09-27: a segment,
+   * fragment or file whose body stops short of its `Content-Length`, rather
+   * than being refused. ffmpeg writes "Stream ends prematurely" for it, and for
+   * a progressive transfer it then reconnects and heals — so the line fails the
+   * stream only when no "Will reconnect" from the **same connection** follows.
+   */
+  test("an HLS segment whose body is cut short fails the stream", async () => {
+    fault = (pathname, count, request, response, body) => {
+      if (!pathname.endsWith("/hls6/seg002.ts") || count !== 1) return false;
+      cutShort(request, response, body, 0.4);
+      return true;
+    };
+    const { received, done } = await streamed("hls-cut-body", hlsVariant("hls6", 6));
+    expect(received.status).toBe(200);
+    expect(received.aborted).toBe(true);
+    await expect(done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+  });
+
+  test("a DASH fragment whose body is cut short fails the stream", async () => {
+    fault = (pathname, _count, request, response, body) => {
+      if (!pathname.endsWith("/dash8/chunk-stream0-00003.m4s")) return false;
+      cutShort(request, response, body, 0.4);
+      return true;
+    };
+    const { received, done } = await streamed("dash-cut-body", dash8());
+    expect(received.status).toBe(200);
+    expect(received.aborted).toBe(true);
+    await expect(done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+  });
+
+  test("control: a segment delivered whole but with corrupt bytes completes", async () => {
+    // Gate 6's false failure for "corrupt input packet": nothing was lost in
+    // transfer, so nothing here may fail it. 4 KB of the segment, inverted.
+    fault = (pathname, _count, _request, response, body) => {
+      if (!pathname.endsWith("/hls6/seg002.ts")) return false;
+      const damaged = Buffer.from(body);
+      const from = Math.floor(damaged.length / 2);
+      for (let index = from; index < Math.min(damaged.length, from + 4096); index += 1) {
+        damaged[index] = (damaged[index] ?? 0) ^ 0xff;
+      }
+      response.writeHead(200, { "content-length": String(damaged.length) });
+      response.end(damaged);
+      return true;
+    };
+    const { received, done } = await streamed("hls-corrupt", hlsVariant("hls6", 6));
+    expect(received.aborted).toBe(false);
+    await expect(done).resolves.toMatchObject({ bytes: received.bytes });
+  });
+
+  test("control: a separate audio rendition cut once and resumed on reconnect completes whole", async () => {
+    // Two inputs, two connections logging on two threads: the reconnect is
+    // attributed to the audio connection that ended early, by its own prefix.
+    fault = (pathname, count, request, response, body) => {
+      if (!pathname.endsWith("/pair5/audio-only.m4a") || count !== 2) return false;
+      cutShort(request, response, body, 0.4);
+      return true;
+    };
+    const { received, done } = await streamed("pair-heal", {
+      id: "pair5",
+      protocol: "dash",
+      url: `${origin.origin}/pair5/video-only.mp4`,
+      audioUrl: `${origin.origin}/pair5/audio-only.m4a`,
+      hasVideo: true,
+      hasAudio: true,
+      durationSec: 5,
+      label: "pair5",
+    });
+    expect(received.aborted).toBe(false);
+    await expect(done).resolves.toMatchObject({ bytes: received.bytes });
+    const probed = await probeMedia(received.file);
+    expect(probed.streams.map((stream) => stream.kind).toSorted()).toEqual(["audio", "video"]);
+    expect(Math.abs((probed.durationSec ?? 0) - 5)).toBeLessThan(TOLERANCE_SEC);
+  }, 60_000);
+
+  test.skipIf(process.platform === "win32")(
+    "an early end is matched to a reconnect by its own connection, however the lines interleave",
+    async () => {
+      // Two connections, as a video and a separate audio input give. Each line
+      // carries its connection's address; a reconnect on one never answers for
+      // the other.
+      // oxlint-disable-next-line consistent-function-scoping -- read beside its lines
+      const ended = (address: string): string =>
+        `[http @ ${address}] Stream ends prematurely at 30028, should be 75004`;
+      // oxlint-disable-next-line consistent-function-scoping -- read beside its lines
+      const reconnect = (address: string): string =>
+        `[http @ ${address}] Will reconnect at 30028 in 0 second(s), error=Input/output error.`;
+
+      const healed = [ended("0xa1"), ended("0xb2"), reconnect("0xb2"), reconnect("0xa1")];
+      const engineHealed = engineWith({ ffmpegPath: await standIn(healed) });
+      const whole = await engineHealed.stream({
+        jobId: "interleaved-healed",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      whole.body.resume();
+      await expect(whole.done).resolves.toBeDefined();
+
+      const oneLeft = [ended("0xa1"), ended("0xb2"), reconnect("0xb2")];
+      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft) });
+      const cut = await engineCut.stream({
+        jobId: "interleaved-cut",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      cut.body.resume();
+      await expect(cut.done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+    },
+    30_000,
+  );
 });

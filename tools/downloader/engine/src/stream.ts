@@ -155,8 +155,43 @@ export const FRAGMENT_LOST = /Failed to open fragment of playlist/iu;
  * cannot be: ffmpeg writes that line for a transfer it then reconnects and
  * completes, measured with a body cut at 40% once and served whole on the
  * reconnect — full length, exit 0, and the line present all the same.
+ *
+ * Since `STREAM_ENDED_EARLY` its measured case is caught twice: the last
+ * refused reconnect writes an early end that nothing answers, and that fails
+ * the stream at exit, where this fails it at the read error a moment before.
+ * Kept for a read error with no early end before it, which no fixture here
+ * produces — measured as overlap, not as a second proof.
  */
 export const DEMUX_READ_FAILED = /Error during demuxing|Error retrieving a packet from demuxer/iu;
+
+/**
+ * A transfer that stopped short of its `Content-Length` — a segment, a
+ * fragment or a progressive body cut mid-way, rather than refused (dl-53's
+ * sixth gate). ffmpeg writes this for all three, and for a progressive body it
+ * then reconnects and fetches the rest: `WILL_RECONNECT`, from the **same**
+ * connection, immediately after. HLS and DASH never reconnect a segment, so
+ * for them the line alone is a hole. The rule is therefore "an early end that
+ * no reconnect of the same connection answered", decided when ffmpeg exits.
+ *
+ * Not `corrupt input packet`, which catches the same cuts: it is also what a
+ * segment delivered whole but with damaged bytes produces, and that is not a
+ * transfer this service failed to make (the owner's choice, 2026-09-27).
+ */
+export const STREAM_ENDED_EARLY = /Stream ends prematurely/iu;
+export const WILL_RECONNECT = /Will reconnect at/iu;
+
+/**
+ * The connection a line came from: the address in ffmpeg's `[http @ 0x…]`
+ * prefix. Measured on ffmpeg 6.1.1: the early end and its reconnect carry the
+ * same address, and a video and a separate audio input each get their own —
+ * which is what keeps a reconnect on one from answering for the other when the
+ * two inputs' threads interleave their lines.
+ */
+const CONNECTION_OF = /^\[[^\]@]*@ (0x[0-9a-f]+)\]/iu;
+
+export function connectionOf(line: string): string | null {
+  return CONNECTION_OF.exec(line)?.[1] ?? null;
+}
 
 /** True for a line that says the source lost data this stream will not get. */
 export function losesSourceData(line: string): boolean {
@@ -485,6 +520,9 @@ async function attempt(
   // For `SEGMENT_SKIPPED`: what ffmpeg said before it gave up on a segment.
   let stderrTail = "";
   let sawCertificateRejection = false;
+  // Connections that ended early and have not reconnected since. See
+  // `STREAM_ENDED_EARLY`; anything left here when ffmpeg exits is a hole.
+  const endedEarly = new Set<string>();
 
   const ffmpeg: FfmpegStream = streamFfmpeg({
     ffmpegPath: config.ffmpegPath,
@@ -515,6 +553,8 @@ async function attempt(
       logger.debug("ffmpeg", { line });
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_CHARS);
       if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
+      if (STREAM_ENDED_EARLY.test(line)) endedEarly.add(connectionOf(line) ?? line);
+      else if (WILL_RECONNECT.test(line)) endedEarly.delete(connectionOf(line) ?? line);
       if (losesSourceData(line)) {
         // A segment refused on its certificate is skipped the same way, and
         // says so first: that is a certificate failure, which is not retried
@@ -583,6 +623,13 @@ async function attempt(
 
   const done = ffmpeg.completion
     .then(async (result): Promise<StreamOutcome> => {
+      if (endedEarly.size > 0) {
+        // Before `body.end()`: the visitor must see a cut connection, not a
+        // complete response carrying a file with a hole in it.
+        throw new AppError("DOWNLOAD_FAILED", "The source cut part of the video short.", {
+          details: { stderr: stderrTail, connections: endedEarly.size },
+        });
+      }
       body.end();
       // Every chunk through the counter, not merely out of ffmpeg: a slow
       // reader leaves the last few queued on the writable side. A reader that
