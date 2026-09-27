@@ -3,7 +3,7 @@ id: repo-76
 tool: repo
 title: Duplicate ids differing by leading zeros are not detected
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -86,6 +86,19 @@ The options as filed:
   one).
 - `npm run check`, the `repo` suite and
   `node scripts/citations-gate.mjs --against origin/main` pass.
+
+## Review
+
+**Gate: PASS** -- 2026-09-27 -- `1a8321ce0615059d9b9d338628b78a2d9552249a...a9a3d840c2dabeee30b637d4fe49f2a63ca0c2f6` -- code-review at high (dispatch named a detailed, per-ticket attack list; treated as above the medium default)
+
+| Done when                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `readTickets` refuses an id whose number has a leading zero, naming the file and the id, and still parses one with an inner zero | proven -- `scripts/test/status-gate-record.test.ts:135 "is refused as not <prefix>-<n>, by file"` (repo-003, repo-01, repo-0) and `:143 "an id with a zero that is not leading still parses"` (repo-10); reproduced red at base sha 1a8321c own validate regex: all three padded ids parsed instead of throwing, green at head; also checked the exact ids named in the gate dispatch directly against the new pattern: dl-0, dl-00 and dl-003 reject, dl-10 and dl-100 accept (number 10 and 100) |
+| `node scripts/status.mjs --json` on this branch still exits 0 (no ticket has one)                                                | verified -- ran head status.mjs --root over an extract of origin/main docs/work plus tools/*/docs/work (205 tickets): exit 0; `git grep -hE "^id: [a-z]+-0"` over origin/main and every other open pull request head (repo-48, repo-63, repo-67, repo-71, repo-72, repo-allow-env-reads) returned no matches, so none would be refused                                                                                                                                                             |
+| `npm run check`, the `repo` suite and `node scripts/citations-gate.mjs --against origin/main` pass                               | verified -- preflight own check 1 and check 2 report ok; independently: npx vitest run --project repo -> 521 passed across 11 files; node scripts/citations-gate.mjs --against origin/main -> 118 enforced, 0 failing, 6 grandfathered, 0 raised, exit 0                                                                                                                                                                                                                                           |
+
+- **findings** -- code-review at high returned 0; 0 carried, 0 dropped.
+- NFR: security n/a -- performance n/a -- reliability: 0 of 205 real tickets affected, confirmed by the exit-0 run above -- maintainability: `next-id.mjs` and `commit-message.mjs` needed no change since neither disagreed with the new spelling, checked by reading both rather than assumed.
 
 ## Log
 
