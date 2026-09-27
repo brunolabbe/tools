@@ -146,25 +146,6 @@ const STDERR_TAIL_CHARS = 4096;
 export const FRAGMENT_LOST = /Failed to open fragment of playlist/iu;
 
 /**
- * ffmpeg's own report that an input's demuxer failed to read — the progressive
- * case, where a body cut mid-transfer is reconnected, the reconnects are
- * refused, and the file ends at the cut. It is written by the ffmpeg CLI for
- * any input, and only for a read error, never at an ordinary end.
- *
- * **Not "Stream ends prematurely".** The gate named it as a candidate, and it
- * cannot be: ffmpeg writes that line for a transfer it then reconnects and
- * completes, measured with a body cut at 40% once and served whole on the
- * reconnect — full length, exit 0, and the line present all the same.
- *
- * Since `STREAM_ENDED_EARLY` its measured case is caught twice: the last
- * refused reconnect writes an early end that nothing answers, and that fails
- * the stream at exit, where this fails it at the read error a moment before.
- * Kept for a read error with no early end before it, which no fixture here
- * produces — measured as overlap, not as a second proof.
- */
-export const DEMUX_READ_FAILED = /Error during demuxing|Error retrieving a packet from demuxer/iu;
-
-/**
  * A transfer that stopped short of its `Content-Length` — a segment, a
  * fragment or a progressive body cut mid-way, rather than refused (dl-53's
  * sixth gate). ffmpeg writes this for all three, and for a progressive body it
@@ -195,7 +176,7 @@ export function connectionOf(line: string): string | null {
 
 /** True for a line that says the source lost data this stream will not get. */
 export function losesSourceData(line: string): boolean {
-  return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line) || DEMUX_READ_FAILED.test(line);
+  return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line);
 }
 
 /** `source` keeps the origin container when we can hold it; otherwise MP4. */
