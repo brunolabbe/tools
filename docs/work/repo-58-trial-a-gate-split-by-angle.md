@@ -179,6 +179,13 @@ before the trial runs, not after.
 - **findings** · record review at the six checks the dispatch named returned 1; 1 carried, 0 dropped.
 - NFR: security n/a · performance n/a · reliability n/a · maintainability — the one med above is itself a documentation accuracy gap in the justification the ticket gives for its methodology, which the finding covers.
 
+### Gate 2
+
+`git diff 4c070696522576c1372bce0696208c7af86d7d32..42c33de12bf6e4a9d9161def0fa7dd212d362e83` — one file, one hunk, `docs/work/repo-58-trial-a-gate-split-by-angle.md` (plus 4, minus 3).
+
+- **med finding, fixed.** The sentence now reads: it was chosen for having the most items to recall, not for size, three larger first round gates on source changes carried fewer, dl-50 none, which would have made criterion 1 true by default, and repo-35 and pl-43 one low finding each. Verified against the same numbers derived independently in the round above: round 1 of pl-39 carried 5 items (B1 through B5) against dl-50 at 0, repo-35 at 1 low, and pl-43 at 1 low. The arithmetic of the new sentence and its comparison set match the recomputation exactly, and it no longer asserts pl-39 was the largest. No new unverifiable claim was introduced.
+- **Did not** re-run the wider six item check this round; the diff touches only the one sentence the finding named, and nothing else changed.
+
 ## Log
 
 - 2026-09-26 — filed while shelving the section, from the second-pass review's
@@ -278,3 +285,7 @@ before the trial runs, not after.
   the normalised diff against that file is empty — nothing altered or dropped.
   Its one med, the baseline claim, is fixed in `42c33de`; the reviewer's full
   report is on the pull request thread.
+- 2026-09-27 — **gate 2 transcribed** the same way: normalised diff empty,
+  nothing altered or dropped. It finds the med fixed. The record's headline
+  stays CONCERNS, as the reviewer notes, because gate 1's verdict is a fact
+  about `4c07069`; nothing is left open at `42c33de`.
