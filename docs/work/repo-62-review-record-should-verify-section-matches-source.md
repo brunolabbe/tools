@@ -3,7 +3,7 @@ id: repo-62
 tool: repo
 title: review-record.mjs should verify a committed section equals its source file
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -204,3 +204,10 @@ origin/main` → exit 0, 112 enforced, 0 failing.
   a context line and shifts every line number after it. A comment now says
   so, and a test at the end of the spec pins the mapping with the marker in
   both sides.
+
+- 2026-09-27 — landed (builder, Opus 5.5). Gates 1 and 2 committed with
+  `review-record.mjs` from the reviewer's file, split byte for byte at its line
+  18 (`9ca04bc`, `f9eb32d`); each normalised disclosure diff was empty — nothing
+  differs. The owner chose to land with gate 2's low (a verbatim-quoted
+  `### Gate <n>` heading ahead of the real one still starts `--gate <n>` at the
+  quote, a false FAIL) recorded rather than fixed in a third round.
