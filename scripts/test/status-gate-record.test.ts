@@ -2,11 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { checkReview } from "../preflight.mjs";
 import { readTickets, reviewedButReady } from "../status.mjs";
 
 /**
  * repo-73: `hasGateRecord` reads fences with the same rule `extractSections`
- * does, rather than a looser one of its own.
+ * does, rather than a looser one of its own — and so does preflight's check 3,
+ * which now calls it. repo-76, at the end: an id's number has no leading zero.
  *
  * A file of its own rather than the end of `status.test.ts`, because that
  * suite's end was already claimed by an open pull request (#302, repo-72) whose
@@ -94,4 +96,52 @@ test.each([
   ["## The gate on this filing", false],
 ])("%s at the top level reads as reviewed: %s", (heading, expected) => {
   expect(reviewed(`${heading}\n`)).toBe(expected);
+});
+
+// ---------------------------------------------------------------------------
+// preflight's check 3, the third reader of `## Review` — folded into repo-73
+// ---------------------------------------------------------------------------
+
+// `checkReview` grepped `^## Review` over the whole file with no fence rule at
+// all, so a ticket marked `done` whose only `## Review` is a quoted example —
+// `docs/01-TICKETS.md`'s template shape — passed as gated. The opposite
+// failure to `hasGateRecord`'s: a false pass on a landing, not a false alarm.
+const done = ready.replace("status: ready", "status: done");
+const preflightReview = (body: string) =>
+  checkReview("unused", [at], () => `${done}${body}`) as { ok: boolean; lines: string[] };
+
+test("preflight's review check does not count a ## Review quoted in a fence", () => {
+  const result = preflightReview(
+    ["```md", "## Review", "", "**Gate: PASS**", "```", ""].join("\n"),
+  );
+  expect(result.ok).toBe(false);
+  expect(result.lines).toEqual([`FAIL  ${at} is marked done but has no ## Review section`]);
+});
+
+test("preflight's review check reads a real ## Review the way the board does", () => {
+  const body = ["`````", "````", "`````", "", "## Review", ""].join("\n");
+  expect(preflightReview(body).ok).toBe(true);
+  expect(reviewed(body)).toBe(true);
+});
+
+// ---------------------------------------------------------------------------
+// repo-76: an id with a leading zero is not an id
+// ---------------------------------------------------------------------------
+
+// `dl-003` parsed, `Number()` dropped the zeros, and `readTickets` returned it
+// beside `dl-3` as a different ticket in the same sort slot; `next-id` read both
+// as 3. The owner chose to reject the spelling (2026-09-27): no ticket had one.
+test.each([["repo-003"], ["repo-01"], ["repo-0"]])(
+  "%s is refused as not <prefix>-<n>, by file",
+  (id) => {
+    const file = `docs/work/${id}-slug.md`;
+    const root = repoWith({ [file]: ready.replace("id: repo-1", `id: ${id}`) });
+    expect(() => readTickets(root)).toThrow(`${file}: "${id}" is not "<prefix>-<n>"`);
+  },
+);
+
+test("an id with a zero that is not leading still parses", () => {
+  const file = "docs/work/repo-10-slug.md";
+  const root = repoWith({ [file]: ready.replace("id: repo-1", "id: repo-10") });
+  expect(readTickets(root).map((t) => [t.id, t.number])).toEqual([["repo-10", 10]]);
 });

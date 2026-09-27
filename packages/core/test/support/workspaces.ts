@@ -14,8 +14,12 @@
  * a primitive `@webtools/core` offers anyone. `vitest` collects `*.test.ts`, so
  * it is never mistaken for a suite of its own, and `tsconfig.tests.json`'s glob
  * typechecks it along with the tests that import it.
+ *
+ * `spawn-safety.test.ts` has since moved to `repoSources`, at the end: its rule
+ * is repo-wide, and the workspace layout is not the repo (repo-75).
  */
 
+import { execFileSync } from "node:child_process";
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -102,4 +106,34 @@ export async function sourcesUnder(dir: string): Promise<SourceFile[]> {
 
   await walk(path.join(REPO_ROOT, dir, "src"));
   return found;
+}
+
+/** Every extension Node or TypeScript will run, which is what a spawn can hide in. */
+const SOURCE_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u;
+
+/**
+ * Every source file in the repository, tracked or new, rather than only
+ * workspaces' `src` — the repo-wide scan `spawn-safety.test.ts` needs (repo-75).
+ * `sourcesUnder` reaches neither `scripts/`, which spawns `git`, `gh` and `npm`
+ * more than anything else here, nor any `test/` or `e2e/`, nor any `.mjs`.
+ *
+ * Asked of git rather than walked, because `.gitignore` is the only honest
+ * answer to "is this ours": a walk would read `storage/`, `coverage/` and every
+ * sibling worktree under `.claude/`. Untracked-but-not-ignored files count, so a
+ * file a branch has just added is scanned before anyone stages it. Deduplicated,
+ * because mid-merge `git ls-files` lists a conflicted path once per stage
+ * (repo-74).
+ */
+export async function repoSources(): Promise<SourceFile[]> {
+  const listed = execFileSync(
+    "git",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { cwd: REPO_ROOT, encoding: "utf8", shell: false, maxBuffer: 64 * 1024 * 1024 },
+  );
+  const files = [...new Set(listed.split("\0"))].filter((file) => SOURCE_EXTENSION.test(file));
+  const found = await Promise.all(
+    files.map(async (file) => ({ file, text: await readFileOrNull(path.join(REPO_ROOT, file)) })),
+  );
+  // A tracked file deleted in the working tree is not source any more.
+  return found.flatMap(({ file, text }) => (text === null ? [] : [{ file, text }]));
 }

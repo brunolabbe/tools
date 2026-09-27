@@ -66,6 +66,12 @@ pipeline the gate predicted — see the red run in the Log.
 3. Keep `scripts/status.mjs`' line count neutral from the first cited line down:
    merged records cite it, and #302 (repo-72) edits `readTickets` just above.
 4. Tests must hold with and without repo-63's `extractSections` fix merged.
+5. **Folded in on 2026-09-27:** `scripts/preflight.mjs`' check 3,
+   `checkReview`, is a third reader of `## Review` with a rule of its own —
+   `/^## Review\b/mu` over the whole file, no fences at all. Export
+   `hasGateRecord` and call it there, keeping every cited line of
+   `preflight.mjs` and `scripts/test/preflight.test.ts` in place (#303 edits
+   the test file, and its record cites `:838`).
 
 ## Done when
 
@@ -74,6 +80,8 @@ pipeline the gate predicted — see the red run in the Log.
 - A `~~~` line inside a backtick fence does not expose a quoted `## Review`.
 - The unclosed-fence test in `status.test.ts` still passes unchanged.
 - `reviewed` is unchanged for every ticket on `main` (0 of 205 differ).
+- Preflight's review check does not count a `## Review` quoted in a fence, and
+  reads a real one the way `status.mjs` does.
 - `npm run check`, the `repo` project's suite and
   `node scripts/citations-gate.mjs --against origin/main` pass.
 
@@ -133,9 +141,33 @@ pipeline the gate predicted — see the red run in the Log.
   `origin/repo-72-status-names-duplicate-id` caught it: the citations gate
   failed that record `moved … it is at 331`.
 
-  **Could have folded, did not:** `scripts/preflight.mjs`' `checkReview` is a
+  **Could have folded, did not (superseded by the next entry):** `scripts/preflight.mjs`' `checkReview` is a
   third reader, `/^## Review\b/mu` over the whole file with no fence handling
   at all, so a `done` ticket quoting `## Review` in a fence passes it. Sharing
   `extractSections` there too would be a line. Not done: it is a different
   check with the opposite failure direction (a false pass, not a false alarm),
   and nothing specified it — reported to the orchestrator instead.
+
+- 2026-09-27 — **`checkReview` folded in**, on the orchestrator's direction:
+  it is this ticket's defect in a third place, a reader of `## Review` with a
+  fence rule of its own (here, none), and one of this batch's gates had already
+  named the missing check — that a gate does not check its section is seen by
+  _every_ reader of `## Review`. The owner's "perform the work now" covered it.
+  Built as Build step 5: `hasGateRecord` is exported and `checkReview` calls
+  it, so all three readers now share `extractSections`.
+
+  Red, with `checkReview`'s old line put back by hand:
+  `npx vitest run scripts/test/status-gate-record.test.ts -t "preflight"` gave
+  `1 failed | 1 passed`, failing "preflight's review check does not count a
+
+  ## Review quoted in a fence" (it passed as gated). Green after, with the
+
+  status, preflight and spawn-safety suites: `193 passed (193)`.
+
+  **Lines**: in `preflight.mjs` the import took the blank line between the
+  `node:` imports and the local ones, so only `main`'s lines 58–65, all
+  imports, move (up one); from 66 every line keeps its number, and the
+  `checkReview` line and its docblock line change in place.
+  `export` went in front of `function hasGateRecord(text)` at `status.mjs:326`,
+  in place — repo-63's record anchors on `function hasGateRecord(text)`, still a
+  fragment of the line. `scripts/test/preflight.test.ts` is untouched.

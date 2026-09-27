@@ -323,12 +323,12 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
  * @param {string} text The whole file, frontmatter included.
  * @returns {boolean}
  */
-function hasGateRecord(text) {
+export function hasGateRecord(text) {
   // Which lines are fences is `extractSections`' rule, shared (repo-73). A
   // loose one of its own here — any three backticks or tildes toggled — hid
   // repo-63's gate record behind a quoted shorter fence, and a `~~~` inside a
-  // backtick fence exposed a quoted one. One reader, so the two cannot
-  // disagree about where a ticket's sections are.
+  // backtick fence exposed a quoted one. Exported for `preflight.mjs`' check 3,
+  // so no two readers of `## Review` can disagree about where it is.
   return extractSections(text).some((s) => s.level === 2 && /^Review\b/.test(s.title));
 }
 
@@ -463,7 +463,7 @@ function validate(fields, tool, entry, file) {
       `${file}: "${ticket.difficulty}" is not a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
     );
   }
-  const match = /^[a-z]+-(?<number>\d+)$/.exec(ticket.id);
+  const match = /^[a-z]+-(?<number>[1-9]\d*)$/.exec(ticket.id);
   if (match?.groups === undefined) throw new Error(`${file}: "${ticket.id}" is not "<prefix>-<n>"`);
   ticket.number = Number(match.groups.number);
   ticket.note ??= null;

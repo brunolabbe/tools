@@ -54,7 +54,6 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-
 import { EXTRA_SCOPES, TYPES, releasingTypes, toolScopes, validate } from "./commit-message.mjs";
 import {
   SCOPE,
@@ -63,6 +62,7 @@ import {
   gate as citationsGate,
   parseGrandfathered,
 } from "./citations-gate.mjs";
+import { hasGateRecord } from "./status.mjs";
 
 export const USAGE =
   "usage: node scripts/preflight.mjs --base <ref> [--title <text>] [--repo <dir>]";
@@ -98,7 +98,7 @@ const lines = (out) => out.split("\n").filter(Boolean);
  * @param {{cwd?: string}} [options]
  */
 function runGit(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd, shell: false });
   if (result.error) throw fail(`${command}: ${result.error.message}`, 127);
   if (result.status !== 0) {
     const detail = (result.stderr || "").trim().split("\n").slice(0, 3).join("\n");
@@ -263,7 +263,7 @@ const BUILD_FAILURE_TAIL = 40;
  * @param {{cwd?: string}} [options]
  */
 export function runBuildCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd, shell: false });
   if (result.error) throw fail(`${command}: ${result.error.message}`, 127);
   const combined = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   if (result.status !== 0) {
@@ -383,7 +383,7 @@ export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo
 
 /**
  * Check 3: every ticket this branch marks `done` carries a `## Review`
- * section — `git show HEAD:<ticket> | grep '^## Review'`, per ticket, with a
+ * section, as `status.mjs`' `hasGateRecord` reads one (repo-73), per ticket, with a
  * distinct message for the one that has none. `diffPaths` is the one already
  * computed against `${base}...HEAD`, filtered to the ticket roots
  * `citations-gate.mjs`'s own `SCOPE` names.
@@ -407,7 +407,7 @@ export function checkReview(repo, diffPaths, run = runGit) {
     }
     const status = /^status:\s*(\S+)\s*$/mu.exec(content)?.[1];
     if (status !== "done") continue;
-    if (/^## Review\b/mu.test(content)) {
+    if (hasGateRecord(content)) {
       out.push(`ok    ${ticket} is done and carries a ## Review section`);
     } else {
       missing += 1;
@@ -527,7 +527,7 @@ export function checkTitle(repo, diffPaths, title, run = runGit) {
  * @param {{cwd?: string}} [options]
  */
 function spawnRaw(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd, shell: false });
   if (result.error) throw fail(`${command}: ${result.error.message}`, 127);
   return result;
 }

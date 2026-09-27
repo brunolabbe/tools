@@ -3,7 +3,7 @@ id: repo-75
 tool: repo
 title: spawn-safety.test.ts never scans scripts/, though CLAUDE.md says the rule is enforced repo-wide
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -52,10 +52,25 @@ recognises `spawn(`. A file calling `spawnSync`, `execFile` or `execFileSync` is
 never asked to say `shell: false`, anywhere the scan runs. The other 14 script
 files that import `node:child_process` use those.
 
-## The decision — held for the owner
+## The decision — answered 2026-09-27: widen the scan, to every source file
 
-Put by the orchestrator on 2026-09-27; this ticket moves to `ready` in the
-commit that records the answer.
+**Asked of the owner** by the orchestrator on 2026-09-27, before the
+measurement above existed: "spawn-safety.test.ts never scans scripts/, yet
+CLAUDE.md says the rule is 'Enforced repo-wide'… Which way?" Two options were
+put: **Widen the scan (recommended)** — "extend the scan to scripts/ (and
+.claude/scripts/ if it holds .mjs/.ts), so CLAUDE.md's claim becomes true" —
+and **Correct the claim**.
+
+**Answered by the owner: Widen the scan.**
+
+**Read as option 1 below, every source file — the orchestrator's reading, not
+the owner's words.** The option's stated purpose was to make "enforced
+repo-wide" true, and only option 1 does; the measurement shows options 1 and 2
+cost the same. The orchestrator took that reading and said it would tell the
+owner it goes one step past the literal option text, which named `scripts/`
+(and `.claude/scripts/`, which holds no `.mjs` or `.ts`).
+
+The three options as the builder priced them afterwards, kept as filed:
 
 1. **Widen the scan to every tracked source** — `scripts/**/*.{mjs,ts}`, plus
    `packages/` and `tools/` beyond `src` — so "repo-wide" is true. Measured
@@ -73,18 +88,44 @@ commit that records the answer.
    `src` — and leave scripts to convention. One sentence; no code. #305 edits
    CLAUDE.md too, at "What is denied", well clear of this line.
 
-Whether the `spawn(`-only gap above is closed in the same change is a second,
-smaller question: closing it asks every `spawnSync`/`execFileSync` file in the
-scanned roots to say `shell: false`, which is unmeasured beyond the 15 script
-files named above.
+**The second gap — open again, not built here.** The orchestrator's message
+with the answer also asked that the explicit-`shell: false` check cover
+`spawnSync` and `execFileSync`, pricing it as `preflight.mjs`' three calls. The
+measurement taken then says otherwise: over every source file, a check that
+asks any file calling `spawn`, `spawnSync`, `execFile` or `execFileSync` for a
+`shell: false` fails **11 files** — `scripts/citations-gate.mjs`,
+`scripts/citations.mjs`, `scripts/next-id.mjs`, seven suites under
+`scripts/test/` (`preflight.test.ts` among them, which #303 edits) and
+`tools/downloader/api/test/ytdlp-in-the-image.test.ts:158`. That last one cannot
+change under this pull request's `fix(repo)` title without releasing the
+downloader, since release-please routes by path. So the premise did not
+survive, and the question went back to the orchestrator as an open decision
+rather than being settled here. `preflight.mjs`' three calls say
+`shell: false` regardless: the wider roots need that for `spawn(` at `:571`.
 
 ## Build
 
-Held until the decision above is answered.
+1. `packages/core/test/support/workspaces.ts` gains `repoSources()`: every
+   `.ts`/`.tsx`/`.mts`/`.cts`/`.js`/`.jsx`/`.mjs`/`.cjs` file that
+   `git ls-files --cached --others --exclude-standard` names, deduplicated
+   (repo-74's shape), deleted files skipped. Appended at the end of the module;
+   `sourcesUnder` and `workspaceDirs` stay for `image-closure` and
+   `host-resolution`.
+2. `spawn-safety.test.ts` reads `repoSources()` and asserts that the scan
+   reached a spawning `scripts/*.mjs` and a spawning workspace `test/` file, so
+   a later narrowing fails instead of passing on less.
+3. `scripts/preflight.mjs`: `shell: false` in the three `spawnSync` option
+   objects (`:101`, `:266`, `:530`), each still one line.
+4. `CLAUDE.md` unchanged: "Enforced repo-wide" is now what the scan does.
 
 ## Done when
 
-Held until the decision above is answered.
+- The scan reads every source file, `scripts/` and `.mjs` included, and a scan
+  narrowed back to workspaces' `src` fails a test.
+- Every check passes over the wider roots, with `scripts/preflight.mjs` saying
+  `shell: false` in each of its `spawnSync` calls.
+- `npm run check`, the `core` and `repo` suites, and
+  `node scripts/citations-gate.mjs --against origin/main` pass.
 
 ## Log
 
@@ -100,3 +141,27 @@ Held until the decision above is answered.
   `scripts/test/status-gate-record.test.ts`, which imports nothing from
   `node:child_process`; at `1a8321c` the same roots hold 19 files, 15 importing
   it.
+- 2026-09-27 — The owner's answer arrived (above); built as option 1, and the
+  status moved to `ready` in the commit recording it.
+
+  **Red, twice.** With the wider roots and `preflight.mjs` untouched,
+  `npx vitest run packages/core/test/spawn-safety.test.ts` gave
+  `1 failed | 4 passed (5)`, the failure
+  `expected [ 'scripts/preflight.mjs' ] to deeply equal []` — the measured hit.
+  With the new reach test but `SOURCES` put back to the old
+  `workspaceDirs()`/`sourcesUnder` expression, the same command gave
+  `1 failed | 4 passed (5)` again, failing only the new reach test: the old
+  scan passes every other check, which is the defect. Green after both changes: `5 passed (5)`; the whole `core` project,
+  `npx vitest run --project core` → `24 passed (24)`.
+
+  **Scanned now**: 484 files by the scratch measurement over the same
+  `git ls-files --cached --others --exclude-standard` list, 27 importing
+  `node:child_process`, against 247 `src` files before.
+
+  **`preflight.mjs` line numbers**: the three edits are in place, each line
+  still under the formatter's width, so no line moves.
+
+  **The `spawnSync`/`execFileSync` half of the orchestrator's message was not
+  built**, for the measured reason under the decision above: 11 files, one of
+  them a downloader test this pull request cannot touch under a `repo` title.
+  Reported back as an open decision with options.

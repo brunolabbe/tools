@@ -9,21 +9,22 @@
  * It lives in `packages/core` rather than in the tool whose ffmpeg calls
  * prompted it, because the rule is repo-wide. Scoped to one tool, a second tool
  * spawning a shell would be caught only if somebody remembered to look — and
- * the whole point is that nobody will. The scan therefore walks every workspace
- * under `packages/` and `tools/`, including ones that do not exist yet.
+ * the whole point is that nobody will. The scan therefore reads every source
+ * file in the repository, including ones that do not exist yet.
+ *
+ * It used to read only workspaces' `src` — every `.ts` one level under
+ * `packages/` and two under `tools/` — while `CLAUDE.md` called it repo-wide.
+ * `scripts/`, which spawns `git`, `gh` and `npm` more than anything else here,
+ * every `test/` and `e2e/`, and every `.mjs` sat outside it (repo-75).
  *
  * A source scan is a blunt instrument and it is the right one.
  */
 
 import { describe, expect, test } from "vitest";
-import { sourcesUnder, workspaceDirs } from "./support/workspaces.ts";
+import { repoSources } from "./support/workspaces.ts";
 
-/**
- * Every workspace's `src`, walked by the same helper the image-closure scan uses:
- * one level under `packages`, two under `tools`, including the workspaces that do
- * not exist yet.
- */
-const SOURCES = (await Promise.all((await workspaceDirs()).map((dir) => sourcesUnder(dir)))).flat();
+/** Every source file in the repository, tracked or new — see `repoSources`. */
+const SOURCES = await repoSources();
 
 /** Strips comments, so a doc block explaining the rule is not a violation of it. */
 function code(text: string): string {
@@ -39,6 +40,19 @@ describe("no shell reaches a child process", () => {
     expect(
       SOURCES.filter((source) => /from\s+["']node:child_process["']/u.test(source.text)).length,
     ).toBeGreaterThan(0);
+  });
+
+  test("the scan reaches past the workspaces, into scripts/ and .mjs", () => {
+    // What repo-75 found missing: a scan narrowed back to workspaces' `src`
+    // would still pass the test above, so the two roots it had never reached
+    // are asserted by their shape rather than by a file name that can move.
+    const spawning = SOURCES.filter((source) =>
+      /from\s+["']node:child_process["']/u.test(source.text),
+    ).map((source) => source.file);
+    expect(spawning.some((file) => file.startsWith("scripts/") && file.endsWith(".mjs"))).toBe(
+      true,
+    );
+    expect(spawning.some((file) => /^(?:packages|tools)\/.*\/test\//u.test(file))).toBe(true);
   });
 
   test("no call site sets `shell` to anything truthy", () => {

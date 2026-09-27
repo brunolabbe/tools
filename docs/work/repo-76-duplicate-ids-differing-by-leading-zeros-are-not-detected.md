@@ -3,7 +3,7 @@ id: repo-76
 tool: repo
 title: Duplicate ids differing by leading zeros are not detected
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -44,13 +44,20 @@ string.
 `git grep -nE "\b(dl|pl|lg|repo)-0[0-9]+" origin/main` over the whole tree → no
 output.
 
-## The decision — held for the owner
+## The decision — answered 2026-09-27: reject leading zeros
 
-Put by the orchestrator on 2026-09-27; this ticket moves to `ready` in the
-commit that records the answer.
+**Asked of the owner** by the orchestrator on 2026-09-27, with three options:
+**Reject leading zeros (recommended)**, **Compare numerically** (which needs
+stacking on #302) and **Leave it**.
+
+**Answered by the owner: Reject leading zeros** — option 1 below. The count it
+depended on is the one above: 0 of 205 tickets carry one, so the rule rejects
+nothing that exists.
+
+The options as filed:
 
 1. **Reject a leading zero in the id grammar** — `validate`'s pattern becomes
-   `/^[a-z]+-(?<number>[1-9]\d*)$/`, failing `dl-003` by file and line as
+   `/^[a-z]+-(?<number>[1-9]\d*)$/`, failing `dl-003` by file as
    `is not "<prefix>-<n>"` does today. One line, line-neutral, and **outside the
    lines #302 (repo-72) rewrites**, so it does not need stacking. 0 of 205
    tickets affected. Afterwards a `dl-003` file cannot pass CI's
@@ -64,14 +71,35 @@ commit that records the answer.
 
 ## Build
 
-Held until the decision above is answered.
+1. `scripts/status.mjs`' `validate`: the id's number is `[1-9]\d*`, in place on
+   its own line, so no line of the file moves and #302's lines are untouched.
+2. Tests: a padded id (`repo-003`, `repo-01`) and `repo-0` are each refused by
+   file with the existing message; `repo-10` still parses. In
+   `scripts/test/status-gate-record.test.ts`, because `status.test.ts`' end is
+   #302's.
 
 ## Done when
 
-Held until the decision above is answered.
+- `readTickets` refuses an id whose number has a leading zero, naming the file
+  and the id, and still parses one with an inner zero.
+- `node scripts/status.mjs --json` on this branch still exits 0 (no ticket has
+  one).
+- `npm run check`, the `repo` suite and
+  `node scripts/citations-gate.mjs --against origin/main` pass.
 
 ## Log
 
 - 2026-09-27 — Filed with the measurement above, in one pull request with
   repo-73, repo-74 and repo-75. No fix committed: the orchestrator is asking the
   owner which option to take.
+- 2026-09-27 — Answered (above) and built; `status` moved to `ready` in the
+  commit recording it. Red before the pattern changed,
+  `npx vitest run scripts/test/status-gate-record.test.ts`: `3 failed` —
+  `repo-003`, `repo-01` and `repo-0` all parsed. `repo-0` was accepted by the
+  old `\d+` too; ids start at 1, so it goes with the others. Green after, with
+  the status and preflight suites and the spawn-safety scan:
+  `Test Files 4 passed (4)`, `Tests 193 passed (193)`.
+
+  `next-id.mjs` and `commit-message.mjs` are unchanged: `next-id` already reads
+  the number, which now has one spelling, and `commit-message` does not parse
+  ticket ids at all.
