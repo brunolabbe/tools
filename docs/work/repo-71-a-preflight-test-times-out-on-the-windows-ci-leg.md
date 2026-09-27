@@ -152,8 +152,8 @@ verified:
     POSIX, a hard link or copy named `gh.exe` on Windows — with `pr.js`
     planted in the fixture, since `gh pr list …` makes node run `pr` from its
     `cwd`. `pr.js` prints a marker and exits 1, and the test asserts it,
-    `scripts/test/preflight.test.ts:889 "exited 1\n\s+fake gh"`, plus
-    `scripts/test/preflight.test.ts:887 "expect(result.error).toBeUndefined()"`.
+    `scripts/test/preflight.test.ts:853 "exited 1\n\s+fake gh"`, plus
+    `scripts/test/preflight.test.ts:851 "expect(result.error).toBeUndefined()"`.
     _Measured here:_ forcing the Windows branch on Linux (which names the file
     `gh.exe`, so Linux's search misses it the way Windows missed `gh`) fails
     the new test on the real `gh`'s `no git remotes found`; the same branch

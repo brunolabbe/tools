@@ -835,42 +835,6 @@ test("the CLI never leaks next-id.mjs's id-sweep wording on a bad --base", () =>
   }
 });
 
-/**
- * A fake `gh` that runs on every platform, and says so. repo-71: this test used
- * to plant a `#!/bin/sh` script named `gh`, which Windows never runs — libuv's
- * `PATH` search there appends only `.com` and `.exe` to a bare name, and spawns
- * no shell to read a shebang — so on the Windows leg the spawn fell through to
- * whatever real `gh` the runner carries, and the test passed or timed out on a
- * binary it did not control. It could not tell, because a real `gh` in a
- * remote-less fixture also exits non-zero and every assertion held either way.
- *
- * The fake is therefore a real executable on every platform: this process's
- * own `node`, reached under the name `gh` (`gh.exe` on Windows — a hard link,
- * or a copy where the link is refused, since a Windows symlink needs a
- * privilege a developer machine may not grant). Invoked as
- * `gh pr list --state open …` with `cwd` at the fixture, node runs `pr` there
- * as its script, and `pr.js` is planted to print a marker and exit 1 — the
- * non-zero exit, not a failed spawn, being the path the id-sweep wording used
- * to leak through. The marker is what lets the test assert that its own fake
- * answered rather than assume it.
- */
-function plantFakeGh(shimDir: string, cwd: string): void {
-  fs.writeFileSync(
-    path.join(cwd, "pr.js"),
-    'process.stderr.write("fake gh answered\\n");\nprocess.exit(1);\n',
-  );
-  if (process.platform !== "win32") {
-    fs.symlinkSync(process.execPath, path.join(shimDir, "gh"));
-    return;
-  }
-  const ghPath = path.join(shimDir, "gh.exe");
-  try {
-    fs.linkSync(process.execPath, ghPath);
-  } catch {
-    fs.copyFileSync(process.execPath, ghPath);
-  }
-}
-
 test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside check 5", () => {
   const repo = makeRepo();
   const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-ghshim-"));
@@ -917,3 +881,39 @@ test("a gh payload missing headRefOid gives an actionable error, not a raw TypeE
     repo.cleanup();
   }
 });
+
+/**
+ * A fake `gh` that runs on every platform, and says so. repo-71: this test used
+ * to plant a `#!/bin/sh` script named `gh`, which Windows never runs — libuv's
+ * `PATH` search there appends only `.com` and `.exe` to a bare name, and spawns
+ * no shell to read a shebang — so on the Windows leg the spawn fell through to
+ * whatever real `gh` the runner carries, and the test passed or timed out on a
+ * binary it did not control. It could not tell, because a real `gh` in a
+ * remote-less fixture also exits non-zero and every assertion held either way.
+ *
+ * The fake is therefore a real executable on every platform: this process's
+ * own `node`, reached under the name `gh` (`gh.exe` on Windows — a hard link,
+ * or a copy where the link is refused, since a Windows symlink needs a
+ * privilege a developer machine may not grant). Invoked as
+ * `gh pr list --state open …` with `cwd` at the fixture, node runs `pr` there
+ * as its script, and `pr.js` is planted to print a marker and exit 1 — the
+ * non-zero exit, not a failed spawn, being the path the id-sweep wording used
+ * to leak through. The marker is what lets the test assert that its own fake
+ * answered rather than assume it.
+ */
+function plantFakeGh(shimDir: string, cwd: string): void {
+  fs.writeFileSync(
+    path.join(cwd, "pr.js"),
+    'process.stderr.write("fake gh answered\\n");\nprocess.exit(1);\n',
+  );
+  if (process.platform !== "win32") {
+    fs.symlinkSync(process.execPath, path.join(shimDir, "gh"));
+    return;
+  }
+  const ghPath = path.join(shimDir, "gh.exe");
+  try {
+    fs.linkSync(process.execPath, ghPath);
+  } catch {
+    fs.copyFileSync(process.execPath, ghPath);
+  }
+}
