@@ -4107,7 +4107,14 @@ rule.
 
 The eight cold wakes all followed waits of more than an hour on owner answers.
 Filed during the batch: `pl-53`, `repo-63`, `dl-74`. This session filed
-`repo-65` from item 12 below, after independently reproducing it.
+`repo-65` from item 12 below, after independently reproducing it; `repo-66`
+from a coordinator addition (a flaky Windows `preflight.test.ts` test); and,
+on the owner's decision from an `AskUserQuestion` after reading this
+session's own process review, four process-change tickets — `repo-67`
+(land gate records once, at the end), `repo-68` (one gate for docs and
+records-only chores), `repo-69` (the orchestrator supplies the facts;
+decision tickets carry reproductions), and `repo-70` (dry-run a record
+mechanic before prescribing it) — none built here.
 
 **what the skill got wrong**
 

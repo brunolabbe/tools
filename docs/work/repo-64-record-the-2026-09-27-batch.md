@@ -531,3 +531,31 @@ docs/work/repo-64-*.md --section Review --require-anchors
 --base origin/main --title "chore(repo): record the 2026-09-27 batch and
 fold its defects into the rule pages (repo-64)"` exit 0; `node
 scripts/status.mjs --json` exit 0.
+
+- 2026-09-27 — **Correction from the orchestrator**, on `repo-65` only, from
+  its own direct read of `builder.md`'s _Gates before you report_ on `main`
+  rather than a gate round: option (a)'s cost was still short one place —
+  that section runs `preflight.mjs` before every report with no line about
+  committing first, and it is the section `dl-53`'s builder actually hit.
+  Reworded `repo-65`'s option (a) and recommendation to name three places,
+  not two; the recommendation still holds (b), more clearly, since (a)'s
+  cost only grew. No citation in `repo-64` moved. Verified: `npm run check`
+  exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0;
+  `node scripts/citations.mjs docs/work/repo-64-*.md --section Review
+--require-anchors --require-distinct-anchors` exit 0, 0 moved, 0 unanchored,
+  0 unresolvable, 3 evidence entries (unchanged); `node scripts/preflight.mjs
+--base origin/main --title "chore(repo): record the 2026-09-27 batch and
+fold its defects into the rule pages (repo-64)"` exit 0; `node
+scripts/status.mjs --json` exit 0.
+
+- 2026-09-27 — **Four process-change tickets filed**, on the owner's decision
+  through an `AskUserQuestion` after reading the orchestrator's process
+  review of this batch: `repo-67` (land gate records once, at the end, not
+  every round), `repo-68` (one gate for docs and records-only chore
+  tickets), `repo-69` (the orchestrator supplies the facts; decision tickets
+  carry reproductions only), `repo-70` (the orchestrator dry-runs a record
+  mechanic before prescribing it). Each carries this batch's evidence in its
+  own Why, marked as the orchestrator's own measurement rather than a
+  primary source the ticket itself can point at. **Not implemented here**,
+  per the coordinator's instruction. Added to the history row's filed-ticket
+  list.
