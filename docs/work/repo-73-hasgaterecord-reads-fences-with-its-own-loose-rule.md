@@ -122,10 +122,16 @@ pipeline the gate predicted — see the red run in the Log.
   inserting above them would move those citations after the merge.
 
   **Line neutrality.** The import costs a line at the top, so the file's first
-  docblock paragraph lost one; the four removed lines of `hasGateRecord`'s body
-  went into its docblock. Only `main`'s lines 19–27 (up one) and
-  `hasGateRecord`'s own 323–326 (down five, to 328–331) move; 28–322 and 334 to
-  the end keep their numbers.
+  docblock paragraph lost one; `hasGateRecord`'s six body lines became a
+  five-line comment and the `return`. Only `main`'s lines 19–27 move (up one);
+  from 28 to the end every line keeps its number, and lines 327–332 are the only
+  ones whose text changes. A first cut put the comment in the docblock instead,
+  which moved `function hasGateRecord(text)` from 326 to 331 — and repo-63's own
+  gate record, on its unmerged branch, cites
+  `scripts/status.mjs:326 "function hasGateRecord(text)"`. A scratch merge of
+  this branch with `origin/repo-63-backtick-info-string` and
+  `origin/repo-72-status-names-duplicate-id` caught it: the citations gate
+  failed that record `moved … it is at 331`.
 
   **Could have folded, did not:** `scripts/preflight.mjs`' `checkReview` is a
   third reader, `/^## Review\b/mu` over the whole file with no fence handling

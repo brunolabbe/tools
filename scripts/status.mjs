@@ -320,15 +320,15 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
  * typo, and guessing wrong turns a missed row on the board into a red pipeline
  * for every reader. It falls on the tolerable side of the asymmetry below.
  *
- * **Which lines are fences is `extractSections`' rule, shared** (repo-73). A
- * loose one of its own here — any three backticks or tildes toggled — hid
- * repo-63's gate record behind a quoted shorter fence, and a `~~~` inside a
- * backtick fence exposed a quoted one. One reader, so they cannot disagree.
- *
  * @param {string} text The whole file, frontmatter included.
  * @returns {boolean}
  */
 function hasGateRecord(text) {
+  // Which lines are fences is `extractSections`' rule, shared (repo-73). A
+  // loose one of its own here — any three backticks or tildes toggled — hid
+  // repo-63's gate record behind a quoted shorter fence, and a `~~~` inside a
+  // backtick fence exposed a quoted one. One reader, so the two cannot
+  // disagree about where a ticket's sections are.
   return extractSections(text).some((s) => s.level === 2 && /^Review\b/.test(s.title));
 }
 
