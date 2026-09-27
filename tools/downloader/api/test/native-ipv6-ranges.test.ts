@@ -86,9 +86,9 @@ const RANGES: readonly RangeCase[] = [
   {
     range: "fec0::/10 (Site-Local, deprecated by RFC 3879)",
     inside: ["fec0::", "fec0::1", "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
-    // Both edges touch other blocked ranges — link-local below, multicast above.
-    // The allowed address used is below unique-local; fe00::/9 is nearer, but it
-    // is unblocked and undecided (dl-63 Log), so no test pins it either way.
+    // Both edges touch other blocked ranges — link-local below, multicast above —
+    // and so does everything down to unique-local, fe00::/9 included (dl-70). The
+    // nearest allowed address is the one below unique-local.
     outside: ["fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"],
   },
 ];
@@ -128,8 +128,8 @@ describe("native IPv6 special-purpose ranges (dl-63)", () => {
   });
 
   test("fe80:: to the top of the space is refused end to end, as is unique-local", () => {
-    // Link-local, site-local and multicast meet with no gap. Unique-local does
-    // not join them: fe00::/9 lies between it and link-local, and is not listed.
+    // Link-local, site-local and multicast meet with no gap, and since dl-70
+    // unique-local joins them through fe00::/9, so fc00:: up is one blocked run.
     for (const address of [
       "fc00::",
       "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
@@ -192,5 +192,23 @@ describe("native IPv6 special-purpose ranges (dl-63)", () => {
     expect(await codeOf(literalOnlyGuard.assertAllowed("https://doc.example/video.mp4"))).toBe(
       "BLOCKED_TARGET",
     );
+  });
+
+  test("fe00::/9, reserved by the IETF, closes the gap between unique-local and link-local (dl-70)", async () => {
+    // Not in the special-purpose registry: IANA's address-space registry lists
+    // it as reserved, which is why dl-63's measurement did not reach it.
+    for (const address of [
+      "fe00::",
+      "fe40::1", // the middle of the /9
+      "fe7f:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    ]) {
+      expect(isBlockedAddress(address), address).toBe(true);
+      expect(await codeOf(literalOnlyGuard.assertAllowed(`https://[${address}]/`)), address).toBe(
+        "BLOCKED_TARGET",
+      );
+    }
+    // Below unique-local is ordinary space, so the whole run from fc00:: up is
+    // refused and the first allowed address beneath it is this one.
+    expect(isBlockedAddress("fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")).toBe(false);
   });
 });

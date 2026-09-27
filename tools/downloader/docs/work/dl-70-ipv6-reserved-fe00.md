@@ -3,7 +3,7 @@ id: dl-70
 tool: downloader
 title: The SSRF guard still admits fe00::/9, between unique-local and link-local
 kind: fix
-status: ready
+status: done
 milestone: M5
 depends_on: [dl-63]
 ---
@@ -94,8 +94,98 @@ range if the registry says it is not a globally reachable allocation.
   undecided.
 - `npm run check` and `npm test -- --project downloader` green.
 
+## Review
+
+**Gate: PASS** — 2026-09-26 · `a1a417b...6749b42` · code-review at medium
+
+| Done when                                                                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Registry measurement recorded in the Log (URL, HTTP status, fetch date, the `fe00::/9` row, and the special-purpose-registry check)                                                                     | verified — refetched both CSVs independently (`curl -sS -w "HTTP %{http_code}"`, 2026-09-26 21:35 UTC): address-space CSV HTTP 200, 2093 bytes, 20 data rows, row `fe00::/9,Reserved by IETF,[RFC3513][RFC4291],`; special-purpose CSV HTTP 200, 2289 bytes, 25 data rows, none inside `fe00::/9`. All four numbers match the Log's second 2026-09-26 entry exactly, byte-for-byte. |
+| Test asserts `fe00::`, `fe40::1` (middle) and `fe7f:ffff:ffff:ffff:ffff:ffff:ffff:ffff` refused and `fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff` stays allowed; run red first; both stale comments updated | proven — `tools/downloader/api/test/native-ipv6-ranges.test.ts:197` "reserved by the IETF, closes the gap"; re-ran red by removing the new `BLOCKED_V6` row by hand: `1 failed \| 14 passed (15)`, failing at `fe00::` with "expected false to be true"; restored, green: `15 passed (15)`.                                                                                         |
+| `npm run check` and `npm test -- --project downloader` green                                                                                                                                            | verified — `npm run check` exit 0; `npm test -- --project downloader`: 92 files / 1549 tests passed, 1 file / 2 tests skipped, exit 0.                                                                                                                                                                                                                                              |
+
+- **Item 1, range and table.** Both IANA CSVs fetched directly (not taken from the Log): the address-space registry's row 22 reads `fe00::/9,Reserved by IETF,[RFC3513][RFC4291],`, matching the comment at `tools/downloader/api/src/ssrf.ts:222` "IANA address-space registry" exactly. The special-purpose registry's 25 rows have nothing between `fc00::/7` and `fe80::/10` — nothing inside `fe00::/9` is separately listed, let alone globally reachable. `inV6Prefix`'s mask, `(0xffff << (16 - take)) & 0xffff`, produces a genuine 9-bit boundary rather than a nibble-aligned one: for `/9` on group 0 it yields `0xFF80`, which places `fe7f:...` inside the range and `fe80::` outside it, confirmed by direct invocation of the built guard. Boundary sweep on the built guard (`isBlockedAddress`): `fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff` false, then `fc00::`, `fdff:ffff:...:ffff`, `fe00::`, `fe7f:ffff:...:ffff`, `fe80::`, `febf:ffff:...:ffff`, `fec0::`, `feff:ffff:...:ffff`, `ff00::` all true. `fc00::/7`, `fe00::/9`, `fe80::/10`, `fec0::/10` and `ff00::/8` tile with no gap or overlap — each range's top address is exactly one below the next range's bottom. **Verdict: the whole unicast space from `fc00::` to the top of the address space is now refused with no gap and no overlap**, `ff00::/8` (multicast) already ran the rest of the way to the end before this ticket.
+- **Item 2, every path.** `BLOCKED_V6` in `tools/downloader/api/src/ssrf.ts` is the only table of its kind in the tool — a sweep of `web`, `resolvers`, `engine` and `contract` for the same ranges found nothing else, and `isBlockedAddress` is the only function that reads it. Both the literal-address path and the DNS-resolved path call it (`assertAllowed` in `ssrf.ts`, and `dispatcher.ts`'s two call sites). IPv4-mapped/SIIT/IPv4-compatible/NAT64 embeddings and the Teredo/6to4/local-NAT64 transition ranges each require a fixed high-order pattern (leading zero groups, or `2001::`/`2002::`/`64:ff9b::`) that is disjoint from `fe00::/9`, so no address in the new range is misrouted through the embedding branch before reaching the native-range check — confirmed directly, and a zoned literal (`fe00::1%eth0`) is still blocked, since `v6Groups` strips the zone id before any of this runs.
+- **Item 3, the test.** Removed the new `["fe00::", 9]` row by hand and ran the single spec: `1 failed | 14 passed (15)`, the one failure at `fe00::` reading "expected false to be true" — the same failure and the same count the Log reports. Restored the row: `15 passed (15)`. The companion allowed address, `fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff`, is allowed for the right reason: it falls one bit short of `fc00::/7`'s mask and matches no transition range or embedding either, confirmed directly against `isBlockedAddress` rather than inferred from the test passing.
+- **Item 4, citation edits.** dl-57's edit moves one coordinate: the "That address could not be resolved." quote now sits at `tools/downloader/api/src/ssrf.ts:340` "could not be resolved", where it still reads unchanged. dl-63's edit re-pins one citation to a `main` commit because the text it quotes ("not join them: fe00::/9 lies between") no longer exists at `HEAD` — this branch is exactly what rewrites it — and that commit still reads it at the cited line, confirmed by reading the file at that commit directly. Neither edit changes a reviewer's words. `node scripts/citations-gate.mjs --against origin/main`, exit code read directly and not through a pipe: `0`. Its own summary: "106 enforced, 0 failing; 7 grandfathered, holding 2 unresolvable, 21 unanchored." and "7 entr(y/ies) compared against origin/main: 0 raised."
+- `npm run check`: exit 0. `npx vitest run tools/downloader/api/test/native-ipv6-ranges.test.ts`: 15 passed (15). `npx vitest run tools/downloader/api`: 631 passed | 2 skipped (633), 38 files passed | 1 skipped (39).
+- NFR: security ✓ (the whole `fc00::`–end-of-space run is now closed, one source of truth, transition/embedding paths provably disjoint, zone ids stripped before matching) · performance n/a (one more fixed entry in an 11-row linear scan) · reliability n/a · maintainability ✓ (both stale test comments rewritten to match; the Log's two same-day entries — the first recording a firewall timeout, the second the completed measurement once it opened — are a transparent record, not a defect)
+- **findings** · code-review at medium returned 0; 0 carried, 0 dropped.
+
 ## Log
 
 - 2026-09-19 — Filed by dl-63's builder on the owner's instruction, relayed by
   the orchestrator. The reproduction above was re-run at `569ecbb` just before
   filing.
+- 2026-09-26 — Built on `origin/main` `a1a417b`. **Build step 1, the registry
+  measurement, is not done: IANA is unreachable from the container.** So the
+  first `Done when` line is unmet, and this ticket stays `ready`.
+  - Both registry fetches time out at the firewall. The address-space CSV,
+    `curl -sS -m 30 -w "%{http_code}" https://www.iana.org/assignments/ipv6-address-space/ipv6-address-space-1.csv`,
+    printed `curl: (28) Connection timed out after 30000 milliseconds` and
+    `000`, at 2026-09-26 21:15 UTC. The special-purpose CSV printed the same
+    thing with `-m 10`. WebFetch also failed, with no output. `www.iana.org` is
+    not in `.devcontainer/allowed-domains.txt`, and `raw.githubusercontent.com`
+    is.
+  - The only evidence here is second-hand, and it is not the registry. CPython's
+    `Lib/ipaddress.py` on `main`, fetched from `raw.githubusercontent.com` with
+    HTTP 200 and 84240 bytes, lists `IPv6Network('FE00::/9')` in
+    `_reserved_networks`, at its line 2477. Neither of the ticket's two claims
+    is confirmed by that: not the row's designation, RFC and notes, and not that
+    nothing globally reachable lies inside the range.
+  - The code is built as step 2 describes, so that a measurement which checks
+    out needs only this Log and the frontmatter. `["fe00::", 9]` is in
+    `BLOCKED_V6`. Its row comment names the registry but no RFC, because none
+    was measured. If the measurement does not check out, step 3 applies and
+    this code comes out again.
+  - The test is red before the fix and green after it. The test
+    `fe00::/9, reserved by the IETF, closes the gap` is appended at the end of
+    the describe block in `api/test/native-ipv6-ranges.test.ts`. Against the
+    unfixed source,
+    `npx vitest run tools/downloader/api/test/native-ipv6-ranges.test.ts` gave
+    `1 failed | 14 passed (15)`, with `AssertionError: fe00::: expected false to be true`.
+    The loop stops at the first address. So the unfixed build was also measured
+    directly, with `isBlockedAddress` on `dist/ssrf.js`: `fe00::`, `fe40::1`,
+    `fe7f:ffff:…:ffff` and `fbff:ffff:…:ffff` each returned `false`, and
+    `fe80::` returned `true`. After the fix the same spec gave
+    `15 passed (15)`.
+  - The two test comments are updated: the `fec0::/10` row's "undecided"
+    comment, and the "not listed" comment in the end-to-end test. The end-to-end
+    test's name is unchanged, because it is still true.
+  - Citations. Adding the row moved dl-57's `## Review` citation of
+    `api/src/ssrf.ts` from `:338` to `:340`, and it is repointed. The same line
+    stayed where it was. dl-63's gate record cited the "not listed" comment,
+    which this change rewrites. It is pinned to `a1a417b`, a `main` commit,
+    where that line still reads as the record quotes it.
+  - Fold-in: none. The same sweep found older Log citations of `ssrf.ts` that
+    were already stale on `main` before this branch: in `repo-1`, `dl-29`,
+    `dl-31`, and dl-63's own Log at `:306`. None of them is under a `## Review`,
+    and repointing history that no ticket asks to be repointed is not
+    already-specified work.
+- 2026-09-26 — **Build step 1 is measured, and the range checks out.** The
+  owner opened the container firewall; the orchestrator relayed that the
+  owner chose this over waiving the line or allowlisting `iana.org`. So the
+  entry above, which says this ticket stays `ready`, describes `e1fcc47` and
+  is superseded here. Fetched at 2026-09-26 21:29 UTC:
+  - `https://www.iana.org/assignments/ipv6-address-space/ipv6-address-space-1.csv`
+    returned HTTP 200, 2093 bytes, **20 data rows** (counted by a quote-aware
+    CSV parse, since the `2000::/3` notes span five lines). The row as it
+    reads, with an empty Notes column:
+    `fe00::/9,Reserved by IETF,[RFC3513][RFC4291],`. Its neighbours are
+    `fc00::/7,Unique Local Unicast,[RFC4193]` and
+    `fe80::/10,Link-Scoped Unicast,[RFC3513][RFC4291]`.
+  - `https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry-1.csv`
+    returned HTTP 200, 2289 bytes, **25 data rows**, the same count dl-63
+    measured. **None of them lies inside `fe00::/9`.** The same parse,
+    filtering on a first group from `fe00` to `fe7f`, returned `[]`. The
+    nearest rows are `fc00::/7` (Unique-Local, Globally Reachable `False [4]`)
+    and `fe80::/10` (Link-Local Unicast, Globally Reachable `False`). So
+    nothing in the range is a globally reachable allocation.
+  - By the rule dl-63 applied, the range is blocked: it is reserved, and
+    nothing inside it is reachable. The `BLOCKED_V6` row comment now names
+    the two RFCs the row cites. `status: done`.
+  - What the brief had wrong: it asked for the row's "notes", and there are
+    none. It named one RFC to record, and the row cites two, RFC 3513 and the
+    RFC 4291 that obsoletes it. And the measurement needed a host that is not
+    in `.devcontainer/allowed-domains.txt`, which the brief anticipated but
+    no subagent can act on.
