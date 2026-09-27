@@ -1683,4 +1683,244 @@ describe("changing the dates or budget", () => {
     // assertion's business.
     expect(screen.getByText(/moderate/)).toBeDefined();
   });
+
+  /**
+   * Gate 1's med, owner's choice (a): a touched control that is incomplete or
+   * invalid disables Save, the wizard's own rule for `null` — rather than
+   * being read as "unchanged" and silently dropped while a sibling slot's
+   * change still saves. The reproduction is the gate's own: Nights changed to
+   * a complete value, Amount typed with Currency left empty.
+   */
+  test("a touched control left incomplete disables Save rather than being silently dropped", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "band", band: "moderate" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "6");
+
+    await user.click(screen.getByRole("radio", { name: "A figure" }));
+    await user.type(screen.getByLabelText("Amount"), "2000");
+
+    const button = screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" });
+    expect(button.disabled).toBe(true);
+  });
+
+  test("clearing a seeded amount back to nothing is incomplete, not a reverted budget", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "amount", currency: "CAD", amount: 500, basis: "total" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "6");
+
+    const amount = await screen.findByLabelText<HTMLInputElement>("Amount");
+    await user.clear(amount);
+
+    const button = screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" });
+    expect(button.disabled).toBe(true);
+  });
+
+  /**
+   * Gate 1's med: the budget half of "compared by value" had no test of its
+   * own. A budget clicked to another band and back to its seeded one, beside
+   * a genuine dates change, must not resend the budget — pl-47's Trap is that
+   * doing so re-packs every day, not only the days the dates change touched.
+   */
+  test("a budget touched away and back to its seeded band is not sent, beside a real dates change", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "band", band: "moderate" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev] }));
+    replanned.mockResolvedValue({
+      id: "run-22",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    });
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "6");
+
+    await user.click(screen.getByRole("radio", { name: "Shoestring" }));
+    await user.click(screen.getByRole("radio", { name: "Moderate" }));
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(replanned).toHaveBeenCalledWith("plan-1", {
+      kind: "brief",
+      baseRevisionId: rev.id,
+      dates: { kind: "open", nights: 6 },
+    });
+  });
+
+  /**
+   * Gate 1's med: the caption's from-end for an **answered** budget had no
+   * fixture. The only prior test left `from` unknown, so `not given` could
+   * stand in for `describeBudget(from.value)` undetected.
+   */
+  test("the diff captions the from-end of an answered budget, never 'not given' for one", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const rev1 = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "band", band: "shoestring" },
+      }),
+    });
+    const rev2 = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      reason: "Changed the budget, and re-packed every day.",
+      brief: brief({
+        dates: { kind: "open", nights: 5 },
+        budget: { kind: "amount", currency: "CAD", amount: 500, basis: "total" },
+      }),
+      operation: {
+        kind: "brief",
+        dates: null,
+        budget: {
+          from: slot.answered({ kind: "band", band: "shoestring" }),
+          to: { kind: "amount", currency: "CAD", amount: 500, basis: "total" },
+        },
+        days: [0],
+      },
+    });
+    const diff = revisionDiff(rev2.id, rev1.id, []);
+    fetched.mockResolvedValue(
+      planView({ candidates: [activity], revisions: [rev1, rev2], diffs: [diff] }),
+    );
+
+    show();
+
+    expect(await screen.findByText("Budget: shoestring → 500 CAD total")).toBeDefined();
+    expect(screen.queryByText(/not given/)).toBeNull();
+  });
+
+  /**
+   * Gate 1's low: `BriefForm`'s `key={latest.id}` had no test. A remove
+   * appends a new latest revision while `PlanView` stays mounted (unlike a
+   * brief edit or a re-plan, which leave for `RunView`), so this is the one
+   * write that can prove a stale typed draft gets discarded rather than kept
+   * pointed at a brief that is no longer current.
+   */
+  test("a remove that appends a new latest reseeds the fieldset rather than keeping a stale draft", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    const rev1 = revision([day(0, [placed])], [], [], [], {
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    const rev2 = revision([day(0, [])], [], [], [], {
+      revision: 2,
+      reason: "Removed something.",
+      brief: brief({ dates: { kind: "open", nights: 5 } }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [rev1] }));
+    edited.mockResolvedValue(planView({ candidates: [activity], revisions: [rev1, rev2] }));
+
+    const user = userEvent.setup();
+    show();
+
+    const nights = await screen.findByLabelText<HTMLInputElement>("Nights");
+    await user.clear(nights);
+    await user.type(nights, "9");
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    // The new latest is on screen (pl-45's own rule) and its own fieldset —
+    // a fresh mount, keyed on `rev2.id` — reads `9` nowhere: neither as the
+    // stale typed draft nor as `rev2`'s own seed, which is still `5`.
+    await screen.findByText("Version 2 of 2 · Removed something.");
+    expect(screen.getByLabelText<HTMLInputElement>("Nights").value).toBe("5");
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save changes" }).disabled).toBe(
+      true,
+    );
+  });
+
+  /**
+   * Gate 1's low: seeding from `plan.revisions[0]` rather than the latest is
+   * indistinguishable from seeding correctly on a plan carrying just one
+   * revision, which is what every earlier seeding test above this one has.
+   * This one has two, with the first revision's brief disagreeing with the
+   * latest's on both slots, so only a `currentBrief`/`latest.brief` read
+   * (never `plan.revisions[0]`) can pass it.
+   */
+  test("seeds from the latest revision, not the first, on a plan with more than one", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      brief: brief({
+        dates: { kind: "open", nights: 2 },
+        budget: { kind: "band", band: "shoestring" },
+      }),
+    });
+    const latest = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      brief: brief({
+        dates: { kind: "open", nights: 9 },
+        budget: { kind: "band", band: "unconstrained" },
+      }),
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, latest] }));
+
+    show();
+
+    expect(await screen.findByLabelText<HTMLInputElement>("Nights")).toHaveProperty("value", "9");
+    expect(
+      screen.getByRole<HTMLInputElement>("radio", { name: "Not a constraint" }),
+    ).toHaveProperty("checked", true);
+  });
+});
+
+/**
+ * Gate 1's low: nothing committed proved `editPlan`'s narrowing — it answers
+ * `startReplan`'s own trap (pl-45's Log) the other way, and this suite never
+ * called it with a `brief` request to have the compiler catch it. Asserted at
+ * compile time, the only place a type-level guarantee can be: this file is
+ * typechecked by the same gate the source is (`controls.test.tsx`'s
+ * `@ts-expect-error` precedent, `api/test/grounding-cache.test.ts`'s too), so
+ * the day `editPlan`'s parameter widens back to admit `brief`,
+ * `@ts-expect-error` has nothing to suppress and `npm run check` fails.
+ */
+describe("editPlan's own narrowing (pl-48)", () => {
+  test("editPlan refuses a brief request at compile time — it answers { kind: run }, never { kind: revision }", () => {
+    const briefRequest = {
+      kind: "brief",
+      baseRevisionId: "rev-1",
+      dates: { kind: "open", nights: 6 },
+    } as const;
+
+    // @ts-expect-error — a brief edit answers `{ kind: "run" }` (pl-47), the
+    // same as a re-plan; `editPlan`'s own narrowing must refuse it exactly as
+    // `startReplan`'s does the opposite way.
+    void editPlan("plan-1", briefRequest);
+  });
 });

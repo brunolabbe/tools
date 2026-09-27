@@ -133,8 +133,8 @@ the plan page would drift from the first.
 | e2e extends a trip by a night, asserts version and day count before and after a reload; local run; `planner.yml` e2e on the PR                  | local: **verified** — `tools/planner/e2e/revise.spec.ts:208 "const dayCountBefore = await dayArticles(page).count();"`, `tools/planner/e2e/revise.spec.ts:209 "nights.fill(String(nightsBefore + 1))"`, crumb and day count after the run and after the reload in `tools/planner/e2e/revise.spec.ts:199-224 "Change the dates: extend the trip by one night"`; `npm run e2e:planner` 5 of 5 passed at `ac00b8d`. CI: **unproven (gate)** — no pull request yet                                                                                                                                                                                                                                                       |
 | `npm run check` and `npm test -- --project planner` pass                                                                                        | verified — `scripts/preflight.mjs` exit 0 at `ac00b8d` (check ok, planner tests ok); planner 1,280 of 1,280 at head, 1,273 at `c87153d`, +7 = the 7 new tests; the one edited test moves its brief onto the revision and now proves the shown-revision read                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-- **med** · open decision — an incomplete budget or dates entry is silently dropped while the other slot’s change is saved. `BriefForm` maps a control’s `null` (incomplete or invalid) to “unchanged” (`tools/planner/web/src/plan/PlanView.tsx:1381 "setDraftBudget(value !== null && value.kind ==="`), so with Nights changed, an Amount of 2000 typed beside an empty Currency (whose placeholder reads CAD) saves dates only, and so does clearing a seeded amount (`tools/planner/web/src/wizard/controls.tsx:605 "placeholder="`). The wizard never has this, because a `null` there disables Next. Options: (a) disable Save while a touched control emits `null` — recommended, the wizard’s own rule; (b) keep it and say on the page that an incomplete field is ignored.
-- **med** · the budget half of “compared by value” is untested: replacing `tools/planner/web/src/plan/PlanView.tsx:1348 "!budgetEqual(draftBudget, seededBudget)"` with `draftBudget !== null` leaves `plan-view.test.tsx` 52 of 52 green. That is the Trap’s own case — a budget clicked away and back, resent beside a dates change, re-packs every day.
+- **med** · open decision — an incomplete budget or dates entry is silently dropped while the other slot’s change is saved. `BriefForm` maps a control’s `null` (incomplete or invalid) to “unchanged” (`tools/planner/web/src/plan/PlanView.tsx:1404 "setDraftBudget(value !== null && value.kind ==="`), so with Nights changed, an Amount of 2000 typed beside an empty Currency (whose placeholder reads CAD) saves dates only, and so does clearing a seeded amount (`tools/planner/web/src/wizard/controls.tsx:605 "placeholder="`). The wizard never has this, because a `null` there disables Next. Options: (a) disable Save while a touched control emits `null` — recommended, the wizard’s own rule; (b) keep it and say on the page that an incomplete field is ignored.
+- **med** · the budget half of “compared by value” is untested: replacing `tools/planner/web/src/plan/PlanView.tsx:1364 "!budgetEqual(draftBudget, seededBudget)"` with `draftBudget !== null` leaves `plan-view.test.tsx` 52 of 52 green. That is the Trap’s own case — a budget clicked away and back, resent beside a dates change, re-packs every day.
 - **med** · the from-end of an answered budget in the caption is untested: rendering `not given` in place of `tools/planner/web/src/plan/PlanView.tsx:1071 "? describeBudget(operation.budget.from.value)"` leaves 52 of 52 green; the only fixture has an unknown from.
 - **low** · nothing committed holds `editPlan`’s narrowing (`tools/planner/web/src/api/plan.ts:110 "request: Exclude<ReviseRequest, { kind:"`): reverting it to the base type compiles the whole tree; only a scratch `@ts-expect-error` probe went red (TS2578).
 - **low** · the reseed key is untested: deleting `tools/planner/web/src/plan/PlanView.tsx:525 "key={latest.id}"` leaves 52 of 52 green. It is load-bearing only for a move or remove on the latest page, which with the key discards a typed draft and without it keeps it; a restore always remounts the form, since restore runs from an older page where the form is absent.
@@ -253,3 +253,91 @@ tools/planner/web/test/wizard.test.tsx tools/planner/web/test/app.test.tsx`:
   in pl-45's record and 1 in pl-46's (the backcountry-fixture fix alone moved
   every line below it in `plan-view.test.tsx`); each was repointed to its new
   line, text and verdict untouched.
+
+**2026-09-27 — gate 1 (Opus, `c87153d...ac00b8d`): CONCERNS, 3 med, 6 low, 2
+dropped.** Recorded verbatim via `node scripts/review-record.mjs`, in its own
+commit. The owner answered both open decisions the gate raised, both times
+taking the gate's own recommendation:
+
+- **The incomplete-entry med, option (a).** `BriefForm` now tracks
+  `datesTouched`/`budgetTouched` separately from the draft values, and Save
+  disables while either is `true` with its draft still `null` — the wizard's
+  own rule for a composite control, applied to Save rather than Next. Two
+  reproductions, each red before the fix and green after: the gate's own
+  (Nights changed, an Amount of 2000 beside an empty Currency) and a second
+  for clearing a seeded amount back to nothing, which is incomplete for the
+  same reason and not merely "unchanged".
+- **The stale-title low, option (a).** Filed
+  [pl-53](./pl-53-retitle-a-plan-after-a-brief-edit.md), `next-id.mjs pl`
+  confirmed free against `main` and every open branch (`dl-53-*`, `pl-17-*`,
+  `repo-60-*`, `repo-62-*`, `worktree-pl-19-*`, both release-please branches).
+  Not implemented, per the owner's ask.
+
+**The two untested meds, each pinned by a test reproduced red under the
+gate's exact mutation, then restored and re-verified green:**
+
+- Replacing `!budgetEqual(draftBudget, seededBudget)` with `draftBudget !==
+null` reddened a new test (a budget clicked to another band and back beside
+  a real dates change) before the mutation was reverted.
+- Rendering `"not given"` unconditionally in the caption's from-branch
+  reddened a new test (an **answered** `from` budget, "Budget: shoestring →
+  500 CAD total") before the mutation was reverted.
+
+**Three of the four lows, each pinned the same way:**
+
+- `editPlan`'s narrowing: a committed `@ts-expect-error` test
+  (`describe("editPlan's own narrowing (pl-48)")`), the same pattern
+  `api/test/grounding-cache.test.ts` already uses for a type-only guarantee.
+  Reverting `editPlan`'s parameter to admit `brief` turned the directive into
+  `TS2578: Unused '@ts-expect-error' directive`, failing `npm run check` —
+  confirmed, then the revert undone.
+- The reseed key: a new test performs a Remove (which appends a revision
+  while `PlanView` stays mounted, unlike a brief edit or a re-plan, which
+  leave for `RunView`) after typing an unsaved Nights draft, and asserts the
+  new latest's own seed (`5`) is on screen rather than the stale typed value
+  (`9`). Deleting `key={latest.id}` reddened it (received `"9"`, expected
+  `"5"`) before the deletion was reverted.
+- The one-revision seed test: a new test seeds from a plan with two
+  revisions whose briefs disagree on both slots. Mutating the seed to
+  `plan.revisions[0]!.brief` reddened the new test while leaving the
+  original, one-revision test green — reproducing the gate's own claim about
+  which test could and could not see that mutation — before the mutation was
+  reverted.
+
+**The fourth low — pushed back, not fixed.** The "Day 8" double-naming
+(`PlanView.tsx`'s `Day {N}: {detail}` wrapper prefixing a `detail` that
+already names its own day, from `itinerary/src/brief-edit.ts`'s
+`droppedPinsRefusal`) is real, but neither line is in this branch's diff:
+`git diff origin/main -- tools/planner/web/src/plan/PlanView.tsx | grep
+infeasibleFindings` and the same against `itinerary/src/brief-edit.ts` both
+print nothing. Both predate this ticket (pl-45's wrapper, pl-47's finding
+copy) and this ticket's own Build step 4 says the rendering "needs no case of
+its own" — this branch only added a test that exercises an existing path and
+made the pre-existing redundancy visible. Not fixed here, and not filed
+separately either: it is cosmetic (low, per the gate itself) and belongs to
+whichever of pl-45 or pl-47 owns the wording, not to a page-only ticket.
+
+**The two dropped findings held on re-reading** — the error banner staying up
+through a retry (pl-45's own behaviour) and the reseed key's _intent_ being
+correct (only its missing test was carried, and is now closed above).
+
+**Re-verification after this round**, each figure from the command beside it:
+
+- `npx tsc --build tools/planner/web tools/planner/web/test`: clean, no
+  output.
+- `npx oxlint tools/planner/web/src tools/planner/web/test`: clean, no
+  output.
+- `npx oxfmt --check tools/planner/web/src tools/planner/web/test`: clean
+  after `npm run format`.
+- `npx vitest run tools/planner/web/test/plan-view.test.tsx`: 59 tests, all
+  passing (52 prior + 7 new: 2 for the incomplete-entry fix, 2 for the untested
+  meds, 3 for the lows).
+- `npx vitest run --project planner`: 75 files, 1,287 tests, all passing.
+- `npx playwright test -c tools/planner/playwright.config.ts`: 5 specs, all
+  passing.
+- `npm run check`: exit 0.
+- `node scripts/citations-gate.mjs --against origin/main`: 113 enforced, 0
+  failing. This round's own edits to `PlanView.tsx` moved two of gate 1's own
+  citations (`:1381`→`:1404`, `:1348`→`:1364`); repointed. A new test's doc
+  comment quoting an earlier test's title verbatim made one gate-1 anchor
+  indistinct across two lines; reworded the quote rather than the record.

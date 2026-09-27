@@ -1321,6 +1321,15 @@ function budgetEqual(a: TripBudget, b: TripBudget): boolean {
  * a dates change turns a dates edit into a full re-pack (pl-47's Trap; pl-48's
  * own Trap repeats it).
  *
+ * **A touched control left incomplete or invalid disables Save, rather than
+ * being read as "unchanged".** `datesTouched`/`budgetTouched` are separate
+ * from the draft itself for exactly this: a control's `null` means both "never
+ * opened" and "opened and not finished" (an amount typed beside an empty
+ * currency, a seeded amount cleared to nothing), and collapsing the two would
+ * let Save quietly drop the incomplete slot while still saving its sibling's
+ * change — the wizard's own `null`-disables-Next rule, applied to Save
+ * instead of Next (gate 1's finding on this ticket).
+ *
  * **Keyed by the caller on the latest revision's id.** The same convention
  * `QuestionField` uses for a question id: a write that leaves `PlanView` on
  * screen with a different latest revision (a restore, a move, a remove) must
@@ -1341,11 +1350,23 @@ function BriefForm({
 
   const [draftDates, setDraftDates] = useState<TripDates | null>(null);
   const [draftBudget, setDraftBudget] = useState<TripBudget | null>(null);
+  // Separate from the draft itself: a control's `null` means "incomplete or
+  // invalid" as much as it means "never touched", and the two must not
+  // collapse into one state. Without `touched`, typing an amount beside an
+  // empty currency reads exactly like never opening "A figure" at all, and a
+  // Save that only sends the sibling slot's change looks like it succeeded.
+  const [datesTouched, setDatesTouched] = useState(false);
+  const [budgetTouched, setBudgetTouched] = useState(false);
 
   const changedDates =
     draftDates !== null && (seededDates === null || !datesEqual(draftDates, seededDates));
   const changedBudget =
     draftBudget !== null && (seededBudget === null || !budgetEqual(draftBudget, seededBudget));
+  // The wizard's own rule for a composite control's `null` (`controls.tsx`'s
+  // `QuestionField` doc comment): it disables the button rather than letting
+  // "half filled" pass as "unanswered". Here that means Save, not Next.
+  const incomplete =
+    (datesTouched && draftDates === null) || (budgetTouched && draftBudget === null);
 
   const submit = (): void => {
     onSubmit({
@@ -1371,22 +1392,24 @@ function BriefForm({
 
       <DatesEntry
         initial={seededDates === null ? null : { kind: "dates", value: seededDates }}
-        onChange={(value) =>
-          setDraftDates(value !== null && value.kind === "dates" ? value.value : null)
-        }
+        onChange={(value) => {
+          setDatesTouched(true);
+          setDraftDates(value !== null && value.kind === "dates" ? value.value : null);
+        }}
       />
       <BudgetEntry
         initial={seededBudget === null ? null : { kind: "budget", value: seededBudget }}
-        onChange={(value) =>
-          setDraftBudget(value !== null && value.kind === "budget" ? value.value : null)
-        }
+        onChange={(value) => {
+          setBudgetTouched(true);
+          setDraftBudget(value !== null && value.kind === "budget" ? value.value : null);
+        }}
       />
 
       <div className="actions">
         <button
           type="button"
           className="primary"
-          disabled={busy || !(changedDates || changedBudget)}
+          disabled={busy || incomplete || !(changedDates || changedBudget)}
           onClick={submit}
         >
           Save changes
