@@ -3,7 +3,7 @@ id: dl-53
 tool: downloader
 title: Stream each finished file to its visitor as ffmpeg produces it, and keep no copy anywhere
 kind: work-package
-status: in-flight
+status: done
 milestone: M5
 depends_on: [dl-50, dl-51]
 difficulty: hard
@@ -488,6 +488,8 @@ Worst-case wall time at the ceiling, recomputed from the constants as they now s
 **2. Round-2 redirect-to-private-address reproduction, re-run at f96ad15.**
 
 Same own script (redirect-mid-stream.round3.test.ts in the scratch directory, byte-identical to round 2s), unchanged fixtures, re-run against the new head: 4 of 4 green, and every observable outcome identical to round 2s numbers. HLS segment 2 redirected to `169.254.169.254`: proxy 403, ffmpeg writes `Segment 2 of playlist 0 failed too many times, skipping`, still matched by the unmoved `SEGMENT_SKIPPED` pattern (`tools/downloader/engine/src/stream.ts:133 "export const SEGMENT_SKIPPED = /failed too many times, skipping/iu"`), client cut at 104466 bytes, job row `failed`/`DOWNLOAD_FAILED`. Redirected to `10.0.0.1`: identical shape and numbers. Progressive `Range` redirected to `169.254.169.254`: client 502 (102 bytes), job row `failed`/`DOWNLOAD_FAILED`, exit code 183, the same "moov atom not found" stderr as round 2. Never `completed`, and never a different code, in any of the four.
+
+<!-- citations: evidence tools/downloader/engine/src/stream.ts:165 -->
 
 Why this rounds new patterns did not fire, and what that means: `FRAGMENT_LOST` is DASH-only and neither of my fixtures is DASH, so it was never in play. `DEMUX_READ_FAILED` (`tools/downloader/engine/src/stream.ts:165 "export const DEMUX_READ_FAILED = /Error during demuxing|Error retrieving a packet from demuxer/iu;"`) covers a progressive input that opened successfully and then lost the source mid-read; my progressive repro instead blocks the very request that fetches the moov atom (this fixtures moov sits at the end), so ffmpeg never opens the input at all and fails through the older, generic non-zero-exit path (`exitCode: 183`) rather than through the stderr-pattern path this round added. Both paths land on the same `DOWNLOAD_FAILED`, so the outcome the coordinator asked me to confirm holds either way, but I did not separately construct a redirect that lands after the first byte specifically to exercise `DEMUX_READ_FAILED` for progressive -- named as not attempted, since it was not what was asked and building a fixture-specific trigger for the exact post-open byte range was not cheap to do reliably.
 
@@ -1012,24 +1014,35 @@ zero wait. `.env.example`, the settings table and the deployment doc say so.
   DASH refused-fragment case; `SEGMENT_SKIPPED` dropped fails only the HLS
   skipped-segment case and the certificate-precedence case, which is a skip.
 
-  **Gate records landed with `scripts/review-record.mjs`**, one commit each,
-  gates 1 to 7. Where a splice refused with a moved citation whose anchor read
+- 2026-09-27 — **Landed.** The committed `## Review` was withdrawn and the seven
+  gate records landed with `scripts/review-record.mjs`, one commit each, in
+  order. Where a splice refused with a moved citation whose anchor read
   unchanged at the line the refusal named, the lander repointed that line
   number in a `.landed.md` copy of the reviewer's file and spliced the copy,
-  the reviewer's file kept as the audit; after the removal, the same rule was
-  applied in place. Coordinate only — no verdict, row, anchor or word changed:
-  - gate 3, at landing: `stream.ts:524` → 564 `"? new AppError("`, and
-    `stream.ts:527` → 567 `": new AppError("`;
-  - gate 5, at landing: `stream.ts:159` → 165
-    `"export const DEMUX_READ_FAILED = …"`;
-  - after the removal: gate 2 `stream.ts:534` → 515 `"failureCode: "` and
-    `stream.ts:351` → 332 `"args.push(...output.args,"`; gate 3 `stream.ts:567`
-    → 548 and `stream.ts:564` → 545 (the two above again); gate 4
-    `stream.ts:555` → 536 `"sawCertificateRejection = isTlsVerificationFailure(line);"`;
-    gate 6 `stream.ts:198` → 179 `"return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line"`
-    and `stream.ts:555` → 536 `"if (!sawCertificateRejection) …"`; gate 7
-    `stream.ts:626` → 607 `"if (endedEarly.size > 0) {"` and `stream.ts:198` →
-    179 (as gate 6's).
+  keeping the reviewer's file as the audit; after `DEMUX_READ_FAILED`'s
+  removal the same rule was applied in place. Coordinate only — no verdict,
+  row, anchor or word changed. Every repointed coordinate, all in
+  `engine/src/stream.ts`:
+  - gate 3, at landing: 524 → 564 `"? new AppError("`; 527 → 567
+    `": new AppError("`;
+  - gate 5, at landing: 159 → 165 `"export const DEMUX_READ_FAILED = …"`;
+  - gate 2, after the removal: 534 → 515 `"failureCode: "`; 351 → 332
+    `"args.push(...output.args,"`;
+  - gate 3, after the removal: 567 → 548 `": new AppError("`; 564 → 545
+    `"? new AppError("`;
+  - gate 4, after the removal: 555 → 536
+    `"sawCertificateRejection = isTlsVerificationFailure(line);"`;
+  - gate 6, after the removal: 198 → 179
+    `"return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line"`; 555 → 536
+    `"if (!sawCertificateRejection) …"`;
+  - gate 7, after the removal: 626 → 607 `"if (endedEarly.size > 0) {"`; 198 →
+    179, the same anchor as gate 6's.
 
-  Gate 5's citation of the removed constant itself (`stream.ts:165`) has no
-  line to move to and is left as the gate wrote it, raised to the orchestrator.
+  **One citation declared evidence** rather than repointed: gate 5's
+  `stream.ts:165`, which quotes `DEMUX_READ_FAILED` itself. The constant was
+  removed by the owner's decision, so its text is nowhere in the file, and no
+  commit on `main` ever held it (`git log origin/main -S DEMUX_READ_FAILED` is
+  empty), so no pin could verify it either — a branch sha would not survive the
+  squash merge. `<!-- citations: evidence … -->` sits on its own line above the
+  citation, adding no word to the finding, the remedy `.claude/skills/orchestrate-tickets/reference/records.md`
+  gives for cited text a later commit deleted outright. `status: done`.
