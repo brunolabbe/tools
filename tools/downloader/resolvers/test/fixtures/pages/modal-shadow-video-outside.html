@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog with no player, unrelated shadow-root video elsewhere</title>
+  </head>
+  <body>
+    <h1>Dialog with no player, unrelated shadow-root video elsewhere</h1>
+    <!-- dl-69 gate round 1, med 1's scope check (M1): a shadow-root video
+         that has nothing to do with the dialog must never excuse the
+         dialog's own close control from being pressed. -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="position: fixed; top: 40px; left: 40px; width: 640px; height: 400px; background: #fff"
+    >
+      <button aria-label="Close">×</button>
+    </div>
+    <div id="unrelated"></div>
+    <script>
+      (function () {
+        var root = document.getElementById("unrelated").attachShadow({ mode: "open" });
+        var video = document.createElement("video");
+        video.width = 640;
+        video.height = 360;
+        root.appendChild(video);
+      })();
+    </script>
+  </body>
+</html>

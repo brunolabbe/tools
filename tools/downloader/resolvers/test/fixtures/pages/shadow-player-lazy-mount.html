@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Lazy-mounted shadow-root player</title>
+  </head>
+  <body>
+    <h1>Lazy-mounted shadow-root player</h1>
+    <!-- dl-69 gate round 1, med 2: a player shell that only requests its
+         manifest once scrolled into view, the shape a real lazy-mount
+         library uses to avoid loading media nobody has scrolled to. The
+         shell lives inside an open shadow root, 6000px below the initial
+         viewport, and is named with a "player" class the way a real
+         component would be — `SCROLL_SCRIPT`'s selector list matches on
+         that, not on `<video>`, since nothing has mounted one yet. -->
+    <div style="height: 6000px"></div>
+    <div id="host"></div>
+    <script>
+      (function () {
+        var root = document.getElementById("host").attachShadow({ mode: "open" });
+        var shell = document.createElement("div");
+        shell.className = "player-shell";
+        shell.style.width = "640px";
+        shell.style.height = "360px";
+        root.appendChild(shell);
+        var mounted = false;
+        new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting && !mounted) {
+            mounted = true;
+            fetch("/media/related/master.m3u8");
+          }
+        }).observe(shell);
+      })();
+    </script>
+  </body>
+</html>
