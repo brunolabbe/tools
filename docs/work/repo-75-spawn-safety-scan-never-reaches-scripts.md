@@ -88,7 +88,8 @@ The three options as the builder priced them afterwards, kept as filed:
    `src` — and leave scripts to convention. One sentence; no code. #305 edits
    CLAUDE.md too, at "What is denied", well clear of this line.
 
-**The second gap — open again, not built here.** The orchestrator's message
+**The second gap — answered 2026-09-27: its own ticket,
+[repo-77](./repo-77-shell-false-check-sees-only-spawn.md).** The orchestrator's message
 with the answer also asked that the explicit-`shell: false` check cover
 `spawnSync` and `execFileSync`, pricing it as `preflight.mjs`' three calls. The
 measurement taken then says otherwise: over every source file, a check that
@@ -102,6 +103,13 @@ downloader, since release-please routes by path. So the premise did not
 survive, and the question went back to the orchestrator as an open decision
 rather than being settled here. `preflight.mjs`' three calls say
 `shell: false` regardless: the wider roots need that for `spawn(` at `:571`.
+
+Put to the owner on 2026-09-27 with three options — **Own ticket**
+(recommended), **Scripts part here** (the ten `scripts/` files in this pull
+request, the downloader test in its own) and **Drop it** — with the
+orchestrator's note that its earlier three-calls price was a misreading and
+the 11-file measurement is the real cost. **Answered by the owner: Own
+ticket.** Filed as repo-77 in this pull request, with no fix.
 
 ## Build
 
@@ -165,3 +173,8 @@ rather than being settled here. `preflight.mjs`' three calls say
   built**, for the measured reason under the decision above: 11 files, one of
   them a downloader test this pull request cannot touch under a `repo` title.
   Reported back as an open decision with options.
+
+- 2026-09-27 — The owner chose "Own ticket" for that half; filed as repo-77
+  (`node scripts/next-id.mjs repo` → `next free: repo-77`), `ready`, carrying
+  the measurement re-run at `cf66f72`: 10 files left, `preflight.mjs` having
+  passed since this ticket's build.
