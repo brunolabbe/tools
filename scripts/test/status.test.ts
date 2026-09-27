@@ -178,10 +178,10 @@ const WITHHELD_REPO9 = `${atRepo("repo-9")}: withheld from --ready — waits on 
 test("every ticket in the repo parses, and its dependencies resolve", () => {
   const tickets = readTickets(REPO);
   expect(tickets.length).toBeGreaterThan(0);
-  // Every tool the repo has, plus `repo` itself for work that belongs to none
-  // of them — `docs/work/`, which ADR 003 opened.
+  // Every tool with a ticket — see `toolsWithTickets` — plus `repo` itself for
+  // work that belongs to none of them — `docs/work/`, which ADR 003 opened.
   expect([...new Set(tickets.map((t) => t.tool))].toSorted()).toEqual([
-    ...fs.readdirSync(path.join(REPO, "tools")).toSorted(),
+    ...toolsWithTickets().toSorted(),
     "repo",
   ]);
 });
@@ -1651,3 +1651,19 @@ test("a closed pipe is ignored, and no other stream error is", () => {
   const eacces = Object.assign(new Error("write EACCES"), { code: "EACCES" });
   expect(() => stream.emit("error", eacces)).toThrow(/EACCES/);
 });
+
+/**
+ * The tools that have at least one ticket file, for the tool-set assertion in
+ * "every ticket in the repo parses". Not every tool: the `add-tool` skill lands
+ * a tool with an empty `work/`, and `readTickets` calls that a young tool rather
+ * than a broken one — so the ledger's scaffold failed an assertion written when
+ * every tool had tickets. What it guards is the reader skipping a tool, and a
+ * tool with nothing to read cannot be skipped. Down here, not beside the test,
+ * so the lines merged review records cite above it do not move.
+ */
+function toolsWithTickets(): string[] {
+  return fs.readdirSync(path.join(REPO, "tools")).filter((tool) => {
+    const work = path.join(REPO, "tools", tool, "docs", "work");
+    return fs.existsSync(work) && fs.readdirSync(work).some((entry) => entry.endsWith(".md"));
+  });
+}

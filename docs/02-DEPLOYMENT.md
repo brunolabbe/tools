@@ -1,7 +1,7 @@
 # Deployment — the tools on a home host
 
 How to put any set of this repo's tools on subdomains — `downloader.example.com`,
-`planner.example.com` — from one machine sitting behind a domestic router, with
+`planner.example.com`, `ledger.example.com` — from one machine sitting behind a domestic router, with
 authentication in front of each.
 
 The container half is a set of compose fragments merged on the host —
@@ -16,9 +16,9 @@ written out below so it is reviewable even though it is not version controlled.
 [Verifying](#verifying) is done once per host and covers every tool that host
 runs: one tunnel, one `.env`, one `docker compose up -d`. Where a step differs by
 tool, the step says so, tool by tool, and the two login policies differ in a way
-that is not a matter of taste. After that, [The downloader](#the-downloader) and
-[The planner](#the-planner) hold what only one tool needs — for the planner, a
-routing engine and a real model, both optional. The
+that is not a matter of taste. After that, [The downloader](#the-downloader),
+[The planner](#the-planner) and [The ledger](#the-ledger) hold what only one
+tool needs — for the planner, a routing engine and a real model, both optional. The
 [volume migration](#migrating-the-volumes-onto-the-project-name) is last, and a
 host that has been running since before repo-33 needs it before its next
 `up -d`.
@@ -34,7 +34,7 @@ page is a second copy of the tunnel, and the copies drift.
 
 ```
                        browser
-                          │  https://downloader.example.com, https://planner.example.com
+                          │  https://downloader.example.com, https://planner.example.com, …
                           ▼
         ┌───────────────────────────────────┐
         │            Cloudflare             │
@@ -48,14 +48,14 @@ page is a second copy of the tunnel, and the copies drift.
 │                  ┌─────────────┐                  │
 │                  │ cloudflared │                  │
 │                  └──────┬──────┘                  │
-│          ┌──────────────┴──────────────┐          │
-│          ▼                             ▼          │
-│   ┌─────────────┐               ┌─────────────┐   │
-│   │ downloader  │               │   planner   │   │
-│   │    :8080    │               │    :8090    │   │
-│   └──────┬──────┘               └──────┬──────┘   │
-│          ▼                             ▼          │
-│    volume /data                  volume /data     │
+│         ┌───────────────┼───────────────┐         │
+│         ▼               ▼               ▼         │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐   │
+│  │ downloader │  │  planner   │  │   ledger   │   │
+│  │   :8080    │  │   :8090    │  │   :8100    │   │
+│  └──────┬─────┘  └──────┬─────┘  └──────┬─────┘   │
+│         ▼               ▼               ▼         │
+│   volume /data    volume /data    volume /data    │
 │                                                   │
 │  edge network 172.30.42.0/24                      │
 └───────────────────────────────────────────────────┘
@@ -80,11 +80,12 @@ real.
 
 The choice is one line in `.env`, `COMPOSE_FILE`:
 
-| This host runs | `COMPOSE_FILE`                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                           |
-| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                      |
-| both           | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml` |
+| This host runs | `COMPOSE_FILE`                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| the downloader | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`                                                    |
+| the planner    | `compose.prod.yaml:compose.planner.prod.yaml`                                                                               |
+| the ledger     | `compose.prod.yaml:compose.ledger.prod.yaml`                                                                                |
+| all three      | `compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml:compose.ledger.prod.yaml` |
 
 Append `:compose.planner.yaml` to a line that runs the planner to make its
 distances real — hours of CPU the first time, so read
@@ -94,7 +95,7 @@ merging it. The separator is `:` on Linux and `;` on Windows.
 host running anything else changes it.
 
 With it set, every command on this page is a bare `docker compose ...`. Written
-out as `-f` flags instead, the three lines are:
+out as `-f` flags instead, four of those lines are:
 
 ```bash
 # the downloader alone
@@ -103,6 +104,9 @@ docker compose -f compose.downloader.yaml -f compose.prod.yaml \
 
 # the planner alone
 docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+
+# the ledger alone
+docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml up -d
 
 # both tools, one tunnel
 docker compose -f compose.downloader.yaml -f compose.prod.yaml \
@@ -123,12 +127,13 @@ downloader-only host merging it would stand up the planner without ever asking
 for it. Each tool's prod fragment is additive in the same way: it changes nothing
 that a host which does not merge it sees.
 
-**The downloader's line has one file more than the planner's**, and that is not
+**The downloader's line has one file more than the others'**, and that is not
 an inconsistency. [`compose.downloader.yaml`](../compose.downloader.yaml) is where
 the downloader's service is defined — its init, its shared memory, its volume —
 and its prod fragment only swaps the build for a released image.
 [`compose.planner.prod.yaml`](../compose.planner.prod.yaml) defines the planner's
-service outright, so it stands alone.
+service outright, so it stands alone, and
+[`compose.ledger.prod.yaml`](../compose.ledger.prod.yaml) is the same shape.
 
 **Every fragment sets `name: webtools`**, so any merge of them is one compose
 project — including [`compose.planner.yaml`](../compose.planner.yaml), which is
@@ -148,6 +153,7 @@ before your next `up -d`.**
 GHCR_OWNER=<the account that owns the repository, lowercased>
 DOWNLOADER_TAG=0.4.0     # read only when compose.downloader.prod.yaml is merged
 PLANNER_TAG=0.5.1        # read only when compose.planner.prod.yaml is merged
+LEDGER_TAG=0.1.0         # read only when compose.ledger.prod.yaml is merged
 ```
 
 Never `latest`: a host following a moving tag cannot answer what it is running,
@@ -217,15 +223,23 @@ checkout, with no dashboard:
 
 ```bash
 CLOUDFLARE_API_TOKEN=… node scripts/cloudflare-setup.mjs \
-  --domain example.com --email you@example.com --tunnel <the tunnel's name>
+  --domain example.com --email you@example.com --tunnel <the tunnel's name> \
+  --ledger-email <the second person's address>
 ```
+
+`--email` is the one address every tool's Allow policy admits. `--ledger-email`
+is the second person the ledger's policy admits, and only the ledger's — see
+[its section of step 2](#the-ledgers-two-people-and-still-no-bypass). The script
+refuses to create the ledger's application without it, and ignores it once the
+application exists: it never rewrites a policy, so changing either address later
+is a dashboard edit.
 
 That prints a plan and writes nothing. `--apply` makes the changes. It is
 idempotent — a second run reports `nothing to do` — so it is also the way to
 check a host still matches what this page describes.
 
 **It configures every tool it knows about, and has no flag to name fewer.** On a
-host that runs one tool it therefore also creates the other's Access application
+host that runs one tool it therefore also creates the others' Access applications
 and routes its hostname to a service that is not there, which answers with a
 login and then an error. Harmless, and untidy; a one-tool host that minds does
 steps 2 and 3 by hand instead.
@@ -281,17 +295,20 @@ has authentication of its own:
 - **The planner** has no owner model, so every visitor reads and edits everyone's
   plans — and once it runs a real model, every visitor spends your token budget.
   The detail is [below](#the-planners-no-bypass-rule-ever).
+- **The ledger** holds a household's bank history, and the Access identity is the
+  only identity it has. The detail is
+  [below](#the-ledgers-two-people-and-still-no-bypass).
 
 For each tool this host runs, **Access → Applications → Add an application →
 Self-hosted**:
 
-| Field            | Value                                     |
-| ---------------- | ----------------------------------------- |
-| Application name | the tool's name — `downloader`, `planner` |
-| Session duration | 1 week                                    |
-| Subdomain        | the tool's name                           |
-| Domain           | your domain                               |
-| Path             | _(empty)_                                 |
+| Field            | Value                                               |
+| ---------------- | --------------------------------------------------- |
+| Application name | the tool's name — `downloader`, `planner`, `ledger` |
+| Session duration | 1 week                                              |
+| Subdomain        | the tool's name                                     |
+| Domain           | your domain                                         |
+| Path             | _(empty)_                                           |
 
 Then one policy: action **Allow**, include **Emails** → your address. Add a
 login method under **Settings → Authentication** if you have not — one-time PIN
@@ -363,6 +380,23 @@ email on it was the only thing hiding that. See that ticket's Log if
 unauthenticated endpoint is a stranger spending your token budget, with
 `MAX_OUTPUT_TOKENS` capping one reply and nothing capping the number of replies.
 
+### The ledger's: two people, and still no Bypass
+
+The one application, with **two** addresses on its Allow policy rather than one:
+the account it keeps is shared by the two people it belongs to, and both use the
+tool. Add the second on the ledger's policy only — adding it to `--email`, or to
+another tool's policy, hands that person the other tools too.
+
+- **No Bypass rule, ever**, for the planner's first reason and a stronger one:
+  nothing in the ledger is a capability link, and what it holds is bank history.
+- **Access is its identity, not only its gate.** The tool has no login of its
+  own; who imported a statement or paid a receipt is the address Access puts on
+  the request. How the API reads and checks it is still to be designed — see
+  the tool's [roadmap](../tools/ledger/docs/02-ROADMAP.md) — and until it is,
+  treat the loopback port as what it is: a way in that Access never sees.
+- **Never "widen it" to public**, below. The next section is about tools whose
+  data is nobody's in particular; this one's is two named people's.
+
 ### When you want it genuinely public
 
 Widen a tool's application policy — or delete it — once that tool has its own
@@ -376,17 +410,17 @@ once a week.
 Still in the tunnel's configuration, **Public Hostnames → Add a public
 hostname**, once for each tool this host runs:
 
-| Field     | downloader        | planner        |
-| --------- | ----------------- | -------------- |
-| Subdomain | `downloader`      | `planner`      |
-| Domain    | your domain       | your domain    |
-| Path      | _(empty)_         | _(empty)_      |
-| Type      | `HTTP`            | `HTTP`         |
-| URL       | `downloader:8080` | `planner:8090` |
+| Field     | downloader        | planner        | ledger        |
+| --------- | ----------------- | -------------- | ------------- |
+| Subdomain | `downloader`      | `planner`      | `ledger`      |
+| Domain    | your domain       | your domain    | your domain   |
+| Path      | _(empty)_         | _(empty)_      | _(empty)_     |
+| Type      | `HTTP`            | `HTTP`         | `HTTP`        |
+| URL       | `downloader:8080` | `planner:8090` | `ledger:8100` |
 
 The URL is the service name from the tool's compose fragment, resolved on the
 `edge` network, which is why `cloudflared` has to share that network and does.
-The ports differ so both tools can run on one machine. `HTTP`, not `HTTPS`: the
+The ports differ so every tool can run on one machine. `HTTP`, not `HTTPS`: the
 leg from `cloudflared` to the container never leaves the host, and giving it its
 own certificate would mean managing one to protect a hop that already cannot be
 observed.
@@ -440,6 +474,9 @@ curl -sS http://127.0.0.1:8080/api/health | jq              # on the host: real 
 curl -sS https://planner.example.com/api/health             # expect an Access login page
 curl -sS http://127.0.0.1:8090/api/health | jq              # on the host: real JSON
 curl -sS http://127.0.0.1:8090/api/health | jq .grounding   # {"provider":"fixtures"} until you ground it
+
+curl -sS https://ledger.example.com/api/health              # expect an Access login page
+curl -sS http://127.0.0.1:8100/api/health | jq              # on the host: real JSON
 ```
 
 A public request returning HTML rather than JSON is the good outcome — it means
@@ -456,6 +493,9 @@ looks:
   was never handed out, and the CI gate asked only for `/api/health`, which
   answered perfectly throughout. That gate now greps the document for the
   bundle's root element, and this is the deployed equivalent of the same check.
+- **ledger** — open it from a phone, as each of the two people, and check both
+  get past the login. A policy with one address on it looks exactly like a
+  working one to the person whose address it is.
 
 ---
 
@@ -918,6 +958,23 @@ the rate a run was billed at is not stored. **And a refusal fallback is priced
 at the configured model's rates**: a run whose reply another model served is in
 the totals, and the report says its dollars are approximate when the window
 holds one.
+
+---
+
+## The ledger
+
+A plain Node image, like the planner's, with SQLite on a volume and nothing it
+reaches outside the host. Two things are its own:
+
+- **The volume is the books.** `ledger_storage` is the only copy of every
+  statement either person imported, and of the history carried over from the
+  spreadsheet it replaces. `docker compose down` without `-v` leaves it alone;
+  back it up as you would that spreadsheet, and more often.
+- **Its login admits two people**, and is also how it knows which of them is
+  asking — [step 2](#the-ledgers-two-people-and-still-no-bypass) has the policy.
+
+There is no model behind it yet. Reading receipts will be one, behind a seam of
+its own with an offline default, and it will get a section here when it lands.
 
 ---
 

@@ -117,7 +117,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   reintroduce this exact ticket's bug on the planner side — this ticket's own
   Traps section, reproducing itself. Repaired: both compose files now say
   three and cross-reference each other
-  (`compose.planner.prod.yaml:88` "named a third time"); the repair folds in
+  (`compose.planner.prod.yaml@6988b65:88` "named a third time"); the repair folds in
   the malformed-vs-valid distinction from the declined low below, landed
   where an operator resolving a collision will actually be standing.
   Reviewer re-verified independently against `bdfc10b`.

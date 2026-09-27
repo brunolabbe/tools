@@ -1,0 +1,77 @@
+# The ledger's production overlay: its released image, on the shared edge.
+#
+#   docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml up -d
+#
+# — a ledger-only host, which is two files because the shared overlay carries no
+# tool. Beside the others it is those two plus theirs, and `COMPOSE_FILE` in
+# `.env` is how a host stops typing the list; see `.env.prod.example`.
+#
+# The same shape as `compose.planner.prod.yaml`, for the reason that file gives:
+# `docs/adr/004-one-compose-fragment-per-tool.md` keeps every service
+# definition out of the shared overlay, so no host runs a tool it did not name.
+# It defines the service outright, so it stands alone, as the planner's does.
+#
+# ## The Cloudflare half is not here
+#
+# The hostname and the Access application live in Cloudflare, not in a file.
+# **Read `docs/02-DEPLOYMENT.md`'s `### The ledger's` before this file is
+# useful**: its policy admits two people rather than one, and it is the one
+# tool whose data is a household's bank history.
+
+name: webtools
+
+services:
+  ledger:
+    # Pinned by version, never `latest`: a host following a moving tag cannot
+    # answer "what is it running", and rolling back means guessing.
+    # `/api/health` reports the version and it matches this line, because
+    # release-please stamps both.
+    image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/ledger:${LEDGER_TAG:?set LEDGER_TAG in .env to a released version - see docs/03-RELEASING.md}"
+    pull_policy: always
+    restart: unless-stopped
+    networks: [edge]
+
+    # Nothing in this image forks, so there is no reaping to do. It costs
+    # nothing to have.
+    init: true
+
+    # Loopback only: this is for `curl` from the host when something is wrong,
+    # not how anything is served. 8100 because 8080 and 8090 are the other two
+    # tools' on this machine.
+    ports:
+      - "127.0.0.1:8100:8100"
+
+    volumes:
+      # The books. `docker compose down` without `-v` leaves it alone, and it is
+      # the only copy of anything either person imported or typed — back it up
+      # the way you would the spreadsheet it replaces.
+      - ledger_storage:/data
+
+    environment:
+      LOG_LEVEL: info
+
+      # The proxy's CIDR, never `true` — the same argument and the same subnet
+      # as the other tools' lines, since all of them sit behind the one
+      # `cloudflared` on the one `edge` network. This is `compose.prod.yaml`'s
+      # `edge` subnet named a fourth time — see the `networks.edge.ipam`
+      # comment there. Change all four together.
+      TRUST_PROXY: "172.30.42.0/24"
+
+    # A Node process with SQLite behind it and two users. Bounded so a runaway
+    # is attributable rather than taking the host down with the other tools.
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  cloudflared:
+    # Merged into the definition in `compose.prod.yaml` rather than repeating
+    # it, exactly as the other tools' fragments do: a host that does not merge
+    # this file gets a `cloudflared` that does not wait on a ledger.
+    depends_on:
+      ledger:
+        # No public hostname until the service passes its own health check.
+        condition: service_healthy
+
+volumes:
+  ledger_storage:

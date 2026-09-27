@@ -66,23 +66,26 @@ const SHARED_TUNNEL = [
   { service: "http_status:404" },
 ];
 
-const wantBoth = desiredState("example.com", "you@example.com").ingress;
+const wantAll = desiredState("example.com", "you@example.com").ingress;
 
 test("preserves a rule it did not add", () => {
-  const plan = planIngress(DOWNLOADER_LIVE, wantBoth);
+  const plan = planIngress(DOWNLOADER_LIVE, wantAll);
 
   expect(plan.ingress).toContainEqual({
     hostname: "downloader.example.com",
     service: "http://downloader:8080",
   });
-  expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual(["planner.example.com"]);
+  expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual([
+    "planner.example.com",
+    "ledger.example.com",
+  ]);
   expect(plan.kept.map((k: { hostname: string }) => k.hostname)).toEqual([
     "downloader.example.com",
   ]);
 });
 
 test("a hostname belonging to nobody in TOOLS survives the merge", () => {
-  const plan = planIngress(SHARED_TUNNEL, wantBoth);
+  const plan = planIngress(SHARED_TUNNEL, wantAll);
 
   expect(plan.ingress).toContainEqual({
     hostname: "immich.example.com",
@@ -90,29 +93,33 @@ test("a hostname belonging to nobody in TOOLS survives the merge", () => {
   });
   // it is not ours, so it is neither added nor reported as kept — it is simply
   // still there, which is the whole of what this script owes it.
-  expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual(["planner.example.com"]);
+  expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual([
+    "planner.example.com",
+    "ledger.example.com",
+  ]);
   expect(plan.kept.map((k: { hostname: string }) => k.hostname)).toEqual([
     "downloader.example.com",
   ]);
   expect(plan.conflicts).toEqual([]);
 });
 
-test("the merge writes back every rule it was given, plus the one it adds", () => {
+test("the merge writes back every rule it was given, plus the ones it adds", () => {
   // Stated as a count as well as a membership, so a merge that preserved the
   // foreign rule by *duplicating* something else still fails.
-  const plan = planIngress(SHARED_TUNNEL, wantBoth);
+  const plan = planIngress(SHARED_TUNNEL, wantAll);
 
-  expect(plan.ingress).toHaveLength(SHARED_TUNNEL.length + 1);
+  expect(plan.ingress).toHaveLength(SHARED_TUNNEL.length + 2);
   expect(plan.ingress.map((r: { hostname?: string }) => r.hostname)).toEqual([
     "immich.example.com",
     "downloader.example.com",
     "planner.example.com",
+    "ledger.example.com",
     undefined,
   ]);
 });
 
 test("keeps the catch-all last, and does not add a second one", () => {
-  const plan = planIngress(DOWNLOADER_LIVE, wantBoth);
+  const plan = planIngress(DOWNLOADER_LIVE, wantAll);
   const catchAlls = plan.ingress.filter((r: { hostname?: string }) => !r.hostname);
 
   expect(catchAlls).toHaveLength(1);
@@ -120,9 +127,9 @@ test("keeps the catch-all last, and does not add a second one", () => {
 });
 
 test("a tunnel with no configuration at all still gets a catch-all", () => {
-  const plan = planIngress([], wantBoth);
+  const plan = planIngress([], wantAll);
 
-  expect(plan.ingress).toHaveLength(3);
+  expect(plan.ingress).toHaveLength(4);
   expect(plan.ingress.at(-1)).toEqual({ service: "http_status:404" });
 });
 
@@ -132,7 +139,7 @@ test("refuses a hostname already routed somewhere else", () => {
     { service: "http_status:404" },
   ];
 
-  const plan = planIngress(taken, wantBoth);
+  const plan = planIngress(taken, wantAll);
 
   expect(plan.conflicts).toEqual([
     {
@@ -189,6 +196,7 @@ test("the two downloader applications are told apart by their path", () => {
   expect(plan.create.map((a: { domain: string }) => a.domain)).toEqual([
     "downloader.example.com/api/files/*",
     "planner.example.com",
+    "ledger.example.com",
   ]);
 });
 
@@ -275,7 +283,7 @@ test("two catch-alls in the existing config is a refusal, not a tidy-up", () => 
     { service: "http_status:503" },
   ];
 
-  const plan = planIngress(malformed, wantBoth);
+  const plan = planIngress(malformed, wantAll);
 
   expect(plan.conflicts).toContainEqual({
     hostname: "(catch-all)",
@@ -288,4 +296,45 @@ test("a desired rule with no hostname throws rather than becoming a catch-all", 
   // `desiredState` cannot produce one, but `planIngress` is exported, and a
   // hostname-less rule matches everything: it would quietly swallow the tunnel.
   expect(() => planIngress(DOWNLOADER_LIVE, [{ service: "http://x:1" }])).toThrow(/no hostname/);
+});
+
+test("the ledger admits a second address, and only the ledger does", () => {
+  // Both people use the household's account. The second address rides on its
+  // own flag rather than on `--email`, which every tool's policy admits — a
+  // repeatable `--email` would have handed that person the other tools too.
+  const apps = desiredState("example.com", "you@example.com", TOOLS, {
+    "ledger-email": "them@example.com",
+  }).apps as { domain: string; include: unknown[]; missing?: string }[];
+
+  const ledger = apps.find((a) => a.domain === "ledger.example.com");
+  expect(ledger?.include).toEqual([
+    { email: { email: "you@example.com" } },
+    { email: { email: "them@example.com" } },
+  ]);
+  expect(ledger?.missing).toBeUndefined();
+
+  for (const other of apps.filter((a) => a !== ledger)) {
+    expect(JSON.stringify(other.include), other.domain).not.toContain("them@example.com");
+  }
+});
+
+test("a ledger application to be created without its second address is flagged, not narrowed", () => {
+  // Created with the owner alone, the policy would lock the other person out
+  // with nothing saying why — and since an existing application is never
+  // rewritten here, a later run would not repair it. `main` refuses on this.
+  const want = desiredState("example.com", "you@example.com").apps as {
+    domain: string;
+    missing?: string;
+  }[];
+  const plan = planAccess([], want) as { create: { domain: string; missing?: string }[] };
+
+  expect(plan.create.filter((a) => a.missing).map((a) => [a.domain, a.missing])).toEqual([
+    ["ledger.example.com", "--ledger-email"],
+  ]);
+
+  // Already there, it is only reported — so a run that adds nothing needs no flag.
+  const live = planAccess([{ id: "9", domain: "ledger.example.com" }], want) as {
+    create: { missing?: string }[];
+  };
+  expect(live.create.filter((a) => a.missing)).toEqual([]);
 });

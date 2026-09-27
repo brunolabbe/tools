@@ -24,8 +24,9 @@
  *
  * Default is a plan. `--apply` is the only thing that writes.
  *
- *   node scripts/cloudflare-setup.mjs --domain example.com --email you@example.com
- *   node scripts/cloudflare-setup.mjs --domain example.com --email you@example.com --apply
+ *   node scripts/cloudflare-setup.mjs --domain example.com --email you@example.com \
+ *     --ledger-email them@example.com
+ *   node scripts/cloudflare-setup.mjs ... --apply
  *
  * CLOUDFLARE_API_TOKEN needs exactly three permissions, and a token with more
  * is a token doing more than this:
@@ -54,6 +55,12 @@ const API = "https://api.cloudflare.com/client/v4";
  *    model at all, so every visitor shares one store. The allowlist is not a
  *    precaution around that data model; it is the only configuration in which
  *    that model is coherent.
+ *  - the ledger gets no bypass either, and its one policy admits **two**
+ *    addresses: the household's shared account is used by both people it
+ *    belongs to. The second comes from its own flag, `extraEmailFlag`, rather
+ *    than from a repeatable `--email`, because `--email` is every tool's
+ *    policy — a second address there would hand that person the downloader
+ *    and the planner as well.
  */
 export const TOOLS = [
   {
@@ -70,6 +77,12 @@ export const TOOLS = [
     subdomain: "planner",
     service: "http://planner:8090",
     access: [{ suffix: "", name: "planner", decision: "allow" }],
+  },
+  {
+    tool: "ledger",
+    subdomain: "ledger",
+    service: "http://ledger:8100",
+    access: [{ suffix: "", name: "ledger", decision: "allow", extraEmailFlag: "ledger-email" }],
   },
 ];
 
@@ -173,8 +186,15 @@ export function planAccess(existingApps, desiredApps) {
   return { create, ok };
 }
 
-/** Everything the tools table wants, resolved against one domain and address. */
-export function desiredState(domain, email, tools = TOOLS) {
+/**
+ * Everything the tools table wants, resolved against one domain and address.
+ *
+ * `extraEmails` maps an application's `extraEmailFlag` to the address given
+ * for it. An application whose flag was not given keeps `missing`, so the
+ * caller can refuse to *create* it half-admitting — an existing one is only
+ * ever reported, so a run that adds nothing needs no flag.
+ */
+export function desiredState(domain, email, tools = TOOLS, extraEmails = {}) {
   const ingress = tools.map((t) => ({
     hostname: `${t.subdomain}.${domain}`,
     service: t.service,
@@ -184,12 +204,19 @@ export function desiredState(domain, email, tools = TOOLS) {
   const dns = tools.map((t) => `${t.subdomain}.${domain}`);
 
   const apps = tools.flatMap((t) =>
-    t.access.map((a) => ({
-      name: a.name,
-      domain: `${t.subdomain}.${domain}${a.suffix}`,
-      decision: a.decision,
-      include: a.decision === "bypass" ? [{ everyone: {} }] : [{ email: { email } }],
-    })),
+    t.access.map((a) => {
+      const extra = a.extraEmailFlag ? extraEmails[a.extraEmailFlag] : undefined;
+      return {
+        name: a.name,
+        domain: `${t.subdomain}.${domain}${a.suffix}`,
+        decision: a.decision,
+        include:
+          a.decision === "bypass"
+            ? [{ everyone: {} }]
+            : [{ email: { email } }, ...(extra ? [{ email: { email: extra } }] : [])],
+        ...(a.extraEmailFlag && !extra ? { missing: `--${a.extraEmailFlag}` } : {}),
+      };
+    }),
   );
 
   return { ingress, dns, apps };
@@ -329,7 +356,12 @@ async function main() {
   }
   const tunnel = tunnels[0];
 
-  const want = desiredState(args.domain, args.email);
+  const extraEmails = Object.fromEntries(
+    TOOLS.flatMap((t) => t.access)
+      .filter((a) => a.extraEmailFlag && args[a.extraEmailFlag])
+      .map((a) => [a.extraEmailFlag, args[a.extraEmailFlag]]),
+  );
+  const want = desiredState(args.domain, args.email, TOOLS, extraEmails);
 
   const config = await call(token, `/accounts/${accountId}/cfd_tunnel/${tunnel.id}/configurations`);
   const ingress = planIngress(config?.config?.ingress ?? [], want.ingress);
@@ -350,6 +382,19 @@ async function main() {
 
   const apps = await call(token, `/accounts/${accountId}/access/apps`);
   const access = planAccess(apps, want.apps);
+
+  // Checked against what would be *created*, not against the table: an
+  // application that already exists is never rewritten here, so its second
+  // address is whatever the dashboard says, and a run that adds nothing
+  // should not need a flag it would ignore.
+  const unadmitted = access.create.filter((a) => a.missing);
+  if (unadmitted.length > 0) {
+    fail(
+      unadmitted
+        .map((a) => `${a.missing} is required — ${a.domain} admits a second person`)
+        .join("\n"),
+    );
+  }
 
   out(`zone    ${args.domain} (${zoneId})`);
   out(`account ${accountId}`);
