@@ -356,6 +356,21 @@ const SHORTHAND = new RegExp(
 );
 
 /**
+ * A double-backtick **quotation**, ` `` ... `` ` in CommonMark: two backticks,
+ * content that may itself hold a single backtick, two backticks closing —
+ * markdown's own way to quote a literal backtick, which is exactly how a
+ * reviewer writes about the citation syntax itself rather than writing one
+ * (repo-60). `` `:443` `` inside such a span is that reviewer's example of
+ * `SHORTHAND`, not an instance of it, and `SHORTHAND`'s own single backticks
+ * sit *inside* the pair this matches — invisible to a regex that never looks
+ * one character further out.
+ *
+ * Lazy on purpose: two spans on one line (`` `:443` ``/`` `:8443` ``) must
+ * close at the nearer pair, not swallow the text between them into one.
+ */
+const DOUBLE_BACKTICK = /\x60\x60(?:(?!\x60\x60).)*?\x60\x60/g;
+
+/**
  * A **prose** reference: `line 367`, `lines 118-119`.
  *
  * Detected so it can be *counted*, never resolved. The nearest preceding file
@@ -472,13 +487,18 @@ export function extractCitations(markdown) {
    * put a blank line between the items — and the same two bullets stop sharing a
    * file.
    *
-   * The example is real and it is in this repository. repo-25's own gate record
-   * has a tight list whose second bullet quotes `` `:8443` `` while the first
-   * cites `scripts/citations.mjs`; the port is read as a line in that file and
-   * fails, which is why that record carries an evidence declaration for it. The
-   * reviewer writing that record hit this while reviewing the rule that causes
-   * it — the tool caught its own gate record, which is the case for trusting the
-   * rule rather than against it.
+   * The example was real and it was in this repository. repo-25's own gate
+   * record has a tight list whose second bullet quoted `` `:8443` `` while the
+   * first cited `scripts/citations.mjs`; the port was read as a line in that
+   * file and failed, excused only by an evidence declaration. The reviewer
+   * writing that record hit this while reviewing the rule that causes it — the
+   * tool caught its own gate record, which was the case for trusting the rule
+   * rather than against it. Both bullets quote the syntax in a *double*-backtick
+   * span, though, which is a quotation rather than a citation (repo-60) — so as
+   * of that fix neither is read at all, and the evidence declaration excusing
+   * the port was dropped in the same commit as stale. The paragraph rule this
+   * documents still holds; it is demonstrated in `citations.test.ts` now rather
+   * than by this record.
    */
   let paragraph = 0;
   let currentFileParagraph = /** @type {number | null} */ (null);
@@ -537,10 +557,23 @@ export function extractCitations(markdown) {
       }
     }
 
+    // A double-backtick quotation of a citation-shaped token is a reviewer
+    // writing about the syntax, not writing one — see `DOUBLE_BACKTICK`. Every
+    // pass below that reads a backtick-delimited or path-and-colon token skips
+    // a match that starts inside one of these spans, and — because a skipped
+    // match is never pushed into `found` at all — never runs its `make`, so a
+    // quoted citation cannot set `currentFile` either.
+    const quotations = [];
+    for (const m of text.matchAll(DOUBLE_BACKTICK)) {
+      quotations.push({ at: m.index, until: m.index + m[0].length });
+    }
+    const inQuotation = (at) => quotations.some((q) => at >= q.at && at < q.until);
+
     /** @type {{at: number, until: number, rev: string | null, make: () => (typeof out)[number]}[]} */
     const found = [];
 
     for (const m of text.matchAll(INLINE)) {
+      if (inQuotation(m.index)) continue;
       const g =
         /** @type {{file: string, rev?: string, start: string, end?: string, anchor?: string}} */ (
           m.groups
@@ -578,6 +611,7 @@ export function extractCitations(markdown) {
     // and is left alone for the reason a shorthand there is.
     for (const pattern of PIN_SHAPED) {
       for (const m of text.matchAll(pattern)) {
+        if (inQuotation(m.index)) continue;
         const same = found.filter((f) => f.at === m.index);
         if (same.some((f) => f.rev !== null)) continue;
         if (same.length === 0 && inQualified(m.index)) continue;
@@ -611,7 +645,7 @@ export function extractCitations(markdown) {
     }
 
     for (const m of text.matchAll(SHORTHAND)) {
-      if (inQualified(m.index)) continue;
+      if (inQualified(m.index) || inQuotation(m.index)) continue;
       const g = /** @type {{start: string, end?: string, inner?: string, outer?: string}} */ (
         m.groups
       );
@@ -634,7 +668,7 @@ export function extractCitations(markdown) {
     }
 
     for (const m of text.matchAll(SHORTHAND_PIN)) {
-      if (inQualified(m.index)) continue;
+      if (inQualified(m.index) || inQuotation(m.index)) continue;
       const token = /** @type {{token: string}} */ (m.groups).token;
       const [, start, end] = /:(\d+)(?:[-–](\d+))?/.exec(token) ?? [];
       found.push({

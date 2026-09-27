@@ -2762,3 +2762,65 @@ test("--displaced-since refuses a ref this repository does not have", () => {
 
   cleanup();
 });
+
+/**
+ * repo-60. A double-backtick span, `` ` ... ` `` in CommonMark, is a
+ * quotation — markdown's own way to escape a literal backtick inside quoted
+ * text — and a reviewer writes one to show the citation *syntax* rather than
+ * to cite anything. `dl-38`'s port numbers are the corpus's own example: a
+ * gate record quoting `` `:443` `` and `` `:8443` `` to describe the defect
+ * those exact tokens caused, byte-identical to `docs/work/repo-25-citations-
+ * checker-misses-shorthand-references.md`'s own text.
+ *
+ * The same token in a *single*-backtick span, right below, is still read —
+ * the fix is "double-backtick is a quotation", not "this token never
+ * parses", and the second fixture pins that half.
+ */
+test("a double-backtick quotation of a shorthand is not read as a citation", () => {
+  const quoted = extractCitations(
+    ["At `a/one.ts:5`.", "Ports (`` `:443` ``/`` `:8443` ``) collided."].join("\n"),
+  );
+  expect(quoted.map((c) => `${c.source}:${c.start}`)).toEqual(["inline:5"]);
+
+  const unquoted = extractCitations(
+    ["At `a/one.ts:5`.", "Ports (`:443`/`:8443`) collided."].join("\n"),
+  );
+  expect(unquoted.map((c) => `${c.source}:${c.start}`)).toEqual([
+    "inline:5",
+    "shorthand:443",
+    "shorthand:8443",
+  ]);
+});
+
+/**
+ * The same quotation, but wrapping an *inline* citation rather than a
+ * shorthand — repo-25's own record does both on one line: `` `scripts/
+ * citations.mjs:5` to `:99999` after the refactor. `` is a single double-
+ * backtick span holding one of each. Neither may be read, and — since a
+ * skipped match is never pushed at all — neither may set `currentFile` for
+ * whatever follows.
+ */
+test("a double-backtick quotation spanning an inline citation and a shorthand reads neither", () => {
+  const found = extractCitations(
+    ["Reproduced (`` `a/one.ts:5` to `:9999` after the refactor. `` -> unchecked."].join("\n"),
+  );
+  expect(found).toEqual([]);
+});
+
+/**
+ * The double-backtick span must not reset `currentFile` either, or a real
+ * shorthand written *after* a quotation would inherit from the wrong file —
+ * or from nothing at all. A citation qualifies the file before the
+ * quotation; a real, unquoted shorthand after it must still resolve there.
+ */
+test("a double-backtick quotation between two paragraphs does not consume or reset currentFile", () => {
+  const found = extractCitations(
+    ["At `a/one.ts:5`.", "", "Quoting the syntax: `` `:443` ``.", "", "And for real, `:6`."].join(
+      "\n",
+    ),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}=${c.file}`)).toEqual([
+    "inline:5=a/one.ts",
+    "shorthand:6=a/one.ts",
+  ]);
+});
