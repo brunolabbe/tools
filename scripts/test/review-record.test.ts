@@ -643,7 +643,6 @@ test("refuses to run when the ticket is not tracked by git yet, and touches noth
 // cite this file by line and a line added above them displaces every one.
 // ---------------------------------------------------------------------------
 
-// oxlint-disable-next-line import/first
 import {
   compareRecord,
   differingLines,
@@ -825,6 +824,13 @@ test("--verify passes a committed record, then fails naming the line once a land
     // rewording and not the comparison.
     const earlier = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2", "--rev", "HEAD~1"]);
     expect(earlier.status).toBe(0);
+
+    // Verified from a checkout that lacks the ticket — main, when the ticket
+    // was filed on the branch being landed: the rev is read, not the disk.
+    fs.rmSync(ticketAbs);
+    const offDisk = runCli(dir, ["--verify", ticketAbs, second, "--gate", "2", "--rev", "HEAD~1"]);
+    expect(offDisk.stderr).toBe("");
+    expect(offDisk.status).toBe(0);
   } finally {
     cleanup();
   }

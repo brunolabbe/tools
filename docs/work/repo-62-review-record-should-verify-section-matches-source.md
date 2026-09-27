@@ -53,3 +53,73 @@ reaches git.
 - 2026-09-27: Filed from account item 11 of the 2026-09-26 batch close-out.
   This is the mechanical guard requested by item 2 of the skill's findings
   (fixer.md edit). Reproductions are visible on pushed branches.
+
+- 2026-09-27 — built (builder, Opus 5.5), on `origin/main` at `c87153d`.
+
+  **What the brief had wrong.**
+  1. _"After committing a section"_: `review-record.mjs` never commits. It
+     splices, formats and checks; the lander commits. An edit made to the
+     ticket after the splice, or to the lander's own copy of the section file
+     before it, is invisible to anything the splice can check — the splice
+     inserts the file verbatim. So "reject the commit before it reaches git"
+     cannot catch either 2026-09-26 incident, and the Done-when's "after the
+     commit lands, compare" is the check that can. Built as a mode,
+     `review-record.mjs --verify <ticket> <section-file> [--gate <n>] [--rev <rev>]`,
+     which reads the ticket at `<rev>` (default `HEAD`) and compares the gate's
+     block with the file. It binds only when run against **the file the gate
+     wrote**, which the orchestrator holds and the lander may not have kept
+     intact, so `orchestrate-tickets` step 9 names it as a ship check beside
+     preflight, and `review-ticket` step 8 names it for the lander.
+  2. _"Ignoring table padding"_ is too narrow: `oxfmt` also rewrites `*`
+     bullets to `-`, `*x*` to `_x_`, `__x__` to `**x**`, `***` to `---` and
+     `1)` to `1.` (measured with `npx oxfmt` on a scratch file), so a
+     byte-for-byte rule fails a record landed verbatim. The comparison accepts
+     the block when, table padding collapsed, it equals the raw file **or**
+     `oxfmt`'s rendering of it, and diffs against the rendering, so a mismatch
+     shows only what the formatter did not do.
+  3. _"On the pushed branches of open PRs #289 and #291"_: both merged, and
+     both branches are deleted on origin (`git ls-remote --heads origin
+dl-69-provoke-shadow-dom repo-50-citations-displaced` prints nothing). The
+     commits survive under the PR refs: `refs/pull/289/head` is `55c40b3` and
+     `refs/pull/291/head` is `e6fa633`, the two repairs, whose parents are the
+     incident commits. The gates' original section files are gone; the only
+     copy of each reviewer's words is the repaired record, which also carries
+     the reviewer's amendment paragraph, so each reproduction's diff shows that
+     paragraph too.
+
+  **Reproduction**, each section file cut from the repaired commit
+  (`dl-69` lines 234–257 at `55c40b3`; `repo-50` lines 135–158 at `e6fa633`):
+  - `node scripts/review-record.mjs --verify <dl-69 ticket> dl69-gate2.md --gate 2 --rev ebd9649`
+    → exit 1, naming ticket lines 249, 250 and 251, the three reworded lows.
+    `--rev 55c40b3` → exit 0, "lines 234-257".
+  - `node scripts/review-record.mjs --verify <repo-50 ticket> repo50-gate3.md --gate 3 --rev d0389bb`
+    → exit 1, naming ticket line 150, the first new low. `--rev e6fa633` → exit 0.
+  - At `HEAD`, repo-50's gate 1 (as `## Review`), gate 2 and gate 3, each
+    against its own cut file → exit 0 three times, so an earlier gate's block
+    ends at the next gate heading rather than running into it.
+
+  **Also in the splice.** Step 5 runs the same comparison on the block just
+  spliced and restores from `HEAD` on a mismatch. It cannot see a lander's
+  edit; it catches the script's own locating going wrong, reproduced with a
+  section ending in an unclosed fence, which swallows `## Log` into the Review
+  block. The splice's success output now prints the `--verify` command, before
+  the disclosure note so the note stays pasteable.
+
+  **Placement.** Every addition to `review-record.mjs` is below `main`, and the
+  tests are at the end of `review-record.test.ts` with their own `import`,
+  because repo-55's merged record cites both files by line: `git diff origin/main
+-U0` shows no hunk above line 478 of the script except three in-place lines in
+  `buildDiff`, and none above line 638 of the spec.
+
+  **Folded in.** `buildDiff` ran `git diff --no-index` on absolute temp paths,
+  so the headers of the disclosure note read
+  `section-file/tmp/review-record-diff-XXXX/section-file`; it now runs in the
+  temp directory with empty prefixes and reads `--- section-file`. Same line
+  count, and it is the output this ticket turns into an error message.
+
+  **Tests.** `npx vitest run scripts/test/review-record.test.ts` → 33 of 33
+  (27 before, 6 new). Red runs by mutation, each reverted: the comparison
+  always matching → 4 of 33 fail; byte comparison without the formatter → 2
+  fail (the formatter test and the CLI verify test); the gate block running to
+  the end of `## Review` → 2 fail; step 5 disabled → 1 fails (the unclosed
+  fence); `--verify` stat-ing a ticket missing from disk → 1 fails with ENOENT.

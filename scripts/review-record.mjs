@@ -722,6 +722,10 @@ export function differingLines(diff, blockStart) {
   return { ticket, section };
 }
 
+/** One numbered line per entry, quoted so trailing whitespace shows. */
+const showLines = (entries) =>
+  entries.map((e) => `  ${e.line}: ${JSON.stringify(e.text)}`).join("\n") || "  (none)";
+
 /**
  * The error a mismatch prints: which lines of the ticket differ, which lines
  * of the section file are missing from it, then the diff itself.
@@ -734,15 +738,13 @@ export function differingLines(diff, blockStart) {
  */
 export function describeMismatch(comparison, blockStart, relative, where, sectionFile) {
   const { ticket, section } = differingLines(comparison.diff, blockStart);
-  const show = (entries) =>
-    entries.map((e) => `  ${e.line}: ${JSON.stringify(e.text)}`).join("\n") || "  (none)";
   return (
     `the gate record in ${relative} ${where} is not ${sectionFile} — it differs beyond ` +
     `table padding and the formatter's own rewrites.\n` +
     `A gate record is committed as the file the gate wrote; a word, a coordinate or an anchor ` +
     `the gate did not write goes back to the gate for amendment, never into the record.\n\n` +
-    `Lines of ${relative} that the section file does not have:\n${show(ticket)}\n\n` +
-    `Lines of the section file (as formatted) missing from ${relative}:\n${show(section)}\n\n` +
+    `Lines of ${relative} that the section file does not have:\n${showLines(ticket)}\n\n` +
+    `Lines of the section file (as formatted) missing from ${relative}:\n${showLines(section)}\n\n` +
     comparison.diff
   );
 }
@@ -753,7 +755,12 @@ function verifyMain(argv) {
   const sectionText = fs.readFileSync(path.resolve(sectionFile), "utf8");
   validateFirstLine(sectionText, gate);
 
-  const ticketRepoRoot = repoRootFor(ticketAbsolutePath);
+  // The ticket need not exist on disk: `--rev origin/<branch>` from a checkout
+  // of main is the orchestrator's case, and a ticket filed on that branch is
+  // only in the branch. Its directory is enough to find the repository.
+  const ticketRepoRoot = repoRootFor(
+    fs.existsSync(ticketAbsolutePath) ? ticketAbsolutePath : path.dirname(ticketAbsolutePath),
+  );
   const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
   const show = spawnSync("git", ["-C", ticketRepoRoot, "show", `${rev}:${relative}`], {
     encoding: "utf8",
