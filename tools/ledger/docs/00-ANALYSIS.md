@@ -249,6 +249,35 @@ catch-up. The 12 cents is a tax contribution 10 cents off the ratio. The owner
 decided to **fold the catch-up into the open period**, so closing that period
 settles both with one deposit.
 
+### Charges between the two
+
+Sometimes one person pays for something that is entirely the other's: an item
+on a shared receipt, or a purchase made as a favour. The owner asked for that
+to be recorded as a **charge**. The other person owes its full price,
+including its taxes and deposit, and it is not shared at all.
+
+A charge is money owed **directly** from one person to the other. So is the
+shared imbalance that formula v2 computes. That gives one rule for the whole
+settlement:
+
+```
+net = [r × (A + B) − A] + (charges A owes B) − (charges B owes A)
+      (A, B cumulative as above; net > 0 means A owes B)
+
+paid into the buffer:  A deposits net / (1 − r),  or B deposits −net / r
+paid directly:         the same net, as a transfer between the two
+```
+
+**The matching rule is this rule with no charges.** Dividing by the
+recipient's share is what makes a deposit into shared money worth exactly the
+debt to the person it settles. The rule was checked by simulation: across five
+random mixes of card spending and charges in both directions, each person's
+cash out, minus their share of the buffer, equalled exactly what they consumed.
+
+A settled charge needs no special case later. The deposit that settled it
+enters the payer's cumulative contributions, and it cancels there against the
+charge, which also stays in the sums.
+
 ### Numbers
 
 - **Money is integer cents.**
@@ -309,9 +338,14 @@ and the shared part takes the remainder. **The read lines must add up:**
 items + deposits + taxes = total, to the cent. If they don't, the receipt is
 shown for correction, never filed on the model's word.
 
-An excluded item is simply not shared: it stays with whoever paid. Charging an
-item to the _other_ person is a different feature, and is not built unless the
-owner asks for it.
+An item has three possible states:
+
+- **shared**, which is the default;
+- **not shared**, which stays with whoever paid;
+- **the other person's**, which becomes a **charge** for its full price plus
+  its taxes and deposit (§5, _Charges between the two_).
+
+The owner asked for all three.
 
 ### Categories
 

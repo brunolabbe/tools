@@ -1,7 +1,7 @@
 ---
 id: lg-10
 tool: ledger
-title: Read a receipt's items, take out what is not shared, and categorise the rest
+title: Read a receipt's items, split out what is not shared or is the other's, and categorise
 kind: work-package
 status: ready
 milestone: P4
@@ -9,7 +9,7 @@ depends_on: [lg-8]
 difficulty: hard
 ---
 
-# lg-10 — Read a receipt's items, take out what is not shared, and categorise the rest
+# lg-10 — Read a receipt's items, split out what is not shared or is the other's, and categorise
 
 ## Why
 
@@ -45,7 +45,12 @@ _Categories_).
 5. **Storage:** the confirmed lines, with excluded flags and categories, are
    stored with the receipt, append-only like everything else. The period line
    carries the shared amount.
-6. `web`: the item list, with a tap to exclude an item. The excluded amount and
+6. **An item marked as the other person's** becomes a charge (lg-6). The
+   amount is its price, its deposit and its taxes, computed exactly like an
+   excluded item's. It comes off the shared amount like one, and it is owed in
+   full by the other person.
+7. `web`: the item list, where a tap cycles an item through shared, not
+   shared and the other's. The excluded amount and
    the shared amount update live, and the category is editable per item.
 
 ## Done when
@@ -57,6 +62,8 @@ _Categories_).
    proves it.
 3. A rate change mid-year uses the rate in effect on the receipt's date.
 4. A merchant's previous category is proposed first on its next receipt.
-5. Gates green.
+5. An item marked as the other's produces a charge equal to its excluded amount,
+   and the receipt still reconciles: shared + not shared + charged = total.
+6. Gates green.
 
 ## Log

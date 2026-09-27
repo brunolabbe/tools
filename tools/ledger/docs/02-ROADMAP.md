@@ -51,7 +51,8 @@ detail and the numbers behind each.
   Nothing is overwritten.
 - **Receipts are read line by line.** Items that are not shared come off,
   together with their taxes and deposits, and the code computes that part, not
-  the model. Items are categorised for the stats.
+  the model. An item can also be marked as the _other_ person's, which makes it
+  a charge they owe in full. Items are categorised for the stats.
 - **Both people use it, identified by Cloudflare Access** — two addresses on one
   policy, and no login of the tool's own.
 
@@ -104,10 +105,10 @@ transcribing by hand.
 
 ## Phase 4 — Receipts
 
-| Ticket                                                           | What                                           |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| [lg-8](./work/lg-8-receipts.md)                                  | photograph, confirm the total, file            |
-| [lg-10](./work/lg-10-receipt-items-exclusions-and-categories.md) | items: take out what is not shared, categorise |
+| Ticket                                                           | What                                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
+| [lg-8](./work/lg-8-receipts.md)                                  | photograph, confirm the total, file                    |
+| [lg-10](./work/lg-10-receipt-items-exclusions-and-categories.md) | items: not shared, or charged to the other; categorise |
 
 ## Phase 5 — History and stats
 

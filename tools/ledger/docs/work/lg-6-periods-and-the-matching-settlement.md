@@ -29,13 +29,21 @@ example).
 2. **A recurring item generates one dated line per month.** A period holds the
    lines dated inside it, so the month arithmetic in §6 of the analysis cannot
    happen.
-3. `books`, pure: `settlement(contributions, ratio)`.
-   - Contributions are everything each person has put toward shared costs since
-     the last point where they were even: period lines plus **every deposit
-     into the current-expenses bucket**.
-   - Payments out of the buffer are **not** inputs.
-   - It returns who deposits and how much: `max(0, B × r/(1 − r) − A)`, or the
-     mirror for the other person, rounded half-up to the cent once, at the end.
+3. `books`, pure: `settlement(contributions, charges, ratio)`, per analysis
+   §5, _Charges between the two_.
+   - **Contributions** are everything each person has put toward shared costs
+     since the last point where they were even: shared period lines plus
+     **every deposit into the current-expenses bucket**. Payments out of the
+     buffer are **not** inputs.
+   - **Charges** are amounts one person owes the other outright. The manual
+     form is here; receipt items marked as the other's arrive with lg-10.
+   - Net direct value is `r × (A + B) − A + charges A owes B − charges B owes
+A`.
+   - Returns: whoever owes deposits `net / (recipient's share)` into the
+     buffer, rounded half-up to the cent once, at the end. With no charges, this
+     is the matching rule `max(0, B × r/(1 − r) − A)`.
+   - Also return `net` itself, so the screen can offer a direct transfer
+     instead.
 4. **The ratio in effect at the period's end applies.** A new ratio takes effect
    only at a period boundary, and what is owed across a boundary carries over as
    money (§5 of the analysis).
@@ -43,7 +51,8 @@ example).
    and formula version. The tool then expects that deposit, and matches it when
    a paste brings it in: same person, same bucket, amount within a cent.
 6. `web`:
-   - the open period, with its lines per person and a manual line entry;
+   - the open period, with its lines per person, a manual line entry, and a
+     manual charge ("this was the other person's");
    - the recurring items;
    - the close button, showing who deposits what;
    - the list of expected deposits not yet seen in a paste.
@@ -59,6 +68,10 @@ example).
    year holds the right months.
 4. A closed period's settlement is matched when a later paste brings in the
    deposit.
-5. Gates green.
+5. A simulation-style test: random mixes of card spending and charges in both
+   directions. After the computed deposit, with the buffer owned at the ratio,
+   each person's cash out minus their buffer share equals what they consumed,
+   to the cent.
+6. Gates green.
 
 ## Log
