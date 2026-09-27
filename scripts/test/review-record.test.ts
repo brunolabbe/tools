@@ -711,7 +711,10 @@ test("locateGateBlock ends an earlier gate at the next gate heading, not at the 
   expect(first).toContain("### Gate 1");
   expect(first).not.toContain("### Gate 2");
 
-  const second = linesOf(reviewedTicket, locateGateBlock(reviewedTicket, 2, "### Gate 2\n"));
+  const second = linesOf(
+    reviewedTicket,
+    locateGateBlock(reviewedTicket, 2, "### Gate 2\n\n### A heading inside gate 2's own body\n"),
+  );
   expect(second).toContain("### A heading inside gate 2's own body");
   expect(second).not.toContain("### Gate 3");
 
@@ -856,4 +859,61 @@ test("a splice whose block does not come back as the section file is restored to
   } finally {
     cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 — a ticket-reviewer gate on repo-62, gate 1 (2026-09-27): a heading
+// inside a gate's body whose title starts "Gate <n>" must not move either end
+// of any gate's block.
+// ---------------------------------------------------------------------------
+
+test("a gate body quoting a '### Gate <n> …' heading moves neither end of any gate's block", () => {
+  const gate1 = [
+    "## Review",
+    "",
+    "### Gate 1",
+    "",
+    "one.",
+    "",
+    "### Gate 2 style findings quoted from elsewhere",
+    "",
+    "quoted.",
+    "",
+  ].join("\n");
+  const gate2 = "### Gate 2\n\ntwo.\n";
+  const gate3 = "### Gate 3\n\nthree.\n";
+  const ticket = ["## Why", "", gate1, gate2, gate3, "## Log", ""].join("\n");
+
+  const first = locateGateBlock(ticket, null, gate1);
+  expect(linesOf(ticket, first)).toContain("quoted.");
+  expect(linesOf(ticket, first)).not.toContain("two.");
+  expect(compareRecord(gate1, linesOf(ticket, first), formatMarkdown(gate1)).matches).toBe(true);
+
+  // The quoted heading is the first one that starts "Gate 2"; it is not gate 2.
+  const second = locateGateBlock(ticket, 2, gate2);
+  expect(linesOf(ticket, second)).toBe("### Gate 2\n\ntwo.\n");
+  expect(compareRecord(gate2, linesOf(ticket, second), formatMarkdown(gate2)).matches).toBe(true);
+
+  // A lander who drops the quoted heading from gate 1 still fails: the block
+  // then runs one heading further, into gate 2.
+  const dropped = ticket.replace("### Gate 2 style findings quoted from elsewhere\n\n", "");
+  const moved = locateGateBlock(dropped, null, gate1);
+  expect(compareRecord(gate1, linesOf(dropped, moved), formatMarkdown(gate1)).matches).toBe(false);
+});
+
+test("differingLines skips git's no-newline marker without miscounting the lines after it", () => {
+  const diff = [
+    "--- section-file",
+    "+++ inserted-block",
+    "@@ -1,2 +1,2 @@",
+    " same",
+    "-old ending",
+    "\\ No newline at end of file",
+    "+new ending",
+    "\\ No newline at end of file",
+  ].join("\n");
+  expect(differingLines(diff, 10)).toEqual({
+    ticket: [{ line: 11, text: "new ending" }],
+    section: [{ line: 2, text: "old ending" }],
+  });
 });

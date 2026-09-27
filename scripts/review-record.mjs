@@ -573,27 +573,30 @@ export function parseVerifyArgs(argv) {
   return { ticket, sectionFile, gate, rev };
 }
 
-/** `### Gate <n>` numbers a text opens as headings of its own. */
-const gateNumbersIn = (text) =>
-  new Set(
-    extractSections(text)
-      .filter((s) => s.level === 3)
-      .map((s) => /^Gate (\d+)(?!\d)/.exec(s.title.trim()))
-      .filter((m) => m !== null)
-      .map((m) => Number(m[1])),
-  );
-
 /**
  * The block one gate occupies in a ticket that may already carry later gates.
  *
  * `locateInsertedBlock` runs right after a splice, when the gate just added is
  * always the last thing under `## Review`, so it can run to the end of the
  * section. A verify runs any time afterwards — gate 1 checked once gate 3 has
- * landed below it — so the block ends at the first `### Gate <m>` heading
- * that the section file does not open itself. Bounding by the section file's
- * own gate headings, rather than by any `###`, keeps a heading inside a gate's
- * body (the repo-55 case `locateInsertedBlock` documents) inside its block,
- * and lets a first review whose file opens `### Gate 1` keep that heading.
+ * landed below it — so the block has to end where the next gate begins.
+ *
+ * **Bounded by counting the section file's own `###` headings, never by what
+ * a heading's title says** (gate 1 on repo-62). A formatter does not touch a
+ * heading, so a faithful record carries exactly the file's `###` headings, in
+ * order, and the next one after them is the next gate's. The first version
+ * read gate numbers out of titles instead, and a gate body with a sub-heading
+ * such as `### Gate 2 style findings quoted from elsewhere` then made the
+ * boundary skip the real `### Gate 2` — a false failure on a faithful record.
+ * Counting also keeps a body's own heading (the repo-55 case
+ * `locateInsertedBlock` documents) inside its block, and a lander who adds or
+ * drops a heading moves the boundary, which the comparison then reports.
+ *
+ * **A later gate starts at the heading whose title is the file's own first
+ * line**, for the same reason: `### Gate 2 style …` inside gate 1 is the first
+ * heading that starts with `Gate 2`, and is not gate 2. Only when no title
+ * matches exactly — the lander changed the heading itself — does it fall back
+ * to the first `Gate <n>` heading, where the comparison fails on that change.
  *
  * @param {string} markdown
  * @param {number | null} gate
@@ -606,29 +609,25 @@ export function locateGateBlock(markdown, gate, sectionText) {
     headings.filter((s) => s.level === 2),
     "Review",
   );
-  const own = gateNumbersIn(sectionText);
-  if (gate !== null) own.add(gate);
+  const inReview = headings.filter(
+    (s) => s.level === 3 && s.start > review.start && s.start <= review.end,
+  );
 
   let start = review.start;
   if (gate !== null) {
-    const heading = headings.find(
-      (s) =>
-        s.level === 3 &&
-        s.start >= review.start &&
-        s.end <= review.end &&
-        new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
+    const firstTitle = /^###[ \t]+(.*\S)[ \t]*$/.exec(sectionText.split("\n", 1)[0])?.[1];
+    const candidates = inReview.filter((s) =>
+      new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
     );
+    const heading = candidates.find((s) => s.title === firstTitle) ?? candidates[0];
     if (heading === undefined) {
       throw new Error(`there is no "### Gate ${gate}" heading under "## Review"`);
     }
     start = heading.start;
   }
 
-  const next = headings.find((s) => {
-    if (s.level !== 3 || s.start <= start || s.start > review.end) return false;
-    const m = /^Gate (\d+)(?!\d)/.exec(s.title.trim());
-    return m !== null && !own.has(Number(m[1]));
-  });
+  const ownHeadings = extractSections(sectionText).filter((s) => s.level === 3).length;
+  const next = inReview.filter((s) => s.start >= start)[ownHeadings];
   return { start, end: next === undefined ? review.end : next.start - 1 };
 }
 
@@ -709,6 +708,9 @@ export function differingLines(diff, blockStart) {
       inHunk = true;
       continue;
     }
+    // `\ No newline at end of file` is part of the unified format this parses.
+    // `buildDiff` never emits it today, since it ends both sides with a
+    // newline; skipping it keeps the numbering right for any diff handed in.
     if (!inHunk || line.startsWith("\\")) continue;
     if (line.startsWith("+")) {
       ticket.push({ line: blockStart + newLine - 1, text: line.slice(1) });

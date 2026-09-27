@@ -131,3 +131,44 @@ origin/main` → exit 0, 112 enforced, 0 failing.
   fail (the formatter test and the CLI verify test); the gate block running to
   the end of `## Review` → 2 fail; step 5 disabled → 1 fails (the unclosed
   fence); `--verify` stat-ing a ticket missing from disk → 1 fails with ENOENT.
+
+- 2026-09-27 — gate 1 round (builder, Opus 5.5), from `162a166`. The owner
+  kept the design as built and both skill-page lines on this branch.
+
+  **Gate 1's record is not in this ticket.** `node scripts/review-record.mjs
+<this ticket> review-gate1.md` at `162a166` exited 20 and restored the ticket:
+  "1 unanchored, 1 anchor(s) not distinct" — the NFR bullet's `:653` carries no
+  anchor, and its `scripts/review-record.mjs:434 "shell: false,"` starts on two
+  lines, the second being this branch's own `formatMarkdown`. Neither is a
+  coordinate a lander may repair, so the section goes back to its reviewer. The
+  fix below also deletes the lines the med cites at 577 and 630 and moves the
+  low's 712.
+
+  **med, fixed — and wider than reported.** Reproduced with a ticket whose gate
+  1 body carries `### Gate 2 style findings quoted from elsewhere`, followed by
+  a real `### Gate 2` and `### Gate 3`, each checked against its own file on
+  `162a166`'s `locateGateBlock` and `compareRecord`:
+  `gate 1 (## Review): block 3-16, matches=false`,
+  `gate 2: block 9-16, matches=false`, `gate 3: block 17-20, matches=true`.
+  Gate 2 fails too: its _start_ was the first heading beginning `Gate 2`, which
+  is the quoted one inside gate 1. Both ends are fixed. The end now counts the
+  section file's own `###` headings, not what their titles say, and the start
+  is the heading whose title is the file's first line. On the fix, the same
+  script gives `3-12`, `13-16` and `17-20`, all `matches=true`. The new test at
+  the end of the spec fails on `162a166`'s script ("not to contain 'two.'",
+  1 of 35), and fails again with only the start reverted to the first
+  `Gate 2` heading ("expected '### Gate 2 style findings quoted from…' to be
+  '### Gate 2\n\ntwo.\n'", 1 of 35). One round-1 test passed `"### Gate 2\n"` as
+  gate 2's file where the ticket's gate 2 has a second heading; counting
+  rightly bounds that before the heading, so the test now passes the file the
+  ticket implies. The incident reproductions still hold: `ebd9649` and
+  `d0389bb` exit 1, `55c40b3` and `e6fa633` exit 0, and repo-50's gates 1 and
+  2 at `HEAD` exit 0.
+
+  **low, kept.** The `\ No newline at end of file` skip in `differingLines` is
+  unreachable through `buildDiff` today, as the gate says. It stays because
+  `differingLines` is exported and parses git's unified format, of which that
+  marker is part. Without the skip, a diff that carries it counts the marker as
+  a context line and shifts every line number after it. A comment now says
+  so, and a test at the end of the spec pins the mapping with the marker in
+  both sides.
