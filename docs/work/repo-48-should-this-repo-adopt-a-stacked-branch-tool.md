@@ -426,7 +426,7 @@ collision between two open branches:
    `history.md@fdafd1a:2304-2307` measured, and #214 and #215 each paid it once
    (`1b7a923`, `7a12272`). The repo's own prescription is
    `git rebase --onto origin/main <A's old tip> <B>`
-   (`.claude/skills/orchestrate-tickets/reference/concurrency.md:318`), with the
+   (`.claude/skills/orchestrate-tickets/reference/concurrency.md@1a8321c:318 "Unstack a branch after its parent squash-merges"`), with the
    old tip recovered from `gh pr view <A> --json headRefOid`. Then run
    `gh pr ready <n>`.
 
