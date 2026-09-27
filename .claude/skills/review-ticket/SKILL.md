@@ -176,10 +176,9 @@ committed with no report beside it cannot be audited.
 
 **One model, not a panel.** Two models reviewing in parallel is not a second
 opinion, it is two gates and no rule saying which one counts. A split of one gate
-into angles on one model was tried and shelved before it could run, because
-nothing could land it or write its verdict; it is being trialled as a workflow
-whose verdict is computed in code, and until that trial reads, one gate is the
-rule ([repo-58](../../../docs/work/repo-58-trial-a-gate-split-by-angle.md)).
+into angles on one model was trialled as a workflow whose verdict is computed in
+code, and dropped: it found less than one gate, at 2.7× the cost
+([repo-58](../../../docs/work/repo-58-trial-a-gate-split-by-angle.md)).
 
 ## Steps
 
