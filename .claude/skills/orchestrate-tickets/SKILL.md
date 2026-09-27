@@ -526,7 +526,7 @@ it would have bitten, not a list of everything found. Keep a board — ticket, g
 count, verdict, PR — and give merge order when branches are stacked or conflict.
 When a batch runs long, say what the next batch should do differently.
 
-**Close the batch with `# Done`** — `CLAUDE.md:259` "## Handing back" — once the
+**Close the batch with `# Done`** — `CLAUDE.md:260` "## Handing back" — once the
 table below is written and nothing is waiting on the user's answer. Open pull
 requests waiting to be merged do not disqualify it; they belong under the heading
 with their merge order. A batch still carrying an open decision, or one whose gates

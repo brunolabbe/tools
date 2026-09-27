@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  buildInputMaps,
   buildOutputArgs,
   containerSupports,
   formatMapArg,
@@ -45,24 +44,6 @@ describe("stream mapping", () => {
       "2:s:1?",
     );
   });
-
-  test("an unverified stream is mapped optionally, a claimed one is not", () => {
-    // dl-42. `-map 0:a:0` against a file with no audio track is
-    // `Stream map '0:a:0' matches no streams` and exit 234, so a tier that
-    // never inspected the file must say so here and get the `?`.
-    const claimed = buildInputMaps({ path: "/tmp/media.mp4", take: ["video", "audio"] }, 0);
-    expect(claimed.map(formatMapArg)).toEqual(["0:v:0", "0:a:0"]);
-
-    const unverified = buildInputMaps(
-      { path: "/tmp/media.mp4", take: ["video", "audio"], unverified: ["audio"] },
-      0,
-    );
-    expect(unverified.map(formatMapArg)).toEqual(["0:v:0", "0:a:0?"]);
-
-    // Subtitles keep their `?` without being listed, as they always have.
-    const subtitles = buildInputMaps({ path: "/tmp/subs.vtt", take: ["subtitle"] }, 1);
-    expect(subtitles.map(formatMapArg)).toEqual(["1:s:0?"]);
-  });
 });
 
 describe("buildOutputArgs", () => {
@@ -78,7 +59,8 @@ describe("buildOutputArgs", () => {
     expect(args[args.indexOf("-c") + 1]).toBe("copy");
     expect(args).not.toContain("-c:v");
     expect(args).not.toContain("-c:a");
-    expect(args[args.indexOf("-movflags") + 1]).toBe("+faststart");
+    // Fragmented, because the output is a pipe with nothing to rewrite (dl-53).
+    expect(args[args.indexOf("-movflags") + 1]).toBe("frag_keyframe+empty_moov+default_base_moof");
   });
 
   test("transcodes — and reports it — only when the container cannot hold the codec", () => {
@@ -142,8 +124,18 @@ describe("buildOutputArgs", () => {
     expect(fmp4.args).not.toContain("-bsf:a");
   });
 
-  test("faststart is an MP4-only concern", () => {
+  test("MP4 flags are an MP4-only concern; Matroska streams as it is", () => {
     const { args } = buildOutputArgs({ container: "mkv", maps: AV_MAPS });
     expect(args).not.toContain("-movflags");
+    expect(args[args.indexOf("-f") + 1]).toBe("matroska");
+  });
+
+  test("audio-only MP4 is fragmented by duration, not at every packet", () => {
+    const { args } = buildOutputArgs({
+      container: "mp4",
+      maps: AV_MAPS.filter((map) => map.kind === "audio"),
+    });
+    expect(args[args.indexOf("-movflags") + 1]).toBe("empty_moov+default_base_moof");
+    expect(args[args.indexOf("-frag_duration") + 1]).toBe("2000000");
   });
 });

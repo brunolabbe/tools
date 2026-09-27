@@ -8,7 +8,7 @@
 # or, once `COMPOSE_FILE` is set in `.env`, a bare `docker compose up -d`.
 #
 # `docs/adr/004-one-compose-fragment-per-tool.md` is why this file holds so
-# little. A `downloader:` or `planner:` block here would be a service
+# little. A `downloader:`, `planner:` or `ledger:` block here would be a service
 # *definition* — an image and a network are enough to start one — so any host
 # that merged the shared overlay would stand up a tool it never named. What is
 # left is what belongs to the **host**: one tunnel, and one network. Each tool's
@@ -69,8 +69,9 @@ networks:
       config:
         # Fixed, so the `TRUST_PROXY` settings can name it. If this collides
         # with a subnet already on the host, change it here and everywhere it is
-        # named — `compose.downloader.prod.yaml`'s `TRUST_PROXY` and
-        # `compose.planner.prod.yaml`'s. It is one setting written three times,
-        # and a mismatch in either of them silently reverts that tool's rate
-        # limit to sharing a single bucket rather than refusing to boot.
+        # named — the `TRUST_PROXY` in `compose.downloader.prod.yaml`,
+        # `compose.planner.prod.yaml` and `compose.ledger.prod.yaml`. It is one
+        # setting written four times, and a mismatch in any of them silently
+        # reverts that tool's rate limit to sharing a single bucket rather than
+        # refusing to boot.
         - subnet: 172.30.42.0/24

@@ -11,8 +11,9 @@ still open is `npm run status -- --tool downloader`; there is no status page.
 
 ## What this is
 
-A service that takes a web page URL, finds the video stream behind it, downloads
-it, and hands back a link to the resulting file. The interesting problem is the
+A service that takes a web page URL, finds the video stream behind it, and hands
+back a single-use link that streams the file to whoever opens it, as ffmpeg
+produces it, keeping no copy (dl-53). The interesting problem is the
 finding: modern players use MSE, so the `<video>` element carries a `blob:` URL
 that means nothing outside the tab. Streams must be caught at the **network
 layer**.
@@ -22,8 +23,8 @@ layer**.
 ```
 contract     types, error taxonomy, job FSM, zod schemas, redaction — no logic
 resolvers    URL → ProbeResult (registry + resolver implementations)
-engine       ProbeResult → file on disk (ffmpeg, storage, GC)
-api          Fastify, job orchestration, SSE, file serving, SSRF guard
+engine       ProbeResult → a streamed body (one ffmpeg, fragmented MP4, no disk)
+api          Fastify, job orchestration, SSE, single-use links, SSRF guard
 web          React + Vite UI
 e2e          Playwright specs + the fixture HLS origin they run against
 ```

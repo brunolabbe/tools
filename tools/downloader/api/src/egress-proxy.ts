@@ -24,7 +24,7 @@
  *     pinning never applies and the pre-flight answer is not binding.
  *
  * Parsing manifests ourselves and pre-vetting each URI is the obvious answer and
- * the wrong one — it gives up why `download/manifest.ts` exists (analysis §6)
+ * the wrong one — it gives up why ffmpeg reads the manifest itself (analysis §6)
  * and still misses key URIs and nested playlists. Nor is there any version of it
  * for a page's subresources. The check belongs at the socket, and a proxy is
  * where all three of these will accept one.
@@ -414,7 +414,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
    * The fourth outcome, and the only one that is ours: no leaf could be issued.
    *
    * `INTERNAL` rather than a new code — the taxonomy already has the one that
-   * means "this service is broken", and `runFfmpeg` uses it for the same shape
+   * means "this service is broken", and `streamFfmpeg` uses it for the same shape
    * of fault (its binary would not start). Nothing about a video, so nothing
    * belongs in the downloader's half of the taxonomy.
    *

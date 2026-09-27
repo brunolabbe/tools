@@ -11,8 +11,11 @@ import {
   appErrorPayloadSchema,
   ERROR_CODES,
   JOB_STATUSES,
+  JOB_TRANSITIONS,
   jobEventSchema,
+  jobResultSchema,
   jobSchema,
+  jobStatusSchema,
   parseJobEvent,
   parseProbeEvent,
   PROBE_STAGES,
@@ -189,8 +192,6 @@ describe("jobEventSchema", () => {
         sizeBytes: 10,
         container: "mp4",
         durationSec: null,
-        downloadUrl: "/api/files/abc",
-        expiresAt: AT,
       },
       at: AT,
     },
@@ -336,5 +337,38 @@ describe("probeIdSchema", () => {
     for (const hostile of ["../../etc/passwd", "abcdef0123456789/../x", "abcdef0123456789?a=b"]) {
       expect(probeIdSchema.safeParse(hostile).success).toBe(false);
     }
+  });
+});
+
+describe("dl-53: the link, and the state that went", () => {
+  test("a job carries its single-use link, and a record from before it still parses", () => {
+    const linked = job({ link: { url: "/api/files/abc", expiresAt: AT } });
+    expect(jobSchema.parse(linked).link).toEqual({ url: "/api/files/abc", expiresAt: AT });
+    // Records persisted before dl-53 have no `link` key at all.
+    const { link: _absent, ...older } = linked;
+    expect(jobSchema.safeParse(older).success).toBe(true);
+  });
+
+  test("a result persisted with a link keeps parsing, and loses the link", () => {
+    const parsed = jobResultSchema.parse({
+      filename: "v.mp4",
+      sizeBytes: 10,
+      container: "mp4",
+      durationSec: null,
+      downloadUrl: "/api/files/abc",
+      expiresAt: AT,
+    });
+    expect(parsed).toEqual({
+      filename: "v.mp4",
+      sizeBytes: 10,
+      container: "mp4",
+      durationSec: null,
+    });
+  });
+
+  test("`muxing` is no longer a status, and nothing moves to or from it", () => {
+    expect(jobStatusSchema.safeParse("muxing").success).toBe(false);
+    expect(Object.keys(JOB_TRANSITIONS)).not.toContain("muxing");
+    expect(JOB_TRANSITIONS.downloading).toEqual(["probing", "completed", "failed", "canceled"]);
   });
 });

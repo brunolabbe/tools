@@ -23,12 +23,17 @@
     { "path": "./tools/planner/agent" },
     { "path": "./tools/planner/api" },
     { "path": "./tools/planner/web" },
+    { "path": "./tools/ledger/contract" },
+    { "path": "./tools/ledger/api" },
+    { "path": "./tools/ledger/web" },
 
     { "path": "./tsconfig.tests.json" },
     { "path": "./tools/downloader/web/test" },
     { "path": "./tools/planner/web/test" },
+    { "path": "./tools/ledger/web/test" },
     { "path": "./tools/downloader/e2e" },
     { "path": "./tools/planner/e2e" },
+    { "path": "./tools/ledger/e2e" },
     { "path": "./scripts/test" }
   ]
 }

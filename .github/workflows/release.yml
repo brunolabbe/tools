@@ -26,7 +26,7 @@ on:
         description: "Tool to rebuild and push at its current version"
         required: true
         type: choice
-        options: [downloader, planner]
+        options: [downloader, planner, ledger]
 
 concurrency:
   group: release-${{ github.ref }}

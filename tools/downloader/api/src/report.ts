@@ -105,6 +105,12 @@ export interface Report {
   };
   downloads: {
     total: number;
+    /**
+     * Stopped by the visitor — a closed tab, the cancel button, or a link
+     * nobody opened (dl-53). Left out of the rate for the reason probes leave
+     * `CANCELED` out: it measures patience, not the tool (dl-57).
+     */
+    canceled: number;
     successes: number;
     successRate: number | null;
     codeCounts: JobCodeCount[];
@@ -158,7 +164,8 @@ function percentile(values: readonly number[], p: number): number {
  * every `RATE_LIMITED` row here is a capacity signal and is excluded from the
  * success rate's denominator rather than counted as a failed attempt.
  * `CANCELED` gets the same exclusion, on the owner's decision B: a visitor
- * navigating away mid-probe is not the tool failing.
+ * navigating away mid-probe is not the tool failing. A `canceled` job gets it
+ * too, since dl-53 made leaving a download mid-stream an outcome of its own.
  */
 export function buildReport(db: Database.Database, sinceIso: string, windowDays: number): Report {
   const outcomes = db
@@ -236,9 +243,11 @@ export function buildReport(db: Database.Database, sinceIso: string, windowDays:
     .all(sinceIso) as JobSqlRow[];
 
   const jobSuccesses = jobs.filter((job) => job.status === "completed").length;
+  const jobsCanceled = jobs.filter((job) => job.status === "canceled").length;
+  const jobsAttempted = jobs.length - jobsCanceled;
   const codeCountsByCode = new Map<string, number>();
   for (const job of jobs) {
-    if (job.status === "completed") continue;
+    if (job.status === "completed" || job.status === "canceled") continue;
     const code = jobErrorCode(job.error_json);
     codeCountsByCode.set(code, (codeCountsByCode.get(code) ?? 0) + 1);
   }
@@ -267,8 +276,9 @@ export function buildReport(db: Database.Database, sinceIso: string, windowDays:
     },
     downloads: {
       total: jobs.length,
+      canceled: jobsCanceled,
       successes: jobSuccesses,
-      successRate: jobs.length === 0 ? null : jobSuccesses / jobs.length,
+      successRate: jobsAttempted === 0 ? null : jobSuccesses / jobsAttempted,
       codeCounts,
       p50DurationMs: completedDurations.length === 0 ? null : percentile(completedDurations, 0.5),
     },
@@ -324,7 +334,8 @@ export function formatReport(report: Report): string {
   lines.push("Downloads");
   lines.push(
     `  success rate: ${formatRate(report.downloads.successRate)}` +
-      ` (${report.downloads.successes}/${report.downloads.total})`,
+      ` (${report.downloads.successes}/${report.downloads.total - report.downloads.canceled},` +
+      ` ${report.downloads.canceled} canceled by the visitor)`,
   );
   if (report.downloads.codeCounts.length === 0) {
     lines.push("  no failed download in this window");

@@ -155,13 +155,13 @@ same day against a running host, and the final Log entry is the measurement.
   this was applied to had exactly such a hostname, sharing the tunnel with
   nothing else of ours.
   `scripts/test/cloudflare-setup.test.ts:63` "const SHARED_TUNNEL = [" is now a
-  fixture whose foreign rule is in no tool's table, and `:84` "a hostname belonging to nobody in TOOLS survives the merge"
+  fixture whose foreign rule is in no tool's table, and `:87` "a hostname belonging to nobody in TOOLS survives the merge"
   plus the rule-count case beside it both go red under the reviewer's mutation.
 - **low, fixed on this branch** · Two hostname-less rules in the _existing_
   config: the second was silently dropped, because the merge kept
   `existing.find(isCatchAll)` and discarded the rest — the function removing a
   rule it did not add, in the one place it promised not to.
-  `scripts/cloudflare-setup.mjs:104` "if (catchAlls.length > 1)" makes it a
+  `scripts/cloudflare-setup.mjs:117` "if (catchAlls.length > 1)" makes it a
   conflict, so the run refuses and a person decides which was meant.
 - **low, fixed on this branch** · A `desired` rule with a falsy hostname
   produced a second catch-all, which matches everything and would swallow the
@@ -175,10 +175,10 @@ same day against a running host, and the final Log entry is the measurement.
   document someone approves before `--apply`, and being wrong in it is the
   defect. It now refuses.
 - **verified** ·
-  `scripts/cloudflare-setup.mjs:230` "export function applyOrder" holds for
+  `scripts/cloudflare-setup.mjs:257` "export function applyOrder" holds for
   every partial plan the reviewer tried — no access with routing, access with no
   ingress, empty — and inverting it fails
-  `scripts/test/cloudflare-setup.test.ts:262` "expect(lastAccess).toBeLessThan(firstRouting)".
+  `scripts/test/cloudflare-setup.test.ts:270` "expect(lastAccess).toBeLessThan(firstRouting)".
 - **verified** · `npm run check` and `npm test` exit 0 at the tip. The test file
   is purely additive, so no existing assertion changed meaning.
 - **unverified by the reviewer, verified here** · that the script was applied to

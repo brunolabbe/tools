@@ -98,17 +98,17 @@ wrong in the brief. This is what a future reader actually needs.
 
 ### Fields
 
-| Field        | Values                                                                        |
-| ------------ | ----------------------------------------------------------------------------- |
-| `id`         | `<prefix>-<n>`, monotonic. `dl-` downloader, `pl-` planner, `repo-` repo-wide |
-| `tool`       | The directory name under `tools/`, or `repo`                                  |
-| `kind`       | `work-package` · `fix` · `chore`                                              |
-| `status`     | `needs-decision` · `ready` · `in-flight` · `done` · `dropped`                 |
-| `milestone`  | A milestone from that tool's roadmap, or `null`                               |
-| `depends_on` | Ticket ids that must land first                                               |
-| `note`       | Optional. What the status view shows instead of the title                     |
-| `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs    |
-| `awaiting`   | Optional. What this ticket still owes, and what would close it                |
+| Field        | Values                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `id`         | `<prefix>-<n>`, monotonic. `dl-` downloader, `pl-` planner, `lg-` ledger, `repo-` repo-wide |
+| `tool`       | The directory name under `tools/`, or `repo`                                                |
+| `kind`       | `work-package` · `fix` · `chore`                                                            |
+| `status`     | `needs-decision` · `ready` · `in-flight` · `done` · `dropped`                               |
+| `milestone`  | A milestone from that tool's roadmap, or `null`                                             |
+| `depends_on` | Ticket ids that must land first                                                             |
+| `note`       | Optional. What the status view shows instead of the title                                   |
+| `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs                  |
+| `awaiting`   | Optional. What this ticket still owes, and what would close it                              |
 
 **A value runs to the end of its line and is taken literally, so wrapping one in
 quotes is neither required nor permitted.** This is not YAML. A title opening

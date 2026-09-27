@@ -22,7 +22,15 @@
 import process from "node:process";
 import { AppError } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
-import { runFfmpeg } from "../src/ffmpeg/runner.ts";
+import { streamFfmpeg } from "../src/ffmpeg/runner.ts";
+import type { FfmpegRunOptions, FfmpegRunResult } from "../src/ffmpeg/runner.ts";
+
+/** The runner as every caller uses it since dl-53: stdout drained, completion awaited. */
+function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
+  const ffmpeg = streamFfmpeg(options);
+  ffmpeg.stdout.resume();
+  return ffmpeg.completion;
+}
 
 /** A stand-in that writes the stderr a test dictates and exits non-zero. */
 function emitting(lines: readonly string[]): { ffmpegPath: string; args: string[] } {

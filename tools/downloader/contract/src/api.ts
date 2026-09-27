@@ -19,7 +19,7 @@ import { z } from "zod";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
 import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
-import type { Job, JobEvent, JobOptions, JobProgress, JobResult } from "./job.ts";
+import type { Job, JobEvent, JobLink, JobOptions, JobProgress, JobResult } from "./job.ts";
 import { DRM_SYSTEMS, STREAM_PROTOCOLS, SUBTITLE_FORMATS } from "./media.ts";
 import type { DrmInfo, MediaVariant, ProbeResult, RequestContext, SubtitleTrack } from "./media.ts";
 import { PROBE_STAGES } from "./resolver.ts";
@@ -206,14 +206,20 @@ export const jobProgressSchema = z.object({
   processedSec: z.number().nullable(),
 }) satisfies z.ZodType<JobProgress>;
 
+// A result persisted before dl-53 still carries `downloadUrl` and `expiresAt`.
+// `z.object` strips unknown keys rather than rejecting them, so those records
+// keep parsing — with nothing left in them to link to, which is the truth.
 export const jobResultSchema = z.object({
   filename: z.string(),
   sizeBytes: z.number(),
   container: z.string(),
   durationSec: z.number().nullable(),
-  downloadUrl: z.string(),
-  expiresAt: z.string(),
 }) satisfies z.ZodType<JobResult>;
+
+export const jobLinkSchema = z.object({
+  url: z.string().min(1),
+  expiresAt: z.string(),
+}) satisfies z.ZodType<JobLink>;
 
 export const jobSchema = z.object({
   id: z.string().min(1),
@@ -235,6 +241,9 @@ export const jobSchema = z.object({
   // user's downloads list on their first load after deploy. `variant` above
   // survives on `.nullable()` alone only because it has always been written.
   thumbnailPath: z.string().nullable().optional(),
+  // `.optional()` for the reason `thumbnailPath` gives above: absent from every
+  // record written before dl-53.
+  link: jobLinkSchema.nullable().optional(),
 }) satisfies z.ZodType<Job>;
 
 /**
@@ -390,7 +399,13 @@ export const ROUTES = {
   job: (id: string) => `/api/jobs/${id}`,
   jobEvents: (id: string) => `/api/jobs/${id}/events`,
   cancelJob: (id: string) => `/api/jobs/${id}/cancel`,
-  /** `token` is opaque and unguessable — it is the capability, not the job id. */
+  /**
+   * A job's single-use link (dl-53). `token` is opaque and unguessable — it is
+   * the capability, not the job id. `GET` starts the job and streams the file
+   * on the same response; a used or expired token answers `410`. The path is
+   * the one it had when it served stored files, so dl-23's per-token limit and
+   * the Access bypass dl-49 names still describe the same route.
+   */
   file: (token: string) => `/api/files/${token}`,
   /**
    * Same shape and same reason as `file`: the token is the capability. It also

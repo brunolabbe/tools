@@ -1,0 +1,80 @@
+/*
+ * Mobile-first: the base rules are the phone, and the one media query below
+ * widens for a desktop. Both people use this from a phone more than from
+ * anything else — a receipt is photographed where it is paid.
+ *
+ * Tokens first, one set per theme, so a component never names a colour.
+ * `light dark` on `color-scheme` (and in the document head) lets the browser
+ * style its own widgets to match, which is the half of dark mode CSS cannot do.
+ */
+:root {
+  color-scheme: light dark;
+
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #dde1e6;
+  --text: #1b1f24;
+  --muted: #5d6670;
+  --bad: #a3341f;
+  --accent: #1f5f8b;
+
+  --radius: 10px;
+  --gap: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --surface: #1a1e23;
+    --border: #2c323a;
+    --text: #eceff2;
+    --muted: #9aa4ae;
+    --bad: #e8836a;
+    --accent: #7db4dc;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.shell {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--gap);
+  display: grid;
+  gap: var(--gap);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.health {
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 48rem) {
+  .shell {
+    padding: calc(var(--gap) * 2);
+  }
+}

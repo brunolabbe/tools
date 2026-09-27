@@ -45,9 +45,15 @@ export type CancelOutcome = "running" | "waiting" | "not-found";
 export interface JobQueue {
   /** Rejects new work once `close()` has begun. */
   enqueue(task: QueuedTask): void;
-  /** Cancels a job whether it is waiting or running; see `CancelOutcome`. */
-  cancel(jobId: string): CancelOutcome;
+  /**
+   * Cancels a job whether it is waiting or running; see `CancelOutcome`.
+   * `reason` becomes the signal's reason, so a caller can say *why* — a
+   * visitor who disconnected, say (dl-53) — and the orchestrator records it.
+   */
+  cancel(jobId: string, reason?: AppError): CancelOutcome;
   has(jobId: string): boolean;
+  /** True while the job is in the wait line, not yet running. */
+  isWaiting(jobId: string): boolean;
   readonly running: number;
   readonly waiting: number;
   /** Stops intake, cancels everything in flight, and waits for it to unwind. */
@@ -91,6 +97,10 @@ export class InProcessJobQueue implements JobQueue {
     return this.#running.has(jobId) || this.#waiting.some((entry) => entry.task.jobId === jobId);
   }
 
+  isWaiting(jobId: string): boolean {
+    return this.#waiting.some((entry) => entry.task.jobId === jobId);
+  }
+
   enqueue(task: QueuedTask): void {
     if (this.#closing) {
       throw new AppError("INTERNAL", "The server is shutting down and is not accepting new jobs.", {
@@ -101,18 +111,18 @@ export class InProcessJobQueue implements JobQueue {
     this.#pump();
   }
 
-  cancel(jobId: string): CancelOutcome {
+  cancel(jobId: string, reason: AppError = new AppError("JOB_CANCELED")): CancelOutcome {
     const running = this.#running.get(jobId);
     if (running !== undefined) {
       // A typed reason survives every layer that re-wraps an abort, so the
       // orchestrator sees JOB_CANCELED rather than having to guess.
-      running.controller.abort(new AppError("JOB_CANCELED"));
+      running.controller.abort(reason);
       return "running";
     }
     const index = this.#waiting.findIndex((entry) => entry.task.jobId === jobId);
     if (index === -1) return "not-found";
     const [removed] = this.#waiting.splice(index, 1);
-    removed?.controller.abort(new AppError("JOB_CANCELED"));
+    removed?.controller.abort(reason);
     // `run` will never be called for this entry, so its own settle path (in
     // `#pump`, below) will never fire. This is the only place that can tell a
     // caller it is done.

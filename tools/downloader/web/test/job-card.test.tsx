@@ -28,7 +28,7 @@ import { JobList } from "../src/components/JobList.tsx";
 import { UNKNOWN } from "../src/lib/format.ts";
 import { applyJobEvent, markWatched } from "../src/lib/job-reducer.ts";
 import type { StreamState } from "../src/lib/job-stream.ts";
-import { NOW, SOURCE_URL, job, progress, result, variant } from "./fixtures.ts";
+import { NOW, SOURCE_URL, errorPayload, job, progress, result, variant } from "./fixtures.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -244,10 +244,13 @@ test("a finished file of unknown duration is described without a trailing dash",
 
 test("each active status names itself and says why the job is sitting there", () => {
   const cases = [
-    ["queued", "Queued", "Waiting for a free worker slot."],
+    ["queued", "Queued", "Starts when you open the download link. The link works once."],
     ["probing", "Re-analysing", "Fetching fresh stream links — signed URLs expire within minutes."],
-    ["downloading", "Downloading", "Pulling the video data."],
-    ["muxing", "Assembling", "Joining audio and video into a playable file."],
+    [
+      "downloading",
+      "Downloading",
+      "Sending the video to your browser as it is fetched. Nothing is kept here.",
+    ],
   ] as const;
 
   for (const [status, label, hint] of cases) {
@@ -260,8 +263,7 @@ test("each active status names itself and says why the job is sitting there", ()
       "Queued",
       "Re-analysing",
       "Downloading",
-      "Assembling",
-      "Ready",
+      "Downloaded",
     ]);
     // `active` is one expression covering four statuses, so it is asserted for
     // each of them rather than only for `downloading`: a job still running can
@@ -307,7 +309,7 @@ test("the downloading → probing back edge keeps the work, and is not an error"
   // Not a failure, and not finished: no notice of either kind is on screen.
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
-  expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Download" })).toBeNull();
 });
 
 test("a forward-running job marks the steps behind it done and the current one active", () => {
@@ -321,19 +323,18 @@ test("a forward-running job marks the steps behind it done and the current one a
   // including that a pending step carries the base class and nothing else. The
   // two assertions under them are the newer half: the same three states, in the
   // accessible tree rather than in the stylesheet alone.
-  mount(job("muxing"));
+  mount(job("downloading"));
 
   const items = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
   expect(items.map((step) => [step.textContent, step.className])).toEqual([
     ["Queued", "steps__item steps__item--done"],
     ["Re-analysing", "steps__item steps__item--done"],
-    ["Downloading", "steps__item steps__item--done"],
-    ["Assembling", "steps__item steps__item--active"],
-    ["Ready", "steps__item"],
+    ["Downloading", "steps__item steps__item--active"],
+    ["Downloaded", "steps__item"],
   ]);
 
-  expect(activeStep()).toBe("Assembling");
-  expect(doneSteps()).toEqual(["Queued", "Re-analysing", "Downloading"]);
+  expect(activeStep()).toBe("Downloading");
+  expect(doneSteps()).toEqual(["Queued", "Re-analysing"]);
 });
 
 test("a re-probe keeps Downloading marked done instead of walking the list back", () => {
@@ -363,8 +364,7 @@ test("a re-probe keeps Downloading marked done instead of walking the list back"
       ["Queued", "done"],
       ["Re-analysing", "active"],
       ["Downloading", "done"],
-      ["Assembling", "pending"],
-      ["Ready", "pending"],
+      ["Downloaded", "pending"],
     ]);
     // And by role, which is the half a class name cannot carry: the state is in
     // the accessible tree now, so a screen reader is told where the job is and
@@ -391,8 +391,7 @@ test("a first probe leaves Downloading pending, however many bytes are on the ca
       ["Queued", "done"],
       ["Re-analysing", "active"],
       ["Downloading", "pending"],
-      ["Assembling", "pending"],
-      ["Ready", "pending"],
+      ["Downloaded", "pending"],
     ]);
     expect(activeStep()).toBe("Re-analysing");
     expect(doneSteps()).toEqual(["Queued"]);
@@ -454,8 +453,7 @@ test("a job driven over the back-edge by frames alone still marks Downloading do
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "done"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
   expect(activeStep()).toBe("Re-analysing");
   expect(doneSteps()).toEqual(["Queued", "Downloading"]);
@@ -478,8 +476,7 @@ test("a first probe reduced from the same code path leaves Downloading pending",
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "pending"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
   expect(activeStep()).toBe("Re-analysing");
   expect(doneSteps()).toEqual(["Queued"]);
@@ -521,27 +518,41 @@ test("a queued job, which has neither, is titled by the address it came from", (
   expect(screen.getByRole("heading", { name: SOURCE_URL })).toBeDefined();
 });
 
-test("a completed job offers the file, its size and how long it will be kept", () => {
+test("a completed job says what arrived, and offers no second copy", () => {
   mount(job("completed"));
 
-  const link = screen.getByRole("link", { name: "Download file" });
-  expect(link.getAttribute("href")).toBe("/api/files/opaque-token/a-sample-recording.mp4");
-  expect(link.getAttribute("download")).toBe("a-sample-recording.mp4");
-  expect(screen.getByText("expires in 2 h 0 min")).toBeDefined();
+  // dl-53: the file went to this browser as it streamed and nothing is kept,
+  // so there is no link to fetch it again.
+  expect(screen.queryByRole("link")).toBeNull();
+  expect(screen.getByText("Saved by your browser. The server kept no copy.")).toBeDefined();
   expect(screen.getByText(/^399 MB · MP4 · 12:34$/u)).toBeDefined();
   // Terminal: no bar, no pipeline, nothing to cancel.
   expect(screen.queryByRole("progressbar")).toBeNull();
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
 });
 
-test("a completed job past its retention window offers the reason, not a dead link", () => {
-  mount(job("completed", { result: result({ expiresAt: "2026-08-20T11:00:00.000Z" }) }));
+test("a queued job offers its link, once, and says how long it has", () => {
+  mount(job("queued"));
 
-  expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+  const link = screen.getByRole("link", { name: "Download" });
+  expect(link.getAttribute("href")).toBe("/api/files/opaque-token");
+  // Empty: the name is the server's, from `Content-Disposition`.
+  expect(link.getAttribute("download")).toBe("");
+  expect(screen.getByText("works once · expires in 14 min")).toBeDefined();
+});
+
+test("a queued job whose link has expired offers the reason, not a dead link", () => {
+  mount(
+    job("queued", {
+      link: { url: "/api/files/opaque-token", expiresAt: "2026-08-20T11:00:00.000Z" },
+    }),
+  );
+
+  expect(screen.queryByRole("link", { name: "Download" })).toBeNull();
   // `FILE_EXPIRED` is not `final` in the presentation table, so it is an alert
-  // rather than a status — the file is gone and there is nothing to click.
+  // rather than a status — the link is spent and there is nothing to click.
   const notice = screen.getByRole("alert");
-  expect(within(notice).getByRole("heading", { name: "File removed" })).toBeDefined();
+  expect(within(notice).getByRole("heading", { name: "Link used or expired" })).toBeDefined();
   expect(within(notice).getByText("FILE_EXPIRED")).toBeDefined();
 });
 
@@ -712,15 +723,13 @@ test("each card is handed its own pipeline mark, looked up by job id", () => {
     "Queued:1",
     "Re-analysing:0",
     "Downloading:0",
-    "Assembling:0",
-    "Ready:0",
+    "Downloaded:0",
   ]);
   expect(stepsOf(second as HTMLElement)).toEqual([
     "Queued:1",
     "Re-analysing:0",
     "Downloading:1",
-    "Assembling:0",
-    "Ready:0",
+    "Downloaded:0",
   ]);
 });
 
@@ -789,7 +798,7 @@ test("a completed job shows its preview inside the result panel, and only there"
   expect(image?.getAttribute("alt")).toBe("");
   expect(container.querySelector(".job__head img")).toBeNull();
   // The panel is the whole panel still, not one that lost something to fit it.
-  expect(screen.getByRole("link", { name: "Download file" })).toBeDefined();
+  expect(screen.getByText("Saved by your browser. The server kept no copy.")).toBeDefined();
 });
 
 test("the filename keeps the left of the result panel with the image present", () => {
@@ -805,7 +814,7 @@ test("the filename keeps the left of the result panel with the image present", (
   // is what keeps it at the left edge instead of centred between the two.
   expect(leading?.querySelector(".result__filename")?.textContent).toBe("a-sample-recording.mp4");
   expect(leading?.querySelector(".preview img")).not.toBeNull();
-  expect(trailing?.className).toBe("result__actions");
+  expect(trailing?.className).toBe("muted result__expiry");
 });
 
 test("a completed job with no preview renders the result panel exactly as before", () => {
@@ -832,7 +841,7 @@ test("a completed job with no preview renders the result panel exactly as before
 
     expect(screen.getByText("a-sample-recording.mp4")).toBeDefined();
     expect(screen.getByText(/^399 MB · MP4 · 12:34$/u)).toBeDefined();
-    expect(screen.getByRole("link", { name: "Download file" })).toBeDefined();
+    expect(screen.getByText("Saved by your browser. The server kept no copy.")).toBeDefined();
     unmount();
   }
 });
@@ -850,4 +859,35 @@ test("a list with nothing finished offers no clear button", () => {
     />,
   );
   expect(screen.queryByRole("button", { name: /Clear/u })).toBeNull();
+});
+
+/**
+ * dl-53's second gate: the server says *why* a job was canceled, on
+ * `error.details.reason`, and the card said the same thing for all three. Each
+ * reason now reads as what happened, and each is its own test so a card that
+ * collapses two of them back together fails by name.
+ */
+function canceledFor(reason: string): Job {
+  return job("canceled", { error: errorPayload("JOB_CANCELED", { details: { reason } }) });
+}
+
+test("a job the visitor canceled says they stopped it", () => {
+  mount(canceledFor("requested"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Canceled" })).toBeDefined();
+  expect(within(notice).getByText(/You stopped this download\./u)).toBeDefined();
+});
+
+test("a job whose connection closed mid-download says it was interrupted", () => {
+  mount(canceledFor("disconnected"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Download interrupted" })).toBeDefined();
+  expect(within(notice).getByText(/connection closed before the file finished/u)).toBeDefined();
+});
+
+test("a job whose link nobody opened says the link expired", () => {
+  mount(canceledFor("link-expired"));
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Link expired" })).toBeDefined();
+  expect(within(notice).getByText(/was not opened within fifteen minutes/u)).toBeDefined();
 });

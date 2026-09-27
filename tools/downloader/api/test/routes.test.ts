@@ -10,10 +10,17 @@ import { AppError, jobResponseSchema, parseJobEvent, ROUTES } from "@downloader/
 import type { JobResponse, ProbeResponse, ProbeResult } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
-import { contentDisposition, parseRange } from "../src/routes/files.ts";
+import { contentDisposition } from "../src/routes/files.ts";
 import { statusForCode, toErrorResponse } from "../src/http-errors.ts";
 import type { HealthResponse } from "../src/routes/health.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
+import {
+  createHarness,
+  openLink,
+  probeResult,
+  SOURCE_URL,
+  StubResolver,
+  waitFor,
+} from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
 let harness: Harness | undefined;
@@ -341,6 +348,7 @@ describe("the source's credentials never reach the client", () => {
           payload: { url: SOURCE_URL },
         })
       ).json() as JobResponse;
+      openLink(harness, created.job);
 
       const sse = await harness.app.server.inject({
         method: "GET",
@@ -380,17 +388,20 @@ describe("the source's credentials never reach the client", () => {
         }),
       ),
       engineOptions: {
-        onDownload: (request) => {
+        onStream: (request) => {
           seen.push(JSON.stringify(request.requestContext.headers));
         },
       },
     });
 
-    await harness.app.server.inject({
-      method: "POST",
-      url: ROUTES.jobs,
-      payload: { url: SOURCE_URL },
-    });
+    const posted = (
+      await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.jobs,
+        payload: { url: SOURCE_URL },
+      })
+    ).json() as JobResponse;
+    openLink(harness, posted.job);
     await waitFor(
       () => seen,
       (calls) => calls.length > 0,
@@ -420,22 +431,17 @@ describe("job routes", () => {
   });
 });
 
-/** Runs a job to completion so there is a real token to leak. */
-async function completed(current: Harness): Promise<{ id: string; token: string }> {
-  const created = (
+/** Creates a job, so there is a real link token to leak. Not opened: see dl-53. */
+async function createdLink(current: Harness): Promise<{ id: string; token: string }> {
+  const response = (
     await current.app.server.inject({
       method: "POST",
       url: ROUTES.jobs,
       payload: { url: SOURCE_URL },
     })
   ).json() as JobResponse;
-  const finished = await waitFor(
-    () => current.app.context.store.get(created.job.id),
-    (job) => job.status === "completed" || job.status === "failed",
-    { label: "job to finish" },
-  );
-  const url = finished.result?.downloadUrl ?? "";
-  return { id: created.job.id, token: url.slice(url.lastIndexOf("/") + 1) };
+  const url = response.job.link?.url ?? "";
+  return { id: response.job.id, token: url.slice(url.lastIndexOf("/") + 1) };
 }
 
 /**
@@ -460,7 +466,7 @@ async function completed(current: Harness): Promise<{ id: string; token: string 
 describe("a job list does not hand out capabilities", () => {
   test("GET /api/jobs is a route miss, with nothing supplied", async () => {
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
-    const { id, token } = await completed(harness);
+    const { id, token } = await createdLink(harness);
     expect(token).toHaveLength(43);
 
     // No id, no token, no credential of any kind — the enumeration case. The
@@ -505,15 +511,15 @@ describe("a job list does not hand out capabilities", () => {
 
   test("reading one job still carries it, because the app cannot work without it", async () => {
     // The guard against this cure becoming a disease. `JobCard.tsx` renders the
-    // download button from `result.downloadUrl`, fed by `useJobs`'s `getJob`
+    // download button from `job.link` (dl-53), fed by `useJobs`'s `getJob`
     // poll — strip it there and the product stops doing the thing it is for.
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
-    const { id, token } = await completed(harness);
+    const { id, token } = await createdLink(harness);
 
     const response = await harness.app.server.inject({ method: "GET", url: ROUTES.job(id) });
     expect(response.statusCode).toBe(200);
     const body = response.json() as JobResponse;
-    expect(body.job.result?.downloadUrl).toBe(ROUTES.file(token));
+    expect(body.job.link?.url).toBe(ROUTES.file(token));
     expect(jobResponseSchema.safeParse(body).success).toBe(true);
 
     // And what makes the negative assertions in the first test mean something.
@@ -523,8 +529,7 @@ describe("a job list does not hand out capabilities", () => {
     expect(response.body).toContain(token);
     expect(response.body).toContain(id);
     expect(response.body).toContain(SOURCE_URL);
-    expect(response.body).toContain("cdn.example");
-    expect(response.body).toContain("video.mp4");
+    expect(response.body).toContain("site.example");
   });
 
   test("a job id is not guessable, which is what makes the trade sound", async () => {
@@ -583,7 +588,6 @@ describe("GET /api/health", () => {
     expect(body.ytdlp).toEqual({ enabled: false, available: false, path: null });
     expect(body.browser.enabled).toBe(false);
     expect(body.storage.dir).toBe(harness.storageRoot);
-    expect(body.storage.quotaBytes).toBeGreaterThan(0);
     // `statfs` answers on both CI platforms; null is the documented fallback.
     expect(body.storage.freeBytes === null || body.storage.freeBytes > 0).toBe(true);
   });
@@ -607,100 +611,73 @@ describe("GET /api/health", () => {
   });
 });
 
-/** A harness whose single job has already finished, plus its download URL. */
-async function completedHarness(): Promise<{ current: Harness; url: string }> {
-  const current = await createHarness({ resolver: new StubResolver(probeResult()) });
-  const created = (
+/** Creates a job and returns its id and its single-use link. */
+async function link(current: Harness): Promise<{ id: string; url: string }> {
+  const response = (
     await current.app.server.inject({
       method: "POST",
       url: ROUTES.jobs,
       payload: { url: SOURCE_URL },
     })
   ).json() as JobResponse;
-  const finished = await waitFor(
-    () => current.app.context.store.get(created.job.id),
-    (job) => job.status === "completed" || job.status === "failed",
-    { label: "job to finish" },
-  );
-  expect(finished.status).toBe("completed");
-  return { current, url: finished.result?.downloadUrl ?? "" };
+  return { id: response.job.id, url: response.job.link?.url ?? "" };
 }
 
-describe("file serving", () => {
-  test("serves a byte range and reports it correctly", async () => {
-    const { current, url } = await completedHarness();
-    harness = current;
-    const response = await current.app.server.inject({
-      method: "GET",
-      url,
-      headers: { range: "bytes=5-9" },
-    });
-    expect(response.statusCode).toBe(206);
-    expect(response.headers["content-range"]).toBe("bytes 5-9/27");
-    expect(response.headers["content-length"]).toBe("5");
-    expect(response.body).toBe("video");
-  });
-
-  test("an unsatisfiable range is a 416, not a truncated body", async () => {
-    const { current, url } = await completedHarness();
-    harness = current;
-    const response = await current.app.server.inject({
-      method: "GET",
-      url,
-      headers: { range: "bytes=9999-" },
-    });
-    expect(response.statusCode).toBe(416);
-    expect(response.headers["content-range"]).toBe("bytes */27");
-  });
-
+describe("the link route (dl-53)", () => {
   test("a malformed token is rejected on shape before a database lookup", async () => {
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
     const response = await harness.app.server.inject({ method: "GET", url: ROUTES.file("short") });
     expect(response.statusCode).toBe(404);
   });
 
-  test("past its expiry the link is 410 Gone, not 404", async () => {
-    // The distinction matters to a user staring at a link that worked yesterday.
-    const { current, url } = await completedHarness();
-    harness = current;
-    const token = url.slice(url.lastIndexOf("/") + 1);
-    const record = current.app.context.store.findToken(token);
-    expect(record).not.toBeNull();
-    current.app.context.store.deleteToken(token);
-    current.app.context.store.saveToken({ ...record!, expiresAt: "2020-01-01T00:00:00.000Z" });
-
-    const response = await current.app.server.inject({ method: "GET", url });
-    expect(response.statusCode).toBe(410);
-    expect(response.json()).toMatchObject({ error: { code: "FILE_EXPIRED" } });
+  test("a used link is 410 Gone, not 404", async () => {
+    // The distinction matters to a user staring at a link that worked a moment ago.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const { url } = await link(harness);
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(200);
+    const again = await harness.app.server.inject({ method: "GET", url });
+    expect(again.statusCode).toBe(410);
+    expect(again.json()).toMatchObject({ error: { code: "FILE_EXPIRED" } });
   });
 
-  test("still 410 after the sweep has deleted the file", async () => {
-    // The end-to-end version of the store-level regression: once the retention
-    // sweep has run, the link must still say "gone", not "never existed".
-    const { current, url } = await completedHarness();
-    harness = current;
-    const token = url.slice(url.lastIndexOf("/") + 1);
-    const record = current.app.context.store.findToken(token);
-    current.app.context.store.deleteToken(token);
-    current.app.context.store.saveToken({ ...record!, expiresAt: "2020-01-01T00:00:00.000Z" });
-    current.app.context.store.markSwept(token);
-    await current.engine.removeJob(record!.jobId);
+  test("past its fifteen minutes an unopened link is 410, and its job canceled as expired", async () => {
+    let clock = new Date("2026-09-27T10:00:00.000Z");
+    harness = await createHarness({ resolver: new StubResolver(probeResult()), now: () => clock });
+    const { id, url } = await link(harness);
+    clock = new Date(clock.getTime() + 15 * 60_000 + 1);
 
-    const response = await current.app.server.inject({ method: "GET", url });
+    const response = await harness.app.server.inject({ method: "GET", url });
     expect(response.statusCode).toBe(410);
     expect(response.json()).toMatchObject({ error: { code: "FILE_EXPIRED" } });
+    const job = harness.app.context.store.get(id);
+    expect(job.status).toBe("canceled");
+    expect(job.error).toMatchObject({ code: "JOB_CANCELED", details: { reason: "link-expired" } });
+    expect(job.link).toBeNull();
+    expect(harness.engine.calls).toBe(0);
   });
 
-  test("a completed file whose bytes vanished is 410, not a 500", async () => {
-    const { current, url } = await completedHarness();
-    harness = current;
-    const token = url.slice(url.lastIndexOf("/") + 1);
-    const record = current.app.context.store.findToken(token);
-    // The row outlived the file: the sweep ran between the two.
-    await current.engine.removeJob(record!.jobId);
+  test("a HEAD does not spend the link", async () => {
+    // Fastify would answer a HEAD by running the GET handler, which would start
+    // a download nobody reads and leave the visitor holding a spent link.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const { url } = await link(harness);
+    const head = await harness.app.server.inject({ method: "HEAD", url });
+    expect(head.statusCode).toBe(404);
+    expect(harness.engine.calls).toBe(0);
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(200);
+  });
 
-    const response = await current.app.server.inject({ method: "GET", url });
-    expect(response.statusCode).toBe(410);
+  test("an unopened link canceled from the card is withdrawn with its job", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const { id, url } = await link(harness);
+    const canceled = await harness.app.server.inject({ method: "POST", url: ROUTES.cancelJob(id) });
+    expect((canceled.json() as JobResponse).job).toMatchObject({
+      status: "canceled",
+      link: null,
+      error: { code: "JOB_CANCELED", details: { reason: "requested" } },
+    });
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(410);
+    expect(harness.engine.calls).toBe(0);
   });
 });
 
@@ -717,6 +694,7 @@ describe("SSE", () => {
         payload: { url: SOURCE_URL },
       })
     ).json() as JobResponse;
+    openLink(harness, created.job);
 
     const response = await harness.app.server.inject({
       method: "GET",
@@ -763,6 +741,7 @@ describe("SSE", () => {
           payload: { url: SOURCE_URL },
         })
       ).json() as JobResponse;
+      openLink(harness, created.job);
 
       const response = await harness.app.server.inject({
         method: "GET",
@@ -796,6 +775,7 @@ describe("SSE", () => {
         payload: { url: SOURCE_URL },
       })
     ).json() as JobResponse;
+    openLink(harness, created.job);
     await waitFor(
       () => (harness as Harness).app.context.store.get(created.job.id),
       (job) => job.status === "completed",
@@ -831,19 +811,6 @@ describe("pure helpers", () => {
     expect(frame.startsWith("data: ")).toBe(true);
     expect(frame.endsWith("\n\n")).toBe(true);
     expect(parseJobEvent(frame.slice(6).trim())?.type).toBe("heartbeat");
-  });
-
-  test("parseRange covers the forms a browser actually sends", () => {
-    expect(parseRange(undefined, 100)).toBeNull();
-    expect(parseRange("bytes=0-", 100)).toEqual({ start: 0, end: 99 });
-    expect(parseRange("bytes=10-19", 100)).toEqual({ start: 10, end: 19 });
-    expect(parseRange("bytes=-20", 100)).toEqual({ start: 80, end: 99 });
-    // Clamped rather than refused: a client asking past the end still gets the tail.
-    expect(parseRange("bytes=90-200", 100)).toEqual({ start: 90, end: 99 });
-    expect(parseRange("bytes=200-", 100)).toBe("unsatisfiable");
-    expect(parseRange("bytes=50-10", 100)).toBe("unsatisfiable");
-    // Multi-range is ignored, which a server is always allowed to do.
-    expect(parseRange("bytes=0-9,20-29", 100)).toBeNull();
   });
 
   test("contentDisposition survives a hostile filename", () => {

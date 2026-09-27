@@ -11,7 +11,10 @@ dist
 **/*.tsbuildinfo
 
 # Runtime artifacts, and the one directory that could be tens of gigabytes.
+# `**/` as well: a dev API run from its workspace writes `<tool>/api/storage/`,
+# and for the ledger that is real bank history.
 storage
+**/storage
 downloads
 tmp
 data

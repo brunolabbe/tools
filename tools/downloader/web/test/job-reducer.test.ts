@@ -80,17 +80,17 @@ describe("applyJobEvent", () => {
   });
 
   test("applies a status the server reports even when it skips states", () => {
-    // queued → muxing is not a step in JOB_TRANSITIONS, and it does not need to
-    // be: the frame says where the job *is*, so the only thing a jump tells us
+    // queued → downloading is not a step in JOB_TRANSITIONS, and it does not
+    // need to be: the frame says where the job *is*, so the only thing a jump tells us
     // is that we missed the frames in between. Refusing it used to leave the
     // card showing a state the server had already left.
     const next = applyJobEvent(job(), {
       type: "status",
       jobId: "job-1",
-      status: "muxing",
+      status: "downloading",
       at: T1,
     });
-    expect(next.status).toBe("muxing");
+    expect(next.status).toBe("downloading");
   });
 
   test("the result still lands when the status frame announced it first", () => {
@@ -129,7 +129,6 @@ describe("applyJobEvent", () => {
     const final = applyJobEvents(job(), [
       { type: "status", jobId: "job-1", status: "downloading", at: T1 },
       { type: "progress", jobId: "job-1", progress: progress({ stage: "downloading" }), at: T1 },
-      { type: "status", jobId: "job-1", status: "muxing", at: T2 },
       { type: "status", jobId: "job-1", status: "completed", at: T3 },
     ]);
     expect(final.status).toBe("completed");
@@ -274,15 +273,15 @@ describe("markWatched", () => {
 
 describe("reconcileJob", () => {
   test("prefers the server copy", () => {
-    const local = job({ status: "downloading", updatedAt: T1 });
-    const remote = job({ status: "muxing", updatedAt: T2 });
-    expect(reconcileJob(local, remote).status).toBe("muxing");
+    const local = job({ status: "probing", updatedAt: T1 });
+    const remote = job({ status: "downloading", updatedAt: T2 });
+    expect(reconcileJob(local, remote).status).toBe("downloading");
   });
 
   test("keeps a strictly newer local copy", () => {
-    const local = job({ status: "muxing", updatedAt: T3 });
-    const remote = job({ status: "downloading", updatedAt: T1 });
-    expect(reconcileJob(local, remote).status).toBe("muxing");
+    const local = job({ status: "downloading", updatedAt: T3 });
+    const remote = job({ status: "probing", updatedAt: T1 });
+    expect(reconcileJob(local, remote).status).toBe("downloading");
   });
 
   test("neither outcome can discard the mark, because the mark is not a job field", () => {

@@ -1,0 +1,70 @@
+# CLAUDE.md — ledger
+
+Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
+and are not repeated here.
+
+**This tool is a scaffold.** What exists is the seams — contract, API, web
+shell, image — and no domain at all. `docs/02-ROADMAP.md` is what is decided and
+what comes next; `npm run status -- --tool ledger` is what is open. Treat
+anything below marked _planned_ as design until a ticket says otherwise.
+
+## What this is
+
+A household ledger replacing a spreadsheet: the joint Desjardins account two
+people share, split into buckets, with who owes what computed rather than kept
+by hand. Both people use it, mostly from a phone.
+
+## Layout
+
+```
+contract     types, error taxonomy, zod schemas — no logic
+api          Fastify, persistence, HTTP — the only place that reads process.env
+web          React + Vite UI, mobile-first
+e2e          Playwright specs — none yet; e2e/README.md says what earns the first
+```
+
+_Planned_, each arriving with the ticket that first needs it rather than as an
+empty package now: **`books`**, pure — the statement-paste parser, the
+running-balance chain check, the split arithmetic and the classification rules,
+with no model, no network and no clock; and **`receipts`**, the one package
+that talks to a model, reading a receipt photo. The name is `books` because
+`ledger` is the tool.
+
+## Commands
+
+```bash
+npm run dev:ledger          # API (8100) + web (5193) together, both in watch mode
+npm run dev:ledger:api      # just the API
+npm run dev:ledger:web      # just the UI
+npm test -- --project ledger
+npm run e2e:ledger          # "No tests found" until the first spec
+```
+
+The ports are 8100/5193 so every tool runs at once without reconfiguring any;
+the e2e suite takes 8108. `.github/workflows/ledger.yml` builds the image, starts
+it, and asks it for both `/api/health` and the page.
+
+## Rules
+
+**Real bank data never enters the repository.** Not in a fixture, not in a
+test, not in a ticket's log, not in a commit message. Fixtures are synthetic —
+invented descriptions, invented amounts — shaped like the real thing. The one
+exception is none: a failing real row is reproduced by writing a synthetic row
+that fails the same way.
+
+**Identity comes from Cloudflare Access.** Two people, two addresses, one Access
+policy (`docs/02-DEPLOYMENT.md`, step 2). The tool has no login of its own and
+must not grow one; who did something is the Access identity on the request.
+
+**Never log a request's headers.** Behind Access every request carries a signed
+identity token in a header and a cookie, and `logger.ts` censors both as a
+backstop — not as permission.
+
+**`/api/health` never says where the data is.** It reports whether the database
+is open, never its path. The contract's `HealthResponse` has no field for it, and
+`api/test/health.test.ts` holds the route to that with a real file.
+
+**Ledger error codes live in `contract/src/errors.ts`**, in
+`LEDGER_ERROR_CODES`, which is empty today on purpose. A code arrives with the
+ticket that first throws it, with its status in `api/src/http-errors.ts` in the
+same change.

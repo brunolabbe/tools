@@ -52,8 +52,8 @@ services:
       # header with the real client address, so this is the one hop worth
       # trusting — and naming it by CIDR is what stops anything else being.
       #
-      # This is `compose.prod.yaml`'s `edge` subnet, named a second time — see
-      # the `networks.edge.ipam` comment there, which counts all three.
+      # This is `compose.prod.yaml`'s `edge` subnet, named again — see the
+      # `networks.edge.ipam` comment there, which names every copy.
       TRUST_PROXY: "172.30.42.0/24"
 
       # The human check on probe and job creation (dl-50), from the host's

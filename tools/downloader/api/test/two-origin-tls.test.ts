@@ -40,12 +40,14 @@
  * certificates, because a trust store is replaced rather than added to.
  */
 
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import tls from "node:tls";
 import { createEngine, resolveFfmpegPath } from "@downloader/engine";
-import type { DownloadRequest } from "@downloader/engine";
+import type { DownloadEngine, StreamRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -169,19 +171,34 @@ async function startTunnellingProxy(): Promise<EgressProxy> {
   return proxy;
 }
 
+interface Received {
+  path: string;
+  sizeBytes: number;
+}
+
+/**
+ * Reads a stream into a file of the test's own, as a visitor's browser would
+ * since dl-53 — the engine writes nothing.
+ */
+async function receive(engine: DownloadEngine, request: StreamRequest): Promise<Received> {
+  const media = await engine.stream(request);
+  const target = path.join(storageDir, `${request.jobId}.mp4`);
+  await pipeline(media.body, createWriteStream(target));
+  const { bytes } = await media.done;
+  return { path: target, sizeBytes: bytes };
+}
+
 /** The production engine, verifying, trusting exactly the bundle it is given. */
 async function startEngine(
   proxyUrl: string,
   caFile: string,
-): Promise<ReturnType<typeof createEngine>> {
+): Promise<{ download(request: StreamRequest): Promise<Received> }> {
   const engine = createEngine({
-    storageDir,
     maxFileSizeBytes: 256 * 1024 * 1024,
     proxyUrl,
     tlsCaFile: caFile,
   });
-  await engine.init();
-  return engine;
+  return { download: async (request) => await receive(engine, request) };
 }
 
 /**
@@ -214,7 +231,7 @@ async function wiredApp(
   return app;
 }
 
-function downloadRequest(jobId: string): DownloadRequest {
+function downloadRequest(jobId: string): StreamRequest {
   return {
     jobId,
     variant: {
@@ -398,7 +415,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
 
       const beforeManifest = manifestOrigin.requests.length;
       const beforeSegments = segmentOrigin.requests.length;
-      const failure = await app.context.engine.download(downloadRequest("wired-untrusted")).then(
+      const failure = await receive(app.context.engine, downloadRequest("wired-untrusted")).then(
         () => null,
         (error: unknown) => AppError.from(error),
       );
@@ -439,7 +456,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
 
       const beforeManifest = manifestOrigin.requests.length;
       const beforeSegments = segmentOrigin.requests.length;
-      const outcome = await app.context.engine.download(downloadRequest("wired-tunnelled"));
+      const outcome = await receive(app.context.engine, downloadRequest("wired-tunnelled"));
 
       // dl-21's hole, exactly: the whole video off an origin nobody checked.
       expect(outcome.sizeBytes).toBeGreaterThan(10_000);

@@ -9,66 +9,20 @@
  */
 
 import { createRequire } from "node:module";
-import path from "node:path";
 import { AppError } from "@downloader/contract";
 import type { Logger } from "./logger.ts";
 import { NOOP_LOGGER } from "./logger.ts";
 
-/** A `fetch`-shaped function. Injectable so callers can supply a proxy dispatcher. */
-export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
-/** Wall-clock seam so retry/GC/rate logic is testable without real time. */
-export interface Clock {
-  now(): number;
-  sleep(ms: number, signal?: AbortSignal): Promise<void>;
-}
-
-export const SYSTEM_CLOCK: Clock = {
-  now: () => Date.now(),
-  sleep: (ms, signal) =>
-    new Promise((resolve, reject) => {
-      if (signal?.aborted === true) {
-        reject(new AppError("JOB_CANCELED"));
-        return;
-      }
-      const timer = setTimeout(() => {
-        signal?.removeEventListener("abort", onAbort);
-        resolve();
-      }, ms);
-      function onAbort(): void {
-        clearTimeout(timer);
-        reject(new AppError("JOB_CANCELED"));
-      }
-      signal?.addEventListener("abort", onAbort, { once: true });
-    }),
-};
-
 export interface EngineConfig {
-  /** Root of `tmp/` and `out/`. Every output path is verified to resolve inside it. */
-  storageDir: string;
   /** Absolute path to the ffmpeg binary. */
   ffmpegPath: string;
-  /** Per-job output cap. Checked from bitrate x duration *before* downloading. */
-  maxFileSizeBytes: number;
   /**
-   * Global cap on everything under `storageDir`, `tmp/` included. Zero disables
-   * it. Distinct from the free-space check in `estimate.ts`: that one protects
-   * the volume, this one protects everything *else* sharing the volume.
+   * Per-job output cap. Checked from bitrate x duration before the stream
+   * starts, and on the bytes themselves while it runs (dl-53).
    */
-  maxTotalStorageBytes: number;
-  /** How long finished artifacts survive the retention sweep. */
-  fileRetentionHours: number;
-  /** How long a `tmp/<jobId>` directory may sit untouched before it counts as orphaned. */
-  tmpRetentionHours: number;
+  maxFileSizeBytes: number;
   /** Hard wall-clock ceiling on a single ffmpeg invocation. */
   stageTimeoutMs: number;
-  /** Concurrent segment fetches on the manual (non-ffmpeg) download path. */
-  segmentConcurrency: number;
-  /** Retry budget for a single HTTP request, including the first attempt. */
-  maxAttempts: number;
-  /** First backoff delay; doubles each attempt up to `maxBackoffMs`. */
-  baseBackoffMs: number;
-  maxBackoffMs: number;
   /**
    * Applies to downloading as well as probing — signed URLs are frequently
    * IP-bound, so a mismatched egress between the two produces 403s that look
@@ -95,13 +49,6 @@ export interface EngineConfig {
    * supplies this explicitly on the path where it can differ.
    */
   tlsCaFile: string | undefined;
-  /**
-   * Node's global `fetch` has no proxy support. When `proxyUrl` is set the
-   * caller must supply a dispatcher-aware fetch here; the engine warns and
-   * proceeds unproxied otherwise rather than silently ignoring the setting.
-   */
-  fetchImpl: FetchLike;
-  clock: Clock;
   logger: Logger;
 }
 
@@ -151,24 +98,9 @@ function boolean(raw: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
-/** Separate from `positiveNumber` because zero is a meaningful value: "no cap". */
-function nonNegativeNumber(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) return fallback;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : fallback;
-}
-
 export const ENGINE_DEFAULTS = {
-  storageDir: "./storage",
   maxFileSizeMb: 4096,
-  maxTotalStorageGb: 50,
-  fileRetentionHours: 6,
-  tmpRetentionHours: 6,
   stageTimeoutMs: 3_600_000,
-  segmentConcurrency: 6,
-  maxAttempts: 5,
-  baseBackoffMs: 500,
-  maxBackoffMs: 30_000,
 } as const;
 
 /** Builds a config from explicit overrides, falling back to env, then defaults. */
@@ -176,40 +108,18 @@ export function loadEngineConfig(
   input: EngineConfigInput = {},
   env: NodeJS.ProcessEnv = process.env,
 ): EngineConfig {
-  const storageDir = path.resolve(
-    input.storageDir ?? env["STORAGE_DIR"] ?? ENGINE_DEFAULTS.storageDir,
-  );
   const maxFileSizeBytes =
     input.maxFileSizeBytes ??
     positiveNumber(env["MAX_FILE_SIZE_MB"], ENGINE_DEFAULTS.maxFileSizeMb) * 1024 * 1024;
 
   return {
-    storageDir,
     ffmpegPath: input.ffmpegPath ?? resolveFfmpegPath(env["FFMPEG_PATH"]),
     maxFileSizeBytes,
-    maxTotalStorageBytes:
-      input.maxTotalStorageBytes ??
-      nonNegativeNumber(env["MAX_TOTAL_STORAGE_GB"], ENGINE_DEFAULTS.maxTotalStorageGb) *
-        1024 *
-        1024 *
-        1024,
-    fileRetentionHours:
-      input.fileRetentionHours ??
-      positiveNumber(env["FILE_RETENTION_HOURS"], ENGINE_DEFAULTS.fileRetentionHours),
-    tmpRetentionHours:
-      input.tmpRetentionHours ??
-      positiveNumber(env["FILE_RETENTION_HOURS"], ENGINE_DEFAULTS.tmpRetentionHours),
     stageTimeoutMs:
       input.stageTimeoutMs ?? positiveNumber(env["JOB_TIMEOUT_MS"], ENGINE_DEFAULTS.stageTimeoutMs),
-    segmentConcurrency: input.segmentConcurrency ?? ENGINE_DEFAULTS.segmentConcurrency,
-    maxAttempts: input.maxAttempts ?? ENGINE_DEFAULTS.maxAttempts,
-    baseBackoffMs: input.baseBackoffMs ?? ENGINE_DEFAULTS.baseBackoffMs,
-    maxBackoffMs: input.maxBackoffMs ?? ENGINE_DEFAULTS.maxBackoffMs,
     proxyUrl: input.proxyUrl ?? env["PROXY_URL"] ?? undefined,
     tlsVerify: input.tlsVerify ?? !boolean(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
     tlsCaFile: input.tlsCaFile ?? env["EGRESS_CA_FILE"] ?? env["FFMPEG_CA_FILE"] ?? undefined,
-    fetchImpl: input.fetchImpl ?? globalThis.fetch,
-    clock: input.clock ?? SYSTEM_CLOCK,
     logger: input.logger ?? NOOP_LOGGER,
   };
 }
