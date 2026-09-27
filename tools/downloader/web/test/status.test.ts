@@ -97,7 +97,7 @@ test("only probing is inferred about, whatever the attempts counter says", () =>
   // card, because the current step outranks the mark and the list is rendered
   // only for an active job; both are wrong answers from a helper whose whole job
   // is to say where a job has been.
-  for (const status of ["queued", "downloading", "muxing", "completed"] as const) {
+  for (const status of ["queued", "downloading", "completed"] as const) {
     expect(reachedStep(job(status, { attempts: 2 }))).toBe(statusIndex(status));
   }
 });
@@ -115,10 +115,10 @@ test("a watched step is a floor under the job, never a promotion of it", () => {
 test("a terminal job ignores the mark, whatever this client watched", () => {
   // The trap the test above names, reached the new way: `STATUS_ORDER` has no
   // step for `failed` or `canceled`, so a client that watched the job get as far
-  // as `muxing` and then fail must not be handed a trail of done steps for it.
+  // as `downloading` and then fail must not be handed a trail of done steps.
   for (const status of ["failed", "canceled"] as const) {
     const terminal = job(status, { attempts: 2 });
     expect(reachedStep(terminal)).toBeNull();
-    expect(statusHighWaterMark(terminal, statusIndex("muxing"))).toBe(statusIndex(status));
+    expect(statusHighWaterMark(terminal, statusIndex("downloading"))).toBe(statusIndex(status));
   }
 });

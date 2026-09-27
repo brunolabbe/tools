@@ -19,11 +19,13 @@
  */
 
 import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createEngine, resolveFfmpegPath } from "@downloader/engine";
 import type { MediaVariant, ProbeResult } from "@downloader/contract";
@@ -181,27 +183,29 @@ describe("dl-42: a silent progressive file the direct tier never inspected", () 
       const probe = await probeFixture();
       const found = probe.variants[0] as MediaVariant;
 
-      const engine = createEngine({ storageDir, maxFileSizeBytes: 64 * 1024 * 1024 });
-      await engine.init();
+      const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 });
 
-      const stages: string[] = [];
-      const outcome = await engine.download({
+      const media = await engine.stream({
         jobId: "dl42-mkv",
         variant: found,
         requestContext: probe.requestContext,
         title: "silent",
-        // mkv, not mp4: the source extension must differ from the target or
-        // `alreadyInTargetContainer` skips the mux stage and proves nothing.
+        // mkv, not mp4: kept from before dl-53, when an `.mp4` source into an
+        // `mp4` target skipped the mux stage. Every stream is one ffmpeg pass
+        // now, so it is the same `-map` either way; the container stays so
+        // this still proves what it proved.
         options: { container: "mkv" },
-        onStage: (stage) => stages.push(stage),
       });
+      // Written by the test, as a visitor's browser would; the engine writes nothing.
+      const received = path.join(storageDir, "received.mkv");
+      await pipeline(media.body, createWriteStream(received));
+      const outcome = await media.done;
 
-      expect(stages).toEqual(["downloading", "muxing"]);
-      expect(outcome.container).toBe("mkv");
-      expect(outcome.sizeBytes).toBeGreaterThan(1000);
+      expect(media.container).toBe("mkv");
+      expect(outcome.bytes).toBeGreaterThan(1000);
 
       // The video survived the remux and no audio track was invented.
-      expect(await streamKinds(outcome.path)).toEqual(["video"]);
+      expect(await streamKinds(received)).toEqual(["video"]);
     },
     SLOW,
   );

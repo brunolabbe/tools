@@ -384,7 +384,6 @@ code {
 }
 
 .pill--downloading,
-.pill--muxing,
 .pill--probing {
   border-color: var(--accent);
   color: var(--accent);

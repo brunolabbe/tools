@@ -318,8 +318,9 @@ So add a **second** application, identical except:
 | Path  | `api/files/*` |
 
 with a single policy: action **Bypass**, include **Everyone**. Access matches the
-more specific path first, so the UI demands a login and finished download links
-keep working for whoever you send them to.
+more specific path first, so the UI demands a login and a download link works for
+whoever opens it — once, within fifteen minutes, since dl-53 made each link
+start its own download rather than serve a stored file.
 
 ### The planner's: no Bypass rule, ever
 
@@ -450,7 +451,7 @@ looks:
 
 - **downloader** — run one real download and watch the progress bar move. That
   exercises the parts most likely to break behind a proxy and nothing else does:
-  the SSE stream, and a ranged file transfer.
+  the SSE stream, and a file streamed through the tunnel as it is produced.
 - **planner** — drive one intake end to end in the browser. `/api/health`
   answering is not evidence the UI is served: pl-2 shipped an image whose bundle
   was never handed out, and the CI gate asked only for `/api/health`, which
@@ -476,9 +477,27 @@ takes as long as a pull. Which versions exist, and how one gets cut, are in
 [03-RELEASING.md](./03-RELEASING.md).
 
 Each tool's volume carries its state across the restart. The downloader's holds
-the job database and any file still inside its retention window, and jobs that
-were mid-download are failed honestly at boot rather than left showing a progress
-bar that will never move. The planner's holds every intake, answer and plan — the
+the job database and nothing else: every file streams to the visitor who opened
+its link as ffmpeg produces it, and no copy is written anywhere (dl-53). A
+redeploy therefore cuts every download in flight — those jobs are failed honestly
+at boot rather than left showing a progress bar that will never move — and a
+visitor starts again from their link's card. A link nobody had opened survives
+the restart and still works until its fifteen minutes are up.
+
+**Upgrading past dl-53 leaves the old files behind.** A build before it stored
+finished files under `/data/out` and working files under `/data/tmp`, and the
+sweep that deleted them went with them. The API reports them at boot —
+`stored files from before dl-53 are still on the volume` — and does not delete
+them itself, because a recursive delete keyed on a path an operator configures
+is one wrong `STORAGE_DIR` from deleting something that was never its own.
+Remove them once:
+
+```bash
+docker compose exec downloader rm -rf /data/out /data/tmp
+```
+
+`FILE_RETENTION_HOURS` and `MAX_TOTAL_STORAGE_GB` are no longer read; delete
+them from `.env` if you set them. The planner's holds every intake, answer and plan — the
 only copy of anything a user typed.
 
 ### Reading the downloader's outcome report
@@ -559,17 +578,38 @@ URL and a couple of options — `MAX_BODY_BYTES` in
 come back out and are not subject to it.
 
 **Video through the proxy is against Cloudflare's terms on any plan short of
-Enterprise.** The CDN section of the Service-Specific Terms lets Cloudflare
-disable or limit a zone that serves video, or a disproportionate share of large
-files, without a paid service (Stream, Images, or content hosted on R2). Its
-documentation applies that to Tunnel public hostnames. At personal scale nobody
-notices. If you ever do get a notice, the fix is to move the file transfer off
-the tunnel — publish the LAN address for `/api/files/*` and keep the UI where
-it is — not to argue about it. A public instance cannot use that fix, because its visitors are not on your
-LAN. `downloader.oludoi.com` streams files over the tunnel anyway, keeping no
-copy, and its owner accepted the risk in
-[dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md),
-which also describes the relay to move to if a notice arrives.
+Enterprise, and this service sends video through it — knowingly.** The CDN
+section of the Service-Specific Terms lets Cloudflare disable or limit a zone
+that serves video, or a disproportionate share of large files, without a paid
+service (Stream, Images, or content hosted on R2). Its documentation applies
+that to Tunnel public hostnames. Every download here streams from ffmpeg,
+through the tunnel, to the visitor, and nothing is kept on the host or anywhere
+else (dl-53). The owner accepted what that risks on 2026-09-14: after a notice
+("reasonable efforts"), Cloudflare may disable or limit the zone — and the
+planner shares the tunnel.
+
+**If a notice arrives, move the files off the proxy, not the service.** The
+fallback decided with the risk is a relay:
+
+- a **DNS-only** hostname for the file route, which Cloudflare's proxy never
+  carries;
+- pointing at a small VPS that forwards to this host over **WireGuard**, so the
+  home address stays private and nothing is stored on the way.
+
+As read on 2026-09-14, Hetzner starts around €5–8/month with 20 TB of outbound
+traffic included in EU regions (1 TB in US regions) and about €1/TB beyond;
+neither figure is contractual. On a LAN-only instance the simpler fix still
+works — publish the LAN address for `/api/files/*` — but a public instance
+cannot use it, because its visitors are not on your LAN. The reasoning, and the
+alternatives that were refused, are in
+[dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md).
+
+**Cloudflare answers `524` if the origin sends no response within 125 s.** A
+download's response starts only once its job has a slot and has re-probed —
+twice, when the first attempt fails in a way a fresh probe can fix — so the API
+bounds the wait for a slot so that it and two `PROBE_TIMEOUT_MS` together stay
+under 100 s, and answers `429` past it. At the 45 s default that is a 10 s wait;
+raising `PROBE_TIMEOUT_MS` shortens it. It is capped at 50 s, where there is none.
 
 ### Tightening it past one user
 
@@ -583,19 +623,19 @@ Consider tightening these once it is reachable by more than you. The defaults in
   probe because the two are used one-for-one; subscribing is what creates a
   channel, so without it one client could fill the hub and leave every other
   user's analysis silent (dl-46).
-- `RATE_LIMIT_FILES_PER_MINUTE` — per **file token**, not per client, so it does
+- `RATE_LIMIT_FILES_PER_MINUTE` — per **link token**, not per client, so it does
   not depend on `TRUST_PROXY` and one leaked link cannot buy itself more
-  allowance by being fetched from more addresses. Its default is 600 because a
-  `<video>` element pointed at a download link issues one open-ended `Range`
-  request per seek: dl-23 measured 207–274 requests a minute from an ordinary
-  scrub-bar drag. Lower it only if you know nobody plays these links in a
-  browser; 0 turns it off.
+  allowance by being fetched from more addresses. Its default of 600 was sized
+  for a `<video>` element seeking in a stored file (dl-23); since dl-53 a link is
+  opened once and answers `410` after, so it rarely matters. 0 turns it off.
 - `RATE_LIMIT_THUMBNAIL_PER_MINUTE` — per **thumbnail token**, on the same
   reasoning and with the same independence from `TRUST_PROXY`. Its default is 60
   because the client is an `<img>` rather than a player: one request per result
   panel, and the response is `private, max-age=300`.
-- `MAX_TOTAL_STORAGE_GB` and `FILE_RETENTION_HOURS` — the only things standing
-  between a shared instance and a full disk.
+- `MAX_JOBS_PER_CLIENT` and `MAX_QUEUED_JOBS` — since dl-53 they apply when a
+  link is opened, which is when a job takes a slot. Nothing fills the disk any
+  more; what a shared instance runs out of is ffmpeg processes and upload
+  bandwidth, and `MAX_FILE_SIZE_MB` caps each stream.
 
 ### On the LAN as well
 

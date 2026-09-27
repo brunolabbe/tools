@@ -19,12 +19,26 @@ beforeEach(() => {
   store = new JobStore(db);
 });
 
+let linkCounter = 0;
+
+/** A distinct link per job: `job_links.job_id` is unique, and so is the token. */
+function freshLink(expiresAt = "2026-08-06T10:15:00.000Z"): {
+  token: string;
+  url: string;
+  expiresAt: string;
+} {
+  linkCounter += 1;
+  const token = `tok-${linkCounter}`;
+  return { token, url: `/api/files/${token}`, expiresAt };
+}
+
 function create(id = "job-1"): void {
   store.create({
     id,
     sourceUrl: "https://site.example/watch",
     options: {},
     variantId: null,
+    link: freshLink(),
     createdAt: "2026-08-06T10:00:00.000Z",
   });
 }
@@ -64,7 +78,6 @@ describe("the FSM", () => {
     create();
     expect(store.transition("job-1", "probing").status).toBe("probing");
     expect(store.transition("job-1", "downloading").status).toBe("downloading");
-    expect(store.transition("job-1", "muxing").status).toBe("muxing");
     const done = store.transition("job-1", "completed");
     expect(done.status).toBe("completed");
     expect(done.finishedAt).not.toBeNull();
@@ -77,11 +90,11 @@ describe("the FSM", () => {
     expect(store.transition("job-1", "probing").status).toBe("probing");
     expect(store.transition("job-1", "downloading").status).toBe("downloading");
 
-    // The back-edge is for an expired URL mid-download. Once muxing has begun
-    // there is nothing to re-resolve, and the FSM stays forward.
-    store.transition("job-1", "muxing");
+    // The back-edge is for an expired URL before the first byte. There is no
+    // `muxing` any more (dl-53), so no state past `downloading` offers it.
+    store.transition("job-1", "completed");
     expect(codeOf(() => store.transition("job-1", "probing"))).toBe("INTERNAL");
-    expect(store.get("job-1").status).toBe("muxing");
+    expect(store.get("job-1").status).toBe("completed");
   });
 
   test("rejects a skipped state rather than tolerating it", () => {
@@ -221,11 +234,11 @@ describe("the preview path, and the migration that adds its column", () => {
 
     migrate(legacy);
 
-    // 5, not 3: dl-44 appended `thumbnail_files` and dl-57 appended
-    // `probe_outcomes` plus `jobs.host`. The number is the count of shipped
+    // 6, not 3: dl-44 appended `thumbnail_files`, dl-57 appended
+    // `probe_outcomes` plus `jobs.host`, and dl-53 the links. The number is the count of shipped
     // migrations, and it moves every time one is added — which is the point of
     // asserting it rather than asserting "greater than 2".
-    expect(legacy.pragma("user_version", { simple: true })).toBe(5);
+    expect(legacy.pragma("user_version", { simple: true })).toBe(6);
     const upgraded = new JobStore(legacy).get("legacy-1");
     expect(upgraded.status).toBe("completed");
     // Null, not absent and not invented: nothing may fabricate a token that was
@@ -240,7 +253,7 @@ describe("the preview path, and the migration that adds its column", () => {
     const legacy = legacyDatabase();
     migrate(legacy);
     expect(() => migrate(legacy)).not.toThrow();
-    expect(legacy.pragma("user_version", { simple: true })).toBe(5);
+    expect(legacy.pragma("user_version", { simple: true })).toBe(6);
     expect(new JobStore(legacy).get("legacy-1").thumbnailPath).toBeNull();
     legacy.close();
   });
@@ -284,6 +297,7 @@ describe("listing and restart recovery", () => {
         sourceUrl: "https://site.example/watch",
         options: {},
         variantId: null,
+        link: freshLink(),
         createdAt: `2026-08-06T10:0${index}:00.000Z`,
       });
     }
@@ -299,111 +313,88 @@ describe("listing and restart recovery", () => {
     store.transition("done", "probing");
     store.transition("done", "downloading");
     store.transition("done", "completed");
+    // Waiting for a click is not interrupted (dl-53): the sweep expires it.
+    create("unopened");
+    // Queued behind a link somebody opened: a request was being served.
+    create("opened");
+    const opened = store.get("opened").link?.url.split("/").at(-1) ?? "";
+    expect(store.claimLink(opened)).toBe(true);
 
-    expect(store.unfinished().map((job) => job.id)).toEqual(["running"]);
+    expect(
+      store
+        .unfinished()
+        .map((job) => job.id)
+        .toSorted(),
+    ).toEqual(["opened", "running"]);
   });
 });
 
-describe("file tokens", () => {
-  test("a token is stored against its job and read back whole", () => {
+describe("single-use links (dl-53)", () => {
+  function tokenOf(id: string): string {
+    return store.get(id).link?.url.split("/").at(-1) ?? "";
+  }
+
+  test("a job is created with its link, and the link is read back whole", () => {
     create();
-    store.saveToken({
-      token: "tok",
-      jobId: "job-1",
-      path: "/storage/out/job-1/video.mp4",
-      filename: "video.mp4",
-      sizeBytes: 27,
-      expiresAt: "2026-08-06T16:00:00.000Z",
+    const token = tokenOf("job-1");
+    expect(store.get("job-1").link).toEqual({
+      url: `/api/files/${token}`,
+      expiresAt: "2026-08-06T10:15:00.000Z",
     });
-    expect(store.findToken("tok")?.filename).toBe("video.mp4");
-    expect(store.findTokenForJob("job-1")?.token).toBe("tok");
-    expect(store.findToken("other")).toBeNull();
+    expect(store.findLink(token)).toEqual({
+      token,
+      jobId: "job-1",
+      expiresAt: "2026-08-06T10:15:00.000Z",
+      usedAt: null,
+    });
+    expect(store.findLink("other")).toBeNull();
   });
 
-  test("expiredTokens finds only what has actually lapsed", () => {
+  test("a link is claimed exactly once, and claiming it withdraws it from the job", () => {
     create();
-    store.saveToken({
-      token: "old",
-      jobId: "job-1",
-      path: "/p",
-      filename: "f",
-      sizeBytes: 1,
-      expiresAt: "2026-08-06T09:00:00.000Z",
-    });
-    expect(store.expiredTokens("2026-08-06T10:00:00.000Z").map((t) => t.token)).toEqual(["old"]);
-    expect(store.expiredTokens("2026-08-06T08:00:00.000Z")).toEqual([]);
+    const token = tokenOf("job-1");
+    expect(store.claimLink(token, "2026-08-06T10:01:00.000Z")).toBe(true);
+    expect(store.claimLink(token, "2026-08-06T10:01:00.000Z")).toBe(false);
+    expect(store.findLink(token)?.usedAt).toBe("2026-08-06T10:01:00.000Z");
+    expect(store.get("job-1").link).toBeNull();
   });
 
-  test("a swept token keeps its row so the route can still answer 410", () => {
-    // Regression: the sweep used to delete the row along with the file, which
-    // turned "this expired" into "never existed" — a 404 that reads as a typo
-    // rather than as a retention window closing.
+  test("a released link is usable again, and the job offers it again", () => {
     create();
-    const token = {
-      token: "tok",
-      jobId: "job-1",
-      path: "/p",
-      filename: "f",
-      sizeBytes: 1,
-      expiresAt: "2026-08-06T09:00:00.000Z",
-    };
-    store.saveToken(token);
-
-    expect(store.expiredTokens("2026-08-06T10:00:00.000Z")).toHaveLength(1);
-    store.markSwept("tok", "2026-08-06T10:00:00.000Z");
-
-    // Not offered to the sweep twice...
-    expect(store.expiredTokens("2026-08-06T10:00:00.000Z")).toHaveLength(0);
-    // ...but still readable, which is what makes the 410 possible.
-    expect(store.findToken("tok")).not.toBeNull();
+    const offered = store.get("job-1").link;
+    const token = tokenOf("job-1");
+    store.claimLink(token);
+    store.releaseLink(token, offered ?? { url: "", expiresAt: "" });
+    expect(store.findLink(token)?.usedAt).toBeNull();
+    expect(store.get("job-1").link).toEqual(offered);
+    expect(store.claimLink(token)).toBe(true);
   });
 
-  test("rows are pruned only long after the file went", () => {
-    create();
-    store.saveToken({
-      token: "tok",
-      jobId: "job-1",
-      path: "/p",
-      filename: "f",
-      sizeBytes: 1,
-      expiresAt: "2026-08-06T09:00:00.000Z",
-    });
-    // An hour later the row is still wanted.
-    expect(store.prunableTokens("2026-08-06T10:00:00.000Z")).toEqual(["tok"]);
-    expect(store.prunableTokens("2026-08-06T08:00:00.000Z")).toEqual([]);
+  test("expiredLinks finds only unopened links that have lapsed", () => {
+    create("lapsed");
+    create("opened");
+    store.claimLink(tokenOf("opened"));
+    expect(store.expiredLinks("2026-08-06T10:20:00.000Z").map((link) => link.jobId)).toEqual([
+      "lapsed",
+    ]);
+    expect(store.expiredLinks("2026-08-06T10:10:00.000Z")).toEqual([]);
   });
 
-  test("deleting a job takes its token with it", () => {
+  test("rows are pruned only once their grace has passed", () => {
     create();
-    store.saveToken({
-      token: "tok",
-      jobId: "job-1",
-      path: "/p",
-      filename: "f",
-      sizeBytes: 1,
-      expiresAt: "2026-08-06T16:00:00.000Z",
-    });
+    const token = tokenOf("job-1");
+    expect(store.pruneLinks("2026-08-06T10:00:00.000Z")).toBe(0);
+    expect(store.findLink(token)).not.toBeNull();
+    expect(store.pruneLinks("2026-08-06T11:00:00.000Z")).toBe(1);
+    expect(store.findLink(token)).toBeNull();
+  });
+
+  test("deleting a job takes its link with it", () => {
+    create();
+    const token = tokenOf("job-1");
     store.delete("job-1");
-    // ON DELETE CASCADE: a token outliving its job would serve a file nothing
-    // remembers owning.
-    expect(store.findToken("tok")).toBeNull();
-  });
-
-  test("deleting a job takes its persisted preview row with it", () => {
-    // The twin of the case above, for `thumbnail_files` (dl-44). The migration
-    // comment claims the cascade as fact; without this, dropping the clause is
-    // green across the whole suite — measured, not assumed.
-    create();
-    store.saveThumbnail({
-      token: "thumb-tok",
-      jobId: "job-1",
-      path: "/p/preview.png",
-      contentType: "image/png",
-    });
-    expect(store.findThumbnail("thumb-tok")).not.toBeNull();
-
-    store.delete("job-1");
-    expect(store.findThumbnail("thumb-tok")).toBeNull();
+    // ON DELETE CASCADE: a link outliving its job would start nothing.
+    expect(store.findLink(token)).toBeNull();
   });
 });
 
@@ -419,6 +410,7 @@ describe("jobs.host (dl-57)", () => {
       sourceUrl: "https://cdn.example/watch/42?sig=super-secret-token",
       options: {},
       variantId: null,
+      link: freshLink(),
       createdAt: "2026-08-06T10:00:00.000Z",
     });
     const host = store.jobHost("job-2");
@@ -438,6 +430,7 @@ describe("jobs.host (dl-57)", () => {
       sourceUrl: "http://93.184.215.14/x",
       options: {},
       variantId: null,
+      link: freshLink(),
       createdAt: "2026-08-06T10:00:00.000Z",
     });
     const host = store.jobHost("job-3");

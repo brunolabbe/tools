@@ -12,7 +12,7 @@ import type { JobResponse, ProbeEvent } from "@downloader/contract";
 import type { LightMyRequestResponse } from "fastify";
 import { describe, expect, test } from "vitest";
 import type { Harness } from "./helpers.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
+import { createHarness, probeResult, SOURCE_URL, StubResolver } from "./helpers.ts";
 import { clientKey, ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import { API_DEFAULTS, loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
@@ -435,22 +435,16 @@ describe("the routes", () => {
   });
 });
 
-/** Runs a job to completion and returns the download link it produced. */
+/** Creates a job and returns its single-use link (dl-53: issued at creation). */
 async function tokenUrl(harness: Harness): Promise<string> {
   const created = (
     await harness.app.server.inject({
       method: "POST",
       url: ROUTES.jobs,
-      payload: { url: `${SOURCE_URL}/${String(harness.engine.calls)}` },
+      payload: { url: SOURCE_URL },
     })
   ).json() as JobResponse;
-  const finished = await waitFor(
-    () => harness.app.context.store.get(created.job.id),
-    (job) => job.status === "completed" || job.status === "failed",
-    { label: "job to finish" },
-  );
-  expect(finished.status).toBe("completed");
-  return finished.result?.downloadUrl ?? "";
+  return created.job.link?.url ?? "";
 }
 
 /**
@@ -464,6 +458,10 @@ async function tokenUrl(harness: Harness): Promise<string> {
  * 40 ms of round trip in the way, and 965 during a full unbroken minute of
  * dragging the scrub bar. An unmetered caller with eight sockets managed
  * 24,132. The shipped default sits between the honest client and the hammer.
+ *
+ * Since dl-53 there is no file to seek in: a link is opened once and answers
+ * `410` after. The limit stays, keyed the same way, because a leaked token is
+ * still worth bounding; the measurements are why the default is what it is.
  */
 describe("the download route", () => {
   /** The worst *realistic* scrub minute measured for dl-23, on a 40 ms link. */
@@ -481,7 +479,7 @@ describe("the download route", () => {
 
       for (let call = 0; call < 3; call++) {
         // oxlint-disable-next-line no-await-in-loop
-        expect((await get()).statusCode, `call ${call}`).toBe(200);
+        expect((await get()).statusCode, `call ${call}`).toBe(call === 0 ? 200 : 410);
       }
 
       const refused = await get();
@@ -522,10 +520,10 @@ describe("the download route", () => {
     }
   });
 
-  test("a seeking player's measured burst passes at the shipped default", async () => {
-    // `bytes=N-` open-ended is the shape Chromium actually sends on a seek; the
-    // point of the count is that 274 of them in a row is an ordinary user, and
-    // the count the brief suggested — 120 — would have cut them off mid-scrub.
+  test("a spent link answers 410, not 429, for a visitor retrying at the shipped default", async () => {
+    // A browser that retries a failed download, or a visitor who clicks again,
+    // is told the link is spent — the answer that says "start again" — rather
+    // than being told to slow down.
     const harness = await createHarness({
       resolver: new StubResolver(probeResult()),
       config: { rateLimitFilesPerMinute: API_DEFAULTS.rateLimitFilesPerMinute },
@@ -534,14 +532,10 @@ describe("the download route", () => {
     try {
       expect(MEASURED_SCRUB_BURST).toBeLessThan(API_DEFAULTS.rateLimitFilesPerMinute);
       const url = await tokenUrl(harness);
-      for (let call = 0; call < MEASURED_SCRUB_BURST; call++) {
+      for (let call = 0; call < 20; call++) {
         // oxlint-disable-next-line no-await-in-loop
-        const response = await harness.app.server.inject({
-          method: "GET",
-          url,
-          headers: { range: `bytes=${String(call % 20)}-` },
-        });
-        expect(response.statusCode, `seek ${call}`).toBe(206);
+        const response = await harness.app.server.inject({ method: "GET", url });
+        expect(response.statusCode, `call ${call}`).toBe(call === 0 ? 200 : 410);
       }
     } finally {
       await harness.dispose();
@@ -560,7 +554,7 @@ describe("the download route", () => {
       for (let call = 0; call < 50; call++) {
         // oxlint-disable-next-line no-await-in-loop
         const response = await harness.app.server.inject({ method: "GET", url });
-        expect(response.statusCode, `call ${call}`).toBe(200);
+        expect(response.statusCode, `call ${call}`).toBe(call === 0 ? 200 : 410);
         // Nothing to advertise when there is no limit.
         expect(response.headers["ratelimit-limit"]).toBeUndefined();
       }

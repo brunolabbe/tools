@@ -5,16 +5,20 @@
  * npx tsx packages/engine/scripts/download.ts <media-url> [options]
  * ```
  *
- * Takes a manifest or media URL plus the headers a probe captured, and writes a
- * playable, seekable, fast-start file under the storage directory. This is the
- * whole engine exercised end to end without the API in front of it.
+ * Takes a manifest or media URL plus the headers a probe captured, and streams
+ * it through the engine into a local file — the engine itself writes nothing
+ * (dl-53); this script is the reader, standing where a visitor's browser
+ * stands. The whole engine exercised end to end without the API in front of it.
  *
  * Writes to stderr directly rather than through `console` — the repo bans
  * `console`, and a CLI's progress belongs on stderr anyway so stdout can carry
  * the one thing a caller might want to pipe: the resulting path.
  */
 
+import { createWriteStream } from "node:fs";
+import path from "node:path";
 import process from "node:process";
+import { pipeline } from "node:stream/promises";
 import type {
   JobProgress,
   MediaVariant,
@@ -28,8 +32,8 @@ import type { Logger } from "../src/logger.ts";
 const USAGE = `
 Usage: npx tsx packages/engine/scripts/download.ts <media-url> [options]
 
-  --out <dir>            Storage directory (default: ./storage)
-  --job <id>             Job id; names tmp/<id>/ and out/<id>/
+  --out <file>           Where to write the stream (default: ./<title>.<ext>)
+  --job <id>             Job id, for the log lines
   --title <text>         Output filename stem (default: "video")
   --protocol <p>         hls | dash | progressive | other (default: guessed)
   --container <c>        mp4 | mkv | webm (default: mp4)
@@ -171,11 +175,9 @@ async function main(): Promise<number> {
   };
 
   const engine = createEngine({
-    storageDir: first("out") ?? "./storage",
     maxFileSizeBytes: maxMb * 1024 * 1024,
     logger: makeLogger(parsed.flags.has("verbose")),
   });
-  await engine.init();
 
   const controller = new AbortController();
   const onSignal = (): void => {
@@ -189,7 +191,7 @@ async function main(): Promise<number> {
   const started = Date.now();
 
   try {
-    const outcome = await engine.download({
+    const media = await engine.stream({
       jobId: first("job") ?? `cli-${Date.now().toString(36)}`,
       variant,
       requestContext: buildRequestContext(parsed),
@@ -206,9 +208,6 @@ async function main(): Promise<number> {
           : { liveDurationSec: durationSec }),
       },
       signal: controller.signal,
-      onStage: (stage) => {
-        process.stderr.write(`\n-> ${stage}\n`);
-      },
       onProgress: (progress) => {
         const line = renderProgress(progress);
         if (line === lastLine) return;
@@ -217,13 +216,17 @@ async function main(): Promise<number> {
       },
     });
 
+    const target = path.resolve(first("out") ?? media.filename);
+    await pipeline(media.body, createWriteStream(target));
+    const outcome = await media.done;
+
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
     process.stderr.write(
-      `\n\ndone in ${elapsed}s — ${(outcome.sizeBytes / 1024 / 1024).toFixed(1)} MB, ` +
+      `\n\ndone in ${elapsed}s — ${(outcome.bytes / 1024 / 1024).toFixed(1)} MB, ` +
         `${outcome.durationSec === null ? "unknown" : outcome.durationSec.toFixed(1)}s of media\n`,
     );
     // stdout carries the path and nothing else, so it can be piped.
-    process.stdout.write(`${outcome.path}\n`);
+    process.stdout.write(`${target}\n`);
     return 0;
   } catch (error: unknown) {
     const appError = AppError.from(error);

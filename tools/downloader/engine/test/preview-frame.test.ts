@@ -9,7 +9,7 @@
  *
  * The bound is the part the tests are most about. A stream that trickles its
  * bytes defeats every stall timeout ffmpeg has, so the only thing standing
- * between a slow origin and a probe that never answers is `runFfmpeg`'s timer
+ * between a slow origin and a probe that never answers is `streamFfmpeg`'s timer
  * and its process-tree kill. "Leaves no process behind" is asserted by finding
  * the ffmpeg process by a marker in its argv while it runs, and not finding it
  * afterwards — the positive half is what keeps the negative half from passing
@@ -49,6 +49,7 @@ const CONTEXT: RequestContext = {
 
 let fixtureDir: string;
 let tmpRoot: string;
+let savedTmpdir: string | undefined;
 let server: FixtureServer;
 /** Paths whose response is trickled a byte at a time, for the timeout tests. */
 const trickled = new Set<string>();
@@ -77,6 +78,10 @@ function generate(args: string[], cwd?: string): Promise<void> {
 beforeAll(async () => {
   fixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), "engine-preview-fixture-"));
   tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "engine-preview-tmp-"));
+  // The process's temp directory, private to this file, so "nothing was
+  // written" is a listing that cannot be disturbed by a sibling suite (dl-53).
+  savedTmpdir = process.env["TMPDIR"];
+  process.env["TMPDIR"] = tmpRoot;
   await generate([
     "-hide_banner",
     "-nostdin",
@@ -154,6 +159,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (savedTmpdir === undefined) delete process.env["TMPDIR"];
+  else process.env["TMPDIR"] = savedTmpdir;
   await server?.close();
   await fs.rm(fixtureDir, { recursive: true, force: true });
   await fs.rm(tmpRoot, { recursive: true, force: true });
@@ -185,8 +192,9 @@ async function processesWith(marker: string): Promise<number[]> {
   return found;
 }
 
+/** Anything at all in the temp directory. Since dl-53 the frame arrives on stdout. */
 async function tmpLeftovers(): Promise<string[]> {
-  return (await fs.readdir(tmpRoot)).filter((name) => name.startsWith("preview-"));
+  return fs.readdir(tmpRoot);
 }
 
 describe("grabPreviewFrame against a generated HLS stream", () => {
@@ -200,7 +208,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       requestContext: CONTEXT,
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
-      tmpRoot,
       timeoutMs,
       maxOutputBytes: 512 * 1024,
       logger: silent,
@@ -227,7 +234,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       requestContext: CONTEXT,
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
-      tmpRoot,
       timeoutMs: 15_000,
       maxOutputBytes: 512 * 1024,
     });
@@ -249,7 +255,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       protocol: "hls",
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
-      tmpRoot,
       timeoutMs: 15_000,
       maxOutputBytes: 512 * 1024,
       logger,
@@ -269,7 +274,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
       requestContext: CONTEXT,
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
-      tmpRoot,
       timeoutMs: 15_000,
       // A frame of this fixture is kilobytes; a hundred bytes cannot hold one.
       maxOutputBytes: 100,
@@ -299,7 +303,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
           requestContext: CONTEXT,
           durationSec: CLIP_SECONDS,
           ffmpegPath: FFMPEG,
-          tmpRoot,
           timeoutMs,
           maxOutputBytes: 512 * 1024,
           logger,
@@ -337,7 +340,6 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
         protocol: "hls",
         requestContext: CONTEXT,
         ffmpegPath: FFMPEG,
-        tmpRoot,
         timeoutMs: 15_000,
         maxOutputBytes: 512 * 1024,
         signal: controller.signal,
@@ -348,13 +350,12 @@ describe("grabPreviewFrame against a generated HLS stream", () => {
 });
 
 describe("what the grab asks ffmpeg for", () => {
-  const destPath = "/storage/tmp/preview-x/frame.jpg";
-
-  test("one video frame, no other streams, as MJPEG to a file rather than stdout", () => {
-    const args = buildPreviewFrameArgs(
-      { url: "https://cdn.example/v.m3u8", protocol: "hls", durationSec: 120 },
-      destPath,
-    );
+  test("one video frame, no other streams, as MJPEG on stdout rather than to a file", () => {
+    const args = buildPreviewFrameArgs({
+      url: "https://cdn.example/v.m3u8",
+      protocol: "hls",
+      durationSec: 120,
+    });
     const input = args.indexOf("-i");
     expect(args[input + 1]).toBe("https://cdn.example/v.m3u8");
     // Exactly one input: a variant's `audioUrl` is never opened for a frame.
@@ -364,17 +365,19 @@ describe("what the grab asks ffmpeg for", () => {
     expect(after[after.indexOf("-map") + 1]).toBe("0:v:0");
     expect(after[after.indexOf("-frames:v") + 1]).toBe("1");
     expect(after[after.indexOf("-f") + 1]).toBe("mjpeg");
-    expect(args.at(-1)).toBe(destPath);
-    // `pipe:1` is progress, which is what enforces the byte cap mid-run.
-    expect(args[args.indexOf("-progress") + 1]).toBe("pipe:1");
+    expect(args.at(-1)).toBe("pipe:1");
+    // Progress on its own descriptor, since stdout carries the frame (dl-53).
+    expect(args[args.indexOf("-progress") + 1]).toBe("pipe:3");
   });
 
   test("the seek is output-side, a tenth in, capped, and absent without a duration", () => {
+    // oxlint-disable-next-line consistent-function-scoping -- read beside its assertions
     const seekOf = (durationSec: number | null): string[] => {
-      const args = buildPreviewFrameArgs(
-        { url: "https://cdn.example/v.m3u8", protocol: "hls", durationSec },
-        destPath,
-      );
+      const args = buildPreviewFrameArgs({
+        url: "https://cdn.example/v.m3u8",
+        protocol: "hls",
+        durationSec,
+      });
       const at = args.indexOf("-ss");
       if (at === -1) return [];
       // After the input, where it decodes forward instead of reopening segments.
@@ -389,23 +392,21 @@ describe("what the grab asks ffmpeg for", () => {
   });
 
   test("TLS verification stays on for an https input, with the CA file it was given", () => {
-    const args = buildPreviewFrameArgs(
-      {
-        url: "https://cdn.example/v.m3u8",
-        protocol: "hls",
-        tlsCaFile: "/run/egress-ca.pem",
-      },
-      destPath,
-    );
+    const args = buildPreviewFrameArgs({
+      url: "https://cdn.example/v.m3u8",
+      protocol: "hls",
+      tlsCaFile: "/run/egress-ca.pem",
+    });
     expect(args[args.indexOf("-tls_verify") + 1]).toBe("1");
     expect(args[args.indexOf("-ca_file") + 1]).toBe("/run/egress-ca.pem");
   });
 
   test("the context's headers are input options, ahead of the input", () => {
-    const args = buildPreviewFrameArgs(
-      { url: "https://cdn.example/v.m3u8", protocol: "hls", requestContext: CONTEXT },
-      destPath,
-    );
+    const args = buildPreviewFrameArgs({
+      url: "https://cdn.example/v.m3u8",
+      protocol: "hls",
+      requestContext: CONTEXT,
+    });
     const headers = args.indexOf("-headers");
     expect(headers).toBeGreaterThan(-1);
     expect(headers).toBeLessThan(args.indexOf("-i"));
@@ -548,7 +549,6 @@ describe("grabPreviewFrame against a generated split-DASH stream", () => {
       requestContext: CONTEXT,
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
-      tmpRoot,
       timeoutMs: 15_000,
       maxOutputBytes: 512 * 1024,
       logger,

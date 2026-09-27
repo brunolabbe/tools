@@ -123,6 +123,51 @@ export const MIGRATIONS: readonly string[] = [
 
   ALTER TABLE jobs ADD COLUMN host TEXT;
   `,
+
+  // 6 — single-use links instead of stored files (dl-53).
+  //
+  // A job no longer ends in a file on disk: its link starts the work and the
+  // file streams to whoever opened it. `job_links` is the capability — one per
+  // job, opaque, unguessable, and spent by `used_at` — and `jobs.link_json` is
+  // the snapshot a client reads back, cleared once the link is opened or
+  // expires. The row outlives both so a second `GET` can answer `410` rather
+  // than `404`, for the reason migration 2 kept `file_tokens` rows.
+  //
+  // `file_tokens` and `thumbnail_files` addressed files this build never writes
+  // and never serves, so they go. `muxing` is no longer a state; a row caught in
+  // it by the upgrade was a download the restart had already killed, and it is
+  // failed the way `reconcileInterruptedJobs` fails one — reading it back
+  // unchanged would not parse, and would stop the service at boot. The same
+  // goes for its progress snapshot's `stage`, on any row.
+  `
+  UPDATE jobs
+     SET status = 'failed',
+         error_json = '{"code":"INTERNAL","message":"The server restarted while this download was running.","retryable":true}',
+         finished_at = COALESCE(finished_at, updated_at)
+   WHERE status = 'muxing';
+
+  -- The progress snapshot names a stage too, and the job schema checks it against
+  -- the same list. Any row still saying muxing there takes its own status.
+  UPDATE jobs
+     SET progress_json = json_set(progress_json, '$.stage', status)
+   WHERE json_extract(progress_json, '$.stage') = 'muxing';
+
+  DROP TABLE thumbnail_files;
+  DROP TABLE file_tokens;
+
+  CREATE TABLE job_links (
+    token      TEXT PRIMARY KEY,
+    job_id     TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE UNIQUE INDEX job_links_job ON job_links (job_id);
+  CREATE INDEX job_links_expires_at ON job_links (expires_at);
+
+  ALTER TABLE jobs ADD COLUMN link_json TEXT;
+  `,
 ];
 
 export function migrate(db: Database): void {

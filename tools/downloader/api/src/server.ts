@@ -7,6 +7,8 @@
  * ports, timeouts or teardown races.
  */
 
+import { mkdir, stat } from "node:fs/promises";
+import path from "node:path";
 import Database from "better-sqlite3";
 import { createEngine } from "@downloader/engine";
 import type { DownloadEngine } from "@downloader/engine";
@@ -27,6 +29,7 @@ import type { HumanCheck } from "./human-check.ts";
 import { readOperatorCa, withSystemRoots } from "./operator-ca.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
+import { cancelError, LINK_ROW_GRACE_MS, recordCanceled } from "./jobs/links.ts";
 import { JobOrchestrator } from "./jobs/orchestrator.ts";
 import { ProbeCache } from "./jobs/probe-cache.ts";
 import { ProbeStageHub } from "./probe-stages.ts";
@@ -51,7 +54,6 @@ import { createFrameGrabber, limitFrameGrabs, ThumbnailStore } from "./thumbnail
 import type { FrameGrabber } from "./thumbnails.ts";
 import { createTlsInterception } from "./tls-interception.ts";
 import { TlsRejectionLog } from "./tls-rejections.ts";
-import { ROUTES } from "@downloader/contract";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
@@ -59,7 +61,7 @@ export interface CreateAppOptions {
   engine?: DownloadEngine;
   logger?: AppLogger;
   now?: () => Date;
-  /** Skips the retention timer. Tests do not want a background sweep running. */
+  /** Skips the sweep timer. Tests do not want a background sweep running. */
   startGc?: boolean;
   /**
    * Injected in tests. Overrides the ffmpeg frame grab built from
@@ -381,15 +383,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const engine =
     options.engine ??
     createEngine({
-      storageDir: config.storageDir,
       maxFileSizeBytes: config.maxFileSizeBytes,
-      maxTotalStorageBytes: config.maxTotalStorageBytes,
-      fileRetentionHours: config.fileRetentionHours,
       stageTimeoutMs: config.stageTimeoutMs,
       logger,
-      // Every direct fetch the engine makes — progressive downloads, segments,
-      // subtitles — goes through the redirect-checking guard.
-      fetchImpl: guardedFetch,
+      // Every fetch the engine makes is ffmpeg's since dl-53 — progressive
+      // files and subtitle tracks included — so every one goes out through the
+      // guarded proxy below, which checks each connection it is asked for.
       ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
       tlsVerify: !config.ffmpegAllowUnverifiedTls,
       // **Both halves come from `ffmpegEgress` and neither is read from
@@ -400,7 +399,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
       proxyUrl: ffmpegEgress.proxyUrl,
     });
-  await engine.init();
 
   // dl-56. **The same `ffmpegEgress` pair the engine was handed above**, for
   // the same reason: a grab opens every segment and key the manifest names,
@@ -418,13 +416,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         proxyUrl: ffmpegEgress.proxyUrl,
         ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
         tlsVerify: !config.ffmpegAllowUnverifiedTls,
-        tmpRoot: engine.storage.tmpRoot,
         logger,
       }),
     frameGrabGate,
     logger,
   );
 
+  // The engine used to create `STORAGE_DIR` for its working files, and the
+  // database rode along. Nothing else writes there since dl-53, so the
+  // database's directory is made here or a fresh volume cannot boot.
+  if (config.databasePath !== ":memory:") {
+    await mkdir(path.dirname(config.databasePath), { recursive: true });
+  }
   const db = new Database(config.databasePath);
   migrate(db);
   const store = new JobStore(db);
@@ -474,12 +477,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     events,
     logger,
     probeTimeoutMs: config.probeTimeoutMs,
-    fileRetentionHours: config.fileRetentionHours,
     // Not `config.proxyUrl`, for the same reason the engine does not get it:
     // the browser and yt-dlp tiers fetch from their own subprocesses, so the
     // only check that can reach them is the one at this proxy. See dl-12.
     proxyUrl: tierProxy.url,
-    fileUrl: (token) => ROUTES.file(token),
     // The re-probe is where a job's own preview comes from, and the only place
     // the source's credentials are in hand to fetch it with. See `thumbnails.ts`.
     thumbnails,
@@ -571,9 +572,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerNotFoundHandler(server, servingWeb);
 
   reconcileInterruptedJobs(context);
+  await warnAboutStoredFiles(config.storageDir, logger);
 
-  const gcTimer =
-    options.startGc === false ? null : startRetentionSweep(context, config.gcIntervalMs);
+  const gcTimer = options.startGc === false ? null : startSweep(context, config.gcIntervalMs);
 
   await server.ready();
 
@@ -731,46 +732,63 @@ function reconcileInterruptedJobs(context: AppContext): void {
 }
 
 /**
- * How long a token row outlives the file it addressed.
+ * Files a build before dl-53 stored, and this one will never serve or delete.
  *
- * The file goes at `expiresAt`; the row stays a further 30 days so the route
- * can answer `410 Gone` — "this existed and is now deleted" — instead of a 404
- * that reads as "you mistyped the link". After that the row is pruned, because
- * an unbounded table is a worse problem than a slightly less precise error on
- * a month-old link.
+ * Their sweep went with them, so they would otherwise sit on the volume for
+ * good. **Reported, not removed**: a recursive delete at boot, keyed on a
+ * directory name under a path an operator configures, is one misconfigured
+ * `STORAGE_DIR` away from deleting something that was never ours. The
+ * deployment doc tells the operator what to remove.
  */
-export const TOKEN_ROW_GRACE_MS = 30 * 24 * 3_600_000;
+async function warnAboutStoredFiles(storageDir: string, logger: AppLogger): Promise<void> {
+  const leftovers: string[] = [];
+  for (const name of ["out", "tmp"]) {
+    // oxlint-disable-next-line no-await-in-loop
+    const found = await stat(path.join(storageDir, name)).then(
+      (entry) => entry.isDirectory(),
+      () => false,
+    );
+    if (found) leftovers.push(name);
+  }
+  if (leftovers.length === 0) return;
+  logger.warn("stored files from before dl-53 are still on the volume; nothing will remove them", {
+    storageDir,
+    directories: leftovers,
+    hint: "Delete them: this build streams every file and keeps none. See docs/02-DEPLOYMENT.md.",
+  });
+}
 
 /**
- * One pass of the retention sweep: expired output dirs, orphaned tmp dirs, and
- * stale token rows.
+ * One pass of the sweep: links that expired unopened, and rows old enough to
+ * go (dl-53).
  *
- * Exported so a test can run exactly one pass against a clock it controls,
- * rather than standing up the timer and waiting `gcIntervalMs` for it. Swallows
- * its own failures for the same reason it always did — a sweep that throws on
- * one bad directory must not stop the next tick.
+ * An expired link's job is `canceled`, reason `link-expired` — the visitor
+ * never started it, which is not a failure of the tool. Its row stays for
+ * `LINK_ROW_GRACE_MS` so a late `GET` still answers `410`.
+ *
+ * Exported so a test can run exactly one pass against a clock it controls.
+ * Swallows its own failures: a pass that throws must not stop the next one.
  */
-export async function runRetentionSweep(context: AppContext): Promise<void> {
+export function runSweep(context: AppContext): void {
   try {
     const nowMs = context.now().getTime();
     const nowIso = context.now().toISOString();
 
-    // Delete the file, keep the row: see TOKEN_ROW_GRACE_MS.
-    for (const token of context.store.expiredTokens(nowIso)) {
-      await context.engine.removeJob(token.jobId);
-      context.store.markSwept(token.token, nowIso);
-      // `removeJob` took the whole `out/<jobId>/` directory, so the preview
-      // image went with the file it depicts. Its row is dropped rather than
-      // kept the way a file token's is: there is no better answer to preserve —
-      // a missing preview renders as no preview either way (dl-44).
-      context.store.removeThumbnailsForJob(token.jobId);
+    let linksExpired = 0;
+    for (const link of context.store.expiredLinks(nowIso)) {
+      const job = context.store.find(link.jobId);
+      if (job === null || job.status !== "queued") continue;
+      recordCanceled(
+        context.store,
+        context.events,
+        job.id,
+        cancelError("link-expired").toPayload(),
+        nowIso,
+      );
+      linksExpired += 1;
     }
 
-    for (const token of context.store.prunableTokens(
-      new Date(nowMs - TOKEN_ROW_GRACE_MS).toISOString(),
-    )) {
-      context.store.deleteToken(token);
-    }
+    const linksPruned = context.store.pruneLinks(new Date(nowMs - LINK_ROW_GRACE_MS).toISOString());
 
     // `probe_outcomes` carries no address and no path, so this bound is about
     // table size, not privacy (dl-57). 0 keeps every row, the same convention
@@ -782,15 +800,16 @@ export async function runRetentionSweep(context: AppContext): Promise<void> {
             new Date(nowMs - context.config.outcomeRetentionDays * 24 * 3_600_000).toISOString(),
           );
 
-    const report = await context.engine.collectGarbage(nowMs);
-    context.logger.debug("retention sweep complete", { ...report, outcomesPruned });
+    context.logger.debug("sweep complete", { linksExpired, linksPruned, outcomesPruned });
   } catch (error: unknown) {
-    context.logger.warn("retention sweep failed", { error: String(error) });
+    context.logger.warn("sweep failed", { error: String(error) });
   }
 }
 
-function startRetentionSweep(context: AppContext, intervalMs: number): NodeJS.Timeout {
-  const timer = setInterval(() => void runRetentionSweep(context), intervalMs);
+function startSweep(context: AppContext, intervalMs: number): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    runSweep(context);
+  }, intervalMs);
   // The sweep must never be the reason the process stays alive.
   timer.unref?.();
   return timer;

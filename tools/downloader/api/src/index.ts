@@ -2,7 +2,7 @@
  * `@downloader/api` — the join point.
  *
  * Registry in (`@downloader/resolvers`), engine out (`@downloader/engine`),
- * jobs and SSE and files in between. This module exports the pieces so the
+ * jobs, SSE and the streamed file in between. This module exports the pieces so the
  * tests, and eventually dl-7's e2e harness, can assemble them without a socket.
  *
  * ```ts
@@ -15,7 +15,7 @@
 export type { ApiConfig, LogLevel } from "./config.ts";
 export { API_DEFAULTS, loadApiConfig, LOG_LEVELS, PROBE_CACHE_TTL_CEILING_MS } from "./config.ts";
 export type { AppContext } from "./context.ts";
-export type { CreateJobInput, FileToken, TransitionPatch } from "./db/job-store.ts";
+export type { CreateJobInput, JobLinkRecord, TransitionPatch } from "./db/job-store.ts";
 export { initialProgress, JobStore } from "./db/job-store.ts";
 export { migrate } from "./db/schema.ts";
 export type {
@@ -46,7 +46,16 @@ export { createRateLimitHook } from "./rate-limit.ts";
 export type { BuildRegistryOptions, RegistryBuild } from "./resolvers.ts";
 export { buildRegistry } from "./resolvers.ts";
 export { formatSseFrame, HEARTBEAT_INTERVAL_MS } from "./routes/events.ts";
-export { contentDisposition, parseRange } from "./routes/files.ts";
+export { contentDisposition } from "./routes/files.ts";
+export type { CancelReason } from "./jobs/links.ts";
+export {
+  cancelError,
+  createJobLink,
+  LINK_ROW_GRACE_MS,
+  LINK_TTL_MS,
+  maxLinkWaitMs,
+  TUNNEL_BUDGET_MS,
+} from "./jobs/links.ts";
 export type { HealthResponse } from "./routes/health.ts";
 export type { App, CreateAppOptions } from "./server.ts";
 export { createApp } from "./server.ts";

@@ -143,7 +143,8 @@ ENV NODE_ENV=production
 # 127.0.0.1 — the default — is unreachable from outside a container.
 ENV HOST=0.0.0.0
 ENV PORT=8080
-# A volume, so downloads and the job database survive a redeploy.
+# A volume, so the job database survives a redeploy. It is the only thing
+# written there: files stream to the visitor and none is kept (dl-53).
 ENV STORAGE_DIR=/data
 ENV DATABASE_PATH=/data/jobs.db
 # Same-origin UI: no CORS to configure, and EventSource just works.

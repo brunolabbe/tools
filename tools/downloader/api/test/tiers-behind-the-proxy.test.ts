@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
-import { createHarness, probeResult, StubResolver, waitFor } from "./helpers.ts";
+import { createHarness, openLink, probeResult, StubResolver, waitFor } from "./helpers.ts";
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
@@ -219,6 +219,8 @@ describe("what the API hands the tiers", () => {
         payload: { url: "https://site.example/watch/42" },
       });
       expect(response.statusCode).toBe(201);
+      // Since dl-53 opening the link is what starts the job.
+      openLink(harness, (response.json() as { job: { link?: { url: string } | null } }).job);
 
       // The job re-probes on its own thread of control, and that re-probe is the
       // only thing that resolves here — the intake route does not.

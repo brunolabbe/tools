@@ -12,9 +12,8 @@
  *
  * ## Why this reads stderr
  *
- * On the engine's own fetch paths the taxonomy already separates the two:
- * `UNREACHABLE` is a transport failure and `VARIANT_GONE` is 403/404/410 — see
- * `http.ts`. The manifest path does not have that luxury. ffmpeg is the one
+ * Since dl-53 every path is ffmpeg's — the engine's own fetches, which
+ * classified by status, went with the stored files. ffmpeg is the one
  * fetching, so every non-zero exit arrives as `DOWNLOAD_FAILED` whatever
  * happened, and the text is the only signal. That is the same bind
  * `isTlsVerificationFailure` is in, for the same reason, and this sits beside it
@@ -54,9 +53,9 @@
  * download while another host is serving the same bytes.
  *
  * **What makes it safe enough to be a decision rather than a defect**, checked
- * rather than assumed: every attempt is a fresh `runFfmpeg` with the same
- * `tlsVerify` and `tlsCaFile` on each input, built by `tlsOptions` in
- * `manifest.ts` from the engine config — so a mirror's certificate is verified
+ * rather than assumed: every attempt is a fresh ffmpeg with the same
+ * `tlsVerify` and `tlsCaFile` on each input, built by `buildStreamArgs` in
+ * `stream.ts` from the engine config — so a mirror's certificate is verified
  * on its own terms and a second bad certificate raises the same code again. The
  * failover **cannot** downgrade verification; the worst case is that a bad
  * certificate on host A is not reported when host B is healthy. And it cannot
@@ -110,7 +109,7 @@ export function isHostFailure(error: unknown): boolean {
   if (HOST_FAILURE_CODES.has(error.code)) return true;
   if (error.code !== "DOWNLOAD_FAILED") return false;
 
-  // The engine's own fetches classify by status; 5xx is the host failing to
+  // A caller that classified by status says so; 5xx is the host failing to
   // serve what it has, which the next host may well have.
   const status = error.details?.["status"];
   if (typeof status === "number") return status >= 500;

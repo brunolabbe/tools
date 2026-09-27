@@ -398,8 +398,7 @@ test("a restored job driven over the back-edge by frames keeps Downloading marke
     ["Queued", "done"],
     ["Re-analysing", "done"],
     ["Downloading", "active"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
 
   act(() => {
@@ -412,8 +411,7 @@ test("a restored job driven over the back-edge by frames keeps Downloading marke
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "done"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
   // **This test does not prove the frames did it, and an earlier draft of this
   // comment claimed it did.** `restore` reconciles before it attaches, so the one
@@ -462,8 +460,7 @@ test("a job started in this tab, never refetched, gets its mark from the frames 
     ["Queued", "active"],
     ["Re-analysing", "pending"],
     ["Downloading", "pending"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
 
   act(() => {
@@ -475,8 +472,7 @@ test("a job started in this tab, never refetched, gets its mark from the frames 
     ["Queued", "done"],
     ["Re-analysing", "done"],
     ["Downloading", "active"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
 
   act(() => {
@@ -487,8 +483,7 @@ test("a job started in this tab, never refetched, gets its mark from the frames 
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "done"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
   // Still nothing refetched, so `attempts` has been `1` on every copy of this
   // job the client has ever held. The mark can only have come from the fold.
@@ -527,8 +522,7 @@ test("a reconnect that slept through the download stage keeps the refetch's word
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "pending"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
 
   // Drop the connection and let the backoff bring it back, which is what makes
@@ -562,8 +556,7 @@ test("a reconnect that slept through the download stage keeps the refetch's word
     ["Queued", "done"],
     ["Re-analysing", "active"],
     ["Downloading", "done"],
-    ["Assembling", "pending"],
-    ["Ready", "pending"],
+    ["Downloaded", "pending"],
   ]);
 });
 
@@ -773,7 +766,7 @@ test("a cancel the server refused for a job that has since finished shows how it
 
   expect(screen.queryByText("Something went wrong")).toBeNull();
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-  expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Downloaded").length).toBeGreaterThan(0);
 });
 
 test("a cancel the server accepted before the job stopped keeps following it to canceled", async () => {
