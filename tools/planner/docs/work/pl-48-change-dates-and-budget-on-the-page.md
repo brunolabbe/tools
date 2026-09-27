@@ -3,7 +3,7 @@ id: pl-48
 tool: planner
 title: Change a plan's dates or budget from the plan page, and prove it through a browser
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-45, pl-46, pl-47]
 difficulty: standard
@@ -472,3 +472,78 @@ gets stuck (gate 2)")`).
   literal fixture and expected text became identical once the fix landed,
   so the citation now anchors on the test's own title over the full range
   instead) and pl-53 (1, pinned).
+
+**2026-09-27 — landed (gate 3, PASS at `f1bde60..4cb75e3`).** A Haiku fixer's
+attempt at this landing pushed nothing and left records that fail the
+citations gate; ignored entirely, per instruction. This round started fresh
+from the pushed `4cb75e3`, confirmed with `git fetch` and `git status` (clean,
+matching `origin/pl-48-edit-dates-budget`).
+
+**The lander-edited `## Review` was withdrawn and re-landed from the
+reviewer's own re-resolved text**, in four commits: the withdrawal, then
+gates 1, 2 and 3 spliced with `scripts/review-record.mjs` and each checked
+byte for byte against the reviewer's file with `cmp` before committing —
+`records.md:63` and `:148` are why: rounds 2 and 3 had pinned two of the
+reviewer's own citations to branch-only shas (`ac00b8d`, `f1bde60`), which
+fail once this branch is squash-merged and deleted, and in doing so edited
+text that was not a lander's to edit. The reviewer's re-resolved gates 1 and
+2 carry the same two facts as **prose** instead (naming the sha in words,
+never as a citation), which is why `4 unchecked` shows up in every citations
+run over this ticket from here on — counted, not failing, per
+`citations.mjs`'s own accounting.
+
+**The Log's own two branch pins, added by this same lander in the same two
+rounds, had the identical defect** and are fixed the same way: the first
+(the pre-existing `Day {…}:` prefix, real before this ticket) is now pinned
+to `c87153d` — `origin/main`'s own commit, and its line there is 192, not
+199 or `ac00b8d`'s line either, since the code above it grew between then and
+now. The second (pl-53's Log sentence) names its sha in prose rather than as
+a pin, because pl-53's file does not exist on `origin/main` at any commit —
+there is no ancestor-of-`main` sha a pin into it could ever point at.
+
+**Gate 3's two new lows, fixed in the landing, no fourth gate — the owner's
+decision, matching the reviewer's own recommendation:**
+
+- The remount behind "Leave the budget as it was" had no test that could see
+  it fail: every prior case started from an unanswered budget, where an empty
+  field already equals the seed. A new test seeds an answered 1500 CAD
+  amount, clears it, resets, and asserts the field reads `1500` again, not
+  empty. Reproduced red first — deleting `key={budgetResetKey}` failed it
+  with `''` where `'1500'` was expected — then restored.
+- Pressing that button unmounted the element holding focus with nothing
+  telling the browser where to go next, dropping it to `document.body` — a
+  keyboard user's lost place in the form. A `ref` on the div wrapping
+  `BudgetEntry`, focused in `resetBudget`, takes it back. A new test asserts
+  `document.activeElement` is that div, not the body; reproduced red first by
+  removing the `.focus()` call, which left the active element `BODY`.
+
+Both tests are appended at the end of `plan-view.test.tsx`, in their own
+`describe`, so no existing citation's line moved on their account; the
+`PlanView.tsx` change itself (the import, the ref, the wrapping `div`) did
+move seven of gate 1/2/3's own citations, each repointed by coordinate only —
+no anchor text and no word touched, per this round's own instruction.
+
+**Verification at the final head**, each figure from the command beside it:
+
+- `npx vitest run tools/planner/web/test/plan-view.test.tsx`: 65 tests, all
+  passing (63 prior + 2 new), and each new test's stated mutation reddens it
+  and only it, restored after.
+- `npx vitest run --project planner`: 75 files, 1,293 tests, all passing.
+- `npm run check`: exit 0.
+- `npx playwright test -c tools/planner/playwright.config.ts`: 5 of 5.
+- `node scripts/citations-gate.mjs --against origin/main`: exit 0.
+- `node scripts/citations.mjs <this ticket> --section Review
+--require-anchors --require-distinct-anchors`: exit 0, 0 unanchored (4
+  unchecked: gate 1's own Done-when row and its day-doubling low each carry
+  one prose line reference, and gate 2's stuck-budget med and pl-53 low each
+  carry the other one).
+- Every `@<sha>` in `git diff origin/main...HEAD` (`c87153d`, `d224afc`, the
+  latter pre-existing from pl-46's own merged record) passes
+  `git merge-base --is-ancestor <sha> origin/main`.
+- `node scripts/preflight.mjs --base origin/main --title "feat(planner):
+change a plan's dates or budget from the plan page (pl-48)"`: exit 0.
+- `git diff --stat 4cb75e3 HEAD`: touches only `PlanView.tsx`,
+  `plan-view.test.tsx` and this ticket.
+
+Ship authority for this round was conditional on all of the above holding.
+They did; pushed and opened the pull request.
