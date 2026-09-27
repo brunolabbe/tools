@@ -552,6 +552,56 @@ Its real limitation is disclosed in its own comment, not hidden: the stderr text
 
 Fixtures reused from earlier rounds (`gate-b/midfail-fixture`, `gate-b/round2-fixtures/dash8`, `.../prog9`), all still present and unmodified. The corrupted-segment file (`/tmp/gateb/seg002-corrupt.ts`, a byte-flipped copy) and every cut-body script are kept in scratch, not committed. Every mutation this round was reverted before this section was written; `git status --short` is empty in the reviewed worktree.
 
+### Gate 7
+
+**Round 4, angle B.** Head `c509fdf79f0bffa45880c6e7bff0d081f4af0c69`, checked out detached; farmed and built after the checkout. Reviewed `git diff f96ad15..c509fdf` excluding the six record commits (`bfaa28d`, `cca580c`, `220d415`, `ef24355`, `993e3e7`, `ebfb0f9`, `b98103b`). Only `tools/downloader/engine/src/stream.ts` (+47) and `tools/downloader/engine/test/stream.test.ts` (+111, five new cases) changed on my angle; nothing else in this round's diff touches it.
+
+Positive control before anything: `npx vitest run tools/downloader/engine/test/stream.test.ts` at head — **26/26** (up from 21 by the five new cases). `npx vitest run --project downloader` — **1523 passed, 2 skipped, of 1525** (up from 1518/1520 by exactly 5).
+
+#### The carried high — checked case by case
+
+**Red without the rule, green with it.** Mutated `tools/downloader/engine/src/stream.ts:626 "if (endedEarly.size > 0) {"` to `if (false && endedEarly.size > 0) {` — all three new "fails the stream" cases went red: `tools/downloader/engine/test/stream.test.ts:879 "an HLS segment whose body is cut short fails the stream"`, `:891 "a DASH fragment whose body is cut short fails the stream"`, and `:948 "an early end is matched to a reconnect by its own connection, however the lines interleave"` (its second, "one left unanswered" half — its first half, both ends healed, was already resolving). With the same mutation still in place, all four controls stayed green: `tools/downloader/engine/test/stream.test.ts:793 "control: a progressive body cut once and resumed on reconnect completes whole"`, `tools/downloader/engine/test/stream.test.ts:808 "control: an HLS segment refused once and served on the retry completes whole"`, `:903 "control: a segment delivered whole but with corrupt bytes completes"`, `:922 "control: a separate audio rendition cut once and resumed on reconnect completes whole"` — confirming they are genuinely unaffected by this mechanism, not passing by coincidence. Reverted; 26/26 again, `git status --short` clean.
+
+**With my own fixtures, through the real `engine.stream()`, not the shipped helpers.** Reused my HLS (`gate-b/midfail-fixture`) and DASH (`gate-b/round2-fixtures/dash8`) fixtures and my round-3 corrupted segment, cutting each at 40% and serving nothing further:
+
+- HLS cut-body: rejected, `code: DOWNLOAD_FAILED`, 103,864 bytes reached the reader first.
+- DASH cut-body: rejected, `code: DOWNLOAD_FAILED`, 185,160 bytes reached the reader — matching the exact figure the gate-6 round's own measurement cited.
+- The byte-flipped, fully-delivered segment (no transfer loss): resolved cleanly, 111,907 bytes — not failed.
+- A fresh separate-audio DASH pair I generated myself (`video-only.mp4` + `audio-only.m4a`, distinct from the shipped `pair5` fixture), with the audio body cut at 40% on its first fetch and healed on a second: resolved cleanly, 132,538 bytes, 2 requests for the audio URL — not failed.
+
+All four match the shipped suite's outcomes exactly, on fixtures the shipped suite never touches.
+
+#### Can two inputs share an `http @` address?
+
+**Yes, measured directly — HLS reuses a small pool of addresses across different segments of the same stream.** A fresh 15-segment HLS fixture, streamed at `-loglevel debug`, opened only 5 distinct `[http @ 0x...]` addresses across 16 requests (manifest plus 15 segments); the same address opened `seg002.ts`, was freed, and was later reused to open `seg004.ts` — a genuinely different, unrelated fetch. DASH showed a narrower instance of the same thing: the video-init and audio-init segments shared one address, though each stream's data chunks then kept one stable address of their own for the rest of the run. Progressive kept exactly one address for its whole transfer (all `Range` re-requests share it), and my own separate-audio DASH pair showed no overlap between the video and audio addresses in the one run I captured.
+
+**I could not turn the HLS reuse into a wrong answer, and I looked for one specifically.** The risk would be: segment N ends early (its address added to `endedEarly`), a later, unrelated segment reuses that same address and logs a reconnect, and the reconnect's `WILL_RECONNECT.delete()` wrongly clears segment N's real, unhealed loss. That requires the _reused_ address to log `Will reconnect` on the later fetch — and every cut-body reproduction I ran for HLS and DASH, across four rounds now, never produced a `Will reconnect` line at all; only progressive's own transfer does, and progressive never frees its one address to begin with. So the two conditions the risk needs — reuse, and a reconnect landing on the reused address — never occurred together in anything I could construct. I read this as reassuring, not as closed: I did not find a fixture shape that forces an HLS segment's failure down the same reconnect path progressive uses, and I would not claim one cannot exist, only that I did not find it in the time I had.
+
+#### `DEMUX_READ_FAILED`: is it still earning its place?
+
+**Reproduced the builder's claim directly.** Removed `DEMUX_READ_FAILED.test(line)` from `tools/downloader/engine/src/stream.ts:198 "return SEGMENT_SKIPPED.test(line) || FRAGMENT_LOST.test(line)"` and re-ran the whole engine suite plus the two TLS integration files: `tools/downloader/engine/test/stream.test.ts` 26/26, the full `engine` project, and `api/test/two-origin-tls.test.ts` / `api/test/proxied-https.test.ts` — **166 of 166, nothing red.** The claim holds: nothing here depends on `DEMUX_READ_FAILED` today.
+
+**Tried to construct a case only it catches, using the coordinator's own hint.** A chunked, no-`Content-Length` progressive body, cut mid-transfer, with every reconnect attempt refused outright:
+
+- Against a `moov`-at-the-end fixture, this fails at _open_ (exit 183, 0 bytes) — before the first byte, a different path entirely, and not a case either pattern is in a position to catch.
+- Against a fast-start fixture (so ffmpeg can start reading immediately, no seek needed), the first failure logs `Will reconnect ... error=End of file` with **no preceding `Stream ends prematurely`** — briefly the exact shape asked for. But it does not stay that way: once ffmpeg has read enough to know a lower bound on the length, every subsequent retry failure logs `Stream ends prematurely at N, should be 18446744073709551615` (the unknown-length sentinel) before its own `Will reconnect`, and the **last** attempt — the one with no further reconnect — is one of these, followed by `Error during demuxing`/`Error retrieving a packet from demuxer`. `STREAM_ENDED_EARLY` still fires, because that last `Stream ends prematurely` is never cleared.
+
+I did not find a shape where `DEMUX_READ_FAILED`'s two lines appear at ffmpeg's exit without a `Stream ends prematurely` also pending at that same moment. That is one negative result, on the one hint given, not an exhaustive search of ffmpeg's own error vocabulary.
+
+**Restated as options:**
+
+- **(a)** — keep it, as a guard against a shape nothing here has produced. Costs nothing to keep (no test depends on its absence being detected, and it does not fire wrongly on anything I ran), and the builder's own framing is honest that it is undemonstrated rather than proven necessary.
+- **(b)** — remove it. Every case in the suite and everything I constructed independently is already caught by `STREAM_ENDED_EARLY`; removing it is measured to fail nothing.
+- **My recommendation is (a), on a narrower ground than "keep everything": not because I found a case it alone catches, but because I did not search exhaustively enough to call the overlap total, and the cost of keeping a redundant-so-far regex is a comment and a few bytes, while the cost of removing it and being wrong is a silent regression on whatever shape neither of us tried. If the owner wants the stronger form of (b) — removed because provably unnecessary rather than merely unexercised — that would need someone to either enumerate ffmpeg's demuxer-read-error vocabulary directly or accept the absence of a counterexample after a wider search than either of us has done.**
+
+#### New findings, in lines this round touched
+
+None. Every case and control I checked — by mutation against the shipped suite, and independently against my own fixtures through the real `engine.stream()` — matched what the builder claimed. The address-reuse measurement above is new information, not a defect: I looked for a way to turn it into a wrong answer and did not find one.
+
+#### Verdict
+
+**PASS.** Nothing in this round's diff, on my angle, misleads a reader or lets a defect through, as far as I could measure it. The two open items are named as open, not resolved by me: whether the address-reuse risk is truly closed for every fixture shape (I found none that breaks it, but did not exhaust the search), and the `DEMUX_READ_FAILED` decision above, which is the owner's to make between (a) and (b).
+
 ## Log
 
 - 2026-09-13 — Filed as `needs-decision`. Cloudflare's current terms had not
