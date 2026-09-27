@@ -4259,3 +4259,74 @@ landed on `SKILL.md` steps 6 and 9.
   `repo-60`'s fixer rewriting a line — the mechanical check did its job even
   though the model behind it did not.
 
+
+## Session 2026-09-27 — base 1a8321c
+
+**Written from the orchestrating session's own account and accounting table (`node scripts/agent-cost.mjs`, rates read 2026-09-26), formatted by a maintenance dispatch. Not gated, by the owner's instruction. The owner first chose a proposals-only close-out and then asked for this row after the merges.** Each field says whether it was measured by the orchestrator or relayed from an agent's report.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **9** taken from `ready` to a gated branch, all merged: `repo-72` → #302 (`d9a0de5`), `repo-71` → #303 (`2b42378`), `repo-67` → #304 (`80dfe6b`), `repo-63` → #306 (`6de494b`), `repo-48` → #307 (`15da799`), and `repo-73`, `repo-74`, `repo-75`, `repo-76` → #308 (`0d455af`). Also merged: #305, an owner-directed change with no ticket (`3e0f9f9`), and #309, which filed `repo-78` to `repo-81` (`aa338df`). `repo-77` was filed in #308 and is still `ready`. **Measured** (`gh pr view --json mergeCommit`) |
+| `agents` / `dispatches` | **22** agents (1 seam-mapper, 8 builders of which 2 were Haiku maintenance, 6 reviewer instances, 7 fixers) / **30** dispatches and wakes (22 dispatches plus 8 `SendMessage` wakes). **Measured** |
+| `builder rounds` | `repo-72` 1, `repo-71` 1, `repo-67` 1, `repo-63` 1, `repo-48` 2 (the owner's decision plus the gate's findings), `repo-73..76` 3. **1 was the orchestrator's fault**: `repo-73..76`'s third round existed because the orchestrator priced an extension of the `shell: false` check at "preflight's three calls", misreading the builder's earlier cost line. Measured, it was 11 files, which became `repo-77`. **Measured** |
+| `gates` | **8** gate rounds across 6 reviewer instances: `repo-72` 1, `repo-63` 1, `repo-71` 1, `repo-67` 1 plus a narrow post-PR check, `repo-48` 2, `repo-73..76` 1. **5** returned findings (repo-63 gate 1, repo-48 gates 1 and 2, repo-67 gate 1, repo-73..76 gate 1, the last one informational). **Measured** from the gate reports |
+| `wrong findings` | **1, not committed as wrong.** repo-48 gate 1's finding that "only calls the GitHub API" was a paraphrase in quotation marks. The builder showed the phrase is verbatim from GitHub's `use-other-tools-with-stacked-pull-requests` docs page; the gate had searched only the README, and conceded on re-fetch. The attribution was fixed. **Measured** from the re-gate |
+| `subagent tokens` | **2,691,019**, summed from each agent's last-observed `subagent_tokens`. **Relayed** from the task notifications |
+| `cost` | **$80.71** over 6h03m active, 3 cold wakes, from `node scripts/agent-cost.mjs`, rates read 2026-09-26. The orchestrator's $11.61 is a floor. **Measured** |
+
+### Per agent
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5 / high | seam-mapper | intake, 11 tickets | 2m29s / 2m29s | 0 | 89,890 | $0.43 |
+| #302 | merged | Opus 5.5 / high | builder-hard | repo-72 build | 7m03s / 7m03s | 0 | 70,778 | $1.48 |
+| #302 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-72 gate 1, PASS | 16m38s / 16m37s | 0 | 134,750 | $3.06 |
+| #302 | merged | Sonnet 5 / high | fixer | repo-72 landing | 2m27s / 2m27s | 0 | 43,546 | $0.37 |
+| #303 | merged | Opus 5.5 / high | builder-hard | repo-71 build | 12m05s / 12m05s | 0 | 121,084 | $3.02 |
+| #303 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-71 gate 1, CONCERNS (Windows unproven) | 21m26s / 21m26s | 0 | 207,731 | $4.73 |
+| #303 | merged | Sonnet 5 / high | fixer | repo-71 landed `in-flight`, then flipped to `done` after 3 clean Windows runs | 6m13s / 2h16m39s | 1 | 78,611 | $1.31 |
+| #304 | merged | Opus 5.5 / high | builder-hard | repo-67 build, plus the `records.md` path fold-in | 16m50s / 16m49s | 0 | 216,116 | $6.48 |
+| #304 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-67 gate 1 PASS, plus a narrow post-PR check | 23m27s / 1h39m55s | 1 | 198,301 | $5.59 |
+| #304 | merged | Sonnet 5 / high | fixer | repo-67 landing, the low fix, the `preflight.mjs` line 410 pin | 4m20s / 1h04m13s | 0 | 57,271 | $0.67 |
+| #305 | merged | Haiku 4.5 / unrecorded | builder-mechanical | `.env` deny removal (maintenance, not gated) | 2m24s / 2m24s | 0 | 38,238 | $0.18 |
+| #305 | merged | Sonnet 5 / high | fixer | `SKILL.md` repoint after CI went red | 1m32s / 1m32s | 0 | 31,816 | $0.22 |
+| #306 | merged | Sonnet 5 / high | builder-standard | repo-63 build | 9m08s / 9m08s | 0 | 79,768 | $1.23 |
+| #306 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-63 gate 1, PASS | 9m41s / 9m37s | 0 | 102,467 | $2.43 |
+| #306 | merged | Sonnet 5 / high | fixer | repo-63 landing: stopped on preflight, then the repo-60 pin | 6m26s / 43m56s | 0 | 72,065 | $0.91 |
+| #307 | merged | Opus 5.5 / high | builder-hard | repo-48 evaluation, then the decision round | 18m19s / 1h17m31s | 0 | 186,915 | $8.02 |
+| #307 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-48 gate 1, then a re-gate, both PASS | 34m18s / 1h49m39s | 1 | 305,481 | $11.14 |
+| #307 | merged | Sonnet 5 / high | fixer | repo-48 landing, plus the `concurrency.md` line 318 pin | 5m35s / 5m35s | 0 | 76,035 | $1.06 |
+| #308 | merged | Opus 5.5 / high | builder-hard | repo-73 to repo-76 in 3 rounds, plus filing repo-77 | 33m14s / 1h06m47s | 0 | 244,210 | $9.62 |
+| #308 | merged | Sonnet 5 / xhigh | ticket-reviewer-sonnet | repo-73 to repo-76 gate 1, PASS on all four | 25m52s / 25m50s | 0 | 217,414 | $5.69 |
+| #308 | merged | Sonnet 5 / high | fixer | repo-73 to repo-76 landing | 10m18s / 9m16s | 0 | 72,015 | $1.22 |
+| #309 | merged | Haiku 4.5 / unrecorded | builder-mechanical | filed repo-78 to repo-81 (maintenance, not gated) | 2m40s / 2m40s | 0 | 46,517 | $0.22 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h30m59s / 3h30m28s | 0 | — | $11.61 (floor) |
+
+The three cold wakes each came more than an hour after the agent's previous turn: repo-48's re-gate, repo-67's narrow check, and repo-71's `done` flip, which waited on three sequential Windows CI runs.
+
+**what the skill got wrong**
+
+1. **A gate record's coordinates drift when another open PR edits the cited line.** Four repairs were needed after gating, and each one turned the coordinate into a pin at the base: repo-60's merged record, broken by repo-63's own landing splice (#306); repo-67's `preflight.mjs` line 410, whose text #308 rewrote in place (#304); repo-48's `concurrency.md` line 318, moved by its own later round (#307); `SKILL.md`'s citation of `CLAUDE.md`'s "## Handing back", moved by #305 → `repo-78`.
+2. **Preflight does not run every CI step.** #305 passed preflight twice, then failed CI's `check` on `ci.yml`'s `citations.mjs … SKILL.md --require-anchors` step → `repo-79`.
+3. **Preflight's check 5 tests for merge conflicts but not for citations on the merged result.** Three citation breaks this batch were each found only by a hand-built scratch merge of the open heads → `repo-79`.
+4. **Landing is a hand-repeated sequence** (splice, set status, commit, push, `--verify`, preflight). It took 7 fixer dispatches and 6 orchestrator dry runs. `SKILL.md` step 9 writes `--verify <ticket>`, but only the ticket path works. A fixer has no way to wait on a preflight backgrounded past 120 s → `repo-80`, plus `repo-81` for the path.
+5. **Four of the five intake tickets had no `difficulty`**, so all four defaulted to Opus; repo-72, about 20 lines, cost $1.48 → `repo-81`.
+6. **"New tests go at the end of a suite" lived only in the orchestrator's memory.** Three builders hit it (repo-63, repo-71, repo-72). When two open PRs append to the same suite, a new test file is the way out → `repo-81`.
+7. **`roles/builder.md` never mentions `needs-decision`**, and the orchestrator told a builder `ready` for filings that held a decision. The builder correctly used `needs-decision` → `repo-81`.
+8. **`reference/dispatching.md`'s "curl it once before you dispatch" is silent on the firewall's state.** The orchestrator relayed six hosts as reachable while the firewall was open (`curl https://example.com` → 200), which said nothing about the allowlist → `repo-81`.
+9. **`gh run view <run> --job <id> --log` returned the wrong attempt's log** for a multi-attempt run: byte-identical output for a failing job and a passing one. `--attempt N --log` is correct → `repo-81`.
+10. **A landing's own splice can break another ticket's merged record, and no page said whose repoint it is.** repo-63's fixer stopped rather than edit repo-60's record, and the orchestrator ruled pin-to-base → `repo-81`, with `repo-78` as the structural fix.
+11. **`roles/builder.md` named `records.md` bare in three places**, where the file is `reference/records.md`. repo-72's builder followed it to a missing path → fixed in #304 as a fold-in to repo-67, in `roles/*.md`.
+12. **A re-gate's instructions assumed a committed gate 1**, where under per-round rules an uncommitted gate 1 gets folded rather than stacked → fixed by #304 (`repo-67`: every re-gate re-issues the whole set, and only the last set lands).
+13. **The orchestrator constructed a cost without measuring it** (item 3 of `builder rounds`, above). This is the relaying-table row "An option or cost you construct yourself" recurring → no page change; recorded here only, since the owner scoped this close-out to the row.
+14. **The orchestrator read `exit=$?` after a `$(git rev-parse …)` substitution as `git merge`'s exit code.** The scratch-merge result looked green on the wrong command, and a re-run with `git merge-base --is-ancestor` confirmed it → no page change; this is the memory note "exit codes through pipes lie" recurring in another form.
+15. **A stray bare `gh api` in a compound command** hit the deny rule, and the whole command was refused. The deny rule did its job, and the orchestrator re-ran without it → recorded only.
+16. **After the merges, `main`'s unit tests had not run on push.** The eight PRs merged in quick succession, and each `push` CI run was cancelled by the next merge, including the run at `0d455af`, the last code merge (#308). The tip's run at `aa338df` (#309, all Markdown) skipped the test matrix. It read `success` at run level, with `test` `skipped` in its jobs. This is the failure `SKILL.md`'s _After a merge_ records for 2026-09-07, recurring. The orchestrator re-ran run 36354181526 at `0d455af` → no page change; the existing rule caught it because its job-level read was followed.
+
+**what went right**
+
+- repo-48's builder refuted half of a gate finding with a primary source, and the gate conceded on re-fetch, not on trust.
+- repo-63's fixer stopped on a preflight failure in another ticket's record instead of editing it, and gave options.
+- repo-73..76's builder built a scratch merge of the open heads unprompted and found two cross-PR citation breaks that neither `citations-gate --against origin/main` nor preflight could see.
+- The fixer that flipped repo-71 to `done` re-read the three Windows CI results itself instead of trusting the orchestrator's relay.
+- The final scratch merge of all seven heads (127 enforced, 0 failing) let the owner merge in any order, and they did.
