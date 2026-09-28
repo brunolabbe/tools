@@ -448,9 +448,22 @@ export function extractCheckJobCommands(yamlText) {
  * alias to the name it stands for, so both now compare equal to `"npm ci"`
  * and are never spawned, the same as the plain spelling.
  *
+ * **`NPM_ALIASES` used to know only one of npm's own four (repo-79 gate 3's
+ * new low, closed by repo-82).** `npm ci --help` lists `aliases: clean-install,
+ * ic, install-clean, isntall-clean` — measured directly, this file's docblock
+ * is not the source of truth for npm's own alias table — and the other three
+ * matched no guard at all, so `npm ic`, `npm install-clean` and `npm
+ * isntall-clean` in the check job would each have spawned a real install the
+ * same way `npm clean-install` once did. All four now rewrite to `"ci"`.
+ *
  * @type {{guard: (raw: string) => boolean, exact: string}[]}
  */
-const NPM_ALIASES = /** @type {const} */ ({ "clean-install": "ci" });
+const NPM_ALIASES = /** @type {const} */ ({
+  "clean-install": "ci",
+  ic: "ci",
+  "install-clean": "ci",
+  "isntall-clean": "ci",
+});
 
 /**
  * @param {string} raw
@@ -1186,10 +1199,11 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
   // `otherHeads` was empty, before `base` was even resolved — so a base that
   // moved a line this branch's own record cites passed silently whenever
   // this branch was the only open pull request, which is not a rare shape,
-  // it is every solo ticket. `otherHeads` is only ever `[null]` here, one
-  // sentinel entry standing for "fold base alone, no other head at all";
-  // every other branch below already treats a head as optional context on
-  // top of the same base fold.
+  // it is every solo ticket. `targets`, below, is only ever `[null]` here
+  // (repo-79 gate 3's low, closed by repo-82: this comment named `otherHeads`,
+  // which stays empty in exactly this branch) — one sentinel entry standing
+  // for "fold base alone, no other head at all"; every other branch below
+  // already treats a head as optional context on top of the same base fold.
   if (otherHeads.length === 0 && baseIsAncestor) {
     return {
       ok: true,

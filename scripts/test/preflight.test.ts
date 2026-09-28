@@ -1838,3 +1838,28 @@ test("deriveExtraCiCommands throws on each of the five newly caught shapes, thro
     /wholly quoted/,
   );
 });
+
+// --- repo-82, repo-79 gate 3's low: NPM_ALIASES knew one of npm's own four ---
+
+/**
+ * `npm ci --help` lists `aliases: clean-install, ic, install-clean,
+ * isntall-clean` — measured directly, 2026-09-28 — and `NPM_ALIASES` knew
+ * only the first. Each of the other three, run through `deriveExtraCiCommands`
+ * exactly as `npm  ci` and `npm clean-install` already are above, used to
+ * match no guard at all and fall through to `assertSpawnable`/`tokenize`,
+ * spawning a real install under a name this file had never heard of.
+ */
+test("deriveExtraCiCommands treats npm ic, npm install-clean and npm isntall-clean as covered, never spawning them", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ic",
+    "      - run: npm install-clean",
+    "      - run: npm isntall-clean",
+    "      - run: npm run check",
+    "",
+  ].join("\n");
+  expect(deriveExtraCiCommands(yaml)).toEqual([]);
+});

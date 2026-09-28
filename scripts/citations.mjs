@@ -255,6 +255,33 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 /**
+ * A record's own lines, with a trailing `\r` stripped from each — the one
+ * normalisation every line-anchored regex in this file needs and none of them
+ * did (repo-82). `.gitattributes`' `* text=auto eol=lf` keeps a checkout on
+ * this machine LF-only, but nothing here reads the record through that
+ * attribute: `core.autocrlf=true` on a contributor's own clone, or a record
+ * pasted from a Windows editor, checks out or is typed with `\r\n`, and every
+ * regex below that anchors on `$` — the heading rule in `extractSections` and
+ * `DECLARATION` — stops matching on that line's trailing `\r`, which
+ * `[ \t]*$` does not consume. Measured: `/^(#{1,6})[ \t]+(.*\S)[ \t]*$/.exec("##
+ * Review\r")` is `null`, so a CRLF record's `## Review` heading is invisible
+ * to `extractSections`, and `citations-gate.mjs`'s `checkRecord` then treats
+ * the whole record as not yet gated (`{ skipped: true }`) rather than as one
+ * whose citations it should check — a moved citation inside a CRLF checkout's
+ * `## Review` section passes gate as "clean over 0 record(s)" instead of
+ * failing `1 moved`. Stripping only a trailing `\r` — never any other
+ * whitespace — leaves every other position untouched, so an anchor's own
+ * `line` and `start`/`end` numbers still count physical lines exactly as they
+ * did before.
+ *
+ * @param {string} markdown
+ * @returns {string[]}
+ */
+function splitLines(markdown) {
+  return markdown.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+}
+
+/**
  * The anchor that may follow a location: a straight-double-quoted fragment,
  * after an optional closing backtick and at most one space.
  *
@@ -499,7 +526,7 @@ const CELL_FILE =
  */
 export function extractCitations(markdown) {
   const out = [];
-  const lines = markdown.split("\n");
+  const lines = splitLines(markdown);
   /** The last file named outright, which is what a shorthand below it means. */
   let currentFile = /** @type {string | null} */ (null);
   /** And the record line it was named on, so the inheritance can be audited. */
@@ -768,7 +795,7 @@ export function extractDeclarations(markdown) {
   const refuse = (message) =>
     Object.assign(new Error(message), { exit: /** @type {number} */ (EXIT.declaration) });
   const out = [];
-  markdown.split("\n").forEach((text, index) => {
+  splitLines(markdown).forEach((text, index) => {
     const declaration = DECLARATION.exec(text);
     if (declaration?.groups === undefined) return;
     const lineNo = index + 1;
@@ -1772,7 +1799,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
  * @returns {{title: string, level: number, start: number, end: number}[]}
  */
 export function extractSections(markdown) {
-  const lines = markdown.split("\n");
+  const lines = splitLines(markdown);
   /** @type {{title: string, level: number, start: number}[]} */
   const headings = [];
   /** @type {{char: string, length: number} | null} */

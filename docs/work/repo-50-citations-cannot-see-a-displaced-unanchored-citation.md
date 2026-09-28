@@ -90,10 +90,10 @@ a cited unanchored line in a scratch copy and watch the mode report it.
 - **med** · In a grandfathered record, `displaced` is absorbed into the debt allowance and the gate exits 0 without naming the record. Measured at this tip: `node scripts/citations-gate.mjs --displaced-since a1a417b` exits 0, printing only "holding 2 unresolvable, 1 displaced, 20 unanchored"; the one is the TLS port shorthand in repo-25, shifted by this branch edit above that line of `scripts/citations.mjs`. That contradicts `scripts/citations.mjs:224 "sets its own exit bit, unconditionally"`.
 - **med** · The Log account of Done-when 4 is false in three places. "22 pins total. **Not 24**": 44196c1 adds 23 pins and b07d506 one, 24; the Log counted lines with `grep -c`, and repo-35 carries four pins on two lines. The "seven more" extras are five. And "22 further displaced results into scripts/citations.mjs at this same base" is an artefact of copying the branch script over the historical checkout: the scripts directory is unchanged from fdafd1a to 5c517d3, and read at 5c517d3 repo-35 reports 4 displaced, none into that file. The Log also blames the ticket premise for a discrepancy that is not there.
 - **low** · The Log gives the base suite as 472; `npx vitest run --project repo` at `a1a417b` is 471, so the branch adds 10, not 9.
-- **low** · The comparison is raw, `scripts/citations.mjs:1108 "if (at === -1) return null;"`, while the message normalises whitespace, `scripts/citations.mjs:1111 "const show = (line) => normalize"`. A re-indent or a CRLF-only difference is reported `DISPLACED` with identical text on both sides of "before" and "now". `.gitattributes` forces LF on checkout here, so the CRLF half needs an editor to write one before staging.
+- **low** · The comparison is raw, `scripts/citations.mjs:1135 "if (at === -1) return null;"`, while the message normalises whitespace, `scripts/citations.mjs:1138 "const show = (line) => normalize"`. A re-indent or a CRLF-only difference is reported `DISPLACED` with identical text on both sides of "before" and "now". `.gitattributes` forces LF on checkout here, so the CRLF half needs an editor to write one before staging.
 - **low** · `scripts/citations.mjs:202 "Nothing is reported when the ref cannot supply a baseline"` overclaims: a citation the record gained after the ref, onto a line that existed then and has changed since, is reported. That case can be a true positive (dl-72, whose record did not exist at its base, cites two lines its own fix rewrote, and the mode flags both) or a false one (a citation written against the tip). The docblock should say the mode cannot tell those apart.
-- **low** · The EOF guard, `scripts/citations.mjs:1098 "c.end > before.length"`, has no test that can fail: deleting it keeps 139 of 139 green, because `scripts/test/citations.test.ts:2570 "const grew = checkCitations"` cites a line wholly past the old EOF, where the slice is empty anyway. The guard matters only for a range straddling the old EOF, and nothing covers that.
-- **low** · `scripts/citations.mjs:1064 "displaced: 128,"` fills the last bit of the byte, and a ninth bit, 256, exits 0 (measured with node). Any combination with it also reads as 128 plus a signal to a shell: the repo-21 historical run exited 131. Neither is named in the EXIT docblock.
+- **low** · The EOF guard, `scripts/citations.mjs:1125 "c.end > before.length"`, has no test that can fail: deleting it keeps 139 of 139 green, because `scripts/test/citations.test.ts:2570 "const grew = checkCitations"` cites a line wholly past the old EOF, where the slice is empty anyway. The guard matters only for a range straddling the old EOF, and nothing covers that.
+- **low** · `scripts/citations.mjs:1091 "displaced: 128,"` fills the last bit of the byte, and a ninth bit, 256, exits 0 (measured with node). Any combination with it also reads as 128 plus a signal to a shell: the repo-21 historical run exited 131. Neither is named in the EXIT docblock.
 - **low** · An evidence declaration naming a displaced citation is reported stale with "it does not fail — drop the declaration", in a run that exits 136 because it fails. The same shape repo-52 gate 1 found for `unpinned-volatile`.
 - **dropped** · the `c.start < 1` half of the EOF guard is unreachable, since `checkCitations` has already refused that start. Harmless.
 - **dropped** · a citation into a file renamed since the ref reports nothing. Documented as a deliberate choice, and a product decision rather than a defect.
@@ -112,7 +112,7 @@ Gate 1 findings:
 - **med** (grandfathered absorbs `displaced`) · **fixed** — `scripts/test/citations-gate.test.ts:1029 "never absorbs a displaced failure into the grandfathered allowance"`; dropping the new check reds 1 of 42.
 - **med** (Log account of Done-when 4) · **fixed** — the Log now gives 23 plus 1 = 24 pins, 29 reported, 5 extras in repo-38, and withdraws the 22 into the script as a method artefact, all matching this gate. New low below on how it was corrected.
 - **low** (base 472) · **fixed** — 471 in the Log, and 471 is what this gate measured.
-- **low** (raw comparison) · **fixed** — `scripts/citations.mjs:1107 "normalize(line) !== normalize(now"`; reverting it reds 1 of 102 at `scripts/test/citations.test.ts:2631 "expect(crlf?.state).toBe("`, which also keeps a real change on the same line failing.
+- **low** (raw comparison) · **fixed** — `scripts/citations.mjs:1134 "normalize(line) !== normalize(now"`; reverting it reds 1 of 102 at `scripts/test/citations.test.ts:2631 "expect(crlf?.state).toBe("`, which also keeps a real change on the same line failing.
 - **low** (postdates docblock) · **fixed** — the paragraph now says the mode cannot tell a citation written for the ref from one written for the tip. New low below on one label in it.
 - **low** (EOF guard untested) · **fixed** — `scripts/test/citations.test.ts:2595 "refuses a range that straddles the ref"`; dropping the guard reds 1 of 102.
 - **low** (exit byte full, signal reading) · **fixed** in the EXIT docblock; its 256-exits-0 and repo-21 exit 131 claims match this gate measurements.
@@ -504,3 +504,12 @@ unanchored: 1 }` either way; reverting the tally to sum `counts` reds it at
 scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
   and only `repo-25` failing** (1 displaced), as expected under option (b);
   `node scripts/preflight.mjs --base origin/main` exit 0.
+
+- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (28
+  lines after the imports) moved five of this record's `## Review` citations
+  again, coordinate only, anchor text unchanged: 1108 (`if (at === -1) return
+null;`) to 1135; 1111 (`const show = (line) => normalize`) to 1138; 1098
+  (`c.end > before.length`) to 1125; 1064 (`displaced: 128,`) to 1091; and
+  1107 (`normalize(line) !== normalize(now`) to 1134. `node
+scripts/citations-gate.mjs --against origin/main` named all five `moved`
+  at exactly these new lines before the repoint.

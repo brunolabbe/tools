@@ -2965,3 +2965,73 @@ test("a citation pinned to the base survives another open PR editing the cited l
     cleanup();
   }
 });
+
+// --- repo-82: a CRLF-terminated record is read the same as its LF form ---
+
+/**
+ * The regex itself, watched failing first — the reproduction the ticket was
+ * filed from. `.` and `\S` never match `\r` in a JS regex with no `/s` flag,
+ * so a line split out of a `\r\n`-terminated file keeps a trailing `\r` that
+ * `[ \t]*$` does not consume, and the heading is invisible to
+ * `extractSections`.
+ */
+test("extractSections reads a heading in a CRLF-terminated record", () => {
+  const lf = extractSections("## Review\n\nsome text\n");
+  const crlf = extractSections("## Review\r\n\r\nsome text\r\n");
+  expect(crlf).toEqual(lf);
+  expect(crlf).toEqual([{ title: "Review", level: 2, start: 1, end: 4 }]);
+});
+
+/**
+ * The same defect, one function over: `DECLARATION` is end-anchored too, so a
+ * CRLF evidence declaration is invisible to both the citations it is meant to
+ * suppress (`extractCitations` reads its locations as live citations instead
+ * of skipping them) and to `extractDeclarations` itself.
+ */
+test("extractDeclarations and extractCitations read an evidence declaration in a CRLF record", () => {
+  const declaration = "<!-- citations: evidence a.ts:12 -->";
+  expect(extractDeclarations(`${declaration}\r\n`)).toEqual(
+    extractDeclarations(`${declaration}\n`),
+  );
+  expect(extractCitations(`${declaration}\r\nBroken at \`a.ts:99999\`.\r\n`)).toEqual(
+    extractCitations(`${declaration}\nBroken at \`a.ts:99999\`.\n`),
+  );
+});
+
+/**
+ * The full reproduction, through the real CLI rather than the regex alone: a
+ * CRLF copy of a real merged record (`repo-79`'s), with one of its own
+ * anchors corrupted so it cannot possibly still verify, regardless of
+ * anything else this repository's tree holds. Before the fix, `--section
+ * Review` cannot find `## Review` at all under CRLF and the run refuses with
+ * "no section matches", the same shape `citations-gate.mjs`'s `checkRecord`
+ * turns into `{ skipped: true }` — a record `citations-gate` should report
+ * `1 moved` over instead reads as not yet gated at all, "clean over 0
+ * record(s)".
+ */
+test("the CLI finds a CRLF ## Review heading and reports a moved citation in it", () => {
+  const source = fs.readFileSync(
+    path.join(REPO, "docs", "work", "repo-79-preflight-runs-all-checks.md"),
+    "utf8",
+  );
+  const brokenAnchor = "TOTALLY_NOT_A_REAL_ANCHOR_repo_82";
+  const corrupted = source.replace('"exited ${added.status}"', `"${brokenAnchor}"`);
+  expect(corrupted).not.toBe(source);
+  const crlf = corrupted.replace(/\n/g, "\r\n");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-crlf-"));
+  const record = path.join(dir, "repo-79-crlf.md");
+  fs.writeFileSync(record, crlf);
+
+  const result = spawnSync("node", [CLI, record, "--section", "Review"], {
+    cwd: REPO,
+    encoding: "utf8",
+  });
+  expect(result.stdout).not.toBe("");
+  expect(result.stderr).not.toMatch(/no section matches/);
+  expect(result.stdout).toMatch(/under "Review"/);
+  expect(result.stdout).toContain(`MOVED      scripts/preflight.mjs:1063 "${brokenAnchor}"`);
+  expect(result.status).toBe(EXIT.moved);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
