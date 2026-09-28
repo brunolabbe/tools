@@ -59,6 +59,45 @@ Preflight fails on a branch shaped like #305's first head, and on a pair of bran
 - Invariants: no shell ✓, style ✓ (no `console`, no `any` added); AppError, redaction, SSRF, progress, contract, Dockerfile and test registration skipped — nothing in the diff reaches them.
 - NFR: security ✓ · performance — preflight took 43.5 s at this head against 30.2 s for the base's code over the same tree and the same three live heads; about 11.3 s of the 13.3 s is the three folds, about 3.75 s a head and linear in open pull requests, and 0.2 s the two derived commands · reliability — the two lows on the fold above · maintainability — the stale docblock above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-09-28 · round diff `f772ee9..6b10392` only (`origin/main` still at `a0841701`) · code-review at medium over the lines this round touched · coordinates re-resolved at `d2b07ea`, words, rows and verdicts as gated at `6b10392`. Eight citations whose text the gate-2 round deleted or whose claim it corrected are now prose naming what they pointed at in `6b10392`.
+
+| Done when                                                                   | Proof                                                                                                                                                                      |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preflight fails on a branch shaped like #305's first head                   | `scripts/test/preflight.test.ts:1131 "FAIL {2}node scripts\/citations"` — **proven**                                                                                       |
+| … and on a pair of branches where one moves a line the other's record cites | `scripts/test/preflight.test.ts:1290 "fails on a citation two clean-merging heads move between them"` — **proven**; re-run live on the gate-1 pair: red, bit 16, `1 moved` |
+| tests prove both                                                            | the two rows above — **proven**                                                                                                                                            |
+| `npm run check` and the repo suite pass                                     | **verified** — `npm run check` exit 0; `npx vitest run --project repo` 549 of 549; `scripts/test/preflight.test.ts` 69 of 69                                               |
+| Windows leg                                                                 | **unproven (gate)** — `test (windows-latest, informational)` in `ci.yml`                                                                                                   |
+
+**Gate 1's findings:**
+
+- **med, parser** · **fixed.** Steps are now grouped and anything but a lone one-line `run:` throws, naming the step: `scripts/preflight.mjs:402 "if (step.lines.length > 1 || value"`. All 16 gate-1 mutations re-run: baseline, a new step and a changed `citations.mjs` argument picked up; the other 13 loud; none wrong. Its test gap is a new finding below.
+- **med, exclusion list** · **fixed.** A covered step must match exactly or it throws, the exact-match throw in `deriveExtraCiCommands` at `6b10392`: `--displaced-since` appended and `npm ci --ignore-scripts` both throw, and `npm ci` is not spawned. The residue is a low below.
+- **low, misdiagnosed fold failure** · **fixed.** A failed worktree add throws naming it, `scripts/preflight.mjs:1050 "exited ${added.status}"`, and a merge with no unmerged path throws, `scripts/preflight.mjs:1087 "with no conflicting path — not a content conflict"`. The gate-1 bogus-oid probe now gives `invalid reference` and leaves no worktree. Tests: `scripts/test/preflight.test.ts:1484 "throws rather than report a non-conflict merge failure as a conflict"` and `scripts/test/preflight.test.ts:1504 "when it cannot create the scratch worktree"`.
+- **low, interrupted run** · **not fixed, explained** in the Log (a process-wide signal handler, judged not cheap). Accepted: no ref is created.
+- **low, stale per-head wording** · **fixed**, in the docblock, `SKILL.md` step 9 and `builder.md`. The base clause they add overstates, per the first med below.
+- **low, repo-75 ranges** · **fixed**, `279-280` and `824-825`, each covering its `shell: false` line; the record exits 0.
+- **low, #305 docblock** · **fixed**, now says same shape, not exactly.
+- **low, test spawn flag** · **fixed**, `scripts/test/preflight.test.ts:1274 "{ cwd: repo, shell: false });"`.
+- **decision** · **resolved by the owner** as option B. Built, and incomplete: the first med below.
+
+**New in this round:**
+
+- **med** · the base fold runs only when some other head is reachable. the empty-list early return in `checkScratchMergeCitations` at `6b10392` comes before its `merge-base --is-ancestor` check, so with zero other open pull requests a base that moved a line this branch's record cites still passes. Measured: the gate-1 base-moved probe gives `citations true`, `mergeTree true … nothing was checked`, while the same probe with one clean head fails `1 moved` (plus b, which HEAD does not yet contain). The fold's own test at `6b10392` needs a filler head, and its docblock says so. The owner's option B carried no such condition, and neither does the docblock, `SKILL.md` step 9 or `builder.md`. No `Done when` line depends on it.
+- **med** · neither med fix is asserted by any test. A mutant with both the `step.lines.length > 1` clause and the exact-match throw removed passes `scripts/test/preflight.test.ts` 69 of 69, while it reads a `name:`-first step silently and lets an altered covered step through again (measured). The block-scalar and shell-operator tests at `6b10392` cover only the paths gate 1 found loud already or the new `assertSpawnable`. The Log says the table came from the gate's script, not a test.
+- **low** · `COVERED` at `6b10392` compares raw text, so `npm  ci` (two spaces) and `npm clean-install` (the alias of `npm ci`) are not recognised and spawn a real install (measured through `deriveExtraCiCommands`), against the docblock's whatever the step's exact text. Comparing tokens would close it.
+- **low** · `assertSpawnable` at `6b10392` rejects `&&`, `|` and ` #` only: `;`, a glued `>/dev/null` or `2>/dev/null`, `$VAR` and a quoted YAML scalar still reach `spawnSync` as literal arguments (measured). With today's scripts each fails loudly, since `status.mjs` rejects `>/dev/null` and `--json;` with exit 1 (measured); a `$VAR` passed to a script that accepts any value would be silent (unmeasured).
+- **low** · the docblock of `checkScratchMergeCitations` at `6b10392` names `reference/records.md` as the page for the whole-batch scratch merge; it is `SKILL.md` step 11, `.claude/skills/orchestrate-tickets/SKILL.md@a0841701:224 "Scratch-merge the batch"`.
+- **low** · the Log's mutation table (this ticket's `## Log`, the 2026-09-28 entry) has a broken `blockPipeDash` row: the escaped pipe inside a code span split it into five cells. It also calls the old `|-` and `>-` behaviour silently spawned; at `f772ee9` those spawned a command named `|-`, which `runBuildCommand` reports as a failed spawn (read, not run): loud but mislabelled.
+- **dropped** · a check job re-indented to compact list style reads zero steps and passes silently, but `npx oxfmt --check` rejects that file (exit 1, measured), so check 1 fails first.
+- **dropped** · a `--base` that does not resolve reaching the fold's `rev-parse`: `preflight()` raises `EXIT.setup` before any check runs.
+- **findings** · code-review at medium over the round diff returned 8; 6 carried, 2 dropped. Gate 1's 9 findings: 7 fixed, 1 not fixed but explained, 1 decision resolved.
+- Merged records: 29 citations changed this round (repo-51 21, repo-64 2, repo-67 1, repo-71 3, repo-75 2, both of repo-75's single lines back to ranges); all 29 checked, anchors unchanged, each record exit 0, each with a dated 2026-09-28 Log entry.
+- Invariants: no shell ✓ (three new spawns in `scripts/preflight.mjs`, each with `shell: false`; `spawn-safety.test.ts` 5 of 5); style ✓.
+- NFR: security ✓ · performance — preflight 38.4 s, exit 0, at `6b10392` against four live heads (#312, #311, #294, #284); gate 1 measured 43.5 s against three, and this gate did not re-time the base, so no delta is claimed · reliability — the first med · maintainability — the second med.
+
 ## Log
 
 - 2026-09-27 — Built.
