@@ -3,9 +3,10 @@ id: repo-65
 tool: repo
 title: preflight's diffPaths does not see uncommitted changes, so a touched suite can go unrun
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
+difficulty: standard
 ---
 
 # repo-65 — preflight's diffPaths does not see uncommitted changes
@@ -74,6 +75,9 @@ throughout. Check 5 (`checkMergeTree`) is unaffected either
 way — it compares committed heads.
 
 ## The decision this ticket carries
+
+**Answered 2026-09-28 by the owner: (b)**, the recommendation. Test selection
+reads the working tree as well as the committed diff. No role page changes.
 
 Two ways to close the gap, and they trade differently:
 
@@ -235,3 +239,9 @@ Whichever of (a) or (b) is chosen:
   re-checked whether (b) still holds now that (a) costs more, not less —
   it does, more clearly than before, since (b) never touches either role
   page and (a)'s count only grew. Still `needs-decision`.
+- 2026-09-28 — **Answered by the owner: (b).** Moved to `ready`, and rated
+  `standard` because it was filed unrated: one function in `preflight.mjs`
+  plus a test in an existing suite. Re-read against `a084170` first:
+  `diffPaths` is still the committed-only `${base}...HEAD` diff at
+  `scripts/preflight.mjs:769`, unchanged by `0d455af`, the last commit to
+  touch the file.

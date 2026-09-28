@@ -3,7 +3,7 @@ id: repo-45
 tool: repo
 title: The worktree farm links a stale shared install into every worktree, and nothing says so
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -184,7 +184,13 @@ builder's run shows a failing suite can still be reported as pre-existing.
 
 ## Decision: how the farm should detect a stale source
 
-**Open.** Each candidate was run against the stale stand-in and the healthy
+**Answered 2026-09-28 by the owner: A, as a warning, reading
+`$SHARED_ROOT/package-lock.json`.** That is the recommendation below on all
+three axes: the presence check, warn rather than refuse, and the shared
+checkout's lockfile rather than the worktree's. B, C and D are kept as the
+record of what was measured.
+
+**Was open.** Each candidate was run against the stale stand-in and the healthy
 shared checkout. Whether it should _warn_ or _refuse_ (exit non-zero) is a
 separate choice that applies to every option. Refusing stops a builder
 reporting green on a broken tree. It also stops every dispatch on a false
@@ -285,3 +291,7 @@ Once the decision above is answered, and whichever option it picks:
     entries marked `extraneous` (`packages/engine`, `packages/resolvers`,
     `packages/shared`) for directories that no longer exist. Noted, not
     investigated, and not part of this defect.
+- **2026-09-28 — answered by the owner: A, warn, shared lockfile.** Moved to
+  `ready`. Re-read against `a084170` first: the farm's two preconditions and
+  its linking loop are unchanged since `ab909c9`, and no freshness check has
+  been added, so the reproduction still describes the code.

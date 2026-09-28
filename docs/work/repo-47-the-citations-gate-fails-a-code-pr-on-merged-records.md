@@ -261,6 +261,24 @@ Write the repair and its three costs into `docs/01-TICKETS.md` or the
 - The costs stay: one to six records per code PR in this batch, and conflicts on
   shared records.
 
+### E. A repeatable pin sweep, run at close-out rather than per PR
+
+Added 2026-09-28. Build C's `--pin <rev>` tool, but run it over every merged,
+enforced record at each batch close-out, not inside the PR that moved a line.
+Once, it clears the records written before repo-78. After that, it pins the
+citations of content that a branch introduced to that branch's squash commit
+on `main`, where the content now exists.
+
+- It turns the per-PR cost into a close-out cost, and a PR that lands between
+  two sweeps can still go red.
+- Why a one-time sweep is not enough: repo-78, open as #312 on branch
+  `repo-78-gate-records-pin-to-base`, pins every citation of pre-existing
+  content to the base. It also keeps citations of content the branch itself
+  introduced unpinned for good. Its own gate 1 (finding F1) measured the
+  consequence. After the squash, those citations point at `main` lines that
+  any later branch can move, so new debt keeps arriving without anyone
+  writing an unpinned citation.
+
 ## Build
 
 Blocked on the decision above.
@@ -282,3 +300,16 @@ tree, since the second is where A's cost shows up.
   pl-36 count are relayed and labelled as such. One finding the brief did not
   carry: option A, as first worded, only defers the failure to `main` and to the
   next PR, which is why B is listed separately.
+- **2026-09-28 — put to the owner, and deferred by the owner's choice: wait
+  for repo-78 (#312) to merge, then re-measure.** Asked with options B, C, D
+  and E above. The owner first asked whether repo-78 contradicts this ticket.
+  It does not: #312 states today's rule (the branch whose change moves a line
+  repoints it) and links here without deciding it. It does change what this
+  ticket measures. Records written after it pin pre-existing content at
+  write time, so the four-branches-in-one-batch rate in the Why describes
+  pre-repo-78 records. Its F1 names the two groups that are still exposed:
+  merged records written before the rule, and every citation of
+  branch-introduced content. **What to measure before asking again:** after
+  #312 merges, the number of code PRs in the next batch that had to repair a
+  record they never touched, split by those two groups. Still
+  `needs-decision`.

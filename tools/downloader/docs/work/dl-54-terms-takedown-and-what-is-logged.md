@@ -3,7 +3,7 @@ id: dl-54
 tool: downloader
 title: Publish terms and a takedown contact, and decide what the operator keeps about who fetched what
 kind: work-package
-status: needs-decision
+status: ready
 milestone: M5
 depends_on: []
 difficulty: standard
@@ -35,12 +35,20 @@ A public service is expected to say three things. Today it says none of them:
 This is not legal advice, and the ticket must not pretend otherwise. It records
 the owner's choices, and the build makes the service say them.
 
-## Decision 1 — answered 2026-09-13 by the owner, not open
+## Decisions — all three answered by the owner
 
-**Keep 14 days, option A below.** The client address and the probed page URL
-are kept for 14 days and then deleted, and the terms page says so. It was the
-recommendation, so nobody was overridden. **Parts 2 and 3 are still open**,
-which is why this ticket stays `needs-decision`.
+**1 — answered 2026-09-13: keep 14 days, option A below.** The client address
+and the probed page URL are kept for 14 days and then deleted, and the terms
+page says so. It was the recommendation, so nobody was overridden.
+
+**2 — answered 2026-09-28: `abuse@oludoi.com`,** an alias created with
+Cloudflare Email Routing and forwarded to a private inbox. The inbox behind it
+is never published, and the alias can be retired without touching it.
+
+**3 — answered 2026-09-28: an agent drafts, the owner approves.** The builder
+drafts the text from the decisions on this page. The page stays marked as a
+draft until the owner approves it in the pull request. It is not legal advice
+and does not say it is.
 
 The answer covers the database as well as the logs. That makes two pieces of
 work the build owns:
@@ -83,7 +91,7 @@ drafts it, and the draft is labelled as a draft until the owner approves it.
 
 ## Build
 
-Written with the decision. It will include:
+In this order:
 
 - A first step that measures exactly which fields reach a log line during one
   probe and one download.
@@ -93,10 +101,33 @@ Written with the decision. It will include:
   after it.
 - The retention made explicit in `compose.downloader.prod.yaml`'s logging
   options.
+- A sweep that deletes `jobs` rows older than 14 days, or clears their
+  `source_url`, alongside the existing prunes in `db/job-store.ts`.
+  `JobStore.delete` still has no production caller on `a084170`.
+- The page also says what dl-57's outcome record keeps: a hostname and
+  resolver timings per probe, for `OUTCOME_RETENTION_DAYS` (90 by default),
+  never a path or a query string. A page about what the service records
+  cannot leave out a table it records to.
+- The alias itself is created on the dashboard by the owner. It is not
+  automated in `scripts/cloudflare-setup.mjs`, because that would need a
+  permission the token does not have (see dl-52's part 2).
 
 ## Done when
 
-Written with the decision.
+1. The UI links to a same-origin terms page that states: what the service may
+   be used for, the DRM line, that no video is stored, the 14-day retention of
+   address and page URL, the outcome record's hostname-only 90 days, and
+   `abuse@oludoi.com`.
+2. A test proves a job row older than 14 days is gone, or has no
+   `source_url`, after the sweep runs, and that a younger one is untouched.
+3. `compose.downloader.prod.yaml` pins log retention, with a comment saying
+   how the size was derived from a day's traffic, or which driver expires by
+   age.
+4. The first step's measurement, the fields that reach a log line during one
+   probe and one download, is in this Log.
+5. The owner has approved the terms text in the pull request, and the draft
+   label is gone.
+6. `npm run check` and the downloader's suite pass.
 
 ## Log
 
@@ -108,3 +139,10 @@ Written with the decision.
   not from a measurement on the host.
 - 2026-09-14 — The terms page will say that no video is stored, which follows
   from dl-53's decision.
+- 2026-09-28 — Parts 2 and 3 answered by the owner, each the recommendation:
+  `abuse@oludoi.com` by Email Routing, and an agent's draft for the owner to
+  approve. Moved to `ready`. Re-read against `a084170` before asking: no terms
+  page, no logging options in the prod overlay, and still no production
+  caller of `JobStore.delete`, so every premise above still holds. Added the
+  outcome record's 90-day hostname retention to what the page must say,
+  because dl-57 landed after this ticket was filed.

@@ -3,7 +3,7 @@ id: repo-46
 tool: repo
 title: Release commits never update package-lock.json, so every npm install rewrites two version lines
 kind: fix
-status: needs-decision
+status: ready
 difficulty: standard
 milestone: null
 depends_on: []
@@ -202,7 +202,24 @@ as a lead to confirm against that version, not as a fact about it.
   Read, not run. How it treats a root lockfile beyond one comment is
   **unverified**.
 
-## Options — none chosen
+## Options — answered 2026-09-28 by the owner: A and C together
+
+**A stamps the lockfile, and C proves that it did.** A alone can fail silently,
+which is how this defect got in; with C beside it, a release PR whose stamp did
+nothing goes red instead of drifting. D and E are not taken, and B is not taken.
+
+Two facts changed between filing and answering, both measured on `a084170`:
+
+- **There are three tools now.** `tools/ledger` is a third `release-type:
+simple` package with the same `api/package.json` stamp, so A adds three
+  lockfile entries, not two.
+- **`jsonpath-plus` reads a bracketed key with `/` in it.** In a scratch
+  install of `jsonpath-plus@10`, the range `release-please@latest` declares
+  (`^10.0.0`), `$.packages['tools/downloader/api'].version` with
+  `resultType: 'all'` over the root lockfile returned exactly one match,
+  `$['packages']['tools/downloader/api']['version'] = 0.7.0`. One of A's two
+  unknowns is settled. **The leading-`/` root path is still unverified**, and C
+  is what catches it if it is wrong.
 
 ### A. Stamp the lockfile as a second extra file
 
@@ -278,7 +295,7 @@ lockfile never drifts.
 
 ## Build
 
-Blocked on the decision above. Whichever option is chosen:
+A and C, in one change:
 
 1. Resync the two stale version lines in the same change, with
    `npm install --package-lock-only` in a scratch copy, **not** in a worktree
@@ -286,18 +303,25 @@ Blocked on the decision above. Whichever option is chosen:
    reproduction 4.
 2. Leave the three `extraneous` entries alone unless the decision says
    otherwise. Removing them is a separate edit with its own diff to review.
-3. For A or D, the proof arrives with a release PR, not with this branch. Record
-   it in `awaiting`.
+3. Add A's lockfile stamp to all three tools' `extra-files`.
+4. Add C's step to `ci.yml`'s `check` job:
+   `npm install --package-lock-only --offline --ignore-scripts`, then
+   `git diff --exit-code package-lock.json`. If `--offline` fails on a runner
+   because the cache lacks something, drop `--offline` rather than the step,
+   and say so in the Log.
+5. The proof of A arrives with a release PR, not with this branch. Record it
+   in `awaiting`.
 
 ## Done when
 
 1. `git log --grep='^chore(.*): release' origin/main -- package-lock.json` lists
-   the first release commit made after the fix lands, or, for C, that release
-   PR's CI shows the new step failing before the lockfile is fixed and passing
-   after.
-2. After that release, `npm install --package-lock-only` in a scratch extraction
+   the first release commit made after the fix lands, and that release PR's
+   `check` job ran C's step green.
+2. On this branch, C's step is shown red against a lockfile with one version
+   line reverted, and green on the fixed one.
+3. After that release, `npm install --package-lock-only` in a scratch extraction
    of `main` leaves `package-lock.json` unchanged (`diff` exit 0).
-3. `/api/health` still reports the released version for both tools.
+4. `/api/health` still reports the released version for every tool.
 
 ## Log
 
@@ -309,3 +333,14 @@ Blocked on the decision above. Whichever option is chosen:
   The lag before `896806c` is the same defect again, not a one-off. The
   `extraneous` entries survive a lockfile-only install, so they are not part of
   this drift and a routine install will not clear them.
+- **2026-09-28 — answered by the owner: A and C.** Moved to `ready`.
+  Re-checked against `a084170` before asking. The config is unchanged apart
+  from the ledger's third entry. The lockfile is in sync today, but only
+  because the ledger scaffold `a9878ad` rewrote it, the same carried-by-an-
+  unrelated-commit pattern as `896806c`. The defect is live right now: the two
+  open release PRs, #284 (downloader 0.8.0) and #294 (planner 0.8.0), each
+  change `.release-please-manifest.json`, the `CHANGELOG.md`, `version.txt`
+  and `api/package.json`, and neither touches `package-lock.json`
+  (`gh pr diff <n> --name-only`). Whichever merges first drifts it again, and
+  Build step 1's resync covers that. The `jsonpath-plus` measurement is
+  above, under Options.
