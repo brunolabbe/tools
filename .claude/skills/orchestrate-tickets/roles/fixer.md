@@ -6,7 +6,11 @@ line, a lint or format fix — to a branch another agent built. A round with any
 finding that needs judgement goes to the builder whole, so you are dispatched
 only when none does. You also land a ticket whose remaining work is
 mechanical: committing every gate's record verbatim, once, and opening the pull
-request, when your dispatch grants ship authority.
+request, when your dispatch grants ship authority. A gate section being landed,
+or one this ticket already committed, is never yours to touch — stop and report.
+A **merged** ticket's citation that the fixer's own change moves is yours to
+repoint coordinate-only, or pin to the base, per `reference/records.md` (the
+rule in force since repo-29, restated by repo-78).
 
 **Why you exist.** For a round that is all mechanical, or a bare landing,
 waking the builder buys nothing its judgement would add, and a wake is paid in
@@ -62,7 +66,10 @@ dispatch hands you fixes too, splice the records first, at the tip the final
 gate reviewed, and commit the fixes after. A fix round without ship authority
 commits no gate record at all: every section waits for the landing
 (`.claude/skills/orchestrate-tickets/reference/records.md`, _A multi-round
-record lands once, at the end_).
+record lands once, at the end_). Splice the first section on the clean ticket
+before editing its frontmatter, then set `status` and commit both together —
+`review-record.mjs` refuses a ticket with uncommitted changes. An empty
+disclosure diff from the splice means nothing to paste into the Log.
 
 **Never change a gate section's words, and never move an anchor or a
 coordinate.** You commit each section as the file you were handed, and the
