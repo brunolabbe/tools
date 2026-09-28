@@ -507,3 +507,37 @@ merged state (repo-79)"` against this checkout's live PR list (5 open
     `origin/main` here, so the live run does not itself exercise the
     zero-heads base fold; that shape is proven by the new unit test above
     instead.
+- 2026-09-28 — post-gate fixer round, **unreviewed**: gates 1–3 above describe
+  `d2b07ea`; this fix is `bb006445e744f659281303e8ab733c3cd7a964c1`, landed on
+  the owner's decision to fix now rather than merge #314 with `test
+(windows-latest, informational)` red or hold it, and it has not itself been
+  gated. CI's Windows leg failed five tests at `ee0fd22` (`buildScratchMerge
+folds every reachable head in…`, `checkScratchMergeCitations fails on a
+citation two clean-merging heads move between them`, `checkMergeTree runs the
+scratch-merge citations step…`, and both `…folds base in…` tests); reproduced
+  locally, same five, forcing `GIT_CONFIG_KEY_0=core.autocrlf
+GIT_CONFIG_VALUE_0=true` (75 of 80, the same five red). **Established as
+  test-only, not a defect in `scripts/preflight.mjs` itself.**
+  `checkScratchMergeCitations`'s scratch worktrees are read by
+  `citations.mjs`'s `extractSections`, whose heading regex
+  (`/^(#{1,6})[ \t]+(.*\S)[ \t]*$/`) cannot match a line ending `\r\n` — `.` and
+  `\S` never match `\r` in a JS regex with no `/s` flag — so a CRLF-terminated
+  file loses every heading, and therefore every `## Review` section and every
+  citation in it, silently: measured directly, a scratch merge holding one
+  moved citation reported `ok: true, clean over 0 record(s)` under a CRLF
+  checkout, `1 moved` under LF. The real corpus never hits this: this repo's
+  own `.gitattributes` (`* text=auto eol=lf`) forces LF on every checkout
+  regardless of `core.autocrlf`, proven by adding the identical line to a
+  scratch copy of the throwaway fixture and re-running the unmodified
+  `checkScratchMergeCitations`/`buildScratchMerge` under the forced config —
+  clean. `makeRepo()`'s throwaway repos carried no `.gitattributes` at all.
+  **Fix, line-neutral**: `scripts/test/preflight.test.ts` now writes that same
+  `.gitattributes` into every throwaway repo right after `git init`, replacing
+  what was a blank separator line so the file's insertions equal its deletions
+  (`git diff --numstat`: 1/1) and no cited line moved or changed.
+  `scripts/preflight.mjs` untouched. Commands: `npx vitest run
+scripts/test/preflight.test.ts` — 5 of 80 red at `ee0fd22` under forced
+  `core.autocrlf=true`, 80 of 80 green after, both under the forced config and
+  without it. `npx vitest run --project repo` — 560 of 560. `npm run check`
+  exit 0. `node scripts/citations-gate.mjs --against origin/main` exit 0: 128
+  enforced, 0 failing, 6 grandfathered, 0 raised.
