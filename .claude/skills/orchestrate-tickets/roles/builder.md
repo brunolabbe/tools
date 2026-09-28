@@ -60,8 +60,11 @@ the sentinelle repository, 2026-09-23).
   the citations gate, the `## Review` presence test for every ticket the
   branch marks `done`, the title's type against the paths it touches, and a
   `git merge-tree` probe against every other open pull request head — which
-  since repo-79 also folds every reachable one into a scratch merge and runs
-  the citations gate over that (repo-51, repo-79).
+  since repo-79 also folds each reachable one onto `HEAD` on its own, plus
+  `base`'s own tip when `HEAD` does not yet contain it, and runs the
+  citations gate over the result (repo-51, repo-79). Two heads that are each
+  clean beside `HEAD` alone but only break a citation together are still
+  uncaught by this alone.
   Run full `npm test` yourself if shared config moved; the project covering
   `scripts/` is named `repo`. When the citations check fails, repoint or pin
   what you moved, per `.claude/skills/orchestrate-tickets/reference/records.md`

@@ -103,7 +103,7 @@ verified:
 | Reliable on the Windows leg: three consecutive windows-latest runs without a timeout, or reassigned | **unproven (gate)** — no pull request open yet, so no Windows leg has run against this fix |
 | `npm run check` and `npx vitest run scripts/test/preflight.test.ts` pass locally                    | verified — 45 of 45 tests, `npm run check` exit 0                                          |
 
-**Local run, for the third Done-when line.** `npx vitest run scripts/test/preflight.test.ts` -- 45 of 45 passed, including `scripts/test/preflight.test.ts:852 "gh fails inside check 5"` -- and `npm run check` exits 0 with no lint, format or typecheck findings. `scripts/test/preflight.test.ts:57 "const CLI = path.join"` anchors the suite that ran.
+**Local run, for the third Done-when line.** `npx vitest run scripts/test/preflight.test.ts` -- 45 of 45 passed, including `scripts/test/preflight.test.ts:853 "gh fails inside check 5"` -- and `npm run check` exits 0 with no lint, format or typecheck findings. `scripts/test/preflight.test.ts:58 "const CLI = path.join"` anchors the suite that ran.
 
 **Mechanism, from primary source, not from the ticket's own restatement of it.**
 Fetched `libuv`'s own `search_path` (`src/win/process.c`, tag v1.x) and Node's
@@ -117,7 +117,7 @@ ticket's own Build proposal, before the hypothesis was confirmed) would
 therefore never be found by that search, and Node's own docs say a `.bat`/
 `.cmd` needs `shell: true` or an explicit `cmd.exe /c` to run at all — this
 repo forbids `shell: true` outright, so the fix could not have taken that
-shape. `scripts/test/preflight.test.ts:918 "function plantFakeGh"` — reaching
+shape. `scripts/test/preflight.test.ts:919 "function plantFakeGh"` — reaching
 `process.execPath` under the fake's own name — is the only shape left that
 satisfies both constraints, and it is what the branch built.
 
@@ -325,3 +325,6 @@ informational)` passed three consecutive times on PR #303 at `818bab2`
   its own additions to `scripts/test/preflight.test.ts` moved — coordinate
   only, anchor text unchanged. `node scripts/citations-gate.mjs --against
 origin/main` exit 0: 127 enforced, 0 failing.
+- 2026-09-28 — repo-79's gate 1 round moved the same three citations again;
+  repointed once more, coordinate only. `node scripts/citations-gate.mjs
+--against origin/main` exit 0: 127 enforced, 0 failing.

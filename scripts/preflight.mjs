@@ -129,7 +129,7 @@ function runGit(command, args, options = {}) {
  * that reuse is subtracted from `ci.yml`'s own `check` job — `npm ci` (setup,
  * not a check), `npm run check` (check 1's own first command) and
  * `citations-gate.mjs --against` (check 2, called as functions) all have a
- * dedicated check already and are excluded by name in `ALREADY_COVERED`; what
+ * dedicated check already and are matched exactly, by name, in `COVERED`; what
  * is left is derived from `ci.yml` itself and spawned for real, so a step that
  * job gains later is caught by construction rather than by someone updating
  * this file to match it — which is exactly how #305 passed preflight twice and
@@ -313,24 +313,29 @@ export function checkBuild(repo, diffPaths, run = runBuildCommand) {
 /** Where `ci.yml`'s `check` job lives, relative to `repo`. */
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 
-/** A `- run: <command>` step's own indentation, whatever depth it sits at. */
-const RUN_STEP = /^\s*- run:(.*)$/u;
+/** A step's own list marker, at the fixed indent every job in this file uses. */
+const STEP_START = /^ {6}- /u;
 
 /** A top-level job key — `  <name>:` at exactly two spaces, nothing narrower. */
 const JOB_HEADER = /^ {2}[A-Za-z0-9_-]+:\s*$/u;
 
+/** A `run:` key, whether it is a step's first key (after `- `) or a later one. */
+const RUN_KEY = /^ {6}- run:(.*)$|^ {8}run:(.*)$/u;
+
+/** The block-scalar headers YAML recognises — chomping indicator included. */
+const BLOCK_SCALAR_TOKENS = new Set(["|", "|-", "|+", ">", ">-", ">+"]);
+
 /**
- * The raw `run:` command of every step in `ci.yml`'s `check` job, in the order
- * they run, read as text rather than parsed as YAML — every step in that job
- * is a single-line `run:` scalar today, and a `run: |` block this cannot read
- * throws rather than silently reporting an empty list, so a shape this parser
- * cannot follow fails loudly instead of preflight quietly checking less than
- * it claims to.
+ * `ci.yml`'s `check` job, split into its steps — one entry per `- ` list item,
+ * each carrying every line from its own start up to (not including) the next
+ * step or the job's end. Comment and blank lines are dropped before grouping,
+ * since a full-line `#` comment between two steps — this file's own style,
+ * everywhere — would otherwise read as trailing content of the step above it.
  *
  * @param {string} yamlText
- * @returns {string[]}
+ * @returns {{startLine: number, lines: string[]}[]}
  */
-export function extractCheckJobCommands(yamlText) {
+function extractCheckJobSteps(yamlText) {
   const rows = yamlText.split("\n");
   const start = rows.indexOf("  check:");
   if (start === -1) {
@@ -343,16 +348,64 @@ export function extractCheckJobCommands(yamlText) {
       break;
     }
   }
-  const commands = [];
+  /** @type {{startLine: number, lines: string[]}[]} */
+  const steps = [];
+  /** @type {{startLine: number, lines: string[]} | null} */
+  let current = null;
   for (let i = start + 1; i < end; i++) {
     const line = rows[i];
-    const match = RUN_STEP.exec(line);
-    if (match === null) continue;
-    const value = match[1].trim();
-    if (value === "" || value === "|" || value === ">") {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (STEP_START.test(line)) {
+      if (current) steps.push(current);
+      current = { startLine: i + 1, lines: [line] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  }
+  if (current) steps.push(current);
+  return steps;
+}
+
+/**
+ * The raw `run:` command of every step in `ci.yml`'s `check` job that carries
+ * one, in the order they run, read as text rather than parsed as YAML.
+ *
+ * **A step is read only in the one shape this trusts: `run:` as its sole key,
+ * on one line, nothing above or below it.** A step with no `run:` key at all —
+ * `uses: actions/checkout@v7` and its `with:` — carries no command and is
+ * silently skipped, which loses nothing. A step that *does* carry `run:` but
+ * is not that one shape — `name:` or `if:` ahead of it, a block scalar
+ * (`run: |`, `run: |-`, `run: >-`, …), a `working-directory:` or `env:`
+ * alongside it — throws, naming the step, rather than either silently
+ * skipping it (the defect gate 1 measured for `name:`/`if:`-first steps: the
+ * old single-line regex never matched their `run:` at all, so the step, its
+ * command and any block scalar inside it vanished with nothing failing) or
+ * silently running it missing the modifier that changes what it does
+ * (`working-directory:`, `env:`). Gate 1's own reproduction, `extractCheckJobCommands`
+ * over 16 mutations of the real file, is what this shape is built to close.
+ *
+ * @param {string} yamlText
+ * @returns {string[]}
+ */
+export function extractCheckJobCommands(yamlText) {
+  const commands = [];
+  for (const step of extractCheckJobSteps(yamlText)) {
+    const runLines = step.lines.filter((l) => RUN_KEY.test(l));
+    if (runLines.length === 0) continue; // no `run:` key — not a command, nothing lost.
+    const first = step.lines[0];
+    const runMatch = RUN_KEY.exec(runLines[0]);
+    const value = (runMatch[1] ?? runMatch[2] ?? "").trim();
+    // Exactly one line, and it is `run:`'s: the one shape this trusts. Any
+    // other line in the step — `name:`/`if:` ahead of `run:`, a block
+    // scalar's own content below it, `working-directory:`, `env:` — makes
+    // `step.lines.length` more than 1, whatever order they came in.
+    if (step.lines.length > 1 || value === "" || BLOCK_SCALAR_TOKENS.has(value)) {
+      const reason = BLOCK_SCALAR_TOKENS.has(value)
+        ? "a block scalar"
+        : "other keys (name, if, working-directory, env, …) or a value spanning more than one line";
       throw new Error(
-        `${CI_WORKFLOW_PATH}'s check job has a run step this parser cannot read (a block scalar), ` +
-          `at line ${i + 1}: ${line}`,
+        `${CI_WORKFLOW_PATH}'s check job has a run step this parser cannot read faithfully ` +
+          `(${reason}), at line ${step.startLine}: ${first}`,
       );
     }
     commands.push(value);
@@ -361,55 +414,57 @@ export function extractCheckJobCommands(yamlText) {
 }
 
 /**
- * Every command `ci.yml`'s `check` job runs that already has a dedicated,
- * better check elsewhere in this file, and would only cost time to repeat
- * here for an identical verdict:
+ * The three commands `ci.yml`'s `check` job runs that already have a
+ * dedicated, better check elsewhere in this file, and would only cost time to
+ * repeat here for an identical verdict — `npm ci` (dependency installation,
+ * not a check; this script's own precondition, `worktree-farm.sh` then
+ * `npm run build`, already establishes the tree, and running it again would
+ * need the network this repo's own worktree rule forbids reaching for),
+ * `npm run check` (check 1's own first command, in every `testPlan` already)
+ * and `node scripts/citations-gate.mjs --against …` (check 2, `checkCitations`,
+ * which imports the very `gate`/`compareAgainst` this line would otherwise
+ * spawn a second, slower time for the same answer).
  *
- *   - `npm ci` is dependency installation, not a check, and this script's own
- *     precondition (`worktree-farm.sh` then `npm run build`, per the builder
- *     role page) already establishes the tree — running it again would need
- *     the network this repo's own worktree rule forbids reaching for.
- *   - `npm run check` is check 1's own first command, in every `testPlan`
- *     already.
- *   - `node scripts/citations-gate.mjs --against …` is check 2 (`checkCitations`),
- *     which imports the very `gate`/`compareAgainst` this line would otherwise
- *     spawn a second, slower time for the same answer — and its `--against`
- *     value is templated (`${{ github.base_ref || 'main' }}`), which this file
- *     would have to resolve a second way if it ever tried to run the line
- *     verbatim instead.
+ * **Each entry both recognises a step and holds it to an exact form.**
+ * `guard` is deliberately looser than `exact` — it is what lets this tell "an
+ * attempt at the covered step, spelled differently" (fail loudly) apart from
+ * "an unrelated step that happens to share no words with it" (fall through to
+ * the generic path below). Gate 1 measured the cost of collapsing that
+ * distinction into `guard` alone: `npm ci --ignore-scripts` used to fail
+ * `raw === "npm ci"` and fall through *uncaught*, so preflight spawned `npm ci`
+ * for real inside a worktree built on the farm — exactly what `common.md`
+ * forbids and what "`npm ci` is never spawned" now guarantees can't happen
+ * silently again, whatever the step's exact text.
  *
- * Matched by exact text or by prefix, not by position, so a step ci.yml
- * reorders is still recognised.
+ * @type {{guard: (raw: string) => boolean, exact: string}[]}
  */
-const ALREADY_COVERED = [
-  (/** @type {string} */ raw) => raw === "npm ci",
-  (/** @type {string} */ raw) => raw === "npm run check",
-  (/** @type {string} */ raw) => raw.startsWith("node scripts/citations-gate.mjs"),
+const COVERED = [
+  { guard: (raw) => raw === "npm ci" || raw.startsWith("npm ci "), exact: "npm ci" },
+  {
+    guard: (raw) => raw === "npm run check" || raw.startsWith("npm run check "),
+    exact: "npm run check",
+  },
+  {
+    guard: (raw) =>
+      raw === "node scripts/citations-gate.mjs" ||
+      raw.startsWith("node scripts/citations-gate.mjs "),
+    exact: "node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
+  },
 ];
 
 /**
- * A `run:` command's own words, as argv — quote-aware but nothing fancier,
- * because every command this reaches is a plain `node <script> --flag value`
- * line with no pipes and no variable expansion of its own. A `>` token is a
- * shell redirection this file never spawns a shell to honour, so it and
+ * A raw command's own words, as argv — quote-aware but nothing fancier,
+ * because every command that reaches this is a plain `node <script> --flag
+ * value` line with no shell operator and no variable expansion of its own,
+ * which `assertSpawnable` below verifies before this ever runs. A `>` token is
+ * a shell redirection this file never spawns a shell to honour, so it and
  * everything after it (`/dev/null`) is dropped rather than handed to
  * `spawnSync` as a literal argument.
- *
- * **A templated `${{ … }}` expression throws rather than being spawned
- * verbatim.** Every command carrying one is on `ALREADY_COVERED` above today;
- * if `ci.yml` ever adds another, running it with the four literal characters
- * `${{` as an argument would be silently wrong rather than caught, and this
- * is the one place that can still tell the difference.
  *
  * @param {string} raw
  * @returns {[string, string[]]}
  */
-export function parseShellCommand(raw) {
-  if (raw.includes("${{")) {
-    throw new Error(
-      `ci.yml's check job has a templated command this parser cannot resolve: ${raw}`,
-    );
-  }
+export function tokenize(raw) {
   const tokens = [];
   const WORD = /"([^"]*)"|'([^']*)'|(\S+)/gu;
   let match;
@@ -422,16 +477,59 @@ export function parseShellCommand(raw) {
 }
 
 /**
+ * A command this parser did not already reject as unreadable (`extractCheckJobCommands`,
+ * one line, one key) can still be one `spawnSync` cannot run faithfully: `&&`
+ * chains a second command, `|` pipes to one, and a trailing `# comment` is
+ * text YAML's own reader would have stripped before the shell ever saw it.
+ * None of the three is spawned with a shell here (the repo-wide rule this
+ * file itself is scanned for), so none of the three can be honoured either —
+ * this is what tells "cannot be run faithfully" from "can", and throws rather
+ * than handing `&&`, `|` or a comment word to `spawnSync` as a literal,
+ * meaningless argument.
+ *
+ * @param {string} raw
+ */
+export function assertSpawnable(raw) {
+  if (raw.includes("${{")) {
+    throw new Error(
+      `ci.yml's check job has a templated command this parser cannot resolve: ${raw}`,
+    );
+  }
+  if (raw.includes("&&") || raw.includes("|") || / #/u.test(raw)) {
+    throw new Error(
+      `ci.yml's check job has a command this parser cannot spawn faithfully (a shell operator ` +
+        `or a trailing comment, never run through a shell here): ${raw}`,
+    );
+  }
+}
+
+/**
  * Every `check`-job command this file does not already run some other way,
- * parsed into `[command, args]`.
+ * parsed into `[command, args]` — a covered step (`COVERED` above) matched
+ * exactly is dropped; a step whose text merely resembles one throws; anything
+ * else is checked for a shell operator or comment this file cannot honour and
+ * then tokenized.
  *
  * @param {string} yamlText
  * @returns {[string, string[]][]}
  */
 export function deriveExtraCiCommands(yamlText) {
-  return extractCheckJobCommands(yamlText)
-    .filter((raw) => !ALREADY_COVERED.some((match) => match(raw)))
-    .map((raw) => parseShellCommand(raw));
+  const out = [];
+  for (const raw of extractCheckJobCommands(yamlText)) {
+    const covered = COVERED.find((c) => c.guard(raw));
+    if (covered) {
+      if (raw !== covered.exact) {
+        throw new Error(
+          `ci.yml's check job runs "${raw}", which looks like ${JSON.stringify(covered.exact)} ` +
+            `but is not that exactly — preflight will not guess whether the difference matters.`,
+        );
+      }
+      continue; // matched exactly: covered elsewhere, never spawned here.
+    }
+    assertSpawnable(raw);
+    out.push(tokenize(raw));
+  }
+  return out;
 }
 
 /**
@@ -870,10 +968,18 @@ function removeWorktree(repo, dir) {
  */
 export function buildScratchMerge(repo, headOid, otherHeads) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-scratch-")));
-  spawnSync("git", ["worktree", "add", "--detach", "--quiet", dir, headOid], {
+  const added = spawnSync("git", ["worktree", "add", "--detach", "--quiet", dir, headOid], {
     cwd: repo,
+    encoding: "utf8",
     shell: false,
   });
+  if (added.status !== 0) {
+    removeWorktree(repo, dir);
+    throw fail(
+      `git worktree add ${dir} ${headOid} exited ${added.status}\n${(added.stderr ?? "").trim()}`,
+      added.status ?? 1,
+    );
+  }
   for (const head of otherHeads) {
     const result = spawnSync(
       "git",
@@ -893,8 +999,25 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
         encoding: "utf8",
         shell: false,
       });
-      spawnSync("git", ["merge", "--abort"], { cwd: dir, shell: false });
       const paths = lines(conflicted.stdout ?? "");
+      spawnSync("git", ["merge", "--abort"], { cwd: dir, shell: false });
+      // A non-zero `git merge` with no unmerged path is not a content conflict
+      // at all — measured live, this repo's own `commit-msg` hook rejecting the
+      // scratch commit's message read exactly this way before `--no-verify`
+      // was added, reporting a clean tree as `FAIL … conflicts on: ` with
+      // nothing after the colon. Anything else that can leave a merge
+      // non-zero with no unmerged path — a missing commit identity, signing —
+      // is the same misdiagnosis and gets the same repair: say so and stop,
+      // rather than report a conflict that was never there.
+      if (paths.length === 0) {
+        removeWorktree(repo, dir);
+        throw fail(
+          `git merge --no-ff --no-verify ${head.oid} in a scratch worktree exited ` +
+            `${result.status} with no conflicting path — not a content conflict, so this will not ` +
+            `report one:\n${(result.stderr ?? "").trim()}`,
+          result.status ?? 1,
+        );
+      }
       removeWorktree(repo, dir);
       return { ok: false, conflictHead: head, paths };
     }
@@ -934,6 +1057,28 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
  * zero-heads case above does: "checked everything, found nothing" and
  * "nothing to check" must not read alike.
  *
+ * **Owner decision, 2026-09-28 (option B of three offered): the fold also
+ * carries `base`'s current tip in, when `HEAD` does not already contain it.**
+ * `git`'s own `pull_request` checkout defaults to the merge of the PR branch
+ * with the base it targets — `refs/pull/<n>/merge` — so a branch that has
+ * fallen behind `base` is not the tree CI actually checks, and this fold
+ * quietly checked the stale one. `git merge-base --is-ancestor base headOid`
+ * decides once per call, not once per head: true (the ordinary case, a
+ * branch built recently off a `base` that has not since moved) folds nothing
+ * extra; false folds `base`'s tip into the *same* worktree as the head under
+ * test, ahead of it, so the tree matches what a real pull request run would
+ * see. **A three-party gap is disclosed rather than closed**: two heads that
+ * are each clean paired with `HEAD` (and with `base`, once folded) can still
+ * break a citation only when *both* land beside `HEAD` together, and this
+ * check — one other head at a time — cannot see that. Option C (fold every
+ * mutually-clean head together, in addition to this) was not built: it
+ * reintroduces exactly the shape option B's sibling repair (folding every
+ * head together, full stop) just closed for two heads that conflict with
+ * each other, one layer up for three that do not — this repository's own
+ * orchestrator already runs a whole-batch scratch merge before a batch lands
+ * (`.claude/skills/orchestrate-tickets/reference/records.md`), which is
+ * where that question is answered today.
+ *
  * @param {string} repo
  * @param {string} headOid
  * @param {{number: number, headRefName: string, oid: string}[]} otherHeads reachable only
@@ -948,14 +1093,37 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
     };
   }
 
+  // Resolved once: every head's fold reads the same answer, and a `base`
+  // that does not resolve here is already `preflight()`'s own `EXIT.setup`,
+  // never reached through this function in the ordinary pipeline.
+  const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", base, headOid], {
+    cwd: repo,
+    shell: false,
+  });
+  const baseIsAncestor = baseAncestor.status === 0;
+  const baseOid = baseIsAncestor
+    ? null
+    : spawnSync("git", ["rev-parse", base], {
+        cwd: repo,
+        encoding: "utf8",
+        shell: false,
+      }).stdout?.trim();
+
   const out = [];
   let problems = 0;
   for (const head of otherHeads) {
-    const label = `HEAD with #${head.number} ${head.headRefName}`;
-    const merge = buildScratchMerge(repo, headOid, [head]);
+    const foldingBase = !baseIsAncestor && baseOid;
+    const label = foldingBase
+      ? `HEAD with #${head.number} ${head.headRefName} (plus ${base}, which HEAD does not yet contain)`
+      : `HEAD with #${head.number} ${head.headRefName}`;
+    const toFold = foldingBase ? [{ number: 0, headRefName: base, oid: baseOid }, head] : [head];
+    const merge = buildScratchMerge(repo, headOid, toFold);
     if (!merge.ok) {
       problems += 1;
-      out.push(`FAIL  scratch merge of ${label} conflicts on: ${merge.paths.join(", ")}`);
+      out.push(
+        `FAIL  scratch merge of ${label} — folding in ${merge.conflictHead.headRefName} ` +
+          `conflicts on: ${merge.paths.join(", ")}`,
+      );
       continue;
     }
     try {
@@ -1025,11 +1193,12 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
  * positive control a silent pass would defeat.
  *
  * **Its second half, added by repo-79, is `checkScratchMergeCitations`
- * above**: every head this loop finds reachable is folded into one scratch
- * worktree and the citation gate runs over the result, which is what catches
- * a citation two clean-merging heads move between them. Only run when a
- * `base` is given — every fixture in this suite that calls `checkMergeTree`
- * directly and does not pass one keeps this file's older, narrower verdict.
+ * above**: each reachable head is folded onto `HEAD` on its own, in its own
+ * scratch worktree, and the citation gate runs over the result — which is
+ * what catches a citation two clean-merging heads move between them. Only
+ * run when a `base` is given — every fixture in this suite that calls
+ * `checkMergeTree` directly and does not pass one keeps this file's older,
+ * narrower verdict.
  *
  * @param {string} repo
  * @param {{run?: typeof runGit, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[], base?: string, grandfathered?: Map<string, number>}} [options]

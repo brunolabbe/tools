@@ -45,7 +45,8 @@ import {
   mergeTreeConflicts,
   parseArgs,
   parseMergeTreeConflicts,
-  parseShellCommand,
+  assertSpawnable,
+  tokenize,
   preflight,
   runBuildCommand,
   scriptsTouched,
@@ -995,30 +996,37 @@ test("deriveExtraCiCommands runs only what no other check already covers", () =>
   ]);
 });
 
-test("parseShellCommand tokenizes a plain command and drops a shell redirection", () => {
-  expect(parseShellCommand("node scripts/status.mjs --json > /dev/null")).toEqual([
+test("tokenize splits a plain command and drops a shell redirection", () => {
+  expect(tokenize("node scripts/status.mjs --json > /dev/null")).toEqual([
     "node",
     ["scripts/status.mjs", "--json"],
   ]);
 });
 
-test("parseShellCommand keeps a double-quoted argument as one token", () => {
-  expect(parseShellCommand('node scripts/citations-gate.mjs --against "origin/main"')).toEqual([
+test("tokenize keeps a double-quoted argument as one token", () => {
+  expect(tokenize('node scripts/citations-gate.mjs --against "origin/main"')).toEqual([
     "node",
     ["scripts/citations-gate.mjs", "--against", "origin/main"],
   ]);
 });
 
 /**
- * `ALREADY_COVERED` excludes every command ci.yml carries a template in
- * today, so this is a defence for the day a new one is added rather than a
- * live path — and it is exactly what stands between that day and a spawn
- * that receives the four literal characters `${{` as an argument.
+ * `COVERED` excludes every command ci.yml carries a template in today, so
+ * this is a defence for the day a new one is added rather than a live path —
+ * and it is exactly what stands between that day and a spawn that receives
+ * the four literal characters `${{` as an argument.
  */
-test("parseShellCommand throws rather than spawn a templated expression verbatim", () => {
+test("assertSpawnable throws rather than let a templated expression reach a spawn verbatim", () => {
   expect(() =>
-    parseShellCommand("node scripts/x.mjs --against \"origin/${{ github.base_ref || 'main' }}\""),
+    assertSpawnable("node scripts/x.mjs --against \"origin/${{ github.base_ref || 'main' }}\""),
   ).toThrow(/templated command/);
+});
+
+test("assertSpawnable throws on a shell operator or a trailing comment", () => {
+  expect(() => assertSpawnable("node a.mjs && node b.mjs")).toThrow(/shell operator/);
+  expect(() => assertSpawnable("node a.mjs | grep x")).toThrow(/shell operator/);
+  expect(() => assertSpawnable("node a.mjs # a note")).toThrow(/shell operator/);
+  expect(() => assertSpawnable("node a.mjs --flag value")).not.toThrow();
 });
 
 /**
@@ -1097,9 +1105,12 @@ test("checkCiCommands runs the ci.yml commands no other check covers, for real, 
 });
 
 /**
- * Done when's first planted failure, reproduced exactly: #305 passed preflight
- * twice and then failed CI on this same command, over a `SKILL.md` carrying a
- * citation with no anchor text.
+ * Done when's first planted failure, in the same shape rather than replayed
+ * exactly: #305's first head failed this same command over a `SKILL.md`
+ * citation the gate found `moved`; this fixture plants one that is
+ * `unanchored` instead, which the same command fails on for the same reason
+ * — `--require-anchors` in force and nothing preflight ran before this ticket
+ * to catch either.
  */
 test("checkCiCommands fails on a branch shaped like #305's first head — an unanchored SKILL.md citation", () => {
   const repo = makeRepo();
@@ -1249,7 +1260,7 @@ test("buildScratchMerge folds every reachable head in and cleans the worktree up
 
 /** Not exported — `buildScratchMerge`'s own cleanup is proven by the conflict test above. */
 function removeWorktreeForTest(repo: string, dir: string): void {
-  spawnSync("git", ["worktree", "remove", "--force", dir], { cwd: repo });
+  spawnSync("git", ["worktree", "remove", "--force", dir], { cwd: repo, shell: false });
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
@@ -1441,6 +1452,138 @@ test("checkScratchMergeCitations does not fail HEAD for a conflict between two o
     expect(result.lines.join("\n")).toMatch(
       /ok {4}scratch merge of HEAD with #294 planner-release/,
     );
+  } finally {
+    repo.cleanup();
+  }
+});
+
+// --- repo-79, gate 1 round: a non-conflict merge failure is not a conflict --
+
+/**
+ * Gate 1's low finding: a non-zero `git merge` with no unmerged path is not a
+ * content conflict, and reporting it as one prints `FAIL … conflicts on: `
+ * with nothing after the colon — measured live before `--no-verify` was
+ * added, when this repo's own `commit-msg` hook rejected the scratch commit's
+ * message and the merge itself was clean. `--no-verify` closes that one
+ * cause; an oid this checkout cannot merge at all — unreachable, or simply
+ * not a commit — is a different one, reproduced here without needing a hook:
+ * `git merge --no-ff --no-verify <bogus>` exits 1 with "not something we can
+ * merge" and no unmerged path, the same shape.
+ */
+test("buildScratchMerge throws rather than report a non-conflict merge failure as a conflict", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "one\n");
+    repo.commitAll("base");
+    const headOid = repo.git("rev-parse", "HEAD");
+
+    expect(() =>
+      buildScratchMerge(repo.dir, headOid, [
+        { number: 1, headRefName: "bogus", oid: "a".repeat(40) },
+      ]),
+    ).toThrow(/not a content conflict/);
+    // Cleaned up despite throwing, same as every other exit from this function.
+    expect(repo.git("worktree", "list")).not.toMatch(/preflight-scratch-/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** `git worktree add`'s own status is checked, not silently ignored. */
+test("buildScratchMerge throws naming git worktree add when it cannot create the scratch worktree", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("f.txt", "one\n");
+    repo.commitAll("base");
+
+    expect(() =>
+      buildScratchMerge(repo.dir, "a".repeat(40), [
+        { number: 1, headRefName: "irrelevant", oid: "b".repeat(40) },
+      ]),
+    ).toThrow(/git worktree add/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * Owner decision, 2026-09-28 (option B): the fold also carries `base`'s
+ * current tip in when `HEAD` does not already contain it, because a real
+ * `pull_request` run checks `HEAD` merged with `base`, not `HEAD` alone.
+ * `main` advances past the commit "mine" branched from, shifting the line
+ * "mine"'s own record cites — a real base moving underneath an open branch.
+ * "o" is an unrelated other open head, needed only to give the loop
+ * something to iterate over; it neither touches `src/tls.ts` nor conflicts
+ * with anything. Without folding `base` in, the merged tree is `HEAD` (whose
+ * own `src/tls.ts` never moved) plus "o" (which never touches it either), so
+ * the citation reads clean — the gap the owner measured. With it, the merged
+ * tree also carries `main`'s shift, and the citation moves.
+ */
+test("checkScratchMergeCitations folds base in when HEAD does not contain it, catching a citation base itself moved", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const rootOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "o", rootOid);
+    repo.write("other.md", "unrelated\n");
+    repo.commitAll("an unrelated open pull request");
+    const oidOther = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("main moves on: insert a line above the cited region");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 9, headRefName: "o", oid: oidOther }],
+      "main",
+      new Map(),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
+    expect(result.lines.join("\n")).toMatch(/plus main, which HEAD does not yet contain/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/** The positive control: `HEAD` already contains `base`, so nothing extra is folded. */
+test("checkScratchMergeCitations does not fold base in when HEAD already contains it", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "o");
+    repo.write("other.md", "unrelated\n");
+    repo.commitAll("an unrelated open pull request");
+    const oidOther = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 9, headRefName: "o", oid: oidOther }],
+      "main",
+      new Map(),
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.lines.join("\n")).not.toMatch(/which HEAD does not yet contain/);
   } finally {
     repo.cleanup();
   }
