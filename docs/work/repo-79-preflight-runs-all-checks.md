@@ -116,3 +116,53 @@ a merged state (repo-79)"` over this real checkout: `check`, `ciCommands`,
     (`release-please--branches--main--components--downloader`) conflicts on
     `.release-please-manifest.json` — which is the new check finding a real
     thing, not a defect in it.
+- 2026-09-27, sent back before gating — **wrong**, and corrected. The
+  orchestrator measured, sha for sha, that this branch's own `mergeTree`
+  failure above was not a real conflict of `HEAD`'s: `#284` and `#294` (two
+  open release-please pull requests) conflict with _each other_ on
+  `.release-please-manifest.json`, and each merges cleanly with `HEAD` on its
+  own — `git merge-tree --write-tree` against both pairs, run by the
+  orchestrator, confirmed it. `checkScratchMergeCitations`'s first shape
+  folded every reachable other open head into one worktree, one after
+  another, so a conflict between two heads that are _not_ `HEAD` landed on
+  `HEAD`'s own verdict — and two open release pull requests is this
+  repository's ordinary standing state, so that shape would have failed
+  preflight, and so blocked every landing (`ci.yml`/`SKILL.md` step 9 both
+  make `preflight` exit 0 a ship condition), almost always.
+  - **Fix: fold each other head onto `HEAD` separately, never two non-`HEAD`
+    heads together** — the first of the two routes the orchestrator offered,
+    chosen over "skip and report a head whose fold conflicts with an earlier
+    non-`HEAD` head" because it needs no notion of "earlier": each head gets
+    its own scratch worktree built fresh from `HEAD`, one merge, one citation
+    gate run, then discarded, so a conflict between two other heads simply
+    cannot arise inside this check at all rather than being detected and
+    excused after the fact. `buildScratchMerge` itself (and its own two
+    tests, which prove a genuine multi-head fold conflict is reported and
+    that a clean fold is cleaned up afterward) is unchanged; only
+    `checkScratchMergeCitations` now calls it once per head instead of once
+    with the whole list. This does cost the case where two heads are each
+    clean against `HEAD` alone but only break a citation when _both_ land
+    beside it — genuinely uncaught by this shape — but that case was never
+    this ticket's reproduction (its own Why and Done when both describe two
+    parties: one record, one line-mover), and the alternative is the outage
+    just measured. Not a change to what `Done when` promises: both required
+    reproductions are still exactly a `HEAD` and one other head.
+  - New test, `checkScratchMergeCitations does not fail HEAD for a conflict
+between two other heads` (`scripts/test/preflight.test.ts`), shaped
+    exactly like `#284`/`#294`: two heads that conflict with each other on
+    one file and each merge cleanly with `HEAD`. Measured directly against
+    both shapes of the code: red on `981c0cb` (`expected { ok: false } to
+match { ok: true }`), green after the fix, 64 of 64 in the same run.
+  - Commands, re-run after the fix: `npx vitest run
+scripts/test/preflight.test.ts` — 64 of 64. `npx vitest run --project
+repo` — 544 of 544. `npm run check` exit 0. `node
+scripts/citations-gate.mjs --against origin/main` exit 0: 127 enforced, 0
+    failing (this fix moved two more `scripts/preflight.mjs` lines repo-51's
+    record cites — `:1122`→`:1134`→`:1137` and `:1043`→`:1055`→`:1058`,
+    repointed twice, once by hand and once again after `npm run format`
+    reflowed the same lines; final coordinates are the ones now in the
+    record). `node scripts/preflight.mjs --base origin/main --title
+"feat(repo): preflight runs every ci check step, plus citations on a
+merged state (repo-79)"` over this real checkout, live PR list: **exit
+    0** — every check `ok`, `mergeTree` included, all three real open heads
+    (`#311`, `#294`, `#284`) both merge-tree-clean and scratch-merge-clean.

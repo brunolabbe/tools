@@ -904,14 +904,31 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
 
 /**
  * Check 5's second half (repo-79): the citation gate over a scratch merge of
- * `HEAD` with every other reachable open pull request head, which is the
- * check `git merge-tree` cannot make. Two heads that touch no common line
- * merge cleanly by git's own definition and can still leave an anchored
- * citation in one of them pointing at the wrong line in the merged state —
- * repo-79's own Why: repo-60's record against repo-63's splice, `hasGateRecord`
- * against repo-63's unmerged record, and `preflight.mjs` line 410 against
- * repo-67's record, all clean merges by `git merge-tree`'s own reckoning and
- * all found only by a hand-built scratch merge until now.
+ * `HEAD` with each other reachable open pull request head **in turn** —
+ * never with two of them at once — which is the check `git merge-tree`
+ * cannot make. Two heads that touch no common line merge cleanly by git's
+ * own definition and can still leave an anchored citation in one of them
+ * pointing at the wrong line in the merged state — repo-79's own Why:
+ * repo-60's record against repo-63's splice, `hasGateRecord` against
+ * repo-63's unmerged record, and `preflight.mjs` line 410 against repo-67's
+ * record, all clean merges by `git merge-tree`'s own reckoning and all found
+ * only by a hand-built scratch merge until now.
+ *
+ * **One fold per head, not one fold of all of them, and that is a repair of
+ * this function's own first shape, not the original design.** Folding every
+ * reachable head into a single worktree tests whether *those heads* merge
+ * with each other, which is nobody's question here and can be false for
+ * reasons that have nothing to do with `HEAD` — the orchestrator measured it
+ * live, sha for sha, against this repository's own two open release-please
+ * pull requests: #284 and #294 each merge cleanly with `HEAD`, and conflict
+ * with *each other* on `.release-please-manifest.json`, which the first
+ * version of this function folded into one FAIL blamed on `HEAD`. Two open
+ * release pull requests is an ordinary standing state here, so that
+ * shape would have failed preflight for every branch in the repository
+ * most of the time. Folding one head onto `HEAD` at a time asks the only
+ * question this check exists to ask — "if this one landed beside mine,
+ * would my citations still hold" — and can never itself report a conflict
+ * between two heads that are not `HEAD`.
  *
  * An empty `otherHeads` says so explicitly, for the same reason the
  * zero-heads case above does: "checked everything, found nothing" and
@@ -931,56 +948,54 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
     };
   }
 
-  const merge = buildScratchMerge(repo, headOid, otherHeads);
-  if (!merge.ok) {
-    return {
-      ok: false,
-      lines: [
-        `FAIL  scratch merge conflicts folding in #${merge.conflictHead.number} ` +
-          `${merge.conflictHead.headRefName}: ${merge.paths.join(", ")}`,
-      ],
-    };
-  }
-
-  try {
-    const result = citationsGate(merge.dir, SCOPE, grandfathered);
-    const problems = [];
-    for (const r of result.failed) problems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
-    for (const r of result.regressed) {
-      problems.push(`WORSE ${r.record} — ${r.failing} failing, its entry allows ${r.allowed}`);
+  const out = [];
+  let problems = 0;
+  for (const head of otherHeads) {
+    const label = `HEAD with #${head.number} ${head.headRefName}`;
+    const merge = buildScratchMerge(repo, headOid, [head]);
+    if (!merge.ok) {
+      problems += 1;
+      out.push(`FAIL  scratch merge of ${label} conflicts on: ${merge.paths.join(", ")}`);
+      continue;
     }
-    for (const r of result.staleEntries) problems.push(`STALE ${r.record} — ${r.why}`);
-
-    let history;
     try {
-      history = compareAgainst(merge.dir, base, grandfathered);
-    } catch (error) {
-      problems.push(`FAIL  compareAgainst ${base}: ${/** @type {Error} */ (error).message}`);
-      history = null;
-    }
-    for (const r of history?.raised ?? []) {
-      problems.push(`RAISED ${r.record} — its GRANDFATHERED entry went from ${r.was} to ${r.now}`);
-    }
+      const result = citationsGate(merge.dir, SCOPE, grandfathered);
+      const headProblems = [];
+      for (const r of result.failed)
+        headProblems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
+      for (const r of result.regressed) {
+        headProblems.push(
+          `WORSE ${r.record} — ${r.failing} failing, its entry allows ${r.allowed}`,
+        );
+      }
+      for (const r of result.staleEntries) headProblems.push(`STALE ${r.record} — ${r.why}`);
 
-    if (problems.length === 0) {
-      return {
-        ok: true,
-        lines: [
-          `ok    scratch merge of HEAD with ${otherHeads.length} other open pull request head(s) ` +
-            `is clean over ${result.inScope.length} record(s)`,
-        ],
-      };
+      let history;
+      try {
+        history = compareAgainst(merge.dir, base, grandfathered);
+      } catch (error) {
+        headProblems.push(`FAIL  compareAgainst ${base}: ${/** @type {Error} */ (error).message}`);
+        history = null;
+      }
+      for (const r of history?.raised ?? []) {
+        headProblems.push(
+          `RAISED ${r.record} — its GRANDFATHERED entry went from ${r.was} to ${r.now}`,
+        );
+      }
+
+      if (headProblems.length === 0) {
+        out.push(
+          `ok    scratch merge of ${label} is clean over ${result.inScope.length} record(s)`,
+        );
+      } else {
+        problems += 1;
+        out.push(`scratch merge of ${label}:`, ...headProblems);
+      }
+    } finally {
+      removeWorktree(repo, merge.dir);
     }
-    return {
-      ok: false,
-      lines: [
-        `scratch merge of HEAD with ${otherHeads.length} other open pull request head(s):`,
-        ...problems,
-      ],
-    };
-  } finally {
-    removeWorktree(repo, merge.dir);
   }
+  return problems === 0 ? { ok: true, lines: out } : { ok: false, lines: out };
 }
 
 /**

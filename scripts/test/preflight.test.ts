@@ -1378,3 +1378,70 @@ test("checkMergeTree runs the scratch-merge citations step and fails on the same
     repo.cleanup();
   }
 });
+
+/**
+ * The orchestrator's own finding on this ticket, reproduced: two open heads
+ * that are not `HEAD` — shaped like this repository's own #284 and #294,
+ * two release-please pull requests — conflict with *each other* on a shared
+ * file, and each merges cleanly with `HEAD` on its own. Folding every
+ * reachable head into one worktree (this function's first shape) reported
+ * that as `HEAD`'s own conflict; two open release pull requests is this
+ * repository's ordinary standing state, so that shape would have failed
+ * preflight for almost every branch, almost always. Folding one head onto
+ * `HEAD` at a time — this function's repaired shape — asks only whether
+ * `HEAD` and that one head conflict, and can never itself see the other two
+ * heads collide.
+ */
+test("checkScratchMergeCitations does not fail HEAD for a conflict between two other heads", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("manifest.json", "1\n");
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("an unrelated change, never touching manifest.json");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "downloader-release");
+    repo.write("manifest.json", "2\n");
+    repo.commitAll("downloader release-please: bump to 2");
+    const oidDownloader = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "planner-release");
+    repo.write("manifest.json", "3\n");
+    repo.commitAll("planner release-please: bump to 3");
+    const oidPlanner = repo.git("rev-parse", "HEAD");
+
+    // Sanity: the two release heads really do conflict with each other, and
+    // neither conflicts with "mine" — otherwise this is not the shape measured.
+    const crossConflict = mergeTreeConflicts(repo.dir, oidDownloader, oidPlanner);
+    expect(crossConflict.conflict).toBe(true);
+    repo.git("checkout", "-q", "mine");
+    expect(mergeTreeConflicts(repo.dir, "HEAD", oidDownloader).conflict).toBe(false);
+    expect(mergeTreeConflicts(repo.dir, "HEAD", oidPlanner).conflict).toBe(false);
+
+    const result = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [
+        { number: 284, headRefName: "downloader-release", oid: oidDownloader },
+        { number: 294, headRefName: "planner-release", oid: oidPlanner },
+      ],
+      mainOid,
+      new Map(),
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.lines.join("\n")).toMatch(
+      /ok {4}scratch merge of HEAD with #284 downloader-release/,
+    );
+    expect(result.lines.join("\n")).toMatch(
+      /ok {4}scratch merge of HEAD with #294 planner-release/,
+    );
+  } finally {
+    repo.cleanup();
+  }
+});
