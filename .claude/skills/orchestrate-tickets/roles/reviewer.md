@@ -66,7 +66,11 @@ ticket as it is on the branch, every section you are returning spliced in above
 `## Log` in gate order — on a re-gate, the earlier ones you re-issued too, since
 the lander commits them together — then
 `node scripts/citations.mjs <copy> --section Review --require-anchors
---require-distinct-anchors`. A section that fails there costs a round
+--require-distinct-anchors --require-claude-pins` — the last flag added since
+repo-78, so the dry run refuses what CI refuses: `citations-gate.mjs` checks
+every `.claude/` citation for a pin unconditionally, and this command used to
+omit the flag that would have caught one before you returned the section
+(repo-78 gate 1, F2). A section that fails there costs a round
 (2026-09-13); skipping it costs the same round later, on the lander's own
 splice this time (`repo-62`, 2026-09-27). `citations.mjs` resolves every
 `file:line` against whatever tree the process running it sits in, so the check
@@ -75,9 +79,20 @@ is only real from the worktree you already detached to
 contain a double quote, and a coordinate into the ticket's own file can never
 be distinct — name the section instead.
 
-**Cite line numbers against the tip you reviewed**, and name that sha in the
-section. **Never write a `@sha` pin to a branch-only commit**: the branch is
-deleted on merge and the pin goes `unresolvable` in CI for everyone (2026-09-14).
+**Pin a citation of content that already existed at the base to the base —
+or to any other `main` commit that holds it** — `file@<base sha>:line`,
+anchor after it as always (repo-78) — since a commit reachable from `main`
+stays reachable whatever this branch, or any other branch merged after you
+write the section, does to the same file. **Cite content the branch under
+review itself introduces unpinned, against the tip you reviewed**, and name
+that sha in the section — there is nothing on `main` yet to pin it to —
+**except under `.claude/`, where introduced content is named by the page and
+the heading it sits under, with no line number**: `citations-gate.mjs` checks
+every `.claude/` citation for a pin whether or not the content is this
+branch's own, so an unpinned line into one is `unpinned-volatile` in CI the
+day it is committed, not merely exposed later (repo-78 gate 1, F2). **Never
+write a `@sha` pin to a branch-only commit**: the branch is deleted on merge
+and the pin goes `unresolvable` in CI for everyone (2026-09-14).
 `.claude/skills/orchestrate-tickets/reference/records.md` has the forms that
 survive.
 

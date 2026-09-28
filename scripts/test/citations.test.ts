@@ -2907,3 +2907,61 @@ test("extractSections still hides headings inside an ordinary backtick or tilde 
   const tilde = ["## Real", "~~~`md", "## Not a heading", "~~~", "tail"].join("\n");
   expect(extractSections(tilde)).toEqual([{ title: "Real", level: 2, start: 1, end: 5 }]);
 });
+
+/**
+ * **repo-78.** `records.md`'s Why section names four gate records whose
+ * citation went stale from a commit that landed after it — a landing splice
+ * into another ticket's file, an unrelated in-place rewrite of a script, an
+ * edit to a heading's file from a different pull request entirely, and one
+ * (repo-48) that is not "another open PR" at all but the same record's own
+ * later round, broken by the same discipline that was meant to prevent it.
+ * The first three are "another open PR editing the cited line"; none of the
+ * four is the drift `--rev` already answers (a fix on the *same* branch
+ * moving the *same* citation, seen once already at the moment it is fixed).
+ *
+ * Reused against the same two-commit tree the pin tests above use — the
+ * second commit there ("the fix, which inserted three lines above the cited
+ * region") stands in for an unrelated later commit, since a citation checker
+ * cannot tell "my own branch's fix" from "somebody else's merge" apart: both
+ * are just a later commit that moved the line.
+ *
+ * Red, under the rule this ticket replaces — cite the tip, unpinned,
+ * anchored, "re-resolved as the last action before commit": true when
+ * written, `MOVED` the moment a later commit lands. Green, under the rule
+ * this ticket sets — pin the same claim to the base — because a pin is read
+ * at its own rev regardless of what the working tree now holds.
+ *
+ * **This is repo-35's own pin capability, not new code — it was already
+ * asserted at the base by "a pinned citation is checked at its own rev,
+ * whatever tree the run reads" above, on the same fixture** (repo-78 gate 1,
+ * F4). What repo-78 changed is the *convention* — which form a gate writes,
+ * not what the checker can verify — so this test's job is to demonstrate
+ * that convention's payoff under its own framing and name, for `records.md`
+ * to cite, not to prove a new capability exists. It cannot fail on anything
+ * repo-78's own diff changed, and is not meant to: the mechanical
+ * enforcement of the new convention is deliberately left to repo-80's
+ * `--land` (`docs/work/repo-80-land-records-one-command.md`), not built here.
+ */
+test("a citation pinned to the base survives another open PR editing the cited line", () => {
+  const { dir, before, cleanup } = withInsertionRepo();
+  const record = path.join(dir, "repo-78.md");
+  fs.writeFileSync(
+    record,
+    [
+      "## Review",
+      "",
+      'Cited against the tip, the rule this ticket replaces: `src/tls.ts:2-3 "Defence in depth"`.',
+      `Pinned to the base, the rule this ticket sets: \`src/tls.ts@${before}:2-3 "Defence in depth"\`.`,
+      "",
+    ].join("\n"),
+  );
+  try {
+    const result = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+    expect(result.stdout).toMatch(summary(1, 1, 0, 0, 2));
+    expect(result.status).toBe(EXIT.moved);
+    expect(result.stdout).toContain('MOVED      src/tls.ts:2-3 "Defence in depth"');
+    expect(result.stdout).toContain(`ok         src/tls.ts@${before}:2-3 "Defence in depth"`);
+  } finally {
+    cleanup();
+  }
+});
