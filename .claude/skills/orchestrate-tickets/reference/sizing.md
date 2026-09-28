@@ -139,7 +139,15 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   and the reproduction **is** the verification. In the second session that builder
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
   no reviewer at all. **A page-only `chore` with no source change is the other
-  case**, covered by the pairing table's "a docs/records-only chore" row (2026-09-27: that form was superseded by a named row in `SKILL.md`'s pairing table, which specifies one narrow gate post-PR, because `repo-64` did not get it). The sentence ending `Gate: PREFLIGHT` below is historical; read the table for the present rule.
+  case** — this form was superseded by a named row in `SKILL.md`'s pairing table,
+  added 2026-09-27 after `repo-64`, which specifies one narrow gate post-PR. On
+  2026-09-27 the owner, asked which applies, chose the table. The following
+  historical description still holds as a record: it ships on
+  `scripts/preflight.mjs` exiting 0 and the orchestrator's own read, and its
+  record is a `## Review` headed `Gate: PREFLIGHT` naming the sha, written by the
+  orchestrator — the verdict `review-ticket` reserves for it. Three such tickets
+  on 2026-09-20 would each have cost an Opus round to gate what a diff of prose
+  and a mechanical check already showed.
 - **The whole-branch gate on a batch merged into one branch runs only when a
   merge conflicted in source.** Every piece was gated on its own branch; when
   the merges collide only on a shared `include` line or on pins, preflight, the
