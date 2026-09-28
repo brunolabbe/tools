@@ -207,24 +207,24 @@ check`, the citations-gate step) is matched exactly; `npm ci` is never
      mutations, table below (old → new; "loud" means throws, naming the
      step):
 
-     | mutation                                               | old                                                                | new                      |
-     | ------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------ |
-     | baseline                                               | correct                                                            | correct                  |
-     | addStep                                                | picked up                                                          | picked up                |
-     | gateArgChanged (`--displaced-since` appended)          | silently excluded, not run, not flagged                            | **loud**                 |
-     | citationsArgChanged (`--require-claude-pins` appended) | picked up                                                          | picked up                |
-     | blockPipe (`run: \|`)                                  | loud                                                               | loud                     |
-     | blockPipeDash (`run: \|-`)                             | silently spawned `"                                                | -"` as a literal command | **loud** |
-     | blockFoldDash (`run: >-`)                              | silently spawned `">-"` as a literal command                       | **loud**                 |
-     | namedStep (`name:` then `run:`)                        | silently invisible — step and command vanish                       | **loud**                 |
-     | namedBlock (`name:` then `run: \|`)                    | silently invisible                                                 | **loud**                 |
-     | andChain (`&&`)                                        | silently spawned with `&&` as a literal argv token                 | **loud**                 |
-     | pipe (`\|`)                                            | silently spawned with `\|` as a literal argv token                 | **loud**                 |
-     | trailingComment (`npm run check # …`)                  | silently spawned as `npm run … # … …`, several bogus args          | **loud**                 |
-     | npmCiArgs (`npm ci --ignore-scripts`)                  | **silently spawned for real**, inside a worktree built on the farm | **loud, never spawned**  |
-     | workingDir (`working-directory:`)                      | silently picked up, wrong cwd                                      | **loud**                 |
-     | envStep (`env:`)                                       | silently picked up, missing env                                    | **loud**                 |
-     | stepIf (`if:` then `run:`)                             | silently invisible                                                 | **loud**                 |
+     | mutation                                               | old                                                                                                                   | new                                |
+     | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+     | baseline                                               | correct                                                                                                               | correct                            |
+     | addStep                                                | picked up                                                                                                             | picked up                          |
+     | gateArgChanged (`--displaced-since` appended)          | silently excluded, not run, not flagged                                                                               | **loud**                           |
+     | citationsArgChanged (`--require-claude-pins` appended) | picked up                                                                                                             | picked up                          |
+     | blockPipe (`run: \|`)                                  | loud                                                                                                                  | loud                               |
+     | blockPipeDash (`run: \|-`)                             | attempted to spawn a command literally named `\|-`, which fails immediately (ENOENT) — loud, but for the wrong reason | **loud, and for the right reason** |
+     | blockFoldDash (`run: >-`)                              | attempted to spawn a command literally named `>-`, which fails immediately (ENOENT) — loud, but for the wrong reason  | **loud, and for the right reason** |
+     | namedStep (`name:` then `run:`)                        | silently invisible — step and command vanish                                                                          | **loud**                           |
+     | namedBlock (`name:` then `run: \|`)                    | silently invisible                                                                                                    | **loud**                           |
+     | andChain (`&&`)                                        | silently spawned with `&&` as a literal argv token                                                                    | **loud**                           |
+     | pipe (`\|`)                                            | silently spawned with `\|` as a literal argv token                                                                    | **loud**                           |
+     | trailingComment (`npm run check # …`)                  | silently spawned as `npm run … # … …`, several bogus args                                                             | **loud**                           |
+     | npmCiArgs (`npm ci --ignore-scripts`)                  | **silently spawned for real**, inside a worktree built on the farm                                                    | **loud, never spawned**            |
+     | workingDir (`working-directory:`)                      | silently picked up, wrong cwd                                                                                         | **loud**                           |
+     | envStep (`env:`)                                       | silently picked up, missing env                                                                                       | **loud**                           |
+     | stepIf (`if:` then `run:`)                             | silently invisible                                                                                                    | **loud**                           |
 
      `npx vitest run scripts/test/preflight.test.ts -t <mutation-shaped test>`
      is not how these were proven — the gate's own `gate1-mutate.mjs`,
@@ -266,3 +266,142 @@ runs every ci check step, plus citations on a merged state (repo-79)"`
     against this checkout's live PR list (now 4 open heads, `#312` new since
     round 1): **exit 0**, wall time 40.8 s, every check `ok` including
     `mergeTree` against all four real heads.
+- 2026-09-28 — gate 2 (ticket-reviewer, code-review at medium over the round
+  diff `f772ee9..6b10392`) returned CONCERNS: two new meds and five new
+  lows, all of gate 1's own findings still verified fixed. Dispatched as a
+  fixer round with mechanical findings; owner decision, 2026-09-28 via
+  `AskUserQuestion`: fix both meds and the cheap lows in one round, no third
+  gate — the orchestrator's own recommendation, taken over none (an earlier
+  answer, "land the records first, then fixes", was withdrawn once the
+  orchestrator found the base-fold fix had to move lines the merged records
+  cite). Reproduced every finding with the gate's own probes
+  (`gate1-basemoved.mjs`, `gate1-mutate.mjs`, `gate2-mutate-extra.mjs`) before
+  touching anything.
+  1. **med, base fold skipped with no other heads** — fixed. The early
+     return in `checkScratchMergeCitations` used to fire the instant
+     `otherHeads` was empty, before `base` was even resolved, so a base that
+     moved a line this branch's own record cites passed silently whenever
+     this branch was the only open pull request. `scripts/preflight.mjs`'s
+     `checkScratchMergeCitations` now resolves the base-ancestor question
+     first and only takes the "nothing to check" exit when `otherHeads` is
+     empty **and** `HEAD` already contains `base`; otherwise it folds `base`
+     alone into one scratch worktree (`otherHeads.length > 0 ? otherHeads :
+[null]`, `null` standing for "no other head, base only"). Measured with
+     a small script built for this round
+     (`fix1-repro-basemoved.mjs`, same shape as `gate1-basemoved.mjs` but
+     calling `checkScratchMergeCitations` directly rather than through
+     `checkCitations`/`checkMergeTree`): `ok: true, "…nothing was checked"`
+     at `6b10392` (the gap), `ok: false, "FAIL  docs/work/a.md — 1 moved"`
+     after. New test at the end of the suite,
+     `checkScratchMergeCitations folds base in when there are no other open
+heads at all` (no filler head, on purpose) — red on `6b10392` (`expected
+true to be false`), green after. The existing `says explicitly that an
+empty list checked nothing` test's own fixture (a bogus repo path and a
+     zeroed oid) no longer stands for "nothing touches git here" once the
+     fix makes something touch git even at zero heads, so it was rewritten
+     to a real repository where `HEAD` already contains `base` — the true
+     positive control for the new contract — rather than moved or deleted.
+  2. **med, the parity fixes have no tests** — fixed. Six tests added, each
+     proven red against the exact mutant that removes its own fix and green
+     after restoring it (temporary in-place edits to `scripts/preflight.mjs`,
+     restored before the next check; never committed):
+     `extractCheckJobCommands throws on a name:-first step`,
+     `…an if:-first step`, `…a working-directory: step` and `…an env: step`
+     (all four red — `expected [Function] to throw an error` — when the
+     `step.lines.length > 1` clause is removed from the guard at
+     `scripts/preflight.mjs:402`, green restored);
+     `deriveExtraCiCommands throws on a step chained with && through the
+real pipeline` (red when the `assertSpawnable(raw)` call is commented out
+     of `deriveExtraCiCommands`, proving `assertSpawnable` is actually wired
+     into the pipeline gate 1's own mutant exercised, not only callable in
+     isolation); `deriveExtraCiCommands throws on npm ci --ignore-scripts
+rather than spawn it uncaught` (red when the exact-match throw is removed
+     from `COVERED`'s consumer, leaving only the guard).
+  3. **Lows fixed now** (owner's standing rule):
+     - `COVERED` whitespace and the `npm ci` alias — `npm  ci` (two spaces)
+       matched neither the guard nor the exact form and fell through to
+       `assertSpawnable`/`tokenize`, which split it on whitespace regardless
+       and spawned a real install; `npm clean-install` — `npm`'s own alias
+       for `npm ci` — matched no guard at all and spawned a real install
+       under a name `COVERED` had never heard of. A new `canonicalize`
+       helper collapses whitespace runs and rewrites the alias before either
+       `guard` or the exact-match comparison runs. Two new tests,
+       `deriveExtraCiCommands treats npm  ci (extra whitespace) as covered`
+       and `…treats npm clean-install as covered`, both red at `6b10392`
+       (measured by swapping that commit's `preflight.mjs` in) and green
+       after; independently re-measured through `gate2-mutate-extra.mjs`
+       re-pointed at this worktree: neither mutation appears in the spawned
+       list anymore.
+     - The `checkScratchMergeCitations` docblock named
+       `.claude/skills/orchestrate-tickets/reference/records.md` as where the
+       three-party gap is answered; the whole-batch scratch merge is
+       `SKILL.md` step 11 ("Scratch-merge the batch"), not that page —
+       corrected.
+     - This ticket's own 2026-09-28 Log table had a broken `blockPipeDash`
+       row (an unescaped `|` inside a code span split it into five cells) and
+       called the old `|-`/`>-` behaviour "silently spawned", which gate 2
+       flagged as mislabelled: at `f772ee9` those spawned a command literally
+       named `|-`/`>-`, which fails immediately with ENOENT — loud, but for
+       the wrong reason, not silent at all. Both rows corrected in place; the
+       table now formats cleanly under `oxfmt`.
+     - `assertSpawnable` extended for the four remaining shapes gate 2
+       measured reaching `spawnSync` unrecognised: `;`, a glued redirect
+       (`>/dev/null`, `2>/dev/null` — no space either side, invisible to
+       `tokenize`'s "a lone `>` token" rule), an unexpanded `$VAR`, and a
+       `run:` value wholly wrapped in one pair of quotes (YAML's own
+       quoting, misread by `tokenize` as a single space-containing "command
+       name"). This was a few lines, not a rewrite, so it was done rather
+       than filed; the docblock discloses what still is not closed — a
+       legitimate argument that itself needs one of these characters quoted
+       (`ci.yml` has none today) would be flagged as the operator it is not,
+       which is a real, if narrow, remaining gap. Two new tests,
+       `assertSpawnable throws on a semicolon, a glued redirect, an
+unexpanded $VAR and a wholly quoted value` (plus a positive control: the
+       legitimate space-delimited redirect this repo's own `ci.yml` uses is
+       still not flagged) and `deriveExtraCiCommands throws on each of the
+five newly caught shapes, through the real pipeline` — both red at
+       `6b10392`, green after.
+  - Citation drift this round caused, repaired before reporting, per the
+    orchestrator's mid-task correction (repo-29; repo-78's gate 1, F1: the
+    branch whose change moves a merged citation repoints it, coordinate
+    only, rather than stopping — narrower than this dispatch's original
+    instruction, which the orchestrator withdrew in the same message).
+    `node scripts/citations-gate.mjs --against origin/main` named four
+    "moved" citations after the med-1 and med-2 fixes (the docblock and
+    function-body insertions in `scripts/preflight.mjs` land well before
+    line 824, shifting everything below): repo-51's three
+    (`scripts/preflight.mjs:1306`→`:1406`, `:1227`→`:1327`, `:641`→`:712`),
+    repo-64's one (`:641`→`:712`, the same line), repo-67's one
+    (`:703`→`:774`) and repo-75's one range (`:824-825`→`:895-896`, width
+    kept, still covering `function spawnRaw(…)` and the `shell: false` line
+    beneath it). repo-71's citations all resolve above the insertion point
+    and needed no change. Each repointed coordinate-only, anchor text
+    byte-for-byte unchanged, verified by re-running the gate after each
+    edit; each ticket carries its own dated 2026-09-28 Log line naming the
+    change and this rule's provenance. One earlier mistake caught and fixed
+    before committing: a new test's own comment quoted the literal fragment
+    `"nothing was checked"`, which repo-51's own citation at
+    `scripts/test/preflight.test.ts:589` anchors to — `citations-gate`
+    reported it "indistinct" (matches two lines) rather than "moved";
+    reworded the comment rather than touching repo-51's anchor, since the
+    fragment it points at was never moved, only duplicated by this round's
+    own new prose.
+  - `SKILL.md` step 9's and `roles/builder.md`'s preflight sentences were
+    re-read against the fix: both already say the scratch merge folds
+    "`base`'s own tip when `HEAD` does not yet contain it" as a clause
+    separate from "each reachable [head]", not conditioned on one existing —
+    so neither needed a change; left as they stood.
+  - Pushback: none — every finding reproduced as the gate described it.
+  - Commands, this round: `npx vitest run scripts/test/preflight.test.ts` —
+    80 of 80 (69 prior + 11 new, one existing test rewritten in place, none
+    removed). `npx vitest run --project repo` — 560 of 560.
+    `packages/core/test/spawn-safety.test.ts` — 5 of 5. `npm run check` exit 0. `node scripts/citations-gate.mjs --against origin/main` exit 0: 127
+    enforced, 0 failing, 6 grandfathered, 0 raised (read directly, never
+    through a pipe). `node scripts/preflight.mjs --base origin/main --title
+"feat(repo): preflight runs every ci check step, plus citations on a
+merged state (repo-79)"` against this checkout's live PR list (5 open
+    heads, `#313` new since round 2): **exit 0**, every check `ok` including
+    `mergeTree` against all five real heads — `HEAD` already contains
+    `origin/main` here, so the live run does not itself exercise the
+    zero-heads base fold; that shape is proven by the new unit test above
+    instead.

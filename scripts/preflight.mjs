@@ -436,18 +436,57 @@ export function extractCheckJobCommands(yamlText) {
  * forbids and what "`npm ci` is never spawned" now guarantees can't happen
  * silently again, whatever the step's exact text.
  *
+ * **Both `guard` and `exact` compare `canonicalize(raw)`, not `raw` itself —
+ * gate 2's low.** Two spellings reached neither side of the pair, whitespace
+ * matched nowhere it was collapsed and an alias `npm` itself defines was not
+ * known to this file at all: `npm  ci` (two spaces) matched neither the guard
+ * nor the exact form and fell through to `assertSpawnable`/`tokenize`, which
+ * split it on whitespace anyway and spawned a real `npm ci`; `npm
+ * clean-install` — `npm`'s own alias for `npm ci`, `npm help ci` names it —
+ * matched no guard at all and spawned a real install under a different name.
+ * `canonicalize` collapses whitespace runs to one space and rewrites the
+ * alias to the name it stands for, so both now compare equal to `"npm ci"`
+ * and are never spawned, the same as the plain spelling.
+ *
  * @type {{guard: (raw: string) => boolean, exact: string}[]}
  */
+const NPM_ALIASES = /** @type {const} */ ({ "clean-install": "ci" });
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function canonicalize(raw) {
+  const collapsed = raw.replace(/\s+/gu, " ").trim();
+  const [cmd, sub, ...rest] = collapsed.split(" ");
+  if (cmd === "npm" && Object.hasOwn(NPM_ALIASES, sub)) {
+    return [cmd, NPM_ALIASES[/** @type {keyof typeof NPM_ALIASES} */ (sub)], ...rest].join(" ");
+  }
+  return collapsed;
+}
+
 const COVERED = [
-  { guard: (raw) => raw === "npm ci" || raw.startsWith("npm ci "), exact: "npm ci" },
   {
-    guard: (raw) => raw === "npm run check" || raw.startsWith("npm run check "),
+    guard: (raw) => {
+      const c = canonicalize(raw);
+      return c === "npm ci" || c.startsWith("npm ci ");
+    },
+    exact: "npm ci",
+  },
+  {
+    guard: (raw) => {
+      const c = canonicalize(raw);
+      return c === "npm run check" || c.startsWith("npm run check ");
+    },
     exact: "npm run check",
   },
   {
-    guard: (raw) =>
-      raw === "node scripts/citations-gate.mjs" ||
-      raw.startsWith("node scripts/citations-gate.mjs "),
+    guard: (raw) => {
+      const c = canonicalize(raw);
+      return (
+        c === "node scripts/citations-gate.mjs" || c.startsWith("node scripts/citations-gate.mjs ")
+      );
+    },
     exact: "node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
   },
 ];
@@ -479,13 +518,27 @@ export function tokenize(raw) {
 /**
  * A command this parser did not already reject as unreadable (`extractCheckJobCommands`,
  * one line, one key) can still be one `spawnSync` cannot run faithfully: `&&`
- * chains a second command, `|` pipes to one, and a trailing `# comment` is
- * text YAML's own reader would have stripped before the shell ever saw it.
- * None of the three is spawned with a shell here (the repo-wide rule this
- * file itself is scanned for), so none of the three can be honoured either —
- * this is what tells "cannot be run faithfully" from "can", and throws rather
- * than handing `&&`, `|` or a comment word to `spawnSync` as a literal,
- * meaningless argument.
+ * chains a second command, `|` pipes to one, `;` sequences one, a trailing
+ * `# comment` is text YAML's own reader would have stripped before the shell
+ * ever saw it, a glued redirect (`>/dev/null`, `2>/dev/null`, no space either
+ * side) is invisible to `tokenize`'s own "a lone `>` token" rule and would
+ * reach `spawnSync` as a literal argument, `$VAR` is never expanded with no
+ * shell to expand it, and a whole `run:` value wrapped in one pair of quotes
+ * — YAML's own quoting, not an argument's — is read by `tokenize` as a
+ * single, space-containing "command name" rather than the words inside it.
+ * None of these seven is spawned with a shell here (the repo-wide rule this
+ * file itself is scanned for), so none can be honoured either — this is what
+ * tells "cannot be run faithfully" from "can", and throws rather than handing
+ * any of them to `spawnSync` as a literal, meaningless argument.
+ *
+ * **Gate 2's low, disclosed rather than closed for the fully general case**:
+ * this still trusts that a legitimate argument never itself contains one of
+ * these characters quoted for a reason — `--message ";"` would be flagged as
+ * a sequencing operator it is not. `ci.yml`'s own check job has no such
+ * argument today, and the seven shapes above are exactly the ones gate 2
+ * measured reaching `spawnSync` unrecognised; a quoted argument that
+ * legitimately needs one of these characters is a real gap this does not
+ * close, left for the day `ci.yml` actually needs one.
  *
  * @param {string} raw
  */
@@ -495,10 +548,28 @@ export function assertSpawnable(raw) {
       `ci.yml's check job has a templated command this parser cannot resolve: ${raw}`,
     );
   }
-  if (raw.includes("&&") || raw.includes("|") || / #/u.test(raw)) {
+  // A whole `run:` value quoted at the YAML level — `run: "node x.mjs --y"`
+  // — rather than an unquoted plain scalar carrying its own internally
+  // quoted argument (`node scripts/citations-gate.mjs --against "origin/…"`,
+  // which starts with `node`, not a quote).
+  const whollyQuoted = /^"[\s\S]*"$/u.test(raw) || /^'[\s\S]*'$/u.test(raw);
+  // A `>` not surrounded by whitespace on both sides — the one shape
+  // `tokenize`'s redirect-drop (an exact `>` token) does not see, since a
+  // glued redirect never becomes its own token at all.
+  const gluedRedirect = /(?<!\s)>|>(?!\s)/u.test(raw);
+  if (
+    raw.includes("&&") ||
+    raw.includes("|") ||
+    raw.includes(";") ||
+    raw.includes("$") ||
+    / #/u.test(raw) ||
+    whollyQuoted ||
+    gluedRedirect
+  ) {
     throw new Error(
-      `ci.yml's check job has a command this parser cannot spawn faithfully (a shell operator ` +
-        `or a trailing comment, never run through a shell here): ${raw}`,
+      `ci.yml's check job has a command this parser cannot spawn faithfully (a shell operator, ` +
+        `a glued redirect, an unexpanded $VAR, a wholly quoted value or a trailing comment, ` +
+        `never run through a shell here): ${raw}`,
     );
   }
 }
@@ -518,7 +589,7 @@ export function deriveExtraCiCommands(yamlText) {
   for (const raw of extractCheckJobCommands(yamlText)) {
     const covered = COVERED.find((c) => c.guard(raw));
     if (covered) {
-      if (raw !== covered.exact) {
+      if (canonicalize(raw) !== covered.exact) {
         throw new Error(
           `ci.yml's check job runs "${raw}", which looks like ${JSON.stringify(covered.exact)} ` +
             `but is not that exactly — preflight will not guess whether the difference matters.`,
@@ -1054,8 +1125,13 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
  * between two heads that are not `HEAD`.
  *
  * An empty `otherHeads` says so explicitly, for the same reason the
- * zero-heads case above does: "checked everything, found nothing" and
- * "nothing to check" must not read alike.
+ * zero-heads case above does — **but only when `base` also needs nothing
+ * folded in.** `HEAD` not containing `base` is itself something to check,
+ * with no other open head required to make it worth checking: an
+ * `otherHeads` of zero and a `base` this branch has fallen behind still runs
+ * one fold, of `base` alone, so "checked everything, found nothing" and
+ * "nothing to check" never read alike merely because this branch happens to
+ * be the only open pull request.
  *
  * **Owner decision, 2026-09-28 (option B of three offered): the fold also
  * carries `base`'s current tip in, when `HEAD` does not already contain it.**
@@ -1076,8 +1152,8 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
  * head together, full stop) just closed for two heads that conflict with
  * each other, one layer up for three that do not — this repository's own
  * orchestrator already runs a whole-batch scratch merge before a batch lands
- * (`.claude/skills/orchestrate-tickets/reference/records.md`), which is
- * where that question is answered today.
+ * (`.claude/skills/orchestrate-tickets/SKILL.md` step 11, "Scratch-merge the
+ * batch"), which is where that question is answered today.
  *
  * @param {string} repo
  * @param {string} headOid
@@ -1086,16 +1162,12 @@ export function buildScratchMerge(repo, headOid, otherHeads) {
  * @param {Map<string, number>} grandfathered
  */
 export function checkScratchMergeCitations(repo, headOid, otherHeads, base, grandfathered) {
-  if (otherHeads.length === 0) {
-    return {
-      ok: true,
-      lines: ["no other open pull request to fold into a scratch merge — nothing was checked"],
-    };
-  }
-
-  // Resolved once: every head's fold reads the same answer, and a `base`
-  // that does not resolve here is already `preflight()`'s own `EXIT.setup`,
-  // never reached through this function in the ordinary pipeline.
+  // Resolved once, before the "nothing to check" decision: every head's fold
+  // reads the same answer, and whether the base itself needs folding in is
+  // exactly what decides whether an empty `otherHeads` is "nothing to check"
+  // or "one fold, base alone" — a `base` that does not resolve here is
+  // already `preflight()`'s own `EXIT.setup`, never reached through this
+  // function in the ordinary pipeline.
   const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", base, headOid], {
     cwd: repo,
     shell: false,
@@ -1109,14 +1181,42 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
         shell: false,
       }).stdout?.trim();
 
+  // **The owner's option B holds unconditionally, zero other open heads
+  // included.** The first shape returned "nothing was checked" the moment
+  // `otherHeads` was empty, before `base` was even resolved — so a base that
+  // moved a line this branch's own record cites passed silently whenever
+  // this branch was the only open pull request, which is not a rare shape,
+  // it is every solo ticket. `otherHeads` is only ever `[null]` here, one
+  // sentinel entry standing for "fold base alone, no other head at all";
+  // every other branch below already treats a head as optional context on
+  // top of the same base fold.
+  if (otherHeads.length === 0 && baseIsAncestor) {
+    return {
+      ok: true,
+      lines: [
+        "no other open pull request to fold into a scratch merge, and HEAD already contains " +
+          "base — nothing was checked",
+      ],
+    };
+  }
+
   const out = [];
   let problems = 0;
-  for (const head of otherHeads) {
+  const targets = otherHeads.length > 0 ? otherHeads : [null];
+  for (const head of targets) {
     const foldingBase = !baseIsAncestor && baseOid;
-    const label = foldingBase
-      ? `HEAD with #${head.number} ${head.headRefName} (plus ${base}, which HEAD does not yet contain)`
-      : `HEAD with #${head.number} ${head.headRefName}`;
-    const toFold = foldingBase ? [{ number: 0, headRefName: base, oid: baseOid }, head] : [head];
+    const label =
+      head === null
+        ? `HEAD with ${base} alone, which HEAD does not yet contain`
+        : foldingBase
+          ? `HEAD with #${head.number} ${head.headRefName} (plus ${base}, which HEAD does not yet contain)`
+          : `HEAD with #${head.number} ${head.headRefName}`;
+    const toFold =
+      head === null
+        ? [{ number: 0, headRefName: base, oid: baseOid }]
+        : foldingBase
+          ? [{ number: 0, headRefName: base, oid: baseOid }, head]
+          : [head];
     const merge = buildScratchMerge(repo, headOid, toFold);
     if (!merge.ok) {
       problems += 1;

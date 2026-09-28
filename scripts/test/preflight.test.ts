@@ -1177,18 +1177,29 @@ test("checkCiCommands fails when status.mjs --json finds a dangling depends_on",
 
 // --- repo-79: check 5's other half — citations over a scratch merge of every open head ---
 
-test("checkScratchMergeCitations says explicitly that an empty list checked nothing", () => {
-  const result = checkScratchMergeCitations(
-    "/does-not-matter",
-    "0".repeat(40),
-    [],
-    "main",
-    new Map(),
-  );
-  expect(result).toMatchObject({ ok: true });
-  expect(result.lines.join("\n")).toMatch(
-    /no other open pull request to fold into a scratch merge/,
-  );
+/**
+ * Gate 2's med repair changed this contract: an empty `otherHeads` alone no
+ * longer means there is no work here — `base` must also already be an
+ * ancestor of `HEAD`, or the fold runs anyway (below). A bogus repo path
+ * and a zeroed oid, this test's own fixture until this round, could no
+ * longer stand in for "this never touches git at all": the fix's whole
+ * point is that something now does, even with zero other heads.
+ */
+test("checkScratchMergeCitations says explicitly that an empty list checked nothing, when HEAD already contains base", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("base");
+    const headOid = repo.git("rev-parse", "HEAD");
+
+    const result = checkScratchMergeCitations(repo.dir, headOid, [], "main", new Map());
+    expect(result).toMatchObject({ ok: true });
+    expect(result.lines.join("\n")).toMatch(
+      /no other open pull request to fold into a scratch merge, and HEAD already contains base/,
+    );
+  } finally {
+    repo.cleanup();
+  }
 });
 
 /**
@@ -1587,4 +1598,243 @@ test("checkScratchMergeCitations does not fold base in when HEAD already contain
   } finally {
     repo.cleanup();
   }
+});
+
+/**
+ * Gate 2's med: the base fold used to run only when some other head was
+ * reachable, so a branch that is the only open pull request — no filler
+ * head at all, `otherHeads` genuinely empty — passed silently even though
+ * `base` had moved a line its own record cites. No "o" here on purpose: the
+ * point of this test is that none is needed for the fold to happen.
+ */
+test("checkScratchMergeCitations folds base in when there are no other open heads at all", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("add the anchored record");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("main moves on: insert a line above the cited region");
+
+    repo.git("checkout", "-q", "mine");
+    const result = checkScratchMergeCitations(repo.dir, mineOid, [], "main", new Map());
+    expect(result.ok).toBe(false);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
+    expect(result.lines.join("\n")).toMatch(/main alone, which HEAD does not yet contain/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+// --- repo-79, gate 2's second med: the round-1 parity fixes, each with its own test ---
+
+/**
+ * Gate 2's med: nothing asserted the round-1 parity fixes, so a mutant with
+ * both `step.lines.length > 1` and the covered-step exact-match check
+ * removed passed this whole suite, 69 of 69, while it silently read a
+ * `name:`-first step (losing the step entirely, missing its own command)
+ * and silently let `npm ci --ignore-scripts` through uncaught again. Each
+ * test below is watched failing against exactly that mutant, one shape at a
+ * time, before being restored — this file's own opening comment's
+ * discipline, applied to gate 2's own finding rather than repo-51's
+ * original guards.
+ *
+ * `name:`, `if:` and `working-directory:`/`env:` ahead of or alongside
+ * `run:` all make a step more than one line, which is what
+ * `extractCheckJobCommands` throws on — a real `ci.yml`-shaped fixture per
+ * shape, not a hand-built array, since the parser reads text, not an AST.
+ */
+test("extractCheckJobCommands throws on a name:-first step, not silently losing it", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - name: Next id",
+    "        run: node scripts/next-id.mjs --check",
+    "",
+  ].join("\n");
+  expect(() => extractCheckJobCommands(yaml)).toThrow(/other keys/);
+});
+
+test("extractCheckJobCommands throws on an if:-first step, not silently losing it", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - if: github.event_name == 'pull_request'",
+    "        run: node scripts/next-id.mjs --check",
+    "",
+  ].join("\n");
+  expect(() => extractCheckJobCommands(yaml)).toThrow(/other keys/);
+});
+
+test("extractCheckJobCommands throws on a working-directory: step, not silently running it in the wrong cwd", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - run: node ../x.mjs",
+    "        working-directory: tools/downloader",
+    "",
+  ].join("\n");
+  expect(() => extractCheckJobCommands(yaml)).toThrow(/other keys/);
+});
+
+test("extractCheckJobCommands throws on an env: step, not silently running it missing the env", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - run: node scripts/status.mjs --json",
+    "        env:",
+    '          STRICT: "1"',
+    "",
+  ].join("\n");
+  expect(() => extractCheckJobCommands(yaml)).toThrow(/other keys/);
+});
+
+/**
+ * `assertSpawnable` wired into the real pipeline, not only called directly:
+ * a `&&`/`|`/trailing-comment step reaching `deriveExtraCiCommands` through
+ * a real `ci.yml`-shaped fixture throws there too, which is what stands
+ * between ci.yml gaining one of these later and a literal `&&` token
+ * reaching `spawnSync` as an argument.
+ */
+test("deriveExtraCiCommands throws on a step chained with && through the real pipeline", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci",
+    "      - run: node scripts/status.mjs --json && node scripts/next-id.mjs --check",
+    "",
+  ].join("\n");
+  expect(() => deriveExtraCiCommands(yaml)).toThrow(/shell operator/);
+});
+
+/**
+ * The covered-step exact match: a step that merely resembles `npm ci` throws
+ * naming what it looks like, rather than falling through uncaught to be
+ * spawned for real — gate 1's own measured defect, reproduced through the
+ * real pipeline rather than only through `COVERED`'s own shape. `npm ci
+ * --ignore-scripts` is never spawned either way this assertion can fail: a
+ * throw or a silent skip both count as "not spawned", so this checks the
+ * loud path specifically, which is what the round-1 fix promised.
+ */
+test("deriveExtraCiCommands throws on npm ci --ignore-scripts rather than spawn it uncaught", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ci --ignore-scripts",
+    "      - run: npm run check",
+    "",
+  ].join("\n");
+  expect(() => deriveExtraCiCommands(yaml)).toThrow(/looks like "npm ci"/);
+});
+
+// --- repo-79, gate 2's lows: COVERED whitespace and the npm ci alias ---
+
+/**
+ * Gate 2's low: `COVERED` compared raw text, so `npm  ci` (two spaces) —
+ * measured through `deriveExtraCiCommands` directly against this repo's own
+ * ci.yml with the step re-spelled — matched neither the guard nor the exact
+ * form and fell through to `assertSpawnable`/`tokenize`, which split it on
+ * whitespace regardless and spawned a real install. `canonicalize` collapses
+ * the run of spaces before either comparison runs.
+ */
+test("deriveExtraCiCommands treats npm  ci (extra whitespace) as covered, never spawning it", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm  ci",
+    "      - run: npm run check",
+    "",
+  ].join("\n");
+  expect(deriveExtraCiCommands(yaml)).toEqual([]);
+});
+
+/**
+ * Gate 2's low: `npm clean-install` is `npm`'s own alias for `npm ci` and
+ * matched no guard at all, so it spawned a real install under a name
+ * `COVERED` had never heard of. `canonicalize` rewrites the alias to the name
+ * it stands for before either comparison runs.
+ */
+test("deriveExtraCiCommands treats npm clean-install as covered, never spawning it", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm clean-install",
+    "      - run: npm run check",
+    "",
+  ].join("\n");
+  expect(deriveExtraCiCommands(yaml)).toEqual([]);
+});
+
+// --- repo-79, gate 2's low: assertSpawnable's broader coverage ---
+
+/**
+ * Gate 2's low: a `;`, a glued redirect (no space either side of `>`), a
+ * `$VAR` or a `run:` value wholly wrapped in one pair of quotes all reached
+ * `spawnSync` as a literal, meaningless argument before this round — measured
+ * through `deriveExtraCiCommands` directly, not only `assertSpawnable` in
+ * isolation, since the parser wiring is what gate 1's own mutant already
+ * proved could be right while `assertSpawnable` itself was never reached for
+ * a given shape.
+ */
+test("assertSpawnable throws on a semicolon, a glued redirect, an unexpanded $VAR and a wholly quoted value", () => {
+  expect(() => assertSpawnable("node a.mjs --json; node b.mjs --check")).toThrow(/shell operator/);
+  expect(() => assertSpawnable("node a.mjs --json >/dev/null")).toThrow(/glued redirect/);
+  expect(() => assertSpawnable("node a.mjs --json 2>/dev/null")).toThrow(/glued redirect/);
+  expect(() => assertSpawnable("node a.mjs --since $GITHUB_SHA")).toThrow(/unexpanded \$VAR/);
+  expect(() => assertSpawnable('"node a.mjs --check"')).toThrow(/wholly quoted/);
+  // The positive control: the legitimate, already-supported space-delimited
+  // redirect this repo's own ci.yml uses is still not flagged.
+  expect(() => assertSpawnable("node a.mjs --json > /dev/null")).not.toThrow();
+});
+
+/** A minimal `ci.yml` carrying one check-job step, for the pipeline test below. */
+function oneCheckStep(run: string): string {
+  return ["name: CI", "jobs:", "  check:", "    steps:", `      - run: ${run}`, ""].join("\n");
+}
+
+test("deriveExtraCiCommands throws on each of the five newly caught shapes, through the real pipeline", () => {
+  const stepFor = oneCheckStep;
+  expect(() =>
+    deriveExtraCiCommands(
+      stepFor("node scripts/status.mjs --json; node scripts/next-id.mjs --check"),
+    ),
+  ).toThrow(/shell operator/);
+  expect(() => deriveExtraCiCommands(stepFor("node scripts/status.mjs --json >/dev/null"))).toThrow(
+    /glued redirect/,
+  );
+  expect(() =>
+    deriveExtraCiCommands(stepFor("node scripts/status.mjs --json 2>/dev/null")),
+  ).toThrow(/glued redirect/);
+  expect(() =>
+    deriveExtraCiCommands(stepFor("node scripts/next-id.mjs --since $GITHUB_SHA")),
+  ).toThrow(/unexpanded \$VAR/);
+  expect(() => deriveExtraCiCommands(stepFor('"node scripts/next-id.mjs --check"'))).toThrow(
+    /wholly quoted/,
+  );
 });
