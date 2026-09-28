@@ -130,3 +130,110 @@ raised.`, exit 0; `npx vitest run --project repo` 526/526; `npm run check`
   exit 0; `node scripts/preflight.mjs --base origin/main` exit 0, including a
   clean `mergeTree` probe against `#311 repo-81-rate-tickets-and-rule-gaps`,
   the one open sibling PR at the time.
+
+- 2026-09-27 — **Round 1: gate 1 (Opus) FAIL at `488913972dca21fcbb781332a9e391e4c3a4b0d2`, 3 med + 6 low.**
+  Every finding reproduced before fixing; none refuted.
+
+  **Owner decisions, taken via `AskUserQuestion`, all three the orchestrator's
+  own recommendation, none overridden:**
+
+  1. **F1 (whose repoint).** Question: how should the page describe who
+     repoints a merged citation another branch moves. Options put: (a) state
+     today's rule and link repo-47, without deciding or pre-empting it;
+     (b) decide repo-47 now, in this branch; (c) the orchestrator repoints
+     after each merge. **Chosen: (a).** `records.md`'s gap-6 bullet now says
+     the branch whose change moves the line repoints it, coordinate only,
+     because that branch's own CI is the one that goes red — the rule in
+     force since repo-29 — and names repo-47
+     (`docs/work/repo-47-the-citations-gate-fails-a-code-pr-on-merged-records.md`,
+     `status: needs-decision`) as the open question of whether that
+     allocation should change, undecided here. The `Done when` survival claim
+     is rescoped, by this decision and not by me: it covers a citation of
+     content that predates the branch (base-pinned, immune to this by
+     construction); a citation of content the branch introduces survives only
+     by being repointed by the owner today's rule names, which is a weaker
+     claim than "survives", and the ticket accepts that as the honest scope.
+     Reproduced the gap the finding names: one comment line inserted above
+     the tests repo-60 and repo-63's own merged records cite in
+     `scripts/test/citations.test.ts`, reverted after — `node
+scripts/citations-gate.mjs --against origin/main` exit 1, `127 enforced,
+2 failing` (repo-60 and repo-63 both newly `moved`; reverted, back to
+     `127 enforced, 0 failing`).
+  2. **F2 (`.claude/` content the branch introduces).** Question: how to keep
+     a gate from writing a record CI then refuses. Options: (a) name it by
+     page and heading, plus add `--require-claude-pins` to the reviewer's
+     documented dry run; (b) teach `citations-gate.mjs` a per-record
+     exemption for a branch's own new `.claude/` lines. **Chosen: (a).** All
+     three pages now say branch-introduced content under `.claude/` is named
+     by page and heading, never an unpinned line, and
+     `roles/reviewer.md`'s dry-run command carries `--require-claude-pins`.
+     Stated plainly, in all three pages, that a heading-form reference is not
+     read by the checker at all — `citations.mjs`'s `INLINE` grammar requires
+     a line number — so it is a disclosed limit on what this page can verify,
+     not a claim that anything checks the heading. Reproduced: a one-bullet
+     scratch record citing this branch's own new gap-6 line in `records.md`
+     by bare coordinate, `node scripts/citations.mjs <file>
+--require-claude-pins` — `1 unpinned-volatile`, exit 64.
+  3. **F3 (enforcement).** Question: where the "left for a ticket of its own"
+     sentence in `records.md` should point. Options: (a) repo-80's `--land`,
+     since landing is the one place that already knows the base; (b) file a
+     new ticket; (c) convention only, recorded as such. **Chosen: (a).**
+     Added to `docs/work/repo-80-land-records-one-command.md`'s Build section
+     — `--land` refuses a section with an unpinned citation of content that
+     predates the branch — status and everything else in that ticket
+     untouched. `records.md`'s sentence now names repo-80 instead of
+     "a ticket of its own". Reproduced the gate's own measurement: a record
+     with two anchored, unpinned citations of pre-existing `scripts/` lines
+     passes `citations.mjs --section Review --require-anchors
+--require-distinct-anchors --require-claude-pins` at exit 0 — nothing
+     mechanical refuses the old convention today.
+
+  **F4** — the test proves repo-35's own pin capability, not new code; said
+  so in the test's docblock and here, rather than building enforcement to
+  make it fail (that is repo-80 now, per F3).
+
+  **F5** — fixed a false claim: `--displaced-since` is already threaded
+  through `citations-gate.mjs`'s whole corpus sweep, not a one-record tool
+  run by hand — reproduced, `node scripts/citations-gate.mjs
+--displaced-since a0841701` enforces 208 records in one run. What is true
+  is narrower and was the actual point: it only reports a citation that is
+  both unanchored _and_ unpinned, and every citation `citations-gate.mjs`
+  enforces already carries an anchor, so it has nothing left to find there
+  regardless of whether CI passes the flag. Rewrote the paragraph to say
+  that, and to point at repo-80 rather than "a ticket of its own" (F3).
+
+  **F6** — fixed: the four-incidents paragraph called every one "broken by a
+  commit its own branch never touched", which is false of the third
+  (repo-48), a citation broken by its own record's later round. Reworded to
+  say three are a different branch entirely and the fourth is the record's
+  own later round.
+
+  **F7** — fixed: the `scripts/preflight.mjs:410` citation in the four-
+  incidents list had no anchor; gave it one, `"if (hasGateRecord(content))"`,
+  verified `ok` by `node scripts/citations.mjs
+.claude/skills/orchestrate-tickets/reference/records.md
+--require-claude-pins`.
+
+  **F8** — fixed the two disagreements named: `roles/reviewer.md` now pins to
+  "the base — or to any other `main` commit that holds it", matching
+  `records.md`, instead of only "the base sha your dispatch names"; and
+  `gate.md`'s claim that `citations-gate.mjs` enforces `.claude/` pins "for
+  every merged record" now says "for every merged record's `## Review`
+  section", the part it actually reads. The heading-form-is-unread edge is
+  now stated plainly in all three pages, per F2's disposition above, rather
+  than left implicit.
+
+  **F9** — the title this branch will use is not "pin every coordinate to
+  the base" (the ticket's own title, which the gate is right overstates a
+  branch that deliberately leaves introduced content unpinned): `docs(repo):
+pin gate-record citations of pre-existing content to the base (repo-78)`,
+  checked with `node scripts/commit-message.mjs --text "<that title>"`,
+  exit 0.
+
+  Verified after the round: `npx vitest run scripts/test/citations.test.ts`
+  109/109; `npm run check` exit 0; `npx vitest run --project repo` 526/526;
+  `node scripts/citations-gate.mjs --against origin/main` exit 0, `127
+enforced, 0 failing; 6 grandfathered, holding 1 unresolvable, 19
+unanchored. 6 entr(y/ies) compared against origin/main: 0 raised.`; `node
+scripts/preflight.mjs --base origin/main --title "docs(repo): pin
+gate-record citations of pre-existing content to the base (repo-78)"`.
