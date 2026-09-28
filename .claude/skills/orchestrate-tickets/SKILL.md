@@ -190,10 +190,18 @@ you are there.
 
    **One command before granting the ship:**
    `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
-   ship condition. It is the check and the touched tools' suites, the citations
-   gate, the `## Review` presence test, the title-type-against-paths test and a
-   `git merge-tree` probe against every other open pull request head, one exit
-   bit each, and a non-zero exit names the check (repo-51). Each was a rule in
+   ship condition. It is the check and the touched tools' suites, every
+   `ci.yml` check-job command not already covered some other way here, the
+   citations gate, the `## Review` presence test, the title-type-against-paths
+   test, and a `git merge-tree` probe against every other open pull request
+   head — which since repo-79 also folds each reachable one onto `HEAD` on
+   its own, plus `base`'s own tip when `HEAD` does not yet contain it, and
+   runs the citations gate over the result, catching a citation two
+   clean-merging heads (or a moved base) move — one exit bit each, and a
+   non-zero exit names the check (repo-51, repo-79). Two heads that are each
+   clean beside `HEAD` alone but only break a citation together are still
+   uncaught, left to the orchestrator's own whole-batch scratch merge before
+   a batch lands. Each was a rule in
    prose here until 2026-09-20, and each cost a round when forgotten: `repo-29`
    opened a pull request carrying five gate rounds and no record (2026-09-08);
    #228 went red on a line an older gate record cited (2026-09-13); a `feat`

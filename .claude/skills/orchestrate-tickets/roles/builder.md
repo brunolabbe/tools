@@ -67,10 +67,16 @@ the sentinelle repository, 2026-09-23).
 - `npm run format` after touching any `.md` — oxfmt formats markdown here, and a
   documentation-only change can break `npm run check`.
 - `node scripts/preflight.mjs --base origin/<base>` — one command, one exit bit
-  per check: `npm run check` and the suite of every tool the diff touches, the
-  citations gate, the `## Review` presence test for every ticket the branch
-  marks `done`, the title's type against the paths it touches, and a
-  `git merge-tree` probe against every other open pull request head (repo-51).
+  per check: `npm run check` and the suite of every tool the diff touches,
+  every `ci.yml` check-job command not already covered some other way here,
+  the citations gate, the `## Review` presence test for every ticket the
+  branch marks `done`, the title's type against the paths it touches, and a
+  `git merge-tree` probe against every other open pull request head — which
+  since repo-79 also folds each reachable one onto `HEAD` on its own, plus
+  `base`'s own tip when `HEAD` does not yet contain it, and runs the
+  citations gate over the result (repo-51, repo-79). Two heads that are each
+  clean beside `HEAD` alone but only break a citation together are still
+  uncaught by this alone.
   Run full `npm test` yourself if shared config moved; the project covering
   `scripts/` is named `repo`. When the citations check fails, repoint or pin
   what you moved, per `.claude/skills/orchestrate-tickets/reference/records.md`
