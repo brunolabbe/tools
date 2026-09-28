@@ -43,18 +43,21 @@ two measurements on the host before asking:
 A starting profile to put against those numbers, not a recommendation made
 without them:
 
-| Setting                       | Today | Proposed                                                          |
-| ----------------------------- | ----- | ----------------------------------------------------------------- |
-| `MAX_CONCURRENT_BROWSERS`     | 2     | what memory allows at ~300 MB each                                |
-| `MAX_CONCURRENT_JOBS`         | 2     | upload speed ÷ one stream's bitrate, and no more than 2           |
-| `MAX_FILE_SIZE_MB`            | 4096  | 1024; refused on the estimate, and a longer stream is cut (dl-53) |
-| `MAX_TOTAL_STORAGE_GB`        | 50    | removed by dl-53, which stores no files                           |
-| `FILE_RETENTION_HOURS`        | 6     | removed by dl-53                                                  |
-| `RATE_LIMIT_PROBE_PER_MINUTE` | 10    | 4                                                                 |
-| `RATE_LIMIT_JOBS_PER_MINUTE`  | 5     | 2                                                                 |
-| `MAX_JOBS_PER_CLIENT` (dl-51) | —     | 1                                                                 |
+| Setting                       | Today  | Proposed                                                          |
+| ----------------------------- | ------ | ----------------------------------------------------------------- |
+| `MAX_CONCURRENT_BROWSERS`     | 2      | what memory allows at ~300 MB each                                |
+| `MAX_CONCURRENT_JOBS`         | 2      | upload speed ÷ one stream's bitrate, and no more than 2           |
+| `MAX_CONCURRENT_FRAME_GRABS`  | = jobs | follows `MAX_CONCURRENT_JOBS` unless CPU says otherwise           |
+| `MAX_FILE_SIZE_MB`            | 4096   | 1024; refused on the estimate, and a longer stream is cut (dl-53) |
+| `RATE_LIMIT_PROBE_PER_MINUTE` | 10     | 4                                                                 |
+| `RATE_LIMIT_JOBS_PER_MINUTE`  | 5      | 2                                                                 |
+| `MAX_JOBS_PER_CLIENT` (dl-51) | 2      | 1                                                                 |
 
-**2 — Where the edge rule lives.**
+"Today" is `API_DEFAULTS` in `tools/downloader/api/src/config.ts` on `a084170`;
+`compose.downloader.prod.yaml` still sets none of these. `MAX_TOTAL_STORAGE_GB`
+and `FILE_RETENTION_HOURS` were in this table until dl-53 removed both.
+
+**2 — Where the edge rule lives. Answered 2026-09-28 by the owner: A.**
 
 - **A — On the dashboard, documented in `02-DEPLOYMENT.md` (recommended).**
   There is one rule, and it changes rarely.
@@ -85,3 +88,11 @@ Written with the decision.
   speed measurement, and marked `MAX_TOTAL_STORAGE_GB` and
   `FILE_RETENTION_HOURS` as removed by it. Still `needs-decision`: no host
   measurement has been taken.
+- 2026-09-28 — Re-read against `a084170` before asking. dl-51 and dl-53 are
+  done: `MAX_JOBS_PER_CLIENT` exists with a default of 2, the storage and
+  retention settings are gone, and `MAX_CONCURRENT_FRAME_GRABS` is new. The
+  table is corrected to match. The prod overlay still sets no limit. **Part 2
+  answered by the owner: A**, the rule on the dashboard, documented in
+  `02-DEPLOYMENT.md` with what the zone's plan allows. **Part 1: the owner
+  will take the three host measurements and paste them.** The ticket stays
+  `needs-decision` until they arrive.

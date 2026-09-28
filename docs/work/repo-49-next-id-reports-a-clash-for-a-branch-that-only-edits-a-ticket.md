@@ -3,7 +3,7 @@ id: repo-49
 tool: repo
 title: next-id.mjs reports a false clash when a branch only edits an already-merged ticket
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: hard
@@ -229,20 +229,41 @@ open rather than solved, and leaves the actual change,
 `scripts/test/next-id.test.ts` coverage for it, and the sign-off on all three
 questions to whoever picks it up next.
 
+## Decision — answered 2026-09-28 by the owner: fix shapes 1 and 3
+
+**Shape 1**: take the candidate above, `--no-renames --diff-filter=A` on both
+`git diff` calls. **Shape 3**: count a pull request and its own head branch as
+one source. **Shape 2 is not fixed.** It stays as documented over-reporting in
+the script's doc comment, since it needs a content comparison against `main`
+and it is rare.
+
+**The two fixes are one change, not two**, and neither half works alone.
+Found while re-reading `a084170` for the owner. The candidate above
+filters only the `git diff` calls. A pull request's paths come from
+`scripts/next-id.mjs:345` `paths: lines(run("gh", ["pr", "diff", pr, "--name-only"], { cwd })),`,
+and `gh pr diff --name-only` has no status filter. So an open PR that only
+edits a merged ticket would still report it as a claim through its `PR#<n>`
+source after shape 1's filter had cleared its `branch/<name>` source. The
+direction, untested: for a PR whose `headRefName` is also swept as a branch,
+keep only the branch source, which can take the filter. Keep the `PR#<n>`
+label on it so the reader still sees the PR number. A PR with no swept branch
+keeps its `gh pr diff` source, unfiltered, and over-reports as it does today.
+
 ## Done when
 
-- The owner or a future builder has answered, for each of the three shapes:
-  whether shape 1 is worth `--no-renames --diff-filter=A` (or accepting the
-  noise as within the tool's existing documented preference for
-  over-reporting), and whether shapes 2 and 3 are worth a fix at all given
-  neither has a candidate here.
-- If shape 1 is applied: a new `scripts/test/next-id.test.ts` case reproduces
+- A new `scripts/test/next-id.test.ts` case reproduces
   this ticket's `pl-50-count-thinking-tokens` and `pl-47-edit-dates-and-budget`
   fixtures (a branch that only modifies an existing ticket file must not
   appear as a clash source), watched red against the unfixed script first, and
   a case for a genuinely **renamed** ticket file must still be caught —
   watched red against `--diff-filter=A` _without_ `--no-renames` first, since
   that combination is exactly what this ticket measured missing a rename.
+- A case where an open PR and its head branch both edit an existing ticket
+  file produces no clash, and a case where they add a new one produces
+  exactly one source for it, not two. Both are watched red against the
+  unfixed script first.
+- The `idsIn` / `branchSources` doc comments name shape 2 as known
+  over-reporting.
 - `npm run check` and the `scripts/test/next-id.test.ts` suite are green.
 
 ## Log
@@ -292,3 +313,9 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   first two sweeps — `pl-46` merged, `pl-52` newly appeared), all three shapes
   present. `npm run format` and `npm run status -- --show repo-49` both clean
   after the rewrite.
+
+- 2026-09-28 — **Answered by the owner: shapes 1 and 3, shape 2 left as
+  documented noise.** Moved to `ready`. Re-read against `a084170`: both
+  `--name-only` diffs are still at `:254` and `:264`. Found one gap in the
+  candidate, written up under Decision: the PR source's `gh pr diff` can't
+  take the filter, which is why shape 3's dedupe has to land with it.
