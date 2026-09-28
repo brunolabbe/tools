@@ -143,7 +143,7 @@ you are there.
    or a declaration, or a merge condition in a dispatch, run it on a scratch
    copy — `review-record.mjs` or `--verify`, the `git log -S` pin-or-declare
    test from `records.md`, or the actual check that needs `main` — and
-   confirm it does what the dispatch is about to say it does.
+   confirm it does what the dispatch is about to say it does. When an `AskUserQuestion` offers options, dry-run each option's mechanism (for a landing, grep the records for the coordinates the option would move) and price it from `node scripts/agent-cost.mjs` figures of comparable agents in the batch, not a guess. Measured 2026-09-28: the orchestrator offered "land the records first, fixes after" on repo-79, the owner chose it, and the fix had to move two lines the records cited, so it was re-asked; and a fixer round quoted at $2–4 cost $7.58.
 
 7. **Accept each report, or send it back — the work is not done until you do**:
    five checks, not a re-review. Does each report say what was *run*, and where
@@ -487,7 +487,7 @@ instruction; where the shape has a worked example it is in
 | --- | --- | --- |
 | A relayed **option** | Read the options out of the ticket yourself before putting them to the user. A relayed *finding* travels safely marked unverified; an option does not, because the user acts on it | 2026-09-03 |
 | An option's stated **mechanism** | A proposal, not a fact, and answering the decision does not verify it. Dispatch the outcome — *this must fail fast with a typed code* — and say the named route is unverified | 2026-09-03 |
-| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it — and a premise inside an option you put to the owner is the same claim: "the planner has no `@fastify/static`" went from a build report into a question unchecked, and one grep of its `package.json` refuted it | 2026-08-22, 2026-09-26 |
+| A subagent's **claim**, repeated as yours | Be able to say who ran it. A vivid failure scenario from a report is a hypothesis until someone renders it — and a premise inside an option you put to the owner is the same claim: "the planner has no `@fastify/static`" went from a build report into a question unchecked, and one grep of its `package.json` refuted it. 2026-09-28: the orchestrator relayed a fixer's "two net lines" to a gate unchecked, and the gate measured +4. | 2026-08-22, 2026-09-26, 2026-09-28 |
 | A **caveat** where a command would do | Where checking is one command — a file count, a config flag, a quoted line — spend it rather than caveating. Reserve the caveat for what genuinely cannot be checked from here | 2026-08-24 |
 | An **unmarked** relay | "The ticket says X; I have not checked" costs a sentence and stops the chain. Without it three links formed silently and only the middle one was cheap to break | 2026-08-23 |
 | Your own **summary**, sent downstream | Relay the reproduction, not the verdict, and say the builder should push back rather than transcribe. Every builder in the fourth session corrected something | 2026-08-23 |

@@ -313,3 +313,4 @@ tree, since the second is where A's cost shows up.
   #312 merges, the number of code PRs in the next batch that had to repair a
   record they never touched, split by those two groups. Still
   `needs-decision`.
+- **2026-09-28 — baseline before #312 merges, from #314 (repo-79):** one code PR repointed citations in five merged records it did not write (repo-51, repo-64, repo-67, repo-71, repo-75) — gate 1 showed 29 records with pin operations, gate 2 showed 29 again, gate 3 showed 6. These counts are from the respective gate sections in repo-79's record as landed.

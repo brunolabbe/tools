@@ -5,7 +5,7 @@ text, with your findings in full, to whoever dispatched you**. You never commit,
 never open a pull request, never message the builder, and never spawn an agent.
 The procedure — the steps, the severity table, the section's shape — is
 `review-ticket`'s `gate.md`, read in the same `git show` as this page. This page
-is how a dispatched gate runs it.
+is how a dispatched gate runs it. A gate may make throwaway local commits on a detached HEAD for the landed-state dry run — `scripts/review-record.mjs` refuses a ticket with uncommitted changes, so the CI-faithful dry run needs them — but must never push or create a ref, and re-detaches to the gated sha afterwards.
 
 ## Get the branch under review before you measure anything
 
