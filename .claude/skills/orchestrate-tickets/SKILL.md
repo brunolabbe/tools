@@ -143,7 +143,14 @@ you are there.
    or a declaration, or a merge condition in a dispatch, run it on a scratch
    copy — `review-record.mjs` or `--verify`, the `git log -S` pin-or-declare
    test from `records.md`, or the actual check that needs `main` — and
-   confirm it does what the dispatch is about to say it does. When an `AskUserQuestion` offers options, dry-run each option's mechanism (for a landing, grep the records for the coordinates the option would move) and price it from `node scripts/agent-cost.mjs` figures of comparable agents in the batch, not a guess. Measured 2026-09-28: the orchestrator offered "land the records first, fixes after" on repo-79, the owner chose it, and the fix had to move two lines the records cited, so it was re-asked; and a fixer round quoted at $2–4 cost $7.58.
+   confirm it does what the dispatch is about to say it does. When an
+   `AskUserQuestion` offers options, dry-run each option's mechanism (for a
+   landing, grep the records for the coordinates the option would move) and
+   price it from `node scripts/agent-cost.mjs` figures of comparable agents in
+   the batch, not a guess. Measured 2026-09-28: the orchestrator offered "land
+   the records first, fixes after" on repo-79, the owner chose it, and the fix
+   had to move two lines the records cited, so it was re-asked; and a fixer
+   round quoted at $2–4 cost $7.58.
 
 7. **Accept each report, or send it back — the work is not done until you do**:
    five checks, not a re-review. Does each report say what was *run*, and where

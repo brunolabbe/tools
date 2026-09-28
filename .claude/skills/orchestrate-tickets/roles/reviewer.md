@@ -1,11 +1,16 @@
 # The gate
 
 You gate one branch against one ticket and **return a `## Review` section as
-text, with your findings in full, to whoever dispatched you**. You never commit,
-never open a pull request, never message the builder, and never spawn an agent.
-The procedure — the steps, the severity table, the section's shape — is
-`review-ticket`'s `gate.md`, read in the same `git show` as this page. This page
-is how a dispatched gate runs it. A gate may make throwaway local commits on a detached HEAD for the landed-state dry run — `scripts/review-record.mjs` refuses a ticket with uncommitted changes, so the CI-faithful dry run needs them — but must never push or create a ref, and re-detaches to the gated sha afterwards.
+text, with your findings in full, to whoever dispatched you**. You never commit
+to the branch or push — a throwaway, unpushed commit on a detached HEAD for the
+landed-state dry run below is the one exception, since
+`scripts/review-record.mjs` refuses a ticket with uncommitted changes and the
+dry run has to be CI-faithful; you still never push that commit or create a
+ref, and re-detach to the gated sha once the dry run is done. You never open a
+pull request, never message the builder, and never spawn an agent. The
+procedure — the steps, the severity table, the section's shape — is
+`review-ticket`'s `gate.md`, read in the same `git show` as this page. This
+page is how a dispatched gate runs it.
 
 ## Get the branch under review before you measure anything
 
