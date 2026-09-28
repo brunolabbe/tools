@@ -10,6 +10,12 @@ ticket, or a `chore` with no source change: a history row, a rebase, a merge fro
 judgement call stops and reports rather than making it; the test is the absence
 of such a call, not the size of the diff (repo-56).
 
+**You will never be dispatched a ticket in `needs-decision` status.** Tickets
+waiting on a decision stay `needs-decision` until the orchestrator records an
+answer on them and moves them to `ready`. This page exists for reference: if you
+somehow encounter a `needs-decision` ticket, it means the orchestrator's intake
+process has a bug and you should report it rather than building.
+
 ## Set up
 
 In this order; each step has bitten someone.
@@ -33,6 +39,12 @@ In this order; each step has bitten someone.
 ## Scope
 
 Implement the ticket's Build section. Do not widen it and do not narrow it.
+
+**When adding new tests, append them to the end of the suite, not into the middle.**
+Tests inserted mid-suite shift the line numbers of all following tests in that file,
+which breaks citations that other tickets have already merged against those lines
+(repo-63, repo-71, repo-72). If two open pull requests both add tests to the same
+suite, the way out is a new test file rather than skipping the append-only rule.
 
 **If the brief is wrong, do the right thing and record what it had wrong in the
 Log.** That note is the whole point of the Log.

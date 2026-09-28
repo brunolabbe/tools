@@ -195,7 +195,7 @@ landing, over the set of sections the final gate returned, one
    step is the builder's, and it has three acts. First, write the reviewer's
    returned text to a file, `## Review` as its first line (or `### Gate <n>` for
    a later gate), and run
-   `node scripts/review-record.mjs <ticket> <section-file> [--gate <n>]`. The
+   `node scripts/review-record.mjs <ticket-path> <section-file> [--gate <n>]`. The
    script finds the insertion point by heading form, never by a bare-text
    search — a first review lands above `## Log`, a later gate at the end of the
    existing `## Review` block — inserts the text verbatim, runs the formatter,
@@ -208,7 +208,7 @@ landing, over the set of sections the final gate returned, one
    what, if anything, differs, "nothing" included — in the same commit. That is
    the check CI is about to run; catching it here costs one command, and
    catching it in CI costs a push. Once it is committed,
-   `node scripts/review-record.mjs --verify <ticket> <section-file> [--gate <n>]`
+   `node scripts/review-record.mjs --verify <ticket-path> <section-file> [--gate <n>]`
    compares the committed record with the file, ignoring table padding and what
    the formatter rewrites, and exits 1 naming every ticket line that differs; a
    difference is a change to the reviewer's words, which goes back to the

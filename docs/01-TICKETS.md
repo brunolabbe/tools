@@ -508,3 +508,13 @@ they are the three ways a correct change fails here.
   [03-RELEASING.md](./03-RELEASING.md), which an agent handed a ticket has no
   reason to open — so the check for it goes here, where it will be read. A title
   that reads like a heading is a guaranteed red `pr-title`.
+
+## Rate `difficulty` at filing
+
+**When you file a ticket, set its `difficulty` field.** Leaving it blank defaults
+the ticket to the strongest builder (Opus on the pairing table in
+[`SKILL.md`](./.claude/skills/orchestrate-tickets/SKILL.md)), which costs more
+than building it on the right model. Four tickets filed without difficulty in one
+batch defaulted to Opus; one was a ~20-line fix that cost $1.48 to build (repo-72).
+See the `difficulty` field's explanation in the _Fields_ section above for the
+three ratings and when to use each.
