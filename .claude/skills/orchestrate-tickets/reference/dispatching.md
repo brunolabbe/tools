@@ -433,7 +433,7 @@ check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
   — never a different checkout.** Splice it into a scratch copy of the ticket
   at the real insertion point, above `## Log`, and run
   `node scripts/citations.mjs <copy> --section Review --require-anchors
-  --require-distinct-anchors`. A reviewer that did this unprompted handed over a
+  --require-distinct-anchors --require-claude-pins`. A reviewer that did this unprompted handed over a
   section needing no repair (2026-09-09); one that did not cost the builder a
   round on two citations (2026-09-13); `repo-62`'s gate 1 skipped it again on
   2026-09-27 and its section failed the lander's own splice on arrival, where

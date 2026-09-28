@@ -311,3 +311,14 @@ was empty — verbatim survived the formatter.
 2026-09-28 — Gate 2's record (PASS, G2-a to G2-d above) landed via
 `review-record.mjs --gate 2`. The tool's own disclosure note against the
 section file was empty — verbatim survived the formatter.
+
+2026-09-28 — Applied gate 2's four low findings after the record: G2-a,
+`records.md` now says an enforced **section** (not "record") has nothing
+left for `--displaced-since` to find, since the claim only holds under
+`## Review` and not a Log; G2-b, repo-80's Build gives `--land` a `--base
+<ref>` and its Done when now asks for the refusal to be built; G2-c, the
+preflight coordinate in `records.md`'s incident list is pinned to `a084170`;
+G2-d, the dry-run command in `dispatching.md` now carries
+`--require-claude-pins`, matching what CI and `--land`'s own splice check
+(repo-80) already require. Landed after gate 2, unreviewed, under this
+ticket's severity floor.

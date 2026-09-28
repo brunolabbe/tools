@@ -275,7 +275,7 @@ discarded. So:
     already supposed to catch and, on that occasion, did not.
     - repo-60's merged record cited a line in repo-63's own ticket file;
       repo-63's landing splice moved it (#306).
-    - repo-67's record cited `scripts/preflight.mjs:410` "if (hasGateRecord(content))",
+    - repo-67's record cited `scripts/preflight.mjs@a084170:410` "if (hasGateRecord(content))",
       which #308 rewrote in place, same number, new text (#304).
     - repo-48's evaluation cited line 318 of this skill's own
       `reference/concurrency.md`, moved by its own later round (#307).
@@ -771,9 +771,10 @@ it is already threaded through the whole gate, not merely a one-record tool —
 `citations-gate.mjs` reaches, 214 of them measured at the base — but it only
 reports a citation that is **both unanchored and unpinned**, and this page's
 own _Anchor a citation, or nothing has checked it_ already requires an anchor
-on everything `citations-gate.mjs` enforces. So an enforced record has
-nothing left for `--displaced-since` to find regardless of whether CI passes
-the flag; it answers a real question, just not this one. **Extending
+on everything `citations-gate.mjs` enforces, its `## Review` section — not a
+Log, which needs no anchor. So an enforced **section** has nothing left for
+`--displaced-since` to find regardless of whether CI passes the flag; it
+answers a real question, just not this one. **Extending
 `citations-gate.mjs` to refuse an unpinned citation of pre-existing content
 is real machinery this ticket did not build** — repo-80
 (`docs/work/repo-80-land-records-one-command.md`), which already touches
