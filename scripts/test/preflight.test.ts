@@ -80,7 +80,7 @@ function makeRepo() {
   git("init", "-q", "-b", "main");
   git("config", "user.email", "preflight@example.test");
   git("config", "user.name", "preflight test");
-
+  fs.writeFileSync(path.join(dir, ".gitattributes"), "* text=auto eol=lf\n");
   const write = (file: string, content: string) => {
     fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
     fs.writeFileSync(path.join(dir, file), content);
