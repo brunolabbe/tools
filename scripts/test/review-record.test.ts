@@ -180,7 +180,7 @@ test("normalizeForDiff trims trailing blank lines only", () => {
 
 /** `git` in a named directory, throwing on failure so a broken fixture fails loudly. */
 function gitIn(dir: string, ...args: string[]): string {
-  const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+  const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
   if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
   return result.stdout.trim();
 }
@@ -265,7 +265,7 @@ function writeSectionFile(dir: string, name: string, body: string): string {
 }
 
 function runCli(dir: string, args: string[]) {
-  return spawnSync("node", [CLI, ...args], { cwd: dir, encoding: "utf8" });
+  return spawnSync("node", [CLI, ...args], { cwd: dir, encoding: "utf8", shell: false });
 }
 
 test('splices the first review above "## Log" even when prose quotes "## Review" inline first', () => {
