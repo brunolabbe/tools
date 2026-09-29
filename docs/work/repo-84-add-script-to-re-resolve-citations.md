@@ -35,8 +35,7 @@ made here):
 3. **Leave it ad-hoc and built by hand in scratch directories when needed,
    avoiding the code path.** Cost: nothing upfront, and this is the status
    quo already measured this batch — the same script rebuilt four times
-   across gate rounds 2 through 5 of `repo-80`'s branch
-   (`scratchpad/repo-80/probe/reresolve.mjs`).
+   across gate rounds 2 through 5 of `repo-80`'s branch.
 
 ## Why
 

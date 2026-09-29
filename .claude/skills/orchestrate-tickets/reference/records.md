@@ -130,8 +130,12 @@ discarded. So:
   (`SKILL.md`, _The PR is not the end of gating_) — unlike the bullet above,
   this one still commits records before the fix that follows them, because
   the records were already committed at the earlier landing that opened the
-  pull request. The section stays as a description of the sha it
-  reviewed; the builder adds a dated post-gate Log entry naming the new sha and
+  pull request. **Prefer the same mechanic as the bullet above here too**:
+  the gate, woken for the narrow round, re-issues every section at the fix's
+  new tip and builds the end-state commit, and the lander lands from it,
+  repointing nothing (`repo-80`, 2026-09-29). What follows is the fallback,
+  for when the gate is not woken. The section stays as a description of the
+  sha it reviewed; the builder adds a dated post-gate Log entry naming the new sha and
   saying the record above describes the earlier one; a coordinate the fix moved
   is repointed by the builder, coordinate only and only where the anchor text
   still reads unchanged, each change named in the Log — a fixer stops and
