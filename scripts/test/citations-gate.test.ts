@@ -18,7 +18,7 @@ import {
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations-gate.mjs");
-const TEXT = { encoding: "utf8", shell: false };
+const TEXT = { encoding: "utf8", shell: false } as const;
 
 /**
  * A throwaway repository with one source file and whatever records a test asks

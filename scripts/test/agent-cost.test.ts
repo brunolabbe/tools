@@ -40,7 +40,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(here, "..", "..");
 const CLI = path.resolve(here, "..", "agent-cost.mjs");
 const FIXTURES = path.resolve(here, "fixtures", "agent-cost");
-const RUN = { cwd: REPO, encoding: "utf8", shell: false };
+const RUN = { cwd: REPO, encoding: "utf8", shell: false } as const;
 
 const sonnetFixture = path.join(FIXTURES, "sonnet.jsonl");
 const opusFixture = path.join(FIXTURES, "opus.jsonl");

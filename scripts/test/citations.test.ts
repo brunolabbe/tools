@@ -22,7 +22,7 @@ import {
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations.mjs");
-const TEXT = { encoding: "utf8", shell: false };
+const TEXT = { encoding: "utf8", shell: false } as const;
 
 /** A citation, with the fields a given test does not care about filled in. */
 const cite = (over: Partial<ReturnType<typeof extractCitations>[number]> = {}) => ({
