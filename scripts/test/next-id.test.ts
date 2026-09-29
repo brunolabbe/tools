@@ -464,6 +464,7 @@ function cli(args: string[], over: { cwd?: string; PATH?: string } = {}) {
     encoding: "utf8",
     cwd: over.cwd ?? REPO,
     env: { ...process.env, ...(over.PATH === undefined ? {} : { PATH: over.PATH }) },
+    shell: false,
   });
 }
 
@@ -499,6 +500,7 @@ const runGit = (cwd: string, args: string[]) => {
     {
       cwd,
       encoding: "utf8",
+      shell: false,
     },
   );
   expect(result.error).toBeUndefined();
@@ -574,7 +576,7 @@ test("a missing default rev keeps git's status and says how to fix it", () => {
       "x",
     ],
   ]) {
-    expect(spawnSync("git", args, { cwd: shallow, encoding: "utf8" }).status).toBe(0);
+    expect(spawnSync("git", args, { cwd: shallow, encoding: "utf8", shell: false }).status).toBe(0);
   }
   const result = cli(["repo", "--repo", shallow]);
   expect(result.status).toBe(128);
