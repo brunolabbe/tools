@@ -210,6 +210,21 @@ Whichever of (a) or (b) is chosen:
 - Commands at `21a2196`: `npx vitest run scripts/test/preflight.test.ts` exit 0, 87 of 87; `npm run check` exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0 (131 enforced, 0 failing); `node scripts/preflight.mjs --base origin/main` exit 0.
 - NFR: security ✓ (the spawn is still an argument array through `runGit`) · performance ✓ (`-uall` lists every untracked file, and this tree is clean after farm and build) · reliability ✓ · maintainability: the three lows above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-29 · `21a2196..89dd642` only, 5 lines changed in place: 1 in `scripts/preflight.mjs`, 4 in this Log (base `6bfae8e`, still the tip of `origin/main`) · code-review at medium over those 5 lines. Every unpinned coordinate below resolves against `89dd642`.
+
+| Gate 2 finding                                      | Verdict at `89dd642`                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| low 1: wrong collapsed form in the docblock and Log | **fixed**. `scripts/preflight.mjs:1470 "with no tracked"` now reads `tools/`. The Log (gate 1 round entry, collapsed-directories paragraph) now reads `tools/` too. Checked against the throwaway repo from gate 2, where `ls-files` lists only `seed.txt`: plain `git status --porcelain=v1` prints `?? tools/` |
+| low 2: stale Log coordinates                        | **fixed**. The "Built (b)" entry now cites line 1485 of `scripts/preflight.mjs` for `workingTreePaths` and line 1549 for `preflight()`, and both resolve at `89dd642`                                                                                                                                            |
+| low 3: test count in the Log                        | **fixed**. The Log now says three new tests, for lows 1, 2 and 4                                                                                                                                                                                                                                                 |
+
+- **findings** · code-review at medium over `21a2196..89dd642` returned 0; 0 carried, 0 dropped. Each of the 5 changed lines was read against the line it replaced.
+- Moved citations: none. All 5 changes are in place, and the diff numstat is 1/1 and 4/4, so no line shifted.
+- Commands at `89dd642`: `node scripts/citations-gate.mjs --against origin/main` exit 0 (131 enforced, 0 failing); `node scripts/preflight.mjs --base origin/main` exit 0, with its own `npm test -- --project repo` passing.
+- NFR: not applicable. A comment and the Log changed; no behaviour did.
+
 ## Log
 
 - 2026-09-27 — Filed from item 12 of the 2026-09-27 batch close-out
