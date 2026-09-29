@@ -320,6 +320,23 @@ Re-gated head `38769fd`; re-issued at `0908468`, against which every unpinned co
 - Gates at `38769fd`: `npx vitest run scripts/test/check-farm-freshness.test.ts` exit 0, 12 of 12; `npm run check` exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0, 131 enforced and 0 failing; `node scripts/preflight.mjs --base origin/main` exit 0.
 - Not re-swept, by the re-gate rule: gate 1 acceptance rows, timing and the lockfile census. This round changes no detection path; 12 of 12 still pass.
 
+### Gate 3
+
+**Gate: PASS** — 2026-09-29 · `38769fd..0908468` · code-review at medium, this round only
+
+Re-gated head `0908468`; every unpinned coordinate below resolves against it. `origin/main` was still `6bfae8e`. The round is one comment word in `.claude/scripts/check-farm-freshness.mjs`, 40 test lines appended after the last test, and the Log; nothing was rebuilt.
+
+| Gate 2 finding                                     | Verdict                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The parse-failure notice is never asserted      | fixed — `scripts/test/check-farm-freshness.test.ts:301-315 "warnIfStale's stderr names"` ✓ and `scripts/test/check-farm-freshness.test.ts:318-327 "worktree-farm.sh's stderr names"` ✓ assert that stderr contains did not parse, directly and end to end. Re-ran the gate 2 mutation (the notice write turned into `String(`): 2 of 14 fail, exactly those two, 12 pass; reverted, 14 of 14 pass |
+| 2. Wrong placeholder in the nested-entries comment | fixed — the comment under _What counts as declared_ now reads a package missing from the nested tree of `<name>`; the diff is that one word, in place                                                                                                                                                                                                                                             |
+
+- **findings** · code-review at medium over this round: 0 returned, 0 carried, 0 dropped. The two new tests do not assert the exit code, which the earlier parse-failure cases already do.
+- Gate 1 and gate 2 citations: this round moved none, since its tests follow the last existing test. The line-273 evidence in the first gate 2 low, whose claim this round corrected, is now prose naming `38769fd`, marked as amended at `0908468`.
+- The round Log entry (the same mutation failing 2 of 14, 14 of 14 after, citation gate 131 enforced and 0 failing) matches every run here.
+- Gates at `0908468`: `npx vitest run scripts/test/check-farm-freshness.test.ts` exit 0, 14 of 14; `node scripts/citations-gate.mjs --against origin/main` exit 0, 131 enforced and 0 failing; `node scripts/preflight.mjs --base origin/main` exit 0, every step ok, `npm run check` among them.
+- Not re-swept, by the re-gate rule: everything outside `38769fd..0908468`.
+
 ## Log
 
 - **2026-09-14 — filed.** Filed by a `builder` dispatched on Opus 5 (1M
