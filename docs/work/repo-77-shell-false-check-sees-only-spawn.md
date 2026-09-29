@@ -101,9 +101,32 @@ to the owner separately on 2026-09-27 and filed here by their choice.
   46 calls could not all be zero-sum), repointed the moved citations to a
   `@2ffb72a` base pin instead, per `records.md`'s standing rule that content
   unchanged at the base pins there rather than churning the ticket that cited
-  it — 46 citations across 9 merged tickets in total (repo-14, repo-29,
-  repo-41, repo-50 x2, repo-52 x2, repo-60, repo-63, repo-64, repo-67, repo-74,
-  repo-78). The downloader test's own PR question from Build step 3 was
+  it — **WITHDRAWN — do not cite this paragraph:** "46 citations across 9
+  merged tickets in total (repo-14, repo-29, repo-41, repo-50 x2, repo-52 x2,
+  repo-60, repo-63, repo-64, repo-67, repo-74, repo-78)." Both numbers are
+  wrong and the list is missing a ticket — that sentence only ever counted the
+  `citations.test.ts` repointing pass, dropped `repo-82` from its own list,
+  and mislabelled two tickets' "x2" as a citation count when it meant "this
+  ticket appears twice in my working notes." The real count, measured by the
+  orchestrator at this ticket's pushed head and independently reproduced
+  here, is **12 tickets, 63 pinned citations, 43 added lines** (a table
+  reflow can put more than one pin on a line, and one line, repo-77's own,
+  matched the sha string in prose rather than a pin and does not belong in
+  either count):
+  `git diff --name-only 2ffb72a bdeb210 -- docs/work | grep -v repo-77` gives
+  the 12 files; per file, `git diff 2ffb72a bdeb210 -- <file> | grep '^+' |
+grep -c '@2ffb72a'` for the line count, and the same piped through
+  `grep -o '@2ffb72a:[0-9]*' | wc -l` for the pin count, give lines/pins:
+  repo-14 4/4, repo-29 2/2, repo-41 1/1, repo-50 15/22, repo-52 2/7, repo-60
+  7/10, repo-63 2/5, repo-64 2/2, repo-67 1/1, repo-74 1/2, repo-78 3/3,
+  repo-82 3/4 — summing to 43 lines, 63 pins, matching the orchestrator's 63
+  exactly and its 44 once repo-77's own line is excluded.
+  Every changed line is coordinate-only: a script pairing each removed line
+  with its added counterpart, stripping `@2ffb72a` and collapsing whitespace,
+  finds zero content mismatches across all twelve files — the only
+  differences left are markdown table separator rows re-padded by `oxfmt` to
+  the new (longer) column width, not a citation's own text. The downloader
+  test's own PR question from Build step 3 was
   answered by the owner before this build started (dispatch record): one PR,
   `test(repo)`, since `test` is hidden from every tool's changelog including
   the downloader's. `next-id.test.ts`'s fourth call, `:685` in the ticket's
