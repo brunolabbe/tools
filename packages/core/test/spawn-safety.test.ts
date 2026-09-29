@@ -77,10 +77,15 @@ describe("no shell reaches a child process", () => {
 
   test("every file that spawns says `shell: false` explicitly", () => {
     // The default is already false, so this is about intent: a spawn without
-    // the flag reads as one nobody thought about.
+    // the flag reads as one nobody thought about. `spawnSync`, `execFile` and
+    // `execFileSync` take the same `shell` option `spawn` does and are asked
+    // the same question — a pattern narrowed to `spawn(` alone saw none of
+    // them (repo-77).
     const offenders = SOURCES.filter((source) => {
       const text = code(source.text);
-      const spawns = /\bspawn\s*\(/u.test(text) && /from\s+["']node:child_process["']/u.test(text);
+      const spawns =
+        /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(/u.test(text) &&
+        /from\s+["']node:child_process["']/u.test(text);
       return spawns && !/\bshell\s*:\s*false/u.test(text);
     }).map((source) => source.file);
     expect(offenders).toEqual([]);
