@@ -262,7 +262,12 @@ Whichever of (a) or (b) is chosen:
   the stale "still `needs-decision`" sentence closing the recommendation
   paragraph above (line 139 before this edit) to point at the owner's answer
   instead, rather than reading as still open beneath it — the dispatch flagged
-  it as possibly misleading and it was.
+  it as possibly misleading and it was. `preflight()`'s own docblock was also
+  stale independently of this ticket — it said `diffPaths` was "handed to
+  whichever checks read the diff — check 1 and check 4," which undercounted
+  check 3 (`checkReview`) even before this branch; rewritten along with the
+  rest of that docblock, in the function this ticket was already rewriting,
+  rather than filed separately.
 
   Reproduced the ticket's own transcript directly against this fix, in a
   scratch clean worktree, before writing a test for it: with `preflight()`
