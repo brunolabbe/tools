@@ -3,7 +3,7 @@ id: repo-47
 tool: repo
 title: The citations gate fails a code PR on citations in merged records that still verify on the base
 kind: fix
-status: needs-decision
+status: ready
 difficulty: hard
 milestone: null
 depends_on: []
@@ -206,7 +206,12 @@ a new mechanism. Two facts constrain any option built on that:
   merge base now also has the citation moved. This follows from
   `makeReader(repo, null)` above. It has not been run.
 
-## Options — none chosen
+## Options — B chosen, 2026-09-29
+
+**The owner chose B: enforce only the records the branch itself changes.** The
+options stay below as filed, because they are what the choice was costed against.
+The measurement it was made on, and where the answer came from, are in the dated
+Log entry.
 
 ### A. A citation that verifies at the merge base and moved on the branch is reported, not failed
 
@@ -281,14 +286,61 @@ on `main`, where the content now exists.
 
 ## Build
 
-Blocked on the decision above.
+Option B, in `scripts/citations-gate.mjs`:
+
+- **The touched set is the branch's diff from the merge base**, meaning
+  `git merge-base HEAD <against>` and not `<against>`'s tip. Diff it against the
+  working tree, so that a local run sees uncommitted edits. In CI the working
+  tree is `HEAD`. The merge base is what the Why's first constraint asks for: a
+  citation moved by a commit already on `main` is `main`'s debt, not the PR's.
+- **An enforced record outside that set does not fail on `moved`.** Print its
+  moved citations under a heading of their own and leave the exit code alone.
+  Every other state (`unresolvable`, `unanchored`, `malformed-pin`) stays
+  failing as it does today. The chosen option covers `moved` only, and a code
+  change that only shifts lines cannot produce the others.
+- **A record in the touched set is enforced exactly as today.** That includes a
+  record the branch creates, which keeps enforcement where repo-29's option D
+  put it: at the moment a gate record is written.
+- **Without `--against`** there is no base, so every record is enforced, as
+  today.
+- **The grandfathered ratchet does not change.**
+- **The push and nightly runs on `main`** compare `main` with itself. The touched
+  set is empty, so every moved citation is reported and none fails. That is the
+  cost the owner accepted with B: moved citations accumulate on `main`, visible
+  in the report, until a branch touches the record or someone sweeps it.
+
+Also update:
+
+- the comment above the gate step in `.github/workflows/ci.yml`, which describes
+  what `--against` compares;
+- `scripts/preflight.mjs`, which runs the gate on a scratch merge of several
+  heads (repo-79). Decide there whether the touched set is the union of the
+  folded heads' diffs, and say which in the Log;
+- `.claude/skills/orchestrate-tickets/reference/records.md`, in the bullet that
+  says whose repoint it is when a later commit moves a cited line. It names this
+  ticket as undecided and states today's rule, "the branch whose change moves
+  the line repoints it". Under B, that branch repoints only the records it also
+  edits.
 
 ## Done when
 
-Written once an option is chosen. For A or B, the acceptance must include a
-fixture in which a code change moves a line cited by an untouched, enforced
-record, together with the gate's exit code on the branch **and** on the merged
-tree, since the second is where A's cost shows up.
+- **A fixture repository** in which a code change moves a line cited by an
+  enforced record that the branch does not touch. The gate exits 0 on the
+  branch, and the moved citation is printed under its own heading.
+- **The same fixture after the merge**, with `--against` naming the merged tip
+  itself, which is what the push run does. The gate exits 0, and the citation is
+  still reported.
+- **The control:** the same branch also edits that record, and the gate exits
+  non-zero on the same `moved`.
+- **A merge-base fixture:** `<against>` has moved on past the merge base with a
+  commit that edits the record. The record is not in the branch's touched set,
+  so it does not fail.
+- **A created record** carrying a `moved` citation fails.
+- Each of the five fails with the change reverted, and the Log says how that
+  was checked.
+- `.github/workflows/ci.yml`'s comment, `scripts/preflight.mjs` and
+  `records.md`'s bullet agree with the new rule.
+- `npm run check` and `npm test` pass.
 
 ## Log
 
@@ -319,3 +371,22 @@ tree, since the second is where A's cost shows up.
   records, gate 2 found "29 citations changed this round", gate 3 found "6
   citations changed this round". These counts are quoted directly from the
   respective gate sections in repo-79's review record as landed.
+- **2026-09-29 — re-measured after #312, and decided: option B, by the owner's
+  choice through AskUserQuestion, taking the option marked recommended.**
+  #312 merged as `9cae329`. The first code PR after it, #316 (repo-82, which
+  changed `scripts/citations.mjs` and `scripts/preflight.mjs`), repointed
+  citations in eight merged records it did not write. Counted from the removed
+  lines of `git diff 2ffb72a^ 2ffb72a`, per record: repo-48 3, repo-50 7,
+  repo-51 3, repo-52 7, repo-60 6, repo-64 2, repo-67 4, repo-79 13. repo-75
+  changed too but counted 0, because its citations are line ranges this
+  count's pattern does not match. So the total is at least 45. Split by the
+  two groups the 2026-09-28 entry named:
+  - **written before repo-78:** seven records, about 32 citations;
+  - **citations of branch-introduced content:** repo-79's record, 13
+    citations of `preflight.mjs` code that repo-79 added. It was written
+    after repo-78 and merged in #314, in the same batch as #316, so option E's
+    close-out sweep would not have reached it in time.
+
+  Options B, E, C and D were offered. B was the only one that removes the cost
+  measured on #316, and the cost of choosing it was stated: it gives up the
+  loud failure accepted in repo-29.
