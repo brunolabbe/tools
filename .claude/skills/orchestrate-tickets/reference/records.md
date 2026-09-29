@@ -99,9 +99,9 @@ discarded. So:
     tip, building a throwaway commit with `citations-gate`, `citations.mjs`
     and `--verify <ticket>` exiting 0 on it; and the lander lands from that
     commit, repointing nothing. `--verify` targets the files from the final
-    re-issue, not the pre-fix gate's file set. Fixes after records cost a
-    repoint within committed records, which is the builder's path and costs
-    coordination.
+    re-issue, not the pre-fix gate's file set. Landing this round's fixes
+    after its own records are committed instead still costs a repoint within
+    committed records — the builder's path — and costs coordination.
   - **The status goes in with the landing's first record commit** — `done`,
     or `in-flight` for work that lands partial — so no commit carries a record
     on a `ready` ticket. Before the landing there is no record, and neither
@@ -125,10 +125,12 @@ discarded. So:
   coordinates are exempt from that rule.
 
 - **A fix that lands after the records are committed does not edit a
-  section.** Two cases are left where a committed record meets a later fix,
-  both conditional ship: a last round of fixes applied after the records, and
-  a pull request opened and then one narrow gate (`SKILL.md`, _The PR is not
-  the end of gating_). The section stays as a description of the sha it
+  section.** One case is left where a committed record meets a later fix,
+  still conditional ship: a pull request opened and then one narrow gate
+  (`SKILL.md`, _The PR is not the end of gating_) — unlike the bullet above,
+  this one still commits records before the fix that follows them, because
+  the records were already committed at the earlier landing that opened the
+  pull request. The section stays as a description of the sha it
   reviewed; the builder adds a dated post-gate Log entry naming the new sha and
   saying the record above describes the earlier one; a coordinate the fix moved
   is repointed by the builder, coordinate only and only where the anchor text
@@ -776,20 +778,19 @@ own _Anchor a citation, or nothing has checked it_ already requires an anchor
 on everything `citations-gate.mjs` enforces, its `## Review` section — not a
 Log, which needs no anchor. So an enforced **section** has nothing left for
 `--displaced-since` to find regardless of whether CI passes the flag; it
-answers a real question, just not this one. **Extending
+answers a real question, just not this one. It is, though, **the only
+command that surfaces a moved citation outside `## Review` at all**: run it
+when a branch moves lines cited in gate records, to find unpinned displaced
+citations that the Review section's own citations gate misses — a record
+that is not in the gated tree has no section to anchor, so this is the only
+way to catch it. Name the base sha, not `origin/main`, so the check sees what
+the base contained. **Extending
 `citations-gate.mjs` to refuse an unpinned citation of pre-existing content
 is real machinery this ticket did not build** — repo-80
 (`docs/work/repo-80-land-records-one-command.md`), which already touches
 `review-record.mjs`'s landing path, carries it now: its `--land` refuses a
 section with an unpinned citation of content that predates the branch,
 since landing is the one place that already knows the base.
-
-**`citations-gate.mjs --displaced-since <base>` is the only command that
-surfaces a moved citation outside `## Review`.** When a branch moves lines
-cited in gate records, run it to find unpinned displaced citations that the
-Review section's own citations gate misses: records that are not in the gated
-tree have no section to anchor. Name the base sha, not `origin/main`, so the
-check sees what the base contained.
 
 **Anchor every citation in a record you are writing now.** That is the whole
 migration: the population that matters is the records still being read against

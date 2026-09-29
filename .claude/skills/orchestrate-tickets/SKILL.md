@@ -197,6 +197,13 @@ you are there.
    describe them. **The PR body names every model — which built, which gated,
    which fixed** — because nothing else in the artefact does.
 
+   **Under conditional ship authority the fixes land first, then the
+   records**: the gate re-issues every section at the new tip and builds the
+   end-state commit, and the lander lands from it, repointing nothing —
+   `--verify` below targets the files from that final re-issue, not an
+   earlier gate's. The mechanic is `reference/records.md`'s (_A multi-round
+   record lands once, at the end_); it is not restated here.
+
    **One command before granting the ship:**
    `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
    ship condition. It is the check and the touched tools' suites, every

@@ -17,11 +17,26 @@ During the 2026-09-29 batch, a reviewer built the same "re-resolve every unpinne
 
 ## Build
 
-Decide where to place a `re-resolve-citations.mjs` script:
+Decide where to place a `re-resolve-citations.mjs` script. Options, costed
+roughly, recommended one first (the filer's recommendation, not a decision
+made here):
 
-1. Add it under `scripts/` as a permanent utility for gates and builders to use
-2. Document it in the skill and build it when builders or gates need to re-resolve unpinned citations
-3. Leave it ad-hoc and built by hand in scratch directories when needed, avoiding the code path
+1. **Add it under `scripts/` as a permanent utility for gates and builders to
+   use (recommended).** Cost: one small script plus a test, roughly the size
+   of `repo-75`'s single-file addition to `scripts/` — a small builder round,
+   once. After that the recurring cost is zero: a gate calls it instead of
+   rebuilding it. Recommended because the alternative's recurring cost is
+   already measured, not projected: four rebuilds in one round.
+2. **Document it in the skill and build it when builders or gates need to
+   re-resolve unpinned citations.** Cost: a paragraph in `records.md` or
+   `roles/reviewer.md`, no new file — cheaper upfront than option 1, but it
+   does not stop the rebuild. The next gate that needs it still writes it
+   from the description, in its own worktree, each time.
+3. **Leave it ad-hoc and built by hand in scratch directories when needed,
+   avoiding the code path.** Cost: nothing upfront, and this is the status
+   quo already measured this batch — the same script rebuilt four times
+   across gate rounds 2 through 5 of `repo-80`'s branch
+   (`scratchpad/repo-80/probe/reresolve.mjs`).
 
 ## Why
 
