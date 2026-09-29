@@ -1574,7 +1574,7 @@ test("a record that does not exist at the rev reports no drift, because there is
   fs.writeFileSync(late, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
   const gate = spawnSync("node", [CLI, late, "--rev", before], { ...TEXT, cwd: dir });
 
-  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`]).status).not.toBe(0);
+  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`], TEXT).status).not.toBe(0);
   expect(gate.status).toBe(0);
   expect(gate.stdout).toMatch(/read from the working tree and resolved against/);
   expect(gate.stdout).not.toMatch(/cited something different/);
@@ -1979,7 +1979,7 @@ test("a citation into a different ticket file is not a self-citation, and counts
   try {
     const result = spawnSync("node", [CLI, distinct.file, "--require-distinct-anchors"], {
       cwd: distinct.dir,
-      encoding: "utf8",
+      ...TEXT,
     });
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/^ {2}ok {9}other\.md:2 /m);
@@ -1994,7 +1994,7 @@ test("a citation into a different ticket file is not a self-citation, and counts
   try {
     const result = spawnSync("node", [CLI, repeated.file, "--require-distinct-anchors"], {
       cwd: repeated.dir,
-      encoding: "utf8",
+      ...TEXT,
     });
     expect(result.status).toBe(EXIT.indistinct);
     expect(result.stdout).toMatch(/anchor starts on 2 lines of other\.md/);

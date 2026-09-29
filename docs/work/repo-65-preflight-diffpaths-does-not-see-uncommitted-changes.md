@@ -60,7 +60,7 @@ with 3 records failing, on `origin/main` at `6988b65`, reverted after. So the
 checks split three ways, not two: check 1's _test selection_ is decided from
 committed diffs only, though the build and the suites it runs execute
 against the working tree like any other local command; check 2 **selects**
-its records from the git index (`git ls-files`, `scripts/citations-gate.mjs:489`)
+its records from the git index (`git ls-files`, `scripts/citations-gate.mjs@2ffb72a:489`)
 and **reads their contents** from disk. The earlier wording here said check
 2 read the working tree unconditionally for both halves, selection
 included; corrected at gate 3, which measured it directly: an untracked

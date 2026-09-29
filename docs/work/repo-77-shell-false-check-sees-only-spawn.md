@@ -151,3 +151,43 @@ grep -c '@2ffb72a'` for the line count, and the same piped through
   post-#317 `main`, its own `test` job is exposed to the same depth-1 failure
   #317 exists to fix — an open decision for the orchestrator, not settled
   here: rebase now, or leave it to a fixer round after a gate names it.
+
+- 2026-09-29 — **Mechanical round (fixer), on gate 1's findings, applied at
+  the branch's head `42e6405`.** Owner decisions, taken via `AskUserQuestion`,
+  relayed by the orchestrator:
+  1. **What goes in the landing round?** Options: "The 3 line-neutral" (the
+     orchestrator's recommendation), "All 8", "None, ship as is". **Chosen:
+     The 3 line-neutral.** Gave the three calls in
+     `scripts/test/citations.test.ts` gate 1 named unfixed
+     (`@2ffb72a:1581`/`1985`/`2000`, now `1577`/`1981`/`1996`) their own
+     `shell: false` without moving any cited line — `git diff --stat` on that
+     file shows 3 insertions, 3 deletions.
+  2. **File a ticket making spawn-safety's check per call?** Options: "File
+     it" (recommended) or "Don't file". **Chosen: File it.** Filed repo-83
+     (`docs/work/repo-83-shell-false-check-is-per-file-not-per-call.md`,
+     `status: needs-decision`), carrying the reproduction re-measured at this
+     round's own head (137 calls, 14 lacking their own `shell: false`, down
+     from the gate's 17 by the three calls this round fixed) and the gate's
+     narrowed-pattern-still-passes result, independently reproduced with a
+     scratch copy of the test.
+  3. **Accept pinning 63 citations instead of holding line counts?** Options:
+     "Accept" (recommended) or "Revert to held lines". **Chosen: Accept.** No
+     change — record only.
+  4. **Build step 3 (one PR, `test(repo)`) — already recorded** in the
+     2026-09-29 entry above.
+
+  Pinned the two citations gate 1's finding named as displaced but not
+  pinned, coordinate only, after checking the content at `2ffb72a` matched:
+  `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md`
+  line 63, `scripts/citations-gate.mjs:489` → `scripts/citations-gate.mjs@2ffb72a:489`;
+  `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md`
+  line 456, `scripts/test/citations.test.ts:2851` →
+  `scripts/test/citations.test.ts@2ffb72a:2851`. Reproduced red before, green
+  after: `node scripts/citations.mjs <file> --displaced-since 2ffb72a` on the
+  pre-fix copies reports `DISPLACED` for both (exit 128 for repo-65, exit 131
+  for repo-60); on the fixed files, neither reports `displaced` at all.
+
+  No landing in this round — no gate record committed, no pull request
+  opened. `origin/main`'s drift past `2ffb72a` (#317, #318), flagged unresolved
+  in the entry above, is unchanged by this round and still open for whoever
+  lands this ticket.

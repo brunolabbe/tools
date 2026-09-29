@@ -453,7 +453,7 @@ reading a double-backtick quotation as a shorthand citation (repo-60)"`
 - 2026-09-27 — Gate 3 (PASS) landed, `scripts/review-record.mjs --gate 3`,
   verbatim (0 diffs against the section file once table padding is
   normalised). One new low, not acted on here per the coordinator's
-  instruction: `scripts/test/citations.test.ts:2851`'s comment says either
+  instruction: `scripts/test/citations.test.ts@2ffb72a:2851`'s comment says either
   carve-out condition regresses the gate 1 high; only the `INLINE` one does,
   since all 23 vanishing citations in repo-31 are inline. The test itself
   still catches both halves — this is a docblock-only overclaim, left for
