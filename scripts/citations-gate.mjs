@@ -357,6 +357,11 @@ export function parseGrandfathered(source) {
 }
 
 /**
+ * Every `execFileSync("git", …)` call below shares this, `shell: false` included.
+ */
+const GIT_EXEC_OPTIONS = { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, shell: false };
+
+/**
  * What this tree's `GRANDFATHERED` allows that `ref`'s did not.
  *
  * **This is the memory the ratchet does not otherwise have, and without it the
@@ -391,8 +396,7 @@ export function parseGrandfathered(source) {
  * @param {Map<string, number>} current
  */
 export function compareAgainst(repo, ref, current = GRANDFATHERED) {
-  const git = (...args) =>
-    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const git = (...args) => execFileSync("git", ["-C", repo, ...args], GIT_EXEC_OPTIONS);
 
   try {
     git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
@@ -409,8 +413,7 @@ export function compareAgainst(repo, ref, current = GRANDFATHERED) {
     // the ordinary bootstrap case here, and printing it beside this run's own
     // explanation of the same thing reads as an error when it is not one.
     source = execFileSync("git", ["-C", repo, "show", `${ref}:${SELF}`], {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
+      ...GIT_EXEC_OPTIONS,
       stdio: ["ignore", "pipe", "ignore"],
     });
   } catch {
@@ -486,10 +489,7 @@ export function compareAgainst(repo, ref, current = GRANDFATHERED) {
  * @param {string[]} pathspecs
  */
 export function findRecords(repo, pathspecs) {
-  const out = execFileSync("git", ["-C", repo, "ls-files", "-z", ...pathspecs], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const out = execFileSync("git", ["-C", repo, "ls-files", "-z", ...pathspecs], GIT_EXEC_OPTIONS);
   return out.split("\0").filter((line) => line !== "");
 }
 
@@ -791,13 +791,14 @@ function main() {
     return;
   }
 
-  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], GIT_EXEC_OPTIONS).trim();
   // Verified up front, loudly, for the same reason `citations.mjs` does: a typo'd
   // ref here would otherwise silently report "0 displaced" over the whole corpus,
   // which is indistinguishable from a clean run.
   if (displacedSince !== null) {
     try {
       execFileSync("git", ["rev-parse", "--verify", "--quiet", `${displacedSince}^{commit}`], {
+        ...GIT_EXEC_OPTIONS,
         cwd: repo,
         stdio: ["ignore", "ignore", "ignore"],
       });
