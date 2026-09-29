@@ -295,3 +295,55 @@ Once the decision above is answered, and whichever option it picks:
   `ready`. Re-read against `a084170` first: the farm's two preconditions and
   its linking loop are unchanged since `ab909c9`, and no freshness check has
   been added, so the reproduction still describes the code.
+- **2026-09-29 — built option A.** `.claude/scripts/check-farm-freshness.mjs`
+  reads `$SHARED_ROOT/package-lock.json`, finds every top-level,
+  non-`optional`, non-`link` `node_modules/<name>` entry missing from
+  `$SHARED_ROOT/node_modules`, and warns on stderr naming each one and the
+  remedy (`npm install` in the shared checkout). `worktree-farm.sh` calls it
+  with `|| true` right after its existing precondition checks and before the
+  linking loop, so a stale source never blocks the farm. A root with no
+  `package-lock.json` is handled by returning `null` and printing nothing.
+
+  Verified against the reproduction, in a tree outside `/workspaces/tools`
+  (`git archive` + `git init`, no ancestor `node_modules`), with a stale
+  stand-in built by mirroring this repo's real shared `node_modules` and
+  dropping `@anthropic-ai/sdk`:
+  - `bash worktree-farm.sh <stale-root>` → stderr names exactly
+    `@anthropic-ai/sdk` and the `npm install` remedy, exit 0, farm still
+    builds 254 entries. `npm run build` afterwards still exits 2 on the same
+    `TS2307`s the ticket recorded — the warning surfaces the defect earlier,
+    it does not paper over it.
+  - `bash worktree-farm.sh /workspaces/tools` (healthy) → no stderr, farm
+    builds 255 entries, `0.346s`–`0.370s` real time, both inside and outside
+    `/workspaces/tools`.
+  - The `299` entries the ticket's option A measured with its own ~15-line
+    script matches this script's count exactly, run over the same lockfile.
+  - Workspace `link` entries whose version disagrees between
+    `package-lock.json` and the hidden lockfile (`@downloader/api`,
+    `@planner/api`) carry `"link": true` in `package-lock.json` and are
+    skipped by that field alone, not by name — confirmed by printing their
+    lockfile entries directly.
+
+  New regression suite `scripts/test/check-farm-freshness.test.ts` (9 cases):
+  pure fixture cases for `findMissingPackages`/`warnIfStale` (a missing
+  non-optional package, an absent optional package, an absent workspace link,
+  a package nested inside another's own tree, a shared root with no
+  lockfile, and the warning text itself), plus two end-to-end cases that spawn
+  `worktree-farm.sh` inside a throwaway git repository. Watched red against
+  the farm script as it stood before this change (stderr empty, assertion on
+  `@anthropic-ai/sdk` failed) and green after restoring the fix. `scripts/`
+  tests a CLI by spawning it for the same reason `preflight.test.ts` does, so
+  every `spawnSync` here sets `shell: false` explicitly — ahead of repo-77's
+  unmerged widening of `spawn-safety.test.ts`, per this dispatch's own note.
+  `check-farm-freshness.mjs` is added to `scripts/test/tsconfig.json`'s
+  `include` (composite project, TS6307 otherwise).
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 9/9 passed.
+  `npx vitest run --project repo` → 577/577 passed, 12 files. `npm run check`
+  → lint, format:check and `tsc --build` all exit 0.
+
+  No fold-in taken: nothing else in this ticket's neighbourhood was both small
+  and already specified. The reference this ticket cites,
+  `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md`'s "verify
+  a farm the same way rather than trusting it", is guidance for a _gate_
+  reading a farm's output, not something this change touches or obsoletes.
