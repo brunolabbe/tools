@@ -414,6 +414,42 @@ export function extractCheckJobCommands(yamlText) {
 }
 
 /**
+ * `npm`'s own rewrite table for `npm ci`, read by `canonicalize` below: every
+ * alias `npm ci --help` lists (`clean-install`, `ic`, `install-clean`,
+ * `isntall-clean`) mapped to `"ci"`, so `canonicalize` can compare any of the
+ * five spellings as one.
+ *
+ * **Used to know only the first (repo-79 gate 3's new low, closed by
+ * repo-82).** `npm ci --help` lists `aliases: clean-install, ic,
+ * install-clean, isntall-clean` — measured directly, this file's docblock is
+ * not the source of truth for npm's own alias table — and the other three
+ * matched no guard at all, so `npm ic`, `npm install-clean` and `npm
+ * isntall-clean` in the check job would each have spawned a real install the
+ * same way `npm clean-install` once did. All four now rewrite to `"ci"`.
+ *
+ * @type {Record<string, "ci">}
+ */
+const NPM_ALIASES = /** @type {const} */ ({
+  "clean-install": "ci",
+  ic: "ci",
+  "install-clean": "ci",
+  "isntall-clean": "ci",
+});
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function canonicalize(raw) {
+  const collapsed = raw.replace(/\s+/gu, " ").trim();
+  const [cmd, sub, ...rest] = collapsed.split(" ");
+  if (cmd === "npm" && Object.hasOwn(NPM_ALIASES, sub)) {
+    return [cmd, NPM_ALIASES[/** @type {keyof typeof NPM_ALIASES} */ (sub)], ...rest].join(" ");
+  }
+  return collapsed;
+}
+
+/**
  * The three commands `ci.yml`'s `check` job runs that already have a
  * dedicated, better check elsewhere in this file, and would only cost time to
  * repeat here for an identical verdict — `npm ci` (dependency installation,
@@ -450,21 +486,6 @@ export function extractCheckJobCommands(yamlText) {
  *
  * @type {{guard: (raw: string) => boolean, exact: string}[]}
  */
-const NPM_ALIASES = /** @type {const} */ ({ "clean-install": "ci" });
-
-/**
- * @param {string} raw
- * @returns {string}
- */
-function canonicalize(raw) {
-  const collapsed = raw.replace(/\s+/gu, " ").trim();
-  const [cmd, sub, ...rest] = collapsed.split(" ");
-  if (cmd === "npm" && Object.hasOwn(NPM_ALIASES, sub)) {
-    return [cmd, NPM_ALIASES[/** @type {keyof typeof NPM_ALIASES} */ (sub)], ...rest].join(" ");
-  }
-  return collapsed;
-}
-
 const COVERED = [
   {
     guard: (raw) => {
@@ -581,6 +602,18 @@ export function assertSpawnable(raw) {
  * else is checked for a shell operator or comment this file cannot honour and
  * then tokenized.
  *
+ * **Any other `npm` step throws too, never falls through to a real spawn**
+ * (repo-82's low). `NPM_ALIASES` only rewrites the four spellings `npm ci
+ * --help` lists, but npm resolves its own commands and aliases by
+ * unambiguous prefix as well — `npm install-clea` and `npm isntall-cl` both
+ * run a real `npm ci` under npm's own resolution, and `npm cit`
+ * (`install-ci-test`) is a fifth, related alias this file never named at all.
+ * Enumerating every prefix npm would accept is not this file's job; refusing
+ * to spawn *any* `npm` step it cannot already name exactly is what keeps a
+ * spelling nobody has measured yet from reaching a real install inside a
+ * worktree the farm — not `npm` — built, the same guarantee `NPM_ALIASES`
+ * gives the four spellings it does know.
+ *
  * @param {string} yamlText
  * @returns {[string, string[]][]}
  */
@@ -596,6 +629,14 @@ export function deriveExtraCiCommands(yamlText) {
         );
       }
       continue; // matched exactly: covered elsewhere, never spawned here.
+    }
+    if (canonicalize(raw).split(" ")[0] === "npm") {
+      throw new Error(
+        `ci.yml's check job runs "${raw}", an npm step this file does not recognise as ` +
+          `"npm ci" or "npm run check" — npm resolves its own abbreviations and aliases too ` +
+          `(clean-install, ic, install-clean, isntall-clean, cit, and any unambiguous prefix of ` +
+          `those), so preflight will not guess whether this one is safe to spawn.`,
+      );
     }
     assertSpawnable(raw);
     out.push(tokenize(raw));
@@ -1186,10 +1227,11 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
   // `otherHeads` was empty, before `base` was even resolved — so a base that
   // moved a line this branch's own record cites passed silently whenever
   // this branch was the only open pull request, which is not a rare shape,
-  // it is every solo ticket. `otherHeads` is only ever `[null]` here, one
-  // sentinel entry standing for "fold base alone, no other head at all";
-  // every other branch below already treats a head as optional context on
-  // top of the same base fold.
+  // it is every solo ticket. `targets`, below, is only ever `[null]` here
+  // (repo-79 gate 3's low, closed by repo-82: this comment named `otherHeads`,
+  // which stays empty in exactly this branch) — one sentinel entry standing
+  // for "fold base alone, no other head at all"; every other branch below
+  // already treats a head as optional context on top of the same base fold.
   if (otherHeads.length === 0 && baseIsAncestor) {
     return {
       ok: true,

@@ -1838,3 +1838,55 @@ test("deriveExtraCiCommands throws on each of the five newly caught shapes, thro
     /wholly quoted/,
   );
 });
+
+// --- repo-82, repo-79 gate 3's low: NPM_ALIASES knew one of npm's own four ---
+
+/**
+ * `npm ci --help` lists `aliases: clean-install, ic, install-clean,
+ * isntall-clean` — measured directly, 2026-09-28 — and `NPM_ALIASES` knew
+ * only the first. Each of the other three, run through `deriveExtraCiCommands`
+ * exactly as `npm  ci` and `npm clean-install` already are above, used to
+ * match no guard at all and fall through to `assertSpawnable`/`tokenize`,
+ * spawning a real install under a name this file had never heard of.
+ */
+test("deriveExtraCiCommands treats npm ic, npm install-clean and npm isntall-clean as covered, never spawning them", () => {
+  const yaml = [
+    "name: CI",
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - run: npm ic",
+    "      - run: npm install-clean",
+    "      - run: npm isntall-clean",
+    "      - run: npm run check",
+    "",
+  ].join("\n");
+  expect(deriveExtraCiCommands(yaml)).toEqual([]);
+});
+
+// --- repo-82's gate 1, low: npm also resolves a prefix of an alias, and a
+// fifth alias (`cit`) NPM_ALIASES never named, to a real `npm ci` ---
+
+/**
+ * `NPM_ALIASES` only rewrites the four exact spellings `npm ci --help` lists.
+ * npm itself also resolves an unambiguous prefix of a command or alias name
+ * — `npm install-clea --help` and `npm isntall-cl --help` both print "Clean
+ * install a project", npm 10.9.9, measured directly, 2026-09-28 — and `npm
+ * cit` is a fifth, wholly different alias (`install-ci-test`) this file never
+ * named. None of the three matches any `COVERED` guard, so before this fix
+ * each fell through to `assertSpawnable`/`tokenize` and would have been
+ * spawned for real; now each throws, naming the step, rather than guessing.
+ */
+test("deriveExtraCiCommands throws on npm install-clea, npm isntall-cl and npm cit rather than spawn any of them", () => {
+  const stepFor = oneCheckStep;
+
+  expect(() => deriveExtraCiCommands(stepFor("npm install-clea"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+  expect(() => deriveExtraCiCommands(stepFor("npm isntall-cl"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+  expect(() => deriveExtraCiCommands(stepFor("npm cit"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+});

@@ -24,7 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { extractSections } from "./citations.mjs";
+import { extractSections, splitLines } from "./citations.mjs";
 
 /** Every field a ticket's frontmatter may carry, and whether it is required. */
 const FIELDS = {
@@ -115,7 +115,7 @@ const DEFAULT_ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
  * @returns {Record<string, unknown>}
  */
 export function parseFrontmatter(text, file) {
-  const lines = text.split("\n");
+  const lines = splitLines(text);
   if (lines[0]?.trim() !== "---") {
     throw new Error(`${file}: no frontmatter — the first line must be "---"`);
   }

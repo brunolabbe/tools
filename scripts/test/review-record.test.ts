@@ -917,3 +917,32 @@ test("differingLines skips git's no-newline marker without miscounting the lines
     section: [{ line: 2, text: "old ending" }],
   });
 });
+
+// ---------------------------------------------------------------------------
+// repo-82 — a CRLF section file must resolve to the same gate block an LF
+// copy of the same text does.
+// ---------------------------------------------------------------------------
+
+test("locateGateBlock matches the right 'Gate 1' heading when the section text is CRLF", () => {
+  const ticket = [
+    "## Review",
+    "",
+    "### Gate 1",
+    "",
+    "first.",
+    "",
+    "### Gate 1 restated",
+    "",
+    "second.",
+    "",
+    "## Log",
+    "",
+  ].join("\n");
+  const sectionLF = "### Gate 1 restated\n\nsecond.\n";
+  const sectionCRLF = sectionLF.replace(/\n/g, "\r\n");
+
+  const lf = locateGateBlock(ticket, 1, sectionLF);
+  const crlf = locateGateBlock(ticket, 1, sectionCRLF);
+  expect(crlf).toEqual(lf);
+  expect(linesOf(ticket, crlf)).toBe(sectionLF);
+});

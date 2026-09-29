@@ -75,7 +75,7 @@ Preflight fails on a branch shaped like #305's first head, and on a pair of bran
 
 - **med, parser** · **fixed.** Steps are now grouped and anything but a lone one-line `run:` throws, naming the step: `scripts/preflight.mjs:402 "if (step.lines.length > 1 || value"`. All 16 gate-1 mutations re-run: baseline, a new step and a changed `citations.mjs` argument picked up; the other 13 loud; none wrong. Its test gap is a new finding below.
 - **med, exclusion list** · **fixed.** A covered step must match exactly or it throws, the exact-match throw in `deriveExtraCiCommands` at `6b10392`: `--displaced-since` appended and `npm ci --ignore-scripts` both throw, and `npm ci` is not spawned. The residue is a low below.
-- **low, misdiagnosed fold failure** · **fixed.** A failed worktree add throws naming it, `scripts/preflight.mjs:1050 "exited ${added.status}"`, and a merge with no unmerged path throws, `scripts/preflight.mjs:1087 "with no conflicting path — not a content conflict"`. The gate-1 bogus-oid probe now gives `invalid reference` and leaves no worktree. Tests: `scripts/test/preflight.test.ts:1484 "throws rather than report a non-conflict merge failure as a conflict"` and `scripts/test/preflight.test.ts:1504 "when it cannot create the scratch worktree"`.
+- **low, misdiagnosed fold failure** · **fixed.** A failed worktree add throws naming it, `scripts/preflight.mjs:1091 "exited ${added.status}"`, and a merge with no unmerged path throws, `scripts/preflight.mjs:1128 "with no conflicting path — not a content conflict"`. The gate-1 bogus-oid probe now gives `invalid reference` and leaves no worktree. Tests: `scripts/test/preflight.test.ts:1484 "throws rather than report a non-conflict merge failure as a conflict"` and `scripts/test/preflight.test.ts:1504 "when it cannot create the scratch worktree"`.
 - **low, interrupted run** · **not fixed, explained** in the Log (a process-wide signal handler, judged not cheap). Accepted: no ref is created.
 - **low, stale per-head wording** · **fixed**, in the docblock, `SKILL.md` step 9 and `builder.md`. The base clause they add overstates, per the first med below.
 - **low, repo-75 ranges** · **fixed**, `279-280` and `824-825`, each covering its `shell: false` line; the record exits 0.
@@ -112,8 +112,8 @@ Preflight fails on a branch shaped like #305's first head, and on a pair of bran
 
 **Gate 2's findings:**
 
-- **med, base fold skipped with no other heads** · **fixed.** The early return now needs base to be contained too, `scripts/preflight.mjs:1193 "if (otherHeads.length === 0 && baseIsAncestor) {"`. The gate-1 base-moved probe, no other heads, now reports `scratch merge of HEAD with b alone, which HEAD does not yet contain: FAIL docs/work/repo-999-gate-probe.md — 1 moved`; the control with base contained still says nothing was checked. Restoring the old early return turns `scripts/test/preflight.test.ts:1610 "folds base in when there are no other open heads at all"` red, 1 of 80.
-- **med, med fixes untested** · **fixed.** Each fix removed alone turns tests red: the `step.lines.length > 1` clause, 4 of 80, starting at `scripts/test/preflight.test.ts:1653 "throws on a name:-first step"`; the `assertSpawnable` call, 2 of 80, `scripts/test/preflight.test.ts:1717 "throws on a step chained with && through"` and `scripts/test/preflight.test.ts:1821 "throws on each of the five newly caught shapes"`; the exact-match throw, `scripts/preflight.mjs:592 "if (canonicalize(raw) !== covered.exact) {"`, 1 of 80, `scripts/test/preflight.test.ts:1739 "throws on npm ci --ignore-scripts rather"`.
+- **med, base fold skipped with no other heads** · **fixed.** The early return now needs base to be contained too, `scripts/preflight.mjs:1235 "if (otherHeads.length === 0 && baseIsAncestor) {"`. The gate-1 base-moved probe, no other heads, now reports `scratch merge of HEAD with b alone, which HEAD does not yet contain: FAIL docs/work/repo-999-gate-probe.md — 1 moved`; the control with base contained still says nothing was checked. Restoring the old early return turns `scripts/test/preflight.test.ts:1610 "folds base in when there are no other open heads at all"` red, 1 of 80.
+- **med, med fixes untested** · **fixed.** Each fix removed alone turns tests red: the `step.lines.length > 1` clause, 4 of 80, starting at `scripts/test/preflight.test.ts:1653 "throws on a name:-first step"`; the `assertSpawnable` call, 2 of 80, `scripts/test/preflight.test.ts:1717 "throws on a step chained with && through"` and `scripts/test/preflight.test.ts:1821 "throws on each of the five newly caught shapes"`; the exact-match throw, `scripts/preflight.mjs:625 "if (canonicalize(raw) !== covered.exact) {"`, 1 of 80, `scripts/test/preflight.test.ts:1739 "throws on npm ci --ignore-scripts rather"`.
 - **low, COVERED raw text** · **fixed** for the two spellings measured: `npm  ci` and `npm clean-install` are now covered and not spawned. A residue is below.
 - **low, assertSpawnable** · **fixed**: the semicolon, glued `>/dev/null` and `2>/dev/null`, `$VAR` and quoted-scalar mutations all throw. The docblock discloses the false positive on a legitimately quoted operator.
 - **low, wrong page** · **fixed**; the docblock now names `SKILL.md` step 11.
@@ -121,8 +121,8 @@ Preflight fails on a branch shaped like #305's first head, and on a pair of bran
 
 **New in this round:**
 
-- **low** · `scripts/preflight.mjs:453 "const NPM_ALIASES"` knows one alias of `npm ci`. `npm ci --help` lists four (`clean-install, ic, install-clean, isntall-clean`), and `npm ic`, `npm install-clean` and `npm isntall-clean` in the check job each spawn (measured through `deriveExtraCiCommands`), against the docblock's own claim to know npm's alias.
-- **low** · the comment at `scripts/preflight.mjs:1189 "it is every solo ticket"` says `otherHeads` is `[null]`; the sentinel list is `targets`, and `otherHeads` stays empty.
+- **low** · `scripts/preflight.mjs:432 "const NPM_ALIASES"` knows one alias of `npm ci`. `npm ci --help` lists four (`clean-install, ic, install-clean, isntall-clean`), and `npm ic`, `npm install-clean` and `npm isntall-clean` in the check job each spawn (measured through `deriveExtraCiCommands`), against the docblock's own claim to know npm's alias.
+- **low** · the comment at `scripts/preflight.mjs:1230 "it is every solo ticket"` says `otherHeads` is `[null]`; the sentinel list is `targets`, and `otherHeads` stays empty.
 - **dropped** · a glued-redirect or `$` false positive on a legitimately quoted argument: disclosed in the docblock, and no check-job step has one.
 - **dropped** · the fixer rewrote a row of the 2026-09-28 Log entry in place: it is disclosed in a new dated Log line, and it is the correction gate 2 asked for.
 - **findings** · code-review at medium over the round diff returned 4; 2 carried, 2 dropped. Gate 2's 6 findings: 6 fixed.
@@ -541,3 +541,37 @@ scripts/test/preflight.test.ts` — 5 of 80 red at `ee0fd22` under forced
   without it. `npx vitest run --project repo` — 560 of 560. `npm run check`
   exit 0. `node scripts/citations-gate.mjs --against origin/main` exit 0: 128
   enforced, 0 failing, 6 grandfathered, 0 raised.
+- 2026-09-28 — repo-82 fixed the CRLF defect this ticket's own post-gate
+  fixer round diagnosed and worked around test-only (above): `citations.mjs`
+  now strips a trailing `\r` from every line it splits before matching, in
+  `extractSections`, `extractCitations` and `extractDeclarations`. It also
+  fixed both lows this ticket's gate 3 disclosed rather than closed (`### Gate
+3`'s "New in this round"): `NPM_ALIASES` now covers all four of `npm ci`'s
+  own aliases, and the fold-loop comment names `targets` rather than
+  `otherHeads`. Both edits moved six of this record's own `## Review`
+  citations, coordinate only, anchor text unchanged: `scripts/preflight.mjs`
+  1050 (`exited ${added.status}`) to 1063; 1087 (`with no conflicting path —
+not a content conflict`) to 1100; 1193 (`if (otherHeads.length === 0 &&
+baseIsAncestor) {`) to 1207; 592 (`if (canonicalize(raw) !== covered.exact)
+{`) to 605; 453 (`const NPM_ALIASES`) to 461; and 1189 (`it is every solo
+ticket`) to 1202. `node scripts/citations-gate.mjs --against origin/main`
+  named all six `moved` at exactly these new lines before the repoint.
+- 2026-09-28 — repo-82's gate 1 fixer round fixed the med (the CLI test's
+  coordinate is now read out of the record text it loads, not hard-coded) and
+  four lows, two of which touched `scripts/preflight.mjs` again: a guard so
+  any `npm` step `deriveExtraCiCommands` does not already recognise throws
+  rather than falls through to a real spawn (`npm install-clea`, `npm
+isntall-cl` and `npm cit` all resolve to a real `npm ci` under npm's own
+  prefix/alias resolution and matched no guard before this), and splitting
+  the docblock the same low named — misplaced above `NPM_ALIASES`, describing
+  `COVERED` — into one paragraph beside each. Both edits moved six of this
+  record's own `## Review` citations again, coordinate only, anchor text
+  unchanged: `scripts/preflight.mjs` 1063 (`exited ${added.status}`) to 1091;
+  1100 (`with no conflicting path — not a content conflict`) to 1128; 1207
+  (`if (otherHeads.length === 0 && baseIsAncestor) {`) to 1235; 605 (`if
+(canonicalize(raw) !== covered.exact) {`) to 625; 461 (`const NPM_ALIASES`)
+  to 432 — this one moved _up_, since the split leaves less text above
+  `NPM_ALIASES` than the misplaced docblock had; and 1202 (`it is every solo
+ticket`) to 1230. `node scripts/citations-gate.mjs --against origin/main`
+  named all six `moved` at exactly these new lines before the repoint, and
+  exit 0 with 0 failing after.
