@@ -1153,6 +1153,42 @@ function runGit(repo, args) {
  * @param {string} title
  * @returns {{ok: boolean, output: string}}
  */
+/**
+ * Splice and commit every plan, in order, into `ticketPath` inside `repoRoot`
+ * — the mechanics `land()`'s scratch validation pass and its real pass share
+ * (gate 1, F3), so a later section's own placement — its `### Gate <n>`
+ * heading landing after the one already spliced, not colliding with it — is
+ * checked by the very code that will actually commit it, never a hand-rolled
+ * approximation of the same rule. Throws on the first failure, exactly as
+ * `spliceSection`, `setStatus` or `run` itself would.
+ *
+ * @param {string} ticketPath
+ * @param {string} repoRoot
+ * @param {{path: string, gate: number | null}[]} plans
+ * @param {string} ticketId
+ * @param {string} tool
+ * @param {"done" | "in-flight"} status
+ * @param {(repo: string, args: string[]) => string} run
+ */
+function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status, run) {
+  plans.forEach((plan, index) => {
+    const result = spliceSection(ticketPath, plan.path, plan.gate, { requireClaudePins: true });
+
+    if (index === 0) {
+      const markdown = fs.readFileSync(ticketPath, "utf8");
+      fs.writeFileSync(ticketPath, setStatus(markdown, status));
+    }
+
+    const gateLabel = plan.gate ?? 1;
+    const message =
+      index === 0
+        ? `docs(${tool}): record gate ${gateLabel} and set status ${status} on ${ticketId} (${ticketId})`
+        : `docs(${tool}): record gate ${gateLabel} on ${ticketId} (${ticketId})`;
+    run(repoRoot, ["add", "--", result.relative]);
+    run(repoRoot, ["commit", "-m", message]);
+  });
+}
+
 function runPreflightDefault(repo, base, title) {
   const preflightCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "preflight.mjs");
   const result = spawnSync(
@@ -1176,25 +1212,34 @@ function runPreflightDefault(repo, base, title) {
  * own — touches nothing (this ticket's `Done when`: "refused before it is
  * spliced").
  *
- * **A splice-time failure rolls every commit this call already made back
- * out** (gate 1, F3; the owner's answer, 2026-09-29): the sections in
- * `records.md`'s own landing order are spliced and committed one at a time,
- * so a later section's own refusal — a bad heading, a citation that fails
- * `--require-claude-pins`, anything `spliceSection` itself refuses — used to
- * leave the earlier ones committed with no way back: a re-run failed at
- * `splice` again, on the *first* section, because `## Review` already
- * existed. Since a splice-time failure can still be fixed and re-run from
- * the same starting point, it is rolled back to the sha this call started
- * from — captured once, before the first commit — so "a bad section fails
- * with nothing written" is true of the whole call, not only of the first
- * section. **A failure after every section has landed — push, verify,
- * preflight — is not rolled back**: those steps only make sense once the
- * commits exist, undoing them would throw away real work over a check that
- * has nothing to do with the splice itself, and the fix is usually on the
- * far side of the failure (open a PR, wait for CI, re-run preflight) rather
- * than back at the ticket. Its own failure names the pre-landing sha and the
- * `git reset --hard` command instead, so whoever holds the failure can undo
- * it by hand if that turns out to be the right call.
+ * **Every section is validated — spliced and committed, in order — against a
+ * disposable scratch clone before any of them touches the real repository**
+ * (gate 1, F3; the owner's chosen mechanism, 2026-09-29, corrected from an
+ * earlier round of this ticket that ran the real commits section by section
+ * and reached for `git reset --hard` in the real checkout on a later
+ * failure — a mechanism the owner was never offered, and one that would
+ * have discarded an unrelated uncommitted change in the same working tree
+ * along with the failed landing). A later section's own placement — its
+ * `### Gate <n>` heading landing after the one already spliced, not
+ * colliding with it — can only be checked once the earlier ones already sit
+ * in the ticket, which one section checked in isolation cannot see; cloning
+ * the repository and running the exact real sequence there, once,
+ * disposably, is what lets a failure on section 3 be caught before section 1
+ * or 2 ever reaches a real commit. **Nothing in `ticketRepoRoot` is read for
+ * writing, written to, or reset during validation** — only the scratch
+ * directory this makes and then deletes. Once validation succeeds, the same
+ * sequence (`spliceAndCommitAll`) runs again for real, so "a bad section
+ * fails with nothing written" holds structurally rather than by cleanup.
+ * **A failure after every section has really landed — push, verify,
+ * preflight, or the vanishingly unlikely case where the real pass disagrees
+ * with a validation that just passed — is never rolled back**: those steps
+ * only make sense once the commits exist, undoing them would throw away real
+ * work over a check that has nothing to do with the splice itself, and the
+ * fix is usually on the far side of the failure (open a PR, wait for CI,
+ * re-run preflight) rather than back at the ticket. Each such failure names
+ * the pre-landing sha and the `git reset --hard` command instead, so whoever
+ * holds the failure can undo it by hand if that turns out to be the right
+ * call.
  *
  * @param {{
  *   ticket: string,
@@ -1259,8 +1304,9 @@ export function land(options) {
 
   let ticketId = ticket;
   let tool = "repo";
+  let relative;
   try {
-    const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
+    relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
     const fields = /** @type {{id: string, tool: string}} */ (
       parseFrontmatter(fs.readFileSync(ticketAbsolutePath, "utf8"), relative)
     );
@@ -1303,67 +1349,56 @@ export function land(options) {
   if (pinIssues.length > 0) return fail("citations-pin", pinIssues.join("\n"));
   pass("citations-pin", "no unpinned citation of pre-existing content");
 
-  // A splice-time failure rolls back to `preLandingSha` — see the docblock
-  // above. Best-effort: a reset that itself fails is reported alongside the
-  // original failure rather than thrown in its place, so the real cause is
-  // never hidden behind a secondary git error.
-  const rollback = () => {
-    try {
-      run(ticketRepoRoot, ["reset", "--hard", preLandingSha]);
-      return `rolled back to ${preLandingSha} — nothing from this call is landed`;
-    } catch (error) {
-      return (
-        `could not roll back to ${preLandingSha} (${/** @type {Error} */ (error).message}); ` +
-        `reset it by hand with:\n  git reset --hard ${preLandingSha}`
-      );
-    }
-  };
+  // A failure after every section has really landed prints the pre-landing
+  // sha and the reset command — never an automatic reset. See the docblock.
   const resetHint = () =>
     `\n\nThe commit(s) already made for this landing are not rolled back. Reset to the ` +
     `pre-landing state with:\n  git reset --hard ${preLandingSha}`;
 
-  // Splice, one commit per gate — the first commit also sets status.
-  for (const [index, plan] of plans.entries()) {
-    let result;
-    try {
-      result = spliceSection(ticketAbsolutePath, plan.path, plan.gate, { requireClaudePins: true });
-    } catch (error) {
-      const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
-      const rolledBack = rollback();
-      return fail(
-        "splice",
-        `${path.basename(plan.path)}: ${failure.stderr || failure.stdout || failure.message}\n\n${rolledBack}`,
-      );
-    }
+  // Validate every section — spliced and committed, in order — against a
+  // disposable scratch clone before any of them touches `ticketRepoRoot`.
+  // See the docblock for why a clone rather than a check per section.
+  let scratchDir;
+  try {
+    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-land-"));
+    const clone = spawnSync("git", ["clone", "-q", "--no-hardlinks", ticketRepoRoot, scratchDir], {
+      encoding: "utf8",
+      shell: false,
+    });
+    if (clone.error) throw clone.error;
+    if (clone.status !== 0) throw new Error(`git clone failed:\n${clone.stderr}`);
+    run(scratchDir, ["config", "user.email", "land-validation@localhost"]);
+    run(scratchDir, ["config", "user.name", "review-record --land validation"]);
+    spliceAndCommitAll(
+      path.join(scratchDir, relative),
+      scratchDir,
+      plans,
+      ticketId,
+      tool,
+      status,
+      run,
+    );
+  } catch (error) {
+    const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
+    return fail(
+      "splice",
+      `${failure.stderr || failure.stdout || failure.message}\n\n` +
+        `Validated against a scratch clone before any real commit — ${ticketRepoRoot} is untouched.`,
+    );
+  } finally {
+    if (scratchDir) fs.rmSync(scratchDir, { recursive: true, force: true });
+  }
 
-    if (index === 0) {
-      try {
-        const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
-        fs.writeFileSync(ticketAbsolutePath, setStatus(markdown, status));
-      } catch (error) {
-        const rolledBack = rollback();
-        return fail(
-          "splice",
-          `setting status: ${/** @type {Error} */ (error).message}\n\n${rolledBack}`,
-        );
-      }
-    }
-
-    const gateLabel = plan.gate ?? 1;
-    const message =
-      index === 0
-        ? `docs(${tool}): record gate ${gateLabel} and set status ${status} on ${ticketId} (${ticketId})`
-        : `docs(${tool}): record gate ${gateLabel} on ${ticketId} (${ticketId})`;
-    try {
-      run(ticketRepoRoot, ["add", "--", result.relative]);
-      run(ticketRepoRoot, ["commit", "-m", message]);
-    } catch (error) {
-      const rolledBack = rollback();
-      return fail(
-        "splice",
-        `committing gate ${gateLabel}: ${/** @type {Error} */ (error).message}\n\n${rolledBack}`,
-      );
-    }
+  // Validated — every section splices and commits in this exact sequence
+  // without refusal, so this repeats it for real. A failure here (the
+  // scratch clone and the real repository disagreeing, a filesystem error)
+  // is reported like push/verify/preflight: the sha and the reset command,
+  // never an automatic reset — some of these commits may already be real.
+  try {
+    spliceAndCommitAll(ticketAbsolutePath, ticketRepoRoot, plans, ticketId, tool, status, run);
+  } catch (error) {
+    const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
+    return fail("splice", `${failure.stderr || failure.stdout || failure.message}${resetHint()}`);
   }
   pass("splice", `${plans.length} commit(s), status set to ${status} in the first`);
 

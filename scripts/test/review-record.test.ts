@@ -1337,7 +1337,7 @@ test('land() lands every commit and the push, then names "preflight" when it fai
   }
 });
 
-test("land() rolls back every commit it already made when a later section's own splice fails (gate 1, F3)", () => {
+test("land() validates every section against a scratch clone before any commit, so a later section's own splice failure lands nothing (gate 1, F3)", () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
   try {
     const gate1 = writeSectionFile(
@@ -1348,7 +1348,9 @@ test("land() rolls back every commit it already made when a later section's own 
     // Gate 2 cites a `.claude/` line the branch itself adds, unpinned — it is
     // not pre-existing content, so `citations-pin` does not catch it, but
     // `spliceSection`'s own `--require-claude-pins` check (repo-78 gate 2,
-    // F2/G2-d) refuses it at `splice`, on the *second* section.
+    // F2/G2-d) refuses it at `splice`, on the *second* section — the only
+    // way to see that is to have gate 1 already spliced in ahead of it,
+    // which is exactly what the scratch clone validates.
     fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
     fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
     gitIn(dir, "add", "-A");
@@ -1378,13 +1380,71 @@ test("land() rolls back every commit it already made when a later section's own 
     const failed = result.steps.at(-1);
     expect(failed?.name).toBe("splice");
     expect(failed?.detail).toMatch(/--require-claude-pins is in force/);
-    expect(failed?.detail).toContain(`rolled back to ${preLandingSha}`);
+    // Never "rolled back" — validated in a scratch clone, so there was
+    // nothing in the real repository to roll back in the first place.
+    expect(failed?.detail).toMatch(/Validated against a scratch clone/);
+    expect(failed?.detail).not.toMatch(/reset --hard/);
 
-    // Gate 1's own commit — made before gate 2 failed — is gone: the branch
-    // is back exactly where it started, not left holding half a landing.
+    // Gate 1 never became a real commit at all: the branch is exactly where
+    // it started, not left holding half a landing.
     expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
     expect(fs.readFileSync(ticketAbs, "utf8")).toBe(beforeTicket);
     expect(fs.readFileSync(ticketAbs, "utf8")).not.toMatch(/## Review/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() never touches the real repository while validating — an unrelated uncommitted edit to a tracked file survives a gate-2 splice failure, and no commit is ever made (gate 1, F3 corrected)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
+
+    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+
+    // An unrelated, uncommitted edit to a *tracked* file in the same working
+    // tree — untracked survives any `git reset --hard` on its own, so this
+    // has to be a modification to something already committed to be a real
+    // test of it. A mechanism that reached for `git reset --hard` in the
+    // real checkout on a later failure — the earlier, rejected shape of this
+    // fix — discards exactly this; the chosen mechanism must not, because it
+    // never runs a git command against `dir` at all until validation passes.
+    const trackedPath = path.join(dir, "src", "tls.ts");
+    const trackedBefore = fs.readFileSync(trackedPath, "utf8");
+    fs.writeFileSync(trackedPath, `${trackedBefore}// an unrelated, uncommitted edit\n`);
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    const gate2 = writeSectionFile(
+      dir,
+      "gate2.md",
+      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1, gate2],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)?.name).toBe("splice");
+
+    // No commit was ever made in the real repository — not gate 1's, not any
+    // other — and the unrelated, uncommitted edit is still there.
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
+    expect(gitIn(dir, "log", "--format=%H", `${preLandingSha}..HEAD`).trim()).toBe("");
+    expect(fs.readFileSync(trackedPath, "utf8")).toContain("an unrelated, uncommitted edit");
+    expect(gitIn(dir, "status", "--porcelain")).toContain("src/tls.ts");
   } finally {
     cleanup();
   }
