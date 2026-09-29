@@ -959,6 +959,7 @@ import {
   land,
   LAND_USAGE,
   parseLandArgs,
+  runPreflightDefault,
   setStatus,
   spliceSection,
   unpinnedPreexistingCitations,
@@ -1395,7 +1396,7 @@ test("land() validates every section against a scratch clone before any commit, 
   }
 });
 
-test("land() never touches the real repository while validating — an unrelated uncommitted edit to a tracked file survives a gate-2 splice failure, and no commit is ever made (gate 1, F3 corrected)", () => {
+test("land() never touches the real repository while validating — an unrelated uncommitted edit to a tracked file survives, and no commit is ever made (gate 1, F3 corrected; superseded at setup by gate 2, G2-a)", () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
   try {
     fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
@@ -1409,9 +1410,13 @@ test("land() never touches the real repository while validating — an unrelated
     // tree — untracked survives any `git reset --hard` on its own, so this
     // has to be a modification to something already committed to be a real
     // test of it. A mechanism that reached for `git reset --hard` in the
-    // real checkout on a later failure — the earlier, rejected shape of this
-    // fix — discards exactly this; the chosen mechanism must not, because it
-    // never runs a git command against `dir` at all until validation passes.
+    // real checkout on a later failure — the round-1 shape of this fix —
+    // discards exactly this. Gate 2's own G2-a then found the round-2
+    // shape (a scratch clone made from `HEAD`) could still commit gate 1 for
+    // real before noticing gate 2's own failure, if a tracked file's
+    // uncommitted edit shifted a cited line the clone never saw — so this
+    // case is now caught earlier still, at `setup`, before the clone is even
+    // made, which is what this test now asserts.
     const trackedPath = path.join(dir, "src", "tls.ts");
     const trackedBefore = fs.readFileSync(trackedPath, "utf8");
     fs.writeFileSync(trackedPath, `${trackedBefore}// an unrelated, uncommitted edit\n`);
@@ -1437,7 +1442,7 @@ test("land() never touches the real repository while validating — an unrelated
     });
 
     expect(result.ok).toBe(false);
-    expect(result.steps.at(-1)?.name).toBe("splice");
+    expect(result.steps.at(-1)?.name).toBe("setup");
 
     // No commit was ever made in the real repository — not gate 1's, not any
     // other — and the unrelated, uncommitted edit is still there.
@@ -1746,4 +1751,248 @@ test("setStatus closes a CRLF frontmatter correctly, and keeps its line endings 
   const updated = setStatus(crlf, "done");
   expect(updated).toBe(crlf.replace("status: ready\r", "status: done\r"));
   expect(updated).toContain("\r\n");
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 2 — F2/M5 as the gate actually named it: the previous round's
+// test pinned `land()`'s own call to whatever `runPreflight` it was given,
+// never `runPreflightDefault`'s own argv to the real `preflight.mjs`, which
+// is where the gate's mutation (dropping `--title`) actually lives.
+// ---------------------------------------------------------------------------
+
+test("runPreflightDefault passes --title through to the real preflight.mjs argv (gate 2, F2/M5)", () => {
+  const spawn = vi.fn((_cmd: string, _args: string[], _options: unknown) => ({
+    status: 0,
+    stdout: "",
+    stderr: "",
+  }));
+  const title = "docs(repo): land the fixture ticket (zz-1)";
+
+  const result = runPreflightDefault("/some/repo", "origin/main", title, spawn);
+
+  expect(result.ok).toBe(true);
+  expect(spawn).toHaveBeenCalledTimes(1);
+  const call = spawn.mock.calls.at(0);
+  const args = call?.[1] ?? [];
+  // Dropping `--title` (or its value) from this array is exactly gate 2's
+  // named mutation — `scripts/review-record.mjs`, the argv literal inside
+  // `runPreflightDefault` — and this assertion is red on either half of it.
+  expect(args).toContain("--title");
+  expect(args[args.indexOf("--title") + 1]).toBe(title);
+  expect(args).toContain("origin/main");
+  expect(args).toContain("/some/repo");
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 2 — G2-a: validation reads the committed tree (the scratch
+// clone), the real pass used to read the working tree — a dirty tracked file
+// could make them disagree. The owner's answer: refuse at `setup`.
+// ---------------------------------------------------------------------------
+
+test("land() refuses at setup when a tracked file has an uncommitted change, before any clone or commit (gate 2, G2-a)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+
+    // Not the ticket itself — a different tracked, already-committed file,
+    // the exact shape gate 2's probe used: an uncommitted edit that would
+    // have shifted a cited line invisibly to the scratch clone.
+    const trackedPath = path.join(dir, "src", "tls.ts");
+    fs.writeFileSync(
+      trackedPath,
+      `// inserted, uncommitted\n${fs.readFileSync(trackedPath, "utf8")}`,
+    );
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("setup");
+    expect(failed?.detail).toMatch(/uncommitted change to a tracked file/);
+    // Never the misleading "commit(s) already made" hint — nothing ran yet.
+    expect(failed?.detail).not.toMatch(/commit\(s\) already made/);
+    expect(failed?.detail).not.toMatch(/reset --hard/);
+
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
+    expect(fs.readFileSync(trackedPath, "utf8")).toContain("inserted, uncommitted");
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 2 — G2-b: a validation (or real-pass) failure names which
+// section file it came from, not only the checker's own text.
+// ---------------------------------------------------------------------------
+
+test("land() names the failing section file in a splice failure's detail (gate 2, G2-b)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    // Named "second.md" rather than "gate2.md" on purpose — the assertion
+    // below has to come from the file `land()` was actually given, not a
+    // naming convention this test happens to reuse elsewhere.
+    const second = writeSectionFile(
+      dir,
+      "second.md",
+      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1, second],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)?.detail).toMatch(/^second\.md — /);
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 2 — G2-c: the scratch clone's cleanup, and the reset hint on a
+// push failure, had no test — each removable with all tests still green.
+// ---------------------------------------------------------------------------
+
+test("land() leaves no scratch directory behind, whether validation passes or fails (gate 2, G2-c)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const tmp = os.tmpdir();
+    const prefix = "review-record-land-";
+    const countScratchDirs = () => fs.readdirSync(tmp).filter((n) => n.startsWith(prefix)).length;
+    const before = countScratchDirs();
+
+    // A validation failure that reaches the scratch clone before refusing —
+    // an unanchored citation fails `spliceSection`'s own check inside it,
+    // which is where the scratch directory this asserts on actually exists.
+    const badGate = writeSectionFile(
+      dir,
+      "bad.md",
+      "## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2`.\n",
+    );
+    const failed = land({
+      ticket: ticketAbs,
+      sections: [badGate],
+      base,
+      status: "done",
+      title: "x",
+      runPreflight: okPreflight,
+    });
+    expect(failed.ok).toBe(false);
+    expect(failed.steps.at(-1)?.name).toBe("splice");
+    expect(countScratchDirs()).toBe(before);
+
+    // A full success — validation and the real pass both run.
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    const ok = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      runPreflight: okPreflight,
+    });
+    expect(ok.ok).toBe(true);
+    expect(countScratchDirs()).toBe(before);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() prints the reset command on a push failure too, not only on preflight (gate 2, G2-c)", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    gitIn(dir, "push", "-q", "origin", "feature");
+    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-other-"));
+    const clone = spawnSync("git", ["clone", "-q", bareDir, otherDir], {
+      encoding: "utf8",
+      shell: false,
+    });
+    expect(clone.status).toBe(0);
+    gitIn(otherDir, "config", "user.email", "other@example.test");
+    gitIn(otherDir, "config", "user.name", "other");
+    gitIn(otherDir, "checkout", "-q", "feature");
+    fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
+    gitIn(otherDir, "add", "-A");
+    gitIn(otherDir, "commit", "-qm", "an unrelated commit lands on the remote first");
+    gitIn(otherDir, "push", "-q", "origin", "feature");
+    fs.rmSync(otherDir, { recursive: true, force: true });
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("push");
+    expect(failed?.detail).toMatch(/git reset --hard/);
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 2 — G2-d: a range citation's suggested pin keeps the range.
+// ---------------------------------------------------------------------------
+
+test("unpinnedPreexistingCitations keeps a range citation's span in the suggested pin (gate 2, G2-d)", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const base = gitIn(dir, "rev-parse", "HEAD");
+    // `src/tls.ts` lines 2-3: "  // Defence in depth: the store is pinned."
+    // and "  return true;" — an anchor spanning both, joined the way
+    // `locateAnchor` joins non-blank lines.
+    const section =
+      '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2-3 "Defence in depth: the store is pinned. return true;"`.\n';
+    const issues = unpinnedPreexistingCitations(section, dir, base);
+    expect(issues).toHaveLength(1);
+    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 2, end: 3 });
+    // Not collapsed to a single line — the suggested pin spans the same two
+    // lines at `base` that the citation itself spans at the tip.
+    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2-3`);
+  } finally {
+    cleanup();
+  }
 });

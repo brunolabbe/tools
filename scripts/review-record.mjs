@@ -1112,18 +1112,29 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
     if (r.state !== "verified") return;
     const original = candidates[index];
     if (declared.has(citationKey(original))) return;
-    const baseLine = r.foundAt?.[0] ?? r.start;
-    const range =
+    const baseStart = r.foundAt?.[0] ?? r.start;
+    // The suggested pin keeps the citation's own span (gate 2, G2-d): a
+    // multi-line anchor still starts on one line of `base`, but collapsing a
+    // three-line citation to that one line alone throws away what the
+    // citation was describing, even though a pin that narrow still verifies
+    // — `locateAnchor`'s own contract only requires the match's *start* to
+    // fall inside the cited range. The base tree gains no *new* lines
+    // relative to the tip between the anchor's start and end (the match
+    // itself proves the text is intact there), so the same span length
+    // carries over unchanged.
+    const baseEnd = baseStart + (original.end - original.start);
+    const originalRange =
       original.start === original.end ? `${original.start}` : `${original.start}-${original.end}`;
+    const baseRange = baseStart === baseEnd ? `${baseStart}` : `${baseStart}-${baseEnd}`;
     issues.push({
       file: /** @type {string} */ (original.file),
       start: original.start,
       end: original.end,
       line: original.line,
       reason:
-        `record line ${original.line}: \`${original.file}:${range}\` cites text that already exists ` +
-        `in ${original.file} at ${base} (line ${baseLine}) — it needs a pin: ` +
-        `\`${original.file}@${base}:${baseLine}\``,
+        `record line ${original.line}: \`${original.file}:${originalRange}\` cites text that already ` +
+        `exists in ${original.file} at ${base} (line ${baseRange}) — it needs a pin: ` +
+        `\`${original.file}@${base}:${baseRange}\``,
     });
   });
   return issues;
@@ -1172,11 +1183,25 @@ function runGit(repo, args) {
  */
 function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status, run) {
   plans.forEach((plan, index) => {
-    const result = spliceSection(ticketPath, plan.path, plan.gate, { requireClaudePins: true });
+    // Every failure below is tagged with `sectionPath` (gate 2, G2-b) — a
+    // caller reports which section file failed, never only the checker's own
+    // text, which says nothing about which of several sections it came from.
+    let result;
+    try {
+      result = spliceSection(ticketPath, plan.path, plan.gate, { requireClaudePins: true });
+    } catch (error) {
+      throw Object.assign(/** @type {Error} */ (error), { sectionPath: plan.path });
+    }
 
     if (index === 0) {
-      const markdown = fs.readFileSync(ticketPath, "utf8");
-      fs.writeFileSync(ticketPath, setStatus(markdown, status));
+      try {
+        const markdown = fs.readFileSync(ticketPath, "utf8");
+        fs.writeFileSync(ticketPath, setStatus(markdown, status));
+      } catch (error) {
+        throw Object.assign(new Error(`setting status: ${/** @type {Error} */ (error).message}`), {
+          sectionPath: plan.path,
+        });
+      }
     }
 
     const gateLabel = plan.gate ?? 1;
@@ -1184,14 +1209,34 @@ function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status,
       index === 0
         ? `docs(${tool}): record gate ${gateLabel} and set status ${status} on ${ticketId} (${ticketId})`
         : `docs(${tool}): record gate ${gateLabel} on ${ticketId} (${ticketId})`;
-    run(repoRoot, ["add", "--", result.relative]);
-    run(repoRoot, ["commit", "-m", message]);
+    try {
+      run(repoRoot, ["add", "--", result.relative]);
+      run(repoRoot, ["commit", "-m", message]);
+    } catch (error) {
+      throw Object.assign(
+        new Error(`committing gate ${gateLabel}: ${/** @type {Error} */ (error).message}`),
+        { sectionPath: plan.path },
+      );
+    }
   });
 }
 
-function runPreflightDefault(repo, base, title) {
+/**
+ * `--land`'s own default `preflight` step, resolved next to this file rather
+ * than inside whatever `repo` the ticket lives in — see `land`'s docblock.
+ * `spawn` is injectable (default `spawnSync`) purely so a test can assert on
+ * the argv this builds — gate 2, F2/M5 — without spawning a real process;
+ * `land()` itself never overrides it.
+ *
+ * @param {string} repo
+ * @param {string} base
+ * @param {string} title
+ * @param {(cmd: string, args: string[], options: {encoding: "utf8", shell: false}) => {status: number | null, stdout: string, stderr: string, error?: Error}} [spawn]
+ * @returns {{ok: boolean, output: string}}
+ */
+export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
   const preflightCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "preflight.mjs");
-  const result = spawnSync(
+  const result = spawn(
     process.execPath,
     [preflightCli, "--base", base, "--title", title, "--repo", repo],
     { encoding: "utf8", shell: false },
@@ -1302,6 +1347,33 @@ export function land(options) {
     return fail("setup", `--base ${base} could not be read in ${ticketRepoRoot}`);
   }
 
+  // Refuse a dirty tracked tree (gate 2, G2-a; the owner's answer, "Refuse
+  // dirty tree", 2026-09-29): the scratch clone below is made from `HEAD`, so
+  // an uncommitted change to any tracked file is invisible to validation but
+  // very visible to the real pass, which reads the working tree — the two
+  // could then disagree, either printing a false "commit(s) already made"
+  // reset hint on a validation that never wrote anything, or committing a
+  // real gate before a later one fails on content only the working tree
+  // holds. Untracked files are not a fact about any existing citation's
+  // content, so they are not checked — the same reasoning `candidateFiles`'s
+  // own docblock in `citations.mjs` uses for reading them in anyway when
+  // resolving a citation, the opposite side of the same distinction.
+  let dirtyStatus;
+  try {
+    dirtyStatus = run(ticketRepoRoot, ["status", "--porcelain", "--untracked-files=no"]);
+  } catch (error) {
+    return fail("setup", /** @type {Error} */ (error).message);
+  }
+  if (dirtyStatus.trim() !== "") {
+    return fail(
+      "setup",
+      `${ticketRepoRoot} has an uncommitted change to a tracked file. The scratch clone this ` +
+        `validates against is made from HEAD, so a dirty tree here means validation and the real ` +
+        `pass could see two different trees. Commit or discard the change first:\n` +
+        `${dirtyStatus.trim()}`,
+    );
+  }
+
   let ticketId = ticket;
   let tool = "repo";
   let relative;
@@ -1379,10 +1451,12 @@ export function land(options) {
       run,
     );
   } catch (error) {
-    const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
+    const failure =
+      /** @type {Error & {stdout?: string, stderr?: string, sectionPath?: string}} */ (error);
+    const label = failure.sectionPath ? `${path.basename(failure.sectionPath)} — ` : "";
     return fail(
       "splice",
-      `${failure.stderr || failure.stdout || failure.message}\n\n` +
+      `${label}${failure.stderr || failure.stdout || failure.message}\n\n` +
         `Validated against a scratch clone before any real commit — ${ticketRepoRoot} is untouched.`,
     );
   } finally {
@@ -1397,8 +1471,13 @@ export function land(options) {
   try {
     spliceAndCommitAll(ticketAbsolutePath, ticketRepoRoot, plans, ticketId, tool, status, run);
   } catch (error) {
-    const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
-    return fail("splice", `${failure.stderr || failure.stdout || failure.message}${resetHint()}`);
+    const failure =
+      /** @type {Error & {stdout?: string, stderr?: string, sectionPath?: string}} */ (error);
+    const label = failure.sectionPath ? `${path.basename(failure.sectionPath)} — ` : "";
+    return fail(
+      "splice",
+      `${label}${failure.stderr || failure.stdout || failure.message}${resetHint()}`,
+    );
   }
   pass("splice", `${plans.length} commit(s), status set to ${status} in the first`);
 
