@@ -7,6 +7,15 @@ lifecycle, is a different rule with a different check, and it lives in
 [`SKILL.md`](../SKILL.md) under _Relaying_. One word doing two jobs is how a rule
 gets read as already-covered; these two do not cover each other.
 
+## Before routing a finding, check it against the tool's own contract
+
+A finding's framing can contradict the tool's own documented behaviour. If a finding
+asks for a range pin while the tool's output says "pin only the line the text starts
+on", routing that contradiction forward costs rounds correcting the misdirection. Read
+the tool's own help text, messages and documented options before treating the finding
+as a fact worth relaying. This prevents a category of errors that are not flawed
+reasoning — sound premises applied to wrong constraints.
+
 ## Defect shapes worth naming in a prompt
 
 **A fixture value that is also the component's no-op.** A sorted list handed to a

@@ -4330,3 +4330,52 @@ The three cold wakes each came more than an hour after the agent's previous turn
 - repo-73..76's builder built a scratch merge of the open heads unprompted and found two cross-PR citation breaks that neither `citations-gate --against origin/main` nor preflight could see.
 - The fixer that flipped repo-71 to `done` re-read the three Windows CI results itself instead of trusting the orchestrator's relay.
 - The final scratch merge of all seven heads (127 enforced, 0 failing) let the owner merge in any order, and they did.
+
+
+## Session 2026-09-29 — base 2ffb72a
+
+**Drafted by the orchestrating session of this batch (repo-77, repo-80) from its own transcript and `node scripts/agent-cost.mjs` (rates read 2026-09-26), formatted by a maintenance dispatch, and gated once, narrowly, after the PR opened. The owner chose on 2026-09-29 to apply the corrections in one pull request.** `subagent tokens` is relayed from task notifications; every other field is measured.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2** taken from `ready` to a gated branch: `repo-80` → #320 (merged as `f9aafe8`), `repo-77` → #322 (open at `52e444a`, all checks passing, awaiting merge). `repo-83` filed from `repo-77`'s gate as `needs-decision`. **Measured** |
+| `agents` / `dispatches` | **7** agents (1 seam-mapper, 2 builder-standard, 2 ticket-reviewer-opus, 2 fixer) / **22** dispatches and `SendMessage` wakes (7 dispatches plus 15 wakes). **Measured** |
+| `builder rounds` | `repo-80`: the builder 5 invocations (build; gate-1 round; F3 send-back; gate-2 round; the gate-3 landing that stopped), the fixer 4 (gate-4 round; landing; Windows one-line fix, stopped; push). `repo-77`: the builder 2 (build; pin-count send-back), the fixer 2 (gate-1 lows; landing). **2 were the orchestrator's fault.** (1) repo-80's gate-3 landing stopped because the orchestrator's ship conditions required both coordinate repoints inside committed records and a `--verify` byte-match against the gate's pre-repoint files, which cannot both hold, and neither was dry-run. (2) repo-80's Windows one-line fix was dry-run for `tsc` and the test but not `citations.mjs`, and it deleted the anchor gate 2 cites at `scripts/test/review-record.test.ts:1733`; the fixer stopped. Two further send-backs were builder errors caught at step 4: repo-80's F3 was implemented as an automatic `git reset --hard` instead of the owner's chosen pre-validation, and labelled as the owner's option; repo-77's Log counted 46 pins across 9 tickets where the diff has 63 across 12. **Measured** |
+| `gates` | **7** rounds across 2 reviewer instances plus 1 amendment wake: `repo-80` FAIL `e893f9d` → CONCERNS `f14349a` → CONCERNS `9d8ca8d` → CONCERNS `ddd3158` → CONCERNS `80e7d99` (Windows only), amendment `6565e2c`; `repo-77` PASS `42e6405` → PASS `6418f17`. **All 7** returned findings. **Measured** |
+| `wrong findings` | **1, and it reached branch commits but not `main`.** repo-80 gate 2's G2-d asked for the suggested pin to keep a range, which contradicted `--land`'s own message ("pin only the line the text starts on"). Two implementations of it were wrong (G3-b, G4-a) before the owner closed G2-d as by design and `80e7d99` returned to the anchor-line suggestion. One gate speculation (whether repo-77's widened check is per file or per call) was corrected by an orchestrator fact before it became a finding. **Measured** |
+| `subagent tokens` | **2,229,268**, last observed per agent: seam-mapper 49,966 · repo-80 builder 675,145 · repo-77 builder 493,386 · repo-80 gate 356,657 · repo-77 gate 181,647 · repo-77 fixer 223,719 · repo-80 fixer 248,748. **Relayed** from task notifications |
+| `cost` | **$147.96** over 7h07m30s active, 9 cold wakes, from `node scripts/agent-cost.mjs`, rates read 2026-09-26. The orchestrator's $14.14 is a floor. The 9 cold wakes are wakes past an hour: the session spanned ~22h of wall time while waiting on the owner and on CI. They are not distinguished here from a TTL lost to usage credits. **Measured** |
+
+### Per agent
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Tokens | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5 / high | seam-mapper | intake: repo-80 and repo-77 | 2m00s / 2m00s | 0 | 49,966 | $0.29 |
+| #320 | merged | Sonnet 5 / high | builder-standard | repo-80: build, three fix rounds, records-first landing stopped | 1h56m03s / 12h35m05s | 1 | 675,145 | $50.70 |
+| #320 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-80: gates 1-5, re-issues, amendment at 6565e2c | 1h08m09s / 20h40m35s | 3 | 356,657 | $21.54 |
+| #320 | merged | Sonnet 5 / high | fixer | repo-80: gate-4 round, landing, Windows one-line fix, push | 27m12s / 1h52m16s | 1 | 248,748 | $7.97 |
+| #322 | open | Sonnet 5 / high | builder-standard | repo-77: build and pin-count correction | 1h31m46s / 1h28m46s | 0 | 493,386 | $38.15 |
+| #322 | open | Opus 5.5 / high | ticket-reviewer-opus | repo-77: gates 1 and 2, both PASS | 22m20s / 10h22m44s | 1 | 181,647 | $8.07 |
+| #322 | open | Sonnet 5 / high | fixer | repo-77: gate-1 lows, filing repo-83, landing with merge from main | 29m42s / 10h40m01s | 1 | 223,719 | $7.08 |
+| — | — | Opus 5.5 / high | orchestrator | this session (a floor) | 1h10m17s / ~22h | 2 | not reported | $14.14 |
+
+## Events outside the two tickets
+
+- main was red from #316's merge (2ffb72a) to #317 (7b48996). #316 merged with its own `test (ubuntu-latest)` failing: repo-82's CRLF test read repo-79's live record, whose pin `SKILL.md@a0841701:224` is unresolvable in CI's depth-1 `test` checkout. It exited 3 where it expected 2; the orchestrator reproduced this in a depth-1 clone of main. Another session fixed it (#317). The previous batch's memory had said to read CI before merging #316.
+- The owner merged main into #320 (fc6d419) believing #319 fixed its Windows failure. The orchestrator measured that it did not (the failing file is not in #319), and the re-run confirmed it.
+
+**what the skill got wrong**
+
+1. **records.md, the conditional-ship route: fixes land before records.** Records-first with repointing breaks `--verify` by construction; the working route is fixes first, then gate re-issues every section and lands from the throwaway result. EDIT.
+2. **SKILL.md step 6, dry-run rule:** check every record that cites a file the fix touches through `citations.mjs --section Review`, not only through `tsc` and tests. EDIT.
+3. **concurrency.md, merge resolution:** `git merge -X ours` takes only the conflicting hunks (not `--ours`, which drops the other side's non-conflicting hunks); when pins collide, the union is the right answer. EDIT.
+4. **.claude/rules/testing.md:** (a) On Windows, a `mkdtemp` path (8.3 short name, backslashes) and the same directory from `git rev-parse --show-toplevel` spell differently — never assert equality. (b) A test counting entries in shared temp races with concurrent sessions; point `TMPDIR`, `TEMP`, `TMP` at a private directory. EDIT.
+5. **roles/common.md:** `origin/main` is a shared ref that moves under a running agent; verify against the resolved base sha, not the floating ref. EDIT.
+6. **SKILL.md step 12, filed tickets:** a reproduction must be runnable from the repo, never a path into a session scratchpad. EDIT.
+7. **roles/reviewer.md:** (a) A re-issue may need a new anchor when a later round duplicated the text; name it in the preamble. (b) An owner's "by design" closing uses the same "Amended at <sha>" marker. (c) Mutation runs should set a private `TMPDIR`. (d) When the gate builds the amendment commit, the lander pushes that exact commit. EDIT.
+8. **roles/builder.md:** Adding a property to a multi-line object literal grows it a line; a line-neutral edit needs a spread or the same line reused. A citation on a call's first line moves when the call collapses. EDIT.
+9. **reference/defect-shapes.md:** Before routing a finding, check it against the contract: G2-d asked for a range pin while `--land` printed "pin only the line the text starts on", costing two wrong rounds. EDIT.
+10. **records.md:** `citations-gate.mjs --displaced-since <base>` surfaces moved citations outside `## Review`; name it for branches that move cited lines. EDIT.
+11. **roles/common.md, sandbox list:** Measured refusals: long heredocs whose content looks like a diff; `for` loops over `$(git …)` results; `printf` with `\r\n`; `awk` with `" | "` in print. Plain `printf` and small heredocs worked. EDIT.
+12. **reference/dispatching.md:** When a dispatch names a line to edit, quote its content, not only its number. EDIT.
+13. **A re-resolve script:** gates rebuilt the same "re-resolve every unpinned citation by anchor" in 4 rounds (scratchpad/repo-80/probe/reresolve.mjs). FILE repo- ticket posing whether to add it under `scripts/`. → `repo-84`.

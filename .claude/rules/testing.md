@@ -95,6 +95,16 @@ on the Windows leg only). Make the fake a real executable on every platform
 under the fake's name) and **have it print a marker the test asserts**, so a
 real binary answering in its place fails the test instead of passing it.
 
+**On Windows, a path from `mkdtemp` and the same directory from `git rev-parse
+--show-toplevel` spell differently — never assert equality between them.** A
+`mkdtemp` returns a short (8.3) name with backslashes; `git rev-parse` returns
+the long form with forward slashes. Both resolve to the same place, but the
+strings are unequal. Assert the resolved directory instead.
+
+**A test that counts entries in the shared temp directory races with concurrent
+sessions.** Point `TMPDIR`, `TEMP` and `TMP` at a private directory for the
+session so concurrent tests do not interfere.
+
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only

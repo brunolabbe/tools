@@ -93,13 +93,15 @@ discarded. So:
     re-resolve. The lander's own Log entry moves no cited line, because a
     record never cites its own ticket file by coordinate (`dispatching.md`,
     _Send the findings in full_, on self-citation).
-  - **Under conditional ship authority the records go in before the fixes.**
-    A lander told to apply a last round of fixes and ship if the checks hold
-    (`sizing.md`) lands past the tip the final gate reviewed. So it splices
-    every record first, at that tip, where they resolve as given, and
-    commits the fixes after — which makes them the case _A fix that lands
-    after the records are committed_, below. Splicing after the fixes would
-    meet a `MOVED` with no gate left to send it back to.
+  - **Under conditional ship authority the fixes land first, then records.**
+    A lander told to apply fixes and ship if the checks hold (`sizing.md`)
+    applies the fixes first; the gate then re-issues every section at the new
+    tip, building a throwaway commit with `citations-gate`, `citations.mjs`
+    and `--verify <ticket>` exiting 0 on it; and the lander lands from that
+    commit, repointing nothing. `--verify` targets the files from the final
+    re-issue, not the pre-fix gate's file set. Fixes after records cost a
+    repoint within committed records, which is the builder's path and costs
+    coordination.
   - **The status goes in with the landing's first record commit** — `done`,
     or `in-flight` for work that lands partial — so no commit carries a record
     on a `ready` ticket. Before the landing there is no record, and neither
@@ -781,6 +783,13 @@ is real machinery this ticket did not build** — repo-80
 `review-record.mjs`'s landing path, carries it now: its `--land` refuses a
 section with an unpinned citation of content that predates the branch,
 since landing is the one place that already knows the base.
+
+**`citations-gate.mjs --displaced-since <base>` is the only command that
+surfaces a moved citation outside `## Review`.** When a branch moves lines
+cited in gate records, run it to find unpinned displaced citations that the
+Review section's own citations gate misses: records that are not in the gated
+tree have no section to anchor. Name the base sha, not `origin/main`, so the
+check sees what the base contained.
 
 **Anchor every citation in a record you are writing now.** That is the whole
 migration: the population that matters is the records still being read against

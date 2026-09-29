@@ -46,6 +46,11 @@ which breaks citations that other tickets have already merged against those line
 (repo-63, repo-71, repo-72). If two open pull requests both add tests to the same
 suite, the way out is a new test file rather than skipping the append-only rule.
 
+**Line-neutral edits matter when citations sit on moved lines.** Adding a property
+to a multi-line object literal makes oxfmt grow it by a line; a line-neutral
+in-place edit needs a spread, or the same line reused. A citation can sit on a
+call's first line, so collapsing that call moves it.
+
 **If the brief is wrong, do the right thing and record what it had wrong in the
 Log.** That note is the whole point of the Log.
 

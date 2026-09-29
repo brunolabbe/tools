@@ -38,6 +38,11 @@ writes only into your worktree.
 `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's
 copy — no error, and content that looks exactly like the right content.
 
+**`origin/main` is a shared ref that moves.** When any session runs `git fetch`,
+the ref moves under a running agent that holds the ref without fetching. Verify
+against the resolved base sha, not the floating ref — `git rev-parse origin/main`
+before any check, or use the sha your dispatch explicitly names.
+
 **Populate and build before you measure anything**, after your role page's
 checkout step:
 
@@ -96,7 +101,12 @@ avoiding the shape outright (a gate's own session on 2026-09-28 saw none of the
 listed shapes refused, itself unreproduced); a string containing `.github`
 refused as naming git; a `sed` pattern containing `&&`; `timeout -s INT … ;
 echo` as a compound command; `git checkout -- <file>` chained after other
-commands. **`pkill -f` can match the shell that is running it and kill your own
+commands.
+Also measured (2026-09-29): long heredocs whose content looks like a diff; a
+`for` loop whose list comes from `$(git …)` substitution; `printf` with `\r\n`
+in its format string; `awk` with `" | "` in a print string. By contrast, plain
+single-quoted `printf` lines and small heredoc pieces worked.
+**`pkill -f` can match the shell that is running it and kill your own
 session** — never reach for it here; find the pid and `kill` it by number
 instead. What holds: one plain command per call, `git commit -F <file>`, literal
 paths, `printf` over `cat <<EOF`, `awk -v`, a short `node -e`, and reading an
