@@ -1105,27 +1105,44 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
     return { ...c, start: 1, end: Math.max(content.length, 1) };
   });
 
-  const results = checkCitations(widened, baseRead, baseResolve);
+  const baseResults = checkCitations(widened, baseRead, baseResolve);
+
+  // Where the anchor itself starts *within its own cited range, at the tip*
+  // (gate 3, G3-b) — checked against the working tree, over the citation's
+  // own unwidened `[start, end]`, exactly the way the ordinary anchor check
+  // already does. A range citation's anchor need not sit on the range's own
+  // first line (a three-line range quoting only its last line, say), and
+  // the previous version of this function assumed it always did: it took the
+  // base line the anchor starts on as the base *range's* start, which is
+  // only correct when that distance is zero, and it derived an end by
+  // reapplying the citation's own span length, which assumes the branch
+  // changed nothing *inside* the range — neither holds in general, and
+  // gate 3 measured three fixture cases where the suggested pin's line
+  // numbers were wrong although every one of them still happened to verify
+  // (`locateAnchor`'s contract checks only where the match *starts*).
+  const tipResolve = makeResolver(candidateFiles(repo, null));
+  const tipRead = makeReader(repo, null);
+  const tipResults = checkCitations(candidates, tipRead, tipResolve);
 
   const issues = [];
-  results.forEach((r, index) => {
-    if (r.state !== "verified") return;
+  baseResults.forEach((baseResult, index) => {
+    if (baseResult.state !== "verified") return;
     const original = candidates[index];
     if (declared.has(citationKey(original))) return;
-    const baseStart = r.foundAt?.[0] ?? r.start;
-    // The suggested pin keeps the citation's own span (gate 2, G2-d): a
-    // multi-line anchor still starts on one line of `base`, but collapsing a
-    // three-line citation to that one line alone throws away what the
-    // citation was describing, even though a pin that narrow still verifies
-    // — `locateAnchor`'s own contract only requires the match's *start* to
-    // fall inside the cited range. The base tree gains no *new* lines
-    // relative to the tip between the anchor's start and end (the match
-    // itself proves the text is intact there), so the same span length
-    // carries over unchanged.
-    const baseEnd = baseStart + (original.end - original.start);
+
+    const baseAnchorLine = baseResult.foundAt?.[0] ?? baseResult.start;
+    const tipResult = tipResults[index];
+    // Falls back to the range's own start when the tip check itself cannot
+    // say — an unresolvable or moved citation at the tip is not this
+    // function's problem to diagnose, and zero distance is the same
+    // assumption the pre-fix code made unconditionally.
+    const tipAnchorLine =
+      tipResult.state === "verified" ? (tipResult.foundAt?.[0] ?? original.start) : original.start;
+    const distanceFromRangeStart = tipAnchorLine - original.start;
+    const baseRangeStart = Math.max(baseAnchorLine - distanceFromRangeStart, 1);
+
     const originalRange =
       original.start === original.end ? `${original.start}` : `${original.start}-${original.end}`;
-    const baseRange = baseStart === baseEnd ? `${baseStart}` : `${baseStart}-${baseEnd}`;
     issues.push({
       file: /** @type {string} */ (original.file),
       start: original.start,
@@ -1133,8 +1150,9 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
       line: original.line,
       reason:
         `record line ${original.line}: \`${original.file}:${originalRange}\` cites text that already ` +
-        `exists in ${original.file} at ${base} (line ${baseRange}) — it needs a pin: ` +
-        `\`${original.file}@${base}:${baseRange}\``,
+        `exists in ${original.file} at ${base}, starting around line ${baseRangeStart} — the end of the ` +
+        `original range is not checked, so pin only the line the text starts on: ` +
+        `\`${original.file}@${base}:${baseRangeStart}\``,
     });
   });
   return issues;
@@ -1365,12 +1383,21 @@ export function land(options) {
     return fail("setup", /** @type {Error} */ (error).message);
   }
   if (dirtyStatus.trim() !== "") {
+    // `trimEnd()`, never `trim()` (gate 3, G3-c): `git status --porcelain`'s
+    // first column is blank for a change that is only in the working tree,
+    // so its very first line can start with a real leading space — an
+    // unstaged " M path" — and `trim()` strips exactly that space off the
+    // *first* line of the whole string (every later line's own leading
+    // space survives, untouched, since `trim()` only touches the string's
+    // outer edges). The stripped form then reads as `M path`, which is the
+    // *staged* shape, on the one line most likely to be misread as the
+    // reason nothing here caught it.
     return fail(
       "setup",
       `${ticketRepoRoot} has an uncommitted change to a tracked file. The scratch clone this ` +
         `validates against is made from HEAD, so a dirty tree here means validation and the real ` +
         `pass could see two different trees. Commit or discard the change first:\n` +
-        `${dirtyStatus.trim()}`,
+        `${dirtyStatus.trimEnd()}`,
     );
   }
 

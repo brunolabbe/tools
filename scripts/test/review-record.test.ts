@@ -1881,12 +1881,26 @@ test("land() names the failing section file in a splice failure's detail (gate 2
 // push failure, had no test — each removable with all tests still green.
 // ---------------------------------------------------------------------------
 
-test("land() leaves no scratch directory behind, whether validation passes or fails (gate 2, G2-c)", () => {
+test("land() leaves no scratch directory behind, whether validation passes or fails (gate 2, G2-c; isolated per gate 3, G3-a)", () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  // A private `TMPDIR`, isolated from whatever else is running in the
+  // machine's shared temp directory (gate 3, G3-a): counting every
+  // `review-record-land-*` entry there is racy the moment a second session
+  // runs this same suite, or `preflight`'s own project-wide `npm test`,
+  // concurrently — measured by the gate at 9 failures of 12 runs made
+  // alongside two other processes exercising `land()`. `os.tmpdir()` reads
+  // `TMPDIR` (POSIX) fresh on every call, so overriding it for the duration
+  // of this test redirects `land()`'s own `fs.mkdtempSync(os.tmpdir(), ...)`
+  // here without touching anything else on the machine.
+  const privateTmp = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "review-record-private-tmp-")),
+  );
+  const originalTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = privateTmp;
   try {
-    const tmp = os.tmpdir();
     const prefix = "review-record-land-";
-    const countScratchDirs = () => fs.readdirSync(tmp).filter((n) => n.startsWith(prefix)).length;
+    const countScratchDirs = () =>
+      fs.readdirSync(privateTmp).filter((n) => n.startsWith(prefix)).length;
     const before = countScratchDirs();
 
     // A validation failure that reaches the scratch clone before refusing —
@@ -1926,6 +1940,9 @@ test("land() leaves no scratch directory behind, whether validation passes or fa
     expect(ok.ok).toBe(true);
     expect(countScratchDirs()).toBe(before);
   } finally {
+    if (originalTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = originalTmpdir;
+    fs.rmSync(privateTmp, { recursive: true, force: true });
     cleanup();
   }
 });
@@ -1977,21 +1994,95 @@ test("land() prints the reset command on a push failure too, not only on preflig
 // repo-80 gate 2 — G2-d: a range citation's suggested pin keeps the range.
 // ---------------------------------------------------------------------------
 
-test("unpinnedPreexistingCitations keeps a range citation's span in the suggested pin (gate 2, G2-d)", () => {
+// ---------------------------------------------------------------------------
+// repo-80 gate 3 — G3-b: the range-pin arithmetic gate 2's own G2-d fix used
+// assumed the anchor sits on the range's own first line, and that the branch
+// left the cited span the same size. Neither holds in general; gate 3
+// measured three fixture cases where the suggested pin's line numbers were
+// wrong although every one of them still verified. Replaces the G2-d test
+// above, whose "keeps the range" claim this correction retracts: the
+// suggested pin now names one line — where the text starts — and says so,
+// never a range whose end was never checked.
+// ---------------------------------------------------------------------------
+
+/** Twenty lines, each with a marker unique to that line number — a small stand-in for gate 3's own 40-line probe fixture. */
+const markerLines = (n: number) =>
+  Array.from({ length: n }, (_, i) => `// line ${i + 1} marker M${i + 1}X`).join("\n") + "\n";
+
+test("unpinnedPreexistingCitations corrects the range-pin's start line for an anchor that is not on the range's own first line (gate 3, G3-b, case 1: unmoved)", () => {
   const { dir, cleanup } = withTicketRepo();
   try {
+    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "add the marker fixture");
     const base = gitIn(dir, "rev-parse", "HEAD");
-    // `src/tls.ts` lines 2-3: "  // Defence in depth: the store is pinned."
-    // and "  return true;" — an anchor spanning both, joined the way
-    // `locateAnchor` joins non-blank lines.
-    const section =
-      '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2-3 "Defence in depth: the store is pinned. return true;"`.\n';
+    // Unmoved: the tip is identical to base for this file. The citation's
+    // own range is 9-11, three lines, but its anchor is only line 10's own
+    // text — one line into the range, not at its start.
+    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:9-11 "marker M10X"`.\n';
     const issues = unpinnedPreexistingCitations(section, dir, base);
     expect(issues).toHaveLength(1);
-    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 2, end: 3 });
-    // Not collapsed to a single line — the suggested pin spans the same two
-    // lines at `base` that the citation itself spans at the tip.
-    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2-3`);
+    // Gate 3's own table: base actually holds it at 9-11 — the corrected
+    // suggestion names line 9, never the old code's "10-12".
+    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:9`);
+    expect(issues.at(0)?.reason).not.toContain(":10-12");
+  } finally {
+    cleanup();
+  }
+});
+
+test("unpinnedPreexistingCitations corrects the range-pin's start line when the branch grew the cited span (gate 3, G3-b, case 2)", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "add the marker fixture");
+    const base = gitIn(dir, "rev-parse", "HEAD");
+
+    // The branch inserts one new line between base's line 10 and line 11 —
+    // base's own 2-line span (10-11) is now 3 tip lines (10-12).
+    const lines = markerLines(20).split("\n");
+    lines.splice(10, 0, "// inserted by the branch, not in base at all");
+    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), lines.join("\n"));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "grow the span by one line");
+
+    // Anchor on the range's own first tip line (distance 0), so this case
+    // isolates the growth, not the anchor-offset case 1 already covers.
+    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:10-12 "marker M10X"`.\n';
+    const issues = unpinnedPreexistingCitations(section, dir, base);
+    expect(issues).toHaveLength(1);
+    // Gate 3's own table: base actually holds it at 10-11 — start 10.
+    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
+  } finally {
+    cleanup();
+  }
+});
+
+test("unpinnedPreexistingCitations corrects the range-pin's start line when the branch shrank the cited span (gate 3, G3-b, case 3)", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "add the marker fixture");
+    const base = gitIn(dir, "rev-parse", "HEAD");
+
+    // The branch removes base's own line 11 — base's 3-line span (10-12) is
+    // now 2 tip lines (10-11).
+    const lines = markerLines(20).split("\n");
+    lines.splice(10, 1);
+    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), lines.join("\n"));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "shrink the span by one line");
+
+    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:10-11 "marker M10X"`.\n';
+    const issues = unpinnedPreexistingCitations(section, dir, base);
+    expect(issues).toHaveLength(1);
+    // Gate 3's own table: base actually holds it at 10-12 — start 10.
+    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
   } finally {
     cleanup();
   }
