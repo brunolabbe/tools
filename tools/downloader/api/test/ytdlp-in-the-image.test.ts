@@ -158,7 +158,7 @@ describe("the bump workflow opens a pull request that releases", () => {
       execFileSync(
         process.execPath,
         [path.join(REPO_ROOT, "scripts", "commit-message.mjs"), "--text", title()],
-        { stdio: "pipe" },
+        { stdio: "pipe", shell: false },
       );
     expect(run).not.toThrow();
   });
