@@ -469,3 +469,7 @@ origin/main` → 131 enforced, 0 failing, both before this collision was
 
   `npm run check` → exit 0. `npx vitest run scripts/test/preflight.test.ts` →
   87 passed (87). `node scripts/preflight.mjs --base origin/main` → exit 0.
+
+- 2026-09-29: Landed. The three review records above are gate 3's final set,
+  spliced verbatim from `89dd642`, one commit per gate, in order; status set
+  to `done` in the first. No section's words or anchors were changed.
