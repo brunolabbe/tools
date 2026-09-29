@@ -399,3 +399,27 @@ Once the decision above is answered, and whichever option it picks:
   `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
   enforced, 0 failing). No fixture, mutation or timing measurement from gate
   1's table needed to change.
+
+- **2026-09-29 — gate 2's two low findings, applied by a fixer.** Gate 2
+  passed with two lows; neither needed judgement.
+  - **Finding 1.** Nothing asserted that the parse-failure notice was
+    actually printed: `expect(captured.trim().split("\n")).toHaveLength(1)`
+    also holds on an empty string, and the end-to-end case checked only that
+    `SyntaxError` was absent. Added two cases after
+    `scripts/test/check-farm-freshness.test.ts`'s existing last test (so no
+    earlier citation's line numbers moved), asserting stderr contains
+    `did not parse` from `warnIfStale` directly and from `worktree-farm.sh`
+    end to end. Reproduced the gate's own mutation
+    (`process.stderr.write(` → `String(` on the notice line in
+    `.claude/scripts/check-farm-freshness.mjs`): both new cases failed (2 of
+    14), the other 12 stayed green; reverted, all 14 passed.
+  - **Finding 2.** The corrected "What counts as declared" comment named the
+    wrong placeholder — "a package missing from `<dep>`'s nested tree" — when
+    that nested tree belongs to `<name>`, and `<dep>` is the package missing
+    from it. One-word fix, no line added or removed.
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 14/14 passed.
+  `npm run check` → exit 0.
+  `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
+  enforced, 0 failing). Pushed as this branch's new head, fast-forward, on
+  top of `38769fd`.

@@ -30,7 +30,7 @@
  * bundled: none of the lockfile's 17 nested entries carries `inBundle` (they
  * are ordinary transitive dependencies npm placed one level down to resolve a
  * version conflict), and the farm links `<name>`'s directory absolutely, so a
- * package missing from `<dep>`'s nested tree in the shared install is equally
+ * package missing from `<name>`'s nested tree in the shared install is equally
  * missing from the worktree's. It is skipped because top-level presence is
  * the scope the owner decided (2026-09-28, option A); checking the nested
  * entries too would be a wider check nobody asked for.

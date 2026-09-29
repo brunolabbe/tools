@@ -290,3 +290,43 @@ test("worktree-farm.sh warns without a raw stack trace when the shared lockfile 
     shared.cleanup();
   }
 });
+
+// --- the parse-failure notice names itself, not just a line count ----------
+//
+// repo-45 gate 2, finding 1: a notice line that never printed at all still
+// satisfies "one line" (`"".split("\n")` has length 1) and "no SyntaxError".
+// These assert the notice's own wording reaches stderr, so a silent
+// `warnIfStale` fails them even though it still fails open.
+
+test("warnIfStale's stderr names the failure as a parse failure, on an unparsable shared lockfile", () => {
+  const shared = makeUnparsableSharedRoot();
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  let captured = "";
+  process.stderr.write = ((chunk: string) => {
+    captured += chunk;
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    warnIfStale(shared.dir);
+  } finally {
+    process.stderr.write = originalWrite;
+    shared.cleanup();
+  }
+  expect(captured).toContain("did not parse");
+});
+
+test("worktree-farm.sh's stderr names the failure as a parse failure, on an unparsable shared lockfile", () => {
+  const shared = makeUnparsableSharedRoot();
+  const tree = makeGitRepo();
+  try {
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.stderr).toContain("did not parse");
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
