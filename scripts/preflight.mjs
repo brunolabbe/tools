@@ -1467,7 +1467,7 @@ function guarded(name, bit, run) {
  * set, plain `git status --porcelain=v1 -z` → `""`; with the flag → the file,
  * named); and without it, an entirely untracked directory collapses to one
  * `dir/` entry rather than its files (checked: an untracked
- * `tools/planner/d.ts` with no tracked `tools/` above it → `tools/planner/`
+ * `tools/planner/d.ts` with no tracked `tools/` above it → `tools/`
  * without the flag, `tools/planner/d.ts` with it). The returned set is
  * therefore paths, not always *file* paths, without this flag — with it,
  * every entry is a real file or a real directory's own path, never a stand-in

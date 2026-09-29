@@ -248,11 +248,11 @@ Whichever of (a) or (b) is chosen:
   `scripts/preflight.mjs:769`, unchanged by `0d455af`, the last commit to
   touch the file.
 - 2026-09-29 — **Built (b).** Added `workingTreePaths(repo, run)`
-  (`scripts/preflight.mjs:1474`), which parses `git status --porcelain=v1 -z`
+  (`scripts/preflight.mjs:1485`), which parses `git status --porcelain=v1 -z`
   rather than the line form — a staged rename's line form (`R  old -> new`)
   is a string to split on `" -> "`, which a renamed path containing that
   exact substring would break, where `-z` hands each side of a rename back as
-  its own NUL-terminated field. `preflight()` (`scripts/preflight.mjs:1530`)
+  its own NUL-terminated field. `preflight()` (`scripts/preflight.mjs:1549`)
   now computes two path sets rather than one: `diffPaths`, unchanged,
   `${base}...HEAD` only, still handed to check 3 (`checkReview`) and check 4
   (`checkTitle`) per the decision above; and `testSelectionPaths`, the union
@@ -344,7 +344,7 @@ check` → exit 0.
   now fails the same assertion with `review`'s `bit: 4`, and the test passes
   at `HEAD` with the real code restored. `npx vitest run
 scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
-  the two new lows' own tests were added.
+  the three new lows' own tests (1, 2 and 4) were added.
 
   **Low, reproduced and fixed — untracked visibility.** A repository with
   `status.showUntrackedFiles=no` set returned `[]` from `workingTreePaths` for
@@ -356,7 +356,7 @@ scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
   **Low, reproduced and fixed — collapsed untracked directories.** The same
   flag fixes this one too: an untracked file under an untracked directory with
   no tracked ancestor (for example `tools/planner/d.ts` in a repo with no
-  tracked `tools/`) came back as the directory alone, `tools/planner/`, not
+  tracked `tools/`) came back as the directory alone, `tools/`, not
   the file — confirmed, then confirmed fixed with the flag. Updated the
   existing rename/untracked unit test's expectation from `"tools/planner/"` to
   `"tools/planner/d.ts"` to match, and added a dedicated test for the
