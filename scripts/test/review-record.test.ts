@@ -1376,3 +1376,67 @@ test("spliceSection and verifySection are what main() and verifyMain() now call"
     cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// repo-80 — the `--land` CLI itself, not only the `land()` function: argv
+// parsing, the process-boundary commit and push, and the real `preflight.mjs`
+// this repository ships, all through `node review-record.mjs --land`.
+// ---------------------------------------------------------------------------
+
+test("the --land CLI refuses a missing flag before touching git, naming it on stderr", () => {
+  const { dir, ticketAbs, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      "## Review\n\n### Gate 1 — smoke\n\nsomething.\n",
+    );
+    const result = runCli(dir, ["--land", ticketAbs, gate1, "--status", "done", "--title", "x"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/--base is required/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('the --land CLI lands the commit and the push for real, then fails naming "preflight" against a fixture with no package.json', () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — smoke\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    const result = runCli(dir, [
+      "--land",
+      ticketAbs,
+      gate1,
+      "--base",
+      base,
+      "--status",
+      "done",
+      "--title",
+      "docs(repo): land the fixture ticket (zz-1)",
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toMatch(/== splice ==\nok/);
+    expect(result.stdout).toMatch(/== push ==\nok/);
+    expect(result.stdout).toMatch(/== verify ==\nok/);
+    expect(result.stdout).toMatch(/== preflight ==\nFAIL/);
+    expect(result.stderr).toMatch(/--land failed at "preflight"/);
+
+    // The real preflight really ran against this fixture and really failed —
+    // this repo's own check 1, `npm run check`, has no `package.json` to read
+    // here, which is exactly the seam `runPreflightDefault`'s own docblock
+    // names as the reason `land()`'s `runPreflight` is injectable at all.
+    expect(result.stdout).toMatch(/no such file or directory.*package\.json/su);
+
+    // Everything before "preflight" really landed, real push included.
+    expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
+    expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
+  } finally {
+    cleanup();
+  }
+});
