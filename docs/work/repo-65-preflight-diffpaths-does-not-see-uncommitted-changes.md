@@ -136,9 +136,11 @@ only widened as (a)'s own count grew from two places to three. It brings
 check 1's selection closer to check 2's, though not identical — check 2
 selects records with `git ls-files` (the index), so an _untracked_ file is
 invisible to it, while (b)'s own `git status --porcelain` union would
-include one for check 1's selection. Still `needs-decision`: the owner may
-judge the one-tree consistency (a) buys, at the cost of three rewritten
-role-page places, worth it over the two-tree split (b) leaves.
+include one for check 1's selection. **Answered below, 2026-09-28: (b)** —
+this paragraph's own "still `needs-decision`" was superseded the moment the
+owner recorded that answer at the top of this section, and is left here
+only as the last of the corrected rounds' own reasoning, not as this
+ticket's current state.
 
 ## Build
 
@@ -245,3 +247,70 @@ Whichever of (a) or (b) is chosen:
   `diffPaths` is still the committed-only `${base}...HEAD` diff at
   `scripts/preflight.mjs:769`, unchanged by `0d455af`, the last commit to
   touch the file.
+- 2026-09-29 — **Built (b).** Added `workingTreePaths(repo, run)`
+  (`scripts/preflight.mjs:1474`), which parses `git status --porcelain=v1 -z`
+  rather than the line form — a staged rename's line form (`R  old -> new`)
+  is a string to split on `" -> "`, which a renamed path containing that
+  exact substring would break, where `-z` hands each side of a rename back as
+  its own NUL-terminated field. `preflight()` (`scripts/preflight.mjs:1530`)
+  now computes two path sets rather than one: `diffPaths`, unchanged,
+  `${base}...HEAD` only, still handed to check 3 (`checkReview`) and check 4
+  (`checkTitle`) per the decision above; and `testSelectionPaths`, the union
+  of `diffPaths` with `workingTreePaths`, handed to check 1 (`checkBuild`)
+  alone, so an uncommitted edit under `scripts/` or a tool's own paths is
+  still selected into the test plan rather than silently skipped. Corrected
+  the stale "still `needs-decision`" sentence closing the recommendation
+  paragraph above (line 139 before this edit) to point at the owner's answer
+  instead, rather than reading as still open beneath it — the dispatch flagged
+  it as possibly misleading and it was.
+
+  Reproduced the ticket's own transcript directly against this fix, in a
+  scratch clean worktree, before writing a test for it: with `preflight()`
+  reverted one line back to `checkBuild(repo, diffPaths, buildRun)`, a new
+  integration test (`scripts/test/preflight.test.ts`, "preflight's check 1
+  runs the repo project's suite for an edit still only in the working tree
+  (repo-65)") went red — `AssertionError: expected [ 'npm run check' ] to
+include 'npm test -- --project repo'` — and passed again once the one line
+  was restored to `checkBuild(repo, testSelectionPaths, buildRun)`. Also
+  added a pure unit test for `workingTreePaths` itself, against a real
+  throwaway repository with a staged rename, an unstaged edit and an
+  untracked new directory, both appended to the end of
+  `scripts/test/preflight.test.ts` per this branch's append-only rule.
+  `npx vitest run scripts/test/preflight.test.ts` → 84 passed (84). `npm run
+check` → exit 0.
+
+  **Adding `workingTreePaths` to the existing top-of-file `import` block
+  would have moved every citation after it.** Tried first, then measured
+  rather than assumed: with `workingTreePaths,` added there,
+  `node scripts/citations-gate.mjs --against origin/main` went from clean to
+  **5 records, 44 citations, all `moved` by exactly one line** —
+  `repo-51-one-preflight-command-before-a-pull-request.md`,
+  `repo-64-record-the-2026-09-27-batch.md`,
+  `repo-71-a-preflight-test-times-out-on-the-windows-ci-leg.md`,
+  `repo-79-preflight-runs-all-checks.md` and
+  `repo-82-citations-crlf-and-preflight-lows.md`, every one an
+  already-merged `## Review` section citing `scripts/test/preflight.test.ts`
+  by bare, unpinned line number. Per this skill's own
+  `reference/records.md` ("Whose repoint it is when a _later, unrelated_
+  commit moves a line an already-merged record cites"), that repoint would
+  have been this branch's to make, coordinate only, in this Log — 44 of
+  them. Instead the import moved to a second, later `import` declaration
+  placed just above the new unit test at the end of the file, which costs
+  nothing upstream of it (an `import` is valid at the top level of a module
+  wherever it is written) and left the file's first N lines — and every
+  citation into them — untouched: re-ran `citations-gate.mjs` after the
+  move, **0 failing**, same as `origin/main` alone. No repoint was needed on
+  either the receiving end or the five already-merged tickets above.
+
+  **Did not widen check 3 or check 4** (checked against the Build section's
+  own "whichever of (a) or (b) is chosen" instruction and the decision's own
+  "no role page changes" line): `checkReview` and `checkTitle` still take
+  `diffPaths`, not `testSelectionPaths`, exactly as before this branch — the
+  new integration test's last two assertions (`review` and `title` both
+  `{ ok: true, bit: 0 }` over the same uncommitted edit) pin that down for
+  whoever reads this next, repo-47's builder named among them.
+
+  **Fold-in considered and declined.** The Build section's only other ask —
+  "update this ticket's Log with which option was built and why, if the
+  answer differs from the recommendation" — is this entry; the answer did not
+  differ from the recommendation, so nothing else was free to fold in here.

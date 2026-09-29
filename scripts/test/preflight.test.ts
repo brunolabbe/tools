@@ -1890,3 +1890,100 @@ test("deriveExtraCiCommands throws on npm install-clea, npm isntall-cl and npm c
     /does not recognise as "npm ci" or "npm run check"/,
   );
 });
+
+// --- repo-65: check 1 also selects a suite for a working-tree-only edit ----
+
+// A second, later `import` rather than one more name in the block at the top
+// of this file: every name up there is cited by line number from five
+// already-merged tickets' own `## Review` sections (this file's own
+// `:739`, `:293`, and more like them), and one more line in that block moves
+// every one of those citations by one — measured directly, with this import
+// briefly added up there instead: `node scripts/citations-gate.mjs --against
+// origin/main` went from 0 failing to 5 records, 44 citations, all `moved` by
+// exactly one line. An `import` declaration is valid at the top level of a
+// module wherever it is written, so this one costs nothing upstream of it.
+import { workingTreePaths } from "../preflight.mjs";
+
+/**
+ * `git status --porcelain=v1 -z`'s own shape: a plain edit or an untracked
+ * path is one NUL-terminated field, but a rename or copy carries the new
+ * path's field immediately followed by the *original* path as a second,
+ * standalone field — parsed wrong, that second field reads on the next turn
+ * of the loop as a bare, statusless path of its own rather than being folded
+ * into the rename it belongs to.
+ */
+test("workingTreePaths reports a staged rename's two sides, an unstaged edit and an untracked path", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("a.txt", "one\n");
+    repo.write("tools/downloader/b.ts", "two\n");
+    repo.commitAll("base");
+
+    repo.git("mv", "tools/downloader/b.ts", "tools/downloader/c.ts");
+    fs.appendFileSync(path.join(repo.dir, "a.txt"), "more\n");
+    repo.write("tools/planner/d.ts", "new\n");
+
+    const found = workingTreePaths(repo.dir, realRun);
+    expect(found).toEqual(
+      expect.arrayContaining([
+        "a.txt",
+        "tools/downloader/c.ts",
+        "tools/downloader/b.ts",
+        "tools/planner/",
+      ]),
+    );
+    expect(found.length).toBe(4);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * The ticket's own reproduction, run through `preflight()` itself rather than
+ * `testPlan` alone: an edit to a file already tracked under `scripts/`, left
+ * uncommitted, used to vanish from `${base}...HEAD` entirely and take check
+ * 1's `repo` project suite with it — a clean `check` bit over a change
+ * nothing had actually run. Checks 3 and 4 stay on `diffPaths`, committed-only
+ * — repo-65's decision (b) — so this same uncommitted edit must leave both of
+ * them exactly as they were, which the last two assertions below pin down.
+ */
+test("preflight's check 1 runs the repo project's suite for an edit still only in the working tree (repo-65)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  fs.mkdirSync(path.join(repo.dir, "tools", "downloader"), { recursive: true });
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.write("scripts/seed.mjs", "// seed\n");
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    repo.write("docs/work/x-2.md", DONE_WITH_REVIEW);
+    repo.commitAll("fix(downloader): close x-2 cleanly");
+
+    // Left uncommitted on purpose — the premise the ticket's Why measured.
+    fs.writeFileSync(path.join(repo.dir, "scripts", "seed.mjs"), "// seed, edited\n");
+    expect(repo.git("diff", "--name-only", `${base}...HEAD`)).not.toMatch(/scripts\/seed\.mjs/);
+
+    const calls: string[] = [];
+    const buildRun = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(" ")}`);
+      return "";
+    };
+
+    const results = preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun,
+      grandfathered: new Map(),
+      listOpenHeads: () => [],
+    });
+
+    expect(calls).toContain("npm test -- --project repo");
+    expect(results.find((r) => r.name === "check")).toMatchObject({ ok: true, bit: 0 });
+    expect(results.find((r) => r.name === "review")).toMatchObject({ ok: true, bit: 0 });
+    expect(results.find((r) => r.name === "title")).toMatchObject({ ok: true, bit: 0 });
+  } finally {
+    repo.cleanup();
+  }
+});

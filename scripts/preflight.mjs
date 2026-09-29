@@ -1451,9 +1451,64 @@ function guarded(name, bit, run) {
 }
 
 /**
- * Every check, in the Build section's order. `diffPaths` is computed once,
- * against `${base}...HEAD`, and handed to whichever checks read the diff —
- * check 1 and check 4 — rather than each recomputing it.
+ * Every path the working tree itself carries right now, beyond `HEAD` — the
+ * union of what is staged, what is modified-but-unstaged and what is
+ * untracked — read from `git status --porcelain=v1 -z` rather than the line
+ * form, because a renamed path's line form (`R  old -> new`) is a string to
+ * split on `" -> "`, which a path containing that exact substring would
+ * break; `-z` gives each side of a rename as its own NUL-terminated field
+ * instead.
+ *
+ * This is repo-65's fix, and it is deliberately narrow: it hands back paths,
+ * never a verdict, and the caller decides which checks should see them.
+ * Today that is check 1 alone (`testSelectionPaths`, below) — checks 3 and 4
+ * keep reading `diffPaths`, committed-only, per repo-65's decision (b). A
+ * consumer added later that wants "everything this branch has touched,
+ * including what is not yet committed" for some other check should union
+ * this in the same way, not invent a second path.
+ *
+ * @param {string} repo
+ * @param {typeof runGit} run
+ * @returns {string[]}
+ */
+export function workingTreePaths(repo, run) {
+  const fields = run("git", ["status", "--porcelain=v1", "-z"], { cwd: repo }).split("\0");
+  const paths = [];
+  for (let i = 0; i < fields.length; i += 1) {
+    const entry = fields[i];
+    if (entry === "") continue;
+    const status = entry.slice(0, 2);
+    paths.push(entry.slice(3));
+    // A rename or copy carries the original path as a second NUL-terminated
+    // field right after this one — consume it here rather than leaving it to
+    // be misread as its own, statusless entry on the next loop turn.
+    if (status.includes("R") || status.includes("C")) {
+      i += 1;
+      paths.push(fields[i]);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Every check, in the Build section's order.
+ *
+ * Two path sets, not one, since repo-65: `diffPaths` is `${base}...HEAD`,
+ * committed history only, computed once and handed to whichever checks read
+ * *committed* state — check 3 (`checkReview`) and check 4 (`checkTitle`).
+ * `testSelectionPaths` unions `diffPaths` with `workingTreePaths` (above) and
+ * is what check 1 (`checkBuild`) reads to decide which suites to run, so a
+ * suite under active edit — staged, unstaged or untracked, not yet committed
+ * — is still selected rather than silently skipped (repo-65's own
+ * reproduction: an uncommitted edit under `scripts/test/` ran no `repo`
+ * project suite at all). This still leaves two trees rather than one — checks
+ * 1 alone on the working tree, checks 3–4 on committed state, check 2
+ * (`checkCitations`) unconditional on disk for a record's contents but
+ * index-based for which records it selects — repo-65's Why has the full
+ * three-way split this narrows from. Widening checks 3–4 the same way was
+ * repo-65's option (a), decided against: it would have meant refusing a dirty
+ * tree outright, which orchestrate-tickets' own builder and fixer pages run
+ * `preflight.mjs` ahead of, deliberately, before every commit.
  *
  * `base` is verified to resolve before anything else runs. A `--base` that
  * does not exist in this checkout is not any one check's problem — every
@@ -1477,9 +1532,11 @@ export function preflight(repo, options) {
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
   let diffPaths;
+  let testSelectionPaths;
   try {
     run("git", ["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd: repo });
     diffPaths = lines(run("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: repo }));
+    testSelectionPaths = [...new Set([...diffPaths, ...workingTreePaths(repo, run)])];
   } catch (error) {
     throw fail(
       `--base ${base} could not be read: ${/** @type {Error} */ (error).message}`,
@@ -1488,7 +1545,7 @@ export function preflight(repo, options) {
   }
 
   return [
-    guarded("check", EXIT.check, () => checkBuild(repo, diffPaths, buildRun)),
+    guarded("check", EXIT.check, () => checkBuild(repo, testSelectionPaths, buildRun)),
     guarded("ciCommands", EXIT.ciCommands, () => checkCiCommands(repo, buildRun)),
     guarded("citations", EXIT.citations, () => checkCitations(repo, base, grandfathered)),
     guarded("review", EXIT.review, () => checkReview(repo, diffPaths, run)),
