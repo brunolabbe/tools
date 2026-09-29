@@ -1459,20 +1459,33 @@ function guarded(name, bit, run) {
  * break; `-z` gives each side of a rename as its own NUL-terminated field
  * instead.
  *
+ * `--untracked-files=all` overrides two things a plain `git status` would
+ * otherwise leave to the caller's own config, neither obvious from reading
+ * this function alone (repo-65 gate 1, two lows, both measured): a
+ * repository with `status.showUntrackedFiles=no` set returns nothing at all
+ * for an untracked path without it (checked: an untracked file, that config
+ * set, plain `git status --porcelain=v1 -z` → `""`; with the flag → the file,
+ * named); and without it, an entirely untracked directory collapses to one
+ * `dir/` entry rather than its files (checked: an untracked
+ * `tools/planner/d.ts` with no tracked `tools/` above it → `tools/planner/`
+ * without the flag, `tools/planner/d.ts` with it). The returned set is
+ * therefore paths, not always *file* paths, without this flag — with it,
+ * every entry is a real file or a real directory's own path, never a stand-in
+ * for "something changed under here."
+ *
  * This is repo-65's fix, and it is deliberately narrow: it hands back paths,
  * never a verdict, and the caller decides which checks should see them.
  * Today that is check 1 alone (`testSelectionPaths`, below) — checks 3 and 4
- * keep reading `diffPaths`, committed-only, per repo-65's decision (b). A
- * consumer added later that wants "everything this branch has touched,
- * including what is not yet committed" for some other check should union
- * this in the same way, not invent a second path.
+ * keep reading `diffPaths`, committed-only, per repo-65's decision (b).
  *
  * @param {string} repo
  * @param {typeof runGit} run
  * @returns {string[]}
  */
 export function workingTreePaths(repo, run) {
-  const fields = run("git", ["status", "--porcelain=v1", "-z"], { cwd: repo }).split("\0");
+  const fields = run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+    cwd: repo,
+  }).split("\0");
   const paths = [];
   for (let i = 0; i < fields.length; i += 1) {
     const entry = fields[i];
@@ -1507,8 +1520,14 @@ export function workingTreePaths(repo, run) {
  * index-based for which records it selects — repo-65's Why has the full
  * three-way split this narrows from. Widening checks 3–4 the same way was
  * repo-65's option (a), decided against: it would have meant refusing a dirty
- * tree outright, which orchestrate-tickets' own builder and fixer pages run
- * `preflight.mjs` ahead of, deliberately, before every commit.
+ * tree outright, which costs three rewritten places across
+ * orchestrate-tickets' own builder and fixer pages — the pre-report gate list
+ * and both pages' fix-round steps run `preflight.mjs` ahead of a commit, by
+ * design, and only those three would have needed to change. Their own Landing
+ * sections do not: both commit first and run `preflight.mjs` second already,
+ * which is why repo-65's own ticket, after two corrected drafts, priced
+ * option (a) at three edits rather than a reversal of an order the whole
+ * skill prescribes.
  *
  * `base` is verified to resolve before anything else runs. A `--base` that
  * does not exist in this checkout is not any one check's problem — every
@@ -1532,14 +1551,27 @@ export function preflight(repo, options) {
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
   let diffPaths;
-  let testSelectionPaths;
   try {
     run("git", ["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd: repo });
     diffPaths = lines(run("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: repo }));
-    testSelectionPaths = [...new Set([...diffPaths, ...workingTreePaths(repo, run)])];
   } catch (error) {
     throw fail(
       `--base ${base} could not be read: ${/** @type {Error} */ (error).message}`,
+      EXIT.setup,
+    );
+  }
+
+  // Its own try, not folded into the one above: `workingTreePaths` never
+  // touches `base` at all, and repo-65 gate 1 measured what folding it in
+  // costs — an injected `run` that throws on `git status` came back as
+  // `--base <ref> could not be read`, blaming a ref that was never the
+  // problem.
+  let testSelectionPaths;
+  try {
+    testSelectionPaths = [...new Set([...diffPaths, ...workingTreePaths(repo, run)])];
+  } catch (error) {
+    throw fail(
+      `the working tree could not be read: ${/** @type {Error} */ (error).message}`,
       EXIT.setup,
     );
   }

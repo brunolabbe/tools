@@ -310,12 +310,98 @@ check` → exit 0.
   **Did not widen check 3 or check 4** (checked against the Build section's
   own "whichever of (a) or (b) is chosen" instruction and the decision's own
   "no role page changes" line): `checkReview` and `checkTitle` still take
-  `diffPaths`, not `testSelectionPaths`, exactly as before this branch — the
-  new integration test's last two assertions (`review` and `title` both
-  `{ ok: true, bit: 0 }` over the same uncommitted edit) pin that down for
-  whoever reads this next, repo-47's builder named among them.
+  `diffPaths`, not `testSelectionPaths`, exactly as before this branch. **This
+  paragraph originally went on to claim the new integration test's last two
+  assertions "pin that down for whoever reads this next" — gate 1 (below)
+  measured that false: the fixture's only uncommitted path was
+  `scripts/seed.mjs`, which neither check has an opinion about, so both
+  assertions passed whether `checkReview`/`checkTitle` read `diffPaths` or
+  `testSelectionPaths`. Corrected below, at gate 1: three more fixture lines
+  now make the same test fail if either check is ever widened.**
 
   **Fold-in considered and declined.** The Build section's only other ask —
   "update this ticket's Log with which option was built and why, if the
   answer differs from the recommendation" — is this entry; the answer did not
   differ from the recommendation, so nothing else was free to fold in here.
+
+- 2026-09-29 — **Gate 1 round, at `7170c8d`.** One med, five lows carried (4
+  dropped — an execFileSync/test-helper `shell: false` gap that predates this
+  branch and repo-83 already counts, loose-but-not-misleading file-header
+  wording, and a staged-copy edge case that is not a defect). Reproduced every
+  carried finding before fixing it, per this skill's own rule for a handed
+  finding.
+
+  **Med, reproduced and fixed.** The claim corrected above, in place: with
+  `checkReview`/`checkTitle` handed `testSelectionPaths` instead of
+  `diffPaths`, the suite still passed 84 of 84 — the only uncommitted path in
+  the fixture, `scripts/seed.mjs`, is not a ticket path and not a `tools/`
+  path, so neither check has an opinion about it either way. Fix: three more
+  fixture lines in the same test — commit `docs/work/x-1.md` as
+  `DONE_NO_REVIEW` at the base (so it is `done`, no `## Review`, and never
+  touched between `base` and `HEAD`, so `diffPaths` never carries it), then
+  leave an uncommitted append to it plus an untracked `tools/downloader/NOTES.md`.
+  Re-measured: reverting `checkReview`/`checkTitle` to `testSelectionPaths`
+  now fails the same assertion with `review`'s `bit: 4`, and the test passes
+  at `HEAD` with the real code restored. `npx vitest run
+scripts/test/preflight.test.ts` → 87 passed (87) at the fix, was 84 before
+  the two new lows' own tests were added.
+
+  **Low, reproduced and fixed — untracked visibility.** A repository with
+  `status.showUntrackedFiles=no` set returned `[]` from `workingTreePaths` for
+  an untracked file; confirmed directly, plain `git status --porcelain=v1 -z`
+  over that fixture returned `""`. Fixed by adding `--untracked-files=all` to
+  the spawned command (`scripts/preflight.mjs:1486`), which overrides the
+  config; locked by a new test.
+
+  **Low, reproduced and fixed — collapsed untracked directories.** The same
+  flag fixes this one too: an untracked file under an untracked directory with
+  no tracked ancestor (for example `tools/planner/d.ts` in a repo with no
+  tracked `tools/`) came back as the directory alone, `tools/planner/`, not
+  the file — confirmed, then confirmed fixed with the flag. Updated the
+  existing rename/untracked unit test's expectation from `"tools/planner/"` to
+  `"tools/planner/d.ts"` to match, and added a dedicated test for the
+  collapse case on its own. Rewrote `workingTreePaths`' own docblock
+  (`scripts/preflight.mjs:1462`) to say both of these explicitly, since
+  neither was obvious from reading the function.
+
+  **Low, fixed — forward advice conflicted with repo-47's decided Build.**
+  The docblock's line telling a later consumer to "union this in the same
+  way, not invent a second path" assumed a consumer inside `preflight.mjs`
+  itself; repo-47's own decided Build computes its touched set inside
+  `citations-gate.mjs`, which `preflight.mjs` already imports, so reusing
+  `workingTreePaths` there would be a circular import. Removed the sentence
+  rather than reworded it — what "touched" means for check 1 is already
+  legible from the code and this Log, which was gate 1's own read on the
+  question this ticket's dispatch asked it.
+
+  **Low, reproduced and fixed — a `git status` failure read as a bad
+  `--base`.** `workingTreePaths`'s own call used to share the `try` that
+  prints `"--base ${base} could not be read"`. Reproduced with an injected
+  `run` that throws only on `status`: the message blamed `--base` for a
+  failure that had nothing to do with it. Fixed by giving it its own `try`
+  (`scripts/preflight.mjs:1569`-`1576`), with its own message,
+  `"the working tree could not be read: …"`, same `EXIT.setup` bit — both are
+  prerequisite plumbing no check can run without, so the bit stays shared;
+  only the wording split. Locked by a new test with the same injected-`run`
+  shape.
+
+  **Low, fixed — a stale claim survived its own ticket's earlier
+  correction.** The docblock said orchestrate-tickets' builder and fixer
+  pages run `preflight.mjs` "ahead of, deliberately, before every commit" —
+  restating, inside new code, exactly the overreach repo-64's gate 3 had
+  already corrected in this ticket's own decision section: only the
+  pre-report gate list and both pages' fix-round steps do that; both pages'
+  Landing sections commit first. Reworded to match.
+
+  **Citation collision, found while re-running the gate.** The new
+  git-status test's own `expect(caught?.exit).toBe(EXIT.setup)` line was
+  character-for-character `scripts/test/preflight.test.ts:764`, a merged
+  citation's anchor (`repo-51-one-preflight-command-before-a-pull-request.md`
+  line 119), which made that anchor indistinct across two lines. Rewritten to
+  read the exit bit through a local first, rather than deleting or
+  restructuring the assertion. `node scripts/citations-gate.mjs --against
+origin/main` → 131 enforced, 0 failing, both before this collision was
+  introduced and after the rewrite.
+
+  `npm run check` → exit 0. `npx vitest run scripts/test/preflight.test.ts` →
+  87 passed (87). `node scripts/preflight.mjs --base origin/main` → exit 0.
