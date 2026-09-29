@@ -505,8 +505,9 @@ scripts/citations-gate.mjs --displaced-since origin/main` **exit 1, exactly
   and only `repo-25` failing** (1 displaced), as expected under option (b);
   `node scripts/preflight.mjs --base origin/main` exit 0.
 
-- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (28
-  lines after the imports) moved five of this record's `## Review` citations
+- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (27
+  lines, measured — not the 28 first written here — after the imports) moved
+  five of this record's `## Review` citations
   again, coordinate only, anchor text unchanged: 1108 (`if (at === -1) return
 null;`) to 1135; 1111 (`const show = (line) => normalize`) to 1138; 1098
   (`c.end > before.length`) to 1125; 1064 (`displaced: 128,`) to 1091; and

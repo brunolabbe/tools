@@ -1863,3 +1863,30 @@ test("deriveExtraCiCommands treats npm ic, npm install-clean and npm isntall-cle
   ].join("\n");
   expect(deriveExtraCiCommands(yaml)).toEqual([]);
 });
+
+// --- repo-82's gate 1, low: npm also resolves a prefix of an alias, and a
+// fifth alias (`cit`) NPM_ALIASES never named, to a real `npm ci` ---
+
+/**
+ * `NPM_ALIASES` only rewrites the four exact spellings `npm ci --help` lists.
+ * npm itself also resolves an unambiguous prefix of a command or alias name
+ * — `npm install-clea --help` and `npm isntall-cl --help` both print "Clean
+ * install a project", npm 10.9.9, measured directly, 2026-09-28 — and `npm
+ * cit` is a fifth, wholly different alias (`install-ci-test`) this file never
+ * named. None of the three matches any `COVERED` guard, so before this fix
+ * each fell through to `assertSpawnable`/`tokenize` and would have been
+ * spawned for real; now each throws, naming the step, rather than guessing.
+ */
+test("deriveExtraCiCommands throws on npm install-clea, npm isntall-cl and npm cit rather than spawn any of them", () => {
+  const stepFor = oneCheckStep;
+
+  expect(() => deriveExtraCiCommands(stepFor("npm install-clea"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+  expect(() => deriveExtraCiCommands(stepFor("npm isntall-cl"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+  expect(() => deriveExtraCiCommands(stepFor("npm cit"))).toThrow(
+    /does not recognise as "npm ci" or "npm run check"/,
+  );
+});

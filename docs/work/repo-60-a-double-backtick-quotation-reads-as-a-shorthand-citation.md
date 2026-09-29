@@ -465,8 +465,9 @@ reading a double-backtick quotation as a shorthand citation (repo-60)"`
   open with the backtick run itself. `extractSections` now reads `Build`,
   `Done when` and `Log` as their own sections again on this file unchanged —
   verified by `repo-63`'s own new test, which plants this exact line shape.
-- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (28
-  lines after the imports) moved six of this record's `## Review` citations
+- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (27
+  lines, measured — not the 28 first written here — after the imports) moved
+  six of this record's `## Review` citations
   again, all coordinate only, anchor text unchanged: 601 (two occurrences, both
   `const inQuotation`, record lines 118 and 178) to 628; 617
   (`g.anchor === undefined) continue;`, record line 144) to 644; 690

@@ -279,7 +279,8 @@ scripts/citations.mjs docs/work/repo-52-....md --section Review
   moved: `scripts/citations.mjs` at 1351 (two occurrences, both
   `export const isUnpinnedVolatile`) to 1352, and at 1312 (`const CLAUDE_PAGE`)
   to 1313. Wording and verdicts unchanged.
-- 2026-09-28 — repo-82 added a `splitLines` helper (28 lines) after the imports
+- 2026-09-28 — repo-82 added a `splitLines` helper (27 lines, measured — not
+  the 28 first written here) after the imports
   in `scripts/citations.mjs`, to make every line-anchored regex CRLF-safe, which
   moved these same citations again: `scripts/citations.mjs` at 1425 (two
   occurrences, both `export const isUnpinnedVolatile`, record lines 76 and 80)

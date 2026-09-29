@@ -277,7 +277,7 @@ import { fileURLToPath } from "node:url";
  * @param {string} markdown
  * @returns {string[]}
  */
-function splitLines(markdown) {
+export function splitLines(markdown) {
   return markdown.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
 }
 

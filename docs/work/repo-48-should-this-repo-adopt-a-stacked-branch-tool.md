@@ -1050,8 +1050,9 @@ Gate 1's findings, each reproduced before anything changed:
    example now names `dl-45`'s suffix without a line number, and says it is
    only there to show the form and is already stale.
 
-- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (28
-  lines after the imports) moved this record's two `## Review` citations
+- 2026-09-28 — repo-82's `splitLines` helper in `scripts/citations.mjs` (27
+  lines, measured — not the 28 first written here — after the imports) moved
+  this record's two `## Review` citations
   again, coordinate only, anchor text unchanged: `candidateFiles` from 843 to
   870, and `makeResolver`'s `tracked.includes(file)` from 824 to 851. `node
 scripts/citations-gate.mjs --against origin/main` named both `moved` at

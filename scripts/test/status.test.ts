@@ -1712,3 +1712,13 @@ test("the command reports the duplicate by name and exits non-zero, which is the
   expect(stderr).toContain("(also docs/work/repo-66-mine.md)");
   expect(stderr).not.toContain("undefined");
 });
+
+// ---------------------------------------------------------------------------
+// repo-82 — a CRLF-terminated ticket file parses the same as its LF form.
+// ---------------------------------------------------------------------------
+
+test("parseFrontmatter reads a CRLF-terminated ticket the same as its LF form", () => {
+  const lf = pl("pl-1");
+  const crlf = lf.replace(/\n/g, "\r\n");
+  expect(parseFrontmatter(crlf, "t.md")).toEqual(parseFrontmatter(lf, "t.md"));
+});

@@ -3014,8 +3014,18 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
     path.join(REPO, "docs", "work", "repo-79-preflight-runs-all-checks.md"),
     "utf8",
   );
+  // The expected coordinate comes from the record text itself, not a
+  // hard-coded line: repointing this citation (repo-29's standing rule, any
+  // time a branch moves `scripts/preflight.mjs`'s code) must not turn this
+  // test red on its own.
+  const anchorText = "exited ${added.status}";
+  const target = extractCitations(source).find(
+    (c) => c.file === "scripts/preflight.mjs" && c.anchor === anchorText,
+  );
+  if (target === undefined) throw new Error(`no citation of ${anchorText} in the record`);
+
   const brokenAnchor = "TOTALLY_NOT_A_REAL_ANCHOR_repo_82";
-  const corrupted = source.replace('"exited ${added.status}"', `"${brokenAnchor}"`);
+  const corrupted = source.replace(`"${anchorText}"`, `"${brokenAnchor}"`);
   expect(corrupted).not.toBe(source);
   const crlf = corrupted.replace(/\n/g, "\r\n");
 
@@ -3030,7 +3040,9 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
   expect(result.stdout).not.toBe("");
   expect(result.stderr).not.toMatch(/no section matches/);
   expect(result.stdout).toMatch(/under "Review"/);
-  expect(result.stdout).toContain(`MOVED      scripts/preflight.mjs:1063 "${brokenAnchor}"`);
+  expect(result.stdout).toContain(
+    `MOVED      scripts/preflight.mjs:${target.start} "${brokenAnchor}"`,
+  );
   expect(result.status).toBe(EXIT.moved);
 
   fs.rmSync(dir, { recursive: true, force: true });

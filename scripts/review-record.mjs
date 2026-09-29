@@ -65,7 +65,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { extractSections, locateRecord, selectSection } from "./citations.mjs";
+import { extractSections, locateRecord, selectSection, splitLines } from "./citations.mjs";
 
 export const USAGE =
   "usage: node scripts/review-record.mjs <ticket-file> <section-file> [--gate <n>]";
@@ -615,7 +615,7 @@ export function locateGateBlock(markdown, gate, sectionText) {
 
   let start = review.start;
   if (gate !== null) {
-    const firstTitle = /^###[ \t]+(.*\S)[ \t]*$/.exec(sectionText.split("\n", 1)[0])?.[1];
+    const firstTitle = /^###[ \t]+(.*\S)[ \t]*$/.exec(splitLines(sectionText)[0])?.[1];
     const candidates = inReview.filter((s) =>
       new RegExp(`^Gate ${gate}(?!\\d)`).test(s.title.trim()),
     );
