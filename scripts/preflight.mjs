@@ -1451,9 +1451,83 @@ function guarded(name, bit, run) {
 }
 
 /**
- * Every check, in the Build section's order. `diffPaths` is computed once,
- * against `${base}...HEAD`, and handed to whichever checks read the diff —
- * check 1 and check 4 — rather than each recomputing it.
+ * Every path the working tree itself carries right now, beyond `HEAD` — the
+ * union of what is staged, what is modified-but-unstaged and what is
+ * untracked — read from `git status --porcelain=v1 -z` rather than the line
+ * form, because a renamed path's line form (`R  old -> new`) is a string to
+ * split on `" -> "`, which a path containing that exact substring would
+ * break; `-z` gives each side of a rename as its own NUL-terminated field
+ * instead.
+ *
+ * `--untracked-files=all` overrides two things a plain `git status` would
+ * otherwise leave to the caller's own config, neither obvious from reading
+ * this function alone (repo-65 gate 1, two lows, both measured): a
+ * repository with `status.showUntrackedFiles=no` set returns nothing at all
+ * for an untracked path without it (checked: an untracked file, that config
+ * set, plain `git status --porcelain=v1 -z` → `""`; with the flag → the file,
+ * named); and without it, an entirely untracked directory collapses to one
+ * `dir/` entry rather than its files (checked: an untracked
+ * `tools/planner/d.ts` with no tracked `tools/` above it → `tools/`
+ * without the flag, `tools/planner/d.ts` with it). The returned set is
+ * therefore paths, not always *file* paths, without this flag — with it,
+ * every entry is a real file or a real directory's own path, never a stand-in
+ * for "something changed under here."
+ *
+ * This is repo-65's fix, and it is deliberately narrow: it hands back paths,
+ * never a verdict, and the caller decides which checks should see them.
+ * Today that is check 1 alone (`testSelectionPaths`, below) — checks 3 and 4
+ * keep reading `diffPaths`, committed-only, per repo-65's decision (b).
+ *
+ * @param {string} repo
+ * @param {typeof runGit} run
+ * @returns {string[]}
+ */
+export function workingTreePaths(repo, run) {
+  const fields = run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+    cwd: repo,
+  }).split("\0");
+  const paths = [];
+  for (let i = 0; i < fields.length; i += 1) {
+    const entry = fields[i];
+    if (entry === "") continue;
+    const status = entry.slice(0, 2);
+    paths.push(entry.slice(3));
+    // A rename or copy carries the original path as a second NUL-terminated
+    // field right after this one — consume it here rather than leaving it to
+    // be misread as its own, statusless entry on the next loop turn.
+    if (status.includes("R") || status.includes("C")) {
+      i += 1;
+      paths.push(fields[i]);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Every check, in the Build section's order.
+ *
+ * Two path sets, not one, since repo-65: `diffPaths` is `${base}...HEAD`,
+ * committed history only, computed once and handed to whichever checks read
+ * *committed* state — check 3 (`checkReview`) and check 4 (`checkTitle`).
+ * `testSelectionPaths` unions `diffPaths` with `workingTreePaths` (above) and
+ * is what check 1 (`checkBuild`) reads to decide which suites to run, so a
+ * suite under active edit — staged, unstaged or untracked, not yet committed
+ * — is still selected rather than silently skipped (repo-65's own
+ * reproduction: an uncommitted edit under `scripts/test/` ran no `repo`
+ * project suite at all). This still leaves two trees rather than one — checks
+ * 1 alone on the working tree, checks 3–4 on committed state, check 2
+ * (`checkCitations`) unconditional on disk for a record's contents but
+ * index-based for which records it selects — repo-65's Why has the full
+ * three-way split this narrows from. Widening checks 3–4 the same way was
+ * repo-65's option (a), decided against: it would have meant refusing a dirty
+ * tree outright, which costs three rewritten places across
+ * orchestrate-tickets' own builder and fixer pages — the pre-report gate list
+ * and both pages' fix-round steps run `preflight.mjs` ahead of a commit, by
+ * design, and only those three would have needed to change. Their own Landing
+ * sections do not: both commit first and run `preflight.mjs` second already,
+ * which is why repo-65's own ticket, after two corrected drafts, priced
+ * option (a) at three edits rather than a reversal of an order the whole
+ * skill prescribes.
  *
  * `base` is verified to resolve before anything else runs. A `--base` that
  * does not exist in this checkout is not any one check's problem — every
@@ -1487,8 +1561,23 @@ export function preflight(repo, options) {
     );
   }
 
+  // Its own try, not folded into the one above: `workingTreePaths` never
+  // touches `base` at all, and repo-65 gate 1 measured what folding it in
+  // costs — an injected `run` that throws on `git status` came back as
+  // `--base <ref> could not be read`, blaming a ref that was never the
+  // problem.
+  let testSelectionPaths;
+  try {
+    testSelectionPaths = [...new Set([...diffPaths, ...workingTreePaths(repo, run)])];
+  } catch (error) {
+    throw fail(
+      `the working tree could not be read: ${/** @type {Error} */ (error).message}`,
+      EXIT.setup,
+    );
+  }
+
   return [
-    guarded("check", EXIT.check, () => checkBuild(repo, diffPaths, buildRun)),
+    guarded("check", EXIT.check, () => checkBuild(repo, testSelectionPaths, buildRun)),
     guarded("ciCommands", EXIT.ciCommands, () => checkCiCommands(repo, buildRun)),
     guarded("citations", EXIT.citations, () => checkCitations(repo, base, grandfathered)),
     guarded("review", EXIT.review, () => checkReview(repo, diffPaths, run)),

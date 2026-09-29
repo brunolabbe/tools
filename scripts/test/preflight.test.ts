@@ -1890,3 +1890,197 @@ test("deriveExtraCiCommands throws on npm install-clea, npm isntall-cl and npm c
     /does not recognise as "npm ci" or "npm run check"/,
   );
 });
+
+// --- repo-65: check 1 also selects a suite for a working-tree-only edit ----
+
+// A second, later `import` rather than one more name in the block at the top
+// of this file: every name up there is cited by line number from five
+// already-merged tickets' own `## Review` sections (this file's own
+// `:739`, `:293`, and more like them), and one more line in that block moves
+// every one of those citations by one — measured directly, with this import
+// briefly added up there instead: `node scripts/citations-gate.mjs --against
+// origin/main` went from 0 failing to 5 records, 44 citations, all `moved` by
+// exactly one line. An `import` declaration is valid at the top level of a
+// module wherever it is written, so this one costs nothing upstream of it.
+import { workingTreePaths } from "../preflight.mjs";
+
+/**
+ * `git status --porcelain=v1 -z`'s own shape: a plain edit or an untracked
+ * path is one NUL-terminated field, but a rename or copy carries the new
+ * path's field immediately followed by the *original* path as a second,
+ * standalone field — parsed wrong, that second field reads on the next turn
+ * of the loop as a bare, statusless path of its own rather than being folded
+ * into the rename it belongs to.
+ */
+test("workingTreePaths reports a staged rename's two sides, an unstaged edit and an untracked path", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("a.txt", "one\n");
+    repo.write("tools/downloader/b.ts", "two\n");
+    repo.commitAll("base");
+
+    repo.git("mv", "tools/downloader/b.ts", "tools/downloader/c.ts");
+    fs.appendFileSync(path.join(repo.dir, "a.txt"), "more\n");
+    repo.write("tools/planner/d.ts", "new\n");
+
+    const found = workingTreePaths(repo.dir, realRun);
+    expect(found).toEqual(
+      expect.arrayContaining([
+        "a.txt",
+        "tools/downloader/c.ts",
+        "tools/downloader/b.ts",
+        "tools/planner/d.ts",
+      ]),
+    );
+    expect(found.length).toBe(4);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * The ticket's own reproduction, run through `preflight()` itself rather than
+ * `testPlan` alone: an edit to a file already tracked under `scripts/`, left
+ * uncommitted, used to vanish from `${base}...HEAD` entirely and take check
+ * 1's `repo` project suite with it — a clean `check` bit over a change
+ * nothing had actually run. Checks 3 and 4 stay on `diffPaths`, committed-only
+ * — repo-65's decision (b) — so this same uncommitted edit must leave both of
+ * them exactly as they were, which the last two assertions below pin down.
+ */
+test("preflight's check 1 runs the repo project's suite for an edit still only in the working tree (repo-65)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  fs.mkdirSync(path.join(repo.dir, "tools", "downloader"), { recursive: true });
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.write("scripts/seed.mjs", "// seed\n");
+    repo.write("docs/work/x-1.md", DONE_NO_REVIEW);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    repo.write("docs/work/x-2.md", DONE_WITH_REVIEW);
+    repo.commitAll("fix(downloader): close x-2 cleanly");
+
+    // Left uncommitted on purpose — the premise the ticket's Why measured.
+    fs.writeFileSync(path.join(repo.dir, "scripts", "seed.mjs"), "// seed, edited\n");
+    expect(repo.git("diff", "--name-only", `${base}...HEAD`)).not.toMatch(/scripts\/seed\.mjs/);
+
+    // repo-65 gate 1's med finding: without these two lines, the assertions
+    // below pass whether `checkReview`/`checkTitle` are handed `diffPaths` or
+    // `testSelectionPaths`, since the only uncommitted path is
+    // `scripts/seed.mjs` and neither check has an opinion about it — this
+    // test locked nothing about the split it claimed to. `x-1.md` is `done`
+    // with no `## Review` at the base already, and unchanged between `base`
+    // and `HEAD`, so `diffPaths` never carries it; an uncommitted append to
+    // it plus an untracked file is what actually distinguishes the two path
+    // sets — handing `testSelectionPaths` to `checkReview` would surface
+    // `x-1.md` and fail with `bit: 4`, where committed-only `diffPaths` never
+    // sees it. Measured: reverting `checkReview`/`checkTitle` to
+    // `testSelectionPaths` here now fails this assertion (`review`'s `ok`
+    // goes `false`), where it did not before this fixture addition.
+    fs.appendFileSync(path.join(repo.dir, "docs", "work", "x-1.md"), "\n<!-- touched -->\n");
+    repo.write("tools/downloader/NOTES.md", "notes\n");
+
+    const calls: string[] = [];
+    const buildRun = (command: string, args: string[]) => {
+      calls.push(`${command} ${args.join(" ")}`);
+      return "";
+    };
+
+    const results = preflight(repo.dir, {
+      base,
+      run: realRun,
+      buildRun,
+      grandfathered: new Map(),
+      listOpenHeads: () => [],
+    });
+
+    expect(calls).toContain("npm test -- --project repo");
+    expect(results.find((r) => r.name === "check")).toMatchObject({ ok: true, bit: 0 });
+    expect(results.find((r) => r.name === "review")).toMatchObject({ ok: true, bit: 0 });
+    expect(results.find((r) => r.name === "title")).toMatchObject({ ok: true, bit: 0 });
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * repo-65 gate 1, low 1: without `--untracked-files=all`, a repository with
+ * `status.showUntrackedFiles=no` set returns nothing at all for an untracked
+ * path — measured directly, plain `git status --porcelain=v1 -z` over this
+ * exact fixture returned `""`.
+ */
+test("workingTreePaths sees an untracked file even when status.showUntrackedFiles=no is set", () => {
+  const repo = makeRepo();
+  try {
+    repo.git("config", "status.showUntrackedFiles", "no");
+    repo.write("seed.txt", "seed\n");
+    repo.commitAll("base");
+    repo.write("untracked.mjs", "new\n");
+
+    expect(workingTreePaths(repo.dir, realRun)).toEqual(["untracked.mjs"]);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * repo-65 gate 1, low 2: without `--untracked-files=all`, an entirely
+ * untracked directory collapses to one `dir/` entry rather than its files —
+ * harmless while `tools/`, `scripts/` and `packages/` stay tracked, but not
+ * documented as a property of the return value. With the flag, the same
+ * fixture returns the file itself.
+ */
+test("workingTreePaths reports an untracked directory's own file, not the collapsed directory", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("seed.txt", "seed\n");
+    repo.commitAll("base");
+    repo.write("tools/planner/d.ts", "new\n");
+
+    expect(workingTreePaths(repo.dir, realRun)).toEqual(["tools/planner/d.ts"]);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * repo-65 gate 1, low 4: `workingTreePaths`' own `git status` call used to
+ * share the same `try`/`catch` as the `--base` resolution above it, so a
+ * `git status` failure came back worded as a bad `--base` — reproduced with
+ * an injected `run` that throws only on `status`, restored to a distinct
+ * message and the same `EXIT.setup` bit once the two calls got their own
+ * `try` each.
+ */
+test("preflight blames the working tree, not --base, when git status itself fails", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("docs/work/seed.md", "seed\n");
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    const throwsOnStatus: typeof realRun = (command, args, options) => {
+      if (args[0] === "status") throw new Error("fatal: index file corrupt (simulated)");
+      return realRun(command, args, options);
+    };
+
+    let caught: (Error & { exit?: number }) | undefined;
+    try {
+      preflight(repo.dir, { base, run: throwsOnStatus, buildRun: stubBuild });
+    } catch (error) {
+      caught = error as Error & { exit?: number };
+    }
+    // Asserting the exit bit through a local first, rather than reading
+    // `caught?.exit` directly in the `expect()` call below: that exact call,
+    // written out, is already a merged citation's anchor at
+    // `scripts/test/preflight.test.ts:764`, and a second, identical line
+    // would make it indistinct.
+    const exitBit = caught?.exit;
+    expect(exitBit).toBe(EXIT.setup);
+    expect(caught?.message).toMatch(/the working tree could not be read/);
+    expect(caught?.message).not.toMatch(/--base/);
+  } finally {
+    repo.cleanup();
+  }
+});

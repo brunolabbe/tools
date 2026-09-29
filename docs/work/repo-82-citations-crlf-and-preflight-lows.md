@@ -88,7 +88,7 @@ Reviewed at `dcc7880` against base `efffb35`; `origin/main` was still at `efffb3
 | Done when                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. The raw regex still prints `null`, and all three extractors read CRLF the same as LF             | **proven** — `scripts/test/citations.test.ts:2981 "expect(crlf).toEqual(lf);"` and `scripts/test/citations.test.ts:2991 "read an evidence declaration in a CRLF record"`. All 3 new tests are red with the `efffb35` script and green at the tip. Reverting `splitLines` at each call site in turn makes a test red every time: `extractCitations` 1 red, `extractDeclarations` 1 red, `extractSections` 2 red. Re-running the raw regex prints `null`                                               |
-| 2. A CRLF copy of a real record, with a citation forced to disagree, is reported `moved` by the CLI | **proven** — `scripts/test/citations.test.ts:3041 "not.toMatch(/no section matches/)"`, which fails at `efffb35` on its empty-stdout assertion. On my own fixture (a CRLF record citing a CRLF target) the CLI at the tip printed identical output for the CRLF and LF forms: exit 2, 1 moved. At `efffb35` the CRLF form printed no section matches and exited 1, and `checkRecord` returned `skipped: true`. See the med below on how this test is coupled to a live record                        |
+| 2. A CRLF copy of a real record, with a citation forced to disagree, is reported `moved` by the CLI | **proven** — `scripts/test/citations.test.ts:3054 "not.toMatch(/no section matches/)"`, which fails at `efffb35` on its empty-stdout assertion. On my own fixture (a CRLF record citing a CRLF target) the CLI at the tip printed identical output for the CRLF and LF forms: exit 2, 1 moved. At `efffb35` the CRLF form printed no section matches and exited 1, and `checkRecord` returned `skipped: true`. See the med below on how this test is coupled to a live record                        |
 | 3. `NPM_ALIASES` covers all four aliases and none is spawned                                        | **proven** — `scripts/test/preflight.test.ts:1852 "treats npm ic, npm install-clean and npm isntall-clean as covered"` covers the three new ones and `scripts/test/preflight.test.ts@efffb35:1781 "treats npm clean-install as covered, never spawning it"` the fourth. The new test is red at `efffb35`, and removing any one new entry makes it red (1 of 81), naming that alias. `npm ci --help` on npm 10.9.9 lists 4 aliases, and `scripts/preflight.mjs:432 "const NPM_ALIASES"` holds those 4 |
 | 4. The fold-loop comment names `targets`                                                            | **verified** (a comment, so there is no test) — `scripts/preflight.mjs:1231 "closed by repo-82: this comment named"`, which matches `scripts/preflight.mjs:1247 "const targets = otherHeads.length > 0"`                                                                                                                                                                                                                                                                                             |
 | 5. The two spec files and `--project repo` pass                                                     | **verified** — the two spec files together pass 193 of 193 (112 + 81), and `npx vitest run --project repo` passes 565 of 565. The test diff adds 95 lines and removes none (4 new tests), so the base count is 561; that count is subtracted, not run at the base                                                                                                                                                                                                                                    |
@@ -304,3 +304,31 @@ scripts/citations-gate.mjs --against origin/main` exit 0, 130 enforced, 0
 CRLF files in citations.mjs and cover every npm ci alias in preflight
 (repo-82)"` exit 0 (after `git fetch origin`, needed for `mergeTree`'s two
   open release-please heads).
+
+- 2026-09-29 — **Main went red on this ticket's merge (`2ffb72a`, #316)**, in
+  both unit legs: `the CLI finds a CRLF ## Review heading and reports a moved
+citation in it` got exit 3 where it expects 2. The gate's med ("how this
+  test is coupled to a live record") was fixed only for the hard-coded line.
+  The test still fed the CLI all 25 of repo-79's citations, and one of them
+  is pinned, `.claude/skills/orchestrate-tickets/SKILL.md@a0841701:224`. CI's
+  `test` job checks out at the default depth 1 (only `check` and `changes`
+  set `fetch-depth: 0`), so that pin is unresolvable there and adds bit 1.
+  Every worktree here has full history, which is why the build, both gate
+  rounds and preflight all passed it.
+
+  **Reproduction**: `git clone --depth 1` of `2ffb72a`, then the test's own
+  steps by hand (CRLF copy of the record, anchor corrupted) →
+  `exit 3 — 1 unresolvable, 1 moved`. The same steps in a full-history
+  worktree → `exit 2 — 1 moved`.
+
+  **Fix**: the test now keeps only the record's headings plus the one
+  corrupted citation, and asserts that exactly one citation survives the
+  narrowing. It does not keep the whole of record line 78, which carries
+  three more citations that could drift later. Green in the depth-1 clone.
+  Still red against `278d288`'s `scripts/citations.mjs` (empty stdout, the
+  "no section matches" refusal), so it still proves this ticket's fix.
+  `fetch-depth: 0` on the `test` job was not taken: it would hide the
+  coupling rather than remove it, and it would make every unit leg pay for
+  full history. The fix added 13 lines above this record's
+  `citations.test.ts` citation, so it is repointed 3041 → 3054, coordinate
+  only.
