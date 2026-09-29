@@ -108,6 +108,28 @@ Reviewed at `dcc7880` against base `efffb35`; `origin/main` was still at `efffb3
 - NFR: security ✓ — no new spawn in either script · performance n/a · reliability ✓ — a CRLF record is no longer silently out of scope · maintainability — the med and the lows above.
 - Preflight with the proposed `fix(repo)` title exits 0. Every path is under `scripts/` or `docs/work/`, and `release-please-config.json` lists only `tools/*` packages, so `fix` routes no changelog. Unmeasured: the Windows CI leg on the new tests.
 
+### Gate 2
+
+**Gate: PASS** — 2026-09-29 · `dcc7880..9ed3e6d` · code-review at medium, this round only
+
+Re-gate of the round `dcc7880..9ed3e6d` (18 files), base `efffb35` unchanged. `origin/main` moved to `278d288` (#315) during the review; the preflight scratch merge that includes it is clean over 136 records. Coordinates introduced by the branch resolve against `9ed3e6d`. The Done-when rows stand as gate 1 gave them. Re-run at the tip: the two spec files pass 194 of 194 (112 + 82), `npx vitest run --project repo` passes 568 of 568, spawn-safety passes 5 of 5, `node scripts/citations-gate.mjs --against origin/main` exits 0 (130 enforced, 0 failing), and preflight exits 0 with the proposed title.
+
+Gate 1 findings:
+
+- **med** (CLI test tied to a live coordinate) · **fixed** — `scripts/test/citations.test.ts:3021 "const anchorText ="` now reads the expected coordinate from the record it loads. Re-running the gate 1 `sed` on repo-79 (1091 to 1092) leaves 3 of 3 CRLF tests green, where it made 1 of 3 red at `dcc7880`. With the `efffb35` `citations.mjs` swapped in, the test is still red, on its empty-stdout assertion.
+- **low** (two CRLF readers) · **fixed** — `scripts/review-record.mjs:618 "splitLines(sectionText)[0]"` and `scripts/status.mjs:118 "const lines = splitLines(text);"`. With `gate1-probe2.mjs`, the CRLF section now resolves to block 14–15, the same as its LF twin, and `parseFrontmatter` reads SAME. Reverting each fix makes its own new test red: `scripts/test/review-record.test.ts:926 "heading when the section text is CRLF"` (1 of 36) and `scripts/test/status.test.ts:1720 "parseFrontmatter reads a CRLF-terminated ticket"` (1 of 130).
+- **low** (npm abbreviations) · **fixed** — `scripts/preflight.mjs:633 "if (canonicalize(raw).split("`. Through `deriveExtraCiCommands`, `npm install-clea`, `npm isntall-cl`, `npm cit` and `npm install-ci-test` all throw, while `npm ic` and `npm ci` still return nothing to spawn. Disabling the guard makes `scripts/test/preflight.test.ts:1880 "throws on npm install-clea, npm isntall-cl and npm cit"` red (1 of 82). A new low below covers how wide the guard is.
+- **low** (Log counts) · **fixed** — I measured 27 (the `+257,27` hunk at `dcc7880`), 8 (the `+451,8` hunk) and 29 (my own per-citation count). The Logs of repo-48, repo-50, repo-52 and repo-60 now say 27, repo-51 says 8, and this ticket says 29. No stale 28 remains in them.
+- **low** (docblock placement) · **fixed**, verified by reading — the alias map has its own docblock above `scripts/preflight.mjs:432 "const NPM_ALIASES"`, and the `COVERED` docblock sits directly above `scripts/preflight.mjs:489 "const COVERED = ["`. A docblock cannot fail a test.
+
+This round:
+
+- **low** · Two findings, one mechanism — the Log entry for this round misstates what it ran and what it cites. (a) It gives `citations.test.ts` as 113 of 113 with 1 new test, but a verbose run counts 112, and this round adds no test to that file; the four touched spec files total 360 (112, 36, 130, 82), and the project is 568, as the entry itself says. (b) It attributes the rule for a change nothing can fail to `common.md`; the rule is in `.claude/skills/orchestrate-tickets/roles/fixer.md@efffb35:38 "changing anything. When nothing can fail"`.
+- **low** · The npm guard refuses every `npm` step it cannot name exactly, not only steps shaped like an install. `npm test` and `npm run lint` in the check job both throw (measured), with a message that blames npm abbreviations and aliases for a step that has neither. The width is deliberate and disclosed at `scripts/preflight.mjs:605 "step throws too, never falls through to a real spawn"`, and the current `ci.yml` check job is unaffected (`deriveExtraCiCommands` on the real file returns its two `node` steps). A future `npm test` step would stop every preflight until this file learns it, and the message would send the reader to the alias table.
+- **checked, no finding** · Repoints — 12 of 12 changed `## Review` citations, across repo-51 (3), repo-64 (1), repo-67 (1), repo-75 (1) and repo-79 (6). Each changes the coordinate only, with the anchor byte-identical and the range width kept (`908-909` to `936-937`). Each old coordinate verified at `dcc7880` and reads moved at `9ed3e6d`; each new one verified at `9ed3e6d`. All 5 records carry dated Log lines ending at the final coordinate. My extractor comparison also flagged 5 prose `record line` mentions in the Logs of repo-52 and repo-60: the rewrapped text above them pushed each down one physical line, their numbers are unchanged, and none is in a `## Review`.
+- **findings** · code-review at medium over `dcc7880..9ed3e6d` returned 3: 3 carried as 2 low bullets, 0 dropped. Gate 1: 8 of 8 findings fixed.
+- NFR: security ✓ — the guard closes the last spawn path for npm spellings · performance n/a · reliability ✓ · maintainability — the lows above.
+
 ## Log
 
 - 2026-09-28 — Built. Filed and built in the same branch on the owner's
