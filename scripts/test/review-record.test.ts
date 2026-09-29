@@ -946,3 +946,433 @@ test("locateGateBlock matches the right 'Gate 1' heading when the section text i
   expect(crlf).toEqual(lf);
   expect(linesOf(ticket, crlf)).toBe(sectionLF);
 });
+
+// ---------------------------------------------------------------------------
+// repo-80 — `--land`: one command for the whole landing sequence. Appended
+// with its own import, for the reason every earlier round here was: a merged
+// gate record cites this file by line, and a block inserted mid-file would
+// displace every one of them.
+// ---------------------------------------------------------------------------
+
+import {
+  detectGate,
+  land,
+  LAND_USAGE,
+  parseLandArgs,
+  setStatus,
+  spliceSection,
+  unpinnedPreexistingCitations,
+  verifySection,
+} from "../review-record.mjs";
+
+// --- detectGate --------------------------------------------------------------
+
+test('detectGate reads gate 1 from "## Review" and a later gate from its own heading', () => {
+  expect(detectGate("## Review\n\nsomething\n")).toBeNull();
+  expect(detectGate("### Gate 2 — 2026-09-29\n\nsomething\n")).toBe(2);
+  expect(detectGate("### Gate 10 — 2026-09-29\n\nsomething\n")).toBe(10);
+});
+
+test("detectGate refuses a section file that opens with neither shape", () => {
+  expect(() => detectGate("Some prose, no heading at all.\n")).toThrow(
+    /must be "## Review".*or start with "### Gate/,
+  );
+});
+
+// --- setStatus -----------------------------------------------------------------
+
+const frontmatterTicket = [
+  "---",
+  "id: zz-2",
+  "tool: repo",
+  "status: ready",
+  "---",
+  "",
+  "# zz-2",
+  "",
+].join("\n");
+
+test("setStatus replaces the frontmatter status line and nothing else", () => {
+  const updated = setStatus(frontmatterTicket, "done");
+  expect(updated).toBe(frontmatterTicket.replace("status: ready", "status: done"));
+});
+
+test("setStatus refuses a ticket with no frontmatter, or with no status line", () => {
+  expect(() => setStatus("# no frontmatter\n", "done")).toThrow(/no frontmatter/);
+  expect(() => setStatus("---\nid: zz-2\n---\n", "done")).toThrow(/no "status:" line/);
+  expect(() => setStatus("---\nstatus: a\nstatus: b\n---\n", "done")).toThrow(
+    /more than one "status:" line/,
+  );
+});
+
+// --- parseLandArgs ---------------------------------------------------------
+
+test("parseLandArgs reads a ticket, one or more sections in order, and the three required flags", () => {
+  expect(
+    parseLandArgs([
+      "--land",
+      "t.md",
+      "gate1.md",
+      "gate2.md",
+      "--base",
+      "origin/main",
+      "--status",
+      "done",
+      "--title",
+      "fix(repo): a thing (repo-1)",
+    ]),
+  ).toEqual({
+    ticket: "t.md",
+    sections: ["gate1.md", "gate2.md"],
+    base: "origin/main",
+    status: "done",
+    title: "fix(repo): a thing (repo-1)",
+  });
+});
+
+test("parseLandArgs refuses a missing flag, an unknown one, and a bad --status", () => {
+  expect(() =>
+    parseLandArgs(["--land", "t.md", "g.md", "--status", "done", "--title", "x"]),
+  ).toThrow(/--base is required/);
+  expect(() => parseLandArgs(["--land", "t.md", "g.md", "--base", "main", "--title", "x"])).toThrow(
+    /--status must be "done" or "in-flight"/,
+  );
+  expect(() =>
+    parseLandArgs([
+      "--land",
+      "t.md",
+      "g.md",
+      "--base",
+      "main",
+      "--status",
+      "maybe",
+      "--title",
+      "x",
+    ]),
+  ).toThrow(/--status must be "done" or "in-flight", got "maybe"/);
+  expect(() =>
+    parseLandArgs(["--land", "t.md", "--base", "main", "--status", "done", "--title", "x"]),
+  ).toThrow(/needs a ticket file and at least one section file/);
+  expect(() =>
+    parseLandArgs([
+      "--land",
+      "t.md",
+      "g.md",
+      "--base",
+      "main",
+      "--status",
+      "done",
+      "--title",
+      "x",
+      "--nope",
+    ]),
+  ).toThrow(/unknown option --nope/);
+  expect(LAND_USAGE).toMatch(/--land/);
+});
+
+// --- unpinnedPreexistingCitations -------------------------------------------
+
+test("unpinnedPreexistingCitations flags an anchored, unpinned citation that verifies at base", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const base = gitIn(dir, "rev-parse", "HEAD");
+    const section = '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n';
+    const issues = unpinnedPreexistingCitations(section, dir, base);
+    expect(issues).toHaveLength(1);
+    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 2, end: 2 });
+    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2`);
+  } finally {
+    cleanup();
+  }
+});
+
+test("unpinnedPreexistingCitations exempts a citation already pinned, or of content the base never had", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const base = gitIn(dir, "rev-parse", "HEAD");
+    const pinned = `## Review\n\n### Gate 1\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`;
+    expect(unpinnedPreexistingCitations(pinned, dir, base)).toEqual([]);
+
+    // Nothing at `base` resolves this file at all: it is exempt, not merely
+    // unverified — the branch's own new content, per records.md.
+    const introduced =
+      '## Review\n\n### Gate 1\n\nProof: `scripts/brand-new.mjs:1 "export const x = 1;"`.\n';
+    expect(unpinnedPreexistingCitations(introduced, dir, base)).toEqual([]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("unpinnedPreexistingCitations exempts a citation excused by its own evidence declaration", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const base = gitIn(dir, "rev-parse", "HEAD");
+    const section = [
+      "## Review",
+      "",
+      "### Gate 1",
+      "",
+      'Proof: `src/tls.ts:2 "Defence in depth"`.',
+      "",
+      "<!-- citations: evidence src/tls.ts:2 -->",
+      "",
+    ].join("\n");
+    expect(unpinnedPreexistingCitations(section, dir, base)).toEqual([]);
+  } finally {
+    cleanup();
+  }
+});
+
+// --- land() ------------------------------------------------------------------
+
+/**
+ * A branch-shaped fixture for `--land`: a real working repo with a real bare
+ * "origin", so the push step has somewhere local to land on — never the
+ * network, per this ticket's own `Done when`. `base` is the repo's first
+ * commit, which already carries `src/tls.ts` and the ticket, on `main`; the
+ * caller lands on `feature`, checked out from it.
+ */
+function withLandRepo(): {
+  dir: string;
+  bareDir: string;
+  ticketAbs: string;
+  base: string;
+  cleanup: () => void;
+} {
+  const bareDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "review-record-origin-")));
+  gitIn(bareDir, "init", "-q", "--bare", "-b", "main");
+
+  const { dir, ticketAbs } = withTicketRepo();
+  gitIn(dir, "remote", "add", "origin", bareDir);
+  const base = gitIn(dir, "rev-parse", "HEAD");
+  gitIn(dir, "push", "-q", "-u", "origin", "main");
+  gitIn(dir, "checkout", "-qb", "feature");
+
+  return {
+    dir,
+    bareDir,
+    ticketAbs,
+    base,
+    cleanup: () => {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(bareDir, { recursive: true, force: true });
+    },
+  };
+}
+
+const okPreflight = () => ({ ok: true, output: "preflight passed (exit 0)" });
+
+test("land() splices two gates, sets status, pushes and verifies — one call, a fixture repo, a local bare remote", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    // Content the branch itself introduces, cited unpinned — exempt from the
+    // pre-existing-content refusal because `base` never held it.
+    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "scripts", "new-thing.mjs"), "export const x = 1;\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "feat(repo): add the new thing");
+
+    const gate2 = writeSectionFile(
+      dir,
+      "gate2.md",
+      [
+        "### Gate 2 — 2026-09-29",
+        "",
+        'Proof: `scripts/new-thing.mjs:1 "export const x = 1;"`.',
+        "",
+      ].join("\n"),
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1, gate2],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.steps.map((s) => `${s.name}:${s.ok}`)).toEqual([
+      "setup:true",
+      "sections:true",
+      "citations-pin:true",
+      "splice:true",
+      "push:true",
+      "verify:true",
+      "preflight:true",
+    ]);
+    expect(result.ok).toBe(true);
+
+    // Two commits, one per gate.
+    const subjects = gitIn(dir, "log", "--format=%s", `${base}..HEAD`)
+      .split("\n")
+      .filter(Boolean)
+      .toReversed();
+    expect(subjects).toHaveLength(3); // the "new thing" commit, then two gates.
+    expect(subjects[1]).toMatch(
+      /^docs\(repo\): record gate 1 and set status done on zz-1 \(zz-1\)$/,
+    );
+    expect(subjects[2]).toMatch(/^docs\(repo\): record gate 2 on zz-1 \(zz-1\)$/);
+
+    // Status set in the ticket at HEAD.
+    expect(gitIn(dir, "show", `HEAD:${TICKET_PATH}`)).toMatch(/^status: done$/m);
+
+    // Pushed: the bare remote's own `feature` ref is this branch's HEAD.
+    expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
+
+    // Both gates verify independently against what actually landed.
+    expect(runCli(dir, ["--verify", ticketAbs, gate1]).status).toBe(0);
+    expect(runCli(dir, ["--verify", ticketAbs, gate2, "--gate", "2"]).status).toBe(0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() refuses before splicing anything when a section cites pre-existing content unpinned (repo-78 gate 1, F3)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const before = fs.readFileSync(ticketAbs, "utf8");
+    const beforeHead = gitIn(dir, "rev-parse", "HEAD");
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      '## Review\n\n### Gate 1 — 2026-09-29\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("citations-pin");
+    expect(failed?.detail).toContain(`src/tls.ts@${base}:2`);
+
+    // Refused before touching anything: no new commit, ticket byte-identical.
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(beforeHead);
+    expect(fs.readFileSync(ticketAbs, "utf8")).toBe(before);
+  } finally {
+    cleanup();
+  }
+});
+
+test('land() lands every commit and the push, then names "preflight" when it fails, without rolling anything back', () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "in-flight",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: () => ({ ok: false, output: "FAIL check: no package.json in the fixture" }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.map((s) => s.name)).toEqual([
+      "setup",
+      "sections",
+      "citations-pin",
+      "splice",
+      "push",
+      "verify",
+      "preflight",
+    ]);
+    expect(result.steps.at(-1)).toEqual({
+      name: "preflight",
+      ok: false,
+      detail: "FAIL check: no package.json in the fixture",
+    });
+
+    // The commit and the push already happened — a report, not a reversal.
+    expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('land() names "push" when the remote already holds a commit this branch has not seen', () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    gitIn(dir, "push", "-q", "origin", "feature");
+
+    // A second clone lands an unrelated commit on the remote's `feature`
+    // first, so this branch's own push is no longer a fast-forward.
+    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-other-"));
+    const clone = spawnSync("git", ["clone", "-q", bareDir, otherDir], { encoding: "utf8" });
+    expect(clone.status).toBe(0);
+    gitIn(otherDir, "config", "user.email", "other@example.test");
+    gitIn(otherDir, "config", "user.name", "other");
+    gitIn(otherDir, "checkout", "-q", "feature");
+    fs.writeFileSync(path.join(otherDir, "elsewhere.txt"), "elsewhere\n");
+    gitIn(otherDir, "add", "-A");
+    gitIn(otherDir, "commit", "-qm", "an unrelated commit lands on the remote first");
+    gitIn(otherDir, "push", "-q", "origin", "feature");
+    fs.rmSync(otherDir, { recursive: true, force: true });
+
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)?.name).toBe("push");
+  } finally {
+    cleanup();
+  }
+});
+
+// --- spliceSection / verifySection — the refactor repo-80 pulled `main` and
+// `verifyMain`'s bodies into, checked once directly so a change to either
+// wrapper cannot silently stop calling them.
+// ---------------------------------------------------------------------------
+
+test("spliceSection and verifySection are what main() and verifyMain() now call", () => {
+  const { dir, ticketAbs, cleanup } = withTicketRepo();
+  try {
+    const section = writeSectionFile(
+      dir,
+      "section.md",
+      '## Review\n\n### Gate 1 — 2026-09-29\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
+    );
+    const spliced = spliceSection(ticketAbs, section, null);
+    expect(spliced.relative).toBe(TICKET_PATH);
+    expect(spliced.diff).toBe("");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "gate 1 lands");
+
+    const verified = verifySection(ticketAbs, section, null, "HEAD");
+    expect(verified.relative).toBe(TICKET_PATH);
+    expect(verified.block.start).toBeGreaterThan(0);
+  } finally {
+    cleanup();
+  }
+});

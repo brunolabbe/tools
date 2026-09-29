@@ -65,7 +65,19 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { extractSections, locateRecord, selectSection, splitLines } from "./citations.mjs";
+import {
+  candidateFiles,
+  checkCitations,
+  extractCitations,
+  extractDeclarations,
+  extractSections,
+  locateRecord,
+  makeReader,
+  makeResolver,
+  selectSection,
+  splitLines,
+} from "./citations.mjs";
+import { parseFrontmatter } from "./status.mjs";
 
 export const USAGE =
   "usage: node scripts/review-record.mjs <ticket-file> <section-file> [--gate <n>]";
@@ -347,11 +359,31 @@ const OXFMT = (() => {
   return path.resolve(path.dirname(manifest), bin.oxfmt);
 })();
 
-function main() {
-  const { ticket, sectionFile, gate } = parseArgs(process.argv.slice(2));
-  const ticketAbsolutePath = path.resolve(ticket);
-  const sectionFileAbsolutePath = path.resolve(sectionFile);
-
+/**
+ * Ticket steps 1-5, pulled out of `main` so `--land` (repo-80) can run the
+ * same splice over more than one section without reimplementing the checks
+ * — the formatter, the citations check, the verbatim-after-formatting
+ * comparison, and the restore-from-HEAD discipline all stay in one place.
+ * `main` is the only other caller, and calling this with no `options`
+ * reproduces its behaviour exactly.
+ *
+ * A refusal raised *before* the ticket is ever written — a bad section, an
+ * untracked or dirty ticket — is a plain `Error`, exactly as it always was, so
+ * it reaches a caller's own top-level `catch` unchanged. A refusal raised
+ * *after* the write, once the ticket has already been restored from `HEAD`,
+ * carries the formatter's or the checker's own `stdout`/`stderr`/`exitCode`,
+ * so `main` can still print exactly what it printed before this was split out.
+ *
+ * @param {string} ticketAbsolutePath
+ * @param {string} sectionFileAbsolutePath
+ * @param {number | null} gate
+ * @param {{requireClaudePins?: boolean}} [options] `requireClaudePins` is
+ *   `--land`'s own addition (repo-78 gate 2, F2/G2-d): its splice refuses what
+ *   CI refuses, not only what a plain splice has always checked.
+ * @returns {{relative: string, diff: string, checkStdout: string}}
+ */
+export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate, options = {}) {
+  const requireClaudePins = options.requireClaudePins ?? false;
   const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
   const sectionText = fs.readFileSync(sectionFileAbsolutePath, "utf8");
 
@@ -373,7 +405,7 @@ function main() {
   const tracked = spawnSync(
     "git",
     ["-C", ticketRepoRoot, "ls-files", "--error-unmatch", "--", relative],
-    { encoding: "utf8" },
+    { encoding: "utf8", shell: false },
   );
   if (tracked.error) throw tracked.error;
   if (tracked.status !== 0) {
@@ -391,9 +423,7 @@ function main() {
   const dirty = spawnSync(
     "git",
     ["-C", ticketRepoRoot, "diff", "--quiet", "HEAD", "--", relative],
-    {
-      encoding: "utf8",
-    },
+    { encoding: "utf8", shell: false },
   );
   if (dirty.error) throw dirty.error;
   if (dirty.status === 1) {
@@ -416,6 +446,7 @@ function main() {
   const restoreFromHead = () => {
     const show = spawnSync("git", ["-C", ticketRepoRoot, "show", `HEAD:${relative}`], {
       encoding: "utf8",
+      shell: false,
     });
     if (show.status !== 0) {
       process.stderr.write(
@@ -436,32 +467,36 @@ function main() {
   if (fmt.error) throw fmt.error;
   if (fmt.status !== 0) {
     restoreFromHead();
-    process.stdout.write(fmt.stdout);
-    process.stderr.write(fmt.stderr);
-    process.exitCode = fmt.status ?? 1;
-    return;
+    throw Object.assign(new Error("oxfmt failed to format the spliced ticket"), {
+      stdout: fmt.stdout,
+      stderr: fmt.stderr,
+      exitCode: fmt.status ?? 1,
+    });
   }
 
   const citationsCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "citations.mjs");
-  const check = spawnSync(
-    process.execPath,
-    [
-      citationsCli,
-      ticketAbsolutePath,
-      "--section",
-      "Review",
-      "--require-anchors",
-      "--require-distinct-anchors",
-    ],
-    { cwd: ticketRepoRoot, encoding: "utf8" },
-  );
+  const checkArgs = [
+    citationsCli,
+    ticketAbsolutePath,
+    "--section",
+    "Review",
+    "--require-anchors",
+    "--require-distinct-anchors",
+  ];
+  if (requireClaudePins) checkArgs.push("--require-claude-pins");
+  const check = spawnSync(process.execPath, checkArgs, {
+    cwd: ticketRepoRoot,
+    encoding: "utf8",
+    shell: false,
+  });
   if (check.error) throw check.error;
   if (check.status !== 0) {
     restoreFromHead();
-    process.stdout.write(check.stdout);
-    process.stderr.write(check.stderr);
-    process.exitCode = check.status ?? 1;
-    return;
+    throw Object.assign(new Error("the citations check failed"), {
+      stdout: check.stdout,
+      stderr: check.stderr,
+      exitCode: check.status ?? 1,
+    });
   }
 
   // Step 4.
@@ -484,14 +519,45 @@ function main() {
   const comparison = compareRecord(sectionText, blockText, formatMarkdown(sectionText));
   if (!comparison.matches) {
     restoreFromHead();
-    process.stderr.write(
-      describeMismatch(comparison, block.start, relative, "after splicing", sectionFile),
+    const message = describeMismatch(
+      comparison,
+      block.start,
+      relative,
+      "after splicing",
+      sectionFileAbsolutePath,
     );
-    process.exitCode = 1;
-    return;
+    throw Object.assign(new Error("the landed block is not the section file"), {
+      stdout: "",
+      stderr: message,
+      exitCode: 1,
+    });
   }
 
-  process.stdout.write(check.stdout);
+  return { relative, diff, checkStdout: check.stdout };
+}
+
+function main() {
+  const { ticket, sectionFile, gate } = parseArgs(process.argv.slice(2));
+  const ticketAbsolutePath = path.resolve(ticket);
+  const sectionFileAbsolutePath = path.resolve(sectionFile);
+
+  let result;
+  try {
+    result = spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate);
+  } catch (error) {
+    const failure = /** @type {Error & {stdout?: string, stderr?: string, exitCode?: number}} */ (
+      error
+    );
+    if (failure.stdout !== undefined || failure.stderr !== undefined) {
+      if (failure.stdout) process.stdout.write(failure.stdout);
+      if (failure.stderr) process.stderr.write(failure.stderr);
+      process.exitCode = failure.exitCode ?? 1;
+      return;
+    }
+    throw error;
+  }
+
+  process.stdout.write(result.checkStdout);
   // Before the disclosure note, never after it: everything below that header
   // is the diff a lander pastes into the Log.
   process.stdout.write(
@@ -499,11 +565,11 @@ function main() {
       `  node scripts/review-record.mjs --verify ${ticket} ${sectionFile}${gate === null ? "" : ` --gate ${gate}`}\n`,
   );
   process.stdout.write(
-    `\nSpliced into ${relative}.\n\n` +
+    `\nSpliced into ${result.relative}.\n\n` +
       "Normalised diff against the section file (table padding and rule width ignored) — empty means\n" +
       "verbatim survived the formatter. Paste this into the Log as the disclosure note:\n\n",
   );
-  process.stdout.write(diff);
+  process.stdout.write(result.diff);
 }
 
 // ---------------------------------------------------------------------------
@@ -753,10 +819,20 @@ export function describeMismatch(comparison, blockStart, relative, where, sectio
   );
 }
 
-function verifyMain(argv) {
-  const { ticket, sectionFile, gate, rev } = parseVerifyArgs(argv);
-  const ticketAbsolutePath = path.resolve(ticket);
-  const sectionText = fs.readFileSync(path.resolve(sectionFile), "utf8");
+/**
+ * `--verify`'s own steps, pulled out for the same reason `spliceSection` was
+ * (repo-80): `--land` runs this once per section, right after pushing, and it
+ * throws rather than printing so `land()` can fold the message into its own
+ * step report instead of writing straight to `stderr`.
+ *
+ * @param {string} ticketAbsolutePath
+ * @param {string} sectionFileAbsolutePath
+ * @param {number | null} gate
+ * @param {string} rev
+ * @returns {{relative: string, block: {start: number, end: number}}}
+ */
+export function verifySection(ticketAbsolutePath, sectionFileAbsolutePath, gate, rev) {
+  const sectionText = fs.readFileSync(sectionFileAbsolutePath, "utf8");
   validateFirstLine(sectionText, gate);
 
   // The ticket need not exist on disk: `--rev origin/<branch>` from a checkout
@@ -768,6 +844,7 @@ function verifyMain(argv) {
   const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
   const show = spawnSync("git", ["-C", ticketRepoRoot, "show", `${rev}:${relative}`], {
     encoding: "utf8",
+    shell: false,
   });
   if (show.error) throw show.error;
   if (show.status !== 0) {
@@ -782,21 +859,461 @@ function verifyMain(argv) {
     .join("\n");
   const comparison = compareRecord(sectionText, blockText, formatMarkdown(sectionText));
   if (!comparison.matches) {
-    process.stderr.write(
-      describeMismatch(comparison, block.start, relative, `at ${rev}`, sectionFile),
-    );
-    process.exitCode = 1;
-    return;
+    throw Object.assign(new Error("the committed record does not match the section file"), {
+      stderr: describeMismatch(
+        comparison,
+        block.start,
+        relative,
+        `at ${rev}`,
+        sectionFileAbsolutePath,
+      ),
+    });
   }
+  return { relative, block };
+}
+
+function verifyMain(argv) {
+  const { ticket, sectionFile, gate, rev } = parseVerifyArgs(argv);
+  const ticketAbsolutePath = path.resolve(ticket);
+  const sectionFileAbsolutePath = path.resolve(sectionFile);
+
+  let result;
+  try {
+    result = verifySection(ticketAbsolutePath, sectionFileAbsolutePath, gate, rev);
+  } catch (error) {
+    const failure = /** @type {Error & {stderr?: string}} */ (error);
+    if (failure.stderr !== undefined) {
+      process.stderr.write(failure.stderr);
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
+
+  const { relative, block } = result;
   process.stdout.write(
     `the gate record in ${relative} at ${rev} (lines ${block.start}-${block.end}) is ${sectionFile}, ` +
       `up to table padding and the formatter's own rewrites.\n`,
   );
 }
 
+// ---------------------------------------------------------------------------
+// --land — one command in place of the manual landing sequence (repo-80)
+// ---------------------------------------------------------------------------
+
+/*
+ * Appended below `main` and `--verify` for the same reason those are appended
+ * below the top-level helpers: `repo-55`, `repo-62`, `repo-63`, `repo-67` and
+ * `repo-82`'s own merged gate records already cite this file by unpinned
+ * line, so every one of them is repointed onto a `main` commit that holds the
+ * cited text once this branch lands — see this ticket's own Log — rather than
+ * chased line by line every time this file grows.
+ *
+ * The Why names seven manual mistakes across six landings: running `--verify`
+ * before the commit, flipping status before the splice, missing
+ * `node_modules` in a bare worktree. `--land` is that whole sequence —
+ * splice, set status, commit, push, verify, preflight — as one command that
+ * names which step failed rather than leaving a lander to notice a skipped
+ * one three steps later.
+ */
+
+export const LAND_USAGE =
+  'usage: node scripts/review-record.mjs --land <ticket-file> <section-file>... --base <ref> --status done|in-flight --title "<title>"';
+
+/**
+ * Parse `--land`'s argv: a ticket and one or more section files, in landing
+ * order — gate 1's file first, each later one after it, exactly the order
+ * `records.md`'s _The lander commits the last set as given_ already
+ * prescribes — plus `--base`, `--status` and `--title`.
+ *
+ * There is deliberately no `--gate` here: each section file already carries
+ * its own gate number on its first line (`## Review` for gate 1, `### Gate
+ * <n>` for a later one), and `detectGate` reads it from there, the same
+ * source `validateFirstLine` already trusts.
+ *
+ * @param {string[]} argv
+ * @returns {{ticket: string, sections: string[], base: string, status: "done" | "in-flight", title: string}}
+ */
+export function parseLandArgs(argv) {
+  const positional = [];
+  let base = null;
+  let status = null;
+  let title = null;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--land") continue;
+    if (arg === "--base" || arg === "--status" || arg === "--title") {
+      const value = argv[++i];
+      if (value === undefined) throw new Error(`${arg} needs a value\n${LAND_USAGE}`);
+      if (arg === "--base") base = value;
+      else if (arg === "--status") status = value;
+      else title = value;
+      continue;
+    }
+    if (arg.startsWith("-")) throw new Error(`unknown option ${arg}\n${LAND_USAGE}`);
+    positional.push(arg);
+  }
+  if (positional.length < 2) {
+    throw new Error(`--land needs a ticket file and at least one section file\n${LAND_USAGE}`);
+  }
+  const [ticket, ...sections] = positional;
+  if (base === null) throw new Error(`--base is required\n${LAND_USAGE}`);
+  if (title === null) throw new Error(`--title is required\n${LAND_USAGE}`);
+  if (status !== "done" && status !== "in-flight") {
+    throw new Error(
+      `--status must be "done" or "in-flight", got ${JSON.stringify(status)}\n${LAND_USAGE}`,
+    );
+  }
+  return { ticket, sections, base, status, title };
+}
+
+/**
+ * The gate a `--land` section file is for, read off its own first line —
+ * `--land` takes section files in landing order rather than a `--gate` per
+ * file, since the caller already has to list them in that order.
+ *
+ * @param {string} sectionText
+ * @returns {number | null}
+ */
+export function detectGate(sectionText) {
+  const firstLine = sectionText.split("\n", 1)[0].replace(/\r$/, "");
+  if (firstLine === "## Review") return null;
+  const match = /^### Gate (\d+)/.exec(firstLine);
+  if (match) return Number(match[1]);
+  throw new Error(
+    `a --land section file's first line must be "## Review" (the first gate) or start with ` +
+      `"### Gate <n>"; got ${JSON.stringify(firstLine)}`,
+  );
+}
+
+/**
+ * Replace the ticket's frontmatter `status:` line — `--land`'s own status
+ * change, made to the ticket on disk in the same commit as the first section
+ * it splices (`records.md`, _The status goes in with the landing's first
+ * record commit_). Refuses a frontmatter with no `status:` line, or with more
+ * than one, rather than guessing which to change — the same discipline
+ * `status.mjs`'s own `parseFrontmatter` holds the rest of the file to.
+ *
+ * @param {string} markdown
+ * @param {string} newStatus
+ * @returns {string}
+ */
+export function setStatus(markdown, newStatus) {
+  const lines = markdown.split("\n");
+  if (lines[0]?.trim() !== "---") {
+    throw new Error('no frontmatter — the first line must be "---"');
+  }
+  const end = lines.indexOf("---", 1);
+  if (end === -1) throw new Error("the frontmatter is never closed");
+  const statusLines = [];
+  for (let i = 1; i < end; i++) {
+    if (lines[i].startsWith("status:")) statusLines.push(i);
+  }
+  if (statusLines.length === 0) throw new Error('the frontmatter has no "status:" line');
+  if (statusLines.length > 1) {
+    throw new Error('the frontmatter has more than one "status:" line');
+  }
+  lines[statusLines[0]] = `status: ${newStatus}`;
+  return lines.join("\n");
+}
+
+/** A citation or a declaration, keyed by what `unpinnedPreexistingCitations` compares them on. */
+const citationKey = (c) => `${c.file}:${c.start}-${c.end}:${c.rev ?? ""}`;
+
+/**
+ * `--land`'s own refusal (repo-78 gate 1, F3; this ticket's Build): a
+ * qualified, anchored citation with no pin, in a section about to be
+ * spliced, whose target verifies against `base` exactly as it does today, is
+ * a citation of content that predates the branch — `records.md`'s "a
+ * citation of content that already existed at the base pins to the base ...
+ * by default." Landing is the one place in the whole pipeline that already
+ * knows the base (`--base` names it), which is why the check lives here
+ * rather than in `citations.mjs` or `citations-gate.mjs`: neither runs with a
+ * second tree to compare against.
+ *
+ * Reuses `citations.mjs`'s own `checkCitations` — the same function that
+ * decides `verified` for the working-tree check `spliceSection` already
+ * runs — pointed at `base`'s tree instead. A citation the branch itself
+ * introduces has nothing to verify there: it comes back `unresolvable` or
+ * `moved` against `base`, and stays exempt, per the same rule. A citation
+ * already declared as evidence in the section is exempt too — a declaration
+ * says the coordinate is deliberately wrong, which a citation this refuses
+ * for being *right* at `base` never is.
+ *
+ * @param {string} sectionText
+ * @param {string} repo
+ * @param {string} base
+ * @returns {{file: string, start: number, end: number, line: number, reason: string}[]}
+ */
+export function unpinnedPreexistingCitations(sectionText, repo, base) {
+  const candidates = extractCitations(sectionText).filter(
+    (c) => c.file !== null && c.rev === undefined && c.malformed === undefined,
+  );
+  if (candidates.length === 0) return [];
+
+  const declarations = extractDeclarations(sectionText);
+  const declared = new Set(declarations.map(citationKey));
+
+  const baseRead = makeReader(repo, base);
+  const baseResolve = makeResolver(candidateFiles(repo, base));
+  const results = checkCitations(candidates, baseRead, baseResolve);
+
+  return results
+    .filter((r) => r.state === "verified")
+    .filter((r) => !declared.has(citationKey(r)))
+    .map((r) => {
+      const range = r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`;
+      return {
+        file: /** @type {string} */ (r.file),
+        start: r.start,
+        end: r.end,
+        line: r.line,
+        reason:
+          `record line ${r.line}: \`${r.file}:${range}\` verifies against ${base} — it cites ` +
+          `content that already exists at the base, so it needs a pin: \`${r.file}@${base}:${range}\``,
+      };
+    });
+}
+
+/** `git -C <repo> <args>`, `shell: false` said explicitly (repo-77's own rule). */
+function runGit(repo, args) {
+  const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8", shell: false });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(" ")} failed:\n${result.stderr || result.stdout}`);
+  }
+  return result.stdout;
+}
+
+/**
+ * `--land`'s own default `preflight` step: the real tool, resolved next to
+ * this file rather than inside whatever `repo` the ticket lives in, since a
+ * ticket's own checkout is exactly the checkout this script ships in for
+ * every real use of `--land`. Injectable so a fixture repo with no
+ * `node_modules` of its own — the `Done when` fixture — can stand in a
+ * stub instead of failing on a check that has nothing to do with this
+ * ticket.
+ *
+ * @param {string} repo
+ * @param {string} base
+ * @param {string} title
+ * @returns {{ok: boolean, output: string}}
+ */
+function runPreflightDefault(repo, base, title) {
+  const preflightCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "preflight.mjs");
+  const result = spawnSync(
+    process.execPath,
+    [preflightCli, "--base", base, "--title", title, "--repo", repo],
+    { encoding: "utf8", shell: false },
+  );
+  if (result.error) throw result.error;
+  return { ok: result.status === 0, output: `${result.stdout}${result.stderr}` };
+}
+
+/**
+ * The whole of `--land`: splice every section (one commit per gate, the
+ * first also setting `status`), push, verify each spliced section against
+ * what actually landed, then preflight. Never throws — a caller reads `.ok`
+ * and `.steps` to learn which step failed and why, which is what lets the
+ * CLI "name the failed step" instead of printing a stack trace.
+ *
+ * Every step before `"splice"` runs before anything is written or
+ * committed, so a refusal there — including `unpinnedPreexistingCitations`'s
+ * own — touches nothing (this ticket's `Done when`: "refused before it is
+ * spliced").
+ *
+ * @param {{
+ *   ticket: string,
+ *   sections: string[],
+ *   base: string,
+ *   status: "done" | "in-flight",
+ *   title: string,
+ *   run?: (repo: string, args: string[]) => string,
+ *   runPreflight?: (repo: string, base: string, title: string) => {ok: boolean, output: string},
+ * }} options
+ * @returns {{ok: boolean, steps: {name: string, ok: boolean, detail: string}[]}}
+ */
+export function land(options) {
+  const {
+    ticket,
+    sections,
+    status,
+    title,
+    base,
+    run = runGit,
+    runPreflight = runPreflightDefault,
+  } = options;
+
+  /** @type {{name: string, ok: boolean, detail: string}[]} */
+  const steps = [];
+  const fail = (name, detail) => {
+    steps.push({ name, ok: false, detail });
+    return { ok: false, steps };
+  };
+  const pass = (name, detail) => steps.push({ name, ok: true, detail });
+
+  if (status !== "done" && status !== "in-flight") {
+    return fail("status", `--status must be "done" or "in-flight", got ${JSON.stringify(status)}`);
+  }
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return fail("sections", "at least one section file is required");
+  }
+
+  const ticketAbsolutePath = path.resolve(ticket);
+  let ticketRepoRoot;
+  try {
+    ticketRepoRoot = repoRootFor(ticketAbsolutePath);
+  } catch (error) {
+    return fail("setup", /** @type {Error} */ (error).message);
+  }
+
+  try {
+    execFileSync(
+      "git",
+      ["-C", ticketRepoRoot, "rev-parse", "--verify", "--quiet", `${base}^{commit}`],
+      {
+        encoding: "utf8",
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+  } catch {
+    return fail("setup", `--base ${base} could not be read in ${ticketRepoRoot}`);
+  }
+
+  let ticketId = ticket;
+  let tool = "repo";
+  try {
+    const relative = locateRecord(ticketRepoRoot, ticketAbsolutePath);
+    const fields = /** @type {{id: string, tool: string}} */ (
+      parseFrontmatter(fs.readFileSync(ticketAbsolutePath, "utf8"), relative)
+    );
+    ticketId = fields.id;
+    tool = fields.tool;
+  } catch (error) {
+    return fail("setup", /** @type {Error} */ (error).message);
+  }
+  pass("setup", `${ticketId} (${tool}) at base ${base}`);
+
+  let plans;
+  try {
+    plans = sections.map((s) => {
+      const sectionAbsolutePath = path.resolve(s);
+      const text = fs.readFileSync(sectionAbsolutePath, "utf8");
+      return { path: sectionAbsolutePath, text, gate: detectGate(text) };
+    });
+  } catch (error) {
+    return fail("sections", /** @type {Error} */ (error).message);
+  }
+  pass("sections", `${plans.length} section file(s), in landing order`);
+
+  // Refuse before splicing anything.
+  const pinIssues = [];
+  for (const plan of plans) {
+    let issues;
+    try {
+      issues = unpinnedPreexistingCitations(plan.text, ticketRepoRoot, base);
+    } catch (error) {
+      return fail("citations-pin", /** @type {Error} */ (error).message);
+    }
+    for (const issue of issues) pinIssues.push(`${path.basename(plan.path)} — ${issue.reason}`);
+  }
+  if (pinIssues.length > 0) return fail("citations-pin", pinIssues.join("\n"));
+  pass("citations-pin", "no unpinned citation of pre-existing content");
+
+  // Splice, one commit per gate — the first commit also sets status.
+  for (const [index, plan] of plans.entries()) {
+    let result;
+    try {
+      result = spliceSection(ticketAbsolutePath, plan.path, plan.gate, { requireClaudePins: true });
+    } catch (error) {
+      const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
+      return fail(
+        "splice",
+        `${path.basename(plan.path)}: ${failure.stderr || failure.stdout || failure.message}`,
+      );
+    }
+
+    if (index === 0) {
+      try {
+        const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
+        fs.writeFileSync(ticketAbsolutePath, setStatus(markdown, status));
+      } catch (error) {
+        return fail("splice", `setting status: ${/** @type {Error} */ (error).message}`);
+      }
+    }
+
+    const gateLabel = plan.gate ?? 1;
+    const message =
+      index === 0
+        ? `docs(${tool}): record gate ${gateLabel} and set status ${status} on ${ticketId} (${ticketId})`
+        : `docs(${tool}): record gate ${gateLabel} on ${ticketId} (${ticketId})`;
+    try {
+      run(ticketRepoRoot, ["add", "--", result.relative]);
+      run(ticketRepoRoot, ["commit", "-m", message]);
+    } catch (error) {
+      return fail(
+        "splice",
+        `committing gate ${gateLabel}: ${/** @type {Error} */ (error).message}`,
+      );
+    }
+  }
+  pass("splice", `${plans.length} commit(s), status set to ${status} in the first`);
+
+  // Push, fast-forward only — never `--force`.
+  let branch;
+  try {
+    branch = run(ticketRepoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    run(ticketRepoRoot, ["push", "-u", "origin", branch]);
+  } catch (error) {
+    return fail("push", /** @type {Error} */ (error).message);
+  }
+  pass("push", `pushed ${branch} to origin`);
+
+  // Verify each section against what actually landed.
+  for (const plan of plans) {
+    try {
+      verifySection(ticketAbsolutePath, plan.path, plan.gate, "HEAD");
+    } catch (error) {
+      const failure = /** @type {Error & {stderr?: string}} */ (error);
+      return fail("verify", `${path.basename(plan.path)}: ${failure.stderr || failure.message}`);
+    }
+  }
+  pass("verify", `${plans.length} section(s) verified against HEAD`);
+
+  // Preflight.
+  let preflightResult;
+  try {
+    preflightResult = runPreflight(ticketRepoRoot, base, title);
+  } catch (error) {
+    return fail("preflight", /** @type {Error} */ (error).message);
+  }
+  if (!preflightResult.ok) return fail("preflight", preflightResult.output);
+  pass("preflight", "exit 0");
+
+  return { ok: true, steps };
+}
+
+function landMain(argv) {
+  const { ticket, sections, base, status, title } = parseLandArgs(argv);
+  const result = land({ ticket, sections, base, status, title });
+  for (const step of result.steps) {
+    process.stdout.write(`\n== ${step.name} ==\n${step.ok ? "ok" : "FAIL"}  ${step.detail}\n`);
+  }
+  if (!result.ok) {
+    const failed = result.steps.at(-1);
+    process.stderr.write(`\n--land failed at "${failed?.name}"\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write("\n--land: landed.\n");
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    if (process.argv.slice(2).includes("--verify")) verifyMain(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    if (argv.includes("--land")) landMain(argv);
+    else if (argv.includes("--verify")) verifyMain(argv);
     else main();
   } catch (error) {
     process.stderr.write(`${/** @type {Error} */ (error).message}\n`);
