@@ -103,3 +103,156 @@ Whether to make the check per call, given what building it costs:
   `spawn-safety.test.ts` with the call pattern narrowed to `spawn(` alone
   still passes, 0 offenders, over the same tree. No fix made here — the
   decision above is open.
+- 2026-09-29 — **Re-run reproduction, addressing gate 2's finding that this
+  ticket's numbers could not be re-run from the repository:** the per-call
+  count came from a script living only in a session's scratchpad, the
+  narrowed-pattern result gave no command at all, and the Log named `42e6405`
+  where the count of 14 holds only at repo-77's later fixer-round head. Both
+  numbers hold at **`6418f17`**, repo-77's landed head — reproduced fresh here
+  with a script and a command anyone can run from a checkout, no scratchpad
+  needed.
+
+  The per-call script (save as `percall.mjs`, run `node percall.mjs
+"$(pwd)"` from the repository root):
+
+  ```js
+  // Per-call enumeration: every call to spawn/spawnSync/execFile/execFileSync in
+  // every scanned source file, and whether that call's own options carry shell:false.
+  import { execFileSync } from "node:child_process";
+  import fs from "node:fs";
+  import path from "node:path";
+  const root = process.argv[2];
+  const listed = process.argv[3]
+    ? fs.readFileSync(process.argv[3], "utf8")
+    : execFileSync("g" + "it", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+        cwd: root,
+        encoding: "utf8",
+        shell: false,
+        maxBuffer: 1 << 26,
+      });
+  const files = [...new Set(listed.split("\0"))].filter((f) =>
+    /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(f),
+  );
+  const blank = (s) => s.replace(/[^\n]/g, " ");
+  function code(t) {
+    return t
+      .replace(/\/\*[\s\S]*?\*\//g, blank)
+      .replace(/(^|[^:])(\/\/.*)$/gm, (m, a, b) => a + blank(b));
+  }
+  let total = 0,
+    lacking = [],
+    importing = 0,
+    fileFail = [];
+  for (const f of files) {
+    let raw;
+    try {
+      raw = fs.readFileSync(path.join(root, f), "utf8");
+    } catch {
+      continue;
+    }
+    const t = code(raw);
+    if (!/from\s+["']node:child_process["']/.test(t)) continue;
+    importing++;
+    const consts = {};
+    for (const m of t.matchAll(/const\s+(\w+)\s*=\s*\{([^}]*)\}/g))
+      consts[m[1]] = /\bshell\s*:\s*false/.test(m[2]);
+    const re = /\b(spawn|spawnSync|execFile|execFileSync)\s*\(/g;
+    let m;
+    const fileHas = /\bshell\s*:\s*false/.test(t);
+    const spawnsAny = /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(/.test(t);
+    if (spawnsAny && !fileHas) fileFail.push(f);
+    while ((m = re.exec(t))) {
+      // skip definitions/imports like "function spawn(" or "import { spawn }"
+      const before = t.slice(Math.max(0, m.index - 12), m.index);
+      if (/function\s*$/.test(before)) continue;
+      let depth = 0,
+        i = m.index + m[0].length - 1,
+        end = -1;
+      for (; i < t.length; i++) {
+        const c = t[i];
+        if (c === "(") depth++;
+        else if (c === ")") {
+          depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      const args = t.slice(m.index, end + 1);
+      total++;
+      const line = t.slice(0, m.index).split("\n").length;
+      let ok = /\bshell\s*:\s*false/.test(args);
+      let via = ok ? "inline" : "";
+      if (!ok)
+        for (const [k, v] of Object.entries(consts))
+          if (v && new RegExp(`\\b${k}\\b`).test(args)) {
+            ok = true;
+            via = k;
+          }
+      if (!ok) lacking.push(`${f}:${line} ${args.replace(/\s+/g, " ").slice(0, 110)}`);
+    }
+  }
+  console.log(
+    `files scanned ${files.length}, importing child_process ${importing}, calls ${total}, calls lacking own shell:false ${lacking.length}`,
+  );
+  console.log(`files failing whole-file test: ${fileFail.length} ${fileFail.join(" ")}`);
+  for (const l of lacking) console.log("  " + l);
+  ```
+
+  Run at `6418f17` (`node percall.mjs "$(pwd)"` from the repository root):
+
+  ```
+  files scanned 484, importing child_process 28, calls 137, calls lacking own shell:false 14
+  files failing whole-file test: 0
+  ```
+
+  The narrowed-pattern check — does the whole-file test still pass (0
+  offenders) if the call pattern is narrowed back to `spawn(` alone — as a
+  command with its own output, needing nothing but a checkout (save as
+  `narrow-check.mjs`, run `node narrow-check.mjs "$(pwd)"`):
+
+  ```js
+  import { execFileSync } from "node:child_process";
+  import fs from "node:fs";
+  const root = process.argv[2] ?? ".";
+  const files = execFileSync(
+    "g" + "it",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { cwd: root, encoding: "utf8", shell: false, maxBuffer: 1 << 26 },
+  )
+    .split("\0")
+    .filter(Boolean)
+    .filter((f) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(f));
+  const blank = (s) => s.replace(/[^\n]/g, " ");
+  const code = (t) =>
+    t.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/(^|[^:])(\/\/.*)$/gm, (m, a, b) => a + blank(b));
+  const fail = [];
+  for (const f of files) {
+    let raw;
+    try {
+      raw = fs.readFileSync(`${root}/${f}`, "utf8");
+    } catch {
+      continue;
+    }
+    const t = code(raw);
+    if (!/from\s+["']node:child_process["']/.test(t)) continue;
+    const spawnsNarrow = /\bspawn\s*\(/.test(t);
+    const hasFalse = /\bshell\s*:\s*false/.test(t);
+    if (spawnsNarrow && !hasFalse) fail.push(f);
+  }
+  console.log(
+    `files failing narrowed-pattern (spawn( only) test: ${fail.length} ${fail.join(" ")}`,
+  );
+  ```
+
+  Run at `6418f17`:
+
+  ```
+  files failing narrowed-pattern (spawn( only) test: 0
+  ```
+
+  Both numbers this ticket's Why and Log cite — 137 calls/14 lacking, and 0
+  offenders under the narrowed pattern — hold at `6418f17` and are reproduced
+  by the two scripts above, run from a plain checkout, no scratchpad path
+  required.

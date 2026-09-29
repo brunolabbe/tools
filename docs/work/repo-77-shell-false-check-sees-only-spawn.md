@@ -205,9 +205,9 @@ grep -c '@2ffb72a'` for the line count, and the same piped through
      orchestrator's recommendation), "All 8", "None, ship as is". **Chosen:
      The 3 line-neutral.** Gave the three calls in
      `scripts/test/citations.test.ts` gate 1 named unfixed
-     (`@2ffb72a:1581`/`1985`/`2000`, now `1577`/`1981`/`1996`) their own
-     `shell: false` without moving any cited line — `git diff --stat` on that
-     file shows 3 insertions, 3 deletions.
+     (`scripts/test/citations.test.ts@2ffb72a:1581`/`1985`/`2000`, now
+     `1577`/`1981`/`1996`) their own `shell: false` without moving any cited
+     line — `git diff --stat` on that file shows 3 insertions, 3 deletions.
   2. **File a ticket making spawn-safety's check per call?** Options: "File
      it" (recommended) or "Don't file". **Chosen: File it.** Filed repo-83
      (`docs/work/repo-83-shell-false-check-is-per-file-not-per-call.md`,
@@ -237,3 +237,16 @@ grep -c '@2ffb72a'` for the line count, and the same piped through
   opened. `origin/main`'s drift past `2ffb72a` (#317, #318), flagged unresolved
   in the entry above, is unchanged by this round and still open for whoever
   lands this ticket.
+
+- 2026-09-29 — **Landed at `6418f17`, ship authority from the orchestrator.**
+  Gate 1's and gate 2's records above describe the branch as it stood at
+  `6418f17` — gate 1 re-issued unchanged, gate 2 re-gating the fixer round
+  against it. Fixed gate 2's two lows: the earlier Log entry's file-less pin
+  (a bare `@2ffb72a` revision with no file ahead of the colon, at the 3
+  brief-listed `citations.test.ts` line numbers) now names its file,
+  `scripts/test/citations.test.ts@2ffb72a:1581`, and `node scripts/citations.mjs`
+  no longer reports a malformed pin there. repo-83 gained an appended, dated
+  reproduction section — the per-call and narrowed-pattern scripts inlined,
+  each with its exact command and output at `6418f17` — so its numbers no
+  longer depend on a session's scratchpad; nothing above that section moved,
+  confirmed by `diff` on the first 105 lines.
