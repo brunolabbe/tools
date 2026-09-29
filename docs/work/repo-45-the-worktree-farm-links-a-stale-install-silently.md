@@ -487,3 +487,7 @@ Re-gated head `0908468`; every unpinned coordinate below resolves against it. `o
   `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
   enforced, 0 failing). Pushed as this branch's new head, fast-forward, on
   top of `38769fd`.
+
+- **2026-09-29 — landed by a fixer.** Committed gate 3's final record set
+  (gates 1, 2 and 3) verbatim, one commit each, at `0908468`; no fixes
+  remained. Opened the pull request against `main`.
