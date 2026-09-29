@@ -26,16 +26,21 @@
  *
  * Every `packages` entry in the lockfile whose key is `node_modules/<name>` or
  * `node_modules/@scope/<name>` **one level deep** — a nested
- * `node_modules/<name>/node_modules/<dep>` is a transitive dependency bundled
- * inside another package's own tree, not something the farm's top-level loop
- * ever looks for at `$SHARED/<name>`, so it is not this check's business.
+ * `node_modules/<name>/node_modules/<dep>` is skipped, but not because it is
+ * bundled: none of the lockfile's 17 nested entries carries `inBundle` (they
+ * are ordinary transitive dependencies npm placed one level down to resolve a
+ * version conflict), and the farm links `<name>`'s directory absolutely, so a
+ * package missing from `<dep>`'s nested tree in the shared install is equally
+ * missing from the worktree's. It is skipped because top-level presence is
+ * the scope the owner decided (2026-09-28, option A); checking the nested
+ * entries too would be a wider check nobody asked for.
  *
- * Two kinds of entry are declared but never installed on purpose, and both are
- * excluded or every healthy run would warn:
+ * Two kinds of *top-level* entry are declared but never installed on purpose,
+ * and both are excluded or every healthy run would warn:
  *
  * - **`optional: true`** — platform-specific optional dependencies
  *   (`fsevents`, the per-OS `@typescript/typescript-*` builds) that npm only
- *   installs on a matching platform. 111 of 442 top-level entries in this
+ *   installs on a matching platform. 111 of 425 top-level entries in this
  *   repo's own lockfile, measured 2026-09-29.
  * - **`link: true`** — a workspace's own packages (`@planner/api`, and so on),
  *   whose `resolved` is a relative path into the checkout rather than
@@ -64,7 +69,9 @@ function topLevelPackageName(lockKey) {
  * The names declared in `sharedRoot`'s `package-lock.json` that are missing
  * from `sharedRoot`'s `node_modules`, or `null` if that root has no lockfile
  * to read (a shared root that was never installed at all is a different
- * problem, and the farm's own existence check already covers it).
+ * problem, and the farm's own existence check already covers it). Throws
+ * `JSON.parse`'s own error if the lockfile exists but does not parse;
+ * `warnIfStale` is the one that catches it.
  *
  * @param {string} sharedRoot
  * @returns {string[] | null}
@@ -87,15 +94,30 @@ export function findMissingPackages(sharedRoot) {
 
 /**
  * Writes the warning to stderr and returns the exit code that reflects it —
- * 0 clean, 1 stale. `worktree-farm.sh` calls this and discards the exit code
- * on purpose: the decision above is to warn, not to refuse, so a stale shared
- * checkout never blocks a dispatch.
+ * 0 clean, 1 stale, and also 0 if the lockfile could not be parsed (a single
+ * notice line takes the place of `findMissingPackages`'s raw `SyntaxError`).
+ * `worktree-farm.sh` calls this and discards the exit code on purpose: the
+ * decision above is to warn, not to refuse, so a stale shared checkout never
+ * blocks a dispatch.
  *
  * @param {string} sharedRoot
  * @returns {number}
  */
 export function warnIfStale(sharedRoot) {
-  const missing = findMissingPackages(sharedRoot);
+  let missing;
+  try {
+    missing = findMissingPackages(sharedRoot);
+  } catch (err) {
+    // findMissingPackages lets a lockfile that fails to parse (e.g. an
+    // unresolved merge conflict) throw JSON.parse's own SyntaxError. Left
+    // uncaught, that prints a raw stack trace into the farm's stderr that
+    // reads as the farm crashing and says nothing about the freshness check
+    // itself having been skipped; fail-open still holds either way.
+    process.stderr.write(
+      `warning: ${path.join(sharedRoot, "package-lock.json")} did not parse, skipping the freshness check (${err.message}).\n`,
+    );
+    return 0;
+  }
   if (missing === null || missing.length === 0) return 0;
   process.stderr.write(
     [

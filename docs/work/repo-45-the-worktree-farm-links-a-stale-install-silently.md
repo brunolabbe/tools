@@ -347,3 +347,55 @@ Once the decision above is answered, and whichever option it picks:
   `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md`'s "verify
   a farm the same way rather than trusting it", is guidance for a _gate_
   reading a farm's output, not something this change touches or obsoletes.
+
+- **2026-09-29 — gate 1's four low findings, applied by a fixer.** Gate 1
+  passed with four lows; none needed judgement.
+  - **Finding 1 (open decision).** The warning's remedy tells the reader to
+    run `npm install` in the shared checkout, and that reader is almost
+    always a dispatched agent, which `common.md` forbids from touching the
+    shared checkout. The orchestrator put this to the owner directly with
+    `AskUserQuestion` (options: add a sentence to `common.md`, reword the
+    warning, both, or leave it); the owner chose to add the sentence to
+    `common.md` — the gate's own recommendation, nothing overridden. Added
+    one sentence to `common.md`'s populate-and-build step 1: if the farm
+    warns of a stale shared checkout, stop, report the missing list to
+    whoever dispatched you, and install nowhere. The warning text itself is
+    unchanged.
+  - **Finding 2.** Corrected `check-farm-freshness.mjs`'s "What counts as
+    declared" comment: nested `node_modules/<name>/node_modules/<dep>`
+    entries are skipped because top-level presence is the decided scope
+    (option A), not because they are "bundled" (none of the 17 carries
+    `inBundle`) or because "the farm never looks for them" (it links the
+    parent directory absolutely, so a nested package missing from the shared
+    install is missing in the worktree too). Behaviour unchanged.
+  - **Finding 3.** Both counts were wrong. Measured directly against this
+    repo's `package-lock.json`: 461 `packages` entries in total, 442 keyed
+    under `node_modules/`, 17 of those nested, 425 top-level, 111 of the 425
+    top-level entries `optional`. Corrected the module comment from "111 of
+    442 top-level entries" to "111 of 425 top-level entries", and the test
+    file header from "442-entry lockfile" to "461-entry lockfile".
+  - **Finding 4.** An unparsable shared lockfile (e.g. an unresolved merge
+    conflict) let `JSON.parse`'s own `SyntaxError` reach the farm's stderr as
+    a raw stack trace — fail-open still held (farm exit 0, entries linked),
+    but it read as the farm crashing and said nothing about the freshness
+    check being skipped. `warnIfStale` now catches that error and writes one
+    notice line instead. Three cases added to
+    `scripts/test/check-farm-freshness.test.ts` (all after the file's
+    existing last test, so no earlier citation's line numbers moved):
+    `findMissingPackages` throwing on an unparsable lockfile, `warnIfStale`
+    printing exactly one line and returning 0, and `worktree-farm.sh` itself
+    warning without the raw trace end to end. All `spawnSync` calls added
+    keep `shell: false`.
+
+  Reproduced each finding before fixing it: finding 4's raw `SyntaxError`
+  trace was confirmed live against a scratch shared root with a hand-written
+  broken lockfile, both before the fix (trace present, exit 0) and after
+  (one notice line, no trace, exit 0). Findings 2 and 3 needed no separate
+  reproduction beyond the gate's own citations, since they are wording and
+  count corrections the gate already pinned to specific lines.
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 12/12 passed.
+  `npm run check` → exit 0.
+  `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
+  enforced, 0 failing). No fixture, mutation or timing measurement from gate
+  1's table needed to change.

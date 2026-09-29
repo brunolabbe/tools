@@ -9,7 +9,7 @@
  *
  * `findMissingPackages` and `warnIfStale` are exercised directly against fixture
  * lockfiles and `node_modules` trees — no fixture is a copy of this repo's own
- * 442-entry lockfile, so a change to *this repo's* dependencies can never make
+ * 461-entry lockfile, so a change to *this repo's* dependencies can never make
  * these cases drift. `worktree-farm.sh` itself is exercised end to end, through
  * a real temporary git repository, the way `preflight.test.ts`'s `makeRepo`
  * does for the same reason: the farm finds its destination with
@@ -229,6 +229,61 @@ test("worktree-farm.sh prints no warning, given a shared root with nothing missi
     });
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
+    expect(result.stdout).toContain("farm built:");
+  } finally {
+    tree.cleanup();
+    shared.cleanup();
+  }
+});
+
+// --- an unparsable shared lockfile: fail-open, without a raw stack trace ----
+
+/** A shared root whose `package-lock.json` exists but is not valid JSON. */
+function makeUnparsableSharedRoot() {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "farm-freshness-")));
+  fs.writeFileSync(path.join(dir, "package-lock.json"), "{ not valid json");
+  fs.mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+  return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("findMissingPackages throws if the shared lockfile does not parse as JSON", () => {
+  const shared = makeUnparsableSharedRoot();
+  try {
+    expect(() => findMissingPackages(shared.dir)).toThrow(SyntaxError);
+  } finally {
+    shared.cleanup();
+  }
+});
+
+test("warnIfStale prints one notice line and returns 0, instead of a raw stack trace, when the shared lockfile does not parse", () => {
+  const shared = makeUnparsableSharedRoot();
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  let captured = "";
+  process.stderr.write = ((chunk: string) => {
+    captured += chunk;
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    expect(warnIfStale(shared.dir)).toBe(0);
+  } finally {
+    process.stderr.write = originalWrite;
+    shared.cleanup();
+  }
+  expect(captured).not.toContain("SyntaxError");
+  expect(captured.trim().split("\n")).toHaveLength(1);
+});
+
+test("worktree-farm.sh warns without a raw stack trace when the shared lockfile does not parse", () => {
+  const shared = makeUnparsableSharedRoot();
+  const tree = makeGitRepo();
+  try {
+    const result = spawnSync("bash", [FARM_SCRIPT, shared.dir], {
+      cwd: tree.dir,
+      shell: false,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("SyntaxError");
     expect(result.stdout).toContain("farm built:");
   } finally {
     tree.cleanup();
