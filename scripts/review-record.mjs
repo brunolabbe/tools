@@ -1107,23 +1107,19 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
 
   const baseResults = checkCitations(widened, baseRead, baseResolve);
 
-  // Where the anchor itself starts *within its own cited range, at the tip*
-  // (gate 3, G3-b) — checked against the working tree, over the citation's
-  // own unwidened `[start, end]`, exactly the way the ordinary anchor check
-  // already does. A range citation's anchor need not sit on the range's own
-  // first line (a three-line range quoting only its last line, say), and
-  // the previous version of this function assumed it always did: it took the
-  // base line the anchor starts on as the base *range's* start, which is
-  // only correct when that distance is zero, and it derived an end by
-  // reapplying the citation's own span length, which assumes the branch
-  // changed nothing *inside* the range — neither holds in general, and
-  // gate 3 measured three fixture cases where the suggested pin's line
-  // numbers were wrong although every one of them still happened to verify
-  // (`locateAnchor`'s contract checks only where the match *starts*).
-  const tipResolve = makeResolver(candidateFiles(repo, null));
-  const tipRead = makeReader(repo, null);
-  const tipResults = checkCitations(candidates, tipRead, tipResolve);
-
+  // The suggested pin is the anchor's own base line — nothing recomputed
+  // from it (gate 4, G4-a, replacing the range arithmetic gate 3's G3-b put
+  // here: it tried to reconstruct the base *range*'s start from the tip's
+  // own distance between the range start and the anchor, which broke the
+  // moment that distance was nonzero — gate 4 measured a citation whose
+  // range and anchor had not moved at all still coming back `MOVED` once
+  // pinned to the recomputed start). `checkCitations` already reports the
+  // one line the anchor starts on at `base`; a single-line citation naming
+  // exactly that line verifies by construction, whatever the original
+  // citation's own range was, whether the branch grew, shrank or shifted
+  // it, and whatever the anchor's own distance from that range's start.
+  // The message already says as much — "pin only the line the text starts
+  // on" — so the suggestion now names that line and nothing else.
   const issues = [];
   baseResults.forEach((baseResult, index) => {
     if (baseResult.state !== "verified") return;
@@ -1131,15 +1127,6 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
     if (declared.has(citationKey(original))) return;
 
     const baseAnchorLine = baseResult.foundAt?.[0] ?? baseResult.start;
-    const tipResult = tipResults[index];
-    // Falls back to the range's own start when the tip check itself cannot
-    // say — an unresolvable or moved citation at the tip is not this
-    // function's problem to diagnose, and zero distance is the same
-    // assumption the pre-fix code made unconditionally.
-    const tipAnchorLine =
-      tipResult.state === "verified" ? (tipResult.foundAt?.[0] ?? original.start) : original.start;
-    const distanceFromRangeStart = tipAnchorLine - original.start;
-    const baseRangeStart = Math.max(baseAnchorLine - distanceFromRangeStart, 1);
 
     const originalRange =
       original.start === original.end ? `${original.start}` : `${original.start}-${original.end}`;
@@ -1150,9 +1137,9 @@ export function unpinnedPreexistingCitations(sectionText, repo, base) {
       line: original.line,
       reason:
         `record line ${original.line}: \`${original.file}:${originalRange}\` cites text that already ` +
-        `exists in ${original.file} at ${base}, starting around line ${baseRangeStart} — the end of the ` +
+        `exists in ${original.file} at ${base}, starting around line ${baseAnchorLine} — the end of the ` +
         `original range is not checked, so pin only the line the text starts on: ` +
-        `\`${original.file}@${base}:${baseRangeStart}\``,
+        `\`${original.file}@${base}:${baseAnchorLine}\``,
     });
   });
   return issues;

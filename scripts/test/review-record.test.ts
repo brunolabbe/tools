@@ -1825,6 +1825,12 @@ test("land() refuses at setup when a tracked file has an uncommitted change, bef
     // Never the misleading "commit(s) already made" hint — nothing ran yet.
     expect(failed?.detail).not.toMatch(/commit\(s\) already made/);
     expect(failed?.detail).not.toMatch(/reset --hard/);
+    // `trimEnd()`, never `trim()` (gate 3, G3-c): `git status --porcelain`'s
+    // own leading space on an unstaged change (" M src/tls.ts") must survive
+    // into the message. `trim()` would strip exactly that space off this
+    // single-line status, printing the staged shape ("M src/tls.ts") instead.
+    expect(failed?.detail).toContain(" M src/tls.ts");
+    expect(failed?.detail).not.toContain("first:\nM src/tls.ts");
 
     expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
     expect(fs.readFileSync(trackedPath, "utf8")).toContain("inserted, uncommitted");
@@ -1883,20 +1889,30 @@ test("land() names the failing section file in a splice failure's detail (gate 2
 
 test("land() leaves no scratch directory behind, whether validation passes or fails (gate 2, G2-c; isolated per gate 3, G3-a)", () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  // A private `TMPDIR`, isolated from whatever else is running in the
+  // A private temp directory, isolated from whatever else is running in the
   // machine's shared temp directory (gate 3, G3-a): counting every
   // `review-record-land-*` entry there is racy the moment a second session
   // runs this same suite, or `preflight`'s own project-wide `npm test`,
   // concurrently — measured by the gate at 9 failures of 12 runs made
   // alongside two other processes exercising `land()`. `os.tmpdir()` reads
-  // `TMPDIR` (POSIX) fresh on every call, so overriding it for the duration
-  // of this test redirects `land()`'s own `fs.mkdtempSync(os.tmpdir(), ...)`
-  // here without touching anything else on the machine.
+  // `TMPDIR` (POSIX) or `TEMP`/`TMP` (Windows) fresh on every call, so
+  // overriding all three for the duration of this test redirects `land()`'s
+  // own `fs.mkdtempSync(os.tmpdir(), ...)` here without touching anything
+  // else on the machine — on POSIX `TMPDIR` alone is enough, since Node
+  // checks it first, but Node's own `os.tmpdir()` never reads `TMPDIR` on
+  // Windows at all, only `TEMP` then `TMP`; setting only `TMPDIR` there would
+  // leave `land()` writing to the real shared directory while this test
+  // counted the empty private one (gate 3's own reading, unmeasured here —
+  // this suite has only run on Linux).
   const privateTmp = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "review-record-private-tmp-")),
   );
   const originalTmpdir = process.env.TMPDIR;
+  const originalTemp = process.env.TEMP;
+  const originalTmp = process.env.TMP;
   process.env.TMPDIR = privateTmp;
+  process.env.TEMP = privateTmp;
+  process.env.TMP = privateTmp;
   try {
     const prefix = "review-record-land-";
     const countScratchDirs = () =>
@@ -1942,6 +1958,10 @@ test("land() leaves no scratch directory behind, whether validation passes or fa
   } finally {
     if (originalTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = originalTmpdir;
+    if (originalTemp === undefined) delete process.env.TEMP;
+    else process.env.TEMP = originalTemp;
+    if (originalTmp === undefined) delete process.env.TMP;
+    else process.env.TMP = originalTmp;
     fs.rmSync(privateTmp, { recursive: true, force: true });
     cleanup();
   }
@@ -2003,6 +2023,13 @@ test("land() prints the reset command on a push failure too, not only on preflig
 // above, whose "keeps the range" claim this correction retracts: the
 // suggested pin now names one line — where the text starts — and says so,
 // never a range whose end was never checked.
+//
+// repo-80 gate 4 — G4-a: gate 3's own fix above was itself wrong whenever the
+// anchor's distance from the range start was nonzero — it reconstructed a
+// base *range start* from that distance, which gate 4 measured coming back
+// `MOVED` even for a citation whose range and anchor had not moved at all.
+// The suggestion is now the anchor's own base line, unrecomputed, so cases
+// 1-3 below assert that line rather than a derived range start.
 // ---------------------------------------------------------------------------
 
 /** Twenty lines, each with a marker unique to that line number — a small stand-in for gate 3's own 40-line probe fixture. */
@@ -2023,10 +2050,12 @@ test("unpinnedPreexistingCitations corrects the range-pin's start line for an an
     const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:9-11 "marker M10X"`.\n';
     const issues = unpinnedPreexistingCitations(section, dir, base);
     expect(issues).toHaveLength(1);
-    // Gate 3's own table: base actually holds it at 9-11 — the corrected
-    // suggestion names line 9, never the old code's "10-12".
-    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:9`);
+    // The anchor text "marker M10X" sits on line 10 at base, unmoved — the
+    // suggestion names that line (gate 4, G4-a), never the range's own start
+    // (9, gate 3's own answer) nor a recomputed range ("10-12").
+    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
     expect(issues.at(0)?.reason).not.toContain(":10-12");
+    expect(issues.at(0)?.reason).not.toContain(`scripts/mix.mjs@${base}:9\``);
   } finally {
     cleanup();
   }
