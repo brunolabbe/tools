@@ -81,3 +81,50 @@ to the owner separately on 2026-09-27 and filed here by their choice.
 - 2026-09-27 — Filed from repo-75's measurement, in repo-75's pull request, on
   the owner's choice of "Own ticket" over "Scripts part here" and "Drop it". No
   fix made here.
+- 2026-09-29 — Built. Re-measured at dispatch (`2ffb72a`, the tip after #316/
+  repo-82) with the widened pattern before touching anything: **9 files**, not
+  10 — `scripts/preflight.test.ts` had already dropped out (#303/repo-71 gave
+  its own new `spawnSync` `shell: false`, and the whole-file check does not
+  care that the other four calls in that file still lack it explicitly, which
+  is a known shape of this test, not something this ticket widens). Every
+  other file on the snapshot was still there, plus two new `citations.test.ts`
+  call sites #316 (repo-82) added, at `2959` and `3036` in that measurement.
+  Fixed all 9 with `shell: false`, sharing one options object per file where
+  three or more calls repeated it (`citations-gate.mjs`, `citations.mjs`,
+  `agent-cost.test.ts`, `citations-gate.test.ts`, `citations.test.ts`) and
+  adding it inline where there were one or two (`next-id.mjs`,
+  `next-id.test.ts`, `review-record.test.ts`, `ytdlp-in-the-image.test.ts`).
+  Kept every edited call's own line count where a merged record's citation
+  sits on it, offsetting a shared constant's own line cost against a call it
+  let collapse so nothing after it shifted; where that was not practical
+  (`citations-gate.mjs`'s `main()`, and the bulk of `citations.test.ts`, whose
+  46 calls could not all be zero-sum), repointed the moved citations to a
+  `@2ffb72a` base pin instead, per `records.md`'s standing rule that content
+  unchanged at the base pins there rather than churning the ticket that cited
+  it — 46 citations across 9 merged tickets in total (repo-14, repo-29,
+  repo-41, repo-50 x2, repo-52 x2, repo-60, repo-63, repo-64, repo-67, repo-74,
+  repo-78). The downloader test's own PR question from Build step 3 was
+  answered by the owner before this build started (dispatch record): one PR,
+  `test(repo)`, since `test` is hidden from every tool's changelog including
+  the downloader's. `next-id.test.ts`'s fourth call, `:685` in the ticket's
+  snapshot, was never real — it is `magnitude per spawn (see the project's` in
+  a doc comment, matched only because a throwaway scan script (mine, and by
+  the shape of it probably the one this ticket's own snapshot came from too)
+  found line numbers by re-scanning the original text instead of the
+  comment-stripped one the test itself uses; the test's own three call sites
+  were the whole population there.
+  **Learned mid-build, unresolved, flagged for whoever lands this**:
+  `origin/main` moved twice while this branch was open — #317
+  (`test(repo): make the CRLF citations CLI test pass on a depth-1 checkout`)
+  and #318 — both from a concurrent session sharing this checkout's remote
+  refs. #317 rewrites the exact `citations.test.ts` test this ticket also
+  touches (the CRLF `## Review` CLI test, `record` line ~90-91 area) to avoid
+  a second, unresolvable citation on a depth-1 checkout; this branch, built
+  from before #317 landed, still carries the pre-#317 shape of that test with
+  only `shell: false` added to its one call. `git merge-tree HEAD origin/main`
+  auto-merges `scripts/test/citations.test.ts` cleanly but conflicts on
+  `docs/work/repo-82-citations-crlf-and-preflight-lows.md` (both branches
+  touch its table/Log). Until this branch is rebased onto (or merged with) the
+  post-#317 `main`, its own `test` job is exposed to the same depth-1 failure
+  #317 exists to fix — an open decision for the orchestrator, not settled
+  here: rebase now, or leave it to a fixer round after a gate names it.
