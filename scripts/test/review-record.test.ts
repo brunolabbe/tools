@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   insertSection,
   locateInsertedBlock,
@@ -1123,6 +1123,32 @@ test("unpinnedPreexistingCitations exempts a citation excused by its own evidenc
   }
 });
 
+test("unpinnedPreexistingCitations flags pre-existing content cited at the branch's own shifted line (gate 1, F1)", () => {
+  const { dir, cleanup } = withTicketRepo();
+  try {
+    const base = gitIn(dir, "rev-parse", "HEAD");
+
+    // The branch inserts a line above the unchanged one, shifting it from
+    // line 2 to line 3 — a citation written against the tip therefore names
+    // 3, which does not verify against `base`'s own line 3 at all.
+    const before = fs.readFileSync(path.join(dir, "src", "tls.ts"), "utf8");
+    fs.writeFileSync(path.join(dir, "src", "tls.ts"), `// inserted\n${before}`);
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "insert a line above the unchanged one");
+
+    const section = '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:3 "Defence in depth"`.\n';
+    const issues = unpinnedPreexistingCitations(section, dir, base);
+    expect(issues).toHaveLength(1);
+    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 3, end: 3 });
+    // The suggested pin names the line the text is actually at *in base* (2),
+    // never the tip's own coordinate (3) — that is the whole of F1's fix.
+    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2`);
+    expect(issues.at(0)?.reason).not.toContain(`src/tls.ts@${base}:3`);
+  } finally {
+    cleanup();
+  }
+});
+
 // --- land() ------------------------------------------------------------------
 
 /**
@@ -1296,14 +1322,69 @@ test('land() lands every commit and the push, then names "preflight" when it fai
       "verify",
       "preflight",
     ]);
-    expect(result.steps.at(-1)).toEqual({
-      name: "preflight",
-      ok: false,
-      detail: "FAIL check: no package.json in the fixture",
-    });
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("preflight");
+    expect(failed?.ok).toBe(false);
+    expect(failed?.detail).toContain("FAIL check: no package.json in the fixture");
+    // Gate 1, F3: a post-splice failure prints the pre-landing sha and the
+    // reset command, but does not run it — the commit stays, on purpose.
+    expect(failed?.detail).toContain(`git reset --hard ${base}`);
 
     // The commit and the push already happened — a report, not a reversal.
     expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() rolls back every commit it already made when a later section's own splice fails (gate 1, F3)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    // Gate 2 cites a `.claude/` line the branch itself adds, unpinned — it is
+    // not pre-existing content, so `citations-pin` does not catch it, but
+    // `spliceSection`'s own `--require-claude-pins` check (repo-78 gate 2,
+    // F2/G2-d) refuses it at `splice`, on the *second* section.
+    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
+
+    // `land()`'s own pre-landing sha is captured at this point — after every
+    // commit the branch made on its own, before any commit `land()` makes.
+    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+    const beforeTicket = fs.readFileSync(ticketAbs, "utf8");
+
+    const gate2 = writeSectionFile(
+      dir,
+      "gate2.md",
+      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1, gate2],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("splice");
+    expect(failed?.detail).toMatch(/--require-claude-pins is in force/);
+    expect(failed?.detail).toContain(`rolled back to ${preLandingSha}`);
+
+    // Gate 1's own commit — made before gate 2 failed — is gone: the branch
+    // is back exactly where it started, not left holding half a landing.
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(preLandingSha);
+    expect(fs.readFileSync(ticketAbs, "utf8")).toBe(beforeTicket);
+    expect(fs.readFileSync(ticketAbs, "utf8")).not.toMatch(/## Review/);
   } finally {
     cleanup();
   }
@@ -1317,7 +1398,10 @@ test('land() names "push" when the remote already holds a commit this branch has
     // A second clone lands an unrelated commit on the remote's `feature`
     // first, so this branch's own push is no longer a fast-forward.
     const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-other-"));
-    const clone = spawnSync("git", ["clone", "-q", bareDir, otherDir], { encoding: "utf8" });
+    const clone = spawnSync("git", ["clone", "-q", bareDir, otherDir], {
+      encoding: "utf8",
+      shell: false,
+    });
     expect(clone.status).toBe(0);
     gitIn(otherDir, "config", "user.email", "other@example.test");
     gitIn(otherDir, "config", "user.name", "other");
@@ -1427,11 +1511,14 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
     expect(result.stdout).toMatch(/== preflight ==\nFAIL/);
     expect(result.stderr).toMatch(/--land failed at "preflight"/);
 
-    // The real preflight really ran against this fixture and really failed —
-    // this repo's own check 1, `npm run check`, has no `package.json` to read
-    // here, which is exactly the seam `runPreflightDefault`'s own docblock
-    // names as the reason `land()`'s `runPreflight` is injectable at all.
-    expect(result.stdout).toMatch(/no such file or directory.*package\.json/su);
+    // The real preflight really ran against this fixture and really failed on
+    // its own check 1 (`npm run check` has no `package.json` to read here) —
+    // asserted on the step name preflight itself prints, never on npm's own
+    // wording (gate 1, F4): `npm.cmd` on Windows fails differently, through a
+    // shell `npm` cannot find without one, and this is exactly the seam
+    // `runPreflightDefault`'s own docblock names as the reason `land()`'s
+    // `runPreflight` is injectable at all.
+    expect(result.stdout).toMatch(/== check ==\nFAIL/);
 
     // Everything before "preflight" really landed, real push included.
     expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
@@ -1439,4 +1526,164 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
   } finally {
     cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 1, F2: four links of the landing chain had no test — a
+// mutation at any of these four passed 52 of 52 before this round. Each test
+// below is red on exactly the mutation the gate named, run alone.
+// ---------------------------------------------------------------------------
+
+test("land() refuses an unpinned .claude/ citation the branch itself introduces — proves --require-claude-pins reaches the splice (F2/M1)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
+
+    // Not pre-existing content (the branch just added it), so `citations-pin`
+    // does not catch it — only `spliceSection`'s own `requireClaudePins: true`
+    // does. Flip that literal to `false` and this section splices clean.
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      '## Review\n\n### Gate 1 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+    );
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)?.name).toBe("splice");
+    expect(result.steps.at(-1)?.detail).toMatch(/--require-claude-pins is in force/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() sets status in the FIRST commit, not only at HEAD (F2/M2)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    const gate2 = writeSectionFile(dir, "gate2.md", "### Gate 2 — 2026-09-29\n\nNothing cited.\n");
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1, gate2],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(true);
+    const shas = gitIn(dir, "log", "--format=%H", `${base}..HEAD`)
+      .split("\n")
+      .filter(Boolean)
+      .toReversed();
+    expect(shas).toHaveLength(2);
+    // The commit BEFORE landing still has the old status …
+    expect(gitIn(dir, "show", `${base}:${TICKET_PATH}`)).toMatch(/^status: ready$/m);
+    // … and the FIRST commit `land()` makes already has the new one — a
+    // mutation writing status only in the last commit leaves this one still
+    // "ready".
+    expect(gitIn(dir, "show", `${shas[0]}:${TICKET_PATH}`)).toMatch(/^status: done$/m);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() actually calls its verify step once per section, and stops on its failure (F2/M4)", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+
+    let calls = 0;
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "docs(repo): land the fixture ticket (zz-1)",
+      verify: () => {
+        calls += 1;
+        throw Object.assign(new Error("boom"), {
+          stderr: "the committed record does not match the section file, on purpose",
+        });
+      },
+      runPreflight: okPreflight,
+    });
+
+    // A deleted verify loop never calls this at all, and `result.ok` stays
+    // `true` — both assertions are red on that mutation, run alone.
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)?.name).toBe("verify");
+    expect(result.steps.at(-1)?.detail).toContain("does not match the section file, on purpose");
+
+    // The commit and the push already happened — verify runs after both.
+    expect(gitIn(bareDir, "rev-parse", "feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() passes --title through to runPreflight (F2/M5)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(
+      dir,
+      "gate1.md",
+      `## Review\n\n### Gate 1 — 2026-09-29\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
+    );
+    const title = "docs(repo): land the fixture ticket (zz-1)";
+    const runPreflight = vi.fn(() => ({ ok: true, output: "" }));
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title,
+      runPreflight,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(runPreflight).toHaveBeenCalledTimes(1);
+    expect(runPreflight).toHaveBeenCalledWith(dir, base, title);
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// repo-80 gate 1 — a trailing low: setStatus on a CRLF frontmatter.
+// ---------------------------------------------------------------------------
+
+test("setStatus closes a CRLF frontmatter correctly, and keeps its line endings CRLF", () => {
+  const lf = frontmatterTicket;
+  const crlf = lf.replaceAll("\n", "\r\n");
+
+  // Reproduced before the fix: `lines.indexOf("---", 1)` never matches
+  // `"---\r"`, so a CRLF-closed frontmatter was reported as never closed at
+  // all, even though `lines[0]`'s own `.trim()` check — unaffected, since
+  // `.trim()` strips `\r` too — found the opening fence correctly.
+  const updated = setStatus(crlf, "done");
+  expect(updated).toBe(crlf.replace("status: ready\r", "status: done\r"));
+  expect(updated).toContain("\r\n");
 });

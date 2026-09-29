@@ -986,6 +986,9 @@ export function detectGate(sectionText) {
   );
 }
 
+/** A line with any trailing `\r` stripped — the one normalisation `setStatus` needs for CRLF. */
+const stripCR = (line) => line.replace(/\r$/, "");
+
 /**
  * Replace the ticket's frontmatter `status:` line — `--land`'s own status
  * change, made to the ticket on disk in the same commit as the first section
@@ -994,26 +997,37 @@ export function detectGate(sectionText) {
  * than one, rather than guessing which to change — the same discipline
  * `status.mjs`'s own `parseFrontmatter` holds the rest of the file to.
  *
+ * **CRLF-safe, the same way `citations.mjs`'s `splitLines` is (repo-82)**:
+ * every line-anchored comparison below strips a trailing `\r` before
+ * matching, never the whole line, so a frontmatter closed with `"---\r"`
+ * still closes it. Reproduced before the fix: `split("\n")` on a
+ * `core.autocrlf=true` checkout leaves that `\r` on every frontmatter line,
+ * `lines.indexOf("---", 1)` never matches `"---\r"` at all, and the whole
+ * file is reported as one whose frontmatter is never closed — even though it
+ * is, and even though the untouched `"---"` was found correctly one line
+ * above by the same, unaffected `.trim()` check.
+ *
  * @param {string} markdown
  * @param {string} newStatus
  * @returns {string}
  */
 export function setStatus(markdown, newStatus) {
   const lines = markdown.split("\n");
-  if (lines[0]?.trim() !== "---") {
+  if (lines[0] === undefined || stripCR(lines[0]).trim() !== "---") {
     throw new Error('no frontmatter — the first line must be "---"');
   }
-  const end = lines.indexOf("---", 1);
+  const end = lines.findIndex((line, i) => i >= 1 && stripCR(line) === "---");
   if (end === -1) throw new Error("the frontmatter is never closed");
   const statusLines = [];
   for (let i = 1; i < end; i++) {
-    if (lines[i].startsWith("status:")) statusLines.push(i);
+    if (stripCR(lines[i]).startsWith("status:")) statusLines.push(i);
   }
   if (statusLines.length === 0) throw new Error('the frontmatter has no "status:" line');
   if (statusLines.length > 1) {
     throw new Error('the frontmatter has more than one "status:" line');
   }
-  lines[statusLines[0]] = `status: ${newStatus}`;
+  const hadCR = lines[statusLines[0]].endsWith("\r");
+  lines[statusLines[0]] = `status: ${newStatus}${hadCR ? "\r" : ""}`;
   return lines.join("\n");
 }
 
@@ -1023,22 +1037,43 @@ const citationKey = (c) => `${c.file}:${c.start}-${c.end}:${c.rev ?? ""}`;
 /**
  * `--land`'s own refusal (repo-78 gate 1, F3; this ticket's Build): a
  * qualified, anchored citation with no pin, in a section about to be
- * spliced, whose target verifies against `base` exactly as it does today, is
- * a citation of content that predates the branch — `records.md`'s "a
- * citation of content that already existed at the base pins to the base ...
- * by default." Landing is the one place in the whole pipeline that already
- * knows the base (`--base` names it), which is why the check lives here
- * rather than in `citations.mjs` or `citations-gate.mjs`: neither runs with a
- * second tree to compare against.
+ * spliced, whose anchor text already exists somewhere in `base`'s own copy
+ * of the file, is a citation of content that predates the branch —
+ * `records.md`'s "a citation of content that already existed at the base
+ * pins to the base ... by default." Landing is the one place in the whole
+ * pipeline that already knows the base (`--base` names it), which is why the
+ * check lives here rather than in `citations.mjs` or `citations-gate.mjs`:
+ * neither runs with a second tree to compare against.
+ *
+ * **Checked against the whole file, never against the citation's own
+ * `[start, end]`** — gate 1's finding F1, and the owner's answer to it
+ * (2026-09-29): the citation names the line at the *tip*, and a branch that
+ * inserts lines above an unchanged one shifts every citation below it, so
+ * checking the tip's own coordinate against `base` reports `moved`, not
+ * `verified`, and the pre-existing content slips through unpinned — this
+ * repo's own history is the reproduction: this ticket's earlier round cited
+ * `scripts/review-record.mjs:446` and `:163`, the tip's own coordinates for
+ * text that already sat, unmoved, at `base`'s lines `416` and `151`, and both
+ * were missed by the first version of this function. So each candidate's
+ * anchor is searched over `base`'s whole file — `checkCitations` with the
+ * citation's range widened to `[1, the file's own length at base]` — and the
+ * chosen line is the first one the anchor starts on there, which is what the
+ * suggested pin names. The owner's own framing of the residual gap: "the
+ * only misjudged case is a line deleted at base and re-added elsewhere with
+ * identical text, which gets flagged as old" — accepted, since
+ * `--require-distinct-anchors` already makes the anchor unique at the tip
+ * (`scripts/citations.mjs@7b48996:140`).
  *
  * Reuses `citations.mjs`'s own `checkCitations` — the same function that
  * decides `verified` for the working-tree check `spliceSection` already
  * runs — pointed at `base`'s tree instead. A citation the branch itself
- * introduces has nothing to verify there: it comes back `unresolvable` or
- * `moved` against `base`, and stays exempt, per the same rule. A citation
- * already declared as evidence in the section is exempt too — a declaration
- * says the coordinate is deliberately wrong, which a citation this refuses
- * for being *right* at `base` never is.
+ * introduces has nothing to verify there: it comes back `unresolvable`
+ * against `base` regardless of range, and stays exempt, per the same rule. A
+ * citation already declared as evidence in the section is exempt too — a
+ * declaration says the coordinate is deliberately wrong, which a citation
+ * this refuses for being *right* at `base` never is; declaredness is judged
+ * on the citation's own coordinate at the tip, never on the widened one used
+ * only to search `base`.
  *
  * @param {string} sectionText
  * @param {string} repo
@@ -1047,32 +1082,51 @@ const citationKey = (c) => `${c.file}:${c.start}-${c.end}:${c.rev ?? ""}`;
  */
 export function unpinnedPreexistingCitations(sectionText, repo, base) {
   const candidates = extractCitations(sectionText).filter(
-    (c) => c.file !== null && c.rev === undefined && c.malformed === undefined,
+    (c) => c.file !== null && c.rev === undefined && c.malformed === undefined && c.anchor !== null,
   );
   if (candidates.length === 0) return [];
 
   const declarations = extractDeclarations(sectionText);
   const declared = new Set(declarations.map(citationKey));
 
-  const baseRead = makeReader(repo, base);
   const baseResolve = makeResolver(candidateFiles(repo, base));
-  const results = checkCitations(candidates, baseRead, baseResolve);
+  const baseRead = makeReader(repo, base);
 
-  return results
-    .filter((r) => r.state === "verified")
-    .filter((r) => !declared.has(citationKey(r)))
-    .map((r) => {
-      const range = r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`;
-      return {
-        file: /** @type {string} */ (r.file),
-        start: r.start,
-        end: r.end,
-        line: r.line,
-        reason:
-          `record line ${r.line}: \`${r.file}:${range}\` verifies against ${base} — it cites ` +
-          `content that already exists at the base, so it needs a pin: \`${r.file}@${base}:${range}\``,
-      };
+  // Widen every candidate to the whole file at `base` before checking it —
+  // never the head's own [start, end], which is a fact about the tip and not
+  // about where the same text sits at `base` (F1). A citation whose file does
+  // not resolve, or does not read, at `base` is left with its original range:
+  // `checkCitations` will call it `unresolvable` either way, harmlessly.
+  const widened = candidates.map((c) => {
+    const resolved = baseResolve(c.file);
+    if ("error" in resolved) return c;
+    const content = baseRead(resolved.path);
+    if (content === null) return c;
+    return { ...c, start: 1, end: Math.max(content.length, 1) };
+  });
+
+  const results = checkCitations(widened, baseRead, baseResolve);
+
+  const issues = [];
+  results.forEach((r, index) => {
+    if (r.state !== "verified") return;
+    const original = candidates[index];
+    if (declared.has(citationKey(original))) return;
+    const baseLine = r.foundAt?.[0] ?? r.start;
+    const range =
+      original.start === original.end ? `${original.start}` : `${original.start}-${original.end}`;
+    issues.push({
+      file: /** @type {string} */ (original.file),
+      start: original.start,
+      end: original.end,
+      line: original.line,
+      reason:
+        `record line ${original.line}: \`${original.file}:${range}\` cites text that already exists ` +
+        `in ${original.file} at ${base} (line ${baseLine}) — it needs a pin: ` +
+        `\`${original.file}@${base}:${baseLine}\``,
     });
+  });
+  return issues;
 }
 
 /** `git -C <repo> <args>`, `shell: false` said explicitly (repo-77's own rule). */
@@ -1122,6 +1176,26 @@ function runPreflightDefault(repo, base, title) {
  * own — touches nothing (this ticket's `Done when`: "refused before it is
  * spliced").
  *
+ * **A splice-time failure rolls every commit this call already made back
+ * out** (gate 1, F3; the owner's answer, 2026-09-29): the sections in
+ * `records.md`'s own landing order are spliced and committed one at a time,
+ * so a later section's own refusal — a bad heading, a citation that fails
+ * `--require-claude-pins`, anything `spliceSection` itself refuses — used to
+ * leave the earlier ones committed with no way back: a re-run failed at
+ * `splice` again, on the *first* section, because `## Review` already
+ * existed. Since a splice-time failure can still be fixed and re-run from
+ * the same starting point, it is rolled back to the sha this call started
+ * from — captured once, before the first commit — so "a bad section fails
+ * with nothing written" is true of the whole call, not only of the first
+ * section. **A failure after every section has landed — push, verify,
+ * preflight — is not rolled back**: those steps only make sense once the
+ * commits exist, undoing them would throw away real work over a check that
+ * has nothing to do with the splice itself, and the fix is usually on the
+ * far side of the failure (open a PR, wait for CI, re-run preflight) rather
+ * than back at the ticket. Its own failure names the pre-landing sha and the
+ * `git reset --hard` command instead, so whoever holds the failure can undo
+ * it by hand if that turns out to be the right call.
+ *
  * @param {{
  *   ticket: string,
  *   sections: string[],
@@ -1129,6 +1203,7 @@ function runPreflightDefault(repo, base, title) {
  *   status: "done" | "in-flight",
  *   title: string,
  *   run?: (repo: string, args: string[]) => string,
+ *   verify?: (ticketAbsolutePath: string, sectionAbsolutePath: string, gate: number | null, rev: string) => {relative: string, block: {start: number, end: number}},
  *   runPreflight?: (repo: string, base: string, title: string) => {ok: boolean, output: string},
  * }} options
  * @returns {{ok: boolean, steps: {name: string, ok: boolean, detail: string}[]}}
@@ -1141,6 +1216,7 @@ export function land(options) {
     title,
     base,
     run = runGit,
+    verify = verifySection,
     runPreflight = runPreflightDefault,
   } = options;
 
@@ -1193,7 +1269,13 @@ export function land(options) {
   } catch (error) {
     return fail("setup", /** @type {Error} */ (error).message);
   }
-  pass("setup", `${ticketId} (${tool}) at base ${base}`);
+  let preLandingSha;
+  try {
+    preLandingSha = run(ticketRepoRoot, ["rev-parse", "HEAD"]).trim();
+  } catch (error) {
+    return fail("setup", /** @type {Error} */ (error).message);
+  }
+  pass("setup", `${ticketId} (${tool}) at base ${base}, pre-landing sha ${preLandingSha}`);
 
   let plans;
   try {
@@ -1221,6 +1303,25 @@ export function land(options) {
   if (pinIssues.length > 0) return fail("citations-pin", pinIssues.join("\n"));
   pass("citations-pin", "no unpinned citation of pre-existing content");
 
+  // A splice-time failure rolls back to `preLandingSha` — see the docblock
+  // above. Best-effort: a reset that itself fails is reported alongside the
+  // original failure rather than thrown in its place, so the real cause is
+  // never hidden behind a secondary git error.
+  const rollback = () => {
+    try {
+      run(ticketRepoRoot, ["reset", "--hard", preLandingSha]);
+      return `rolled back to ${preLandingSha} — nothing from this call is landed`;
+    } catch (error) {
+      return (
+        `could not roll back to ${preLandingSha} (${/** @type {Error} */ (error).message}); ` +
+        `reset it by hand with:\n  git reset --hard ${preLandingSha}`
+      );
+    }
+  };
+  const resetHint = () =>
+    `\n\nThe commit(s) already made for this landing are not rolled back. Reset to the ` +
+    `pre-landing state with:\n  git reset --hard ${preLandingSha}`;
+
   // Splice, one commit per gate — the first commit also sets status.
   for (const [index, plan] of plans.entries()) {
     let result;
@@ -1228,9 +1329,10 @@ export function land(options) {
       result = spliceSection(ticketAbsolutePath, plan.path, plan.gate, { requireClaudePins: true });
     } catch (error) {
       const failure = /** @type {Error & {stdout?: string, stderr?: string}} */ (error);
+      const rolledBack = rollback();
       return fail(
         "splice",
-        `${path.basename(plan.path)}: ${failure.stderr || failure.stdout || failure.message}`,
+        `${path.basename(plan.path)}: ${failure.stderr || failure.stdout || failure.message}\n\n${rolledBack}`,
       );
     }
 
@@ -1239,7 +1341,11 @@ export function land(options) {
         const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
         fs.writeFileSync(ticketAbsolutePath, setStatus(markdown, status));
       } catch (error) {
-        return fail("splice", `setting status: ${/** @type {Error} */ (error).message}`);
+        const rolledBack = rollback();
+        return fail(
+          "splice",
+          `setting status: ${/** @type {Error} */ (error).message}\n\n${rolledBack}`,
+        );
       }
     }
 
@@ -1252,43 +1358,49 @@ export function land(options) {
       run(ticketRepoRoot, ["add", "--", result.relative]);
       run(ticketRepoRoot, ["commit", "-m", message]);
     } catch (error) {
+      const rolledBack = rollback();
       return fail(
         "splice",
-        `committing gate ${gateLabel}: ${/** @type {Error} */ (error).message}`,
+        `committing gate ${gateLabel}: ${/** @type {Error} */ (error).message}\n\n${rolledBack}`,
       );
     }
   }
   pass("splice", `${plans.length} commit(s), status set to ${status} in the first`);
 
-  // Push, fast-forward only — never `--force`.
+  // Push, fast-forward only — never `--force`. Not rolled back on failure —
+  // see the docblock above.
   let branch;
   try {
     branch = run(ticketRepoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
     run(ticketRepoRoot, ["push", "-u", "origin", branch]);
   } catch (error) {
-    return fail("push", /** @type {Error} */ (error).message);
+    return fail("push", `${/** @type {Error} */ (error).message}${resetHint()}`);
   }
   pass("push", `pushed ${branch} to origin`);
 
-  // Verify each section against what actually landed.
+  // Verify each section against what actually landed. Not rolled back on
+  // failure — see the docblock above.
   for (const plan of plans) {
     try {
-      verifySection(ticketAbsolutePath, plan.path, plan.gate, "HEAD");
+      verify(ticketAbsolutePath, plan.path, plan.gate, "HEAD");
     } catch (error) {
       const failure = /** @type {Error & {stderr?: string}} */ (error);
-      return fail("verify", `${path.basename(plan.path)}: ${failure.stderr || failure.message}`);
+      return fail(
+        "verify",
+        `${path.basename(plan.path)}: ${failure.stderr || failure.message}${resetHint()}`,
+      );
     }
   }
   pass("verify", `${plans.length} section(s) verified against HEAD`);
 
-  // Preflight.
+  // Preflight. Not rolled back on failure — see the docblock above.
   let preflightResult;
   try {
     preflightResult = runPreflight(ticketRepoRoot, base, title);
   } catch (error) {
-    return fail("preflight", /** @type {Error} */ (error).message);
+    return fail("preflight", `${/** @type {Error} */ (error).message}${resetHint()}`);
   }
-  if (!preflightResult.ok) return fail("preflight", preflightResult.output);
+  if (!preflightResult.ok) return fail("preflight", `${preflightResult.output}${resetHint()}`);
   pass("preflight", "exit 0");
 
   return { ok: true, steps };

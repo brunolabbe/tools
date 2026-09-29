@@ -170,7 +170,7 @@ origin/main` → exit 0, 112 enforced, 0 failing.
   **Gate 1's record is not in this ticket.** `node scripts/review-record.mjs
 <this ticket> review-gate1.md` at `162a166` exited 20 and restored the ticket:
   "1 unanchored, 1 anchor(s) not distinct" — the NFR bullet's `:653` carries no
-  anchor, and its `scripts/review-record.mjs:434 "shell: false,"` starts on two
+  anchor, and its `scripts/review-record.mjs@2ffb72a:434 "shell: false,"` starts on two
   lines, the second being this branch's own `formatMarkdown`. Neither is a
   coordinate a lander may repair, so the section goes back to its reviewer. The
   fix below also deletes the lines the med cites at 577 and 630 and moves the
