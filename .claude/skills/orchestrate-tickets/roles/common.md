@@ -45,7 +45,10 @@ checkout step:
    about half a second. **Never `npm install` or `npm ci`**: minutes, the
    largest fixed cost of a dispatch, and it can fail outright when a
    postinstall cannot reach the network (a gate told to run `npm ci` ran two
-   hours without reporting, 2026-09-03).
+   hours without reporting, 2026-09-03). If the farm's stderr warns that the
+   shared checkout is stale, its remedy (`npm install` there) is not yours to
+   run — stop, report the missing package list to whoever dispatched you, and
+   install nothing.
 2. `npm run build`. Without built `dist`, most suites fail with
    `packageEntryFailure`, which reads as a test failure and is not.
 

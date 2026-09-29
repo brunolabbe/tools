@@ -33,6 +33,14 @@ DEST="$(git rev-parse --show-toplevel)/node_modules"
 [ "$DEST" != "$SHARED" ] || { echo "refusing: this is the shared checkout" >&2; exit 1; }
 [ -d "$SHARED" ] || { echo "no shared node_modules at $SHARED" >&2; exit 1; }
 
+# A warning, not a refusal (repo-45): the shared checkout can only be as fresh
+# as its last `npm install`, and a merge that added a dependency since then
+# leaves every package the farm links, and every check afterwards, silently
+# stale until a TS2307 surfaces it deep into a build. This names the missing
+# package and the remedy before anything is linked; it never blocks the farm,
+# because a false positive here would stop every dispatch instead of one.
+node "$(dirname "${BASH_SOURCE[0]}")/check-farm-freshness.mjs" "$SHARED_ROOT" || true
+
 link_entry() { # $1 = source path, $2 = dest path
   local target
   if [ -L "$1" ]; then target="$(readlink "$1")"; else target="$1"; fi

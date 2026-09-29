@@ -2994,9 +2994,9 @@ test("extractDeclarations and extractCitations read an evidence declaration in a
 
 /**
  * The full reproduction, through the real CLI rather than the regex alone: a
- * CRLF copy of a real merged record (`repo-79`'s), with one of its own
- * anchors corrupted so it cannot possibly still verify, regardless of
- * anything else this repository's tree holds. Before the fix, `--section
+ * real merged record's (`repo-79`'s) headings under CRLF, carrying one of its
+ * own citations with the anchor corrupted so it cannot possibly still verify,
+ * and nothing else that could fail with it. Before the fix, `--section
  * Review` cannot find `## Review` at all under CRLF and the run refuses with
  * "no section matches", the same shape `citations-gate.mjs`'s `checkRecord`
  * turns into `{ skipped: true }` — a record `citations-gate` should report
@@ -3021,7 +3021,20 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
   const brokenAnchor = "TOTALLY_NOT_A_REAL_ANCHOR_repo_82";
   const corrupted = source.replace(`"${anchorText}"`, `"${brokenAnchor}"`);
   expect(corrupted).not.toBe(source);
-  const crlf = corrupted.replace(/\n/g, "\r\n");
+  // Only the record's headings and the corrupted citation go through: every
+  // other citation it carries is a second way to fail. On CI's depth-1
+  // checkout its `@a0841701` pin is unresolvable, which turned exit 2 into 3
+  // on main while every full-history worktree passed.
+  const brokenCitation = `\`scripts/preflight.mjs:${target.start} "${brokenAnchor}"\``;
+  const narrowed = corrupted
+    .split("\n")
+    .flatMap((line) => {
+      if (line.startsWith("#")) return [line];
+      return line.includes(brokenAnchor) ? [brokenCitation] : [];
+    })
+    .join("\n");
+  expect(extractCitations(narrowed)).toHaveLength(1);
+  const crlf = narrowed.replace(/\n/g, "\r\n");
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-crlf-"));
   const record = path.join(dir, "repo-79-crlf.md");

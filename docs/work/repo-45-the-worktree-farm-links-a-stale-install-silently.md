@@ -3,7 +3,7 @@ id: repo-45
 tool: repo
 title: The worktree farm links a stale shared install into every worktree, and nothing says so
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -273,6 +273,70 @@ Once the decision above is answered, and whichever option it picks:
    measured.
 4. `npm run check` passes.
 
+## Review
+
+### Gate 1
+
+**Gate: PASS** — 2026-09-29 · `6bfae8e...54278ea` · code-review at medium
+
+Gated head `54278ea`; re-issued at `0908468`, against which every unpinned coordinate below resolves. Gates 2 and 3 moved none of them; findings 2–4 quote the `54278ea` text that gate 2 records as fixed. `origin/main` was still `6bfae8e` after the fetch. Every reproduction ran in a scratch tree outside `/workspaces/tools` (`git archive` + `git init`, no ancestor `node_modules`), farmed from a stand-in that mirrors the shared install minus the six packages the brief names; `npm run build` there exits 2 with 6 `TS2307`, so the stand-in is genuinely stale.
+
+| Done when                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A stale source names the missing package and the remedy before the farm exits                                | `scripts/test/check-farm-freshness.test.ts:196-211 "warns on stderr and still links and exits 0"` ✓ — re-run: the head farm over the stand-in printed all six names and the `npm install` remedy on stderr, exit 0, 249 entries; the base farm over the same root printed nothing. Mutations: detection removed → 3 of 9 tests fail and the farm goes silent; the call line removed → 1 of 9 fails; `\|\| true` removed → 1 of 9 fails (exit 1)                                                                                                                                                                                                                                                                                                               |
+| 2. Healthy shared checkout prints nothing new: optional builds, links, the two version-skewed workspace entries | verified — `scripts/test/check-farm-freshness.test.ts:95-104 "does not report an optional package"` ✓, `scripts/test/check-farm-freshness.test.ts:110-119 "does not report a workspace link"` ✓, `scripts/test/check-farm-freshness.test.ts:218-231 "result.stderr).toBe("` ✓; re-run over `/workspaces/tools` itself: empty stderr in 14 of 14 farm runs. Of its 461 lockfile entries, 299 checked and 0 missing; 111 `optional` (102 absent) and 15 `link` skipped by field; 17 nested and 19 root/workspace keys not read. No version is compared, so the two skewed workspace entries (both `link`) cannot be reported. Mutations: `optional` exclusion removed → 1 of 9 fails and the real checkout reports 102; `link` exclusion removed → 1 of 9 fails |
+| 3. Under a second on the healthy shared checkout, measured                                                      | verified — 14 head runs from the scratch tree: medians 397 ms and 418 ms per batch of 7, 13 of 14 under 1 s; the one outlier (6,952 ms) fell in a batch where the base farm also took 2,559 and 2,027 ms. The check alone: 35–37 ms mean over 7 runs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 4. `npm run check` passes                                                                                       | verified — exit 0 at `54278ea`. `npm test -- --project repo`: 577 passed in 12 files, against 568 in 11 at `6bfae8e`; the +9 are the new file, and no existing test file changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+- **low** · **open decision** · The warning tells its reader to run `npm install` in the shared checkout, and that reader is almost always a dispatched agent, which `.claude/skills/orchestrate-tickets/roles/common.md@6bfae8e:31 "Never touch"` forbids from touching it; no page says what an agent does on this warning. (a) One sentence in that page, under its populate-and-build step: if the farm warns, stop and report the list, and install nowhere — recommended, since the brief mandates the remedy text. (b) Reword the remedy line to address the orchestrator. Either is one line.
+- **low** · The module comment in `.claude/scripts/check-farm-freshness.mjs`, under _What counts as declared_, gives a wrong reason for skipping nested `node_modules/a/node_modules/b` entries. It calls them bundled, but none of the 17 in the lockfile carries `inBundle` (they are version-conflict placements); and it says the farm never looks for them, but the farm links the parent directory absolutely, so a nested package absent from the shared install is equally absent in the worktree. Skipping them is option A as decided (top-level), so the behaviour stands, and `scripts/test/check-farm-freshness.test.ts:125-138 "ignores a package nested inside"` pins it; checking the 16 non-optional nested entries too would have been silent on the healthy install (0 missing), but widening is past the decided scope. Recommendation: correct the comment only.
+- **low** · two findings, one mechanism — lockfile counts in comments are off. The module comment says 111 of 442 top-level entries; 442 is every `node_modules/` key, 17 of them nested, and top-level is 425. The test header calls it a 442-entry lockfile; it has 461 entries.
+- **low** · A shared lockfile that does not parse (conflict markers, measured) makes the check print an uncaught `SyntaxError` stack trace into the farm stderr. Fail-open holds (farm exit 0, entries linked), but it reads as the farm crashing, and says nothing about the freshness check having been skipped. A `try`/`catch` with a one-line notice would do.
+- **dropped** · hunted: an absent `devOptional` platform build would be misreported, since the check skips only `optional`. npm arborist skips a platform mismatch at reify only when `node.optional` is set, so a `devOptional` mismatch fails the install rather than leaving the package absent; and the lockfile holds 0 `devOptional`, 0 `peer`, 0 `inBundle` entries. Not a defect.
+- **findings** · code-review at medium, run by this gate: 6 returned, 5 carried (two merged in one bullet), 1 dropped.
+- Invariants: no shell — 3 of 3 `spawnSync` calls in the new test pass `shell: false`, and the new `.mjs` spawns nothing. Both new files are tracked and not ignored. Lint covers `.claude/scripts/` (a probe file there drew two oxlint errors); oxfmt does not, since `.claude/` is in its ignorePatterns repo-wide, like the existing farm script; typecheck takes the `.mjs` under `allowJs` with `checkJs` off, on the same terms as every `scripts/*.mjs`. Not touchable by this diff, skipped: tool imports, `AppError`, redaction, SSRF, progress, contracts, Dockerfiles.
+- Gates at `54278ea`: `node scripts/citations-gate.mjs --against origin/main` exit 0 (131 enforced, 0 failing); `node scripts/preflight.mjs --base origin/main` exit 0.
+- NFR: security n/a (reads one local file) · performance ✓ (35–37 ms) · reliability ✓ fail-open measured: stale root, unparseable lockfile, `node` absent from `PATH` all end in farm exit 0 with entries linked · maintainability — the comment findings above.
+
+### Gate 2
+
+**Gate: PASS** — 2026-09-29 · `54278ea..38769fd` · code-review at medium, this round only
+
+Re-gated head `38769fd`; re-issued at `0908468`, against which every unpinned coordinate below resolves. Gate 3 moved none; the line-273 evidence in the first low, whose claim gate 3 found corrected, is now prose naming `38769fd`. `origin/main` was still `6bfae8e`. The round touches no workspace source, so nothing was rebuilt.
+
+| Gate 1 finding                                                                 | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The remedy tells an agent to install in the shared checkout (open decision) | fixed — the owner chose (a). The new sentence in `.claude/skills/orchestrate-tickets/roles/common.md`, step 1 under _Populate and build before you measure anything_, fires on the farm warning that the shared checkout is stale and names its remedy, `npm install` there, as not the agent to run: that is the remedy line of the warning, unchanged. The new parse-failure notice also begins `warning:` but says the check was skipped, not that anything is missing, so the sentence rightly does not catch it |
+| 2. Wrong reason for skipping nested entries                                    | fixed — the comment now gives the decided scope as the reason, and states the 17 entries, the missing `inBundle` and the absolute parent link; behaviour unchanged, 12 of 12 pass. One wrong placeholder remains, below                                                                                                                                                                                                                                                                                              |
+| 3. Wrong counts in two comments                                                | fixed — 111 of 425 top-level entries, and a 461-entry lockfile, both matching the gate 1 census                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 4. Raw stack trace on an unparseable lockfile                                  | fixed — re-ran the farm over the same conflict-marker lockfile: exit 0, entries linked, stderr one line, did not parse, skipping the freshness check, with the JSON error in brackets; no trace. `scripts/test/check-farm-freshness.test.ts:258-272 "instead of a raw stack trace, when the shared lockfile"` and `scripts/test/check-farm-freshness.test.ts:276-286 "warns without a raw stack trace"` fail, 2 of 12, against the `54278ea` script                                                                  |
+
+- **low** · The notice this round adds is never asserted. The one-line assertion at line 273 of the test file at `38769fd`, `captured.trim().split(`, holds on an empty string, which splits to one element, and the end-to-end case asserts only that `SyntaxError` is absent. Turning the notice write into a no-op (`String(...)` in place of `process.stderr.write(...)`) leaves 12 of 12 green and the farm silent over the unparseable lockfile — the says-nothing-about-the-skip state gate 1 finding 4 named. Asserting that stderr contains `did not parse` closes it. _Amended at `0908468`: the line-273 citation became prose because gate 3 records this finding fixed; no other word changed._
+- **low** · The corrected nested-entries comment in `.claude/scripts/check-farm-freshness.mjs`, under _What counts as declared_, names the wrong placeholder: a package missing from the nested tree of `<dep>` — that tree belongs to `<name>`, and `<dep>` is the package missing. One word.
+- **dropped** · The new `catch` also takes a lockfile path that cannot be read and labels it did not parse; measured with a directory there, the bracket carries `EISDIR` and the farm stays fail-open. Not worth a line.
+- **findings** · code-review at medium over this round: 3 returned, 2 carried, 1 dropped.
+- Gate 1 citations: this round moved none. Its three new tests follow the last existing test, and all 6 gate 1 references verify at `38769fd`. Gate 1 findings 2–4 quote text this round corrected, but only in prose (the `.mjs` is named by heading), so no citation had to become prose.
+- The round Log entry (12 of 12, check exit 0, citation gate 131 enforced and 0 failing, no earlier line moved) matches every run here.
+- Gates at `38769fd`: `npx vitest run scripts/test/check-farm-freshness.test.ts` exit 0, 12 of 12; `npm run check` exit 0; `node scripts/citations-gate.mjs --against origin/main` exit 0, 131 enforced and 0 failing; `node scripts/preflight.mjs --base origin/main` exit 0.
+- Not re-swept, by the re-gate rule: gate 1 acceptance rows, timing and the lockfile census. This round changes no detection path; 12 of 12 still pass.
+
+### Gate 3
+
+**Gate: PASS** — 2026-09-29 · `38769fd..0908468` · code-review at medium, this round only
+
+Re-gated head `0908468`; every unpinned coordinate below resolves against it. `origin/main` was still `6bfae8e`. The round is one comment word in `.claude/scripts/check-farm-freshness.mjs`, 40 test lines appended after the last test, and the Log; nothing was rebuilt.
+
+| Gate 2 finding                                     | Verdict                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The parse-failure notice is never asserted      | fixed — `scripts/test/check-farm-freshness.test.ts:301-315 "warnIfStale's stderr names"` ✓ and `scripts/test/check-farm-freshness.test.ts:318-327 "worktree-farm.sh's stderr names"` ✓ assert that stderr contains did not parse, directly and end to end. Re-ran the gate 2 mutation (the notice write turned into `String(`): 2 of 14 fail, exactly those two, 12 pass; reverted, 14 of 14 pass |
+| 2. Wrong placeholder in the nested-entries comment | fixed — the comment under _What counts as declared_ now reads a package missing from the nested tree of `<name>`; the diff is that one word, in place                                                                                                                                                                                                                                             |
+
+- **findings** · code-review at medium over this round: 0 returned, 0 carried, 0 dropped. The two new tests do not assert the exit code, which the earlier parse-failure cases already do.
+- Gate 1 and gate 2 citations: this round moved none, since its tests follow the last existing test. The line-273 evidence in the first gate 2 low, whose claim this round corrected, is now prose naming `38769fd`, marked as amended at `0908468`.
+- The round Log entry (the same mutation failing 2 of 14, 14 of 14 after, citation gate 131 enforced and 0 failing) matches every run here.
+- Gates at `0908468`: `npx vitest run scripts/test/check-farm-freshness.test.ts` exit 0, 14 of 14; `node scripts/citations-gate.mjs --against origin/main` exit 0, 131 enforced and 0 failing; `node scripts/preflight.mjs --base origin/main` exit 0, every step ok, `npm run check` among them.
+- Not re-swept, by the re-gate rule: everything outside `38769fd..0908468`.
+
 ## Log
 
 - **2026-09-14 — filed.** Filed by a `builder` dispatched on Opus 5 (1M
@@ -295,3 +359,135 @@ Once the decision above is answered, and whichever option it picks:
   `ready`. Re-read against `a084170` first: the farm's two preconditions and
   its linking loop are unchanged since `ab909c9`, and no freshness check has
   been added, so the reproduction still describes the code.
+- **2026-09-29 — built option A.** `.claude/scripts/check-farm-freshness.mjs`
+  reads `$SHARED_ROOT/package-lock.json`, finds every top-level,
+  non-`optional`, non-`link` `node_modules/<name>` entry missing from
+  `$SHARED_ROOT/node_modules`, and warns on stderr naming each one and the
+  remedy (`npm install` in the shared checkout). `worktree-farm.sh` calls it
+  with `|| true` right after its existing precondition checks and before the
+  linking loop, so a stale source never blocks the farm. A root with no
+  `package-lock.json` is handled by returning `null` and printing nothing.
+
+  Verified against the reproduction, in a tree outside `/workspaces/tools`
+  (`git archive` + `git init`, no ancestor `node_modules`), with a stale
+  stand-in built by mirroring this repo's real shared `node_modules` and
+  dropping `@anthropic-ai/sdk`:
+  - `bash worktree-farm.sh <stale-root>` → stderr names exactly
+    `@anthropic-ai/sdk` and the `npm install` remedy, exit 0, farm still
+    builds 254 entries. `npm run build` afterwards still exits 2 on the same
+    `TS2307`s the ticket recorded — the warning surfaces the defect earlier,
+    it does not paper over it.
+  - `bash worktree-farm.sh /workspaces/tools` (healthy) → no stderr, farm
+    builds 255 entries, `0.346s`–`0.370s` real time, both inside and outside
+    `/workspaces/tools`.
+  - The `299` entries the ticket's option A measured with its own ~15-line
+    script matches this script's count exactly, run over the same lockfile.
+  - Workspace `link` entries whose version disagrees between
+    `package-lock.json` and the hidden lockfile (`@downloader/api`,
+    `@planner/api`) carry `"link": true` in `package-lock.json` and are
+    skipped by that field alone, not by name — confirmed by printing their
+    lockfile entries directly.
+
+  New regression suite `scripts/test/check-farm-freshness.test.ts` (9 cases):
+  pure fixture cases for `findMissingPackages`/`warnIfStale` (a missing
+  non-optional package, an absent optional package, an absent workspace link,
+  a package nested inside another's own tree, a shared root with no
+  lockfile, and the warning text itself), plus two end-to-end cases that spawn
+  `worktree-farm.sh` inside a throwaway git repository. Watched red against
+  the farm script as it stood before this change (stderr empty, assertion on
+  `@anthropic-ai/sdk` failed) and green after restoring the fix. `scripts/`
+  tests a CLI by spawning it for the same reason `preflight.test.ts` does, so
+  every `spawnSync` here sets `shell: false` explicitly — ahead of repo-77's
+  unmerged widening of `spawn-safety.test.ts`, per this dispatch's own note.
+  `check-farm-freshness.mjs` is added to `scripts/test/tsconfig.json`'s
+  `include` (composite project, TS6307 otherwise).
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 9/9 passed.
+  `npx vitest run --project repo` → 577/577 passed, 12 files. `npm run check`
+  → lint, format:check and `tsc --build` all exit 0.
+
+  No fold-in taken: nothing else in this ticket's neighbourhood was both small
+  and already specified. The reference this ticket cites,
+  `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md`'s "verify
+  a farm the same way rather than trusting it", is guidance for a _gate_
+  reading a farm's output, not something this change touches or obsoletes.
+
+- **2026-09-29 — gate 1's four low findings, applied by a fixer.** Gate 1
+  passed with four lows; none needed judgement.
+  - **Finding 1 (open decision).** The warning's remedy tells the reader to
+    run `npm install` in the shared checkout, and that reader is almost
+    always a dispatched agent, which `common.md` forbids from touching the
+    shared checkout. The orchestrator put this to the owner directly with
+    `AskUserQuestion` (options: add a sentence to `common.md`, reword the
+    warning, both, or leave it); the owner chose to add the sentence to
+    `common.md` — the gate's own recommendation, nothing overridden. Added
+    one sentence to `common.md`'s populate-and-build step 1: if the farm
+    warns of a stale shared checkout, stop, report the missing list to
+    whoever dispatched you, and install nowhere. The warning text itself is
+    unchanged.
+  - **Finding 2.** Corrected `check-farm-freshness.mjs`'s "What counts as
+    declared" comment: nested `node_modules/<name>/node_modules/<dep>`
+    entries are skipped because top-level presence is the decided scope
+    (option A), not because they are "bundled" (none of the 17 carries
+    `inBundle`) or because "the farm never looks for them" (it links the
+    parent directory absolutely, so a nested package missing from the shared
+    install is missing in the worktree too). Behaviour unchanged.
+  - **Finding 3.** Both counts were wrong. Measured directly against this
+    repo's `package-lock.json`: 461 `packages` entries in total, 442 keyed
+    under `node_modules/`, 17 of those nested, 425 top-level, 111 of the 425
+    top-level entries `optional`. Corrected the module comment from "111 of
+    442 top-level entries" to "111 of 425 top-level entries", and the test
+    file header from "442-entry lockfile" to "461-entry lockfile".
+  - **Finding 4.** An unparsable shared lockfile (e.g. an unresolved merge
+    conflict) let `JSON.parse`'s own `SyntaxError` reach the farm's stderr as
+    a raw stack trace — fail-open still held (farm exit 0, entries linked),
+    but it read as the farm crashing and said nothing about the freshness
+    check being skipped. `warnIfStale` now catches that error and writes one
+    notice line instead. Three cases added to
+    `scripts/test/check-farm-freshness.test.ts` (all after the file's
+    existing last test, so no earlier citation's line numbers moved):
+    `findMissingPackages` throwing on an unparsable lockfile, `warnIfStale`
+    printing exactly one line and returning 0, and `worktree-farm.sh` itself
+    warning without the raw trace end to end. All `spawnSync` calls added
+    keep `shell: false`.
+
+  Reproduced each finding before fixing it: finding 4's raw `SyntaxError`
+  trace was confirmed live against a scratch shared root with a hand-written
+  broken lockfile, both before the fix (trace present, exit 0) and after
+  (one notice line, no trace, exit 0). Findings 2 and 3 needed no separate
+  reproduction beyond the gate's own citations, since they are wording and
+  count corrections the gate already pinned to specific lines.
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 12/12 passed.
+  `npm run check` → exit 0.
+  `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
+  enforced, 0 failing). No fixture, mutation or timing measurement from gate
+  1's table needed to change.
+
+- **2026-09-29 — gate 2's two low findings, applied by a fixer.** Gate 2
+  passed with two lows; neither needed judgement.
+  - **Finding 1.** Nothing asserted that the parse-failure notice was
+    actually printed: `expect(captured.trim().split("\n")).toHaveLength(1)`
+    also holds on an empty string, and the end-to-end case checked only that
+    `SyntaxError` was absent. Added two cases after
+    `scripts/test/check-farm-freshness.test.ts`'s existing last test (so no
+    earlier citation's line numbers moved), asserting stderr contains
+    `did not parse` from `warnIfStale` directly and from `worktree-farm.sh`
+    end to end. Reproduced the gate's own mutation
+    (`process.stderr.write(` → `String(` on the notice line in
+    `.claude/scripts/check-farm-freshness.mjs`): both new cases failed (2 of
+    14), the other 12 stayed green; reverted, all 14 passed.
+  - **Finding 2.** The corrected "What counts as declared" comment named the
+    wrong placeholder — "a package missing from `<dep>`'s nested tree" — when
+    that nested tree belongs to `<name>`, and `<dep>` is the package missing
+    from it. One-word fix, no line added or removed.
+
+  `npx vitest run scripts/test/check-farm-freshness.test.ts` → 14/14 passed.
+  `npm run check` → exit 0.
+  `node scripts/citations-gate.mjs --against origin/main` → exit 0 (131
+  enforced, 0 failing). Pushed as this branch's new head, fast-forward, on
+  top of `38769fd`.
+
+- **2026-09-29 — landed by a fixer.** Committed gate 3's final record set
+  (gates 1, 2 and 3) verbatim, one commit each, at `0908468`; no fixes
+  remained. Opened the pull request against `main`.

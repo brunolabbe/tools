@@ -117,7 +117,7 @@ Re-gate of the round `dcc7880..9ed3e6d` (18 files), base `efffb35` unchanged. `o
 Gate 1 findings:
 
 - **med** (CLI test tied to a live coordinate) · **fixed** — `scripts/test/citations.test.ts@2ffb72a:3021 "const anchorText ="` now reads the expected coordinate from the record it loads. Re-running the gate 1 `sed` on repo-79 (1091 to 1092) leaves 3 of 3 CRLF tests green, where it made 1 of 3 red at `dcc7880`. With the `efffb35` `citations.mjs` swapped in, the test is still red, on its empty-stdout assertion.
-- **low** (two CRLF readers) · **fixed** — `scripts/review-record.mjs:618 "splitLines(sectionText)[0]"` and `scripts/status.mjs:118 "const lines = splitLines(text);"`. With `gate1-probe2.mjs`, the CRLF section now resolves to block 14–15, the same as its LF twin, and `parseFrontmatter` reads SAME. Reverting each fix makes its own new test red: `scripts/test/review-record.test.ts:926 "heading when the section text is CRLF"` (1 of 36) and `scripts/test/status.test.ts:1720 "parseFrontmatter reads a CRLF-terminated ticket"` (1 of 130).
+- **low** (two CRLF readers) · **fixed** — `scripts/review-record.mjs@2ffb72a:618 "splitLines(sectionText)[0]"` and `scripts/status.mjs:118 "const lines = splitLines(text);"`. With `gate1-probe2.mjs`, the CRLF section now resolves to block 14–15, the same as its LF twin, and `parseFrontmatter` reads SAME. Reverting each fix makes its own new test red: `scripts/test/review-record.test.ts:926 "heading when the section text is CRLF"` (1 of 36) and `scripts/test/status.test.ts:1720 "parseFrontmatter reads a CRLF-terminated ticket"` (1 of 130).
 - **low** (npm abbreviations) · **fixed** — `scripts/preflight.mjs:633 "if (canonicalize(raw).split("`. Through `deriveExtraCiCommands`, `npm install-clea`, `npm isntall-cl`, `npm cit` and `npm install-ci-test` all throw, while `npm ic` and `npm ci` still return nothing to spawn. Disabling the guard makes `scripts/test/preflight.test.ts:1880 "throws on npm install-clea, npm isntall-cl and npm cit"` red (1 of 82). A new low below covers how wide the guard is.
 - **low** (Log counts) · **fixed** — I measured 27 (the `+257,27` hunk at `dcc7880`), 8 (the `+451,8` hunk) and 29 (my own per-citation count). The Logs of repo-48, repo-50, repo-52 and repo-60 now say 27, repo-51 says 8, and this ticket says 29. No stale 28 remains in them.
 - **low** (docblock placement) · **fixed**, verified by reading — the alias map has its own docblock above `scripts/preflight.mjs:432 "const NPM_ALIASES"`, and the `COVERED` docblock sits directly above `scripts/preflight.mjs:489 "const COVERED = ["`. A docblock cannot fail a test.
@@ -304,3 +304,31 @@ scripts/citations-gate.mjs --against origin/main` exit 0, 130 enforced, 0
 CRLF files in citations.mjs and cover every npm ci alias in preflight
 (repo-82)"` exit 0 (after `git fetch origin`, needed for `mergeTree`'s two
   open release-please heads).
+
+- 2026-09-29 — **Main went red on this ticket's merge (`2ffb72a`, #316)**, in
+  both unit legs: `the CLI finds a CRLF ## Review heading and reports a moved
+citation in it` got exit 3 where it expects 2. The gate's med ("how this
+  test is coupled to a live record") was fixed only for the hard-coded line.
+  The test still fed the CLI all 25 of repo-79's citations, and one of them
+  is pinned, `.claude/skills/orchestrate-tickets/SKILL.md@a0841701:224`. CI's
+  `test` job checks out at the default depth 1 (only `check` and `changes`
+  set `fetch-depth: 0`), so that pin is unresolvable there and adds bit 1.
+  Every worktree here has full history, which is why the build, both gate
+  rounds and preflight all passed it.
+
+  **Reproduction**: `git clone --depth 1` of `2ffb72a`, then the test's own
+  steps by hand (CRLF copy of the record, anchor corrupted) →
+  `exit 3 — 1 unresolvable, 1 moved`. The same steps in a full-history
+  worktree → `exit 2 — 1 moved`.
+
+  **Fix**: the test now keeps only the record's headings plus the one
+  corrupted citation, and asserts that exactly one citation survives the
+  narrowing. It does not keep the whole of record line 78, which carries
+  three more citations that could drift later. Green in the depth-1 clone.
+  Still red against `278d288`'s `scripts/citations.mjs` (empty stdout, the
+  "no section matches" refusal), so it still proves this ticket's fix.
+  `fetch-depth: 0` on the `test` job was not taken: it would hide the
+  coupling rather than remove it, and it would make every unit leg pay for
+  full history. The fix added 13 lines above this record's
+  `citations.test.ts` citation, so it is repointed 3041 → 3054, coordinate
+  only.
