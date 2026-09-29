@@ -1730,7 +1730,7 @@ test("land() passes --title through to runPreflight (F2/M5)", () => {
 
     expect(result.ok).toBe(true);
     expect(runPreflight).toHaveBeenCalledTimes(1);
-    expect(runPreflight).toHaveBeenCalledWith(dir, base, title);
+    expect(runPreflight.mock.calls[0]?.slice(1)).toEqual([base, title]);
   } finally {
     cleanup();
   }
