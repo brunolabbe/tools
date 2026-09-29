@@ -40,6 +40,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(here, "..", "..");
 const CLI = path.resolve(here, "..", "agent-cost.mjs");
 const FIXTURES = path.resolve(here, "fixtures", "agent-cost");
+const RUN = { cwd: REPO, encoding: "utf8", shell: false };
 
 const sonnetFixture = path.join(FIXTURES, "sonnet.jsonl");
 const opusFixture = path.join(FIXTURES, "opus.jsonl");
@@ -149,10 +150,7 @@ test("renders one row per file, a total row, and the rate date beside every doll
 });
 
 test("the CLI over the Sonnet and Opus fixtures prints the same total and exits 0", () => {
-  const result = spawnSync("node", [CLI, sonnetFixture, opusFixture], {
-    cwd: REPO,
-    encoding: "utf8",
-  });
+  const result = spawnSync("node", [CLI, sonnetFixture, opusFixture], RUN);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain(formatDollars(0.0065));
   expect(result.stdout).toContain(formatDollars(0.3425));
@@ -222,7 +220,7 @@ test("priceFile on the streamed fixture's grouped totals matches the hand-comput
 });
 
 test("the CLI over the streamed fixture prices the deduplicated total, not the raw record count", () => {
-  const result = spawnSync("node", [CLI, streamedFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, streamedFixture], RUN);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("output=1503");
   expect(result.stdout).not.toContain("output=1519");
@@ -270,7 +268,7 @@ test("sumUsage skips a synthetic session-limit record from both the model check 
 });
 
 test("the CLI over the synthetic fixture prices the two real responses and reports the skip", () => {
-  const result = spawnSync("node", [CLI, syntheticFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, syntheticFixture], RUN);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain(formatDollars(0.3425));
   expect(result.stdout).toContain("1 synthetic record skipped");
@@ -278,7 +276,7 @@ test("the CLI over the synthetic fixture prices the two real responses and repor
 });
 
 test("a file with no synthetic records prints no skip note", () => {
-  const result = spawnSync("node", [CLI, opusFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, opusFixture], RUN);
   expect(result.stdout).not.toContain("synthetic");
 });
 
@@ -288,7 +286,7 @@ test("a file with only a synthetic record refuses as no billable assistant recor
   ).toThrowError(
     /no assistant records with a model id found \(1 synthetic session-limit record skipped\)/,
   );
-  const result = spawnSync("node", [CLI, allSyntheticFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, allSyntheticFixture], RUN);
   expect(result.status).toBe(EXIT.noAssistantRecords);
   expect(result.stderr).toContain("1 synthetic session-limit record skipped");
   expect(result.stdout).toBe("");
@@ -312,7 +310,7 @@ test("a mixed-model file prices each response at its own model's rate", () => {
 });
 
 test("the CLI prices a mixed-model file, names both models, and exits 0", () => {
-  const result = spawnSync("node", [CLI, mixedModelFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, mixedModelFixture], RUN);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("claude-opus-5+claude-sonnet-5");
   expect(result.stderr).toBe("");
@@ -354,7 +352,7 @@ test("priceFile fails loudly on a model id missing from RATES, rather than prici
 });
 
 test("the CLI over an unrated model refuses it and sets the missingRate exit bit, not a $0.0000 row", () => {
-  const result = spawnSync("node", [CLI, unknownModelFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, unknownModelFixture], RUN);
   expect(result.status).toBe(EXIT.missingRate);
   expect(result.stderr).toContain("claude-nonexistent-9");
   expect(result.stdout).toBe("");
@@ -378,7 +376,7 @@ test("sumUsage refuses a file with no assistant records, rather than a silent ze
 });
 
 test("the CLI over a file with no assistant records refuses it and sets the noAssistantRecords bit", () => {
-  const result = spawnSync("node", [CLI, noAssistantFixture], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, noAssistantFixture], RUN);
   expect(result.status).toBe(EXIT.noAssistantRecords);
   expect(result.stdout).toBe("");
 });
@@ -387,7 +385,7 @@ test("the CLI over a file with no assistant records refuses it and sets the noAs
 
 test("the CLI over a nonexistent file refuses it and sets the unreadableFile bit", () => {
   const missing = path.join(FIXTURES, "does-not-exist.jsonl");
-  const result = spawnSync("node", [CLI, missing], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, missing], RUN);
   expect(result.status).toBe(EXIT.unreadableFile);
   expect(result.stderr).toContain(missing);
 });
@@ -401,10 +399,7 @@ test("a malformed JSON line refuses the file and sets the unreadableFile bit", (
 // --- Multiple files: independent failure, aggregated exit bitmask ----------
 
 test("one bad file among several is excluded from the total; the good files still print", () => {
-  const result = spawnSync("node", [CLI, sonnetFixture, unknownModelFixture, opusFixture], {
-    cwd: REPO,
-    encoding: "utf8",
-  });
+  const result = spawnSync("node", [CLI, sonnetFixture, unknownModelFixture, opusFixture], RUN);
   expect(result.status).toBe(EXIT.missingRate);
   expect(result.stdout).toContain(sonnetFixture);
   expect(result.stdout).toContain(opusFixture);
@@ -414,10 +409,7 @@ test("one bad file among several is excluded from the total; the good files stil
 });
 
 test("exit bits from different failure classes combine by bitwise OR across a batch", () => {
-  const result = spawnSync("node", [CLI, unknownModelFixture, noAssistantFixture], {
-    cwd: REPO,
-    encoding: "utf8",
-  });
+  const result = spawnSync("node", [CLI, unknownModelFixture, noAssistantFixture], RUN);
   expect(result.status).toBe(EXIT.missingRate | EXIT.noAssistantRecords);
 });
 
@@ -434,7 +426,7 @@ test("parseArgs refuses an unknown option rather than treating it as a filename"
 });
 
 test("the CLI with no arguments exits 1 and prints usage to stderr", () => {
-  const result = spawnSync("node", [CLI], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI], RUN);
   expect(result.status).toBe(1);
   expect(result.stderr).toContain(USAGE);
 });
@@ -492,8 +484,7 @@ test("findAgentTranscript finds a subagent's transcript by id under the config d
 
 test("the CLI prices an agent by id, prints its effort and cold count, and labels the row by id", () => {
   const result = spawnSync("node", [CLI, "--agent", "a1b2c3", opusFixture], {
-    cwd: REPO,
-    encoding: "utf8",
+    ...RUN,
     env: { ...process.env, CLAUDE_CONFIG_DIR: CONFIG },
   });
   expect(result.status).toBe(0);
@@ -514,8 +505,7 @@ test("the CLI prices an agent by id, prints its effort and cold count, and label
 
 test("the CLI over an unknown agent id sets the unreadableFile bit and names where it looked", () => {
   const result = spawnSync("node", [CLI, "--agent", "nobody"], {
-    cwd: REPO,
-    encoding: "utf8",
+    ...RUN,
     env: { ...process.env, CLAUDE_CONFIG_DIR: CONFIG },
   });
   expect(result.status).toBe(EXIT.unreadableFile);
