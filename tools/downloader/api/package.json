@@ -22,7 +22,6 @@
     "better-sqlite3": "^12.4.1",
     "fastify": "^5.7.1",
     "node-forge": "^1.4.0",
-    "pino": "^10.3.1",
     "undici": "^7.29.0"
   },
   "devDependencies": {

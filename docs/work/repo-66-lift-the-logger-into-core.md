@@ -81,3 +81,76 @@ to need a `fix` or `feat`, it splits into one pull request per tool.
   first: still three copies. The downloader's has 16 lines naming
   `RequestContext` or `redactUrlsInText`, the ledger's has none, and the
   planner's has one, a comment saying it deliberately leaves that pass out.
+
+- 2026-09-30 — **Built, against base `e79b04f`.** Added the adapter and
+  `createLogger` to `packages/core/src/logger.ts`, exported from
+  `@webtools/core/logger` (not the barrel, matching `./rate-limit`'s reasoning
+  — it imports `pino`) with `redactPaths` (pino's own path-based redaction)
+  and `redactFields` (a hook run over a call's fields, and a `child`'s
+  bindings, before either reaches pino) as its two optional layers. Each
+  tool's `logger.ts` is now a thin file: its own `REDACT_PATHS`, and, for the
+  downloader only, `isRequestContext`/`redactUrlsDeep`/`safeFields` supplied
+  as `redactFields`. `pino` moved from each of the three `api` packages'
+  `dependencies` to `packages/core`'s (`package.json` and `package-lock.json`
+  in all four), since none of the three imports it directly any more —
+  confirmed by `grep -rln "pino" tools/{downloader,planner,ledger}/api/src`
+  matching only `logger.ts` before the move, and nothing after it.
+  `@webtools/core` was already in every tool's `Dockerfile` and
+  `dependencies`, so no image-closure edit was needed —
+  `npx vitest run packages/core/test/image-closure.test.ts` (part of the
+  `core` project run below) passed unchanged.
+
+  Added `tools/ledger/api/test/logging.test.ts` (the Done-when's callout —
+  the ledger had no logging test at all): five tests proving each of its
+  `REDACT_PATHS` entries censors what it names (`Authorization`, `Cookie`,
+  `cf-access-jwt-assertion`, top-level `apiKey`), plus one proving redaction
+  and not deletion. Did not add an equivalent for the planner: its
+  `REDACT_PATHS` (`apiKey`, `headers.authorization`,
+  `headers['x-api-key']`) are not exercised directly anywhere in its existing
+  suite either (`grep -rn "headers.authorization\|headers\['x-api-key'\]"
+tools/planner/api/test` — no matches), so the ticket's own framing that only
+  the ledger "has none today" is arguably imprecise; left as is rather than
+  widened, since the Done-when's own wording names the ledger specifically and
+  the planner's indirect coverage (pl-39, the SDK-error path) was in place
+  before this ticket. Flagged here rather than silently deferred.
+
+  `npm run build` exit 0. `npm run check` exit 0 (lint, format, typecheck).
+  Suites: `npx vitest run --project downloader` 89 passed / 1 skipped (90
+  files), 1525 passed / 2 skipped (1527 tests) — the same 47/47 in
+  `logging.test.ts` the Done-when asks to stay unchanged, re-run directly
+  too. `--project planner` 75 files, 1293 tests, all passed. `--project
+ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
+  `contract/test/errors.test.ts`, `web/test/vite-config.test.ts`), 20 tests,
+  all passed — 4 files / 15 tests before this branch, +1 file / +5 tests from
+  the new `logging.test.ts` alone (`grep -c '^\s*test(' logging.test.ts` is 5,
+  and it is the only test file this branch adds or edits). `--project core` 5
+  files, 24 tests, all passed.
+
+  Citations: `node scripts/citations-gate.mjs --against origin/main` was 0
+  failing before any edit (135 enforced). After the move it reported 2
+  failing — `docs/work/repo-40-trust-proxy-is-a-second-consumer-with-nowhere-to-land.md`
+  (`packages/core/src/index.ts:3-8`, its quoted text changed from "so
+  exporting **it**" to "so exporting **either**" when the barrel comment grew
+  a second subpath) and `tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md`
+  (`tools/downloader/api/src/logger.ts:211 "isRequestContext(value)"`, shifted
+  to line 210 by the new file header). Both cited content that was true of
+  `origin/main` unchanged, so both were repaired by pinning to the base
+  (`@e79b04f`) per repo-78, not by repointing within this branch — a
+  repoint would itself go stale the next time either file moves. Re-run after
+  the two pins: `135 enforced, 0 failing`. The three records the dispatch
+  named as at risk — dl-43 (`logger.ts:74-112 "function isRequestContext"`),
+  dl-53 (the one above), dl-58 (`logger.ts:115/125/127/142`, already excused
+  by an `evidence` declaration rather than pinned, per its own Log's D4) — were
+  checked individually with
+  `node scripts/citations.mjs <ticket> --section Review --require-anchors --require-distinct-anchors`:
+  dl-43's range citation still resolves `ok` (the function it names still
+  falls inside the cited 74-112 span after the move), dl-58's declared
+  citations remain excused (the pre-fix text they quote is still nowhere in
+  the file), and only dl-53's needed a pin, done above.
+
+  Fold-in: none identified. No other ticket in `docs/work/` or
+  `tools/*/docs/work/` names the logger, and the only other citations into
+  either changed file (`packages/core/src/index.ts`, the three tools'
+  `logger.ts`) were the two repaired above — found by running the gate, not
+  by a targeted grep, so this is not a claim that no other ticket could ever
+  be affected, only that the gate found none.

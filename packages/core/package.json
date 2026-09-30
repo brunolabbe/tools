@@ -17,10 +17,17 @@
     "./rate-limit": {
       "types": "./dist/rate-limit.d.ts",
       "default": "./dist/rate-limit.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
     }
   },
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "pino": "^10.3.1"
   }
 }

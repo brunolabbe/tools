@@ -17,8 +17,7 @@
     "@ledger/contract": "*",
     "@webtools/core": "*",
     "better-sqlite3": "^12.4.1",
-    "fastify": "^5.7.1",
-    "pino": "^10.3.1"
+    "fastify": "^5.7.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13"

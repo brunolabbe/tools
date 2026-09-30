@@ -20,8 +20,7 @@
     "@planner/itinerary": "*",
     "@webtools/core": "*",
     "better-sqlite3": "^12.4.1",
-    "fastify": "^5.7.1",
-    "pino": "^10.3.1"
+    "fastify": "^5.7.1"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
