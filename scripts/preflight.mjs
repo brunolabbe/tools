@@ -24,8 +24,8 @@
  *     touches, `npm test -- --project <tool>` — read from the diff's own
  *     paths, never from a flag, so a forgotten `--project` cannot silently
  *     skip a tool's suite the way a hand-typed one can.
- *   - check 2 imports `gate` and `compareAgainst` from `citations-gate.mjs`
- *     directly, over the same `SCOPE` that script enforces in CI, so a
+ *   - check 2 imports `gate`, `compareAgainst` and `touchedPaths` from
+ *     `citations-gate.mjs`, over the same `SCOPE` and touched set CI uses, so a
  *     citation this failed on is the same citation CI's `check` job fails on.
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
  *     `git show HEAD:<ticket>` — the same command
@@ -62,6 +62,7 @@ import {
   compareAgainst,
   gate as citationsGate,
   parseGrandfathered,
+  touchedPaths,
 } from "./citations-gate.mjs";
 import { hasGateRecord } from "./status.mjs";
 
@@ -732,6 +733,32 @@ export function grandfatheredFor(repo) {
   return parseGrandfathered(source) ?? new Map();
 }
 
+/**
+ * The `moved` citations the gate reported rather than failed — enforced records
+ * not changed since the merge base with `base` (repo-47, option B) — as a
+ * summary line and one line per record, or nothing. `limit` caps the records
+ * listed: a fold repeats what check 2 already listed, and on the live corpus
+ * one line naming all of them ran to about 900 characters (gate 1, F3).
+ *
+ * @param {{reported?: {record: string, moved: object[]}[]}} result
+ * @param {string} base
+ * @param {number} [limit]
+ */
+const movedNote = (result, base, limit = Infinity) => {
+  const reported = result.reported ?? [];
+  if (reported.length === 0) return [];
+  const count = reported.reduce((n, r) => n + r.moved.length, 0);
+  const shown = reported.slice(0, limit);
+  return [
+    `note  ${count} moved citation(s) in ${reported.length} record(s) not changed since the ` +
+      `merge base with ${base}, reported and not failed:`,
+    ...shown.map((r) => `        ${r.record} — ${r.moved.length} moved`),
+    ...(reported.length > shown.length
+      ? [`        … and ${reported.length - shown.length} more; check 2 lists every one`]
+      : []),
+  ];
+};
+
 /** The `state: count` half of a record's counts, for a one-line summary. */
 const countLine = (counts = {}) =>
   Object.entries(counts)
@@ -750,7 +777,7 @@ const countLine = (counts = {}) =>
  * @param {Map<string, number>} [grandfathered]
  */
 export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo)) {
-  const result = citationsGate(repo, SCOPE, grandfathered);
+  const result = citationsGate(repo, SCOPE, grandfathered, null, touchedPaths(repo, base));
   const problems = [];
   for (const r of result.failed) problems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
   for (const r of result.regressed) {
@@ -782,10 +809,16 @@ export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo
         `ok    citation gate clean over ${result.inScope.length} record(s), ` +
           `${result.excused.length} grandfathered` +
           (history.skipped === null ? ` — checked against ${base}` : ` (${history.skipped})`),
+        ...movedNote(result, base),
       ],
     };
   }
-  return { ok: false, bit: EXIT.citations, name: "citations", lines: problems };
+  return {
+    ok: false,
+    bit: EXIT.citations,
+    name: "citations",
+    lines: [...problems, ...movedNote(result, base)],
+  };
 }
 
 /**
@@ -1242,6 +1275,15 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
     };
   }
 
+  // repo-47, option B, and the choice its Build left here: the touched set is
+  // this branch's own committed diff from its merge base with `base`, **not**
+  // the union with each folded head's. The question a fold asks is whether
+  // *this* branch's records still hold once that head lands, and B bills a
+  // branch only for the records it changes — a union would bill this branch
+  // for the other head's record, the exact cost B removed. The other head's
+  // records are its own preflight's to enforce, folding this one in. Every
+  // state but `moved` is still enforced on every record here, as in CI.
+  const touched = touchedPaths(repo, base, headOid);
   const out = [];
   let problems = 0;
   const targets = otherHeads.length > 0 ? otherHeads : [null];
@@ -1269,7 +1311,7 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
       continue;
     }
     try {
-      const result = citationsGate(merge.dir, SCOPE, grandfathered);
+      const result = citationsGate(merge.dir, SCOPE, grandfathered, null, touched);
       const headProblems = [];
       for (const r of result.failed)
         headProblems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
@@ -1296,10 +1338,11 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
       if (headProblems.length === 0) {
         out.push(
           `ok    scratch merge of ${label} is clean over ${result.inScope.length} record(s)`,
+          ...movedNote(result, base, 3),
         );
       } else {
         problems += 1;
-        out.push(`scratch merge of ${label}:`, ...headProblems);
+        out.push(`scratch merge of ${label}:`, ...headProblems, ...movedNote(result, base, 3));
       }
     } finally {
       removeWorktree(repo, merge.dir);
