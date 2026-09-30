@@ -1,7 +1,7 @@
 ---
 id: repo-84
 tool: repo
-title: Decide whether to add a re-resolve-citations utility script
+title: Add a re-resolve-citations utility script under scripts/ (decided 2026-09-30, build after repo-47)
 kind: work-package
 status: ready
 milestone: null
@@ -15,7 +15,17 @@ difficulty: standard
 
 During the 2026-09-29 batch, a reviewer built the same "re-resolve every unpinned citation by anchor" script in each of four separate gate rounds to find citations that had moved in the branch but were not pinned. This suggests the operation is common enough and valuable enough to make available as a reusable script.
 
-## Build
+## Decision — answered 2026-09-30: option 1, a script under `scripts/`, built later
+
+**Asked of the owner** by the orchestrator via `AskUserQuestion` on 2026-09-30,
+with four options: build it now; **build it later** (option 1 below, chosen);
+document it only (option 2); leave it ad hoc (option 3). **Answered by the
+owner: option 1, built later, after repo-47.** The reason: repo-47 changed what
+"moved" means to the gate, so the script is written against the new meaning.
+The script's semantics are documented in `roles/reviewer.md` meanwhile. Nothing
+is built; `status` is `ready`, and the builder re-measures after repo-47.
+
+## Build (decided: option 1, built later — the step below is the options as filed, superseded)
 
 Decide where to place a `re-resolve-citations.mjs` script. Options, costed
 roughly, recommended one first (the filer's recommendation, not a decision

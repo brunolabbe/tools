@@ -103,10 +103,15 @@ survive.
 
 **2026-09-30:** For a multi-section landing dry run, splice each section
 sequentially: splice, commit the splice (with a conventional message), then
-splice the next section, commit again, and run `citations.mjs --verify` on each.
+splice the next section, commit again, and run `review-record.mjs --verify` on each.
 `review-record.mjs` requires the ticket to be clean between splices, and each
 splice is a separate commit. Do not attempt to dry-run a landing with `--land`
 because the landing cannot dry-run — the `--land` flag performs an actual push.
+
+**2026-09-30:** `citations.mjs` silently drops a citation into a file with no
+extension, a `Dockerfile` among them: it is neither verified nor unchecked, so a
+wrong one passes as if absent (`repo-87`). Until that is fixed, check each such
+citation by hand with `git show <sha>:<path> | sed -n <line>p`.
 
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep
@@ -198,9 +203,11 @@ merge against an unmerged branch as part of a gate's findings, **treat it as a
 prediction, not proof.** The set of records that count as changed depends on the
 merge base; when the unmerged branch is later merged, the base moves and the
 changed set can change. If a gate records a finding based on such a measurement,
-confirm it against the head sha after the dependency merges. Measured: repo-66's
-final gate found changed records measured on a scratch merge against repo-47
-before repo-47 merged; once repo-47 merged, the same records changed differently.
+confirm it against the head sha after the dependency merges. Measured: repo-46's
+gate 2 predicted, from a scratch merge against repo-47 before it merged, that
+repo-47's own record needed repins; once repo-47 merged,
+`node scripts/citations-gate.mjs --against origin/main` exited 0 with
+`137 enforced, 0 failing`, and the requirement was refuted.
 
 ## Check the ticket's premise, not only its code
 

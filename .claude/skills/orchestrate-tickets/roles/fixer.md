@@ -93,7 +93,7 @@ with `pl-48`'s record at "1 moved, 5 unanchored," where the reviewer's own
 dry-run of the same section had 0 unanchored — and the whole round was
 discarded rather than repaired. Both are why this role now runs on a
 different model — see _Why you exist_, above. Your account of what you fixed
-goes in the ticket's Log.
+goes in the ticket's Log, in its own commit after the last splice (2026-09-29).
 
 Set the ticket's `status: done` — or `in-flight`, for work that lands partial
 — in the first record commit of your landing, per `roles/builder.md`'s

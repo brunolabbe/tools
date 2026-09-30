@@ -392,9 +392,11 @@ discarded. So:
   inspection.
 
   **2026-09-29:** An import-block insertion at the top of a file moves citations
-  exactly as a mid-file test insertion does — measured at 44 moved citations on
-  repo-65 when an import was added to `contract/src/errors.ts`. Guard by heading
-  form and diff-before-commit like any other splice. **Also 2026-09-29:** A
+  exactly as a mid-file test insertion does — measured at 44 moved citations in
+  5 records on repo-65 when `workingTreePaths,` was added to the top-of-file
+  import block of `scripts/test/preflight.test.ts`. The remedy was a second,
+  later `import` declaration just above the new test at the end of the file,
+  which left every citation untouched. **Also 2026-09-29:** A
   comment that quotes another line's exact text is a second occurrence of that
   line's anchor, and `citations.mjs` reports it as indistinct. If a comment
   documents a line by quoting it, use an indirect citation or paraphrase instead
