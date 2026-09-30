@@ -593,4 +593,9 @@ scripts/test/check-lockfile-sync.test.ts`. Two of the five (in sync, and
 scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`:
     93 passed (93). `npm test -- --project repo`: 626 passed (626), 620
     before. `node scripts/citations-gate.mjs --against origin/main` exit 0,
-    `135 enforced, 0 failing`. Preflight: see the pushed head's report.
+    `135 enforced, 0 failing`. `node scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the lockfile on release and catch drift in CI (repo-46)"` at `d8fdb3d`: exit 8, `title` only
+    (the expected dl-72 failure, unchanged); `check`, `ciCommands` (incl. `ok
+node scripts/check-lockfile-sync.mjs`), `citations` and `mergeTree` ok,
+    `mergeTree` now also against #325. Across that whole run the shared
+    `node_modules/.package-lock.json` read `2026-09-30 01:23:14.500764343` /
+    `d432f0b6…c80e` before and after.
