@@ -101,10 +101,20 @@ to need a `fix` or `feat`, it splits into one pull request per tool.
   `core` project run below) passed unchanged.
 
   Added `tools/ledger/api/test/logging.test.ts` (the Done-when's callout —
-  the ledger had no logging test at all): five tests proving each of its
-  `REDACT_PATHS` entries censors what it names (`Authorization`, `Cookie`,
-  `cf-access-jwt-assertion`, top-level `apiKey`), plus one proving redaction
-  and not deletion. **Correction, same day, on the coordinator's review:** an
+  the ledger had no logging test at all): one test per `REDACT_PATHS` entry
+  (9, wildcard forms included) plus one proving redaction and not deletion,
+  10 in all. The first draft covered only the four top-level forms (5
+  tests); extended on the coordinator's review to the planner's standard.
+  Mutation, one entry deleted at a time from the ledger's list
+  (`node` script in the scratch directory, file restored after each): eight of
+  nine turn their own test red (`apiKey`, `*.apiKey`, `*.headers.authorization`,
+  `*.authorization`, `headers.cookie`, `*.headers.cookie`,
+  `headers['cf-access-jwt-assertion']`,
+  `*.headers['cf-access-jwt-assertion']`; deleting `headers.cookie` also fails
+  the redaction-not-deletion test, which uses that path). **Shadowed:
+  `headers.authorization` only** — deleting it stays green (`exit 0`, no test
+  failed), because `*.authorization` matches `headers.authorization`. No path
+  removed. **Correction, same day, on the coordinator's review:** an
   earlier draft of this entry left the planner without an equivalent, reading
   "the ledger has none today" as narrowing the Done-when. It does not; "a test
   per tool" includes the planner, whose `REDACT_PATHS` were exercised nowhere
@@ -126,10 +136,10 @@ tools/planner/api/test` matched nothing before this commit). Added
   `logging.test.ts` the Done-when asks to stay unchanged, re-run directly
   too. `--project planner` 76 files, 1301 tests, all passed (75/1293 before the planner test above). `--project
 ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
-  `contract/test/errors.test.ts`, `web/test/vite-config.test.ts`), 20 tests,
-  all passed — 4 files / 15 tests before this branch, +1 file / +5 tests from
-  the new `logging.test.ts` alone (`grep -c '^\s*test(' logging.test.ts` is 5,
-  and it is the only test file this branch adds or edits). `--project core` 5
+  `contract/test/errors.test.ts`, `web/test/vite-config.test.ts`), 25 tests,
+  all passed — 4 files / 15 tests before this branch, +1 file / +10 tests from
+  the new `logging.test.ts` alone (25 tests after the extension; 20 in the
+  first draft). `--project core` 5
   files, 24 tests, all passed.
 
   Citations: `node scripts/citations-gate.mjs --against origin/main` was 0

@@ -5,9 +5,11 @@
  * request carries the visitor's identity as a signed token, in a header and
  * in a cookie, and either is a live session for as long as it lasts. This
  * tool had no logging test at all before repo-66 lifted the shared adapter
- * out of it — its `REDACT_PATHS` list was unverified. The shape follows the
- * downloader's `logging.test.ts`: a logger writing into an array, so the
- * assertions read the real serialised line rather than a call argument.
+ * out of it — its `REDACT_PATHS` list was unverified. One assertion per
+ * entry, named after the entry, so dropping one turns a named test red. The
+ * shape follows the downloader's `logging.test.ts`: a logger writing into an
+ * array, so the assertions read the real serialised line rather than a call
+ * argument.
  */
 
 import { describe, expect, test } from "vitest";
@@ -33,44 +35,76 @@ function capturing(): { logger: AppLogger; lines: Line[] } {
   return { logger, lines };
 }
 
+const SECRET = "super-secret";
+
 describe("the ledger's redaction list", () => {
-  test("censors a bearer token under Authorization", () => {
+  test("apiKey", () => {
     const { logger, lines } = capturing();
-    logger.info("upstream", { headers: { authorization: "Bearer super-secret" } });
+    logger.info("configured", { apiKey: SECRET });
 
-    expect(JSON.stringify(lines[0])).not.toContain("super-secret");
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
-  test("censors a session cookie", () => {
+  test("*.apiKey", () => {
     const { logger, lines } = capturing();
-    logger.info("upstream", { headers: { cookie: "session=super-secret" } });
+    logger.info("configured", { config: { apiKey: SECRET } });
 
-    expect(JSON.stringify(lines[0])).not.toContain("super-secret");
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
-  test("censors Cloudflare Access's own header", () => {
+  test("headers.authorization", () => {
     const { logger, lines } = capturing();
-    logger.info("upstream", {
-      headers: { "cf-access-jwt-assertion": "eyJhbGciOiJSUzI1NiJ9.jwt-secret" },
-    });
+    logger.info("upstream", { headers: { authorization: `Bearer ${SECRET}` } });
 
-    expect(JSON.stringify(lines[0])).not.toContain("jwt-secret");
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
-  test("censors a top-level apiKey", () => {
+  test("*.headers.authorization", () => {
     const { logger, lines } = capturing();
-    logger.info("configured", { apiKey: "sk-super-secret" });
+    logger.info("upstream", { request: { headers: { authorization: `Bearer ${SECRET}` } } });
 
-    expect(JSON.stringify(lines[0])).not.toContain("sk-super-secret");
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
-  test("leaves an unrelated field alone — this is redaction, not deletion", () => {
+  test("*.authorization", () => {
     const { logger, lines } = capturing();
-    logger.info("upstream", {
-      headers: { cookie: "session=super-secret" },
-      host: "ledger.example",
-    });
+    logger.info("upstream", { request: { authorization: `Bearer ${SECRET}` } });
 
-    expect(lines[0]?.["host"]).toBe("ledger.example");
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
+  test("headers.cookie", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { headers: { cookie: `session=${SECRET}` } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
+  test("*.headers.cookie", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { request: { headers: { cookie: `session=${SECRET}` } } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
+  test("headers['cf-access-jwt-assertion']", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { headers: { "cf-access-jwt-assertion": SECRET } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
+  test("*.headers['cf-access-jwt-assertion']", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { request: { headers: { "cf-access-jwt-assertion": SECRET } } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
+  test("redaction, not deletion: the censored key stays and its neighbours are untouched", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { headers: { cookie: SECRET, accept: "application/json" } });
+
+    expect(lines[0]?.["headers"]).toEqual({ cookie: "[redacted]", accept: "application/json" });
   });
 });
