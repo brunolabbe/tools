@@ -63,7 +63,7 @@ function fail(message, exit) {
  * into `source`, because a label prints only when its source produced a row and
  * the dangerous branch is the one that produces none.
  *
- * @typedef {{source: string, paths: string[], note?: string}} Source
+ * @typedef {{source: string, paths: string[], note?: string, unread?: boolean}} Source
  */
 
 /**
@@ -111,6 +111,11 @@ export function runCommand(command, args, options = {}) {
  * counts, rather than only paths shaped like a ticket file. Over-reporting a
  * claim costs a reader one glance; under-reporting one is the entire failure
  * this script exists to prevent, so the two errors are not weighed equally.
+ *
+ * Which paths reach this is decided upstream (repo-49): a branch's diff gives
+ * only files it adds (`ADDED`), and a name naming only merged ids is dropped in
+ * `collect`. One over-report is known and kept — a squash-merged branch's own
+ * ticket file, still `A` against its stale merge base (`branchSources`).
  *
  * @param {string[]} paths
  * @param {string} prefix
@@ -175,6 +180,24 @@ export function clashes(rows) {
 }
 
 /**
+ * The `git diff` flags for "what a branch adds", and repo-49 is why they are
+ * not a bare `--name-only`.
+ *
+ * **`--diff-filter=A`**: a branch that only *edits* a merged ticket — a Log
+ * entry, a gate record, a corrected premise — is not a second claimant of its
+ * id, and without the filter every such edit printed as a clash with `merged`.
+ * Measured on a `pl` sweep, 2026-09-19: 11 of 14 clash lines were `M` alone.
+ *
+ * **`--no-renames`, which the filter is unsafe without.** `git diff` detects
+ * renames by default, so a ticket renumbered from `repo-3` to `repo-12` is one
+ * `R` line, and `--diff-filter=A` alone drops it — the claim on `repo-12`
+ * disappears, which is under-reporting. With detection off it is a `D` and an
+ * `A`, and the `A` is the claim. Both halves have a case in
+ * `scripts/test/next-id.test.ts`.
+ */
+const ADDED = /** @type {const} */ (["diff", "--no-renames", "--diff-filter=A", "--name-only"]);
+
+/**
  * The remote's own branch list, and what each branch adds over `rev`.
  *
  * repo-41's source: a branch that is **pushed but carries no open pull
@@ -208,6 +231,14 @@ export function clashes(rows) {
  * **What it does not reach**: a peer's *local, unpushed* branch. That is the
  * state the 2026-09-06/07 collisions actually were, and no sweep of a remote
  * can see it. This removes one of the two ways to lose the race, not the race.
+ *
+ * **What it over-reports, knowingly — repo-49's shape 2.** A branch whose work
+ * already squash-merged, and which nobody deleted, still has its pre-squash
+ * merge base, so a ticket file it filed is reported `A` and clashes with the
+ * `merged` copy of the same file. Only a content comparison against `rev`'s
+ * tree tells that apart from a genuine second ticket under a taken id, and the
+ * owner chose to leave it (2026-09-28): it is rare, and an extra clash line
+ * costs a glance where a missing one costs a collision.
  *
  * @param {{run?: typeof runCommand, cwd?: string, rev?: string, remote?: string}} [options]
  * @returns {Source[]}
@@ -244,6 +275,9 @@ export function branchSources(options = {}) {
       return {
         source,
         paths,
+        // So that `collect` never lets this branch stand in for its pull
+        // request's diff: that would drop files `gh` can still read.
+        unread: true,
         note:
           `unread: branch ${name} is on ${remote} at ${sha.slice(0, 7)}, which is not in this ` +
           `checkout — only its name was read; run \`git fetch ${remote}\` and re-run for its files`,
@@ -251,23 +285,26 @@ export function branchSources(options = {}) {
     }
 
     try {
-      paths.push(...lines(run("git", ["diff", "--name-only", `${rev}...${sha}`], { cwd })));
+      paths.push(...lines(run("git", [...ADDED, `${rev}...${sha}`], { cwd })));
     } catch (error) {
       const failure = /** @type {Error} */ (error);
       // An orphan branch — `gh-pages` and its kin — shares no history with
       // `rev`, and a symmetric difference with no merge base is fatal, which
       // would take the whole sweep down with it. Fall back to the plain
-      // two-dot diff, which over-reports (every file that differs, not just the
-      // branch's own) — and per `idsIn` above, over-reporting is the cheap
-      // error here and under-reporting is the expensive one.
+      // two-dot diff, which over-reports (every file the branch holds that
+      // `rev` lacks, not just the ones it added) — and per `idsIn` above,
+      // over-reporting is the cheap error here and under-reporting is the
+      // expensive one. Filtered to additions like the three-dot diff: a file
+      // only `rev` holds is `merged`'s claim, not this branch's, and a file
+      // both hold is already taken, so neither is a claim lost.
       if (!/no merge base/iu.test(failure.message)) throw failure;
-      paths.push(...lines(run("git", ["diff", "--name-only", rev, sha], { cwd })));
+      paths.push(...lines(run("git", [...ADDED, rev, sha], { cwd })));
       return {
         source,
         paths,
         note:
-          `unrelated: branch ${name} shares no history with ${rev}, so every file that differs ` +
-          `was read, not just the branch's own — expect it to over-claim`,
+          `unrelated: branch ${name} shares no history with ${rev}, so every file it holds that ` +
+          `${rev} lacks was read, not just the branch's own — expect it to over-claim`,
       };
     }
     return { source, paths };
@@ -276,7 +313,8 @@ export function branchSources(options = {}) {
 
 /**
  * Read both ticket roots at a ref, plus every open pull request's diff, plus
- * every branch the remote has.
+ * every branch the remote has — a pull request and its own head branch counted
+ * once, as the branch's diff under the PR's label (repo-49).
  *
  * @param {string} prefix
  * @param {{run?: typeof runCommand, cwd?: string, rev?: string, remote?: string}} [options]
@@ -330,26 +368,87 @@ export function collect(prefix, options = {}) {
   // a failing command substitution has its status discarded even under
   // `set -e`. The sweep reported the merged half alone and exited 0 — the very
   // defect it had just been rewritten to fix.
+  //
+  // The head is read only for a pull request from this repository: a fork's
+  // head names a branch in the fork, and a same-named branch here (`main`,
+  // typically) is somebody else's. A branch name cannot hold a tab, so the
+  // `@tsv` split is unambiguous.
   const prs = lines(
-    run("gh", ["pr", "list", "--state", "open", "--json", "number", "--jq", ".[].number"], { cwd }),
-  );
+    run(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--json",
+        "number,headRefName,isCrossRepository",
+        "--jq",
+        ".[] | [.number, .headRefName, .isCrossRepository] | @tsv",
+      ],
+      { cwd },
+    ),
+  ).map((line) => {
+    const [number = "", head, fork] = line.split("\t");
+    return { number, head: fork === "false" ? head : undefined };
+  });
+
+  // After `gh pr list` and before any `gh pr diff`, and the order is
+  // load-bearing twice. `gh` is spawned before this reaches the network, so the
+  // case that measures `gh`-absent-is-127 still dies at `gh` and not at
+  // `ls-remote`; and the branches have to be in hand to know which pull
+  // requests they already stand for.
+  //
+  // repo-49: a branch *name* is a floor for an id nobody has filed yet — a
+  // branch cut before its ticket file was committed. A name carrying an id that
+  // is already merged is the ordinary case instead, every `<id>-slug` build
+  // branch, and claims nothing new: a second ticket filed under that id is
+  // still an added file in the branch's diff, and is caught there. So a name
+  // that names only merged ids is dropped. `branchSources` puts it first.
+  const taken = new Set(idsIn(merged, prefix));
+  const branches = branchSources({ run, cwd, rev, remote: options.remote }).map((branch) => {
+    const [name = "", ...files] = branch.paths;
+    const named = idsIn([name], prefix);
+    const stale = named.length > 0 && named.every((id) => taken.has(id));
+    return stale ? { ...branch, paths: files } : branch;
+  });
+  // By head name, fixed before the loop relabels anything, so a second pull
+  // request on the same head still finds its branch.
+  const byHead = new Map(branches.map((branch, at) => [branch.source.slice("branch/".length), at]));
 
   /** @type {Source[]} */
   const sources = [{ source: "merged", paths: merged }];
-  for (const pr of prs) {
+  for (const { number, head } of prs) {
+    const source = `PR#${number}`;
+    // repo-49's shape 3: a pull request and its own head branch read the same
+    // commits, and swept as two sources one claim printed as two. The branch
+    // stands for both, under the PR's label so the number is still on the
+    // line, because its diff takes the added-only filter and `gh pr diff` takes
+    // none — with the PR's diff kept, a PR that only edits a merged ticket would
+    // still clash with `merged`.
+    const at = head === undefined ? undefined : byHead.get(head);
+    const branch = at === undefined ? undefined : branches[at];
+    // Two pull requests on one head share its source, and both numbers stay on it.
+    const label = branch?.source.startsWith("PR#") ? `${branch.source}+${source}` : source;
+    if (at !== undefined && branch && !branch.unread) {
+      branches[at] = { ...branch, source: label };
+      continue;
+    }
     // A pull request whose diff touches no ticket file is ordinary, and must
     // not shorten anything. In the shell version this was `grep`'s exit 1 on no
     // match, guarded with `|| true`; here an empty list is simply an empty list.
-    sources.push({
-      source: `PR#${pr}`,
-      paths: lines(run("gh", ["pr", "diff", pr, "--name-only"], { cwd })),
-    });
+    const paths = lines(run("gh", ["pr", "diff", number, "--name-only"], { cwd }));
+    // A head branch this checkout has not fetched had only its name read, so it
+    // cannot stand for the PR — its files would be lost, which is the expensive
+    // error. The PR's own diff is kept, unfiltered, beside the name, and the
+    // "only its name was read" note goes, because the files were read after all.
+    // It stays `unread`, so a second PR on the same head adds its own diff too.
+    if (at !== undefined && branch) {
+      branches[at] = { source: label, paths: [...branch.paths, ...paths], unread: true };
+    } else sources.push({ source, paths });
   }
 
-  // Last, and the order is load-bearing for one test rather than for the
-  // answer: `gh` is spawned before this reaches the network, so the case that
-  // measures `gh`-absent-is-127 still dies at `gh` and not at `ls-remote`.
-  sources.push(...branchSources({ run, cwd, rev, remote: options.remote }));
+  sources.push(...branches);
   return sources;
 }
 
