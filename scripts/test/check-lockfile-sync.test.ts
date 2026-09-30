@@ -54,14 +54,45 @@ function fixture(lockVersion: string, manifestVersion = "1.0.0"): string {
   return dir;
 }
 
-/** The script's own runner, with output captured instead of inherited. */
+/**
+ * The four tests that run `npm` for real are skipped on Windows, and this
+ * comment is why they are skipped rather than made to work. There `npm` is a
+ * `.cmd` shim, and spawning it with `shell: false` — which this repo forbids
+ * changing — never starts a process (`.claude/rules/testing.md`, the paragraph
+ * whose bold lead is "A test that runs a tool out of `node_modules` cannot
+ * spawn its `bin` directly, because Windows does not honour a shebang"). That
+ * rule's answer, resolving
+ * npm's `npm-cli.js` and running it under `process.execPath`, was weighed and
+ * not taken (owner, 2026-09-30, repo-46): the script under test only ever runs
+ * on the ubuntu `check` job it mirrors and in Linux worktrees through
+ * preflight, so a Windows-only spawn path here would be test code with no
+ * production counterpart. The script's own spawn-failure path is covered
+ * where it can be, by the injected-runner tests below, on every platform.
+ */
+const realNpm = test.skipIf(process.platform === "win32");
+
+/**
+ * The script's own runner, with output captured instead of inherited.
+ *
+ * It asserts the spawn itself started. Without that, a missing `npm` comes
+ * back as `status: null` and an empty `output`, and the test that used it
+ * fails on a verdict or a missing diff — blaming the script for a process
+ * that never ran. Measured with a `PATH` holding only `node`: two tests failed
+ * with `expected 1 to be +0` and `expected '' to match`, and two more passed
+ * without `npm` ever running.
+ */
 function quietRun(command: string, args: string[], options: { cwd: string }) {
   const result = spawnSync(command, args, { cwd: options.cwd, encoding: "utf8", shell: false });
+  expect(result.error, `could not start ${command}`).toBeUndefined();
   return { status: result.status, error: result.error, output: result.stdout + result.stderr };
 }
 
 /** A spawn that never started: `status` is null and `error` says why. */
 const neverStarted = () => ({ status: null, error: new Error("spawn npm ENOENT") });
+
+/** An install that succeeds and a `git` that never started. */
+const gitNeverStarted = (command: string) =>
+  command === "npm" ? { status: 0 } : { status: null, error: new Error("spawn git ENOENT") };
 
 /** Every file under `dir` with its bytes, to prove nothing was written. */
 function snapshot(dir: string): Record<string, string> {
@@ -77,7 +108,7 @@ function snapshot(dir: string): Record<string, string> {
   return out;
 }
 
-test("a lockfile that matches every manifest passes and leaves the directory as it was", () => {
+realNpm("a lockfile that matches every manifest passes and leaves the directory as it was", () => {
   const dir = fixture("1.0.0");
   const before = snapshot(dir);
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -88,48 +119,54 @@ test("a lockfile that matches every manifest passes and leaves the directory as 
   expect(snapshot(dir)).toEqual(before);
 });
 
-test("a lockfile one workspace version behind fails, names the drift, and is not rewritten", () => {
-  const dir = fixture("0.9.0");
-  const before = snapshot(dir);
-  const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  let diffOutput = "";
-  const capturing = (command: string, args: string[], options: { cwd: string }) => {
-    const result = quietRun(command, args, options);
-    if (command === "git") diffOutput = result.output;
-    return result;
-  };
+realNpm(
+  "a lockfile one workspace version behind fails, names the drift, and is not rewritten",
+  () => {
+    const dir = fixture("0.9.0");
+    const before = snapshot(dir);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    let diffOutput = "";
+    const capturing = (command: string, args: string[], options: { cwd: string }) => {
+      const result = quietRun(command, args, options);
+      if (command === "git") diffOutput = result.output;
+      return result;
+    };
 
-  expect(checkLockfileSync(dir, capturing)).toBe(1);
+    expect(checkLockfileSync(dir, capturing)).toBe(1);
 
-  expect(diffOutput).toMatch(/-\s+"version": "0\.9\.0"/u);
-  expect(diffOutput).toMatch(/\+\s+"version": "1\.0\.0"/u);
-  expect(String(stderr.mock.calls[0]?.[0])).toMatch(/out of sync/u);
-  // The property gate 1 found missing: the script reports drift, it does not
-  // repair it in the caller's tree.
-  expect(snapshot(dir)).toEqual(before);
-});
+    expect(diffOutput).toMatch(/-\s+"version": "0\.9\.0"/u);
+    expect(diffOutput).toMatch(/\+\s+"version": "1\.0\.0"/u);
+    expect(String(stderr.mock.calls[0]?.[0])).toMatch(/out of sync/u);
+    // The property gate 1 found missing: the script reports drift, it does not
+    // repair it in the caller's tree.
+    expect(snapshot(dir)).toEqual(before);
+  },
+);
 
-test("nothing npm writes lands in the directory it was run from, hidden lockfile included", () => {
-  // In a farm worktree `node_modules/.package-lock.json` is a symlink into the
-  // shared checkout, and npm rewrites it whenever it installs beside it. A
-  // regular file stands in for the symlink: what matters is that it is not
-  // touched, and a rewrite of a regular file is as visible as one through a link.
-  const dir = fixture("0.9.0");
-  const hidden = path.join(dir, "node_modules", ".package-lock.json");
-  fs.mkdirSync(path.dirname(hidden));
-  fs.writeFileSync(hidden, "sentinel\n");
-  const old = new Date("2020-01-01T00:00:00Z");
-  fs.utimesSync(hidden, old, old);
-  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+realNpm(
+  "nothing npm writes lands in the directory it was run from, hidden lockfile included",
+  () => {
+    // In a farm worktree `node_modules/.package-lock.json` is a symlink into the
+    // shared checkout, and npm rewrites it whenever it installs beside it. A
+    // regular file stands in for the symlink: what matters is that it is not
+    // touched, and a rewrite of a regular file is as visible as one through a link.
+    const dir = fixture("0.9.0");
+    const hidden = path.join(dir, "node_modules", ".package-lock.json");
+    fs.mkdirSync(path.dirname(hidden));
+    fs.writeFileSync(hidden, "sentinel\n");
+    const old = new Date("2020-01-01T00:00:00Z");
+    fs.utimesSync(hidden, old, old);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
-  checkLockfileSync(dir, quietRun);
+    checkLockfileSync(dir, quietRun);
 
-  expect(fs.readFileSync(hidden, "utf8")).toBe("sentinel\n");
-  expect(fs.statSync(hidden).mtimeMs).toBe(old.getTime());
-  expect(fs.existsSync(path.join(dir, "node_modules", "a"))).toBe(false);
-});
+    expect(fs.readFileSync(hidden, "utf8")).toBe("sentinel\n");
+    expect(fs.statSync(hidden).mtimeMs).toBe(old.getTime());
+    expect(fs.existsSync(path.join(dir, "node_modules", "a"))).toBe(false);
+  },
+);
 
-test("its temporary directory is removed, whatever the verdict", () => {
+realNpm("its temporary directory is removed, whatever the verdict", () => {
   const made: string[] = [];
   const spy = (command: string, args: string[], options: { cwd: string }) => {
     if (command === "npm") made.push(options.cwd);
@@ -164,4 +201,13 @@ test("an install that fails passes its own exit status through and never reaches
   expect(checkLockfileSync(dir, failing)).toBe(7);
 
   expect(commands).toEqual(["npm"]);
+});
+
+test("a git that never started says so and fails, instead of reading as a clean diff", () => {
+  const dir = fixture("1.0.0");
+  const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  expect(checkLockfileSync(dir, gitNeverStarted)).toBe(1);
+
+  expect(String(stderr.mock.calls[0]?.[0])).toMatch(/could not run git diff: spawn git ENOENT/u);
 });
