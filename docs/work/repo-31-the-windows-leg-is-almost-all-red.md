@@ -13,7 +13,7 @@ depends_on: []
 ## Why
 
 `.github/workflows/ci.yml` runs the unit-test matrix over
-`` `.github/workflows/ci.yml:329` "os: [ubuntu-latest, windows-latest]" ``, gated
+`` `.github/workflows/ci.yml@e79b04f:329` "os: [ubuntu-latest, windows-latest]" ``, gated
 by a `changes` job rather than an event filter — a documentation-only push still
 skips the matrix, on both `push` and `pull_request` alike. The repo's owner asked
 directly whether the Windows leg is worth keeping. This ticket is where that
@@ -271,8 +271,8 @@ Four `gh run view` calls, as asked:
   regression reported green on `main`'s own push trigger, having never run the
   matrix.
 - The `changes` gate is real, not a guess:
-  `` `.github/workflows/ci.yml:221` "changes:" `` /
-  `` `.github/workflows/ci.yml:325` "if: needs.changes.outputs.code == 'true'" ``.
+  `` `.github/workflows/ci.yml@e79b04f:221` "changes:" `` /
+  `` `.github/workflows/ci.yml@e79b04f:325` "if: needs.changes.outputs.code == 'true'" ``.
 - Only the unfiltered `schedule` trigger ran the matrix against the regression
   and went red — run `34127289168`, 13:25 UTC, the first of the four
   citations-only failures in measurement 1's table. Everything between 11:39
@@ -296,7 +296,7 @@ mutually exclusive.
 ### A. Remove `windows-latest` from the matrix
 
 Cheapest. Deletes one array entry at
-`` `.github/workflows/ci.yml:329` "os: [ubuntu-latest, windows-latest]" ``.
+`` `.github/workflows/ci.yml@e79b04f:329` "os: [ubuntu-latest, windows-latest]" ``.
 
 - Ends the dominant source of red immediately — 7 of 8 failures counted here
   disappear outright, and the 8th's Windows half with them.

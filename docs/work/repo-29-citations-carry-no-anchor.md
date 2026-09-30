@@ -268,7 +268,7 @@ cannot be taken first.**
 - The step belongs in the `check` job, which is filtered by nothing and so sees a
   markdown-only change, beside the board gate that is already there:
 
-  `.github/workflows/ci.yml:129` "node scripts/status.mjs --json"
+  `.github/workflows/ci.yml@e79b04f:129` "node scripts/status.mjs --json"
 
 ### D. Enforce where a citation carries a verdict — chosen, as the first slice
 
@@ -1021,7 +1021,7 @@ unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did no
     edit to a constant rather than to YAML, and so the loop is testable. 13 tests
     in `scripts/test/citations-gate.test.ts`.
   - One CI step in the `check` job, beside repo-21's:
-    `.github/workflows/ci.yml:190 "node scripts/citations-gate.mjs --against"`.
+    `.github/workflows/ci.yml@e79b04f:190 "node scripts/citations-gate.mjs --against"`.
   - A record with **no** `## Review` section is out of scope rather than an
     error, which is the one place this deliberately disagrees with
     `citations.mjs --section`. That flag refuses a name matching nothing for a

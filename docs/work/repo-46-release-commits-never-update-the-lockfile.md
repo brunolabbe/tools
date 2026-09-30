@@ -360,7 +360,7 @@ A and C, in one change:
   Added A's second `extra-files` entry to all three tools in
   `release-please-config.json`, `$.packages['tools/<tool>/api'].version`
   against `/package-lock.json`, per the Build section and the `jsonpath-plus`
-  measurement already recorded under Options. Added C as two steps in
+  measurement already recorded under Options. Added C as one step (corrected in round 2: this said "two steps") in
   `.github/workflows/ci.yml`'s `check` job, right after `npm ci` and before
   `npm run check` — kept clear of the citations-gate step at the end of that
   job, which repo-47 edits concurrently, so the two branches' diffs sit in
@@ -466,7 +466,8 @@ downloader` all ok — the downloader suite ran because this branch also
         changelog line and a version for that tool over what is really a docs-only change
   ```
 
-  This is Build step 1's own consequence, not something new: adding A's
+  This is Build step 3's consequence (corrected in round 2: this said step
+  1), not something new: adding A's
   second `extra-files` entry to all three tools shifts every line below the
   first edit in `release-please-config.json`, including dl-72's `"Fixes"`
   citation at line 33 (repointed above, under the 2026-09-28-adjacent entry).
@@ -488,6 +489,8 @@ citation displaced by repo-46's config edit`), landing separately from
      `main` is never left with dl-72's citation `MOVED` (this branch's own
      `release-please-config.json` edit is what displaces it, so the two
      either merge in the same window or the repoint merges first).
+     **Corrected in round 2:** the pin to `e79b04f` resolves on `main`
+     today, so the dl-72 change can always merge first.
   2. **Give this whole branch a hidden type** (`build` or `ci` both fit: the
      change is `.github/workflows/ci.yml` and release tooling config,
      nothing shipped to an end user) instead of `fix`. Costs nothing
@@ -501,6 +504,10 @@ citation displaced by repo-46's config edit`), landing separately from
      exists to catch, and CLAUDE.md's own rule ("a commit that touches two
      tools lands in both changelogs under one sentence written for one of
      them … meaning two pull requests") names this shape directly.
+     **Corrected in round 2:** the cost was overstated as a version bump.
+     #284 (`chore(downloader): release 0.8.0`) is open, so a `fix` adds one
+     line to that pending 0.8.0 changelog; it causes a new version only if
+     #284 merges first.
 
   I did not choose one: **I have no ship authority on this branch, and the
   real pull request title is chosen at landing, not by this commit's own
@@ -511,3 +518,79 @@ citation displaced by repo-46's config edit`), landing separately from
   Left the commit as `fix(repo): …` — an accurate description of the change,
   matching the ticket's own `kind: fix` — rather than pre-empting the
   decision by mistyping it.
+
+- **2026-09-30 — round 2, after gate 1 at `cff47a6` (CONCERNS: three meds,
+  four lows) and the owner's three answers.** Built from `cff47a6`.
+  - **The title decision, answered by the owner:** rebase onto `main` after
+    repo-47 merges, drop only the dl-72 repoint (keep the nine `repo-`
+    pins), and land as `fix(repo): stamp the lockfile on release and catch
+drift in CI (repo-46)`. repo-47 makes the citations gate enforce only
+    records a branch changes, so an untouched dl-72 is excused. This
+    overrode the builder's option 1 and the gate's option 2 (`ci(repo):`).
+    **Not done yet, on purpose:** the rebase waits for repo-47's merge, and
+    at it the records this branch edits (repo-29, repo-31 and the others)
+    become enforced under repo-47's rule, so any citation there that
+    repo-47's own changes moved fails the gate until pinned. Until then
+    `node scripts/preflight.mjs --base origin/main --title "fix(repo): …"`
+    still fails `title` (exit 8), as expected.
+  - **M1 reproduced, then fixed.** Reproduced in a scratch copy whose
+    `node_modules/.package-lock.json` is a symlink to a scratch stand-in for
+    the shared file: running round 1's `check-lockfile-sync.mjs` moved that
+    file's mtime (`01:42:15.176` to `01:42:24.485`); its hash did not change
+    because this manifest set matched the one it was built from. Fixed by
+    the owner's option (the gate's option 1): the script now stages the root
+    `package.json`, the lockfile, an `.npmrc` if any, and every workspace
+    `package.json` into an `os.tmpdir()` directory, installs there, and
+    compares the regenerated lockfile with the committed one
+    (`git diff --no-index`); the directory is removed in a `finally`.
+    **From outside the script:** in this farm worktree,
+    `node scripts/check-lockfile-sync.mjs` exit 0, 0.59 s, and
+    `stat`/`sha256sum` of `/workspaces/tools/node_modules/.package-lock.json`
+    before and after read `2026-09-30 01:23:14.500764343` /
+    `d432f0b6…c80e` both times; `ls -d /tmp/lockfile-sync-*` is empty
+    after. Drifted case on the real tree (`package-lock.json:6228` set to
+    `0.6.0`): exit 1, the diff shows only that line, and the worktree
+    lockfile still says `0.6.0` afterwards (not repaired in place); reverted.
+  - **M2, `scripts/test/check-lockfile-sync.test.ts`, 6 tests**, plus one
+    `include` line in `scripts/test/tsconfig.json` (TS6307 otherwise).
+    Cases: in sync (exit 0, directory byte-identical); one version behind
+    (exit 1, diff names both versions, stderr says out of sync, caller's
+    files unchanged); a sentinel `node_modules/.package-lock.json` with an
+    old mtime untouched and no `node_modules/a` link created; the temp
+    directory gone after both verdicts; a spawn that never started (`error`
+    set, `status` null) exits 1 naming it; an install that exits 7 returns 7
+    and never runs `git`. **Red first against round 1's script**
+    (`git show HEAD:scripts/check-lockfile-sync.mjs` swapped in, then
+    restored): 5 of 6 fail, `npx vitest run
+scripts/test/check-lockfile-sync.test.ts`. Two of the five (in sync, and
+    drifted) fail there with exit 129 because round 1 ran `git diff` in the
+    fixture, which is not a git repository; that is not the behaviour they
+    are meant to pin, so the honest red cases are the other three — the
+    hidden lockfile rewritten (`expected '{ "name": "fx", …' to be
+'sentinel\n'`), the temp-directory case, and the missing spawn-error
+    message. Green now: 6 of 6.
+  - **L1** Log claims corrected in place above (each marked "corrected in
+    round 2"): "two steps" is one step; the dl-72 repoint follows from Build
+    step 3, not 1; option 3's cost is one line in #284's pending 0.8.0
+    changelog, not a new version unless #284 merges first; option 1's merge
+    order can always put dl-72 first, since the `e79b04f` pin resolves on
+    `main` today. The title decision above is recorded beside them.
+  - **L2** "same flags": the script and its two comments now say
+    `--no-audit --no-fund` are additions to the Build section's flags.
+    `ci.yml`'s comment kept its line count, so no citation moves.
+  - **L3** Eleven anchored citations outside any enforced `## Review`,
+    correct at `e79b04f`, are now pinned to it: `repo-31` lines 16, 274,
+    275, 299; `repo-24` 53, 369; `repo-29` 271, 1024; `history.md` 1521,
+    1522, 3826. `node scripts/citations.mjs <file>` reports the `@e79b04f`
+    ones `ok` in each of the four files. `repo-29:1096` (`ci.yml:326`) is not
+    among them: that coordinate was already wrong at `e79b04f`, so a pin
+    would fail, and it is left alone.
+  - **L4** `install.error` and `diff.error` are read; a spawn that never
+    started prints `could not run npm: <message>` and exits 1. Windows
+    itself is **unmeasured**: the check job runs on Linux and the tested
+    path is the injected error.
+  - `npm run check` exit 0. `npx vitest run
+scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`:
+    93 passed (93). `npm test -- --project repo`: 626 passed (626), 620
+    before. `node scripts/citations-gate.mjs --against origin/main` exit 0,
+    `135 enforced, 0 failing`. Preflight: see the pushed head's report.

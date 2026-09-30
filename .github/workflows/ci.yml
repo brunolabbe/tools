@@ -119,8 +119,8 @@ jobs:
       # raw `npm install --package-lock-only …` line here fails
       # `deriveExtraCiCommands` and the unit test pinning its output over
       # this file, for every future run. `scripts/check-lockfile-sync.mjs`
-      # runs the same two commands, in the same order, with the same flags,
-      # and is outside that guard.
+      # runs C's install and diff in a temp directory, not the caller's tree
+      # (plus `--no-audit --no-fund`), and is outside that guard.
       - run: node scripts/check-lockfile-sync.mjs
       - run: npm run check
       # Parses every ticket, and fails by file and line on anything it does not

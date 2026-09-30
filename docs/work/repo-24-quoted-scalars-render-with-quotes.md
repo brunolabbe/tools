@@ -50,7 +50,7 @@ because it is what a reader needs in order to size this:
   `milestone`.** Measured below: exit 0, `problems: []`. `EXIT_ON_PROBLEMS` is
   `["json"]` (`scripts/status.mjs:610`) and it fires only on a dangling
   dependency or a gate record on a `ready` ticket. CI's board gate is
-  `node scripts/status.mjs --json > /dev/null` (`.github/workflows/ci.yml:129` "run: node scripts/status.mjs --json"),
+  `node scripts/status.mjs --json > /dev/null` (`.github/workflows/ci.yml@e79b04f:129` "run: node scripts/status.mjs --json"),
   so a quoted title never turns CI red.
 - **A quoted `depends_on` entry is a different story and does reach the exit
   code.** See the third row of the field table below. That is a correction to
@@ -366,7 +366,7 @@ node scripts/status.mjs --root "$R" --json
   `note` and `milestone` — measured, exit 0 with `problems: []`. It is false for
   `depends_on`: `parseList` has the same gap and turns a quoted entry into a
   false `dangling-dependency`, which makes `--json` exit 1 and fails
-  `.github/workflows/ci.yml:129` "run: node scripts/status.mjs --json", the board's whole CI gate. The brief asked
+  `.github/workflows/ci.yml@e79b04f:129` "run: node scripts/status.mjs --json", the board's whole CI gate. The brief asked
   whether `parseList` "may or may not have the same gap". It does, and it is the
   more serious half.
 - **The quoting was never required by this parser.** An unquoted leading
