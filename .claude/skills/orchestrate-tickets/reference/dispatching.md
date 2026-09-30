@@ -65,9 +65,9 @@ What only you can supply, and what every builder prompt therefore carries:
   `<scratchpad>/<id>/build/` and the gate under `<scratchpad>/<id>/gate-<n>/`.
   A gate prompt must say the gate never lists `<scratchpad>/<id>/` itself to avoid
   seeing the builder's scratch files.
-- **Say "maintenance" when it is one** — no ticket, or a `chore` with no
-  source change — so the builder runs on Haiku by the table and stops on a
-  judgement call instead of making it (repo-56).
+- **Say "maintenance" when it is one** — a citation pin, a rebase, a merge from `main`, one Log edit — so the builder runs on Haiku by the table
+  and stops on a judgement call instead of making it (repo-56). A chore writing rule pages or records from a fact list is not maintenance:
+  it is the docs/records-only row, `builder-standard`.
 - **The narrowest thing that can fail**, for verification runs. Agents reach for
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
