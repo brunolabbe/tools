@@ -90,10 +90,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The citation gate's `--against` reads this file's own
-          # `GRANDFATHERED` list as it stood on the base branch, so this job
-          # needs a history where every other check here needs only the
-          # checkout. It is the same reason the `changes` job below sets it, and
+          # The citation gate's `--against` reads history twice: its own
+          # `GRANDFATHERED` list as it stood on the base branch, and the merge
+          # base of `HEAD` with that branch, which decides the records a change
+          # is billed for (repo-47). So this job needs a history where every
+          # other check here needs only the checkout. It is the same reason the `changes` job below sets it, and
           # it changes what this job fetches rather than when it runs — the
           # cheaper of the two ways to give the gate a memory, and the reason
           # the step stays here instead of moving into a job that already had
@@ -115,7 +116,7 @@ jobs:
       # reads the ticket's own body rather than its commits. That used to be
       # forced — this job took a depth-1 clone, so a check written against
       # `git log` would have passed by seeing nothing. It is now a choice: the
-      # citation gate below needs the base branch's copy of one file, so the
+      # citation gate below needs the base branch's history, so the
       # checkout above fetches a history and any step here *could* read one. This
       # one still does not, and should not; a board check that consulted the log
       # would be answering a different question from the one repo-12 asked.
@@ -167,9 +168,9 @@ jobs:
       # them, prints the remaining debt on every run, and errors if one of them
       # starts passing.
       #
-      # Same depth-1 caveat as the two steps above: it reads the checkout, never
-      # the history, and it needs `check` to stay filtered by nothing, because
-      # the change that breaks it is a markdown-only one by construction.
+      # Like the two steps above, it needs `check` to stay filtered by nothing,
+      # because the change that breaks it is a markdown-only one by
+      # construction. Unlike them it reads history, through `--against` below.
       #
       # `--against` is the half that cannot be derived from the checkout. The
       # `GRANDFATHERED` list is a ratchet, and a ratchet with no memory is

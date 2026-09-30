@@ -734,18 +734,28 @@ export function grandfatheredFor(repo) {
 }
 
 /**
- * One line naming the `moved` citations the gate reported rather than failed —
- * enforced records this branch does not change (repo-47, option B) — or none.
+ * The `moved` citations the gate reported rather than failed — enforced records
+ * not changed since the merge base with `base` (repo-47, option B) — as a
+ * summary line and one line per record, or nothing. `limit` caps the records
+ * listed: a fold repeats what check 2 already listed, and on the live corpus
+ * one line naming all of them ran to about 900 characters (gate 1, F3).
  *
  * @param {{reported?: {record: string, moved: object[]}[]}} result
+ * @param {string} base
+ * @param {number} [limit]
  */
-const movedNote = (result) => {
+const movedNote = (result, base, limit = Infinity) => {
   const reported = result.reported ?? [];
   if (reported.length === 0) return [];
   const count = reported.reduce((n, r) => n + r.moved.length, 0);
+  const shown = reported.slice(0, limit);
   return [
-    `note  ${count} moved citation(s) in ${reported.length} record(s) this branch does not ` +
-      `change, reported and not failed: ${reported.map((r) => r.record).join(", ")}`,
+    `note  ${count} moved citation(s) in ${reported.length} record(s) not changed since the ` +
+      `merge base with ${base}, reported and not failed:`,
+    ...shown.map((r) => `        ${r.record} — ${r.moved.length} moved`),
+    ...(reported.length > shown.length
+      ? [`        … and ${reported.length - shown.length} more; check 2 lists every one`]
+      : []),
   ];
 };
 
@@ -799,7 +809,7 @@ export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo
         `ok    citation gate clean over ${result.inScope.length} record(s), ` +
           `${result.excused.length} grandfathered` +
           (history.skipped === null ? ` — checked against ${base}` : ` (${history.skipped})`),
-        ...movedNote(result),
+        ...movedNote(result, base),
       ],
     };
   }
@@ -807,7 +817,7 @@ export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo
     ok: false,
     bit: EXIT.citations,
     name: "citations",
-    lines: [...problems, ...movedNote(result)],
+    lines: [...problems, ...movedNote(result, base)],
   };
 }
 
@@ -1328,11 +1338,11 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
       if (headProblems.length === 0) {
         out.push(
           `ok    scratch merge of ${label} is clean over ${result.inScope.length} record(s)`,
-          ...movedNote(result),
+          ...movedNote(result, base, 3),
         );
       } else {
         problems += 1;
-        out.push(`scratch merge of ${label}:`, ...headProblems, ...movedNote(result));
+        out.push(`scratch merge of ${label}:`, ...headProblems, ...movedNote(result, base, 3));
       }
     } finally {
       removeWorktree(repo, merge.dir);

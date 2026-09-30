@@ -2142,7 +2142,9 @@ test("checkScratchMergeCitations enforces HEAD's own records, not the folded hea
     const heads = [{ number: 7, headRefName: "b", oid: oidB }];
     const fromMine = checkScratchMergeCitations(repo.dir, mineOid, heads, mainOid, new Map());
     expect(fromMine.ok).toBe(true);
-    expect(fromMine.lines.join("\n")).toMatch(/note {2}1 moved citation\(s\).*docs\/work\/b\.md/);
+    expect(fromMine.lines.join("\n")).toMatch(
+      /note {2}1 moved citation\(s\)[\s\S]*docs\/work\/b\.md/,
+    );
 
     // The other side of the same pair: from b's point of view the record is its
     // own, so the same fold fails.
@@ -2151,6 +2153,59 @@ test("checkScratchMergeCitations enforces HEAD's own records, not the folded hea
     const fromB = checkScratchMergeCitations(repo.dir, oidB, mine, mainOid, new Map());
     expect(fromB.ok).toBe(false);
     expect(fromB.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/b\.md — 1 moved/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * repo-47 gate 1, F3(c). The note used to name every reported record on one
+ * line, about 900 characters on the live corpus, and repeat it once per fold.
+ * Check 2 now lists one record per line; a fold, which says the same thing
+ * again, lists at most three and points at check 2 for the rest.
+ */
+test("the moved note lists one record per line in check 2, and at most three in a fold", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    for (const name of ["a", "b", "c", "d"]) repo.write(`docs/work/${name}.md`, ANCHORED_REVIEW);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "o");
+    repo.write("other.md", "unrelated\n");
+    repo.commitAll("an unrelated open pull request");
+    const oidOther = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("shift the cited line");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    const check2 = checkCitations(repo.dir, mainOid, new Map());
+    expect(check2.ok).toBe(true);
+    expect(check2.lines).toContain(
+      `note  4 moved citation(s) in 4 record(s) not changed since the merge base with ${mainOid}, reported and not failed:`,
+    );
+    for (const name of ["a", "b", "c", "d"]) {
+      expect(check2.lines).toContain(`        docs/work/${name}.md — 1 moved`);
+    }
+
+    const fold = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 3, headRefName: "o", oid: oidOther }],
+      mainOid,
+      new Map(),
+    );
+    expect(fold.ok).toBe(true);
+    expect(fold.lines.filter((l) => l.startsWith("        docs/work/"))).toHaveLength(3);
+    expect(fold.lines).toContain("        … and 1 more; check 2 lists every one");
+    // The note's own lines only: check 2's ok line carries compareAgainst's
+    // bootstrap message here, since this fixture has no copy of the gate.
+    const noteLines = [...check2.lines, ...fold.lines].filter((l) => /^(note|        )/.test(l));
+    for (const line of noteLines) expect(line.length).toBeLessThan(160);
   } finally {
     repo.cleanup();
   }

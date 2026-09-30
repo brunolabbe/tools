@@ -342,7 +342,7 @@ discarded. So:
     only the records it also edits.** `citations-gate.mjs --against` fails
     `moved` only in the records the branch's diff from its merge base with
     the base touches; a `moved` anywhere else is printed under "Moved in
-    records this branch does not change" and fails nothing, in CI and in
+    records not changed since the merge base" and fails nothing, in CI and in
     `preflight.mjs` alike. So a code change that shifts a line a merged
     record cites repoints nothing, and the move stays on `main` as reported
     debt — every push and nightly run prints it — until a branch that edits

@@ -1166,7 +1166,8 @@ const shiftTls = (dir: string) =>
     ].join("\n"),
   );
 
-const REPORTED = /Moved in records this branch does not change — 1 citation\(s\) in 1 record\(s\)/;
+const REPORTED =
+  /Moved in records not changed since the merge base with main — 1 citation\(s\) in 1 record\(s\)/;
 
 test("repo-47: a branch that moves a line an untouched record cites passes, and reports it", () => {
   const { dir, run, cleanup } = withGateCopy();
@@ -1317,6 +1318,67 @@ test("repo-47: touchedPaths refuses a base it shares no history with, rather tha
     gitIn(dir, "checkout", "-q", "--orphan", "unrelated");
     gitIn(dir, "commit", "-q", "--allow-empty", "-m", "no shared history");
     expect(() => touchedPaths(dir, "main")).toThrow(/no merge base with HEAD/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * repo-47 gate 1, F2 and F3. An untouched record holding a `moved` *and* an
+ * `unresolvable` still fails — on the `unresolvable` alone. Its FAIL line counts
+ * only what failed, its `moved` is listed under the reported heading, and that
+ * heading comes after the FAIL lines, which are what turn the build red.
+ *
+ * `c.md` is on `main` before the branch is cut, citing `src/tls.ts` and
+ * `src/other.ts`; the branch shifts the first and deletes the second.
+ */
+test("repo-47: an untouched record with a moved and an unresolvable fails on the unresolvable alone", () => {
+  const { dir, run, cleanup } = withGateCopy();
+  try {
+    gitIn(dir, "checkout", "-q", "main");
+    fs.writeFileSync(path.join(dir, "src", "other.ts"), "export const other = 1;\n");
+    fs.writeFileSync(
+      path.join(dir, "docs", "work", "c.md"),
+      '## Review\n\nProof: `src/tls.ts:2 "Defence in depth"` and `src/other.ts:1 "const other"`.\n',
+    );
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "a record citing two files");
+    gitIn(dir, "checkout", "-q", "branch");
+    gitIn(dir, "merge", "-q", "--ff-only", "main");
+    shiftTls(dir);
+    fs.rmSync(path.join(dir, "src", "other.ts"));
+    gitIn(dir, "commit", "-qam", "code: shift one cited line, delete the other file");
+
+    const result = run();
+    const out = String(result.stdout);
+    expect(out).toMatch(/FAIL {2}docs\/work\/c\.md — 1 unresolvable\n/);
+    expect(out).not.toMatch(/FAIL {2}docs\/work\/c\.md — .*moved/);
+    expect(out).toMatch(
+      /Moved in records not changed since the merge base with main — 2 citation\(s\) in 2 record\(s\)/,
+    );
+    expect(out).toMatch(/MOVED docs\/work\/c\.md\n {9}moved {8}src\/tls\.ts:2 /);
+    expect(out.indexOf("FAIL  docs/work/c.md")).toBeLessThan(out.indexOf("Moved in records"));
+    expect(result.status).toBe(1);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * repo-47 gate 1, F5. A ref that does not resolve is named as that — the advice
+ * `compareAgainst` already gave — rather than as a missing merge base, which is
+ * what `touchedPaths` said once it began running first.
+ */
+test("repo-47: an --against ref that does not resolve says so, not that the merge base is missing", () => {
+  const { dir, cleanup } = withGateCopy();
+  try {
+    const result = spawnSync("node", [path.join(dir, SELF), "--against", "no-such-ref"], {
+      ...TEXT,
+      cwd: dir,
+    });
+    expect(result.stderr).toMatch(/--against no-such-ref: no such commit/);
+    expect(result.stderr).not.toMatch(/no merge base/);
+    expect(result.status).toBe(1);
   } finally {
     cleanup();
   }

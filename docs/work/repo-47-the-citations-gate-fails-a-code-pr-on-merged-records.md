@@ -487,3 +487,59 @@ scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
   - Spawn calls: two new `execFileSync("git", …)` calls in `touchedPaths`,
     `shell: false` via `GIT_EXEC_OPTIONS`. No existing spawn call was edited,
     and none of `preflight.mjs`'s `spawnSync` calls (repo-83's) was touched.
+- **2026-09-30 — round 2: gate 1's F2–F6 fixed, and F1 kept by the owner.**
+  Gate 1 (at `3487667`) raised one open decision, F1: `moved` also covers an
+  anchor that is no longer in the file at all. The owner kept B as built,
+  choosing through AskUserQuestion, so nothing was built for it, and the
+  demotion's comment now says `moved` covers both. The owner chose fixing the
+  five lows now over disclosing them.
+  - **F2, reproduced, then fixed.** Replacing the demotion's `const failures =
+result.failures.filter(…)` with `const failures = [];` left 144 of 144
+    passing across `citations-gate.test.ts` and `preflight.test.ts`, run by
+    `mutate-m6.mjs` in the scratch directory. The new fixture is "an untouched
+    record with a moved and an unresolvable fails on the unresolvable alone":
+    `c.md` sits on `main`, and the branch shifts one file it cites and deletes
+    the other. It asserts exit 1, the FAIL line, and the `moved` under the
+    heading. Under the same mutation the result is 1 failed, 145 passed of 146. The fixture was red before the fix too.
+  - **F3, fixed.** (a) The demotion now also subtracts from the record's
+    `counts`, so the FAIL line reads `1 unresolvable` and no longer counts
+    what was demoted. (b) The reported block prints after every FAIL, WORSE,
+    STALE and RAISED line. The same fixture asserts the order. (d) The heading
+    is now "Moved in records not changed since the merge base with <ref>", so
+    it is also true on `main`'s push run. `records.md` quotes the new wording.
+    (c) `preflight.mjs`'s note is now a summary line plus one line per record.
+    A fold lists at most three and then "… and N more; check 2 lists every
+    one". Covered by the new test "the moved note lists one record per line in
+    check 2, and at most three in a fold", which was red first (no such line)
+    and now passes. My round-1 fold test's regex was widened to cross the new
+    line break.
+  - **F5, reproduced, then fixed.** `node scripts/citations-gate.mjs --against
+no-such-ref` printed `--against no-such-ref: no merge base with HEAD, …`
+    and exited 1. `touchedPaths` now runs `git rev-parse --verify` first and
+    throws `compareAgainst`'s own wording, `no such commit. In CI that means
+the checkout was shallow`. That fixes the CLI and preflight's check 2,
+    since both call it before `compareAgainst`. The test "an --against ref
+    that does not resolve says so, not that the merge base is missing" was red
+    first, on that exact message.
+  - **F4: pinned.** The alternative was a Log note naming both lines for the
+    next editor. Editing repo-51 makes it a record this branch changes, so B
+    enforces it here, and every moved citation in it has to be repaired. So
+    all five of its citations whose content this branch shifted or rewrote
+    are pinned to `e79b04f`. These are the two on the "non-zero on a moved
+    citation in a merged record" row (test lines 293 and 294), plus
+    `preflight.mjs` lines 1448, 1369 and 753. Each verifies there:
+    `node scripts/citations.mjs <repo-51> --section Review --rev e79b04f` gave
+    `21 verified, 0 moved`, exit 0. After pinning, the same record with
+    `--require-anchors` gives `21 verified … 5 pinned`, exit 0. The table
+    re-pad the Why relayed as cost 2 is now measured: five pins changed 12
+    lines of the record, most of them table padding. The gate's exit status
+    either way: pinned, `node scripts/citations-gate.mjs --against
+origin/main` exits 0 with `30 moved citation(s) reported in 11 record(s)`.
+    With a Log note instead, repo-51 stays untouched, as at `3487667`, which
+    exited 0 with 34 in 12 (round 1's measurement, not re-run).
+  - **F6, fixed.** Rewrote `ci.yml`'s `fetch-depth: 0` comment, which named
+    the base's `GRANDFATHERED` list as the only reason for depth 0; the merge
+    base is now named as the second. Also rewrote the "Same depth-1 caveat …
+    never the history" paragraph, and in the ticket-check comment "needs the
+    base branch's copy of one file" became "the base branch's history". The
+    dispatch lifted its narrow-edit constraint for these.

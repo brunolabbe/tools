@@ -702,16 +702,19 @@ export function gate(
     );
     if (result.skipped) continue;
     // repo-47, option B: a record this branch does not change is not billed
-    // for a line this branch's code moved under it. `moved` only — every other
-    // state still fails, because shifting lines cannot produce it — and only
-    // for an enforced record: `GRANDFATHERED`'s ratchet is left as it was.
+    // for a line its code moved or rewrote under it (`moved` covers both; the
+    // owner kept that, gate 1 F1). Every other state still fails, and only an
+    // enforced record is excused: `GRANDFATHERED`'s ratchet is left as it was.
     if (touched !== null && !touched.has(record) && !grandfathered.has(record)) {
       const moved = (result.failures ?? []).filter((f) => f.state === "moved");
       if (moved.length > 0) {
         const failures = result.failures.filter((f) => f.state !== "moved");
         reported.push({ record, moved });
+        const counts = { ...result.counts, moved: (result.counts.moved ?? 0) - moved.length };
+        if (counts.moved <= 0) delete counts.moved;
         result = {
           ...result,
+          counts,
           failures,
           failing: failures.length + result.stale.length,
           passed: failures.length === 0 && result.stale.length === 0,
@@ -806,6 +809,20 @@ export function gate(
  */
 export function touchedPaths(repo, against, head = null) {
   const options = { ...GIT_EXEC_OPTIONS, stdio: /** @type {const} */ (["ignore", "pipe", "pipe"]) };
+  try {
+    execFileSync("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `${against}^{commit}`], {
+      ...options,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch (error) {
+    // The same advice `compareAgainst` gives for the same fault (repo-47 gate
+    // 1, F5): this runs first, so without it that advice was never reached.
+    throw new Error(
+      `--against ${against}: no such commit. In CI that means the checkout was shallow — this\n` +
+        `needs \`fetch-depth: 0\`, which ci.yml's check job sets.`,
+      { cause: error },
+    );
+  }
   let mergeBase;
   try {
     mergeBase = execFileSync(
@@ -922,30 +939,6 @@ function main() {
     `citation gate — ${scope} of ${inScope.length} record(s), distinct anchors required\n\n`,
   );
 
-  // Printed first and under a heading of its own, so it reads as what it is:
-  // debt on the base, not this branch's failure (repo-47, option B).
-  if (reported.length > 0) {
-    const count = reported.reduce((n, r) => n + r.moved.length, 0);
-    process.stdout.write(
-      `  Moved in records this branch does not change — ${count} citation(s) in ` +
-        `${reported.length} record(s), reported and not failed:\n`,
-    );
-    for (const { record, moved } of reported) {
-      process.stdout.write(`  MOVED ${record}\n`);
-      for (const f of moved) {
-        const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
-        const where =
-          f.file === null
-            ? `:${range}`
-            : `${f.file}${f.rev === undefined ? "" : `@${f.rev}`}:${range}`;
-        process.stdout.write(
-          `         moved        ${where}  (record line ${f.line})\n` +
-            `                      ${f.reason}\n`,
-        );
-      }
-    }
-  }
-
   for (const result of [...failed, ...regressed]) {
     if (result.error != null) {
       process.stdout.write(`  FAIL ${result.record}\n         ${result.error.split("\n")[0]}\n`);
@@ -989,6 +982,35 @@ function main() {
       `  RAISED ${entry.record} — its GRANDFATHERED entry went from ${entry.was} to ${entry.now}` +
         ` against ${against}\n`,
     );
+  }
+
+  // After every line that fails the run, not before it (repo-47 gate 1, F3):
+  // this is debt on the base, printed so it stays visible, and a reader looking
+  // for why the build is red should meet the FAIL lines first. The heading
+  // names the merge base rather than "this branch", because on `main`'s push
+  // and nightly runs there is no branch — the set is empty and all of it shows.
+  if (reported.length > 0) {
+    const count = reported.reduce((n, r) => n + r.moved.length, 0);
+    const above =
+      failed.length + regressed.length + staleEntries.length + (history?.raised.length ?? 0);
+    process.stdout.write(
+      `${above > 0 ? "\n" : ""}  Moved in records not changed since the merge base with ${against} — ${count} ` +
+        `citation(s) in ${reported.length} record(s), reported and not failed:\n`,
+    );
+    for (const { record, moved } of reported) {
+      process.stdout.write(`  MOVED ${record}\n`);
+      for (const f of moved) {
+        const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
+        const where =
+          f.file === null
+            ? `:${range}`
+            : `${f.file}${f.rev === undefined ? "" : `@${f.rev}`}:${range}`;
+        process.stdout.write(
+          `         moved        ${where}  (record line ${f.line})\n` +
+            `                      ${f.reason}\n`,
+        );
+      }
+    }
   }
 
   const enforced = inScope.length - excused.length - regressed.length;
