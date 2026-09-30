@@ -450,10 +450,64 @@ grandfathered, holding 1 unresolvable, 19 unanchored. 6 entr(y/ies)
 compared against origin/main: 0 raised.`
 
   `npm run check`: exit 0. `npx vitest run --project repo`: 620 passed
-  (620). `node scripts/preflight.mjs --base origin/main`: `check` ok
-  (`npm run check`, `npm test -- --project repo`, `npm test -- --project
+  (620). `node scripts/preflight.mjs --base origin/main --title "fix(repo):
+stamp the lockfile on release and catch drift in CI (repo-46)"`: `check`
+  ok (`npm run check`, `npm test -- --project repo`, `npm test -- --project
 downloader` all ok — the downloader suite ran because this branch also
   touches `tools/downloader/docs/work/dl-72-…md`), `ciCommands` ok (all
   three commands, including the new script), `citations` ok (0 failing),
-  `review` ok, `title` ok (`chore` hidden, no changelog line), `mergeTree`
-  ok against both open release PRs (#284, #294) alone and scratch-merged.
+  `review` ok, `mergeTree` ok against both open release PRs (#284, #294)
+  alone and scratch-merged — but **`title` fails**, and this is an open
+  decision rather than something I resolved:
+
+  ```
+  FAIL  "fix(repo): stamp the lockfile on release and catch drift in CI (repo-46)" is type "fix", which reaches a changelog, but every tools/ path
+        in the diff is markdown (tools/downloader/docs/work/dl-72-youtube-finds-no-video-because-the-image-has-no-yt-dlp.md) — release-please would cut a
+        changelog line and a version for that tool over what is really a docs-only change
+  ```
+
+  This is Build step 1's own consequence, not something new: adding A's
+  second `extra-files` entry to all three tools shifts every line below the
+  first edit in `release-please-config.json`, including dl-72's `"Fixes"`
+  citation at line 33 (repointed above, under the 2026-09-28-adjacent entry).
+  So this branch's diff necessarily touches one file under `tools/downloader/`
+  — purely a citation repoint, no functional downloader change — alongside
+  the real repo-level fix, and `fix` is a releasing type
+  (`release-please-config.json`'s `changelog-sections` does not hide it), so
+  release-please would attribute this commit's subject to downloader's
+  `CHANGELOG.md` and cut it a version, over a change that touched nothing of
+  downloader's but one citation's line number. **Options, recommended
+  first:**
+
+  1. **Split the dl-72 repoint into its own tiny pull request**, titled with
+     a hidden type scoped to downloader (`docs(downloader): repoint dl-72's
+citation displaced by repo-46's config edit`), landing separately from
+     this one. Keeps this branch's own title (`fix(repo): …`) accurate and
+     clean — its own diff would then touch no `tools/` path at all — at the
+     cost of a second small pull request whose merge has to be sequenced so
+     `main` is never left with dl-72's citation `MOVED` (this branch's own
+     `release-please-config.json` edit is what displaces it, so the two
+     either merge in the same window or the repoint merges first).
+  2. **Give this whole branch a hidden type** (`build` or `ci` both fit: the
+     change is `.github/workflows/ci.yml` and release tooling config,
+     nothing shipped to an end user) instead of `fix`. Costs nothing
+     functionally — `release-please-config.json` has no `tools/repo`
+     package, so a hidden-type commit here loses no changelog anywhere that
+     would otherwise have gained one — but it means this ticket's own
+     `kind: fix` does not read straight off its commit type, and a reader of
+     `git log` sees `ci`/`build` for what the ticket itself calls a defect.
+  3. **Leave it as `fix(repo)` and accept the spurious downloader changelog
+     line and version bump.** Not recommended: it is exactly what `checkTitle`
+     exists to catch, and CLAUDE.md's own rule ("a commit that touches two
+     tools lands in both changelogs under one sentence written for one of
+     them … meaning two pull requests") names this shape directly.
+
+  I did not choose one: **I have no ship authority on this branch, and the
+  real pull request title is chosen at landing, not by this commit's own
+  subject** — `node scripts/preflight.mjs --base origin/<base>` with no
+  `--title` falls back to `git log -1 --format=%s`, which is this branch's
+  own last commit right now, but that is a fallback for an unspecified
+  title, not a claim that this commit's subject is the one that ships.
+  Left the commit as `fix(repo): …` — an accurate description of the change,
+  matching the ticket's own `kind: fix` — rather than pre-empting the
+  decision by mistyping it.
