@@ -136,9 +136,9 @@ export const USAGE = "usage: node scripts/agent-cost.mjs [--agent <id>]... [<out
  * input rate at the default 5-minute TTL and 2× at the 1-hour one; cache read
  * is 0.1× the input rate, except Claude Fable 5.1's documented flat
  * $0.25/MTok and Claude Opus 5.5's $0.20/MTok, which is 0.05× its input and
- * the same figure as Sonnet 5's).
+ * the same figure as Sonnet 5's and Sonnet 5.5's).
  */
-export const RATES_READ_ON = "2026-09-26";
+export const RATES_READ_ON = "2026-09-30";
 
 /**
  * Per-million-token rates, keyed by the model id `normaliseModel` returns.
@@ -161,6 +161,13 @@ export const RATES = /** @type {const} */ ({
     cacheWrite1h: 10.0,
     cacheRead: 0.5,
     output: 25.0,
+  },
+  "claude-sonnet-5-5": {
+    input: 2.0,
+    cacheWrite: 2.5,
+    cacheWrite1h: 4.0,
+    cacheRead: 0.2,
+    output: 10.0,
   },
   "claude-sonnet-5": {
     input: 2.0,

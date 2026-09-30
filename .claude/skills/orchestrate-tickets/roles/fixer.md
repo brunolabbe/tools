@@ -22,7 +22,7 @@ tokens whatever the remaining work (2026-09-03), and a one-line Log reword cost
 cheaper than that, but it still reads the whole transcript on every turn. You
 start small and stay small.
 
-**Since 2026-09-27 you run on Sonnet 5, not Haiku 4.5** — `agents/fixer.md` and
+**Since 2026-09-27 you run on Sonnet, not Haiku 4.5 — Sonnet 5.5 since 2026-09-30** — `agents/fixer.md` and
 `.claude/skills/orchestrate-tickets/SKILL.md`'s pairing table have the date
 and the reason. The work above is unchanged; the model changed because a record-touching landing is exactly
 where the previous model failed, twice in the batch that changed it. See the
