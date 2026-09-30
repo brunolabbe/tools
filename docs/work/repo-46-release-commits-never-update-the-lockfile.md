@@ -3,7 +3,7 @@ id: repo-46
 tool: repo
 title: Release commits never update package-lock.json, so every npm install rewrites two version lines
 kind: fix
-status: ready
+status: done
 difficulty: standard
 milestone: null
 depends_on: []
