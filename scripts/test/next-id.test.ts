@@ -267,7 +267,7 @@ test("a pushed branch with no pull request claims the ids in its diff, not just 
     },
   });
   expect(rows(result)).toEqual([
-    "branch/repo-37-anchor-planner-review-corpus repo-37",
+    // Not the name's `repo-37` since repo-49: a merged id in a name is no claim.
     "merged repo-37",
     "PR#197 repo-38",
     "merged repo-38",
@@ -795,11 +795,10 @@ const withGh =
  * `pl-47-edit-dates-and-budget` modified `pl-42`, `pl-43`, `pl-44`, `pl-47` and
  * `pl-49` — every one `M`, and every one printed as a clash with `merged`.
  *
- * **Two clashes are left, and they are not the diff's.** Each branch's *name*
- * carries an id (`pl-50`, `pl-47`), and the name is a claim floor that
- * `branchSources` reads before any diff. That is a separate narrowing repo-49
- * does not make; see its Log. What this case pins is that the diff contributes
- * no path at all.
+ * **Each branch's *name* carries an id too** (`pl-50`, `pl-47`), and the name is
+ * a claim floor, so the filter alone left both clashing. repo-49's first gate
+ * found that and the owner decided it: a name naming only merged ids is no
+ * claim. So neither the diff nor the name contributes a path here.
  */
 const ticket = (id: number, slug: string) => `tools/planner/docs/work/pl-${id}-${slug}.md`;
 
@@ -825,12 +824,9 @@ test("a branch that only modifies merged ticket files claims nothing from its di
 
   const sources = collect("pl", { run: withGh([]), cwd: peer, rev: "origin/trunk" });
   for (const name of ["pl-50-count-thinking-tokens", "pl-47-edit-dates-and-budget"]) {
-    expect(sources.find((source) => source.source === `branch/${name}`)?.paths).toEqual([name]);
+    expect(sources.find((source) => source.source === `branch/${name}`)?.paths).toEqual([]);
   }
-  expect(clashes(claims(sources, "pl"))).toEqual([
-    { id: 47, sources: ["branch/pl-47-edit-dates-and-budget", "merged"] },
-    { id: 50, sources: ["branch/pl-50-count-thinking-tokens", "merged"] },
-  ]);
+  expect(clashes(claims(sources, "pl"))).toEqual([]);
 });
 
 /**
@@ -923,4 +919,104 @@ test("a PR whose head branch is unread keeps its own diff, and a fork's PR is no
     "PR#310 repo-45",
     "PR#311 repo-46",
   ]);
+});
+
+/**
+ * The no-merge-base fallback needs `--no-renames` as much as the three-dot diff
+ * does, and repo-49's first gate found nothing proving it: dropping the flag
+ * from that call alone left every case green.
+ *
+ * An orphan branch holding a merged ticket's body under a new id is, against
+ * `rev`, a deletion and an addition with the same content — so rename
+ * detection pairs them into one `R` line, and `--diff-filter=A` alone drops
+ * the claim on `repo-77`.
+ */
+test("an orphan branch holding a merged ticket's body under a new id still claims it", () => {
+  const body = "a ticket body long enough to be recognised as the same file\n";
+  const { peer } = ticketRemote({ "docs/work/repo-7-c.md": body });
+  runGit(peer, ["checkout", "-q", "--orphan", "orphan-copy"]);
+  runGit(peer, ["rm", "-rq", "--cached", "."]);
+  fs.rmSync(path.join(peer, "docs/work/repo-7-c.md"));
+  fs.writeFileSync(path.join(peer, "docs/work/repo-77-copy.md"), body);
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "orphan copy"]);
+  runGit(peer, ["push", "-q", "origin", "orphan-copy"]);
+
+  const sources = branchSources({ cwd: peer, rev: "origin/trunk" });
+  expect(sources.find((source) => source.source === "branch/orphan-copy")?.note).toMatch(
+    /shares no history/u,
+  );
+  expect(claims(sources, "repo")).toEqual([{ source: "branch/orphan-copy", id: 77 }]);
+});
+
+/**
+ * Two open pull requests from one head branch — one against `main`, one
+ * against another base — both fold into that branch, and neither keeps its
+ * unfilterable `gh pr diff`. Found by repo-49's first gate: the fold used to
+ * look the branch up by its label, which the first PR had already replaced
+ * with its own, so the second found nothing and clashed with `merged`.
+ */
+test("two pull requests on one head branch both fold into it", () => {
+  const { peer, branch } = ticketRemote({ "docs/work/repo-5-merged.md": "status: done\n" });
+  branch("revise-it-twice", ({ write }) =>
+    write("docs/work/repo-5-merged.md", "status: done\n\n## Log\n\n- a gate\n"),
+  );
+  const run = withGh([
+    { number: "276", head: "revise-it-twice", files: ["docs/work/repo-5-merged.md"] },
+    { number: "277", head: "revise-it-twice", files: ["docs/work/repo-5-merged.md"] },
+  ]);
+  const sources = collect("repo", { run, cwd: peer, rev: "origin/trunk" });
+  expect(clashes(claims(sources, "repo"))).toEqual([]);
+  // Both numbers stay on the one source, so neither pull request disappears
+  // from the output.
+  expect(sources.map((source) => source.source).toSorted()).toEqual([
+    "PR#276+PR#277",
+    "branch/trunk",
+    "merged",
+  ]);
+});
+
+/**
+ * Every status at once on one branch — the `pl-17-image-closure` shape and
+ * more. Only an addition is a claim: the edit, the deletion and the renamed
+ * file's *old* id are not, and the renamed file's new id is.
+ */
+test("a branch that edits, adds, deletes and renames claims only what it adds", () => {
+  const { peer, branch } = ticketRemote({
+    "docs/work/repo-5-edited.md": "edited\n",
+    "docs/work/repo-6-deleted.md": "deleted\n",
+    "docs/work/repo-7-renumbered.md": "a ticket long enough to be recognised as moved\n",
+  });
+  branch("mixed", ({ write, move }) => {
+    write("docs/work/repo-5-edited.md", "edited\n\n## Log\n");
+    write("docs/work/repo-52-new.md", "new\n");
+    fs.rmSync(path.join(peer, "docs/work/repo-6-deleted.md"));
+    move("docs/work/repo-7-renumbered.md", "docs/work/repo-70-renumbered.md");
+  });
+  const sources = branchSources({ cwd: peer, rev: "origin/trunk" });
+  expect(claims(sources, "repo")).toEqual([
+    { source: "branch/mixed", id: 52 },
+    { source: "branch/mixed", id: 70 },
+  ]);
+});
+
+/**
+ * What makes dropping a merged id from a branch *name* safe: a branch named
+ * for a merged ticket that files a second ticket under the same id still
+ * clashes, through its diff. The case the name floor exists for — an id
+ * nobody has filed — is untouched, and so is a name the sweep could not read
+ * past.
+ */
+test("a name naming a merged id is no claim, but a second ticket filed under it still clashes", () => {
+  const result = sweep({
+    work: ["docs/work/repo-30-b.md", "docs/work/repo-31-c.md"],
+    branches: {
+      "repo-30-build-it": [],
+      "repo-31-and-refile": ["docs/work/repo-31-a-second-ticket.md"],
+      "repo-32-not-filed-yet": [],
+    },
+  });
+  expect(clashes(result)).toEqual([{ id: 31, sources: ["branch/repo-31-and-refile", "merged"] }]);
+  expect(rows(result)).toContain("branch/repo-32-not-filed-yet repo-32");
+  expect(rows(result)).not.toContain("branch/repo-30-build-it repo-30");
 });

@@ -112,6 +112,11 @@ export function runCommand(command, args, options = {}) {
  * claim costs a reader one glance; under-reporting one is the entire failure
  * this script exists to prevent, so the two errors are not weighed equally.
  *
+ * Which paths reach this is decided upstream (repo-49): a branch's diff gives
+ * only files it adds (`ADDED`), and a name naming only merged ids is dropped in
+ * `collect`. One over-report is known and kept — a squash-merged branch's own
+ * ticket file, still `A` against its stale merge base (`branchSources`).
+ *
  * @param {string[]} paths
  * @param {string} prefix
  * @returns {number[]}
@@ -393,7 +398,23 @@ export function collect(prefix, options = {}) {
   // case that measures `gh`-absent-is-127 still dies at `gh` and not at
   // `ls-remote`; and the branches have to be in hand to know which pull
   // requests they already stand for.
-  const branches = branchSources({ run, cwd, rev, remote: options.remote });
+  //
+  // repo-49: a branch *name* is a floor for an id nobody has filed yet — a
+  // branch cut before its ticket file was committed. A name carrying an id that
+  // is already merged is the ordinary case instead, every `<id>-slug` build
+  // branch, and claims nothing new: a second ticket filed under that id is
+  // still an added file in the branch's diff, and is caught there. So a name
+  // that names only merged ids is dropped. `branchSources` puts it first.
+  const taken = new Set(idsIn(merged, prefix));
+  const branches = branchSources({ run, cwd, rev, remote: options.remote }).map((branch) => {
+    const [name = "", ...files] = branch.paths;
+    const named = idsIn([name], prefix);
+    const stale = named.length > 0 && named.every((id) => taken.has(id));
+    return stale ? { ...branch, paths: files } : branch;
+  });
+  // By head name, fixed before the loop relabels anything, so a second pull
+  // request on the same head still finds its branch.
+  const byHead = new Map(branches.map((branch, at) => [branch.source.slice("branch/".length), at]));
 
   /** @type {Source[]} */
   const sources = [{ source: "merged", paths: merged }];
@@ -405,10 +426,12 @@ export function collect(prefix, options = {}) {
     // line, because its diff takes the added-only filter and `gh pr diff` takes
     // none — with the PR's diff kept, a PR that only edits a merged ticket would
     // still clash with `merged`.
-    const at = head === undefined ? -1 : branches.findIndex((b) => b.source === `branch/${head}`);
-    const branch = at === -1 ? undefined : branches[at];
-    if (branch && !branch.unread) {
-      branches[at] = { ...branch, source };
+    const at = head === undefined ? undefined : byHead.get(head);
+    const branch = at === undefined ? undefined : branches[at];
+    // Two pull requests on one head share its source, and both numbers stay on it.
+    const label = branch?.source.startsWith("PR#") ? `${branch.source}+${source}` : source;
+    if (at !== undefined && branch && !branch.unread) {
+      branches[at] = { ...branch, source: label };
       continue;
     }
     // A pull request whose diff touches no ticket file is ordinary, and must
@@ -419,8 +442,10 @@ export function collect(prefix, options = {}) {
     // cannot stand for the PR — its files would be lost, which is the expensive
     // error. The PR's own diff is kept, unfiltered, beside the name, and the
     // "only its name was read" note goes, because the files were read after all.
-    if (branch) branches[at] = { source, paths: [...branch.paths, ...paths] };
-    else sources.push({ source, paths });
+    // It stays `unread`, so a second PR on the same head adds its own diff too.
+    if (at !== undefined && branch) {
+      branches[at] = { source: label, paths: [...branch.paths, ...paths], unread: true };
+    } else sources.push({ source, paths });
   }
 
   sources.push(...branches);

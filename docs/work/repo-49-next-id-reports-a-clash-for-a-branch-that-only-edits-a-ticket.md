@@ -386,3 +386,53 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   `spawnSync`, and the new tests go through the existing `runGit` and
   `runCommand`. No fold-in was available: the only other open ticket that
   names this script is `pl-52`, and it names it in passing.
+
+- 2026-09-30 — **Round 2, on gate 1's findings at `0d9ddb8`.** The owner
+  decided F1 on 2026-09-30, choosing the builder's option over the gate's: a
+  branch name that names only merged ids claims nothing. `collect` now drops
+  such a name from the branch's paths before folding, and the `pl-50`/`pl-47`
+  case now expects no clash. That meets Done-when line 1 as written. Each
+  finding was reproduced before it was fixed; every run below is
+  `npx vitest run scripts/test/next-id.test.ts`.
+  - **F1, fixed.** Against the round-1 script, the flipped case fails with
+    `expected [ 'pl-50-count-thinking-tokens' ] to deeply equal []`. A new
+    last case pins why dropping the name is safe: a branch named for a merged
+    id that adds a _second_ ticket file under that id still clashes, and a
+    name naming an unmerged id still claims it. Against the round-1 script it
+    fails with `expected [ { id: 30, … }, …(1) ] to deeply equal
+[ { id: 31, … } ]`. Removing the guard that a name must carry some id
+    fails the unread/fork case (1 of 29). Case 9's `repo-37` name row is
+    replaced by a comment on the same line, so its anchored `:277` does not
+    move.
+  - **F2, fixed.** A new case: an orphan branch holding a merged ticket's
+    body under `repo-77`. With `--no-renames` dropped from the fallback call
+    alone it fails, `expected [] to deeply equal [ { …(2) } ]`, which
+    reproduces the gate's probe.
+  - **F3, fixed.** `concurrency.md`'s four-state table now says how a PR is
+    read, through its head branch or else `gh pr diff`, and that a branch's
+    diff counts added files only. The clash paragraph is rewritten for the
+    new behaviour. A `branch/…`/`merged` clash is now either a second ticket
+    under a taken id, which needs renumbering, or a stale squash-merged
+    branch, which should be deleted once its work is on `main`. The guard
+    table gained the name rule and the label-lookup rule, and the rename row
+    now names both diffs.
+  - **F4, fixed.** Reproduced as the gate stated it: two PRs on one head gave
+    `[{ id: 5, sources: [PR#277, merged] }]`. The head branch is now looked
+    up in a map keyed by head name, built before any relabelling. A second
+    PR joins the label as `PR#276+PR#277`, so both numbers stay visible. An
+    unread head keeps `unread` after its first PR's diff is merged in, so a
+    second PR on that head adds its own diff too.
+  - **F5, fixed.** The `idsIn` docblock now says which paths reach it and
+    names shape 2 as kept over-reporting.
+  - **F6, fixed.** A new case: one branch that edits `repo-5`, adds `repo-52`,
+    deletes `repo-6` and renumbers `repo-7` to `repo-70` claims exactly `52`
+    and `70`. With `--diff-filter=AD` it fails: `expected [ …(4) ] to deeply
+equal [ …(2) ]`.
+  - **Live, against origin with `main` at `e79b04f`.** The owner's deletion
+    of `pl-17-image-closure` and `worktree-pl-19-pin-through-the-browser` is
+    confirmed by `git ls-remote --heads origin`, which lists neither.
+    `node scripts/next-id.mjs pl` prints no clash line and no non-merged row
+    (`next free: pl-54`). `node scripts/next-id.mjs repo` prints no clash
+    line (`next free: repo-85`). The round-1 script, run against the same
+    remote, prints four `repo` clashes, all names of live build branches:
+    `repo-46`, `repo-47`, `repo-49` and `repo-66`.
