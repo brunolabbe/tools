@@ -197,14 +197,22 @@ measured, `git cat-file` and `git diff` both exit 128 on such a sha — so only 
 name is scanned, and a branch named `wip-…` holding a ticket file contributes
 nothing. `git fetch origin` and re-run before you rely on the number.
 
-**Expect `branch/…` rows to clash with `merged`, and do not read that as a
-defect.** Measured 2026-09-09 on a `pl` sweep: five clash lines, all true, all
-from two branches whose work had already squash-merged and which nobody deleted.
-A squash merge leaves the branch unrelated to `main` by ancestry, so no cheap
-test tells "stale" from "genuinely duplicating a merged id", and the script's own
-rule decides it — over-reporting a claim costs one glance, under-reporting one is
-the failure the whole page is about. A `branch/…`/`merged` clash usually means
-that branch should be deleted.
+**A pull request and its own head branch are one row, labelled `PR#<n>`**, and a
+branch's files count only where it *adds* them — so a branch that only appends a
+Log entry or a gate record to a merged ticket no longer claims its id (repo-49).
+A PR whose head branch is not fetched, or comes from a fork, keeps its own
+`gh pr diff`, which cannot be filtered that way and still over-reports.
+
+**Expect some `branch/…` rows to clash with `merged` still, and do not read that
+as a defect.** Two kinds are left. A branch's *name* is a claim floor, so
+`pl-17-image-closure` clashes on `pl-17` for as long as it exists. And a branch
+whose work already squash-merged, and which nobody deleted, reports the ticket
+file it filed as added, because its merge base predates the squash — measured
+2026-09-30 as `pl-21` on that same branch. No cheap test tells "stale" from
+"genuinely duplicating a merged id", and the script's own rule decides it —
+over-reporting a claim costs one glance, under-reporting one is the failure the
+whole page is about. A `branch/…`/`merged` clash usually means that branch should
+be deleted.
 
 **It was a fenced snippet on this page until repo-30, and it was wrong the whole
 time.** That is the argument for it being a file: the work is mechanical, it must
@@ -223,6 +231,10 @@ verified by removing each one in turn, not by assertion.
 | break ties by input order | two rows holding one id swap between runs |
 | swallow a failing `gh pr list` | the merged half alone, exit 0 — which is the original defect exactly |
 | drop the advice on a missing default rev | `fatal: Not a valid object name origin/main` and nothing else, which is what every CI runner and every shallow clone gets |
+| count every path a branch's diff touches | a branch that only edits a merged ticket claims its id — 11 of 14 clash lines on a `pl` sweep, 2026-09-19 |
+| filter to added paths without `--no-renames` | a ticket renumbered on a branch is one `R` line, and its new id is **not claimed at all** |
+| sweep a PR and its head branch separately | one claim prints as two, and the PR's unfilterable diff clashes on every merged ticket it edits |
+| let an unfetched head branch stand for its PR | only the branch's name was read, so the PR's files are dropped |
 | drop the branch source (repo-41) | a **pushed branch with no pull request** is in neither of the other two sources, so a ticket file already committed and pushed on one is handed out as free. Measured on `main` at `a5e31c7`: `next free: repo-39` while `docs/work/repo-39-….md` was on `repo-37-anchor-planner-review-corpus` |
 | read `refs/remotes/origin/*` instead of `ls-remote` | wrong in both directions at once — a plain `git fetch` does not prune, so it keeps branches the remote deleted (**twelve refs against the remote's five**, measured), and it cannot see a branch pushed since your last fetch at all |
 | `ls-tree` a branch instead of diffing it | every ticket file the branch *contains* becomes a claim, so `main` itself and every long-lived branch cut from it re-report the whole merged set and clash on every id |

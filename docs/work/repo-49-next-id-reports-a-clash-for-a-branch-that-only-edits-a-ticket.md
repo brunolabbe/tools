@@ -319,3 +319,70 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   `--name-only` diffs are still at `:254` and `:264`. Found one gap in the
   candidate, written up under Decision: the PR source's `gh pr diff` can't
   take the filter, which is why shape 3's dedupe has to land with it.
+
+- 2026-09-30 — **Built shapes 1 and 3 on `e79b04f`.** The premise held there:
+  both diffs were still a bare `git diff --name-only`. Both now take `ADDED`
+  (`--no-renames --diff-filter=A --name-only`). In `collect`, a pull request
+  whose head branch is swept and was read is folded into that branch's source
+  under the `PR#<n>` label. `gh pr list` now asks for
+  `number,headRefName,isCrossRepository`. Shape 2 is named in `branchSources`'
+  docblock. The concurrency page's clash paragraph and its guard table are
+  updated to match.
+
+  Each new case was watched red with
+  `npx vitest run scripts/test/next-id.test.ts`:
+  - Against the unfixed script: 4 failed of 25. The failures were the orphan
+    case, the `pl-50`/`pl-47` case (`expected [ 'pl-50-count-thinking-tokens',
+…(3) ] to deeply equal [ 'pl-50-count-thinking-tokens' ]`), the PR-and-branch
+    case (`expected [ 'PR#276 repo-5', …(4) ]`) and the unread/fork case. The
+    rename case passes against the unfixed script, as it should: a bare
+    `--name-only` lists a rename's new path.
+  - Against `--diff-filter=A` without `--no-renames`: the rename case fails,
+    `expected [] to deeply equal [ { …(2) } ]`.
+  - With the filter in and the fold disabled: 2 failed of 25, the PR-and-branch
+    case and the unread/fork case. That confirms the Decision's point that
+    neither half works alone.
+  - With `!branch.unread` removed: 1 failed of 25,
+    `expected [ 'peer-just-opened' ] to deeply equal [ 'peer-just-opened', …(1) ]`.
+  - With the fork check removed: 1 failed of 25,
+    `expected [ 'PR#310', 'PR#311', 'merged' ]`.
+  - Fixed: 25 of 25.
+
+  Live, `node scripts/next-id.mjs pl` against origin at `e79b04f`:
+
+  ```
+  before: clash pl-5, pl-10, pl-17, pl-19, pl-21   (5 lines)
+  after:  clash pl-17, pl-19, pl-21                (3 lines)
+  ```
+
+  `pl-5` and `pl-10` were `M` only. `pl-21` is shape 2. `pl-17` and `pl-19`
+  are the next item.
+
+  **What the brief had wrong or left out:**
+  - **Shape 1 is two mechanisms, and the filter fixes one.** A branch's _name_
+    is a claim floor (`branchSources`' docblock). So a branch named after the
+    ticket it edits still clashes with `merged` on that id, with no diff
+    involved. That is the ordinary case: every builder branch is named
+    `<id>-slug`. It covers 4 of the 11 lines this ticket counted as `M`-only:
+    `pl-17`, `pl-19`, `pl-47` and `pl-50`. That is why the `pl-50`/`pl-47`
+    case asserts that the diff contributes no path, and leaves exactly two
+    clashes, `pl-47` and `pl-50`, both from the names. Narrowing the name floor
+    narrows what counts as a claim, and this ticket says that needs sign-off.
+    It is not built here; it went to the orchestrator as an open decision.
+  - **"Keep only the branch source" loses files when the branch is unread.**
+    `ls-remote` names a sha this checkout has not fetched, so only the name was
+    read. In that case the PR's `gh pr diff` is kept beside the name, still
+    unfiltered, and the unread note is dropped, because the files were read
+    after all. A fork's PR has a `headRefName` that names a branch in the fork,
+    so only a same-repository head is matched.
+  - **The orphan fallback's existing case changed.** It asserted that `repo-1`,
+    a file the orphan _deletes_, was claimed. Filtered to additions, as the
+    Decision asks for both calls, it is no longer claimed. Nothing is lost by
+    that: a file only `rev` holds is `merged`'s claim. The fallback now
+    over-reports only files the orphan holds that `rev` lacks, and its note
+    says so.
+
+  No spawn call changed. The source's only spawn is still `runCommand`'s
+  `spawnSync`, and the new tests go through the existing `runGit` and
+  `runCommand`. No fold-in was available: the only other open ticket that
+  names this script is `pl-52`, and it names it in passing.
