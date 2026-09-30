@@ -3,7 +3,7 @@ id: repo-66
 tool: repo
 title: Three tools carry their own copy of the pino logger; lift the shared half into core
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
