@@ -181,12 +181,23 @@ jobs:
       # increase now has to be argued for in review rather than landing quietly
       # — is the point of the check and was accepted as such.
       #
+      # It also decides which enforced records fail on `moved` (repo-47, option
+      # B): only the ones this change touches, diffed from the *merge base* of
+      # `HEAD` with that ref — not its tip, so a record `main` edited after the
+      # branch was cut is not counted as the branch's. A `moved` in any other
+      # record is printed under its own heading and fails nothing, so a code
+      # change is not billed for a merged record whose cited line it shifted;
+      # every other state still fails wherever it is.
+      #
       # `github.base_ref` is the pull request's own base, so a branch opened
       # against another branch is compared with *that* one rather than with
       # `main`; it is empty for a push, a schedule and a dispatch, where `main`
-      # is right. On a push to `main` this compares `main` with itself and finds
-      # nothing, which is correct rather than a gap: the pull request run is the
-      # gate, and pushing straight to `main` is denied.
+      # is right. On a push to `main`, and on the nightly run, this compares
+      # `main` with itself: the ratchet finds nothing, and the touched set is
+      # empty, so every moved citation on `main` is reported and none fails.
+      # That is the debt the owner accepted with option B — printed on every
+      # run until a branch touches the record or someone sweeps it — and the
+      # pull request run stays the gate, since pushing to `main` is denied.
       - run: node scripts/citations-gate.mjs --against "origin/${{ github.base_ref || 'main' }}"
 
   # Which files this change actually touches, because **Actions has no per-job

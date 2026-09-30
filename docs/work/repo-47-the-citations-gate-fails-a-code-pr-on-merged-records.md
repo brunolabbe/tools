@@ -390,3 +390,100 @@ Also update:
   Options B, E, C and D were offered. B was the only one that removes the cost
   measured on #316, and the cost of choosing it was stated: it gives up the
   loud failure accepted in repo-29.
+
+- **2026-09-30 — built, option B, off `e79b04f`.** `citations-gate.mjs` gains
+  `touchedPaths(repo, against, head = null)` — `git merge-base <head|HEAD>
+<against>`, then `git diff --name-only --no-renames -z` from that merge base
+  to the working tree (or to `head`) — and `gate()` a fifth parameter,
+  `touched`. An enforced record outside it has its `moved` failures taken out
+  and returned as `reported`; the CLI prints them under "Moved in records this
+  branch does not change" and leaves the exit code alone. A grandfathered
+  record, a touched record, and every state but `moved` are untouched. Without
+  `--against` the touched set is `null` and every record is enforced, and the
+  run now says which of the two rules it applied on every run, as the history
+  line already did. A merge base that cannot be found throws rather than
+  returning an empty set, which would excuse every `moved` in the corpus.
+  - **What `main`'s push and nightly runs do under B**, measured, not argued:
+    `HEAD` is `main`'s tip, the merge base with `origin/main` is `HEAD`, the
+    touched set is empty, and every `moved` is reported and none fails. The
+    test "after the merge, a run against the merged tip itself still passes
+    and still reports" squash-merges the branch and runs the fixture's own copy
+    of the CLI with `--against main`: `0 path(s) changed since the merge base
+with main`, the moved citation under the heading, exit 0. **In a pull
+    request run**, `HEAD` is GitHub's merge of the branch into its base, so the
+    merge base with the base tip is that tip and the diff is the branch's net
+    change as it would land — the same set the local run computes from the
+    fork point.
+  - **`preflight.mjs`, the choice the Build left here: `HEAD`'s own committed
+    diff, not the union of the folded heads'.** Check 2 passes
+    `touchedPaths(repo, base)`, the same set CI computes. The scratch fold
+    computes `touchedPaths(repo, base, headOid)` once and uses it for every
+    fold. A fold asks whether _this_ branch's records survive another head
+    landing; a union would bill this branch for the other head's record, the
+    cost B removed, and that head's own preflight folds this one in and does
+    enforce it. Both directions are one test, "checkScratchMergeCitations
+    enforces HEAD's own records, not the folded head's": from "mine" the
+    fold's `moved` in b's record is a note and `ok`; from "b" the same fold
+    fails. Mutated to the union, it fails (below).
+  - **Done when, and how each was made to fail.** Five fixtures, plus three
+    guards, appended to `scripts/test/citations-gate.test.ts` under
+    "repo-47". Each builds a repository carrying its own copy of the gate, its
+    `GRANDFATHERED` emptied, and runs that CLI end to end with `--against
+main`. `npx vitest run scripts/test/citations-gate.test.ts`: 55 of 55
+    (47 at the base). With the whole change reverted —
+    `git show e79b04f:scripts/citations-gate.mjs` written over the file —
+    `-t repo-47` gave 7 failed, 1 passed of 8: every fixture fails, and the
+    one that passes is the guard that an untouched record still fails on
+    `indistinct`, which holds before and after by design. Three targeted
+    mutations, each applied and restored by a script in the scratch
+    directory: the merge base replaced by `against`'s tip fails only the
+    merge-base fixture; the `!touched.has(record)` condition dropped fails
+    the control and the created-record fixture; `--diff-filter=M` fails the
+    created-record fixture. In `preflight.test.ts`, passing `null` for check
+    2's touched set fails the rewritten repo-51 test, and the union mutation
+    fails the new fold test; 89 of 89 unmutated.
+  - `npm run check` exit 0; `npm test` exit 0, 3487 passed and 2 skipped of
+    3489; `npm test -- --project repo` 630 of 630.
+  - **What the brief had wrong.** (1) `moved` is broader than a shift:
+    `citations.mjs` returns `moved` both when the anchor is found on another
+    line and when it is "not anywhere in" the file. So B also excuses an
+    untouched record whose cited text a branch rewrote or deleted, which the
+    Build's "a code change that only shifts lines cannot produce the others"
+    does not say. This branch is an example of that: repo-51's record cites
+    `citationsGate(repo, SCOPE, grandfathered)` in `preflight.mjs`, which the
+    change rewrote, and it is reported, not failed. (2) repo-51's own test
+    "checkCitations fails and names the record when a merged citation's
+    target line moves" asserted the rule B reverses. It is rewritten in place,
+    so no line below it moves, as "checkCitations reports, and does not fail,
+    a moved citation in a record the branch leaves alone", and the control is
+    appended at the end of the file. repo-51's record cites that test's
+    `toBe(EXIT.citations)` line. The anchor now also matches the new control
+    test, so the gate reports it "at 2109". A later repoint that follows that
+    hint would land on a different test. The correct repair is a pin to
+    `e79b04f`.
+  - **The debt this branch leaves, by B's rule.** `node
+scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
+0 failing`, `34 moved citation(s) reported in 12 record(s)` — repo-29,
+    -31, -34, -41, -50, -51, -64, -65, -67, -75, -79 and -82, almost all of
+    them citing `preflight.mjs` or `citations-gate.mjs` lines this change
+    shifted. None is repointed, since that is exactly the cost B removed.
+    **Until this merges, any branch whose preflight folds this head runs its
+    own pre-B gate, so its scratch-merge check fails on those 34.** It clears
+    once that branch has `main` with this in it.
+  - **Disclosed, not changed:** the grandfathered ratchet is as it was, as the
+    Build says, so an unrelated branch that raises one of the six listed
+    records' counts still fails `WORSE`. The `--against` paragraph in the
+    gate's header docblock was rewritten line for line, so no line under it
+    moved. The dynamic import in the last new test is there for the same
+    reason.
+  - **Fold-in considered and declined.** `ci.yml`'s "Same depth-1 caveat …
+    it reads the checkout, never the history" has been stale since
+    `--against` began reading history, and it is more so now. Not edited:
+    the dispatch confined this branch's `ci.yml` edit to the comment the
+    Build names, because repo-46 edits the same job. Other skill pages still
+    say "repoint what you moved" (`roles/builder.md`). They stay true under
+    B, since the branch only fails on its own records, so they were left
+    alone.
+  - Spawn calls: two new `execFileSync("git", …)` calls in `touchedPaths`,
+    `shell: false` via `GIT_EXEC_OPTIONS`. No existing spawn call was edited,
+    and none of `preflight.mjs`'s `spawnSync` calls (repo-83's) was touched.

@@ -78,11 +78,11 @@
  * Usage:
  *   node scripts/citations-gate.mjs [--against <ref>] [--displaced-since <ref>]
  *
- * `--against` is the ratchet's memory: it compares this tree's `GRANDFATHERED`
- * with the one at `ref` and fails on any entry whose number went up, an absent
- * entry counting as zero. Without it this reads only the current tree, which is
- * the right default for a local run and is exactly why an accurate number could
- * silence a regression until the owner asked for this.
+ * `--against` is the ratchet's memory — it fails on any `GRANDFATHERED` entry
+ * whose number went up since `ref`, absent counting as zero — and it names the
+ * base whose merge base with `HEAD` decides which records this branch changes:
+ * only those fail on `moved` (repo-47, option B; `touchedPaths` says why).
+ * Without it every record is enforced and no history is compared.
  *
  * `--displaced-since` is `citations.mjs`'s own flag of the same name (repo-50),
  * threaded through to every record this gate reaches — both roots `SCOPE`
@@ -664,8 +664,18 @@ export function checkRecord(
  * @param {Map<string, number>} grandfathered
  * @param {string | null} [displacedSince] `citations.mjs`'s own flag (repo-50),
  *   passed to every record `scope` reaches; omitted or null, nothing changes.
+ * @param {Set<string> | null} [touched] The paths this branch changes, from
+ *   `touchedPaths`. An enforced record outside it has its `moved` citations
+ *   moved out of `failures` into `reported` (repo-47, option B); `null`, which
+ *   is a run with no `--against`, enforces every record exactly as before.
  */
-export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displacedSince = null) {
+export function gate(
+  repo,
+  scope = SCOPE,
+  grandfathered = GRANDFATHERED,
+  displacedSince = null,
+  touched = null,
+) {
   const read = makeReader(repo, null);
   const resolve = makeResolver(candidateFiles(repo, null));
   const trees = makeTrees(repo);
@@ -674,11 +684,13 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displac
   const failed = [];
   const excused = [];
   const regressed = [];
+  /** @type {{record: string, moved: object[]}[]} */
+  const reported = [];
   /** @type {Record<string, number>} */
   const debt = {};
 
   for (const record of findRecords(repo, scope.records)) {
-    const result = checkRecord(
+    let result = checkRecord(
       repo,
       record,
       scope.section,
@@ -689,6 +701,23 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displac
       displacedSince,
     );
     if (result.skipped) continue;
+    // repo-47, option B: a record this branch does not change is not billed
+    // for a line this branch's code moved under it. `moved` only — every other
+    // state still fails, because shifting lines cannot produce it — and only
+    // for an enforced record: `GRANDFATHERED`'s ratchet is left as it was.
+    if (touched !== null && !touched.has(record) && !grandfathered.has(record)) {
+      const moved = (result.failures ?? []).filter((f) => f.state === "moved");
+      if (moved.length > 0) {
+        const failures = result.failures.filter((f) => f.state !== "moved");
+        reported.push({ record, moved });
+        result = {
+          ...result,
+          failures,
+          failing: failures.length + result.stale.length,
+          passed: failures.length === 0 && result.stale.length === 0,
+        };
+      }
+    }
     inScope.push(result);
     if (result.passed && result.error == null) continue;
     // `displaced` is never absorbed by the grandfathered allowance (repo-50
@@ -738,7 +767,67 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED, displac
     }
   }
 
-  return { inScope, failed, excused, regressed, staleEntries, debt };
+  return { inScope, failed, excused, regressed, staleEntries, debt, reported };
+}
+
+/**
+ * The paths this branch changes: `git diff` from the merge base of `head` and
+ * `against` — to the working tree when `head` is null, so a local run sees
+ * uncommitted edits, and to `head` itself otherwise.
+ *
+ * **The merge base, not `against`'s tip** (repo-47's Why, first constraint). CI
+ * passes the base branch's tip, and a branch cut before `main` moved on would
+ * otherwise count `main`'s own later commits as its changes — including one that
+ * edits a record, which would then be enforced here for a move that is `main`'s
+ * debt rather than this branch's. In a pull request run `HEAD` is GitHub's
+ * merge of the branch into its base, whose merge base with the base tip is that
+ * tip, so the diff is the branch's net change as it would land.
+ *
+ * **What this costs, stated because it is the owner's accepted trade and not a
+ * gap.** `main`'s push and nightly runs pass `--against origin/main` with
+ * `HEAD` at `main`'s tip: the merge base is `HEAD`, the set is empty, and every
+ * `moved` in an enforced record is reported and none fails. Moved citations
+ * accumulate on `main`, printed on every run, until a branch touches the record
+ * or someone sweeps it — the loud failure repo-29 accepted for this state is
+ * given up for enforced records; the grandfathered ratchet keeps it.
+ *
+ * A merge base that cannot be found is an error, not an empty set: an empty set
+ * would report every `moved` in the corpus and fail none, which is the most
+ * permissive answer reached for the least reason. In CI it means a shallow
+ * clone, which `compareAgainst` refuses for its own reason too.
+ *
+ * `--no-renames`, so a record moved to a new path counts on both sides, and `-z`
+ * so no path is quoted.
+ *
+ * @param {string} repo
+ * @param {string} against
+ * @param {string | null} [head]
+ * @returns {Set<string>}
+ */
+export function touchedPaths(repo, against, head = null) {
+  const options = { ...GIT_EXEC_OPTIONS, stdio: /** @type {const} */ (["ignore", "pipe", "pipe"]) };
+  let mergeBase;
+  try {
+    mergeBase = execFileSync(
+      "git",
+      ["-C", repo, "merge-base", head ?? "HEAD", against],
+      options,
+    ).trim();
+  } catch (error) {
+    throw new Error(
+      `--against ${against}: no merge base with ${head ?? "HEAD"}, so which records this branch\n` +
+        `changes cannot be told. In CI that means a shallow checkout (\`fetch-depth: 0\`).\n` +
+        `${String(/** @type {{stderr?: unknown}} */ (error).stderr ?? "").trim()}`,
+      { cause: error },
+    );
+  }
+  const range = head === null ? [mergeBase] : [mergeBase, head];
+  const out = execFileSync(
+    "git",
+    ["-C", repo, "diff", "--name-only", "--no-renames", "-z", ...range, "--"],
+    options,
+  );
+  return new Set(out.split("\0").filter((p) => p !== ""));
 }
 
 /** The `state: count` half of a record's line, worst first and zeroes dropped. */
@@ -808,11 +897,13 @@ function main() {
       return;
     }
   }
-  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(
+  const touched = against === null ? null : touchedPaths(repo, against);
+  const { inScope, failed, excused, regressed, staleEntries, debt, reported } = gate(
     repo,
     SCOPE,
     GRANDFATHERED,
     displacedSince,
+    touched,
   );
   const history = against === null ? null : compareAgainst(repo, against, GRANDFATHERED);
 
@@ -830,6 +921,30 @@ function main() {
   process.stdout.write(
     `citation gate — ${scope} of ${inScope.length} record(s), distinct anchors required\n\n`,
   );
+
+  // Printed first and under a heading of its own, so it reads as what it is:
+  // debt on the base, not this branch's failure (repo-47, option B).
+  if (reported.length > 0) {
+    const count = reported.reduce((n, r) => n + r.moved.length, 0);
+    process.stdout.write(
+      `  Moved in records this branch does not change — ${count} citation(s) in ` +
+        `${reported.length} record(s), reported and not failed:\n`,
+    );
+    for (const { record, moved } of reported) {
+      process.stdout.write(`  MOVED ${record}\n`);
+      for (const f of moved) {
+        const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
+        const where =
+          f.file === null
+            ? `:${range}`
+            : `${f.file}${f.rev === undefined ? "" : `@${f.rev}`}:${range}`;
+        process.stdout.write(
+          `         moved        ${where}  (record line ${f.line})\n` +
+            `                      ${f.reason}\n`,
+        );
+      }
+    }
+  }
 
   for (const result of [...failed, ...regressed]) {
     if (result.error != null) {
@@ -891,6 +1006,15 @@ function main() {
         ? `No history compared — ${history.skipped}.\n`
         : `${GRANDFATHERED.size} entr(y/ies) compared against ${against}: ` +
           `${history.raised.length} raised.\n`,
+  );
+  // The same rule for the touched set: which of the two a clean run means —
+  // every record enforced, or only the ones this branch changes — is stated.
+  process.stdout.write(
+    touched === null
+      ? `Every record enforced — no --against, so no base to tell this branch's records by.\n`
+      : `${touched.size} path(s) changed since the merge base with ${against}; ` +
+          `${reported.reduce((n, r) => n + r.moved.length, 0)} moved citation(s) reported ` +
+          `in ${reported.length} record(s) outside them.\n`,
   );
 
   if (
