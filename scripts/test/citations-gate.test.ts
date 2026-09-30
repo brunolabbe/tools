@@ -18,6 +18,7 @@ import {
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations-gate.mjs");
+const TEXT = { encoding: "utf8", shell: false } as const;
 
 /**
  * A throwaway repository with one source file and whatever records a test asks
@@ -28,7 +29,7 @@ const CLI = path.join(REPO, "scripts", "citations-gate.mjs");
 function withRepo(records: Record<string, string>): { dir: string; cleanup: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-gate-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -60,7 +61,7 @@ function withRepo(records: Record<string, string>): { dir: string; cleanup: () =
 
 /** `git` in a named directory. Module scope because it closes over nothing. */
 const gitIn = (dir: string, ...args: string[]) => {
-  const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+  const result = spawnSync("git", ["-C", dir, ...args], TEXT);
   if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
   return result.stdout.trim();
 };
@@ -283,7 +284,7 @@ test("a pathspec that stops at the work directory matches nothing", () => {
 test("the CLI exits non-zero and names the record when a record fails", () => {
   const { dir, cleanup } = withRepo({ "docs/work/b.md": BARE });
   try {
-    const result = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    const result = spawnSync("node", [CLI], { ...TEXT, cwd: dir });
     expect(result.status).toBe(1);
     expect(result.stdout).toMatch(/FAIL\s+docs\/work\/b\.md/);
     expect(result.stdout).toMatch(/unanchored/);
@@ -294,7 +295,7 @@ test("the CLI exits non-zero and names the record when a record fails", () => {
 });
 
 test("the CLI rejects an argument rather than ignoring it", () => {
-  const result = spawnSync("node", [CLI, "--section", "Log"], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, "--section", "Log"], { ...TEXT, cwd: REPO });
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/usage: node scripts\/citations-gate\.mjs/);
 });
@@ -370,7 +371,7 @@ test("a file with no GRANDFATHERED block parses as null rather than as empty", (
 function withHistory(before: string | null, after: string) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-history-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -518,7 +519,7 @@ test("a base whose list cannot be read is an error rather than an assumed empty"
 test("a base that once had this file and lost it is refused, not treated as a bootstrap", () => {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-reset-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -588,9 +589,7 @@ test("a shallow clone is refused, because git log cannot answer there", () => {
     gitIn(src, "add", "-A");
     gitIn(src, "commit", "-qm", "and without it");
 
-    const clone = spawnSync("git", ["clone", "--depth", "1", `file://${src}`, dst], {
-      encoding: "utf8",
-    });
+    const clone = spawnSync("git", ["clone", "--depth", "1", `file://${src}`, dst], TEXT);
     expect(clone.error).toBeUndefined();
     expect(clone.status).toBe(0);
     // Asserted rather than assumed: if the clone came out complete, everything
@@ -650,7 +649,7 @@ test("the glob matches this file, and not its test or a record that quotes it", 
 });
 
 test("the CLI rejects --against with no value", () => {
-  const result = spawnSync("node", [CLI, "--against"], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, "--against"], { ...TEXT, cwd: REPO });
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/--against needs a value/);
 });
@@ -663,7 +662,7 @@ test("the CLI rejects --against with no value", () => {
 test("a run with no history says that no history was compared", () => {
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
   try {
-    const result = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    const result = spawnSync("node", [CLI], { ...TEXT, cwd: dir });
     expect(result.stdout).toMatch(/No history compared/);
   } finally {
     cleanup();
@@ -691,7 +690,7 @@ test("a self-citation fails the gate by name, even when its fragment is on one l
     const lax = checkRecord(dir, "docs/work/a.md", "Review", read, resolve, false);
     expect(lax.passed).toBe(true);
 
-    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    const run = spawnSync("node", [CLI], { ...TEXT, cwd: dir });
     expect(run.status).toBe(1);
     expect(run.stdout).toMatch(/self-citation — it cites the record it is written in/);
     expect(run.stdout).not.toMatch(/\bnull\b/);
@@ -755,7 +754,7 @@ test("an indistinct citation into another file prints the lines it starts on, no
       path.join(dir, "src", "tls.ts"),
       ["// depth", "  // Defence in depth: the store is pinned.", "return true;", ""].join("\n"),
     );
-    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    const run = spawnSync("node", [CLI], { ...TEXT, cwd: dir });
     expect(run.status).toBe(1);
     expect(run.stdout).toMatch(/anchor starts on 2 lines of src\/tls\.ts/);
     expect(run.stdout).not.toMatch(/\bnull\b/);
@@ -829,14 +828,11 @@ test("the CLI's --displaced-since reaches a record under tools/*/docs/work, not 
   const record = "tools/planner/docs/work/pl-99.md";
   const { dir, before, cleanup } = withDisplaceable(record);
   try {
-    const plain = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    const plain = spawnSync("node", [CLI], { ...TEXT, cwd: dir });
     expect(plain.stdout).toMatch(/FAIL {2}tools\/planner\/docs\/work\/pl-99\.md/);
     expect(plain.stdout).toMatch(/unanchored/);
 
-    const result = spawnSync("node", [CLI, "--displaced-since", before], {
-      cwd: dir,
-      encoding: "utf8",
-    });
+    const result = spawnSync("node", [CLI, "--displaced-since", before], { ...TEXT, cwd: dir });
     expect(result.status).toBe(1);
     expect(result.stdout).toMatch(/FAIL {2}tools\/planner\/docs\/work\/pl-99\.md/);
     expect(result.stdout).toMatch(/displaced/);
@@ -1044,7 +1040,7 @@ test("gate() never absorbs a displaced failure into the grandfathered allowance"
 });
 
 test("the CLI rejects --displaced-since with no value", () => {
-  const result = spawnSync("node", [CLI, "--displaced-since"], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, "--displaced-since"], { ...TEXT, cwd: REPO });
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/--displaced-since needs a value/);
 });
@@ -1053,8 +1049,8 @@ test("the CLI refuses --displaced-since with a ref this repository does not have
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
   try {
     const result = spawnSync("node", [CLI, "--displaced-since", "not-a-real-ref"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/--displaced-since not-a-real-ref: no such commit/);
@@ -1074,10 +1070,7 @@ test("the CLI reports the header correctly when --displaced-since is used", () =
   const record = "tools/planner/docs/work/pl-99.md";
   const { dir, before, cleanup } = withDisplaceable(record);
   try {
-    const result = spawnSync("node", [CLI, "--displaced-since", before], {
-      cwd: dir,
-      encoding: "utf8",
-    });
+    const result = spawnSync("node", [CLI, "--displaced-since", before], { ...TEXT, cwd: dir });
     expect(result.status).toBe(1);
     // Check that the header mentions the specific scope with the displaced
     // context, not the ordinary Review-only scope
@@ -1110,7 +1103,7 @@ test("a path in merge conflict is one candidate, and its bare name still resolve
     gitIn(dir, "checkout", "-q", "main");
     edit("main");
     gitIn(dir, "commit", "-qam", "main");
-    const merge = spawnSync("git", ["-C", dir, "merge", "-q", "side"], { encoding: "utf8" });
+    const merge = spawnSync("git", ["-C", dir, "merge", "-q", "side"], TEXT);
     expect(merge.status).not.toBe(0);
     // The precondition, so this cannot pass by the conflict never happening.
     expect(gitIn(dir, "ls-files").split("\n")).toEqual(["src/tls.ts", "src/tls.ts", "src/tls.ts"]);

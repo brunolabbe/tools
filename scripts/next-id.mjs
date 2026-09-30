@@ -84,7 +84,7 @@ function fail(message, exit) {
  * @returns {string}
  */
 export function runCommand(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd, shell: false });
   // ENOENT and friends: the command never ran, so there is no status to carry.
   // 127 is what a shell leaves behind for this, and the recorded measurements
   // are in those terms.

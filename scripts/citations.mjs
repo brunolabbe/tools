@@ -869,7 +869,9 @@ export function makeResolver(tracked) {
  */
 export function candidateFiles(repo, rev) {
   const run = (args) =>
-    execFileSync("git", args, { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean);
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", shell: false })
+      .split("\n")
+      .filter(Boolean);
   if (rev) return run(["ls-tree", "-r", "--name-only", rev]);
   return [...new Set(run(["ls-files"])), ...run(["ls-files", "--others", "--exclude-standard"])];
 }
@@ -889,6 +891,7 @@ export function makeReader(repo, rev) {
           cwd: repo,
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
+          shell: false,
         });
         return out.split("\n");
       }
@@ -926,6 +929,7 @@ export function makeTrees(repo) {
             cwd: repo,
             encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
+            shell: false,
           },
         ).trim();
         tree = {
@@ -2080,6 +2084,7 @@ export function locateRecord(repo, file) {
       cwd: path.dirname(resolved),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      shell: false,
     }).split("\n");
   } catch {
     return arithmetic;
@@ -2094,7 +2099,10 @@ function main() {
   const { file, rev, section, requireAnchors, requireDistinct, requireClaudePins, displacedSince } =
     parseArgs(process.argv.slice(2));
 
-  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+  const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+    shell: false,
+  }).trim();
   const markdown = fs.readFileSync(file, "utf8");
   const relative = locateRecord(repo, file);
 
@@ -2106,6 +2114,7 @@ function main() {
       execFileSync("git", ["rev-parse", "--verify", "--quiet", `${displacedSince}^{commit}`], {
         cwd: repo,
         stdio: ["ignore", "ignore", "ignore"],
+        shell: false,
       });
     } catch {
       throw new Error(`--displaced-since ${displacedSince}: no such commit`);

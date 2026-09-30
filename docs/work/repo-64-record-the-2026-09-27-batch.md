@@ -261,7 +261,7 @@ Two things are still wrong, and both tilt the decision.
 <!-- citations: evidence docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 -->
 
 - **low · check 2 does not select from the working tree.**
-  - The Why says check 2 reads the working tree "in both what it selects and what it runs": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 "in both what it selects and what it runs"`. It selects records with `git ls-files` (`scripts/citations-gate.mjs:489 "ls-files"`), which lists the index, and it reads their contents from disk.
+  - The Why says check 2 reads the working tree "in both what it selects and what it runs": `docs/work/repo-65-preflight-diffpaths-does-not-see-uncommitted-changes.md:62 "in both what it selects and what it runs"`. It selects records with `git ls-files` (`scripts/citations-gate.mjs@2ffb72a:489 "ls-files"`), which lists the index, and it reads their contents from disk.
   - Measured at `ce99898`: I wrote an untracked ticket whose Review citation fails. `node scripts/citations.mjs` on it exits 2. `node scripts/citations-gate.mjs --against origin/main` exits 0 and never names it. After `git add`, the gate exits 1 and names it. Then I unstaged and deleted it, and `git status --short` is empty.
   - So under (b), whose union includes untracked paths, check 1 would select for an untracked file that check 2 never reads. "Checks 1–2 on the working tree" is close, not exact.
 
@@ -496,7 +496,7 @@ record the 2026-09-27 batch and fold its defects into the rule pages
   _Landing_ sections already commit before preflighting, which the previous
   two rounds missed by reading only the fix-round steps — reworded `repo-65`'s
   option (a) and recommendation to name (a)'s real cost as the two fix-round
-  steps, not a skill-wide reversal. And `citations-gate.mjs:489`'s
+  steps, not a skill-wide reversal. And `citations-gate.mjs@2ffb72a:489`'s
   `ls-files` call means check 2 selects from the index, not the working
   tree — reproduced the gate's own measurement: an untracked ticket with a
   failing citation is invisible to `citations-gate.mjs` until `git add`ed —

@@ -22,6 +22,7 @@ import {
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations.mjs");
+const TEXT = { encoding: "utf8", shell: false } as const;
 
 /** A citation, with the fields a given test does not care about filled in. */
 const cite = (over: Partial<ReturnType<typeof extractCitations>[number]> = {}) => ({
@@ -164,12 +165,12 @@ test("the CLI exits non-zero on an unresolvable citation, and zero when they all
   const record = path.join(dir, "ticket.md");
 
   fs.writeFileSync(record, "## Review\n\nBroken at `scripts/citations.mjs:999999`.\n");
-  const bad = spawnSync("node", [CLI, record], { cwd: REPO, encoding: "utf8" });
+  const bad = spawnSync("node", [CLI, record], { ...TEXT, cwd: REPO });
   expect(bad.status).toBe(1);
   expect(bad.stderr).toMatch(/cannot be right/);
 
   fs.writeFileSync(record, "## Review\n\nFine at `scripts/citations.mjs:1`.\n");
-  const good = spawnSync("node", [CLI, record], { cwd: REPO, encoding: "utf8" });
+  const good = spawnSync("node", [CLI, record], { ...TEXT, cwd: REPO });
   expect(good.status).toBe(0);
   expect(good.stdout).toMatch(summary(0, 0, 1, 0, 1));
   // It resolves and it is not verified, because the record gave it no anchor.
@@ -188,7 +189,7 @@ test("the CLI rejects an unknown flag with the usage string and a non-zero exit"
   const record = path.join(dir, "ticket.md");
   fs.writeFileSync(record, "## Review\n\nFine at `scripts/citations.mjs:1`.\n");
 
-  const result = spawnSync("node", [CLI, record, "--nonsense"], { cwd: REPO, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, record, "--nonsense"], { ...TEXT, cwd: REPO });
   expect(result.status).not.toBe(0);
   expect(result.stderr).toMatch(/unknown option --nonsense/);
   expect(result.stderr).toMatch(/usage: node scripts\/citations\.mjs/);
@@ -214,7 +215,7 @@ test("the CLI resolves the ticket rather than a file named after the sha, in eit
     [record, "--rev", "HEAD"],
     ["--rev", "HEAD", record],
   ]) {
-    const result = spawnSync("node", [CLI, ...argv], { cwd: REPO, encoding: "utf8" });
+    const result = spawnSync("node", [CLI, ...argv], { ...TEXT, cwd: REPO });
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     // Both halves matter: the record was read, and the rev was actually applied.
@@ -476,8 +477,7 @@ function withRecord(body: string): { record: string; cleanup: () => void } {
   return { record, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-const run = (...argv: string[]) =>
-  spawnSync("node", [CLI, ...argv], { cwd: REPO, encoding: "utf8" });
+const run = (...argv: string[]) => spawnSync("node", [CLI, ...argv], { ...TEXT, cwd: REPO });
 
 /**
  * Acceptance 3. A filtered run reports strictly fewer citations than an
@@ -573,7 +573,7 @@ function withInsertionRepo(): {
 } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-repo-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -641,15 +641,12 @@ function withInsertionRepo(): {
 test("the CLI tells a citation whose referent moved from one that still points at it", () => {
   const { dir, record, before, cleanup } = withInsertionRepo();
 
-  const atWriting = spawnSync("node", [CLI, record, "--rev", before], {
-    cwd: dir,
-    encoding: "utf8",
-  });
+  const atWriting = spawnSync("node", [CLI, record, "--rev", before], { ...TEXT, cwd: dir });
   expect(atWriting.status).toBe(0);
   expect(atWriting.stdout).toMatch(summary(1, 0, 0, 0, 1));
   expect(atWriting.stdout).toMatch(/^ {2}ok /m);
 
-  const atTip = spawnSync("node", [CLI, record, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+  const atTip = spawnSync("node", [CLI, record, "--rev", "HEAD"], { ...TEXT, cwd: dir });
   // `moved` alone, so the code says `moved` alone — not the generic 1 it shared
   // with `unresolvable` before repo-25 gave each class its own bit.
   expect(atTip.status).toBe(EXIT.moved);
@@ -671,7 +668,7 @@ test("the CLI tells a citation whose referent moved from one that still points a
 test("the summary cannot read N/N while a citation is in the moved state", () => {
   const { dir, mixed, cleanup } = withInsertionRepo();
 
-  const result = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+  const result = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { ...TEXT, cwd: dir });
   // Two classes co-occur, so two bits are set and both are named. A ranking
   // would have had to drop one of them exactly here.
   expect(result.status).toBe(EXIT.unresolvable | EXIT.moved);
@@ -707,7 +704,7 @@ test("the summary cannot read N/N while a citation is in the moved state", () =>
 test("--require-anchors makes an unanchored citation fatal, and nothing else does", () => {
   const { dir, legacy, cleanup } = withInsertionRepo();
   const at = (...argv: string[]) =>
-    spawnSync("node", [CLI, legacy, ...argv], { cwd: dir, encoding: "utf8" });
+    spawnSync("node", [CLI, legacy, ...argv], { ...TEXT, cwd: dir });
 
   const lenient = at();
   expect(lenient.status).toBe(0);
@@ -744,7 +741,7 @@ test("--require-anchors makes an unanchored citation fatal, and nothing else doe
 test("--require-anchors changes the exit code and not a single citation's state", () => {
   const { dir, mixed, cleanup } = withInsertionRepo();
   const at = (...argv: string[]) =>
-    spawnSync("node", [CLI, mixed, "--rev", "HEAD", ...argv], { cwd: dir, encoding: "utf8" });
+    spawnSync("node", [CLI, mixed, "--rev", "HEAD", ...argv], { ...TEXT, cwd: dir });
 
   const lenient = at();
   const strict = at("--require-anchors");
@@ -772,8 +769,8 @@ test("--require-anchors passes a record that has no unanchored citation", () => 
   const { dir, record, before, cleanup } = withInsertionRepo();
 
   const result = spawnSync("node", [CLI, record, "--rev", before, "--require-anchors"], {
+    ...TEXT,
     cwd: dir,
-    encoding: "utf8",
   });
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
@@ -1285,7 +1282,7 @@ test("--section filters evidence declarations by the same span as the citations"
 function withGrowingRecord(): { dir: string; record: string; before: string; cleanup: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-rev-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -1320,7 +1317,7 @@ function withGrowingRecord(): { dir: string; record: string; before: string; cle
 test("--rev names which record it read, and says when that record cited something else", () => {
   const { dir, record, before, cleanup } = withGrowingRecord();
   const at = (...argv: string[]) =>
-    spawnSync("node", [CLI, record, ...argv], { cwd: dir, encoding: "utf8" });
+    spawnSync("node", [CLI, record, ...argv], { ...TEXT, cwd: dir });
 
   // Both sides named. Naming only the rev was the defect: a reader who passed a
   // sha and got a verdict had no way to see which document produced it.
@@ -1538,17 +1535,16 @@ test.skipIf(process.platform === "win32")(
     fs.symlinkSync(dir, link, "junction");
 
     const viaLink = path.join(link, "drift.md");
-    const toplevel = spawnSync("git", ["-C", link, "rev-parse", "--show-toplevel"], {
-      encoding: "utf8",
-    }).stdout.trim();
+    const toplevel = spawnSync(
+      "git",
+      ["-C", link, "rev-parse", "--show-toplevel"],
+      TEXT,
+    ).stdout.trim();
     // The reproduction only exists while git and Node disagree. Before the fix
     // this subtraction is what the script used, and it yields `../<link>/drift.md`.
     expect(path.relative(toplevel, viaLink)).not.toBe("drift.md");
 
-    const linked = spawnSync("node", [CLI, viaLink, "--rev", before], {
-      cwd: dir,
-      encoding: "utf8",
-    });
+    const linked = spawnSync("node", [CLI, viaLink, "--rev", before], { ...TEXT, cwd: dir });
     // Named as git names it, not as the caller happened to spell it: no `..`
     // can appear, because a path that leaves the repository is a path `git show`
     // will never resolve.
@@ -1576,9 +1572,9 @@ test("a record that does not exist at the rev reports no drift, because there is
 
   const late = path.join(dir, "gate.md");
   fs.writeFileSync(late, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
-  const gate = spawnSync("node", [CLI, late, "--rev", before], { cwd: dir, encoding: "utf8" });
+  const gate = spawnSync("node", [CLI, late, "--rev", before], { ...TEXT, cwd: dir });
 
-  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`]).status).not.toBe(0);
+  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`], TEXT).status).not.toBe(0);
   expect(gate.status).toBe(0);
   expect(gate.stdout).toMatch(/read from the working tree and resolved against/);
   expect(gate.stdout).not.toMatch(/cited something different/);
@@ -1776,7 +1772,7 @@ function withDistinctnessRepo(
 ): { dir: string; file: string; cleanup: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-distinct-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
   };
   git("init", "-q", "-b", "main");
@@ -1808,10 +1804,10 @@ function withDistinctnessRepo(
 test("--require-distinct-anchors changes the exit code and not one citation line", () => {
   const { dir, file, cleanup } = withDistinctnessRepo('Proof: `src/a.ts:4 "informational"`.\n');
   try {
-    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    const lax = spawnSync("node", [CLI, file], { ...TEXT, cwd: dir });
     const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
 
     expect(lax.status).toBe(0);
@@ -1838,7 +1834,7 @@ test("the indistinct bit combines with the unanchored one", () => {
     const result = spawnSync(
       "node",
       [CLI, file, "--require-anchors", "--require-distinct-anchors"],
-      { cwd: dir, encoding: "utf8" },
+      { ...TEXT, cwd: dir },
     );
     expect(result.status).toBe(EXIT.unanchored | EXIT.indistinct);
   } finally {
@@ -1854,8 +1850,8 @@ test("a distinct anchor passes under --require-distinct-anchors", () => {
   const { dir, file, cleanup } = withDistinctnessRepo('Proof: `src/a.ts:3 "const b"`.\n');
   try {
     const result = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.status).toBe(0);
   } finally {
@@ -1901,8 +1897,8 @@ test("the CLI prints the number of lines an anchor starts on, beside the word li
   });
   try {
     const result = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.stdout).toMatch(/anchor starts on 2 lines of src\/g\.ts/);
     expect(result.status).toBe(EXIT.indistinct);
@@ -1935,8 +1931,8 @@ test("a citation into its own record is named a self-citation instead of being t
   const { dir, file, cleanup } = withDistinctnessRepo(SELF_RECORD);
   try {
     const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     // Still fails, on the bit it always failed on. Nothing here makes it pass.
     expect(strict.status).toBe(EXIT.indistinct);
@@ -1950,7 +1946,7 @@ test("a citation into its own record is named a self-citation instead of being t
     expect(strict.stderr).not.toMatch(/always available/);
 
     // Still policy, not taxonomy: the same lines without the flag, and exit 0.
-    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    const lax = spawnSync("node", [CLI, file], { ...TEXT, cwd: dir });
     expect(lax.status).toBe(0);
     expect(marks(lax.stdout)).toEqual(marks(strict.stdout));
   } finally {
@@ -1983,7 +1979,7 @@ test("a citation into a different ticket file is not a self-citation, and counts
   try {
     const result = spawnSync("node", [CLI, distinct.file, "--require-distinct-anchors"], {
       cwd: distinct.dir,
-      encoding: "utf8",
+      ...TEXT,
     });
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/^ {2}ok {9}other\.md:2 /m);
@@ -1998,7 +1994,7 @@ test("a citation into a different ticket file is not a self-citation, and counts
   try {
     const result = spawnSync("node", [CLI, repeated.file, "--require-distinct-anchors"], {
       cwd: repeated.dir,
-      encoding: "utf8",
+      ...TEXT,
     });
     expect(result.status).toBe(EXIT.indistinct);
     expect(result.stdout).toMatch(/anchor starts on 2 lines of other\.md/);
@@ -2048,8 +2044,8 @@ test("a self-citation of its own line still fails, although it now starts on one
   const { dir, file, cleanup } = withDistinctnessRepo(record);
   try {
     const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(strict.status).toBe(EXIT.indistinct);
     expect(strict.stderr).toMatch(/point into this record itself/);
@@ -2217,7 +2213,7 @@ test("a pinned citation is checked at its own rev, whatever tree the run reads",
   );
   try {
     for (const argv of [[pinned], [pinned, "--rev", "HEAD"]]) {
-      const result = spawnSync("node", [CLI, ...argv], { cwd: dir, encoding: "utf8" });
+      const result = spawnSync("node", [CLI, ...argv], { ...TEXT, cwd: dir });
       expect(result.status).toBe(EXIT.moved);
       expect(result.stdout).toMatch(summary(2, 2, 1, 0, 5));
       expect(result.stdout).toMatch(/— of 5 references, 4 pinned\n/);
@@ -2234,7 +2230,7 @@ test("a pinned citation is checked at its own rev, whatever tree the run reads",
     // A record with no pin prints the summary it always printed, byte for byte:
     // the count is suppressed at zero, which is what keeps every existing
     // record's output — and repo-35's own reproduction table — unchanged.
-    const plain = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+    const plain = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { ...TEXT, cwd: dir });
     expect(plain.stdout).toMatch(
       /^1 verified, 1 moved, 1 unanchored, 1 unresolvable, 0 unchecked, 0 evidence — of 4 references\nexit 3/m,
     );
@@ -2257,7 +2253,7 @@ test("a pin to a commit this repository does not have is unresolvable, never a p
     '## Review\n\nPinned to nothing: `src/tls.ts@deadbeef0:2 "Defence in depth"`.\n',
   );
   try {
-    const result = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+    const result = spawnSync("node", [CLI, record], { ...TEXT, cwd: dir });
     expect(result.status).toBe(EXIT.unresolvable);
     expect(result.stdout).toMatch(summary(0, 0, 0, 1, 1));
     expect(result.stdout).toMatch(/rev deadbeef0 not in this repository/);
@@ -2281,7 +2277,7 @@ test("a pin to a commit this repository does not have is unresolvable, never a p
 test("a declaration is refused for a citation that another line of its file would verify", () => {
   const { dir, before, cleanup } = withInsertionRepo();
   const record = path.join(dir, "declared.md");
-  const at = () => spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+  const at = () => spawnSync("node", [CLI, record], { ...TEXT, cwd: dir });
   try {
     fs.writeFileSync(
       record,
@@ -2329,7 +2325,7 @@ test("a bare citation into a .claude page is invisible without --require-claude-
     { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
   );
   try {
-    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    const lax = spawnSync("node", [CLI, file], { ...TEXT, cwd: dir });
     expect(lax.status).toBe(0);
     expect(lax.stdout).toMatch(/ok {9}\.claude\/agents\/x\.md:1/);
     expect(lax.stdout).toMatch(summary(1, 0, 0, 0, 1));
@@ -2351,8 +2347,8 @@ test("--require-claude-pins reports an unpinned .claude citation as unpinned-vol
   );
   try {
     const strict = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(strict.status).toBe(EXIT.unpinnedVolatile);
     expect(strict.stdout).toMatch(/UNPINNED {3}\.claude\/agents\/x\.md:1/);
@@ -2376,13 +2372,11 @@ test("a pinned citation into a .claude page passes --require-claude-pins", () =>
     { ".claude/agents/x.md": "the mechanical row\nsecond line\n" },
   );
   try {
-    const head = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).stdout.trim();
+    const head = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], TEXT).stdout.trim();
     fs.writeFileSync(file, `Pinned: \`.claude/agents/x.md@${head}:1 "the mechanical row"\`.\n`);
     const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/ok {9}\.claude\/agents\/x\.md@/);
@@ -2431,8 +2425,8 @@ test("--require-claude-pins catches a shorthand into a .claude page, not only an
   );
   try {
     const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.status).toBe(EXIT.unpinnedVolatile);
     expect(result.stdout).toMatch(/UNPINNED {3}:2 in \.claude\/agents\/x\.md/);
@@ -2458,8 +2452,8 @@ test("a declaration cannot excuse unpinned-volatile, and the stale message says 
   );
   try {
     const result = spawnSync("node", [CLI, file, "--require-claude-pins"], {
+      ...TEXT,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(result.status).toBe(EXIT.unpinnedVolatile | EXIT.declaration);
     expect(result.stderr).toMatch(
@@ -2687,7 +2681,7 @@ function withDisplacedRecord(): {
 } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-displaced-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], TEXT);
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -2723,13 +2717,13 @@ function withDisplacedRecord(): {
 test("the CLI reports a citation displaced since a ref, and stays silent when nothing moved", () => {
   const { dir, record, before, cleanup } = withDisplacedRecord();
 
-  const plain = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+  const plain = spawnSync("node", [CLI, record], { ...TEXT, cwd: dir });
   expect(plain.status).toBe(0);
   expect(plain.stdout).toMatch(summary(0, 0, 1, 0, 1));
 
   const atTip = spawnSync("node", [CLI, record, "--displaced-since", before], {
+    ...TEXT,
     cwd: dir,
-    encoding: "utf8",
   });
   expect(atTip.status).toBe(EXIT.displaced);
   expect(atTip.stdout).toMatch(/^exit 128 — 1 displaced$/m);
@@ -2739,8 +2733,8 @@ test("the CLI reports a citation displaced since a ref, and stays silent when no
 
   // Comparing a tree against itself: nothing moved, so nothing is reported.
   const noOp = spawnSync("node", [CLI, record, "--displaced-since", "HEAD"], {
+    ...TEXT,
     cwd: dir,
-    encoding: "utf8",
   });
   expect(noOp.status).toBe(0);
   expect(noOp.stdout).toMatch(summary(0, 0, 1, 0, 1));
@@ -2956,7 +2950,7 @@ test("a citation pinned to the base survives another open PR editing the cited l
     ].join("\n"),
   );
   try {
-    const result = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+    const result = spawnSync("node", [CLI, record], { ...TEXT, cwd: dir });
     expect(result.stdout).toMatch(summary(1, 1, 0, 0, 2));
     expect(result.status).toBe(EXIT.moved);
     expect(result.stdout).toContain('MOVED      src/tls.ts:2-3 "Defence in depth"');
@@ -3047,8 +3041,8 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
   fs.writeFileSync(record, crlf);
 
   const result = spawnSync("node", [CLI, record, "--section", "Review"], {
+    ...TEXT,
     cwd: REPO,
-    encoding: "utf8",
   });
   expect(result.stdout).not.toBe("");
   expect(result.stderr).not.toMatch(/no section matches/);
