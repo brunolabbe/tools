@@ -3,7 +3,7 @@ id: repo-84
 tool: repo
 title: Decide whether to add a re-resolve-citations utility script
 kind: work-package
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -43,4 +43,7 @@ The script was rebuilt four times by the same gate round over successive fix rou
 
 ## Log
 
-None yet.
+- 2026-09-30 — **Decided via AskUserQuestion:** option 1, add it under `scripts/`
+  as a permanent utility. The filer's recommendation was chosen. To be built
+  after repo-47, since repo-47 changed what "moved" means to the gate. The
+  script's semantics are documented in `roles/reviewer.md`.

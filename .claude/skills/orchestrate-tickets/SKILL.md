@@ -78,6 +78,12 @@ you are there.
    repository's orchestrator, which checks its build report before its review
    for the same reason.
 
+   **2026-09-30:** When a `Done when` line names several subjects (e.g., "a test
+   per tool" naming planner, ledger, downloader), check all subjects against the
+   same grain in one message. Do not send back for one subject, accept, then send
+   back again for another at a different grain — this causes builds to introduce
+   grain differences undetected by the prior round.
+
 5. **Gate each accepted branch** — `ticket-reviewer-sonnet` or
    `ticket-reviewer-opus` per the pairing below, spawned by **you, never the
    builder**: the checked thing must not pick its checker. **Give the gate

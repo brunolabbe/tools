@@ -419,3 +419,11 @@ keeping non-conflicting changes from both sides. When merging `main` into a
 branch, `--theirs` refers to `main`. Where both sides pinned different citations
 on the same line, the resolution is the union of those pins, verified by
 `citations-gate.mjs` at the merged result.
+
+**2026-09-30:** **When a batch holds a branch that changes the citations gate or
+preflight script, merge it first.** Every sibling's preflight fold will judge that
+sibling by the old code until the branch merges. A dispatch into this collision
+should name the expected fold failure and cost; merging the citations-changing
+branch first saves the round. Measured: repo-66's preflight exited 16 on its fold
+against an unmerged repo-47, with 30 moved citations in 11 records neither branch
+edits.

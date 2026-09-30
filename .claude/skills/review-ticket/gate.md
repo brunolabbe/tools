@@ -224,6 +224,15 @@ rebuilds the defect from the brief that still describes it.
   with the row naming who scoped it and where the work lands instead. It does
   not force FAIL: three gates on 2026-09-20 each had to reconcile this by hand
   when a builder was told to leave the page wiring to the orchestrator.
+- **proven (post-merge)** — the acceptance line is proven only by a mechanism
+  that runs after the branch merges to `main` — a hook, a workflow trigger, an
+  alert state. The gate cannot supply this proof and its absence here does not
+  make the line unproven.
+- **open decision** — a finding of an inconsistency or contradiction in the
+  brief itself — a condition that cannot be satisfied given the stated
+  constraints, or a required capability that cannot exist. Report it with the
+  contradictory facts and the branch head sha, so the builder can re-decide the
+  ticket's approach.
 - **PASS** — every acceptance line proven or verified, nothing above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
 - **PREFLIGHT** — a page-only `chore` with no source change, gated by

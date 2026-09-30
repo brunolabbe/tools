@@ -89,6 +89,15 @@ the sentinelle repository, 2026-09-23).
   `tools/*/docs/work/*.md`, written with the `*.md`, because a pathspec
   ending at the directory matches nothing and says so nowhere (2026-09-20).
 
+  **2026-09-30:** Preflight's title check reads the last commit's subject when
+  `--title` is not passed. Pass the title the pull request will carry for the check
+  to run against what the merge will actually land: `node scripts/preflight.mjs
+  --base origin/<base> --title "your pull request title"`. A new `scripts/*.mjs`
+  file needs an `include` line in `scripts/test/tsconfig.json` so TypeScript finds
+  its test; the error is TS6307. When a merge from `main` moves lines in records
+  the branch edits, repoint them to the base **after** the gate reports which
+  citations fail, using the MOVED list from the citations gate as your target.
+
 Append a dated entry to the ticket's Log in the commit that earns it. **The
 Log's shape is a claim, its command, and that command's output**
 (`.claude/skills/orchestrate-tickets/reference/records.md`).

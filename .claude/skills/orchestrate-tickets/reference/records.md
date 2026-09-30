@@ -391,6 +391,15 @@ discarded. So:
   exactly like one that has not**, which is why the discipline cannot be an
   inspection.
 
+  **2026-09-29:** An import-block insertion at the top of a file moves citations
+  exactly as a mid-file test insertion does — measured at 44 moved citations on
+  repo-65 when an import was added to `contract/src/errors.ts`. Guard by heading
+  form and diff-before-commit like any other splice. **Also 2026-09-29:** A
+  comment that quotes another line's exact text is a second occurrence of that
+  line's anchor, and `citations.mjs` reports it as indistinct. If a comment
+  documents a line by quoting it, use an indirect citation or paraphrase instead
+  to avoid the duplicate.
+
   So, two practices, both one line:
 
   - **Anchor on the heading *form*, never the bare heading text** — `\n\n## …\n`,

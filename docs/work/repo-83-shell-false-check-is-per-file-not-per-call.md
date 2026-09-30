@@ -3,7 +3,7 @@ id: repo-83
 tool: repo
 title: spawn-safety's `shell: false` check is per file, not per call, and nothing guards the widened pattern
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -256,3 +256,9 @@ Whether to make the check per call, given what building it costs:
   offenders under the narrowed pattern — hold at `6418f17` and are reproduced
   by the two scripts above, run from a plain checkout, no scratchpad path
   required.
+
+- 2026-09-30 — **Decided via AskUserQuestion:** option (a), the per-call check,
+  deferred to a later batch. The filer's recommendation was chosen. The ticket's
+  count of 14 calls was measured at `6418f17`. The scripts `scripts/review-record.mjs`
+  and `scripts/preflight.mjs` have changed since then, so the builder will
+  re-measure before building.
