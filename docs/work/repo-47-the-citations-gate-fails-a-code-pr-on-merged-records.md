@@ -3,7 +3,7 @@ id: repo-47
 tool: repo
 title: The citations gate fails a code PR on citations in merged records that still verify on the base
 kind: fix
-status: ready
+status: done
 difficulty: hard
 milestone: null
 depends_on: []
@@ -342,6 +342,77 @@ Also update:
   `records.md`'s bullet agree with the new rule.
 - `npm run check` and `npm test` pass.
 
+## Review
+
+### Gate 1
+
+**Gate: PASS** — 2026-09-30 · `git diff e79b04f...3487667` (`origin/main` was `e79b04f` at the first fetch and at a second one at the end, so the base did not move) · code-review at medium · reviewed at `3487667db46cc8c771d4b6e5d71a4b233ac68c1e` · gate model Sonnet 5.5 (`claude-sonnet-5-5`); the builder was rated `hard` (Opus)
+
+Re-issued at gate 2 with every coordinate re-resolved against `982bd152fdbb83510fb1e8aab5f493a0f3188313`, and otherwise as gate 1 returned it at `3487667`, except that four claims which round 2 corrected are prose naming that sha and not citations (F2's demotion line, F3's `countLine` line and its old heading, and F5's `touchedPaths` call), and that F1's counts of 34 in 12 were measured at `3487667` (the same command at `982bd15` gives 30 in 11, since round 2 pinned repo-51's four). Citations of content this branch introduces are unpinned, against `982bd15`. Citations of content that predates it are pinned to `e79b04f`. `.claude/` content is named by page and heading, with no line number.
+
+| Done when                                                                                               | Proof                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fixture: a code change moves a line an untouched enforced record cites; exit 0; printed under a heading | `scripts/test/citations-gate.test.ts:1180 "MOVED docs\/work\/a\.md"` (heading and coordinate), `scripts/test/citations-gate.test.ts:1181 "0 failing"`, exit 0 at line 1182 — **proven**. Mutation M1, below, turns it red                                                                                    |
+| The same fixture after the merge, `--against` naming the merged tip: exit 0, still reported             | `scripts/test/citations-gate.test.ts:1207 "0 path\(s\) changed since the merge base with main"`, heading at line 1208, exit 0 at line 1209 — **proven**. Mutation M4 turns it red, and only it                                                                                                               |
+| The control: the branch also edits the record, and the gate exits non-zero on the same `moved`          | `scripts/test/citations-gate.test.ts:1215-1226 "the control — a branch that also edits the record fails on the same moved"`, FAIL line at 1223, exit 1 at 1226 — **proven**. Mutation M9 turns it red at the FAIL line                                                                                       |
+| Merge-base fixture: the base moved past the merge base with a commit editing the record; no failure     | `scripts/test/citations-gate.test.ts:1251 "1 path\(s\) changed since the merge base with main"`, precondition at line 1247, exit 0 at line 1252 — **proven**. Mutation M3 turns it red, and only it                                                                                                          |
+| A created record carrying a `moved` citation fails                                                      | `scripts/test/citations-gate.test.ts:1267 "FAIL {2}docs\/work\/b\.md — 1 moved"`, exit 1 at line 1270 — **proven**. Mutations M5 and M9 turn it red at that line                                                                                                                                             |
+| Each of the five fails with the change reverted, and the Log says how                                   | **verified.** The Log's whole-file revert reproduces exactly: 7 failed, 1 passed of 8. The control and the created-record test go red under that revert through the new report line and not their exit code, so M9 and M5 are the proof that each fails for its own reason                                   |
+| `ci.yml`'s comment, `preflight.mjs` and `records.md` agree with the rule                                | **verified** by reading: `.github/workflows/ci.yml:185 "It also decides which enforced records fail on"`, `scripts/preflight.mjs:27 "check 2 imports"`, `scripts/preflight.mjs:1278 "repo-47, option B, and the choice"`, and `records.md`'s bullet on whose repoint it is, under its Since repo-47 sentence |
+| `npm run check` and `npm test` pass                                                                     | **verified** at the tip: `npm run check` exit 0; `npm test` 3487 passed and 2 skipped of 3489, exit 0; the two changed files 144 of 144 (55 gate, 89 preflight), and the same 144 in a depth-1 clone. The base's own count was not run                                                                       |
+
+- **open decision** · F1 · `moved` is two states and option B as decided excuses both, so a branch that rewrites or deletes text a merged record cites is excused exactly like one that shifts a line. Measured with `node scripts/citations-gate.mjs --against e79b04f` at the tip (exit 0): **34** moved citations reported, in **12** of 135 enforced records. **32 of 34** are found on another line, and **2 of 34** are "not anywhere in" the file. Of the 32, **31** are pure line shifts (each old line, mapped through `git diff -U0 e79b04f 3487667` for its file, lands on the line the gate reports), and **1** is `repo-51`'s citation of the test the branch rewrote (F4). The 2 are one call site cited by two records: `docs/work/repo-51-one-preflight-command-before-a-pull-request.md@e79b04f:127 "from the reviewing checkout's module"` and `docs/work/repo-64-record-the-2026-09-27-batch.md@e79b04f:157 "Check 2 does not"`, both citing `scripts/preflight.mjs@e79b04f:753 "citationsGate(repo, SCOPE, grandfathered)"`. At the tip that call is `scripts/preflight.mjs:780 "touchedPaths(repo, base)"`, two arguments longer, so the anchor's closing parenthesis is gone. **Neither claim is false on the tip, both are merely unlocatable**: repo-51 says the call takes `SCOPE` from the reviewing checkout and the grandfather list from the target repo, and `scripts/preflight.mjs:779 "grandfathered = grandfatheredFor(repo)"` still does; repo-64 says check 2 reads the working tree, and it still does. **Options, open for the owner.** (A, recommended) Keep it as built: at this tip a split would have caught 0 false claims, because the one citation whose meaning did change sits in the found-elsewhere class and the two not-in-file ones are still true, and it would have billed this branch two record edits for nothing. (B) Split it: keep reporting `moved` with a `foundAt` hit, and fail one with none in an untouched record. The field is already on every result (`scripts/citations.mjs@e79b04f:1400 "foundAt: hits,"`, beside the reason text at `scripts/citations.mjs@e79b04f:1394 "and not anywhere in"`), so it is one predicate at `scripts/citations-gate.mjs:711 "const failures = result.failures.filter"`. The cost is the two pins now and, after that, a branch that rewrites a cited line pays for that record. One branch is the whole sample.
+- **low** · F2 · a mutation of the demotion survives all 144 tests. Replacing the `const failures = result.failures.filter(…)` line in the demotion, as it stood at `3487667`, with `const failures = [];` parses, and 55 of 55 gate and 89 of 89 preflight tests still pass (M6). The guard `scripts/test/citations-gate.test.ts:1288 "1 indistinct"` runs a record with no `moved` in it, so the demotion block is never entered. The code is right: on a stand-in (the tip plus a commit deleting `scripts/test/preflight.test.ts`) the untouched `repo-79` record fails with `16 unresolvable, 8 moved`, exit 1, its 8 moved under the heading, and 5 of that run's 6 failing records were mixed the same way. Remedy: one fixture, an untouched record holding one `moved` and one `unresolvable`, asserting exit 1, the FAIL line, and the `moved` under the heading.
+- **low** · F3 · four presentation findings, one mechanism: the demotion changes the verdict and not what is printed. (a) The FAIL line still counts what was demoted, `16 unresolvable, 8 moved, 1 verified`, because `countLine(result.counts)` in the FAIL line, as it stood at `3487667`, reads the pre-demotion tally, so a reader is told 8 moved failed the record. (b) The reported block prints before every FAIL line (the heading `Moved in records this branch does not change`, as it stood at `3487667`); in the stand-in run above the first FAIL is line 82 of 191, and FAIL lines are what turn the build red. (c) The `preflight.mjs` note names all 12 records on one line of about 900 characters, once per fold. (d) The heading says "this branch" on `main`'s own push run, where nothing is a branch.
+- **low** · F4 · the branch rewrote a test a merged record cites, and the gate can only half see it. `docs/work/repo-51-one-preflight-command-before-a-pull-request.md@e79b04f:109 "non-zero on a moved citation in a merged record"` proves that row with `scripts/test/preflight.test.ts@e79b04f:293-294 "toBe(EXIT.citations)"`, a two-line range. At the tip the same lines sit in a test that asserts the opposite, `scripts/test/preflight.test.ts:292-293 "note {2}1 moved citation\(s\) in 1 record"`. The first is reported moved to a different test, the control the branch appended; the second still verifies at its old coordinate and is not reported at all. The Log names the first and not the second. When a later branch edits repo-51 it should pin both to `e79b04f` and ignore the gate's "it is at" hint. The only merged record citing that region is repo-51's, from a grep of `docs` and `tools` for citations of that file's lines 270 to 299.
+- **low** · F5 · a mistyped or unfetched `--against` ref now gets the merge-base message. the `touchedPaths` call in `main()`, as it stood at `3487667`, runs before `compareAgainst`, so the advice at `scripts/citations-gate.mjs@e79b04f:405 "no such commit. In CI that means"` is shadowed for the CLI and for check 2. Measured in a depth-1 clone of the tip with no `origin/main`: exit 1, `--against origin/main: no merge base with HEAD, so which records this branch changes cannot be told`, then git's `fatal: Not a valid object name origin/main`. Both messages name `fetch-depth: 0`, so this is wording only.
+- **low** · F6 · two comments the branch leaves stale, with no ticket filed. `.github/workflows/ci.yml@e79b04f:170 "Same depth-1 caveat as the two steps above"` says the gate reads the checkout and never the history, and now sits directly above the paragraph saying `--against` reads history. `.github/workflows/ci.yml@e79b04f:93 "The citation gate's"` names the base's `GRANDFATHERED` list as the only reason `check` fetches depth 0, and the merge base is a second. The Log declines the first because repo-46 edits the same job. CLAUDE.md's rule for a stale sentence is to fix it or file it, and a one-sentence comment edit costs a rebase line where a filing costs an intake slot.
+- **note** · F7 · the transition and the debt, both by design and both the Log's own claims, re-measured. Until this merges, an older gate over the tip's tree fails 11 records and 33 moved citations (a stand-in with the base's `citations-gate.mjs` written over the tip's; the Log says 34, and the 34th is `repo-50`'s citation into the gate file I overwrote), so a branch that folds this head under its own pre-B preflight goes red on records it never touched: merge this before its siblings' last preflight. And the debt stays on `main`: the next branch to append even a Log line to one of the 12 records owns every `moved` in it, `repo-79` 8, `repo-82` 7, `repo-51` and `repo-65` 4 each.
+- **dropped** · "the fold, using only `HEAD`'s diff, lets a pair of branches merge to a red `main`". Not reachable through `moved`: `main`'s push and nightly runs compute an empty touched set and fail nothing on it, and every other state is enforced on every record in every fold. Emptying the fold's set turns 4 tests red (P4), so that half is tested; a pair whose second branch opens after the first's last preflight is not folded by either, before or after this change (reasoned from what preflight folds, not run).
+- **dropped** · "no merge base in CI". `touchedPaths` throws, `main()` catches it and exits 1 (measured in the depth-1 clone), and the path is unreachable in `check`: it fetches depth 0, a pull request run's `HEAD` is a merge whose first parent is the base tip, and a push run's `HEAD` is `origin/main`.
+- **dropped** · "an untracked new record escapes the touched set locally". The gate never reads an untracked record, before or after (`findRecords` is `git ls-files`); a staged one is read and enforced (measured: `136 enforced, 1 failing`, the scratch record failing on its `moved`). Not this branch's.
+- **findings** · code-review at medium returned 13; 10 carried in 7 bullets (F3 is four findings in one), 3 dropped.
+- NFR: security ✓ (`execFileSync` with argument arrays and `shell: false` through `GIT_EXEC_OPTIONS`; `against` reaches a git argument only, and CI prefixes it `origin/`) · performance ✓ (two extra git subprocesses per run, not timed) · reliability — an unfindable merge base throws rather than returning an empty set, and a test asserts it (`scripts/test/citations-gate.test.ts:1320 "no merge base with HEAD"`); the wording is F5 · maintainability — F3 and F6. Invariants walked: no shell, no `console`, the tests typechecked by `npm run check` (the `.mjs` is not, since `checkJs` is off in `scripts/test/tsconfig.json`), no new test file to register. Skipped, not touched by the diff: tool imports, `AppError`, redaction, SSRF, progress, contracts, the image's workspace list.
+
+**Method, mutations.** Range `git diff e79b04f...3487667`: 7 files, all read, the ticket's Log last. Tree detached at the tip, farm and build first. Nine mutations of `citations-gate.mjs` and five of `preflight.mjs`, each parse-checked with `node --check` and restored; a first `sed` mutation that did not parse was discarded and redone, and none counted. Gate side: M1 the demotion condition replaced by `if (false) {`, 4 red of 8; M2 an always-empty touched set, 3 red; M3 the diff taken from the base's tip, 1 red; M4 an empty set treated as no set, 1 red; M5 `--diff-filter=M`, 1 red; M6 the survivor of F2, 0 red; M7 no `--against` read as an empty set, 1 red; M8 the no-merge-base error swallowed, 1 red; M9 the `!touched.has(record)` condition dropped, 2 red, which is the Log's own claim reproduced. Preflight side: P1 check 2's set `null`, 1 red; P2 check 2's set empty, 1 red; P3 the fold's set `null`, 1 red; P4 the fold's set empty, 4 red; P5 the fold's set the union of the folded heads', 1 red, which is the Log's own union claim reproduced.
+
+**Method, what CI computes.** A scratch repository holding the real history to `e79b04f` and the tip, plus two commits that move the base: one edits `repo-79`'s record, one inserts a line in `preflight.mjs`. A `pull_request` run: the tip merged onto that base with `--no-ff`, `HEAD` the merge, `origin/main` the base's tip. It touched 7 paths, all the branch's own, and not the base-only edit to `repo-79`; `0 failing`, exit 0, 35 moved reported in 12 records. The same merge with `origin/main` moved on again by a commit editing `repo-82`'s record, as when a merge ref predates the base: the same 7 paths, exit 0. A `push` run: the tip squash-merged onto that base with `HEAD` and `origin/main` the same commit: `0 path(s) changed`, 35 reported, exit 0. No merge base: a depth-1 clone with no `origin/main` exits 1 with the message in F5.
+
+**Method, depth 1 and preflight.** Depth 1: `git clone --depth 1` of the tip with a farm, the two changed files 144 of 144 and `--project repo` 630 of 630; every new test builds its own fixture repository and reads no real history. Preflight at the tip, `node scripts/preflight.mjs --base origin/main --title "fix(repo): enforce only the citation records a branch changes (repo-47)"`: exit 0, with `check`, `ciCommands`, `citations` (141 records, 34 moved noted), `review`, `title` and `mergeTree` all ok (2 open heads, both clean, each fold noting the same 34). Check 2 and the fold apply CI's rule as a set; they differ in that check 2 diffs to the working tree and the fold to the committed head. Records the branch itself edits: the `repo-47` ticket verified 11 of 11 anchored citations, 0 moved, exit 0, and `records.md` is a `.claude` page outside `SCOPE.records`. Not run: the base's `npm test` count, the e2e and container gates (the branch touches neither), and a real GitHub `pull_request` run, which the stand-ins above replace.
+
+### Gate 2
+
+**Gate: PASS** — 2026-09-30 · `git diff 3487667..982bd15`, the one round only (`origin/main` was `e79b04f` at the first fetch and at a second one at the end, so the base did not move) · code-review at medium · reviewed at `982bd152fdbb83510fb1e8aab5f493a0f3188313` · gate model Sonnet 5.5 (`claude-sonnet-5-5`)
+
+Round 2 was the owner's choice, made between gates: F1 kept as built, one round for F6 and the lows F2 to F5. Coordinates are against `982bd15`, unpinned, since the content is this round's own. Every mutation below was parse-checked with `node --check` and restored.
+
+| Gate 1 finding                                          | Verdict                          | Proof                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1, `moved` covers two states                           | kept by the owner; nothing built | the demotion's comment now says so, `scripts/citations-gate.mjs:705 "for a line its code moved or rewrote under it"`, and the predicate is unchanged at `scripts/citations-gate.mjs:711 "const failures = result.failures.filter"`                                                                                                                                |
+| F2, the demotion's other half untested                  | **fixed**                        | `scripts/test/citations-gate.test.ts:1354 "docs\/work\/c\.md — 1 unresolvable"`, exit 1 at line 1361. Mutation M6 re-run, the same `const failures = [];`: 1 failed of 57 in that file, this test, at that line, and 90 of 90 pass in `preflight.test.ts`, so 1 red of 147 in all; before the round it was 0 red of 144                                           |
+| F3(a), the FAIL line counted the demoted `moved`        | **fixed**                        | `scripts/test/citations-gate.test.ts:1355 "not.toMatch(/FAIL {2}docs\/work\/c\.md"` and the subtraction at `scripts/citations-gate.mjs:713 "(result.counts.moved ?? 0) - moved.length"`. N1, `const counts = result.counts;`, turns that test red at line 1354 (`1 unresolvable, 1 moved`). On the stand-in run `repo-79` now reads `16 unresolvable, 1 verified` |
+| F3(b), the reported block printed before the FAIL lines | **fixed**                        | `scripts/test/citations-gate.test.ts:1360 "toBeLessThan(out.indexOf"` and `scripts/citations-gate.mjs:987 "After every line that fails the run"`. N2, the heading written before the FAIL loop, turns it red (`expected 141 to be less than 82`). On the stand-in run the first FAIL is line 3 of 181 and the block starts at line 100                            |
+| F3(c), one 900-character note per fold                  | **fixed**                        | `scripts/test/preflight.test.ts:2204 "and 1 more; check 2 lists every one"`, cap at `scripts/preflight.mjs:751 "const shown = reported.slice(0, limit)"`. N4, `const shown = reported;`, turns it red (`to have a length of 3 but got 4`). The live fold prints 3 records and `… and 8 more`                                                                      |
+| F3(d), "this branch" on `main`'s push run               | **fixed**                        | `scripts/citations-gate.mjs:997 "Moved in records not changed since the merge base with"`, asserted at `scripts/test/citations-gate.test.ts:1170 "main — 1 citation\(s\) in 1 record\(s\)"`. N5, the old wording back, turns 5 of 57 red                                                                                                                          |
+| F4, repo-51 cited a rewritten test                      | **fixed** by pinning all five    | see the F4 bullet below: 21 of 21 verified, 0 moved, 5 pinned; the gate exits 0 with repo-51 enforced and passing                                                                                                                                                                                                                                                 |
+| F5, a missing ref got the merge-base message            | **fixed**                        | `scripts/test/citations-gate.test.ts:1379 "--against no-such-ref: no such commit"`, and `scripts/citations-gate.mjs:822 "which ci.yml's check job sets"`. N3, the new verification made to always pass, turns it red (`no merge base` in place). A real no-merge-base still says so, measured in the shallow probe below                                          |
+| F6, two stale comments                                  | **fixed**                        | `.github/workflows/ci.yml:93 "reads history twice"`, `.github/workflows/ci.yml:119 "needs the base branch's history"`, `.github/workflows/ci.yml:173 "Unlike them it reads history"`; `preflight.mjs`'s own `ciCommands` check still parses the job, exit 0                                                                                                       |
+
+- **F4, verified.** The owner's alternative was a Log note; the builder pinned. Editing `repo-51` makes it a record this branch changes, so it is enforced here, and the touched set at `982bd15` is 8 paths, repo-51's among them. The row at `docs/work/repo-51-one-preflight-command-before-a-pull-request.md:109 "@e79b04f:293"` and the three bullets, the last at `docs/work/repo-51-one-preflight-command-before-a-pull-request.md:127 "preflight.mjs@e79b04f:753"`, carry the five pins. `node scripts/citations.mjs <repo-51> --section Review --require-anchors --require-distinct-anchors --require-claude-pins`: **21 verified of 21**, 0 moved, 0 unanchored, 0 unresolvable, 5 pinned, exit 0; with `--rev e79b04f` again 21 of 21, exit 0. The five were also read straight off `git show e79b04f:<file>`: `preflight.mjs` lines 753, 1369 and 1448 hold their anchors, and the two test lines verify at that pin in the checker's own list. The whole file, not only the section the gate reads: 21 verified, 0 moved of 47 references, the other 24 being unanchored Log and Why citations that predate the branch and are outside `## Review`. `node scripts/citations-gate.mjs --against origin/main` at the head: **exit 0**, `135 enforced, 0 failing`, `8 path(s) changed`, repo-51 in neither a FAIL nor a MOVED line, and the reported count fell from 34 in 12 records to **30 in 11**, which is exactly repo-51's four. Five pins changed 12 lines of the record (`git diff --shortstat`: 12 insertions, 12 deletions), most of it table padding, which is the Why's cost 2 measured.
+- **F5 probe from a state its test does not start from.** The new test uses a ref that does not exist. In a depth-1 clone of `982bd15` with `origin/main` fetched at depth 1, so that the ref resolves and shares no history: `--against origin/main` still exits 1 with `no merge base with HEAD, so which records this branch changes cannot be told`, and `--against origin/nope` exits 1 with `no such commit`. The new `rev-parse` did not swallow the real shallow case.
+- **low** · G2-1 · the fold's note says something false about a record the folded head changed. The note now reads `not changed since the merge base with <base>` (`scripts/preflight.mjs:753 "record(s) not changed since the"`), and a fold prints it for every record it reports. In the fold test's own fixture the reported record is one the other head created (`scripts/test/preflight.test.ts:2137 "docs/work/b.md"`), so it was changed since that merge base, by the head being folded in. The set it is true of is `HEAD`'s own diff, which is what the choice in `preflight.mjs` says and what the old "this branch" wording carried. Check 2 and the gate's CLI are accurate. Wording only: in a fold, `not changed by this branch since the merge base`.
+- **low** · G2-2 · the round's Log gives a stale count. The round-2 entry's F2 bullet says the mutation "is 1 failed, 145 passed of 146". At `982bd15` the two files hold 147, and M6 re-run gives 1 red of 147 (56 of 57 in one file, 90 of 90 in the other). The 146 was taken before the F3(c) test existed. The finding it reports stands. A coordinate into the ticket's own file can never be distinct, so this names the section.
+- **low** · G2-3 · one comment line is out of wrap. The rewrapped `fetch-depth` comment has four lines of 72 to 79 characters and then `.github/workflows/ci.yml:97 "other check here needs only the checkout"`, at 112. `oxfmt` does not touch YAML comments, so nothing will fix it.
+- **low** · G2-4 · two copies of one message, with different tails. `scripts/citations-gate.mjs@e79b04f:406 "which ci.yml's changes job already sets"` and `scripts/citations-gate.mjs:822 "which ci.yml's check job sets"` are the same advice for the same fault. `touchedPaths` runs first from the CLI and from check 2, so the older copy is now reached only by a direct call to `compareAgainst`, which only the unit tests make. The two will drift; one shared constant would not.
+- **dropped** · "the reordering breaks something that parses the gate's output". No consumer does: a search of every `.mjs`, `.ts`, `.yml`, `.sh`, `.json` and `.md` file outside `node_modules` for the old and new heading, `MOVED `, `reported and not failed` and `enforced, ` found only the gate, its own tests, and `citations.mjs`'s separate output of its own. CI's gate step reads the exit status, `preflight.mjs` calls `gate()` and never reads its stdout, and `review-record.mjs` and `citations.mjs` name the gate in comments only.
+- **dropped** · "the new `rev-parse` spawn skips `shell: false`". It spreads `GIT_EXEC_OPTIONS`, `against` reaches an argument and nothing else, and `packages/core/test/spawn-safety.test.ts` passes 5 of 5 at the head.
+- **dropped** · "the reported block now sits between the FAIL lines and the verdict". Measured on the stand-in: FAIL lines 3 to 94, the block 100 to 172, `135 enforced, 6 failing` at 173 and the advice after it, of 181. The FAIL lines come first, which is what F3(b) asked for, and the verdict line is still at the foot. The block sits after `STALE` and `RAISED` too: a probe with a bogus `GRANDFATHERED` entry printed `STALE` at line 4, `RAISED` at 5 and the heading at 7.
+- **dropped** · "the `counts` subtraction misreports under `--displaced-since`". Run with `--against origin/main --displaced-since origin/main`: exit 1, 13 failing, no crash. That mode's FAIL line has always printed the widened whole-record tally, by `checkRecord`'s own comment, so the subtraction only removes what `moved` this gate demoted from it.
+- **findings** · code-review at medium over `3487667..982bd15` returned 8; 4 carried, 4 dropped.
+- NFR: security ✓ (the one new spawn is an argument array with `shell: false`, output ignored) · performance ✓ (one more git subprocess per run, not timed) · reliability ✓ (F5, and the shallow probe above) · maintainability — G2-4. Invariants walked, for the lines this round touched only: no shell, no `console`, no new test file to register, no workspace dependency added.
+
+**Method.** `git diff 3487667..982bd15` only: 8 files, all read, the ticket's Log last; the tree detached at `982bd15` and the gate-1 files in the scratch directory read first. Tests at the head: the two changed files 147 of 147 (57 gate, 90 preflight; 144 at gate 1, plus the three new tests), and the same 147 in a depth-1 clone of the head; `npm test` 3490 passed and 2 skipped of 3492, exit 0 (3487 at gate 1); `npm run check` and `npm test -- --project repo` both ok inside preflight. Mutations, each parse-checked and restored: M6 re-run, 1 red in the gate file and 0 in the preflight file; N1 the `counts` subtraction dropped, 1 red; N2 the heading printed before the FAIL loop, 1 red; N3 the new verification made to always pass, 1 red; N4 the fold's cap dropped, 1 red; N5 the old heading wording back, 5 red. Commands at the head: `node scripts/citations-gate.mjs --against origin/main`, exit 0, `135 enforced, 0 failing`, `8 path(s) changed`, 30 moved reported in 11 records; `node scripts/preflight.mjs --base origin/main --title "fix(repo): enforce only the citation records a branch changes (repo-47)"`, exit 0, with `check`, `ciCommands`, `citations`, `review` (repo-51 is now on the branch and is done with a Review), `title` and `mergeTree` ok, the last against 3 open heads, one, #325, opened since gate 1, each fold printing 3 records and `… and 8 more`. Probes from states the round's tests do not start from: a depth-1 clone with `origin/main` fetched at depth 1 (F5), a run with a bogus `GRANDFATHERED` entry (ordering against `STALE` and `RAISED`), a mixed-record stand-in (the tip's own scenario, `preflight.test.ts` deleted), and `--displaced-since`. Every gate-1 mutation was also re-run at the head over whole test files, not one filter, and each is still red: M1 5 red, M2 3, M3 1, M4 1, M5 1, M7 3, M8 1, M9 2, P1 2, P2 1, P3 2, P4 5, P5 1. Not run: a real GitHub `pull_request` run.
+
 ## Log
 
 - **2026-09-14 — filed by the owner's choice, through AskUserQuestion, taking the
@@ -390,3 +461,156 @@ Also update:
   Options B, E, C and D were offered. B was the only one that removes the cost
   measured on #316, and the cost of choosing it was stated: it gives up the
   loud failure accepted in repo-29.
+
+- **2026-09-30 — built, option B, off `e79b04f`.** `citations-gate.mjs` gains
+  `touchedPaths(repo, against, head = null)` — `git merge-base <head|HEAD>
+<against>`, then `git diff --name-only --no-renames -z` from that merge base
+  to the working tree (or to `head`) — and `gate()` a fifth parameter,
+  `touched`. An enforced record outside it has its `moved` failures taken out
+  and returned as `reported`; the CLI prints them under "Moved in records this
+  branch does not change" and leaves the exit code alone. A grandfathered
+  record, a touched record, and every state but `moved` are untouched. Without
+  `--against` the touched set is `null` and every record is enforced, and the
+  run now says which of the two rules it applied on every run, as the history
+  line already did. A merge base that cannot be found throws rather than
+  returning an empty set, which would excuse every `moved` in the corpus.
+  - **What `main`'s push and nightly runs do under B**, measured, not argued:
+    `HEAD` is `main`'s tip, the merge base with `origin/main` is `HEAD`, the
+    touched set is empty, and every `moved` is reported and none fails. The
+    test "after the merge, a run against the merged tip itself still passes
+    and still reports" squash-merges the branch and runs the fixture's own copy
+    of the CLI with `--against main`: `0 path(s) changed since the merge base
+with main`, the moved citation under the heading, exit 0. **In a pull
+    request run**, `HEAD` is GitHub's merge of the branch into its base, so the
+    merge base with the base tip is that tip and the diff is the branch's net
+    change as it would land — the same set the local run computes from the
+    fork point.
+  - **`preflight.mjs`, the choice the Build left here: `HEAD`'s own committed
+    diff, not the union of the folded heads'.** Check 2 passes
+    `touchedPaths(repo, base)`, the same set CI computes. The scratch fold
+    computes `touchedPaths(repo, base, headOid)` once and uses it for every
+    fold. A fold asks whether _this_ branch's records survive another head
+    landing; a union would bill this branch for the other head's record, the
+    cost B removed, and that head's own preflight folds this one in and does
+    enforce it. Both directions are one test, "checkScratchMergeCitations
+    enforces HEAD's own records, not the folded head's": from "mine" the
+    fold's `moved` in b's record is a note and `ok`; from "b" the same fold
+    fails. Mutated to the union, it fails (below).
+  - **Done when, and how each was made to fail.** Five fixtures, plus three
+    guards, appended to `scripts/test/citations-gate.test.ts` under
+    "repo-47". Each builds a repository carrying its own copy of the gate, its
+    `GRANDFATHERED` emptied, and runs that CLI end to end with `--against
+main`. `npx vitest run scripts/test/citations-gate.test.ts`: 55 of 55
+    (47 at the base). With the whole change reverted —
+    `git show e79b04f:scripts/citations-gate.mjs` written over the file —
+    `-t repo-47` gave 7 failed, 1 passed of 8: every fixture fails, and the
+    one that passes is the guard that an untouched record still fails on
+    `indistinct`, which holds before and after by design. Three targeted
+    mutations, each applied and restored by a script in the scratch
+    directory: the merge base replaced by `against`'s tip fails only the
+    merge-base fixture; the `!touched.has(record)` condition dropped fails
+    the control and the created-record fixture; `--diff-filter=M` fails the
+    created-record fixture. In `preflight.test.ts`, passing `null` for check
+    2's touched set fails the rewritten repo-51 test, and the union mutation
+    fails the new fold test; 89 of 89 unmutated.
+  - `npm run check` exit 0; `npm test` exit 0, 3487 passed and 2 skipped of
+    3489; `npm test -- --project repo` 630 of 630.
+  - **What the brief had wrong.** (1) `moved` is broader than a shift:
+    `citations.mjs` returns `moved` both when the anchor is found on another
+    line and when it is "not anywhere in" the file. So B also excuses an
+    untouched record whose cited text a branch rewrote or deleted, which the
+    Build's "a code change that only shifts lines cannot produce the others"
+    does not say. This branch is an example of that: repo-51's record cites
+    `citationsGate(repo, SCOPE, grandfathered)` in `preflight.mjs`, which the
+    change rewrote, and it is reported, not failed. (2) repo-51's own test
+    "checkCitations fails and names the record when a merged citation's
+    target line moves" asserted the rule B reverses. It is rewritten in place,
+    so no line below it moves, as "checkCitations reports, and does not fail,
+    a moved citation in a record the branch leaves alone", and the control is
+    appended at the end of the file. repo-51's record cites that test's
+    `toBe(EXIT.citations)` line. The anchor now also matches the new control
+    test, so the gate reports it "at 2109". A later repoint that follows that
+    hint would land on a different test. The correct repair is a pin to
+    `e79b04f`.
+  - **The debt this branch leaves, by B's rule.** `node
+scripts/citations-gate.mjs --against e79b04f` on the tip: `135 enforced,
+0 failing`, `34 moved citation(s) reported in 12 record(s)` — repo-29,
+    -31, -34, -41, -50, -51, -64, -65, -67, -75, -79 and -82, almost all of
+    them citing `preflight.mjs` or `citations-gate.mjs` lines this change
+    shifted. None is repointed, since that is exactly the cost B removed.
+    **Until this merges, any branch whose preflight folds this head runs its
+    own pre-B gate, so its scratch-merge check fails on those 34.** It clears
+    once that branch has `main` with this in it.
+  - **Disclosed, not changed:** the grandfathered ratchet is as it was, as the
+    Build says, so an unrelated branch that raises one of the six listed
+    records' counts still fails `WORSE`. The `--against` paragraph in the
+    gate's header docblock was rewritten line for line, so no line under it
+    moved. The dynamic import in the last new test is there for the same
+    reason.
+  - **Fold-in considered and declined.** `ci.yml`'s "Same depth-1 caveat …
+    it reads the checkout, never the history" has been stale since
+    `--against` began reading history, and it is more so now. Not edited:
+    the dispatch confined this branch's `ci.yml` edit to the comment the
+    Build names, because repo-46 edits the same job. Other skill pages still
+    say "repoint what you moved" (`roles/builder.md`). They stay true under
+    B, since the branch only fails on its own records, so they were left
+    alone.
+  - Spawn calls: two new `execFileSync("git", …)` calls in `touchedPaths`,
+    `shell: false` via `GIT_EXEC_OPTIONS`. No existing spawn call was edited,
+    and none of `preflight.mjs`'s `spawnSync` calls (repo-83's) was touched.
+- **2026-09-30 — round 2: gate 1's F2–F6 fixed, and F1 kept by the owner.**
+  Gate 1 (at `3487667`) raised one open decision, F1: `moved` also covers an
+  anchor that is no longer in the file at all. The owner kept B as built,
+  choosing through AskUserQuestion, so nothing was built for it, and the
+  demotion's comment now says `moved` covers both. The owner chose fixing the
+  five lows now over disclosing them.
+  - **F2, reproduced, then fixed.** Replacing the demotion's `const failures =
+result.failures.filter(…)` with `const failures = [];` left 144 of 144
+    passing across `citations-gate.test.ts` and `preflight.test.ts`, run by
+    `mutate-m6.mjs` in the scratch directory. The new fixture is "an untouched
+    record with a moved and an unresolvable fails on the unresolvable alone":
+    `c.md` sits on `main`, and the branch shifts one file it cites and deletes
+    the other. It asserts exit 1, the FAIL line, and the `moved` under the
+    heading. Under the same mutation the result is 1 failed, 145 passed of 146. The fixture was red before the fix too.
+  - **F3, fixed.** (a) The demotion now also subtracts from the record's
+    `counts`, so the FAIL line reads `1 unresolvable` and no longer counts
+    what was demoted. (b) The reported block prints after every FAIL, WORSE,
+    STALE and RAISED line. The same fixture asserts the order. (d) The heading
+    is now "Moved in records not changed since the merge base with <ref>", so
+    it is also true on `main`'s push run. `records.md` quotes the new wording.
+    (c) `preflight.mjs`'s note is now a summary line plus one line per record.
+    A fold lists at most three and then "… and N more; check 2 lists every
+    one". Covered by the new test "the moved note lists one record per line in
+    check 2, and at most three in a fold", which was red first (no such line)
+    and now passes. My round-1 fold test's regex was widened to cross the new
+    line break.
+  - **F5, reproduced, then fixed.** `node scripts/citations-gate.mjs --against
+no-such-ref` printed `--against no-such-ref: no merge base with HEAD, …`
+    and exited 1. `touchedPaths` now runs `git rev-parse --verify` first and
+    throws `compareAgainst`'s own wording, `no such commit. In CI that means
+the checkout was shallow`. That fixes the CLI and preflight's check 2,
+    since both call it before `compareAgainst`. The test "an --against ref
+    that does not resolve says so, not that the merge base is missing" was red
+    first, on that exact message.
+  - **F4: pinned.** The alternative was a Log note naming both lines for the
+    next editor. Editing repo-51 makes it a record this branch changes, so B
+    enforces it here, and every moved citation in it has to be repaired. So
+    all five of its citations whose content this branch shifted or rewrote
+    are pinned to `e79b04f`. These are the two on the "non-zero on a moved
+    citation in a merged record" row (test lines 293 and 294), plus
+    `preflight.mjs` lines 1448, 1369 and 753. Each verifies there:
+    `node scripts/citations.mjs <repo-51> --section Review --rev e79b04f` gave
+    `21 verified, 0 moved`, exit 0. After pinning, the same record with
+    `--require-anchors` gives `21 verified … 5 pinned`, exit 0. The table
+    re-pad the Why relayed as cost 2 is now measured: five pins changed 12
+    lines of the record, most of them table padding. The gate's exit status
+    either way: pinned, `node scripts/citations-gate.mjs --against
+origin/main` exits 0 with `30 moved citation(s) reported in 11 record(s)`.
+    With a Log note instead, repo-51 stays untouched, as at `3487667`, which
+    exited 0 with 34 in 12 (round 1's measurement, not re-run).
+  - **F6, fixed.** Rewrote `ci.yml`'s `fetch-depth: 0` comment, which named
+    the base's `GRANDFATHERED` list as the only reason for depth 0; the merge
+    base is now named as the second. Also rewrote the "Same depth-1 caveat …
+    never the history" paragraph, and in the ticket-check comment "needs the
+    base branch's copy of one file" became "the base branch's history". The
+    dispatch lifted its narrow-edit constraint for these.

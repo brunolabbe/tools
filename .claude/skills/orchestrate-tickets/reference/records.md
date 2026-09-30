@@ -326,8 +326,8 @@ discarded. So:
     can verify, not a claim that anything checks the heading still exists.
   - **Whose repoint it is when a *later, unrelated* commit moves a line an
     already-merged record cites — repo-81's gap 6, and repo-47's own
-    subject — is not settled by this rule, and this rule does not try to
-    settle it.** A base-pinned citation is immune to this by construction:
+    subject — is not settled by this rule; repo-47 settled it, as the end
+    of this bullet says.** A base-pinned citation is immune to this by construction:
     the pin is read at the base commit, which no later splice on any branch
     can move, so there is nothing to repoint for that population. Two
     populations remain exposed, both real: every record merged before this
@@ -337,19 +337,24 @@ discarded. So:
     (reproduced — one comment line inserted above the tests repo-60 and
     repo-63's own merged records cite in this repository's
     `scripts/test/citations.test.ts`, then `citations-gate.mjs --against
-    origin/main` exit 1, 2 records newly `moved`). **Today's rule, unchanged
-    by this ticket, is that the branch whose change moves the line repoints
-    it — coordinate only, pinned to a commit where the content now exists,
-    named in its own Log — because that branch's own CI is the one the move
-    turns red.** Whether that allocation of the cost is the right one is
-    exactly repo-47's open question
-    (`docs/work/repo-47-the-citations-gate-fails-a-code-pr-on-merged-records.md`,
-    `status: needs-decision`), which this ticket does not reopen, decide or
-    pre-empt. This ticket's own `Done when` survival claim is scoped to the
-    first population only — a citation of content that predates the branch —
-    for exactly this reason: a citation of content the branch introduces
-    survives by being repointed by the owner today's rule names, not by
-    being immune to drift the way a base pin is.
+    origin/main` exit 1, 2 records newly `moved`, before repo-47). **Since
+    repo-47 (option B, the owner's choice on 2026-09-29), a branch repoints
+    only the records it also edits.** `citations-gate.mjs --against` fails
+    `moved` only in the records the branch's diff from its merge base with
+    the base touches; a `moved` anywhere else is printed under "Moved in
+    records not changed since the merge base" and fails nothing, in CI and in
+    `preflight.mjs` alike. So a code change that shifts a line a merged
+    record cites repoints nothing, and the move stays on `main` as reported
+    debt — every push and nightly run prints it — until a branch that edits
+    that record repoints it, or someone sweeps it. A branch that does edit
+    the record (a Log entry is enough) owns every `moved` in it, and repoints
+    coordinate only, pinned to a commit where the content now exists, named
+    in its own Log. Every state but `moved` still fails in every record,
+    touched or not. This ticket's own `Done when` survival claim is scoped
+    to the first population only — a citation of content that predates the
+    branch — because a citation of content the branch introduces survives by
+    being repointed when its record is next edited, not by being immune to
+    drift the way a base pin is.
   - **Where a later commit deleted the cited text outright, rewrite the citation
     as prose naming the reviewed sha, or declare it as evidence.** `dl-58`'s
     owner decision D4(b) is the worked example: pins dropped from the record in

@@ -3,7 +3,7 @@ id: repo-49
 tool: repo
 title: next-id.mjs reports a false clash when a branch only edits an already-merged ticket
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -266,6 +266,61 @@ keeps its `gh pr diff` source, unfiltered, and over-reports as it does today.
   over-reporting.
 - `npm run check` and the `scripts/test/next-id.test.ts` suite are green.
 
+## Review
+
+### Gate 1
+
+**Gate: FAIL** — 2026-09-30 · `origin/main...HEAD`, base `e79b04f`, head `0d9ddb8` · code-review at medium, run by hand (no finder subagent)
+
+`origin/main` was still `e79b04f` at my fetch and again before the live sweep, so nothing moved under the range. Re-issued with gate 2 at `612fb5c`: coordinates into `scripts/` and the tests are re-resolved against that tip, and content that predates the branch stays pinned to `e79b04f`. The citations whose text round 2 replaced or whose claim it corrected (the first row's two test citations, and F1, F2 and F4) are prose naming `0d9ddb8`, the sha this section gated, because that sha is branch-only and cannot be a pin. The anchor of the last row's second citation, which round 2's orphan-copy case now duplicates, is replaced by a range anchor on the comment above the same assertion. Rows, counts and verdicts are gate 1's words, measured at `0d9ddb8`. The FAIL rests on the first row and the first bullet alone: the brief asks for something its own Decision cannot deliver. Every other finding is low.
+
+| Done when                                                                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A new `next-id.test.ts` case reproduces the `pl-50` and `pl-47` fixtures (a branch that only modifies a ticket file must not appear as a clash source), watched red against the unfixed script first | Fixtures reproduced and the diff contributes no path: the shape-1 case at `0d9ddb8` asserted `?.paths).toEqual([name])` ✓. Red against the unfixed script (verified, head tests on the base script): 4 of 25 fail, this case with `expected [ 'pl-50-count-thinking-tokens', …(3) ] to deeply equal [ 'pl-50-count-thinking-tokens' ]` ✓. **"Must not appear as a clash source" is unproven, and the test asserts the opposite:** at `0d9ddb8` the same case expects both branches to remain clash sources, for `pl-47` and `pl-50`, through their names (F1).                   |
+| a genuinely renamed ticket file must still be caught, watched red against `--diff-filter=A` without `--no-renames` first                                                                             | `scripts/test/next-id.test.ts:849 "id: 12 }])"` ✓. Red with `--no-renames` dropped from `ADDED` (verified): 1 of 25 fails, this case alone, `expected [] to deeply equal [ { …(2) } ]` ✓.                                                                                                                                                                                                                                                                                                                                                                                        |
+| An open PR and its head branch both editing a ticket produce no clash, and both adding one produce exactly one source for it, both watched red against the unfixed script first                      | `scripts/test/next-id.test.ts:874 "expect(clashes(result)).toEqual([])"` (edit) and `scripts/test/next-id.test.ts:873 "PR#274 repo-52"` (add: one `PR#274` row for `repo-52`, and no `PR#276` row) ✓. Red against the unfixed script (verified): `expected [ 'PR#276 repo-5', …(4) ] to deeply equal [ 'merged repo-5', 'PR#274 repo-52' ]` ✓. Fold disabled (verified): 2 of 25 fail, this case and the unread and fork case. The two halves are one test, watched red together.                                                                                                |
+| The `idsIn` / `branchSources` doc comments name shape 2 as known over-reporting                                                                                                                      | **verified** by reading: `scripts/next-id.mjs:235 "What it over-reports, knowingly"` is in the `branchSources` docblock; the `idsIn` docblock was unchanged at `0d9ddb8` (F5).                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `npm run check` and the `next-id.test.ts` suite are green                                                                                                                                            | **verified**: `npm run check` exit 0; `npx vitest run scripts/test/next-id.test.ts` 25 of 25 at the head against 21 of 21 at the base; `npm test -- --project repo` 624 of 624; `packages/core/test/spawn-safety.test.ts` 5 of 5. Not run: the full `npm test`, CI.                                                                                                                                                                                                                                                                                                              |
+| (step 4) no existing test changed meaning                                                                                                                                                            | **verified**: the base test file run against the head script passes 20 of 21, and the one red is the orphan case. Its base assertion claimed `repo-1`, a file the orphan deletes (`scripts/test/next-id.test.ts@e79b04fb68e936fae777becbeef44b20f10f600e:723 "every file that differs, so a file the orphan"`); it is now `scripts/test/next-id.test.ts:722-726 "Until repo-49 the two-dot diff"`. That is what the Decision asks (both `diff` calls filtered), and nothing is under-reported: a file only `rev` holds is `merged` claim, and a file both hold is already taken. |
+
+- **high** · **F1, open decision** · The brief's premise is wrong for part of shape 1: **4 of the 11 lines it counts as `M`-only are name claims** (`pl-17`, `pl-19`, `pl-47`, `pl-50`, each a branch named for the id it edits). `branchSources` reads a branch name as a claim floor before any diff, so the filter cannot clear them, and the new test asserts they stay (at `0d9ddb8` the shape-1 case expects the two clashes). Live at `e79b04f`, `node scripts/next-id.mjs pl` goes from 5 clash lines to 3 and `repo` stays at 1. **All 4 remaining lines are false positives, 0 of 4 a real hazard**, and each id's ticket file is already on `origin/main`: `pl-17`, `pl-19` and `repo-49` by branch name (3 of 4), `pl-21` by shape 2 (1 of 4). Options: **A** accept the name floor as the documented residue and have a human amend or waive the first row's parenthetical; **B** a follow-up that lets a branch name stop claiming an id whose merged file the branch only modifies, which clears 3 of the 4 and leaves `pl-21`; **C** delete the two stale remote branches, which clears `pl-17`, `pl-19` and `pl-21`. Recommend A with C; B narrows what counts as a claim for one line per live branch. Not settled here.
+- **low** · F2 · `nfr:reliability` — the orphan fallback's `--no-renames` is unproven: dropping it at that call alone (the fallback call in `scripts/next-id.mjs` at `0d9ddb8`) leaves 25 of 25 green, and a probe shows the claim lost, an orphan branch holding a near-copy of a merged ticket under a new id reports `[]` instead of that id. One case would close it.
+- **low** · F3 · `nfr:maintainability` — the concurrency page is only partly brought in line: its four-state table still reads `gh pr diff --name-only` for a pull request (`.claude/skills/orchestrate-tickets/reference/concurrency.md@e79b04fb68e936fae777becbeef44b20f10f600e:268 "a file in an open pull request"`) and a plain three-dot diff for a branch (`.claude/skills/orchestrate-tickets/reference/concurrency.md@e79b04fb68e936fae777becbeef44b20f10f600e:269 "plus a three-dot diff per head"`); and the page's paragraph headed _Expect some `branch/…` rows to clash with `merged` still_ keeps "usually means that branch should be deleted", which is false for the live build branch `repo-49-next-id-edit-only`, the fourth of the four remaining lines. Two sentences, one mechanism.
+- **low** · F4 · `nfr:reliability` — a second open pull request on the same head branch is not folded: the first renames the branch source to its own label, so the second finds no `branch/<head>` and keeps its unfiltered `gh pr diff` (at `0d9ddb8` the lookup matched only the unrenamed label). Probe: two PRs on one head that edits a merged ticket make `clashes()` return `[{ id: 5, sources: [PR#277, merged] }]`. The over-reporting direction, and the page lists only an unfetched head and a fork as the cases that keep `gh pr diff`.
+- **low** · F5 · The `idsIn` docblock is unchanged and only `branchSources` names shape 2; the Decision says "the script's doc comment", the Done when says both, so I graded the row verified and disclose the reading.
+- **low** · F6 · No committed test covers a branch that edits one ticket and adds another (the `pl-17-image-closure` shape), or a ticket deleted on a three-dot diff. Probed, both correct: a branch that edits `repo-5`, adds `repo-52`, deletes `repo-6` and renumbers `repo-7` to `repo-70` claims exactly `52` and `70`. `--diff-filter=AD` in place of `A` is caught by two existing tests (2 of 25 red), so the deletion half is covered indirectly.
+- **dropped** · `gh pr list` returns 30 at most by default. The base has no `--limit` either, so it is outside this range, and 2 are open.
+- **dropped** · `@tsv` might render the boolean `isCrossRepository` oddly. The live `gh pr list --json number,headRefName,isCrossRepository --jq` query printed `false` between tabs.
+- **dropped** · a stacked pull request's base is another branch, and the branch diff is against `rev`. That over-reports, the safe direction.
+- **findings** · code-review at medium, by hand, returned 9; 6 carried (F1 to F6, F3 being two sentences of one mechanism), 3 dropped.
+- NFR: security ✓ (argument arrays, `spawn-safety.test.ts` 5 of 5) · performance n/a (same three commands, folded in memory) · reliability — F2, F4 · maintainability — F3, F5, F6.
+
+### Gate 2
+
+**Gate: PASS** — 2026-09-30 · `git diff 0d9ddb8..612fb5c`, base `e79b04f`, head `612fb5c` · code-review at medium, run by hand (no finder subagent)
+
+A re-gate of round 2, scoped to `0d9ddb8..612fb5c`. `origin/main` was still `e79b04f` at my fetch. Between rounds the owner took F1 as the builder's option, that a branch name naming only merged ids claims nothing, over the gate's recommendation, so gate 1's first row is to be met as written; the two stale branches were deleted from origin; the folded-PR label stays `PR#<n>`; and the five lows ride along. Coordinates are against the tip `612fb5c`. Not re-swept, on purpose: anything outside the round's four files. Not rebuilt: nothing under a workspace `src` changed.
+
+| Gate 1 finding, or Done when                                           | Verdict and proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1 (high): the first row's clause "must not appear as a clash source"  | **fixed**, on the owner's option, and the row is now proven as written: `scripts/test/next-id.test.ts:827 "?.paths).toEqual([])"` ✓ (neither the diff nor the name contributes a path to either fixture branch, and the same case expects no clash). Red against the unfixed script (verified, the head tests on the base script): 8 of 29 fail, this case with `expected [ 'pl-50-count-thinking-tokens', …(3) ] to deeply equal []`. Red when the rule is removed (verified): 3 of 29 fail with the name rule disabled, and 3 of 29 with the name always dropped. The direction it narrows is proven by `scripts/test/next-id.test.ts:1019 "id: 31, sources"` ✓ (a second ticket filed under a taken id still clashes) and `scripts/test/next-id.test.ts:1020 "not-filed-yet repo-32"` ✓ (an unmerged id in a name still claims).                                                                                                                                                                                 |
+| F2 (low): the orphan fallback's `--no-renames` unproven                | **fixed**: `scripts/test/next-id.test.ts:934 "body under a new id still claims it"` ✓. With `--no-renames` dropped from the fallback call alone (verified): 1 of 29 fails, this case, `expected [] to deeply equal [ { …(2) } ]`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| F3 (low): the concurrency page only partly brought in line             | **fixed**, and each sentence it now states is one the round's behaviour bears out. The four-state table reads a pull request through its head branch, and through `gh pr diff --name-only` for a fork's PR or an unfetched head: `scripts/test/next-id.test.ts:917 "expect(rows(claims(sources"` ✓ (`PR#310`, unfetched, keeps its own file; `PR#311`, a fork's, is not matched to `branch/main`). The advice that a `branch/…`/`merged` clash is a second ticket under a taken id or a stale squash-merged branch: `scripts/test/next-id.test.ts:1019 "id: 31, sources"` ✓, and on a real remote a branch whose file was squash-merged to trunk under the same name still clashes on its id (probe R5, `gate-2/probes-real-head.txt`). The page is named by its file and the paragraph it sits in, with no line: `.claude/skills/orchestrate-tickets/reference/concurrency.md`, the four-state table and the paragraph that begins _So a `branch/…`/`merged` clash is one of two things_. It misses one kind (N2). |
+| F4 (low): a second PR on one head branch not folded                    | **fixed**: `scripts/test/next-id.test.ts:973 "PR#276+PR#277"` ✓ (both numbers stay on the one source, and the same case expects no clash). With the head branch looked up by its label again (verified): 1 of 29 fails, `expected [ { id: 5, sources: [ …(2) ] } ] to deeply equal []`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| F5 (low): the `idsIn` docblock unchanged                               | **fixed**, by reading, since a docblock has nothing to mutate: `scripts/next-id.mjs:115 "Which paths reach this is decided upstream"` names the added-only diff, the name rule and shape 2. It is incomplete (N2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| F6 (low): no committed test for a mixed branch or a three-dot deletion | **fixed**: `scripts/test/next-id.test.ts:998 "id: 52 },"` ✓ (one branch edits `repo-5`, adds `repo-52`, deletes `repo-6` and renumbers `repo-7`, and only `52` and `70` are claimed). Red under `--diff-filter=AD` (4 of 29), under `AM` (4 of 29) and with `--no-renames` dropped from both diffs (3 of 29) (verified).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| (step 4) no existing test changed meaning in this round                | **verified**: the base test file run against the head script passes 19 of 21. The two red are the orphan case (round 1, unchanged) and the pushed-branch case, whose base row for the name `repo-37` is now a comment (`scripts/test/next-id.test.ts:270 "Not the name"`); both follow from a decision, the Decision's two diffs and the owner's name rule. That case still asserts what its title says, that the diff is what claims `repo-39`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `npm run check`, the suite and the record checks are green             | **verified**: `npx vitest run scripts/test/next-id.test.ts` 29 of 29 at the head; `node scripts/preflight.mjs --base e79b04f` with the intended title exits 0 (`npm run check`, `npm test -- --project repo`, the citation gate over 141 records, the title check, and a merge-tree probe against the 2 open pull requests); `node scripts/citations-gate.mjs --against origin/main` exits 0 with `135 enforced, 0 failing`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+- **attack** · F1's direction, on real remotes and a scripted board (probe files, not committed; outputs in `gate-2/probes-real-head.txt` and `gate-2/probes-head.txt`). A branch named for a merged id that files a second ticket still clashes through its diff in all four shapes tried: the file added under the taken id, a ticket renamed onto the taken id, a leading zero on both file and name, and a same-repository PR whose head adds it (`PR#300`). **No case found where a second ticket under a taken id is missed once a file exists.** What goes silent is what has no file yet: a pushed branch named for a merged id with no commit of its own, and an unfetched one, whose `unread:` line still names it though its wording, only its name was read, now overstates. Both were clash lines before round 2, and `next free` is the same either way, so this is the price of the owner's option and not a defect.
+- **measured** · live against origin at `612fb5c`, `main` at `e79b04f`, 7 heads (`main`, the 2 release-please branches, `repo-46`, `repo-47`, `repo-49`, `repo-66`) and 2 open pull requests, both release-please. `node scripts/next-id.mjs pl` exits 0 with 53 rows (53 merged), 0 clash lines, `next free: pl-54`; `repo` exits 0 with 80 rows (80 merged), 0 clash lines, `next free: repo-85`. On the same remote the base script prints 14 `repo` clash lines from 4 branches (10 by an `M` diff, 4 by name) and 0 for `pl`, which no longer measures the fix now both stale branches are gone; round 1's script prints 4, all names. That is 14 to 4 to 0, and none of the 14 was real: none of the 4 branches adds a `repo` ticket file, measured with `--diff-filter=A` on each.
+- **low** · N1 · two findings, one mechanism: an under-reporting guard with no test. (a) The `unread: true` kept on a folded unread head (`scripts/next-id.mjs:447 "unread: true };"`): dropping it leaves 29 of 29 green, and a probe with two PRs on one unfetched head, one adding `repo-45` and the other `repo-46`, then reports only `repo-45`, so the second PR's file is lost (`gate-2/probe-p4-mutant.txt`; at the head both are reported). (b) The `every` in the name rule (`scripts/next-id.mjs:412 "named.every((id) => taken.has(id))"`): `some` in its place leaves 29 of 29 green, and would drop the claim of a name like `repo-30-and-repo-90-together`, whose `repo-90` is unmerged.
+- **low** · N2 · The `idsIn` docblock says one over-report is known and kept (`scripts/next-id.mjs:117 "One over-report is known and kept"`), and there are more: a name naming a merged and an unmerged id keeps both (probe: `repo-30-and-repo-90-together` clashes with `merged` on `repo-30`), and a fork's or an unfetched head's pull request keeps its unfiltered `gh pr diff`. The concurrency page's paragraph that calls a `branch/…`/`merged` clash one of two things misses the first. Two sentences, one mechanism, and over-reporting, the safe direction.
+- **low** · N3 · **open decision**: the label of two PRs folded onto one head, `PR#276+PR#277` (`scripts/next-id.mjs:432 "branch.source}+${source}"`). The owner's label decision was taken about one PR per head. Options: keep `+` as built, which cannot be mistaken for the `, ` that joins sources on a clash line, and nothing parses a label (a search of `scripts/` for the label found no consumer); show only the first PR, so the second number disappears; or one row per PR carrying the same paths, which would clash with each other. Recommend keeping `+`.
+- **dropped** · a merged filename that names another id in its slug makes the taken set hold an id no ticket owns, dropping a real name claim (probe: `repo-9-close-the-repo-77-loop.md` with a branch `repo-77-new-ticket`). `merged` already reserves that id through the same match, and `next free` reads 78 either way, so nothing is under-reported.
+- **findings** · code-review at medium, by hand, returned 5; 4 carried (N1 is two findings, one mechanism; N2; N3), 1 dropped. Every gate 1 finding, F1 to F6, has a verdict above. The builder's round-2 Log claims I re-ran matched: the guard removal failing the unread and fork case (1 of 29), and the round-1 script printing four `repo` clashes for `repo-46`, `repo-47`, `repo-49` and `repo-66`.
+- NFR: security ✓ (no spawn changed; `spawn-safety.test.ts` 5 of 5 at the head) · performance n/a · reliability — N1, N2 · maintainability — N2, N3.
+
 ## Log
 
 - 2026-09-19 — Filed per the coordinator's instruction while gating dl-66,
@@ -319,3 +374,128 @@ headRefName` for both PRs. Added as shape 3, with its own `Done when`
   `--name-only` diffs are still at `:254` and `:264`. Found one gap in the
   candidate, written up under Decision: the PR source's `gh pr diff` can't
   take the filter, which is why shape 3's dedupe has to land with it.
+
+- 2026-09-30 — **Built shapes 1 and 3 on `e79b04f`.** The premise held there:
+  both diffs were still a bare `git diff --name-only`. Both now take `ADDED`
+  (`--no-renames --diff-filter=A --name-only`). In `collect`, a pull request
+  whose head branch is swept and was read is folded into that branch's source
+  under the `PR#<n>` label. `gh pr list` now asks for
+  `number,headRefName,isCrossRepository`. Shape 2 is named in `branchSources`'
+  docblock. The concurrency page's clash paragraph and its guard table are
+  updated to match.
+
+  Each new case was watched red with
+  `npx vitest run scripts/test/next-id.test.ts`:
+  - Against the unfixed script: 4 failed of 25. The failures were the orphan
+    case, the `pl-50`/`pl-47` case (`expected [ 'pl-50-count-thinking-tokens',
+…(3) ] to deeply equal [ 'pl-50-count-thinking-tokens' ]`), the PR-and-branch
+    case (`expected [ 'PR#276 repo-5', …(4) ]`) and the unread/fork case. The
+    rename case passes against the unfixed script, as it should: a bare
+    `--name-only` lists a rename's new path.
+  - Against `--diff-filter=A` without `--no-renames`: the rename case fails,
+    `expected [] to deeply equal [ { …(2) } ]`.
+  - With the filter in and the fold disabled: 2 failed of 25, the PR-and-branch
+    case and the unread/fork case. That confirms the Decision's point that
+    neither half works alone.
+  - With `!branch.unread` removed: 1 failed of 25,
+    `expected [ 'peer-just-opened' ] to deeply equal [ 'peer-just-opened', …(1) ]`.
+  - With the fork check removed: 1 failed of 25,
+    `expected [ 'PR#310', 'PR#311', 'merged' ]`.
+  - Fixed: 25 of 25.
+
+  Live, `node scripts/next-id.mjs pl` against origin at `e79b04f`:
+
+  ```
+  before: clash pl-5, pl-10, pl-17, pl-19, pl-21   (5 lines)
+  after:  clash pl-17, pl-19, pl-21                (3 lines)
+  ```
+
+  `pl-5` and `pl-10` were `M` only. `pl-21` is shape 2. `pl-17` and `pl-19`
+  are the next item.
+
+  **What the brief had wrong or left out:**
+  - **Shape 1 is two mechanisms, and the filter fixes one.** A branch's _name_
+    is a claim floor (`branchSources`' docblock). So a branch named after the
+    ticket it edits still clashes with `merged` on that id, with no diff
+    involved. That is the ordinary case: every builder branch is named
+    `<id>-slug`. It covers 4 of the 11 lines this ticket counted as `M`-only:
+    `pl-17`, `pl-19`, `pl-47` and `pl-50`. That is why the `pl-50`/`pl-47`
+    case asserts that the diff contributes no path, and leaves exactly two
+    clashes, `pl-47` and `pl-50`, both from the names. Narrowing the name floor
+    narrows what counts as a claim, and this ticket says that needs sign-off.
+    It is not built here; it went to the orchestrator as an open decision.
+  - **"Keep only the branch source" loses files when the branch is unread.**
+    `ls-remote` names a sha this checkout has not fetched, so only the name was
+    read. In that case the PR's `gh pr diff` is kept beside the name, still
+    unfiltered, and the unread note is dropped, because the files were read
+    after all. A fork's PR has a `headRefName` that names a branch in the fork,
+    so only a same-repository head is matched.
+  - **The orphan fallback's existing case changed.** It asserted that `repo-1`,
+    a file the orphan _deletes_, was claimed. Filtered to additions, as the
+    Decision asks for both calls, it is no longer claimed. Nothing is lost by
+    that: a file only `rev` holds is `merged`'s claim. The fallback now
+    over-reports only files the orphan holds that `rev` lacks, and its note
+    says so.
+
+  No spawn call changed. The source's only spawn is still `runCommand`'s
+  `spawnSync`, and the new tests go through the existing `runGit` and
+  `runCommand`. No fold-in was available: the only other open ticket that
+  names this script is `pl-52`, and it names it in passing.
+
+- 2026-09-30 — **Round 2, on gate 1's findings at `0d9ddb8`.** The owner
+  decided F1 on 2026-09-30, choosing the builder's option over the gate's: a
+  branch name that names only merged ids claims nothing. `collect` now drops
+  such a name from the branch's paths before folding, and the `pl-50`/`pl-47`
+  case now expects no clash. That meets Done-when line 1 as written. Each
+  finding was reproduced before it was fixed; every run below is
+  `npx vitest run scripts/test/next-id.test.ts`.
+  - **F1, fixed.** Against the round-1 script, the flipped case fails with
+    `expected [ 'pl-50-count-thinking-tokens' ] to deeply equal []`. A new
+    last case pins why dropping the name is safe: a branch named for a merged
+    id that adds a _second_ ticket file under that id still clashes, and a
+    name naming an unmerged id still claims it. Against the round-1 script it
+    fails with `expected [ { id: 30, … }, …(1) ] to deeply equal
+[ { id: 31, … } ]`. Removing the guard that a name must carry some id
+    fails the unread/fork case (1 of 29). Case 9's `repo-37` name row is
+    replaced by a comment on the same line, so its anchored `:277` does not
+    move.
+  - **F2, fixed.** A new case: an orphan branch holding a merged ticket's
+    body under `repo-77`. With `--no-renames` dropped from the fallback call
+    alone it fails, `expected [] to deeply equal [ { …(2) } ]`, which
+    reproduces the gate's probe.
+  - **F3, fixed.** `concurrency.md`'s four-state table now says how a PR is
+    read, through its head branch or else `gh pr diff`, and that a branch's
+    diff counts added files only. The clash paragraph is rewritten for the
+    new behaviour. A `branch/…`/`merged` clash is now either a second ticket
+    under a taken id, which needs renumbering, or a stale squash-merged
+    branch, which should be deleted once its work is on `main`. The guard
+    table gained the name rule and the label-lookup rule, and the rename row
+    now names both diffs.
+  - **F4, fixed.** Reproduced as the gate stated it: two PRs on one head gave
+    `[{ id: 5, sources: [PR#277, merged] }]`. The head branch is now looked
+    up in a map keyed by head name, built before any relabelling. A second
+    PR joins the label as `PR#276+PR#277`, so both numbers stay visible. An
+    unread head keeps `unread` after its first PR's diff is merged in, so a
+    second PR on that head adds its own diff too.
+  - **F5, fixed.** The `idsIn` docblock now says which paths reach it and
+    names shape 2 as kept over-reporting.
+  - **F6, fixed.** A new case: one branch that edits `repo-5`, adds `repo-52`,
+    deletes `repo-6` and renumbers `repo-7` to `repo-70` claims exactly `52`
+    and `70`. With `--diff-filter=AD` it fails: `expected [ …(4) ] to deeply
+equal [ …(2) ]`.
+  - **Live, against origin with `main` at `e79b04f`.** The owner's deletion
+    of `pl-17-image-closure` and `worktree-pl-19-pin-through-the-browser` is
+    confirmed by `git ls-remote --heads origin`, which lists neither.
+    `node scripts/next-id.mjs pl` prints no clash line and no non-merged row
+    (`next free: pl-54`). `node scripts/next-id.mjs repo` prints no clash
+    line (`next free: repo-85`). The round-1 script, run against the same
+    remote, prints four `repo` clashes, all names of live build branches:
+    `repo-46`, `repo-47`, `repo-49` and `repo-66`.
+- 2026-09-30 — the label for two open pull requests on one head branch is
+  `PR#<a>+PR#<b>`, as built in round 2 (`PR#276+PR#277` in the test). Gate 2
+  raised it as open decision N3, since the owner's earlier `PR#<n>` decision
+  covered one PR per head. Put to the owner via AskUserQuestion with three
+  options (keep `+`, first PR only, one row per PR); the owner kept `+`, the
+  gate's and builder's recommendation. The same day the owner chose to land with
+  gate 2's lows N1 and N2 disclosed in the record rather than open a third
+  round, the option marked recommended.
