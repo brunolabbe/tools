@@ -93,13 +93,15 @@ discarded. So:
     re-resolve. The lander's own Log entry moves no cited line, because a
     record never cites its own ticket file by coordinate (`dispatching.md`,
     _Send the findings in full_, on self-citation).
-  - **Under conditional ship authority the records go in before the fixes.**
-    A lander told to apply a last round of fixes and ship if the checks hold
-    (`sizing.md`) lands past the tip the final gate reviewed. So it splices
-    every record first, at that tip, where they resolve as given, and
-    commits the fixes after — which makes them the case _A fix that lands
-    after the records are committed_, below. Splicing after the fixes would
-    meet a `MOVED` with no gate left to send it back to.
+  - **Under conditional ship authority the fixes land first, then records.**
+    A lander told to apply fixes and ship if the checks hold (`sizing.md`)
+    applies the fixes first; the gate then re-issues every section at the new
+    tip, building a throwaway commit with `citations-gate`, `citations.mjs`
+    and `--verify <ticket>` exiting 0 on it; and the lander lands from that
+    commit, repointing nothing. `--verify` targets the files from the final
+    re-issue, not the pre-fix gate's file set. Landing this round's fixes
+    after its own records are committed instead still costs a repoint within
+    committed records — the builder's path — and costs coordination.
   - **The status goes in with the landing's first record commit** — `done`,
     or `in-flight` for work that lands partial — so no commit carries a record
     on a `ready` ticket. Before the landing there is no record, and neither
@@ -123,11 +125,17 @@ discarded. So:
   coordinates are exempt from that rule.
 
 - **A fix that lands after the records are committed does not edit a
-  section.** Two cases are left where a committed record meets a later fix,
-  both conditional ship: a last round of fixes applied after the records, and
-  a pull request opened and then one narrow gate (`SKILL.md`, _The PR is not
-  the end of gating_). The section stays as a description of the sha it
-  reviewed; the builder adds a dated post-gate Log entry naming the new sha and
+  section.** One case is left where a committed record meets a later fix,
+  still conditional ship: a pull request opened and then one narrow gate
+  (`SKILL.md`, _The PR is not the end of gating_) — unlike the bullet above,
+  this one still commits records before the fix that follows them, because
+  the records were already committed at the earlier landing that opened the
+  pull request. **Prefer the same mechanic as the bullet above here too**:
+  the gate, woken for the narrow round, re-issues every section at the fix's
+  new tip and builds the end-state commit, and the lander lands from it,
+  repointing nothing (`repo-80`, 2026-09-29). What follows is the fallback,
+  for when the gate is not woken. The section stays as a description of the
+  sha it reviewed; the builder adds a dated post-gate Log entry naming the new sha and
   saying the record above describes the earlier one; a coordinate the fix moved
   is repointed by the builder, coordinate only and only where the anchor text
   still reads unchanged, each change named in the Log — a fixer stops and
@@ -774,7 +782,13 @@ own _Anchor a citation, or nothing has checked it_ already requires an anchor
 on everything `citations-gate.mjs` enforces, its `## Review` section — not a
 Log, which needs no anchor. So an enforced **section** has nothing left for
 `--displaced-since` to find regardless of whether CI passes the flag; it
-answers a real question, just not this one. **Extending
+answers a real question, just not this one. It is, though, **the only
+command that surfaces a moved citation outside `## Review` at all**: run it
+when a branch moves lines cited in gate records, to find unpinned displaced
+citations that the Review section's own citations gate misses — a record
+that is not in the gated tree has no section to anchor, so this is the only
+way to catch it. Name the base sha, not `origin/main`, so the check sees what
+the base contained. **Extending
 `citations-gate.mjs` to refuse an unpinned citation of pre-existing content
 is real machinery this ticket did not build** — repo-80
 (`docs/work/repo-80-land-records-one-command.md`), which already touches

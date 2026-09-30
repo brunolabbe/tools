@@ -89,6 +89,10 @@ What only you can supply, and what every builder prompt therefore carries:
   that no gate or preflight run could see before the pull request existed, and
   a pre-merge `gh pr checks 298` on the already-open pull request is what
   found them (2026-09-27).
+- **When a dispatch names a line to edit, quote its content, not only its
+  number.** A coordinate like "line 1981" can point at the wrong thing when the
+  fixer misinterprets which field or line the number refers to. The text holds
+  only the meaning you intend.
 
 ### An answered decision has to be recorded even when you do not build it
 

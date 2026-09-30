@@ -128,7 +128,7 @@ you are there.
    artefact the message should produce — a push, a commit — and resend if
    neither appears.
 
-   **2026-09-27: dry-run a record mechanic before writing it into a dispatch
+   **2026-09-27: dry-run a record mechanic or prescribed fix before writing it into a dispatch
    or a message, the same way you check a fact before relaying it.** Three
    of one session's own instructions were impossible or wrong as written,
    each costing a builder a stop or a round: ordering a byte-for-byte splice
@@ -143,7 +143,9 @@ you are there.
    or a declaration, or a merge condition in a dispatch, run it on a scratch
    copy — `review-record.mjs` or `--verify`, the `git log -S` pin-or-declare
    test from `records.md`, or the actual check that needs `main` — and
-   confirm it does what the dispatch is about to say it does. When an
+   confirm it does what the dispatch is about to say it does. A fix prescribed
+   in a dispatch is dry-run through `citations.mjs --section Review` on every
+   record that cites a file the fix touches, not only through `tsc` and tests. When an
    `AskUserQuestion` offers options, dry-run each option's mechanism (for a
    landing, grep the records for the coordinates the option would move) and
    price it from `node scripts/agent-cost.mjs` figures of comparable agents in
@@ -194,6 +196,13 @@ you are there.
    once, at the end_, since `repo-67`). Hand it the set's files; do not
    describe them. **The PR body names every model — which built, which gated,
    which fixed** — because nothing else in the artefact does.
+
+   **Under conditional ship authority the fixes land first, then the
+   records**: the gate re-issues every section at the new tip and builds the
+   end-state commit, and the lander lands from it, repointing nothing —
+   `--verify` below targets the files from that final re-issue, not an
+   earlier gate's. The mechanic is `reference/records.md`'s (_A multi-round
+   record lands once, at the end_); it is not restated here.
 
    **One command before granting the ship:**
    `node scripts/preflight.mjs --base origin/main --title "<the pull request title>"` on the branch, exit 0 as a
@@ -279,13 +288,14 @@ you are there.
     reviewer only confirmed — a fact nobody had drafted from source, and it
     cost a round to undo once a gate re-read the primary commits. **A ticket
     filed out of a step-12 close-out PR carries its reproduction — a command
-    and its output — not a claim reconstructed from a summary**, and where it
-    poses a decision, its options are drafted from a fresh read at the time
-    the owner is asked, never carried forward from an earlier draft that may
-    have gone stale: `repo-64`'s own `repo-65` had its decision section
-    rewritten four times inside one pull request, because each gate found
-    another premise in it that a fresh read would have caught the first
-    time.
+    and its output — not a claim reconstructed from a summary.** The reproduction
+    must be runnable from the repository, never a path into a session scratchpad,
+    so a later reader can re-run it. Where it poses a decision, its options are
+    drafted from a fresh read at the time the owner is asked, never carried
+    forward from an earlier draft that may have gone stale: `repo-64`'s own
+    `repo-65` had its decision section rewritten four times inside one pull
+    request, because each gate found another premise in it that a fresh read
+    would have caught the first time.
 
 **The PR is not the end of gating; the merge is.** A branch that has already shown
 its corrections can be wrong may open its PR under conditional ship authority *and*

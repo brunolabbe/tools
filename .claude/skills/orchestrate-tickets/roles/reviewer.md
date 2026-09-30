@@ -153,14 +153,28 @@ not get their narrative, for the same reason you did not get the build's report.
   _A multi-round record lands once, at the end_, since `repo-67`). A citation
   whose text the round deleted, or whose claim the round corrected though its
   anchor survives, becomes prose naming the sha that section gated
-  (branch-only, so never a pin), and one preamble sentence says which. Every
-  re-gate on 2026-09-26 had to be told the corrected-copy half of this.
+  (branch-only, so never a pin), and one preamble sentence says which. When a
+  later round duplicates the anchor's text, the re-issue may need a new anchor;
+  name that in the preamble. Every re-gate on 2026-09-26 had to be told the
+  corrected-copy half of this.
 - **Woken only to re-issue** — the tip moved after your last round and a
   lander's `review-record.mjs` found a section `MOVED` — re-resolve every
   section against the new sha the same way and return the set; review nothing
   else unless the orchestrator names a diff.
 - When `origin/main` moves while you review, keep the base you were dispatched
   with in your header and say that `main` moved.
+- **When an owner closes a finding "by design" after it is committed**, use the
+  same `Amended at <sha>` marker as for corrections — name the exact commit
+  the owner's amendment creates.
+
+**Mutation runs should set a private `TMPDIR`, `TEMP` and `TMP`.** Concurrent test
+runs race if multiple sessions count entries in the shared temp directory; point
+these vars at session-specific directories so leaked directories do not break
+peer tests.
+
+**When a gate builds the commit an amendment names, the lander pushes that exact
+commit.** Do not let the builder or lander amend it further; the amendment's
+coordinates are read at the commit the gate built.
 
 ## Check the ticket's premise, not only its code
 

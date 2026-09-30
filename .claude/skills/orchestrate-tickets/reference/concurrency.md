@@ -396,3 +396,11 @@ the old tip from the reflog or `gh pr view <parent> --json headRefOid` before th
 branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, which
 reads like a content problem and is not: it is history shape. Do not send a builder
 to resolve those conflicts by hand.
+
+**When merging `main` into a branch and citations collide, take the union of pins.**
+`git checkout --ours <file>` takes the whole file and drops the other side's
+non-conflicting hunks. `git merge -X ours` resolves only the conflicting hunks,
+keeping non-conflicting changes from both sides. When merging `main` into a
+branch, `--theirs` refers to `main`. Where both sides pinned different citations
+on the same line, the resolution is the union of those pins, verified by
+`citations-gate.mjs` at the merged result.
