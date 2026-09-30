@@ -3,7 +3,7 @@ id: repo-49
 tool: repo
 title: next-id.mjs reports a false clash when a branch only edits an already-merged ticket
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -491,3 +491,11 @@ equal [ …(2) ]`.
     line (`next free: repo-85`). The round-1 script, run against the same
     remote, prints four `repo` clashes, all names of live build branches:
     `repo-46`, `repo-47`, `repo-49` and `repo-66`.
+- 2026-09-30 — the label for two open pull requests on one head branch is
+  `PR#<a>+PR#<b>`, as built in round 2 (`PR#276+PR#277` in the test). Gate 2
+  raised it as open decision N3, since the owner's earlier `PR#<n>` decision
+  covered one PR per head. Put to the owner via AskUserQuestion with three
+  options (keep `+`, first PR only, one row per PR); the owner kept `+`, the
+  gate's and builder's recommendation. The same day the owner chose to land with
+  gate 2's lows N1 and N2 disclosed in the record rather than open a third
+  round, the option marked recommended.
