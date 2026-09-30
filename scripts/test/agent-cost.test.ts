@@ -613,3 +613,8 @@ test("a file with no timestamps counts no cold restarts, however large its write
   ].join("\n");
   expect(sumUsage(content, "untimed.jsonl").coldRestarts).toBe(0);
 });
+
+test("Sonnet 5.5 is priced, at Sonnet 5's rates", () => {
+  expect(normaliseModel("claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
+  expect(RATES["claude-sonnet-5-5"]).toEqual(RATES["claude-sonnet-5"]);
+});

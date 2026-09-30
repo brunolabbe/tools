@@ -1,8 +1,8 @@
 ---
 name: ticket-reviewer-sonnet
-description: Gates a finished branch against its ticket on Sonnet 5 — the gate for a build that did not run on Sonnet. Returns the gate as text; never commits, never opens a PR, never spawns an agent.
+description: Gates a finished branch against its ticket on Sonnet 5.5 — the gate for a build that did not run on Sonnet. Returns the gate as text; never commits, never opens a PR, never spawns an agent.
 tools: Read, Grep, Glob, Bash, WebFetch, TodoWrite
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 effort: xhigh
 isolation: worktree
 experimental:

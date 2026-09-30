@@ -2,7 +2,7 @@
 name: builder-standard
 description: Builds one ticket rated `standard` to a pushed branch in its own worktree. Dispatched only by the orchestrate-tickets skill; never choose it for other work.
 tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch, TodoWrite
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 effort: high
 isolation: worktree
 experimental:

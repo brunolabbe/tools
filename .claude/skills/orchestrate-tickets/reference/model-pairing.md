@@ -26,7 +26,7 @@ under it would go stale unseen. Which model the alias was resolving to when the
 pin replaced it was not checked: the transcripts that would say are in the
 devcontainer, not where this change was made.
 
-**Opus 5.5 reads its cache at Sonnet 5's rate.** $0.20 per million tokens for
+**Opus 5.5 reads its cache at Sonnet's rate.** $0.20 per million tokens for
 both, against $0.50 for Opus 5 (the `claude-api` skill's pricing table, read
 2026-09-26); input and output stay at twice Sonnet's, $4 and $20. Cache reads
 were 94 to 97% of every bill this repo measured (repo-53). **So the cost case
@@ -40,12 +40,14 @@ under the Fable orchestrator of 2026-09-20 would have built unrated tickets on
 Fable, which this page forbids. A definition cannot inherit its dispatcher's
 model and also pin one, and the pin is the point.
 
-**Effort is set per definition, and not measured.** Sonnet 5 builds at `high`
+**Effort is set per definition, and not measured.** Sonnet 5.5 builds at `high`
 and gates at `xhigh`; Opus 5.5 builds and gates at `high`; Haiku 4.5 takes no
 effort setting. Those are the sentinelle repository's values for the same models
 — Opus 5.5's own API default is `medium` — and nothing here compared them.
 `agent-cost.mjs` prints the effort each agent ran at since this date, so the
-first history rows under the new lineup are the trial.
+first history rows under the new lineup are the trial. Sonnet 5.5 replaced
+Sonnet 5 on 2026-09-30 and recalibrates its effort levels, so its `high` and
+`xhigh` are the same names on a different scale, carried over unmeasured.
 
 **The `fixer` was Haiku 4.5, from 2026-09-26 (when the role itself was
 created, per `git log --diff-filter=A -- .claude/agents/fixer.md`, not

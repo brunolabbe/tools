@@ -97,7 +97,7 @@ you are there.
    | The round's findings | Go to |
    | --- | --- |
    | any one needs judgement — how, not only whether | **the builder, resumed** with `SendMessage`, carrying the mechanical ones in the same message: it knows why it built what it did, so it does not undo one decision fixing another, and once its wake is paid the mechanical fixes cost a few warm turns |
-   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Sonnet 5 since 2026-09-27): it starts small and stays small |
+   | every one is mechanical — a rename, a citation repoint or pin, a Log sentence, a registration line, a lint or format fix — or only the landing is left | **a fresh `fixer`** (Sonnet since 2026-09-27, Sonnet 5.5 since 2026-09-30): it starts small and stays small |
 
    **Why the second row exists, and why only for a whole round.** A subagent's
    prompt cache lives five minutes by default, and every subagent write measured
@@ -312,13 +312,13 @@ edits this table and those files together, and nothing else.**
 
 | `difficulty` | Builder | Gate |
 | --- | --- | --- |
-| `mechanical` | `builder-mechanical` — Haiku 4.5 | `ticket-reviewer-sonnet` — Sonnet 5, xhigh |
-| `standard` | `builder-standard` — Sonnet 5, high | **`ticket-reviewer-opus`** — Opus 5.5, high |
+| `mechanical` | `builder-mechanical` — Haiku 4.5 | `ticket-reviewer-sonnet` — Sonnet 5.5, xhigh |
+| `standard` | `builder-standard` — Sonnet 5.5, high | **`ticket-reviewer-opus`** — Opus 5.5, high |
 | `hard` | `builder-hard` — Opus 5.5, high | `ticket-reviewer-sonnet` |
 | absent | `builder-hard` | `ticket-reviewer-sonnet` |
 | **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
 | **a docs/records-only chore** — a `chore` whose whole diff is rule pages, ticket files and history rows, no source (2026-09-27) | whichever builder the dispatch names — `builder-mechanical` absent an override, or a stronger one by owner override, per `repo-64`'s own `builder-standard` | **one gate, post-PR and narrow** — `sizing.md`'s docs-ticket gate cap; a second, narrow gate only once the first has found something wrong, never a default second round |
-| **a round's mechanical fixes, and its landing** | `fixer` — Sonnet 5, high (Haiku 4.5 until 2026-09-27) | the round's gate, woken |
+| **a round's mechanical fixes, and its landing** | `fixer` — Sonnet 5.5, high (Sonnet 5 until 2026-09-30, Haiku 4.5 until 2026-09-27) | the round's gate, woken |
 
 **2026-09-27: the docs/records-only chore row exists because `repo-64` did not
 get it.** That ticket — a `chore` with no source change, only rule pages and
@@ -347,6 +347,13 @@ rather than measuring a new value for this one: `reference/model-pairing.md`
 already gives Sonnet 5 `high` as its builder setting, and a fixer's work is a
 small build.
 
+**2026-09-30: every Sonnet row moved from Sonnet 5 to Sonnet 5.5, on the owner's
+decision** — `builder-standard`, `fixer`, `seam-mapper` and
+`ticket-reviewer-sonnet`. The price is unchanged ($2 / $10, cache reads $0.20).
+Sonnet 5.5 recalibrates its effort levels, so the `high` and `xhigh` above are
+carried over by name, not re-measured; the first history rows under it are the
+trial.
+
 - **Never pass `model` when dispatching one of these.** It overrides the
   definition's model and keeps its effort, which gives a pairing this table does
   not have. Relayed from the sentinelle repository and not measured here: Claude
@@ -366,7 +373,7 @@ small build.
   same models. `agent-cost.mjs` prints the effort every agent actually ran at,
   so a history row can test them. Why each model row reads as it does, and why
   the cost case behind `standard` needs re-measuring now that Opus 5.5 reads its
-  cache at Sonnet 5's rate, is [reference/model-pairing.md](reference/model-pairing.md).
+  cache at Sonnet's rate, is [reference/model-pairing.md](reference/model-pairing.md).
 
 **Confirm what ran from the transcript, not from anyone's account of it:**
 `node scripts/agent-cost.mjs --agent <id>` prints each agent's model and effort
