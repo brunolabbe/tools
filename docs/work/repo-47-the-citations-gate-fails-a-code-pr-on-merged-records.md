@@ -3,7 +3,7 @@ id: repo-47
 tool: repo
 title: The citations gate fails a code PR on citations in merged records that still verify on the base
 kind: fix
-status: ready
+status: done
 difficulty: hard
 milestone: null
 depends_on: []
