@@ -164,9 +164,71 @@ ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
   citations remain excused (the pre-fix text they quote is still nowhere in
   the file), and only dl-53's needed a pin, done above.
 
-  Fold-in: none identified. No other ticket in `docs/work/` or
-  `tools/*/docs/work/` names the logger, and the only other citations into
-  either changed file (`packages/core/src/index.ts`, the three tools'
-  `logger.ts`) were the two repaired above — found by running the gate, not
-  by a targeted grep, so this is not a claim that no other ticket could ever
-  be affected, only that the gate found none.
+  Fold-in: none identified. ~~No other ticket in `docs/work/` or
+  `tools/*/docs/work/` names the logger~~ — **WITHDRAWN, do not cite (gate 1,
+  F5): false as written.** `grep -l "logger.ts" docs/work/*.md
+tools/*/docs/work/*.md` finds ten other tickets — dl-29, dl-43, dl-53,
+  dl-56, dl-58, dl-66, pl-39, lg-3, repo-29, repo-48 — the sentence was
+  written from the citations gate's output, which reads only `## Review`
+  sections, and not from a grep. What stands is the narrower claim: the only
+  citations the gate found displaced were the two repaired above
+  (`packages/core/src/index.ts`, the three tools' `logger.ts`), found by
+  running the gate, so this is not a claim that no other ticket could ever be
+  affected. None of the ten goes stale (the one open ticket, lg-3, says the
+  ledger logger censors the token and header, which still holds).
+
+- 2026-09-30 — **Round 2, on gate 1's findings** (F1, F2, F3, F5 fixed; F4
+  filed as `repo-85`). Both med findings were reproduced before anything was
+  fixed, by a mutation runner in the scratch directory (`mutate.mjs`, file
+  restored after each run):
+  - **F1 reproduced, then fixed.** Deleting `headers.authorization`,
+    `*.headers.authorization` and `*.authorization` from the downloader's
+    `REDACT_PATHS` left `tools/downloader/api/test/logging.test.ts` at `47
+passed / 47`. New file `tools/downloader/api/test/redaction.test.ts` (no
+    existing downloader test touched): one test per entry (6) plus
+    redaction-not-deletion, 7. Per-entry mutation, one entry deleted at a
+    time: `*.headers.cookie`, `*.headers.authorization`, `*.cookie` and
+    `*.authorization` each turn their own test red (`6 passed / 7`). **Shadowed:
+    `headers.cookie` (by `*.cookie`) and `headers.authorization` (by
+    `*.authorization`)** — each stays `7 passed / 7` when deleted, and so do
+    both together. F1's own mutation, all three authorization entries at once,
+    now fails 4 tests (`3 passed / 7`). No path removed.
+  - **F2 reproduced, then fixed.** Replacing `safe(extra)` with `extra` in
+    `packages/core/src/logger.ts`'s `child` line: `69 passed / 69` across the
+    downloader, planner and ledger logging specs (four spec files; the gate's
+    2851-test figure covers whole projects and was not re-run). New file
+    `packages/core/test/logger.test.ts`, 12 tests: the adapter itself (line
+    shape, levels, `silent`, bindings), `redactPaths` (censors; none by
+    default) and one test per route the `redactFields` hook is applied on
+    (call fields, child bindings, grandchild bindings, call fields on a
+    grandchild, `undefined` in and out, the `fieldsDropped` fallback, no hook).
+    One mutation per route, each red: `child(safe(extra))` → `child(extra)`
+    fails 2 (child and grandchild bindings); dropping the hook from the
+    child's `adapt` fails 2 (grandchild bindings, grandchild call fields);
+    `safe(fields)` → `fields` fails 4; removing the `fieldsDropped` line, and
+    letting the hook's throw propagate, each fail the fallback test;
+    `redactPaths` ignored fails 1; the top-level `adapt` without the hook
+    fails 6. The stand-in hook (`scrub`, a `secret` key) is the core spec's own;
+    the downloader's real hook stays tested in `tools/downloader/api/test/`.
+  - **F3 fixed.** The planner and ledger spec headers said deleting an entry
+    turns a named test red; each now names `headers.authorization` as the
+    shadowed exception, which is what the mutation runs measured (planner
+    `8 passed / 8`, ledger `10 passed / 10` when it is deleted).
+  - **F5 fixed** above, in place: the withdrawn sentence is struck through and
+    kept, with the ten tickets `grep -l "logger.ts" docs/work/*.md
+tools/*/docs/work/*.md` finds, re-derived here (same ten as the gate).
+  - **F4 filed**, not fixed, on the owner's choice:
+    `docs/work/repo-85-logger-hook-misses-msg-err-and-bindings.md` (`kind:
+fix`, `status: ready`, `difficulty: standard`, `depends_on: [repo-66]`),
+    with the reproduction inlined as a script and its output. `node
+scripts/next-id.mjs repo` printed `next free: repo-85` before the file was
+    written. Run again with the file present but uncommitted it still printed
+    `repo-85`, so it does not see an uncommitted file; the id is held from the
+    commit that adds it.
+
+  `npm run check` exit 0. The four new or edited specs: 4 files / 37 tests
+  passed (7 + 12 + 8 + 10). `npm test -- --project downloader --project
+planner --project ledger --project core`: exit 0, 177 files passed / 1
+  skipped (178), 2894 tests passed / 2 skipped (2896).
+  `node scripts/citations-gate.mjs --against origin/main`: exit 0, `135
+enforced, 0 failing`.

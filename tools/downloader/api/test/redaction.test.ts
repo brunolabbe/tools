@@ -1,15 +1,21 @@
 /**
- * The planner's redaction list, censored on the way out (repo-66).
+ * The downloader's `REDACT_PATHS`, one test per entry (repo-66).
  *
- * `logger.ts` keeps `REDACT_PATHS` as a backstop for a provider API key or an
- * auth header that someone logs whole. Until repo-66 lifted the shared adapter
- * into `@webtools/core/logger`, nothing here exercised those paths directly —
- * `logging.test.ts` only proves the key never reaches a line through the SDK's
- * error path (pl-39), which would pass even with the list empty. One assertion
- * per entry, so dropping an entry turns its named test red — except
- * `headers.authorization`, which `*.authorization` shadows (pino's `*` also
- * matches the key `headers`): deleting it leaves every test green. It is
- * asserted anyway, because the test is of what the list censors.
+ * `logging.test.ts` proves the cookie half at one depth and never writes a
+ * lowercase `authorization` at all: deleting all three authorization entries
+ * from `logger.ts` left its 47 tests green. These are the header bags that do
+ * *not* arrive as a `RequestContext` — the structural pass in `safeFields`
+ * matches the key `requestContext` and nothing else — so the path layer is the
+ * only thing between them and a written line, which is why each entry is
+ * asserted by itself, named after the entry.
+ *
+ * Deleting an entry turns its own test red **except where another entry
+ * shadows it**: pino's `*` matches one key at any name, so `*.cookie` also
+ * matches `headers.cookie`, and `*.authorization` also matches
+ * `headers.authorization`. Those two are asserted anyway, because the test is
+ * of what the list censors, not of which entry does it.
+ *
+ * A new file rather than more of `logging.test.ts`, so no existing test moves.
  */
 
 import { describe, expect, test } from "vitest";
@@ -37,17 +43,10 @@ function capturing(): { logger: AppLogger; lines: Line[] } {
 
 const SECRET = "super-secret";
 
-describe("the planner's redaction list", () => {
-  test("apiKey", () => {
+describe("the downloader's redaction list", () => {
+  test("headers.cookie", () => {
     const { logger, lines } = capturing();
-    logger.info("configured", { apiKey: SECRET });
-
-    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
-  });
-
-  test("*.apiKey", () => {
-    const { logger, lines } = capturing();
-    logger.info("configured", { config: { apiKey: SECRET } });
+    logger.info("upstream", { headers: { cookie: `session=${SECRET}` } });
 
     expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
@@ -59,6 +58,13 @@ describe("the planner's redaction list", () => {
     expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
+  test("*.headers.cookie", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { request: { headers: { cookie: `session=${SECRET}` } } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
   test("*.headers.authorization", () => {
     const { logger, lines } = capturing();
     logger.info("upstream", { request: { headers: { authorization: `Bearer ${SECRET}` } } });
@@ -66,23 +72,16 @@ describe("the planner's redaction list", () => {
     expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });
 
+  test("*.cookie", () => {
+    const { logger, lines } = capturing();
+    logger.info("upstream", { request: { cookie: `session=${SECRET}` } });
+
+    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
+  });
+
   test("*.authorization", () => {
     const { logger, lines } = capturing();
     logger.info("upstream", { request: { authorization: `Bearer ${SECRET}` } });
-
-    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
-  });
-
-  test("headers['x-api-key']", () => {
-    const { logger, lines } = capturing();
-    logger.info("upstream", { headers: { "x-api-key": SECRET } });
-
-    expect(JSON.stringify(lines[0])).not.toContain(SECRET);
-  });
-
-  test("*.headers['x-api-key']", () => {
-    const { logger, lines } = capturing();
-    logger.info("upstream", { request: { headers: { "x-api-key": SECRET } } });
 
     expect(JSON.stringify(lines[0])).not.toContain(SECRET);
   });

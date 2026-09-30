@@ -6,10 +6,12 @@
  * in a cookie, and either is a live session for as long as it lasts. This
  * tool had no logging test at all before repo-66 lifted the shared adapter
  * out of it — its `REDACT_PATHS` list was unverified. One assertion per
- * entry, named after the entry, so dropping one turns a named test red. The
- * shape follows the downloader's `logging.test.ts`: a logger writing into an
- * array, so the assertions read the real serialised line rather than a call
- * argument.
+ * entry, named after the entry, so dropping one turns its named test red —
+ * except `headers.authorization`, which `*.authorization` shadows (pino's `*`
+ * also matches the key `headers`): deleting it leaves every test green. It is
+ * asserted anyway, because the test is of what the list censors. The shape
+ * follows the downloader's `logging.test.ts`: a logger writing into an array,
+ * so the assertions read the real serialised line rather than a call argument.
  */
 
 import { describe, expect, test } from "vitest";
