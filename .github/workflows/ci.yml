@@ -104,6 +104,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # A release commit stamps each tool's `api/package.json` with its new
+      # version and never touches `package-lock.json`, whose own `packages`
+      # map mirrors that same version — so the lockfile falls behind on every
+      # release until some unrelated commit's `npm install` catches it up and
+      # carries the diff (repo-46). This is option C beside repo-46's option
+      # A, which stamps the lockfile directly: A can fail silently if the
+      # stamp does nothing, and this step is what turns that into a red
+      # release PR instead of a quiet drift.
+      #
+      # A script, not the two raw `npm`/`git` lines C names, because
+      # `scripts/preflight.mjs` refuses to spawn any `npm` command it does
+      # not already recognise as `npm ci` or `npm run check` (repo-82) — a
+      # raw `npm install --package-lock-only …` line here fails
+      # `deriveExtraCiCommands` and the unit test pinning its output over
+      # this file, for every future run. `scripts/check-lockfile-sync.mjs`
+      # runs the same two commands, in the same order, with the same flags,
+      # and is outside that guard.
+      - run: node scripts/check-lockfile-sync.mjs
       - run: npm run check
       # Parses every ticket, and fails by file and line on anything it does not
       # understand — an unknown field, a status outside the taxonomy, an id that

@@ -344,3 +344,116 @@ A and C, in one change:
   (`gh pr diff <n> --name-only`). Whichever merges first drifts it again, and
   Build step 1's resync covers that. The `jsonpath-plus` measurement is
   above, under Options.
+- **2026-09-30 — built on `repo-46-lockfile-stamp` from `origin/main` at
+  `e79b04f`.** Build step 1's resync was a no-op: at `e79b04f` the lockfile
+  already matches every `api/package.json` (downloader 0.7.0, planner 0.7.0,
+  ledger 0.0.0) — confirmed with a scratch `git archive` extraction and
+  `npm install --package-lock-only --offline --ignore-scripts --no-audit
+--no-fund`, `diff` against the pre-install copy exits 0. This is the same
+  "in sync only because an unrelated commit rewrote it" state the 2026-09-28
+  entry names; #284 and #294 are still open and still touch no lockfile
+  (unchanged from that entry), so the drift is still live and will land on
+  whichever merges first — after this branch merges, that release PR's
+  `extra-files` stamp (A) is what should keep it caught up, with CI's new
+  step (C) behind it.
+
+  Added A's second `extra-files` entry to all three tools in
+  `release-please-config.json`, `$.packages['tools/<tool>/api'].version`
+  against `/package-lock.json`, per the Build section and the `jsonpath-plus`
+  measurement already recorded under Options. Added C as two steps in
+  `.github/workflows/ci.yml`'s `check` job, right after `npm ci` and before
+  `npm run check` — kept clear of the citations-gate step at the end of that
+  job, which repo-47 edits concurrently, so the two branches' diffs sit in
+  different parts of the file.
+
+  **Proved C red-then-green (`Done when` 2) in a throwaway git repo**, not in
+  this worktree or the shared checkout: archived this branch's tree,
+  `git init` there, committed it as `base`, edited
+  `tools/downloader/api`'s lockfile entry from `0.7.0` to `0.6.0` and
+  committed that as `stale` (simulating a release commit that stamped
+  `api/package.json` but not the lockfile), then ran C's two commands.
+  Against `stale`: `npm install --package-lock-only --offline
+--ignore-scripts --no-audit --no-fund` exits 0 and rewrites the line back to
+  `0.7.0`, then `git diff --exit-code package-lock.json` exits 1 (red),
+  printing exactly that one-line diff. Committing that fix and re-running
+  both commands: `git diff --exit-code package-lock.json` exits 0 (green).
+  Left no trace in this worktree — the throwaway repo lived under this
+  ticket's scratch directory and this worktree's own `package-lock.json` was
+  restored to match `HEAD` before continuing (`git diff --stat
+package-lock.json` prints nothing).
+
+  **Not done, and not this ticket's to do**: `Done when` 1 and 3 need a real
+  release PR after this merges, and `Done when` 1 also needs C to have run on
+  a GitHub runner, where `--offline`'s dependence on the cache `npm ci` just
+  filled is unmeasured (flagged already, under Options and in the new CI
+  step's own comment). Status stays `ready` per the builder role page, so this
+  branch does not set `awaiting` — that is a `done`-ticket field
+  (`docs/01-TICKETS.md`), and Build step 5 is an instruction for whoever lands
+  this: write an `awaiting` line naming Done when 1 and 3 — that the next
+  release PR's `check` job runs C green and touches `package-lock.json` —
+  once the status flips to `done`.
+
+  **Fold-in considered and declined**: nothing else in front of me was small
+  and already specified enough to fold in. The `extraneous` workspace entries
+  the ticket names are explicitly out of scope for this fix (Build step 2),
+  and I found no other already-specified piece of work this change makes
+  free.
+
+  **C's step is a script, not the two raw lines the Build section names, and
+  this is a change I made rather than asked about.** A raw
+  `- run: npm install --package-lock-only …` line in `ci.yml`'s `check` job
+  fails `scripts/preflight.mjs`'s own guard, which refuses to spawn any `npm`
+  command it does not already recognise as `npm ci` or `npm run check`
+  (repo-82) — measured directly: with the raw line in place,
+  `npx vitest run scripts/test/preflight.test.ts -t "deriveExtraCiCommands
+runs only what no other check already covers"` fails with `ci.yml's check
+job runs "npm install --package-lock-only …", an npm step this file does
+not recognise …`, the same error `node scripts/preflight.mjs --base
+origin/main` reported under `== ciCommands ==`. That guard is deliberate
+  and heavily tested (12+ tests in `scripts/test/preflight.test.ts` defend
+  it against exactly this shape of unrecognised npm command), so rather than
+  weaken it I wrapped C's two commands, in the same order and with the same
+  flags, in `scripts/check-lockfile-sync.mjs` — a plain `spawnSync` with
+  `shell: false`, no shell operators — and pointed `ci.yml` at
+  `node scripts/check-lockfile-sync.mjs` instead. That step is outside the
+  npm guard and reaches preflight's ordinary spawn-it-for-real path instead:
+  `== ciCommands ==` now reads `ok node scripts/check-lockfile-sync.mjs`.
+  Updated the two tests in `scripts/test/preflight.test.ts` that assert the
+  exact command list read off the real `ci.yml`
+  (`extractCheckJobCommands reads this repo's own ci.yml check job, in
+order` and `deriveExtraCiCommands runs only what no other check already
+covers`) to include the new step; both pass,
+  `npx vitest run scripts/test/preflight.test.ts` — 87 passed (87).
+
+  This is a judgment call, not something I could ask about mid-build, and I
+  am flagging it rather than treating it as free: the alternative was to
+  leave the raw two-line form and let `ciCommands` fail on every future
+  `node scripts/preflight.mjs` run in this repo (and the pinned-output unit
+  test fail in `npm test -- --project repo`) until someone else fixed it.
+  If the wrapper script is judged wrong — for instance if this repo would
+  rather widen `COVERED` itself, or accept the two raw lines and teach
+  `ciCommands` to actually spawn a narrow allowlist of safe `npm` commands —
+  that is a preflight.mjs design change I did not make and did not want to
+  make unreviewed.
+
+  **The wrapper script's own diff moved lines in `scripts/test/preflight.test.ts`
+  that three already-merged records cite by line number** (repo-65, repo-79,
+  repo-82), a `+2`-line shift from the two array entries I added. Repointed
+  all 25 affected citations (7 + 16 + 2) to `scripts/test/preflight.test.ts@e79b04f:<original
+line>`, `e79b04f` being the base I branched from, which the citations-gate
+  itself confirms still holds every one of those lines' content unchanged —
+  the same repair already applied above to the citations `.github/workflows/ci.yml`
+  and `release-please-config.json` displaced. `node
+scripts/citations-gate.mjs --against origin/main`, re-run as the last
+  action after the final `npm run format`: `135 enforced, 0 failing; 6
+grandfathered, holding 1 unresolvable, 19 unanchored. 6 entr(y/ies)
+compared against origin/main: 0 raised.`
+
+  `npm run check`: exit 0. `npx vitest run --project repo`: 620 passed
+  (620). `node scripts/preflight.mjs --base origin/main`: `check` ok
+  (`npm run check`, `npm test -- --project repo`, `npm test -- --project
+downloader` all ok — the downloader suite ran because this branch also
+  touches `tools/downloader/docs/work/dl-72-…md`), `ciCommands` ok (all
+  three commands, including the new script), `citations` ok (0 failing),
+  `review` ok, `title` ok (`chore` hidden, no changelog line), `mergeTree`
+  ok against both open release PRs (#284, #294) alone and scratch-merged.

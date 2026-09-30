@@ -943,6 +943,7 @@ function plantFakeGh(shimDir: string, cwd: string): void {
 test("extractCheckJobCommands reads this repo's own ci.yml check job, in order", () => {
   expect(extractCheckJobCommands(REAL_CI_YAML)).toEqual([
     "npm ci",
+    "node scripts/check-lockfile-sync.mjs",
     "npm run check",
     "node scripts/status.mjs --json > /dev/null",
     "node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors",
@@ -988,6 +989,7 @@ test("extractCheckJobCommands throws rather than silently skip a block-scalar ru
  */
 test("deriveExtraCiCommands runs only what no other check already covers", () => {
   expect(deriveExtraCiCommands(REAL_CI_YAML)).toEqual([
+    ["node", ["scripts/check-lockfile-sync.mjs"]],
     ["node", ["scripts/status.mjs", "--json"]],
     [
       "node",
