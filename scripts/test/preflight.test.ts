@@ -272,12 +272,12 @@ test("checkCitations exits 0 over a clean corpus", () => {
 });
 
 /**
- * Done when's first planted failure: a moved citation in a merged record.
- * `ANCHORED_REVIEW` is merged at `base`; the branch's own change shifts the
- * cited line without touching the citation, the same reproduction
- * `citations-gate.test.ts` uses for the `moved` state.
+ * repo-47, option B: a moved citation in a merged record this branch does not
+ * change is reported and not failed. `ANCHORED_REVIEW` is merged at `base`; the
+ * branch shifts the cited line without touching the record. Until repo-47 this
+ * was repo-51's first planted failure; the control is at the end of this file.
  */
-test("checkCitations fails and names the record when a merged citation's target line moves", () => {
+test("checkCitations reports, and does not fail, a moved citation in a record the branch leaves alone", () => {
   const repo = makeRepo();
   try {
     repo.write("src/tls.ts", TLS);
@@ -289,8 +289,8 @@ test("checkCitations fails and names the record when a merged citation's target 
     repo.commitAll("shift the cited line");
 
     const result = checkCitations(repo.dir, base, new Map());
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.citations);
+    expect(result).toMatchObject({ ok: true, bit: 0 });
+    expect(result.lines.join("\n")).toMatch(/note {2}1 moved citation\(s\) in 1 record\(s\)/);
     expect(result.lines.join("\n")).toMatch(/docs\/work\/a\.md/);
   } finally {
     repo.cleanup();
@@ -2080,6 +2080,132 @@ test("preflight blames the working tree, not --base, when git status itself fail
     expect(exitBit).toBe(EXIT.setup);
     expect(caught?.message).toMatch(/the working tree could not be read/);
     expect(caught?.message).not.toMatch(/--base/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+// --- repo-47: which records the citation checks enforce on `moved` ----------
+
+/**
+ * The control for the rewritten repo-51 test above: the same shift, but the
+ * branch also edits the record, so it is in the touched set and its `moved`
+ * fails exactly as it did before repo-47.
+ */
+test("checkCitations still fails a moved citation in a record the branch edits", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.write("docs/work/a.md", ANCHORED_REVIEW);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.write("docs/work/a.md", `${ANCHORED_REVIEW}\n## Log\n\n- touched.\n`);
+    repo.commitAll("shift the cited line and edit the record");
+
+    const result = checkCitations(repo.dir, base, new Map());
+    expect(result.ok).toBe(false);
+    expect(result.bit).toBe(EXIT.citations);
+    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * The choice repo-47's Build left to `preflight.mjs`: a scratch fold's touched
+ * set is `HEAD`'s own diff, not the union with the folded head's. "mine" is a
+ * code change that shifts the cited line; "b" adds a record citing it. In the
+ * fold, b's record is `moved` — but it is b's record, so it is reported here and
+ * left to b's own preflight, which folds "mine" in and does enforce it.
+ */
+test("checkScratchMergeCitations enforces HEAD's own records, not the folded head's", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("insert a line above the cited region");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "b");
+    repo.write("docs/work/b.md", ANCHORED_REVIEW);
+    repo.commitAll("add a record citing line 2");
+    const oidB = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "mine");
+    const heads = [{ number: 7, headRefName: "b", oid: oidB }];
+    const fromMine = checkScratchMergeCitations(repo.dir, mineOid, heads, mainOid, new Map());
+    expect(fromMine.ok).toBe(true);
+    expect(fromMine.lines.join("\n")).toMatch(
+      /note {2}1 moved citation\(s\)[\s\S]*docs\/work\/b\.md/,
+    );
+
+    // The other side of the same pair: from b's point of view the record is its
+    // own, so the same fold fails.
+    repo.git("checkout", "-q", "b");
+    const mine = [{ number: 8, headRefName: "mine", oid: mineOid }];
+    const fromB = checkScratchMergeCitations(repo.dir, oidB, mine, mainOid, new Map());
+    expect(fromB.ok).toBe(false);
+    expect(fromB.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/b\.md — 1 moved/);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+/**
+ * repo-47 gate 1, F3(c). The note used to name every reported record on one
+ * line, about 900 characters on the live corpus, and repeat it once per fold.
+ * Check 2 now lists one record per line; a fold, which says the same thing
+ * again, lists at most three and points at check 2 for the rest.
+ */
+test("the moved note lists one record per line in check 2, and at most three in a fold", () => {
+  const repo = makeRepo();
+  try {
+    repo.write("src/tls.ts", TLS);
+    for (const name of ["a", "b", "c", "d"]) repo.write(`docs/work/${name}.md`, ANCHORED_REVIEW);
+    repo.commitAll("base");
+    const mainOid = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "-b", "o");
+    repo.write("other.md", "unrelated\n");
+    repo.commitAll("an unrelated open pull request");
+    const oidOther = repo.git("rev-parse", "HEAD");
+
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "mine");
+    repo.write("src/tls.ts", TLS_SHIFTED);
+    repo.commitAll("shift the cited line");
+    const mineOid = repo.git("rev-parse", "HEAD");
+
+    const check2 = checkCitations(repo.dir, mainOid, new Map());
+    expect(check2.ok).toBe(true);
+    expect(check2.lines).toContain(
+      `note  4 moved citation(s) in 4 record(s) not changed since the merge base with ${mainOid}, reported and not failed:`,
+    );
+    for (const name of ["a", "b", "c", "d"]) {
+      expect(check2.lines).toContain(`        docs/work/${name}.md — 1 moved`);
+    }
+
+    const fold = checkScratchMergeCitations(
+      repo.dir,
+      mineOid,
+      [{ number: 3, headRefName: "o", oid: oidOther }],
+      mainOid,
+      new Map(),
+    );
+    expect(fold.ok).toBe(true);
+    expect(fold.lines.filter((l) => l.startsWith("        docs/work/"))).toHaveLength(3);
+    expect(fold.lines).toContain("        … and 1 more; check 2 lists every one");
+    // The note's own lines only: check 2's ok line carries compareAgainst's
+    // bootstrap message here, since this fixture has no copy of the gate.
+    const noteLines = [...check2.lines, ...fold.lines].filter((l) => /^(note|        )/.test(l));
+    for (const line of noteLines) expect(line.length).toBeLessThan(160);
   } finally {
     repo.cleanup();
   }
