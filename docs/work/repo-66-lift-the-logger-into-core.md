@@ -104,21 +104,27 @@ to need a `fix` or `feat`, it splits into one pull request per tool.
   the ledger had no logging test at all): five tests proving each of its
   `REDACT_PATHS` entries censors what it names (`Authorization`, `Cookie`,
   `cf-access-jwt-assertion`, top-level `apiKey`), plus one proving redaction
-  and not deletion. Did not add an equivalent for the planner: its
-  `REDACT_PATHS` (`apiKey`, `headers.authorization`,
-  `headers['x-api-key']`) are not exercised directly anywhere in its existing
-  suite either (`grep -rn "headers.authorization\|headers\['x-api-key'\]"
-tools/planner/api/test` — no matches), so the ticket's own framing that only
-  the ledger "has none today" is arguably imprecise; left as is rather than
-  widened, since the Done-when's own wording names the ledger specifically and
-  the planner's indirect coverage (pl-39, the SDK-error path) was in place
-  before this ticket. Flagged here rather than silently deferred.
+  and not deletion. **Correction, same day, on the coordinator's review:** an
+  earlier draft of this entry left the planner without an equivalent, reading
+  "the ledger has none today" as narrowing the Done-when. It does not; "a test
+  per tool" includes the planner, whose `REDACT_PATHS` were exercised nowhere
+  directly (`grep -rn "headers.authorization\|headers\['x-api-key'\]"
+tools/planner/api/test` matched nothing before this commit). Added
+  `tools/planner/api/test/redaction.test.ts`, a new file so no merged record's
+  citation moves: one test per `REDACT_PATHS` entry (7) plus a
+  redaction-not-deletion test, 8 in all. Red-green: deleting
+  `*.headers['x-api-key']` from the planner's list turns exactly that test red
+  (`1 failed | 7 passed`, `expected ... not to contain 'super-secret'`),
+  restored afterwards. Also measured: deleting `headers.authorization` stays
+  green (`8 passed`), because pino's `*.authorization` already matches it, so
+  that entry is redundant; left in place, since removing a redaction path is
+  not this ticket's call.
 
   `npm run build` exit 0. `npm run check` exit 0 (lint, format, typecheck).
   Suites: `npx vitest run --project downloader` 89 passed / 1 skipped (90
   files), 1525 passed / 2 skipped (1527 tests) — the same 47/47 in
   `logging.test.ts` the Done-when asks to stay unchanged, re-run directly
-  too. `--project planner` 75 files, 1293 tests, all passed. `--project
+  too. `--project planner` 76 files, 1301 tests, all passed (75/1293 before the planner test above). `--project
 ledger` 5 files (`api/test/{config,health,logging}.test.ts`,
   `contract/test/errors.test.ts`, `web/test/vite-config.test.ts`), 20 tests,
   all passed — 4 files / 15 tests before this branch, +1 file / +5 tests from
