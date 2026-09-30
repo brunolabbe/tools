@@ -599,3 +599,71 @@ node scripts/check-lockfile-sync.mjs`), `citations` and `mergeTree` ok,
     `mergeTree` now also against #325. Across that whole run the shared
     `node_modules/.package-lock.json` read `2026-09-30 01:23:14.500764343` /
     `d432f0b6…c80e` before and after.
+
+- **2026-09-30 — round 3, after gate 2 at `484f0d2` (CONCERNS: one med, two
+  lows; M1, M2 and L1–L4 verified fixed) and repo-47 merging (#326 as
+  `9fadda7`, then #325 as `b658179`).**
+  - **Merged `origin/main` (`b658179`), not rebased**, clean, with a
+    conventional message. Farm and build per `common.md`; `npm run build`
+    exit 0.
+  - **The dl-72 repoint is dropped**, as the owner decided: the file is
+    restored to its content on `origin/main`. `git diff --name-only
+origin/main` over the working tree, filtered for `^tools/`, matches 0
+    lines. Preflight's `title` now reads `ok "fix(repo): stamp the lockfile
+on release and catch drift in CI (repo-46)" — type and paths agree`.
+    `node scripts/citations-gate.mjs` reports dl-72 as `MOVED`
+    (`release-please-config.json:33`) under "Moved in records not changed
+    since the merge base", reported and not failed, exactly as the owner's
+    dry run predicted.
+  - **Pins changed, only what the gate failed in records this branch edits**
+    (first run after the merge: 4 records, 20 citations; after: `137
+enforced, 0 failing`). All resolved by running the gate, at the
+    coordinate it reported. The content is unchanged; repo-47 moved it.
+    `scripts/preflight.mjs` ones pinned to `b658179` at the line the gate
+    named: repo-65 record lines 173 (`1580`→`1623`), 198 (`1486`→`1529`),
+    201 (`1574`→`1617`), 219 (`1470`→`1513`); repo-79 76 (`402`→`403`), 78
+    (`1091`→`1124`, `1128`→`1161`), 115 (`1235`→`1268`), 116
+    (`625`→`626`), 124 (`432`→`433`), 125 (`1230`→`1263`); repo-82 92
+    (`432`→`433`), 93 (`1231`→`1264`, `1247`→`1289`), 121 (`633`→`634`),
+    123 (`432`→`433`, `489`→`490`), 128 (`605`→`606`). repo-34 lines 153
+    and 163: `ci.yml:264-285` became `ci.yml@b658179:264-285` (the anchor is
+    inside that range at `b658179`; the gate's "at 294" is this branch's
+    own +15-line `ci.yml` edit on top). The earlier `e79b04f` pins are kept.
+  - **Gate 2's third finding, corrected by measurement:** the claim that
+    repo-47's own record needs repins does not hold. Its five moved
+    citations (`ci.yml` 185, 119, 173; `preflight.test.ts` 2204, 2137) are
+    in a record this branch does not edit, so they are reported and not
+    failed, and I pinned none. The gate's other 6 reported items
+    (repo-50, 64, 67, 75, dl-72) are the same kind. Preflight's `citations`
+    and `mergeTree` print them as `note`, exit 0.
+  - **Gate 2's med, the Windows spawn:** owner's choice, skip and assert.
+    `scripts/test/check-lockfile-sync.test.ts` now declares
+    `realNpm = test.skipIf(process.platform === "win32")` for the four tests
+    that run `npm` for real, with a comment saying why they are skipped and
+    not resolved and citing `.claude/rules/testing.md`, the paragraph whose
+    bold lead is "A test that runs a tool out of `node_modules` cannot spawn
+    its `bin` directly, because Windows does not honour a shebang" (it is a
+    bold lead, not a heading). `quietRun` asserts
+    `expect(result.error).toBeUndefined()`. **Red before:** `PATH` holding
+    only `node` (`/usr/bin/node node_modules/vitest/vitest.mjs run
+scripts/test/check-lockfile-sync.test.ts`): 2 failed, 4 passed, the two
+    failures being `expected 1 to be +0` and `expected '' to match`. **After,
+    same `PATH`:** 4 failed, 3 passed, all four failures
+    `could not start npm: expected Error: spawnSync npm ENOENT … to be
+undefined`. The skip itself is **unmeasured**: it gates on
+    `process.platform`, which I did not fake, and Windows was not run.
+  - **Gate 2's first low, `diff.error`:** new last test, "a git that never
+    started says so and fails, instead of reading as a clean diff".
+    **Red first by mutation:** `if (diff.error !== undefined) {` replaced by
+    `if (false) {`, `npx vitest run scripts/test/check-lockfile-sync.test.ts`:
+    1 failed, 6 passed; restored, 7 of 7.
+  - `npm run check` exit 0. `npx vitest run
+scripts/test/check-lockfile-sync.test.ts scripts/test/preflight.test.ts`
+    exit 0, 97 of 97. `npm test -- --project repo` exit 0, 648 of 648
+    (before the last lint-only move of a test helper to module scope; the two
+    spec files above were re-run after it). `node scripts/citations-gate.mjs
+--against origin/main` exit 0, `137 enforced, 0 failing`. `node
+scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the
+lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
+    **exit 0**, every check ok, title included, `mergeTree` ok against #294
+    and #284 (#325 has merged).
