@@ -12,19 +12,40 @@
       "release-type": "simple",
       "component": "downloader",
       "component-no-space": true,
-      "extra-files": [{ "type": "json", "path": "api/package.json", "jsonpath": "$.version" }]
+      "extra-files": [
+        { "type": "json", "path": "api/package.json", "jsonpath": "$.version" },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['tools/downloader/api'].version"
+        }
+      ]
     },
     "tools/planner": {
       "release-type": "simple",
       "component": "planner",
       "component-no-space": true,
-      "extra-files": [{ "type": "json", "path": "api/package.json", "jsonpath": "$.version" }]
+      "extra-files": [
+        { "type": "json", "path": "api/package.json", "jsonpath": "$.version" },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['tools/planner/api'].version"
+        }
+      ]
     },
     "tools/ledger": {
       "release-type": "simple",
       "component": "ledger",
       "component-no-space": true,
-      "extra-files": [{ "type": "json", "path": "api/package.json", "jsonpath": "$.version" }]
+      "extra-files": [
+        { "type": "json", "path": "api/package.json", "jsonpath": "$.version" },
+        {
+          "type": "json",
+          "path": "/package-lock.json",
+          "jsonpath": "$.packages['tools/ledger/api'].version"
+        }
+      ]
     }
   },
 

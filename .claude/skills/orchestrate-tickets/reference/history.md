@@ -1518,8 +1518,8 @@ the line that already covers them.
    is nowhere in the file. The third drifted when `repo-21` rewrote
    `dispatching.md`. **Nothing reports this**: `npm run check` does not run the
    checker at all, and CI runs it on exactly one file —
-   `.github/workflows/ci.yml:151` "--require-anchors" — scoped that way on
-   purpose, `.github/workflows/ci.yml:142` "alone, on purpose". So the page
+   `.github/workflows/ci.yml@e79b04f:151` "--require-anchors" — scoped that way on
+   purpose, `.github/workflows/ci.yml@e79b04f:142` "alone, on purpose". So the page
    carrying the schema every session must append to is failing its own checker at
    the base, and each session inherits a red baseline it has no way to see. The
    tenth session's entry 8 said *nothing checks this page*; this is the
@@ -3823,7 +3823,7 @@ check run from GitHub's default setup, not a workflow at all, so `gh run
 list` cannot see it in principle) nor `test (windows-latest, informational)`
 appears in that output in any form, even though the latter's failing job is
 `continue-on-error` — confirmed at
-`.github/workflows/ci.yml:338 "continue-on-error:"` — so the *workflow*
+`.github/workflows/ci.yml@e79b04f:338 "continue-on-error:"` — so the *workflow*
 still reports `success` while the job inside it did not. Whether the PR's
 check rollup actually showed two failures at that exact commit is not
 independently checked here: this dispatch has no `gh api` access (denied by
