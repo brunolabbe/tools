@@ -58,9 +58,12 @@ function onePaste(options: {
 }
 
 describe("parseStatement on a three-month paste", () => {
-  const { rows } = parseStatement(THREE_MONTHS);
+  // Parsed inside each test, not here: a fixture that stops parsing then fails
+  // the tests that read it, one by one, instead of the whole file at collection.
+  const parseRows = () => parseStatement(THREE_MONTHS).rows;
 
   test("returns every row, oldest first, with seq counting from 0", () => {
+    const rows = parseRows();
     expect(rows).toHaveLength(12);
     expect(rows.map((row) => row.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(rows[0]).toEqual({
@@ -82,7 +85,7 @@ describe("parseStatement on a three-month paste", () => {
   });
 
   test("takes the year from each month header and the day from the row", () => {
-    expect(rows.map((row) => row.date)).toEqual([
+    expect(parseRows().map((row) => row.date)).toEqual([
       "2026-07-03",
       "2026-07-15",
       "2026-07-29",
@@ -99,6 +102,7 @@ describe("parseStatement on a three-month paste", () => {
   });
 
   test("orders the four rows of one day by the paste's listing, never by sorting", () => {
+    const rows = parseRows();
     // Listed newest first, so the last of the four in the text is the first in time.
     expect(
       rows
@@ -113,6 +117,7 @@ describe("parseStatement on a three-month paste", () => {
   });
 
   test("reads the same on CRLF line endings and behind a byte-order mark", () => {
+    const rows = parseRows();
     expect(parseStatement(THREE_MONTHS.replaceAll("\n", "\r\n")).rows).toEqual(rows);
     expect(parseStatement(`﻿${THREE_MONTHS}`).rows).toEqual(rows);
   });
@@ -123,6 +128,7 @@ describe("parseStatement on a three-month paste", () => {
   });
 
   test("proves its own chain: every balance follows from the row before it", () => {
+    const rows = parseRows();
     for (const [index, row] of rows.entries()) {
       const previous = rows[index - 1];
       if (previous) expect(row.balanceCents).toBe(previous.balanceCents + row.amountCents);

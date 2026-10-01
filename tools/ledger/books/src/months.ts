@@ -2,8 +2,10 @@
  * French month names and the abbreviations AccèsD glues onto a day.
  *
  * `JUL`, `AOÛ` and `SEP` were seen in a real paste; the other nine are the same
- * rule applied to the month's name — three letters — and are unverified (the
- * analysis, §2). Both columns are matched with accents and case folded away, so
+ * rule applied to the month's name, and are unverified (the analysis, §2). The
+ * rule is three letters but not simply the first three: `JUL` for `JUILLET` is
+ * seen, so `JUN` for `JUIN` is a guess at the same shape, not a prefix. A wrong
+ * guess fails loudly and names its line. Both columns are matched with accents and case folded away, so
  * `FEV`, `FÉV` and `fév` are one month, and `AOÛ` and `AOU` another.
  */
 
