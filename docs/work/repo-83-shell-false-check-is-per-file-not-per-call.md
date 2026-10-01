@@ -343,3 +343,54 @@ enforced, 0 failing`. The edit still moves lines cited by merged records
     repo-86 work, held to a later batch and sharing that file.
   - `npm run check` exit 0; `npm test -- --project core --project repo` 19
     files, 689 of 689 passed.
+- 2026-10-01 — **Gate 1's round (Opus, CONCERNS at `6970cee`): one med, five
+  lows, all reproduced before fixing; owner answers by `AskUserQuestion` the
+  same day: fix the med here, and repoint repo-77's row and drop the
+  placeholder comment.** This entry supersedes the first entry's `:87` layout
+  sentence and its `preflight.mjs` `+3` line.
+  - **Med — the guard read comments before strings (reproduced).** Mutating
+    `scripts/test/citations-gate.test.ts:287` from `{ ...TEXT, cwd: dir }` to
+    `{ encoding: "utf8", cwd: dir }` and then to `{ ...TEXT, cwd: dir, shell: true }`
+    left `npx vitest run packages/core/test/spawn-safety.test.ts` at `10 passed`
+    both times at `6970cee`: `"docs/work/*.md"` opened a block comment that ran to the
+    next `*/`, hiding four calls. Fixed at `f27ecfa` by one tokenizer, `mask` in
+    `spawn-calls.ts`, that blanks comments and, unless asked to keep them, string,
+    template and regex literal contents; `code()` in `spawn-safety.test.ts` is
+    `mask(text, true)`. On `f27ecfa`, control (unmutated) 14 of 14 passed; mutation 1
+    failed 1 of 14 — "every file that spawns says `shell: false` at each of its calls",
+    naming `scripts/test/citations-gate.test.ts:287`; mutation 2 failed 2 of 14 — that
+    one and "no call site sets `shell` to anything truthy". Restored, 14 of 14.
+    The fixture test for a `/*` string ahead of a call is "a `/*` inside a string does
+    not hide the code up to the next `*/`".
+  - **Low — the header's limits were false.** An assignment after the literal, or
+    two functions each declaring `options`, passed on the other's `shell: false`.
+    Now a name is safe only if _every_ declaration of it in the file is a safe
+    literal and nothing assigns to it (fixture: "an assignment, or a second
+    declaration of the name, withdraws its `shell: false`"). The header was
+    rewritten to list the limits that remain, each one true.
+  - **Low — bypass shapes.** Fixed, with fixtures: `shell: false` nested in `env`,
+    in a string argument or a JSON payload (only a top-level property of the options
+    literal counts), `{ ...BASE, shell: !0 }` and `{ ...BASE, shell: process.env.X }`
+    (the last word on `shell` wins), a safe name used as a non-options argument (the
+    first argument is never options), `spawnSync as run` and `{ spawnSync: run }`
+    aliases, `require(...)`, `import(...)` and the bare `child_process` specifier.
+    **Declined, and listed as limits in the header:** `cp["spawnSync"](…)`,
+    `promisify(execFile)`, `fork`, and `exec`/`execSync` through a namespace or default
+    import — the last needs a ban on the member, which is a different rule from this
+    ticket's (the named-import ban is `spawn-safety.test.ts`'s own test), and
+    `.exec(` cannot be told from `RegExp#exec` without a parser. A spread of anything
+    that is not a safe name is trusted not to carry `shell` — the tree's own
+    `...(cwd === undefined ? {} : { cwd })` needs that — which is also a limit.
+  - **Low — repo-77's citation.** `docs/work/repo-77-shell-false-check-sees-only-spawn.md`
+    row 89 now cites `packages/core/test/support/spawn-calls.ts:53 "execFileSync"`, the
+    call list itself, and the placeholder comment is gone from the test. Owning that
+    record meant owning its other `moved`: its `repo-83` citation is repointed
+    coordinate-only to `…per-call.md@b7fb3fb:108`, where the anchor already sat at the
+    base (the brief's `:99` had drifted before this branch). The gate then exits 0.
+  - **Low — the injected `spawn` parameter.** Confirmed: `spawnRaw`
+    (`scripts/preflight.mjs`) reads only `options.cwd` and sets `shell: false` itself, so
+    the flag added to `mergeTreeConflicts`'s call was a no-op that read as a fix. The
+    flag is removed and the parameter renamed `run`, which keeps the call out of the
+    name match and drops this branch's `+3` lines in that function.
+  - `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0
+failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
