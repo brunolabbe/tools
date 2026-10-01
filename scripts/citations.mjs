@@ -298,12 +298,42 @@ export function splitLines(markdown) {
 const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
 
 /**
+ * **A file with no extension** (repo-87): `tools/planner/Dockerfile`,
+ * `.githooks/commit-msg`, `.gitignore`. The two alternatives in `INLINE` need a
+ * `.ext` after the last slash, so a citation into one of these matched nothing,
+ * and a citation nothing matches is not counted, verified or unchecked — the
+ * invisible failure this script exists to refuse. A wrong `Dockerfile` line
+ * passed as if it had never been written (repo-66, gate 1). Two shapes, and the
+ * line between them is what keeps prose out:
+ *
+ *   - **Pathed**: at least one directory, then a last segment that starts with a
+ *     letter (or a dot, for `.gitkeep`) and holds only word characters and
+ *     hyphens. The slash is the evidence it is a path; a directory that starts
+ *     with a digit is not one, which keeps `10/12:30`, `2026/09/30:12` and
+ *     `low:40/high:60` (a real one, in pl-10's record) out; and no `@` in the
+ *     last segment, so `Dockerfile@e79b04f:40` reads as a name and a pin rather
+ *     than one long name.
+ *   - **Bare**, with no slash to vouch for it, so a closed set: `Dockerfile`,
+ *     `Makefile`, `LICENSE`, or a leading-dot name (`.gitignore`), and only when
+ *     not the tail of a longer token. An open rule would read `Note:5` and
+ *     `Step:2` as files, and an unresolvable one is fatal. A bare name that is
+ *     not on the list is written with its directory.
+ *
+ * One definition for `INLINE`, the pin-shaped pass and a declaration, so the
+ * three cannot disagree about what a file is.
+ */
+const NO_EXT_PATH = String.raw`(?:[A-Za-z_.@][\w.@-]*\/)+\.?[A-Za-z][\w-]*`;
+const NO_EXT_BARE = String.raw`(?<![\w.\/@-])(?:Dockerfile|Makefile|LICENSE|\.[A-Za-z][\w-]*)`;
+const NO_EXT_FILE = `${NO_EXT_PATH}|${NO_EXT_BARE}`;
+
+/**
  * A path token that looks like a repo file. Deliberately narrow: it needs a
  * slash or a known extension, so prose like `10:30` or `PASS:1` is not a
- * citation.
+ * citation. The extension-less shapes come last, so a path that has an extension
+ * is read exactly as it always was.
  */
 const INLINE = new RegExp(
-  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))` +
+  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh)|${NO_EXT_FILE})` +
     String.raw`(?:@(?<rev>[0-9a-fA-F]{7,40}))?` +
     String.raw`:(?<start>\d+)(?:[-–](?<end>\d+))?` +
     ANCHOR,
@@ -340,8 +370,14 @@ const INLINE = new RegExp(
  * strict grammar did not turn into a pin.
  */
 const PIN_SHAPED = [
-  /(?<file>(?:[\w.@-]+\/)*[\w.-]+\.\w+)@(?<rev>[^\s:`"]*):(?<start>\d+)(?:[-–](?<end>\d+))?/g,
-  /(?<file>(?:[\w.@-]+\/)*[\w.@-]+\.\w+):(?<start>\d+)(?:[-–](?<end>\d+))?@(?<rev>[^\s`"]*)/g,
+  new RegExp(
+    String.raw`(?<file>(?:[\w.@-]+\/)*[\w.-]+\.\w+|${NO_EXT_FILE})@(?<rev>[^\s:\x60"]*):(?<start>\d+)(?:[-–](?<end>\d+))?`,
+    "g",
+  ),
+  new RegExp(
+    String.raw`(?<file>(?:[\w.@-]+\/)*[\w.@-]+\.\w+|${NO_EXT_FILE}):(?<start>\d+)(?:[-–](?<end>\d+))?@(?<rev>[^\s\x60"]*)`,
+    "g",
+  ),
 ];
 
 /**
@@ -464,8 +500,9 @@ const DECLARATION =
  * with its pin when the citation carries one, since a declaration names a
  * citation exactly as the record writes it.
  */
-const DECLARED_LOCATION =
-  /^(?<file>[\w.@/-]+\.\w+)(?:@(?<rev>[0-9a-fA-F]{7,40}))?:(?<start>\d+)(?:[-–](?<end>\d+))?$/;
+const DECLARED_LOCATION = new RegExp(
+  String.raw`^(?<file>[\w.@/-]+\.\w+|${NO_EXT_FILE})(?:@(?<rev>[0-9a-fA-F]{7,40}))?:(?<start>\d+)(?:[-–](?<end>\d+))?$`,
+);
 
 /** A `file` cell in a table row: the first backticked path-looking token. */
 const CELL_FILE =

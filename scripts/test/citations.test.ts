@@ -3054,3 +3054,107 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * repo-87: a citation into a file with no extension matched nothing, so a wrong
+ * `Dockerfile` line was neither counted, verified nor unchecked.
+ */
+test("extractCitations reads a citation into a file with no extension, pinned and anchored", () => {
+  const found = extractCitations(
+    [
+      '- `tools/planner/Dockerfile@e79b04f:40 "RUN npm ci"`',
+      "- `tools/planner/Dockerfile:108-109`",
+      "- `.githooks/commit-msg:12`",
+      "- `docs/.gitkeep:1`",
+    ].join("\n"),
+  );
+  expect(found.map((c) => [c.file, c.rev, c.start, c.end, c.anchor])).toEqual([
+    ["tools/planner/Dockerfile", "e79b04f", 40, 40, "RUN npm ci"],
+    ["tools/planner/Dockerfile", undefined, 108, 109, null],
+    [".githooks/commit-msg", undefined, 12, 12, null],
+    ["docs/.gitkeep", undefined, 1, 1, null],
+  ]);
+});
+
+test("extractCitations reads a bare Dockerfile, LICENSE or dotfile, and nothing else bare", () => {
+  const read = (text: string) => extractCitations(text).map((c) => c.file);
+  expect(read("see `Dockerfile:90-93` and `LICENSE:3` and `Makefile:2` and .gitignore:48")).toEqual(
+    ["Dockerfile", "LICENSE", "Makefile", ".gitignore"],
+  );
+  // A bare name off the closed set has no slash to vouch for it, and an
+  // unresolvable citation is fatal, so prose like this must stay unread.
+  expect(read("Note:5 and Step:2 and Gate:1 and `foo:7`")).toEqual([]);
+  // Not the tail of a longer token.
+  expect(read("MyDockerfile:4 and x.gitignore:9 and a/b.LICENSE:2")).toEqual(["a/b.LICENSE"]);
+});
+
+test("extractCitations does not read a ratio, a date or a time as an extension-less path", () => {
+  const prose =
+    "low:40/high:60 and 10/12:30 and 2026/09/30:12 and 3/4:5 and https://host.example:8080/x and http://localhost:3000/api/v1 and 1/2:30";
+  expect(extractCitations(prose).filter((c) => c.source !== "prose")).toEqual([]);
+});
+
+test("extractCitations leaves a path with an extension exactly as it read it", () => {
+  const found = extractCitations('`a/b/c.ts@e79b04f:7 "x"` and `a/b/c.test.ts:2-3` and `d.mjs:4`');
+  expect(found.map((c) => [c.file, c.rev, c.start, c.end])).toEqual([
+    ["a/b/c.ts", "e79b04f", 7, 7],
+    ["a/b/c.test.ts", undefined, 2, 3],
+    ["d.mjs", undefined, 4, 4],
+  ]);
+});
+
+test("a malformed pin on an extension-less file is reported rather than dropped", () => {
+  const found = extractCitations(
+    '`tools/planner/Dockerfile@zzz:40` and `tools/planner/Dockerfile:40@zzz "RUN npm ci"`',
+  );
+  expect(found.map((c) => [c.file, c.malformed, c.start])).toEqual([
+    ["tools/planner/Dockerfile", "tools/planner/Dockerfile@zzz:40", 40],
+    ["tools/planner/Dockerfile", "tools/planner/Dockerfile:40@zzz", 40],
+  ]);
+});
+
+test("an evidence declaration can name an extension-less citation, pinned or not", () => {
+  expect(
+    extractDeclarations(
+      "<!-- citations: evidence tools/planner/Dockerfile:40, `tools/planner/Dockerfile@e79b04f:40`, .gitignore:48 -->",
+    ).map((d) => [d.file, d.rev, d.start]),
+  ).toEqual([
+    ["tools/planner/Dockerfile", undefined, 40],
+    ["tools/planner/Dockerfile", "e79b04f", 40],
+    [".gitignore", undefined, 48],
+  ]);
+});
+
+test("the CLI counts, verifies and fails an extension-less citation", () => {
+  const dockerfile = fs
+    .readFileSync(path.join(REPO, "tools/planner/Dockerfile"), "utf8")
+    .split("\n");
+  // Read at run time: a Dockerfile edit must not turn this test red by itself.
+  const line = dockerfile.indexOf("RUN npm ci") + 1;
+  expect(line).toBeGreaterThan(0);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-noext-"));
+  const record = path.join(dir, "repo-87-noext.md");
+  fs.writeFileSync(
+    record,
+    [
+      "# t",
+      "",
+      "## Review",
+      "",
+      `- right \`tools/planner/Dockerfile:${line} "RUN npm ci"\``,
+      `- wrong \`tools/planner/Dockerfile:${line} "NOT ON THAT LINE"\``,
+      `- bare \`tools/planner/Dockerfile:${line}\``,
+      "",
+    ].join("\n"),
+  );
+  const result = spawnSync("node", [CLI, record, "--section", "Review", "--require-anchors"], {
+    ...TEXT,
+    cwd: REPO,
+  });
+  expect(result.stdout).toMatch(/3 references in /);
+  expect(result.stdout).toMatch(summary(1, 1, 1, 0, 3));
+  expect(result.stdout).toContain(`MOVED      tools/planner/Dockerfile:${line} "NOT ON THAT LINE"`);
+  expect(result.status).toBe(EXIT.moved | EXIT.unanchored);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
