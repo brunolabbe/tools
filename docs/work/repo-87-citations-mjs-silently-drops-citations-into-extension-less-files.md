@@ -67,3 +67,61 @@ Citations to extensionless files like `Dockerfile` should be:
   correct and one incorrect Dockerfile citation, plus one script citation to a
   non-existent line; only the script citation is counted as MOVED, and the
   Dockerfile citations are silently dropped.
+- 2026-10-01 — Built on origin/main at b7fb3fb. Three changes, all in
+  `scripts/citations.mjs`: a new `NO_EXT_FILE` alternative in `INLINE`, the same
+  alternative in both `PIN_SHAPED` patterns (so a malformed pin on such a file
+  is reported, not dropped), and in `DECLARED_LOCATION` (so an evidence
+  declaration can name one). The rule: **pathed** (a directory that starts with
+  a letter, `_`, `.` or `@`, then a last segment that starts with a letter or a
+  dot and has no `@`) or **bare from a closed set** (`Dockerfile`, `Makefile`,
+  `LICENSE`, or a leading-dot name), never the tail of a longer token. A bare
+  name off that list must be written with its directory — an open rule would
+  read `Note:5` as a file, and an unresolvable one is fatal.
+  - The brief's repro now counts three: `node scripts/citations.mjs
+probe.md --section Review --require-anchors` printed `1 verified, 2 moved, 0
+unanchored, 0 unresolvable, 0 unchecked, 0 evidence — of 3 references, 3
+pinned`, exit 2, where it had printed `0 verified, 1 moved … of 1 reference`.
+  - **The brief's second Done-when line is met more strongly than it asks**: a
+    wrong citation into such a file is `MOVED` (exit 2), not "unanchored or
+    unchecked" — it is anchored, so it is checked like any other.
+  - **First draft was wrong on this corpus.** The pathed rule first took any
+    word characters as a directory, and read `low:40/high:60` in pl-10's
+    record as the file `40/high`. Found by diffing old against new extraction
+    over every `.md` in the tree; fixed by requiring a non-digit first
+    character in a directory. The diff is the measurement below.
+  - **Corpus effect**, measured by extracting every one of the 280 `.md` files
+    with the old and the new `extractCitations` (scratch script): 4,847
+    citations now, **24 added, 0 removed**, in 14 files. Run through
+    `citations.mjs --require-anchors` over each whole file: 4 `ok`, 2 `moved`, 2
+    `unresolvable` (a bare `Dockerfile` matches four tracked files), 16
+    `unanchored`. The 24 are the one `.gitignore` pair in repo-15 and repo-22
+    and `Dockerfile` citations in repo-33, repo-66, repo-87, dl-27, dl-37, dl-39,
+    dl-57, dl-72, pl-2, pl-31, pl-32 and `history.md`.
+  - **What fails CI as a result** (`node scripts/citations-gate.mjs --against
+origin/main`): `FAIL dl-37 — 9 verified, 1 unresolvable`, `FAIL pl-31 — 10
+verified, 2 unchecked, 1 unanchored`, `WORSE pl-32 — 5 failing, its entry
+allows 1`. These are the records' own citations, newly visible, not drift; none is
+    repaired in this branch because how is an open decision (see the report).
+    Dry-run in scratch, not committed: one anchor added in each of the three
+    records, and dl-37's bare name given its directory, takes dl-37 to `10
+verified … exit 0`, pl-31 to `11 verified … exit 0`, and pl-32 back to its
+    entry's one unresolvable (`21 verified, 1 unresolvable`).
+  - **For repo-84:** extraction now returns `file` for these as the written
+    path, unresolved (`Dockerfile`, `tools/planner/Dockerfile`, `.gitignore`); a
+    bare `Dockerfile` is then ambiguous in `makeResolver` (four tracked
+    matches), a pathed one resolves exactly. A script that rewrites a citation
+    must treat `.gitignore:48` and `Dockerfile:90-93` as citations, and
+    cannot assume a `.` in the file. Inserting the new block moved every line
+    of `scripts/citations.mjs` below `INLINE` down by 37, so the 8 moved citations
+    into it, in repo-48 (2) and repo-60 (6), are among the 26 the gate
+    reports in unchanged records, non-fatal by repo-47's rule.
+  - Folded in: `roles/reviewer.md` carried a 2026-09-30 paragraph warning that
+    this script drops such citations "until that is fixed"; rewritten in place
+    to say it reads them, and that a bare name off the closed set is not read.
+    Four lines for four, so no citation into that page moves.
+  - Tests, appended at the end of `scripts/test/citations.test.ts`: seven. With
+    the old `scripts/citations.mjs` swapped in, `npx vitest run
+scripts/test/citations.test.ts` gave `5 failed | 114 passed (119)`; the two
+    that pass on both are the negative guards (a ratio, a date and a URL are
+    not paths; an extension path reads as before). With the new one, `119
+passed (119)`.

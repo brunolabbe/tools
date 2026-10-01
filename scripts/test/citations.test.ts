@@ -3076,8 +3076,9 @@ test("extractCitations reads a citation into a file with no extension, pinned an
   ]);
 });
 
+const read = (text: string) => extractCitations(text).map((c) => c.file);
+
 test("extractCitations reads a bare Dockerfile, LICENSE or dotfile, and nothing else bare", () => {
-  const read = (text: string) => extractCitations(text).map((c) => c.file);
   expect(read("see `Dockerfile:90-93` and `LICENSE:3` and `Makefile:2` and .gitignore:48")).toEqual(
     ["Dockerfile", "LICENSE", "Makefile", ".gitignore"],
   );
