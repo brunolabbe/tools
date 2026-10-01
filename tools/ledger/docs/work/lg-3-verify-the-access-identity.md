@@ -51,4 +51,140 @@ passing through Access.
    test proves it.
 6. Gates green, the container-build workflow included.
 
+## Decisions — answered 2026-10-01 by the owner at intake, not open
+
+Both asked by the orchestrator through `AskUserQuestion`, each with the
+orchestrator's recommendation first, and each answered with it.
+
+**1. The question was:** lg-3's 401 and 403 have no error code anywhere — where
+should they live? Options: add to `@webtools/core` / ledger-local in
+`@ledger/contract` / the builder brings it back as options.
+
+**The answer: add them to `@webtools/core`.** They describe the transport — who
+is at the door — and not the ledger's domain; any tool behind an
+identity-aware proxy has them.
+
+**2. The question was**, asked after the orchestrator measured that the
+downloader maps every `ErrorCode` exhaustively (`Record<ErrorCode, …>` in
+`tools/downloader/api/src/http-errors.ts` and
+`tools/downloader/web/src/lib/error-presentation.ts`), so a new core code forces
+edits under `tools/downloader`, and release-please routes changelogs by path:
+how should lg-3 land? Options: two PRs, `refactor(core)` first / one PR
+accepting a downloader release / ledger-local codes instead.
+
+**The answer: two PRs, `refactor(core)` first.** The first carries only the
+codes and the entries every exhaustive map needs to compile; `refactor` is
+`hidden` in `release-please-config.json`, so the downloader paths it touches cut
+no release. The second, this ticket's build, is `feat(ledger)` stacked on it.
+
 ## Log
+
+### 2026-10-01 — built, as two stacked branches (Opus 5.5 builder)
+
+**Branch 1, `lg-3-core-auth-codes`** (`refactor(core)`, on `main` at `b7fb3fb`):
+core gains `UNAUTHENTICATED` and `FORBIDDEN`, neither retryable, and the
+downloader's two exhaustive maps gain entries: 401 and 403 in its status table,
+and presentation copy that says plainly the downloader has no sign-in and raises
+neither. The planner's and the ledger's status tables are `Partial`, so they
+needed nothing there. `tools/downloader/web/test/mock-api.test.ts`'s coverage
+test lists the pair as never raised there. Nothing raises either code on that
+branch.
+
+- **The names.** `FORBIDDEN` is HTTP's own reason phrase for 403, the same
+  convention as core's `BAD_REQUEST` and `NOT_FOUND`. 401's phrase is
+  "Unauthorized", which names the wrong failure — it is _authentication_ that
+  failed — so the code is `UNAUTHENTICATED`, which is also what gRPC calls it.
+  An `UNAUTHORIZED` would also have read too close to the downloader's own
+  `AUTH_REQUIRED`, which is about a _source site_ wanting a session.
+- **Not `HUMAN_CHECK_FAILED`**, the nearest core code: that one asks _whether_ a
+  person is there, this asks _which_ person. The downloader maps that code to
+  403 rather than 401 because a 401 must carry `WWW-Authenticate` (RFC 9110
+  §15.5.2), and the ledger's 401 here sends none either: Access has no
+  registered scheme to name, and §7 and this brief both say 401. A gate may
+  want to weigh that.
+- The test that checks every code has presentation copy failed before the copy
+  existed. Before the build was rebuilt, it compared stale `dist` codes against
+  the source table — `npx vitest run tools/downloader/web/test/error-presentation.test.ts`
+  failed with `+ "FORBIDDEN"` and `+ "UNAUTHENTICATED"`. After `npm run build`:
+  `14 passed (14)` files, `273 passed (273)` tests across the touched downloader,
+  ledger and planner suites.
+- `node scripts/preflight.mjs --base origin/main --title "refactor(core): add UNAUTHENTICATED and FORBIDDEN to the shared taxonomy (lg-3)"`
+  → `preflight passed (exit 0)`, its title check reporting that `refactor` is
+  hidden in `release-please-config.json`, so no changelog line. It reports 19
+  moved citations in 12 records this branch does not change, and fails none of
+  them. One of the 19 is caused by this branch: `dl-53`'s
+  `error-presentation.ts:296`, which the new entries push down.
+
+**Branch 2, `lg-3-verify-access-identity`** (`feat(ledger)`, on branch 1):
+
+- **Verified with `node:crypto`, not a JWT library.** Nothing in the lockfile
+  verifies JWTs. Adding one would have meant an `npm install` this worktree may
+  not run, and a `package-lock.json` change that lg-1 may also touch. Access
+  signs with RS256 only, so `api/src/access.ts` accepts that algorithm and
+  nothing else, and checks it before looking up any key. That closes off
+  `alg: none` and the HMAC-with-a-public-key confusion, which is the part of JWT
+  a library mostly exists to negotiate. The signature check itself is Node's.
+  Checked: signature, `aud` (a string or an array), `exp`, `nbf` when present,
+  **and `iss`**, which the brief did not ask for. `iss` costs one comparison
+  against the issuer the team name already fixes, and refuses a token minted
+  for another team with the same audience.
+- **The key set** comes from `https://<ACCESS_TEAM>.cloudflareaccess.com/cdn-cgi/access/certs`.
+  `ACCESS_TEAM` must be a single DNS label, so its own value cannot steer the
+  host anywhere else. The fetch refuses redirects and times out after 5 s. The
+  set is cached for an hour, and refreshed sooner when a token names a key id
+  the set lacks, which is how a rotation is picked up. Concurrent callers share
+  one fetch, and no fetch starts within 30 s of the last attempt, so a flood of
+  forged key ids costs one fetch per window. If the key endpoint fails, a key
+  already held stays in use. A key never seen gets `UNREACHABLE` (502), not a
+  401, because that failure is not the caller's.
+- **Every token failure is one `UNAUTHENTICATED`**, carrying no details. The
+  reason is logged as a `reason` field and never sent to the caller. An address
+  that verifies but is not mapped gets `FORBIDDEN`, and the address is logged
+  for the operator.
+- **What the check covers is decided by the route the request matched**
+  (`request.routeOptions.url`), not by the URL it arrived with. That turned out
+  to matter. Measured with `inject`: `/%61pi/me` and `/api/%6de` both reach
+  `GET /api/me`, and `//api/me` and `/api/me/` reach no route. With the hook
+  mutated to read `request.url`, the test for this fails with
+  `expected 401 to be 403`, because the request then reaches only `personOf`'s
+  fail-closed fallback.
+- **The UI's own files are not behind the check** — every API route but
+  `/api/health` is. This is a reading of "every route", and the dispatch report
+  carries it as an open decision. The bundle is this public repository's build
+  output and holds no data. `ledger.yml` asks the image for `/` with no token,
+  and gating the page would fail that step with nothing gained.
+- **With no Access settings, the API still starts and refuses every API route
+  but health**, logging a warning at boot. It does not refuse to start, so
+  `ledger.yml`'s smoke run, which sets nothing, still passes.
+  `compose.ledger.prod.yaml` refuses instead: it reads
+  `LEDGER_ACCESS_{TEAM,AUD,PEOPLE}` with `:?`. Without that, the first release
+  would have deployed as a ledger that refuses both people. Measured:
+  `docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml config` exits
+  1 naming all three when they are unset, and renders them when they are set.
+- **Development:** `DEV_IDENTITY=<address>`, which must be in `ACCESS_PEOPLE`.
+  `loadApiConfig` refuses it when `NODE_ENV=production`, after the overrides
+  are applied, so a test cannot build a configuration the process would refuse.
+- **For later tickets:** `GET /api/me` is the first route behind the check, and
+  `Person` and `MeResponse` are new in `@ledger/contract`. A route reads the
+  caller with `personOf(request)`, which throws `UNAUTHENTICATED` rather than
+  hand back `null`. `person.id` is the configured name that lg-5's `people`
+  table can key on.
+- **Folded in:** `docs/02-DEPLOYMENT.md` still said "how the API reads and checks
+  it is still to be designed", which became false with this branch.
+  `.env.prod.example` and `tools/ledger/.env.example` gain the new settings.
+- `npx vitest run --project ledger` → `7 passed (7)` files, `53 passed (53)`
+  tests, 28 of them new in `api/test/access.test.ts` and
+  `api/test/config-access.test.ts`. Each guarding check was mutated to prove its
+  test can fail:
+  - Removing the signature, audience, expiry and algorithm checks together
+    failed 6 of 20 access tests.
+  - Setting the refetch floor to 0 failed the flood test with
+    `expected … to have a length of 2 but got 3`.
+  - Disabling the production refusal failed both config tests that cover it.
+- **The container itself was not built:** this sandbox has no Docker daemon.
+  Instead, the built `dist` was run the way the image runs it (`NODE_ENV=production`,
+  `WEB_DIR` set, nothing else). Health answered `200`, `/` with `Accept: text/html`
+  served `<div id="root">`, and `/api/me` answered `401`. The same run with
+  `DEV_IDENTITY` set exited 1 with `"msg":"failed to start"` and
+  `DEV_IDENTITY is set in production mode`. Done-when 6's container leg is
+  `ledger.yml` on the pull request.

@@ -57,6 +57,15 @@ services:
       # comment there. Change all four together.
       TRUST_PROXY: "172.30.42.0/24"
 
+      # Who may use the tool (lg-3), from the host's `.env`. The API verifies
+      # Access's signed token on every API route but health, against the keys
+      # of this team, for this application's AUD tag, and maps the address to
+      # a person. Required: without them every API route is refused, so compose
+      # refuses first and names the variable. See `.env.prod.example`.
+      ACCESS_TEAM: "${LEDGER_ACCESS_TEAM:?set LEDGER_ACCESS_TEAM in .env - see .env.prod.example}"
+      ACCESS_AUD: "${LEDGER_ACCESS_AUD:?set LEDGER_ACCESS_AUD in .env - see .env.prod.example}"
+      ACCESS_PEOPLE: "${LEDGER_ACCESS_PEOPLE:?set LEDGER_ACCESS_PEOPLE in .env - see .env.prod.example}"
+
     # A Node process with SQLite behind it and two users. Bounded so a runaway
     # is attributable rather than taking the host down with the other tools.
     deploy:

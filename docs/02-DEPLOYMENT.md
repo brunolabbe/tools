@@ -392,9 +392,11 @@ another tool's policy, hands that person the other tools too.
   nothing in the ledger is a capability link, and what it holds is bank history.
 - **Access is its identity, not only its gate.** The tool has no login of its
   own; who imported a statement or paid a receipt is the address Access puts on
-  the request. How the API reads and checks it is still to be designed — see
-  the tool's [roadmap](../tools/ledger/docs/02-ROADMAP.md) — and until it is,
-  treat the loopback port as what it is: a way in that Access never sees.
+  the request. The API verifies Access's signed token on every API route but
+  `/api/health`, so the loopback port answers health and refuses the rest. It
+  needs the team name, the application's AUD tag and the address-to-person
+  list — `LEDGER_ACCESS_TEAM`, `LEDGER_ACCESS_AUD` and `LEDGER_ACCESS_PEOPLE`
+  in `.env` — and `compose.ledger.prod.yaml` refuses to start without them.
 - **Never "widen it" to public**, below. The next section is about tools whose
   data is nobody's in particular; this one's is two named people's.
 

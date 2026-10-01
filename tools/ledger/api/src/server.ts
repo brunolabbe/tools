@@ -13,20 +13,30 @@ import { AppError } from "@ledger/contract";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import { createIdentityVerifier } from "./access.ts";
+import type { Fetch } from "./access.ts";
 import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
 import { toErrorResponse } from "./http-errors.ts";
+import { registerIdentityCheck } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerHealthRoute } from "./routes/health.ts";
+import { registerMeRoute } from "./routes/me.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
   logger?: AppLogger;
   now?: () => Date;
+  /**
+   * What fetches Access's signing keys. Injected in tests, which serve their
+   * own key set and never reach Cloudflare; the URL it is called with is still
+   * the one built from configuration.
+   */
+  fetch?: Fetch;
 }
 
 export interface App {
@@ -79,7 +89,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
 
   registerErrorHandling(server, context);
   registerCors(server, config);
+  // Before any route, so every route registered after it is covered.
+  registerIdentityCheck(
+    server,
+    createIdentityVerifier({
+      config: config.access,
+      fetch: options.fetch ?? globalThis.fetch,
+      now,
+      logger,
+    }),
+  );
   registerHealthRoute(server, context);
+  registerMeRoute(server);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
