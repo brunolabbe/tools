@@ -13,11 +13,11 @@
  * that cannot be read. If a new code would make sense to a tool that has never
  * heard of a bank account, it belongs in core instead.
  *
- * **The list is empty, and that is the honest state of a scaffold.** The domain
- * has not been designed yet, and a code written ahead of the thing that raises
- * it is a guess at a sentence nobody has had to say. Each one arrives with the
- * ticket that first throws it — the same way `ITEM_NOT_FOUND` arrived with pl-10
- * in the planner's catalog.
+ * **The list grows one ticket at a time.** A code written ahead of the thing
+ * that raises it is a guess at a sentence nobody has had to say, so each one
+ * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
+ * arrived with pl-10 in the planner's catalog. The first four are the statement
+ * parser's (lg-1).
  */
 
 import {
@@ -32,7 +32,30 @@ import {
 
 export type { AppErrorOptions } from "@webtools/core";
 
-export const LEDGER_ERROR_CODES = [] as const;
+export const LEDGER_ERROR_CODES = [
+  // --- The statement paste ---
+  //
+  // All four are about one pasted text and are terminal: the same text fails
+  // the same way, so the caller has to change the paste, never retry it. Each
+  // carries `details.line`, the 1-based line of the text it names, so the UI
+  // can point at the place rather than say "something is wrong".
+  /**
+   * A line the parser does not recognise — or a row cut short, an amount that is
+   * not an amount, a date that is not a day. Nothing is ever skipped, because a
+   * skipped line is a row that silently vanishes from the books.
+   */
+  "STATEMENT_UNRECOGNIZED_LINE",
+  /**
+   * A row's balance is not the previous row's balance plus its amount. The
+   * paste is missing a row, or one was altered; `details` carries the unexplained
+   * amount, since "how much money went missing" is the question the user has.
+   */
+  "STATEMENT_CHAIN_BROKEN",
+  /** A month's `Total` line is not the sum of that month's rows, or is absent. */
+  "STATEMENT_TOTAL_MISMATCH",
+  /** A row's echo line does not repeat its own date, description and amount. */
+  "STATEMENT_ECHO_MISMATCH",
+] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
 export const ERROR_CODES = [...CORE_ERROR_CODES, ...LEDGER_ERROR_CODES] as const;
@@ -42,6 +65,11 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 /** Default user-facing copy. Layers may override with something more specific. */
 export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   ...CORE_ERROR_MESSAGES,
+  STATEMENT_UNRECOGNIZED_LINE: "A line in the pasted statement was not recognised.",
+  STATEMENT_CHAIN_BROKEN:
+    "The pasted statement does not add up: a row's balance does not follow from the one before it.",
+  STATEMENT_TOTAL_MISMATCH: "A month's total in the pasted statement does not match its rows.",
+  STATEMENT_ECHO_MISMATCH: "A row in the pasted statement does not match its own repeated line.",
 };
 
 /**

@@ -4,8 +4,8 @@
  * Mapping per-route is how a service ends up answering 500 for a typo in a
  * date and 404 for an outage. Everything leaves through here instead, and
  * anything unmapped is a 500 — the honest default for "we did not think about
- * this yet". Only core codes are mapped, because the ledger has none of its own
- * yet; each one it grows gets its line here in the same change.
+ * this yet". Each ledger code gets its line here in the same change that adds it
+ * to the contract.
  */
 
 import { AppError, type ErrorCode, type ErrorResponse } from "@ledger/contract";
@@ -22,6 +22,12 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   CANCELED: 499,
   UNREACHABLE: 502,
   TIMEOUT: 504,
+  // A paste that is well-formed HTTP and wrong as a statement: 422, not the 400
+  // of a request we could not read at all.
+  STATEMENT_UNRECOGNIZED_LINE: 422,
+  STATEMENT_CHAIN_BROKEN: 422,
+  STATEMENT_TOTAL_MISMATCH: 422,
+  STATEMENT_ECHO_MISMATCH: 422,
 };
 
 /**

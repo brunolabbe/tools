@@ -18,17 +18,17 @@ by hand. Both people use it, mostly from a phone.
 
 ```
 contract     types, error taxonomy, zod schemas — no logic
+books        pure: the statement parser and its proofs; no model, network or clock
 api          Fastify, persistence, HTTP — the only place that reads process.env
 web          React + Vite UI, mobile-first
 e2e          Playwright specs — none yet; e2e/README.md says what earns the first
 ```
 
-_Planned_, each arriving with the ticket that first needs it rather than as an
-empty package now: **`books`**, pure — the statement-paste parser, the
-running-balance chain check, the split arithmetic and the classification rules,
-with no model, no network and no clock; and **`receipts`**, the one package
-that talks to a model, reading a receipt photo. The name is `books` because
-`ledger` is the tool.
+`books` holds the statement-paste parser and its running-balance proof (lg-1);
+the split arithmetic and the classification rules join it as their tickets
+land. The name is `books` because `ledger` is the tool. _Planned_, arriving
+with the ticket that first needs it rather than as an empty package now:
+**`receipts`**, the one package that talks to a model, reading a receipt photo.
 
 ## Commands
 
@@ -65,6 +65,6 @@ is open, never its path. The contract's `HealthResponse` has no field for it, an
 `api/test/health.test.ts` holds the route to that with a real file.
 
 **Ledger error codes live in `contract/src/errors.ts`**, in
-`LEDGER_ERROR_CODES`, which is empty today on purpose. A code arrives with the
-ticket that first throws it, with its status in `api/src/http-errors.ts` in the
+`LEDGER_ERROR_CODES`, and grows on purpose one ticket at a time. A code arrives
+with the ticket that first throws it, with its status in `api/src/http-errors.ts` in the
 same change.

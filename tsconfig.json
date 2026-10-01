@@ -24,6 +24,7 @@
     { "path": "./tools/planner/api" },
     { "path": "./tools/planner/web" },
     { "path": "./tools/ledger/contract" },
+    { "path": "./tools/ledger/books" },
     { "path": "./tools/ledger/api" },
     { "path": "./tools/ledger/web" },
 

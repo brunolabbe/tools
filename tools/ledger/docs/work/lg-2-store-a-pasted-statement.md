@@ -21,6 +21,8 @@ overlap routinely, and a gap between two pastes is money nobody can explain
 
 1. Migration 1 in `api/src/db/schema.ts`: a `statement_rows` table holding
    everything `ParsedStatement` carries, plus the import it came from and when.
+   `seq` comes back 0-based within the paste (oldest = 0): the parser cannot
+   know the history, so offset it by what is already stored (lg-1).
    A row's identity is (date, description, amount, balance), with a unique index
    on it.
 2. `POST` on a new route in `contract/src/api.ts`: paste text in, and a report
