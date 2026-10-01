@@ -12,8 +12,7 @@
  * the whole point is that nobody will. The scan therefore reads every source
  * file in the repository, including ones that do not exist yet.
  *
- * It used to read only workspaces' `src` — every `.ts` one level under
- * `packages/` and two under `tools/` — while `CLAUDE.md` called it repo-wide.
+ * It used to read only workspaces' `src` while `CLAUDE.md` called it repo-wide:
  * `scripts/`, which spawns `git`, `gh` and `npm` more than anything else here,
  * every `test/` and `e2e/`, and every `.mjs` sat outside it (repo-75).
  *
@@ -21,6 +20,7 @@
  */
 
 import { describe, expect, test } from "vitest";
+import { SPAWN_CALLS, callsWithoutShellFalse } from "./support/spawn-calls.ts";
 import { repoSources } from "./support/workspaces.ts";
 
 /** Every source file in the repository, tracked or new — see `repoSources`. */
@@ -75,19 +75,88 @@ describe("no shell reaches a child process", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("every file that spawns says `shell: false` explicitly", () => {
+  test("every file that spawns says `shell: false` at each of its calls", () => {
     // The default is already false, so this is about intent: a spawn without
-    // the flag reads as one nobody thought about. `spawnSync`, `execFile` and
-    // `execFileSync` take the same `shell` option `spawn` does and are asked
-    // the same question — a pattern narrowed to `spawn(` alone saw none of
-    // them (repo-77).
-    const offenders = SOURCES.filter((source) => {
-      const text = code(source.text);
-      const spawns =
-        /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(/u.test(text) &&
-        /from\s+["']node:child_process["']/u.test(text);
-      return spawns && !/\bshell\s*:\s*false/u.test(text);
-    }).map((source) => source.file);
+    // the flag reads as one nobody thought about. Asked of each call, not of the
+    // file: one `shell: false` string used to excuse every other call in its
+    // file, and a file of nine `spawnSync` calls passed on it (repo-83).
+    // `spawnSync`, `execFile` and `execFileSync` take the same option `spawn`
+    // does and are asked the same question — a pattern narrowed to `spawn(`
+    // alone saw none of them (repo-77), which is why `SPAWN_CALLS` is asserted
+    // member by member below. What carrying the flag means is in `spawn-calls.ts`
+    // (spawn, spawnSync, execFile, execFileSync).
+    const offenders = SOURCES.flatMap((source) =>
+      callsWithoutShellFalse(source.text).map((call) => `${source.file}:${call.line} ${call.call}`),
+    );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the per-call check can fail (repo-83)", () => {
+  // The fixtures are source text, and this file is itself scanned. The import
+  // line is assembled so that the scan does not take a fixture for a spawning
+  // file, and every call below sits in a string, where `callsWithoutShellFalse`
+  // would read it only if this file imported `node:child_process` — which it
+  // does not, and must not start to.
+  const IMPORT = `import { spawn, spawnSync } from "node:child${"_"}process";\n`;
+  const fixture = (body: string): string => IMPORT + body;
+
+  test("a call lacking its own `shell: false` fails beside one that has it", () => {
+    // The shape the file-level test passed: one `shell: false` string
+    // somewhere, and every other call excused by it.
+    const text = fixture(
+      [
+        `spawnSync("git", ["a"], { encoding: "utf8", shell: false });`,
+        `spawnSync("git", ["b"], { encoding: "utf8" });`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text)).toEqual([
+      { line: 3, call: `spawnSync("git", ["b"], { encoding: "utf8" })` },
+    ]);
+  });
+
+  test("a call reaches `shell: false` through a named literal or a spread of one", () => {
+    const text = fixture(
+      [
+        `const BASE = { encoding: "utf8", shell: false };`,
+        `const WITH_STDIO = { ...BASE, stdio: "pipe" };`,
+        `spawnSync("git", ["a"], BASE);`,
+        `spawnSync("git", ["b"], WITH_STDIO);`,
+        `spawnSync("git", ["c"], { ...WITH_STDIO, cwd: "." });`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text)).toEqual([]);
+  });
+
+  test("a literal that does not say it, or options built elsewhere, do not excuse a call", () => {
+    const text = fixture(
+      [
+        `const PLAIN = { encoding: "utf8" };`,
+        `spawnSync("git", ["a"], PLAIN);`,
+        `spawnSync("git", ["b"], makeOptions());`,
+        `spawnSync("git", ["c"]);`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text).map((call) => call.line)).toEqual([3, 4, 5]);
+  });
+
+  test("a comment, a definition and a file that does not import child_process are not calls", () => {
+    expect(
+      callsWithoutShellFalse(fixture(`// spawnSync("git", [])\nfunction spawn(command) {}\n`)),
+    ).toEqual([]);
+    expect(callsWithoutShellFalse(`spawnSync("git", ["a"]);\n`)).toEqual([]);
+  });
+
+  test("every member of SPAWN_CALLS is asked, and a pattern narrowed to `spawn(` misses them", () => {
+    // What repo-83 found unguarded: narrowing the call pattern back to `spawn(`
+    // alone left the whole scan green, because every file that called the others
+    // also said `shell: false` somewhere. Here each member is a fixture of its
+    // own, so dropping one from `SPAWN_CALLS` fails on that member by name.
+    for (const name of ["spawn", "spawnSync", "execFile", "execFileSync"]) {
+      const text = fixture(`${name}("git", ["a"], { encoding: "utf8" });\n`);
+      expect(SPAWN_CALLS, name).toContain(name);
+      expect(callsWithoutShellFalse(text), name).toHaveLength(1);
+      expect(callsWithoutShellFalse(text, ["spawn"]), name).toHaveLength(name === "spawn" ? 1 : 0);
+    }
   });
 });

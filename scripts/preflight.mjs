@@ -1008,7 +1008,10 @@ export function parseMergeTreeConflicts(output) {
  * @param {typeof spawnRaw} [spawn]
  */
 export function mergeTreeConflicts(repo, ours, theirs, spawn = spawnRaw) {
-  const result = spawn("git", ["merge-tree", "--write-tree", ours, theirs], { cwd: repo });
+  const result = spawn("git", ["merge-tree", "--write-tree", ours, theirs], {
+    cwd: repo,
+    shell: false,
+  });
   const stdout = result.stdout ?? "";
   if (stdout.trim() === "") {
     throw fail(
@@ -1655,7 +1658,11 @@ export function parseArgs(argv) {
 export function main(argv = process.argv.slice(2)) {
   const { base, title, repo: repoArg } = parseArgs(argv);
   const repo =
-    repoArg ?? execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+    repoArg ??
+    execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      shell: false,
+    }).trim();
 
   const results = preflight(repo, { base, title });
   let bitmask = 0;

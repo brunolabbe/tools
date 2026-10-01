@@ -73,7 +73,7 @@ const REAL_CI_YAML = fs.readFileSync(
 function makeRepo() {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-")));
   const git = (...args: string[]) => {
-    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", shell: false });
     if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
     return result.stdout.trim();
   };
@@ -701,7 +701,7 @@ test("mergeTreeConflicts reports a real git failure rather than treating it as a
  * failure (round 2's fifth med finding).
  */
 function realRun(command: string, args: string[], options: { cwd?: string } = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd });
+  const result = spawnSync(command, args, { encoding: "utf8", cwd: options.cwd, shell: false });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")}\n${result.stderr}`);
   return result.stdout;
 }
@@ -807,7 +807,7 @@ test("preflight isolates a throwing check to its own bit and still runs the othe
 // --- the CLI's own usage guard, spawned for real ----------------------------
 
 function cli(args: string[]): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8", shell: false });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -841,6 +841,7 @@ test("the CLI never leaks next-id.mjs's id-sweep wording on a bad --base", () =>
       [CLI, "--repo", repo.dir, "--base", "no-such-base"],
       {
         encoding: "utf8",
+        shell: false,
       },
     );
     expect(result.status).toBe(EXIT.setup);
@@ -861,6 +862,7 @@ test("the CLI never leaks next-id.mjs's id-sweep wording when gh fails inside ch
 
     const result = spawnSync(process.execPath, [CLI, "--repo", repo.dir, "--base", base], {
       encoding: "utf8",
+      shell: false,
       env: { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` },
     });
     expect(result.error).toBeUndefined();

@@ -76,7 +76,7 @@ The options as filed:
   `CLAUDE.md` states ("never invoke a shell"). Leaves the call pattern
   unguarded, as-is.
 
-## Build (decided: (a), deferred — not built)
+## Build (decided: (a); built 2026-10-01)
 
 1. Rewrite "every file that spawns says `shell: false` explicitly" to
    evaluate each matched call's own argument list plus, where a call passes a
@@ -91,7 +91,7 @@ The options as filed:
    `scripts/review-record.mjs` (7), `scripts/test/preflight.test.ts` (5) —
    re-measure first, this is a snapshot.
 
-## Done when (decided: (a), deferred — not built)
+## Done when (decided: (a); built 2026-10-01)
 
 - A call to `spawnSync`, `execFile` or `execFileSync` whose own options carry
   no `shell: false`, in a file that has one elsewhere, fails
@@ -272,3 +272,74 @@ The options as filed:
   calls was measured at `6418f17`. The scripts `scripts/review-record.mjs` and
   `scripts/preflight.mjs` have changed since then, so the builder will
   re-measure before building.
+- 2026-10-01 — **Deferral lifted and built, option (a).** The owner selected
+  repo-83 for this batch at intake on 2026-10-01 (asked via `AskUserQuestion`,
+  "which groups go into this batch", the repo-tooling group chosen); the
+  deferral's stated reason was repo-47 editing `scripts/preflight.mjs`, and
+  repo-47 merged as `9fadda7`. Built at base `b7fb3fb`.
+  - **The brief's population was stale, as it warned.** Re-measured by running
+    the brief's own `percall.mjs` (extracted from this file's first code block)
+    at `b7fb3fb`: `files scanned 493, importing child_process 31, calls 157,
+calls lacking own shell:false 12`, against the brief's 28 / 137 / 14. By
+    file the brief's `preflight.mjs (2), review-record.mjs (7),
+preflight.test.ts (5)` is now `preflight.mjs (2), review-record.mjs (2),
+preflight.test.ts (5)` plus three in `scripts/citations-gate.mjs` that did
+    not exist at the brief's head. Those three are a false positive of
+    `percall.mjs`, not of the new check: each passes `options`, a binding that
+    spreads `GIT_EXEC_OPTIONS` (`scripts/citations-gate.mjs:811`, `:362`), which
+    says `shell: false` — `percall.mjs` resolves one level of name and not a
+    spread, and the new check resolves the chain. Real offenders: **9**.
+  - **Red before the fix.** The rewritten test run over the unfixed tree:
+    `npx vitest run packages/core/test/spawn-safety.test.ts` failed 1 of 10
+    ("every file that spawns says `shell: false` at each of its calls") and
+    named exactly the nine — `scripts/preflight.mjs:1011` and `:1658`,
+    `scripts/review-record.mjs:317` and `:346`, `scripts/test/preflight.test.ts:76`,
+    `:704`, `:810`, `:839`, `:862`. After adding `shell: false` to each, the same
+    command passes 10 of 10; `percall.mjs` over the tip reports `calls lacking
+own shell:false 3`, only the three spread-resolved ones above.
+  - **The guard fails when the call list narrows.** With `SPAWN_CALLS` in
+    `packages/core/test/support/spawn-calls.ts` temporarily set to `["spawn"]`,
+    the same command failed 3 of 10 — "a call lacking its own `shell: false`
+    fails beside one that has it", "a literal that does not say it, or options
+    built elsewhere, do not excuse a call" and "every member of SPAWN_CALLS is
+    asked" (`expected [ 'spawn' ] to include 'spawnSync'`). The production scan
+    itself stays green under that mutation, which is the brief's own finding:
+    nothing in the tree differs, so only the fixtures can notice. Restored
+    afterwards.
+  - **Where the check lives.** `callsWithoutShellFalse` and `SPAWN_CALLS` in
+    `packages/core/test/support/spawn-calls.ts`, beside `workspaces.ts`, rather
+    than inline in the test, so the fixtures can call it with a narrowed list.
+    A call is safe when its own argument list says `shell: false`, or names an
+    identifier whose same-file object literal does — directly or through a
+    spread, to a fixpoint. **Documented limits**, in that file's header: options
+    built by a call, destructured, imported or assigned after the literal read as
+    unsafe (say `shell: false` at the call); a safe identifier anywhere in the
+    argument list is accepted; string literals are skipped when matching
+    brackets, regex literals and template `${}` are not understood.
+  - **Citations: no record fails, and none was repointed.**
+    `node scripts/citations-gate.mjs --against origin/main` exits 0 with `139
+enforced, 0 failing`. The edit still moves lines cited by merged records
+    outside this branch, which repo-47 makes reported debt and not a failure:
+    at `b7fb3fb` the same command prints 17 moved citations in 10 records outside the
+    branch's; at the tip, 36 in 12 (39 before the three repairs below). Three of the
+    new ones were breakages and were avoided rather than repointed:
+    `spawn-safety.test.ts:45` (repo-75) would have moved by the one import
+    line, so the header paragraph was rewrapped one line shorter; `:78`
+    (repo-75) anchors "every file that spawns says", so the test keeps that
+    wording; `:87` (repo-77) anchors "execFileSync)", so the comment is laid out
+    to keep that text on line 87. All three resolve at the tip. **What remains
+    is the line shifts from adding `shell: false`**: `scripts/review-record.mjs`
+    +1 line at `:347` (15 of the 19 new moved citations sit below it),
+    `scripts/preflight.mjs` +3 at `:1011` and +4 at `:1658`,
+    `scripts/test/preflight.test.ts` +1 at `:842` and `:863` (3 of the 19; the other is
+    `preflight.mjs:1278`). None of those
+    records is edited here, so nothing fails; the debt is the same kind the
+    repo-47 option-B rule describes and rides on the next branch that edits
+    those records.
+  - **Could have folded in, did not:** repointing those merged records'
+    citations (12 records outside this branch) — repo-47's rule says
+    a branch repoints only what it edits, and doing it here would widen a
+    one-check change into a record sweep; and `scripts/review-record.mjs`'s
+    repo-86 work, held to a later batch and sharing that file.
+  - `npm run check` exit 0; `npm test -- --project core --project repo` 19
+    files, 689 of 689 passed.

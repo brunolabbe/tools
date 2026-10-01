@@ -326,7 +326,7 @@ function buildDiff(oldText, newText) {
         "section-file",
         "inserted-block",
       ],
-      { cwd: dir, encoding: "utf8" },
+      { cwd: dir, encoding: "utf8", shell: false },
     );
     if (result.error) throw result.error;
     // --no-index exits 0 when the files are identical and 1 when they differ;
@@ -345,6 +345,7 @@ function repoRootFor(p) {
   const dir = fs.statSync(p).isDirectory() ? p : path.dirname(p);
   return execFileSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], {
     encoding: "utf8",
+    shell: false,
   }).trim();
 }
 
