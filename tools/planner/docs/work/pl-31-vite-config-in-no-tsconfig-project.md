@@ -313,7 +313,7 @@ Spot-checks worth naming:
   `.devcontainer/devcontainer.json:102 "forwardPorts"`
   `"forwardPorts": [8080, 5173, 8099, 8090, 5183]`,
   `.devcontainer/devcontainer.json:108 "planner web"` labels `5183`
-  "planner web". `tools/planner/Dockerfile:110` is `ENV HOST=0.0.0.0`.
+  "planner web". `tools/planner/Dockerfile:110 "ENV HOST=0.0.0.0"` is `ENV HOST=0.0.0.0`.
 
 #### Findings
 

@@ -125,3 +125,24 @@ scripts/test/citations.test.ts` gave `5 failed | 114 passed (119)`; the two
     that pass on both are the negative guards (a ratio, a date and a URL are
     not paths; an extension path reads as before). With the new one, `119
 passed (119)`.
+- 2026-10-01 — **Decision, from the owner via the orchestrator, answered
+  through AskUserQuestion the same day:** the three newly failing records are
+  repaired in this branch, one pull request, under a hidden-type title. The
+  options were one pull request with the repairs, two pull requests (a
+  records-only `docs(repo)` repair first, this one a draft behind it), or
+  grandfathering; the first was chosen. Superseding the previous entry's "none
+  is repaired in this branch": six citations are now repaired, citation text
+  only, no verdict, row or severity touched — dl-37 line 138 qualified to
+  `tools/downloader/Dockerfile` with an anchor, pl-31 line 316 anchored, pl-32
+  lines 146-148 anchored (four citations).
+  - **Why not `fix`:** preflight's title check fails a changelog-reaching type
+    when every `tools/` path in the diff is markdown, and release-please would
+    cut downloader and planner versions over a records repair. `scripts/`
+    belongs to no release component, so a hidden type loses no changelog line.
+  - **Why `chore` and not `ci`:** both are `hidden: true` in
+    `release-please-config.json`. `ci` names the pipeline and its workflow
+    files; this is a script's parsing rule plus the records it newly reaches,
+    which `chore` says without claiming CI changed. The title is `chore(repo):
+read citations into files with no extension (repo-87)`.
+  - dl-57's `moved` Dockerfile citation and the other non-fatal moves in
+    unchanged records are left alone, as instructed.
