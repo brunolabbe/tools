@@ -41,6 +41,13 @@
  * without a fifth call site needing to remember anything. The accepted cost
  * is a walk of every field on every line, and every URL anywhere in a log
  * line loses its query string, including ones that carried nothing secret.
+ *
+ * Three routes to a line are not `fields` at all, and each is closed here or
+ * in the adapter (repo-85): the message string, through `redactMessage` set to
+ * the same `redactUrlsInText`; the `createLogger` `bindings` option, which the
+ * adapter now passes through `safeFields` as a child's always were; and an
+ * `Error`, whose `message` and `stack` the object walk never reached and which
+ * `redactError` below copies as an `Error` so the line keeps its failure.
  */
 
 import { redactRequestContext } from "@downloader/contract";
@@ -145,6 +152,7 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
   if (ancestors.has(value)) return "[Circular]";
   ancestors.add(value);
   try {
+    if (value instanceof Error) return redactError(value, ancestors);
     if (Array.isArray(value)) {
       let changed = false;
       const out = value.map((entry) => {
@@ -167,6 +175,62 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
   } finally {
     ancestors.delete(value);
   }
+}
+
+/**
+ * Copies an `Error` as an `Error`, with every own property run through the
+ * walk (repo-85).
+ *
+ * The generic object branch of `redactUrlsDeep` cannot take one: `message`,
+ * `stack` and `cause` are own but **not enumerable**, so `Object.entries`
+ * never visits them — pino's `err` serialiser then writes a signed URL in
+ * `message` and `stack` verbatim — and the `{ ...value }` copy it makes when
+ * an *enumerable* field did change is a plain object with no `message` and no
+ * `stack`, which is safe and useless for the failure the line was written
+ * for. The copy keeps the prototype, so pino still reads it as an error of the
+ * same `type`, and keeps each property's enumerability, so a non-`err` key
+ * serialises exactly as the original would have. Other own *accessors* are
+ * copied as they are — evaluating a getter is the walk's existing hazard, not
+ * one to add on an error's behalf.
+ *
+ * **`stack` is the exception, and it is read and rewritten as a value.** On the
+ * Node this repo runs it is an own accessor over V8's captured trace, and a
+ * descriptor copied onto another object reads back `undefined` — measured:
+ * the first cut of this function logged `"stack": ""`. So a copy always
+ * carries `stack` as a plain, non-enumerable data property.
+ *
+ * Returns the same reference when nothing changed, like the rest of the walk.
+ */
+function redactError(error: Error, ancestors: Set<object>): Error {
+  const changes = new Map<string, unknown>();
+  for (const key of Object.getOwnPropertyNames(error)) {
+    const descriptor = Object.getOwnPropertyDescriptor(error, key);
+    if (descriptor === undefined) continue;
+    const original: unknown = key === "stack" ? error.stack : descriptor.value;
+    if (key !== "stack" && !("value" in descriptor)) continue;
+    const redacted = redactUrlsDeep(original, ancestors);
+    if (redacted !== original) changes.set(key, redacted);
+  }
+  if (changes.size === 0) return error;
+
+  const copy: Error = Object.create(
+    Object.getPrototypeOf(error),
+    Object.getOwnPropertyDescriptors(error),
+  );
+  Object.defineProperty(copy, "stack", {
+    value: changes.has("stack") ? changes.get("stack") : error.stack,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  for (const [key, value] of changes) {
+    if (key === "stack") continue;
+    Object.defineProperty(copy, key, {
+      ...Object.getOwnPropertyDescriptor(error, key),
+      value,
+    });
+  }
+  return copy;
 }
 
 /**
@@ -227,5 +291,6 @@ export function createLogger(options: LoggerOptions): AppLogger {
     bindings: options.bindings,
     redactPaths: REDACT_PATHS,
     redactFields: safeFields,
+    redactMessage: redactUrlsInText,
   });
 }

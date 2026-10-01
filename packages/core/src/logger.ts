@@ -32,11 +32,17 @@
  *    `REDACTED` from `./redact.ts`. Cheap, but fragile by nature: it matches a
  *    path segment exactly, so it is a net under a plain header bag and not a
  *    substitute for a tool's own structural pass.
- *  - **`redactFields`**, a hook run over a call's whole `fields` object — and,
- *    on `child`, over its bindings — before either reaches pino. This is
- *    where the downloader's structural `RequestContext` pass and dl-58's
- *    whole-line URL walk live now: neither is expressible as a pino path, and
- *    neither the planner nor the ledger has a shape that needs one.
+ *  - **`redactFields`**, a hook run over a call's whole `fields` object — and
+ *    over every set of bindings, `createLogger`'s option and each `child`'s —
+ *    before any of them reaches pino. This is where the downloader's structural
+ *    `RequestContext` pass and dl-58's whole-line URL walk live now: neither is
+ *    expressible as a pino path, and neither the planner nor the ledger has a
+ *    shape that needs one.
+ *  - **`redactMessage`**, the same for the one thing `fields` does not carry:
+ *    the message string (repo-85). A separate hook, not a widened
+ *    `redactFields`, because a message is a string and the fields hook is
+ *    typed over an object — widening it would break every hook already
+ *    written, to save one optional property.
  */
 
 import os from "node:os";
@@ -44,6 +50,9 @@ import process from "node:process";
 import pino from "pino";
 import type { DestinationStream, Logger as PinoLogger } from "pino";
 import { REDACTED } from "./redact.ts";
+
+/** What `redactMessage` leaves when it throws; see `safeMessage`. */
+const MESSAGE_DROPPED = "[message dropped]";
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
 
@@ -72,6 +81,13 @@ export interface LoggerOptions {
   redactFields?:
     | ((fields: Record<string, unknown> | undefined) => Record<string, unknown> | undefined)
     | undefined;
+  /**
+   * Runs over every message before it reaches pino, so a tool can strip what
+   * must not be logged from a string a caller built by concatenation
+   * (`"fetching " + url`). Absent for a tool that needs nothing. If it throws,
+   * the message is replaced rather than written raw.
+   */
+  redactMessage?: ((message: string) => string) | undefined;
 }
 
 /**
@@ -81,8 +97,26 @@ export interface LoggerOptions {
  * first, ours takes the message — so this is a genuine adapter rather than a
  * pass-through, and it is the single place `redactFields` is applied.
  */
-function adapt(logger: PinoLogger, redactFields?: LoggerOptions["redactFields"]): AppLogger {
+function adapt(
+  logger: PinoLogger,
+  redactFields?: LoggerOptions["redactFields"],
+  redactMessage?: LoggerOptions["redactMessage"],
+): AppLogger {
   const safe = redactFields ?? ((fields: Record<string, unknown> | undefined) => fields);
+
+  /**
+   * A hook that throws must not let the raw message through: the message is
+   * the thing the hook was asked to clean, so the fallback is a placeholder,
+   * never the input.
+   */
+  const safeMessage = (message: string): string => {
+    if (redactMessage === undefined) return message;
+    try {
+      return redactMessage(message);
+    } catch {
+      return MESSAGE_DROPPED;
+    }
+  };
 
   /**
    * Logging must never be the reason a request dies.
@@ -99,10 +133,11 @@ function adapt(logger: PinoLogger, redactFields?: LoggerOptions["redactFields"])
     message: string,
     fields: Record<string, unknown> | undefined,
   ): void => {
+    const text = safeMessage(message);
     try {
-      logger[level](safe(fields) ?? {}, message);
+      logger[level](safe(fields) ?? {}, text);
     } catch {
-      logger[level]({ fieldsDropped: true }, message);
+      logger[level]({ fieldsDropped: true }, text);
     }
   };
 
@@ -111,11 +146,19 @@ function adapt(logger: PinoLogger, redactFields?: LoggerOptions["redactFields"])
     info: (message, fields) => emit("info", message, fields),
     warn: (message, fields) => emit("warn", message, fields),
     error: (message, fields) => emit("error", message, fields),
-    child: (extra) => adapt(logger.child(safe(extra) ?? {}), redactFields),
+    child: (extra) => adapt(logger.child(safe(extra) ?? {}), redactFields, redactMessage),
   };
 }
 
 export function createLogger(options: LoggerOptions): AppLogger {
+  // `bindings` is a route to the line like a child's are, so it takes the same hook.
+  // Only when there are bindings to redact: a call with no fields is the hook's
+  // job to see, a logger with no bindings is not. And a hook that returns nothing
+  // means nothing, as it does for a child — not the raw input.
+  const bindings =
+    options.redactFields === undefined || options.bindings === undefined
+      ? options.bindings
+      : options.redactFields(options.bindings);
   const destination: DestinationStream =
     options.write === undefined
       ? // Synchronous: an async destination buffers, and the lines worth having
@@ -133,10 +176,10 @@ export function createLogger(options: LoggerOptions): AppLogger {
       redact: { paths: options.redactPaths ?? [], censor: REDACTED },
       // `hostname` is the container id under compose, which is the only way to
       // tell two replicas' lines apart once they are interleaved.
-      base: { pid: process.pid, hostname: os.hostname(), ...options.bindings },
+      base: { pid: process.pid, hostname: os.hostname(), ...bindings },
     },
     destination,
   );
 
-  return adapt(logger, options.redactFields);
+  return adapt(logger, options.redactFields, options.redactMessage);
 }
