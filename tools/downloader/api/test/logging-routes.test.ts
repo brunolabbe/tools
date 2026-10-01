@@ -10,6 +10,7 @@
  * still carried the credential somewhere the test did not look.
  */
 
+import { runInNewContext } from "node:vm";
 import { describe, expect, test } from "vitest";
 import { createLogger } from "../src/logger.ts";
 import type { LoggerOptions } from "../src/logger.ts";
@@ -18,6 +19,7 @@ const SIGNED = "https://cdn.example/v.mp4?X-Amz-Signature=SECRET&x=1";
 const REDACTED_URL = "https://cdn.example/v.mp4?[redacted]";
 
 interface ErrLine {
+  level: string;
   msg: string;
   err?: { type?: string; message?: string; stack?: string; details?: unknown };
   [key: string]: unknown;
@@ -51,7 +53,13 @@ describe("the message", () => {
     child.error(`e ${SIGNED}`);
 
     expect(lines.join("")).not.toContain("SECRET");
-    expect(lines).toHaveLength(3);
+    expect(
+      lines.map((line) => [parse(line).level, parse(line)["requestId"], parse(line).msg]),
+    ).toEqual([
+      ["debug", "r1", `d ${REDACTED_URL}`],
+      ["warn", "r1", `w ${REDACTED_URL}`],
+      ["error", "r1", `e ${REDACTED_URL}`],
+    ]);
   });
 
   test("a message with no URL is written as given", () => {
@@ -108,13 +116,17 @@ describe("an Error", () => {
     expect(parse(lines[0]).err?.stack).toContain(`inner ${REDACTED_URL}`);
   });
 
-  test("nested under another key is redacted too", () => {
+  // Not a redaction test: pino writes an `Error` below any key but `err` as `{}`
+  // on the base and on this branch alike, so it cannot fail on a leak. It pins
+  // that shape, so a change to how such an error is written is a decision.
+  test("nested under another key is written as an empty object, as pino always has", () => {
     const { logger, lines } = capture();
     logger.error("probe failed", {
       details: { attempts: [new Error(`first ${SIGNED}`), new Error(`second ${SIGNED}`)] },
     });
 
     expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0])["details"]).toEqual({ attempts: [{}, {}] });
   });
 
   test("with nothing to redact is untouched, stack included", () => {
@@ -127,13 +139,65 @@ describe("an Error", () => {
     expect(err?.stack).toBe(error.stack);
   });
 
-  test("a cycle through `cause` does not hang or leak", () => {
+  test("a cycle through `cause` does not hang or leak, and keeps its message and stack", () => {
     const { logger, lines } = capture();
     const error = new Error(`loop ${SIGNED}`);
     error.cause = error;
     logger.error("probe failed", { err: error });
 
+    const err = parse(lines[0]).err;
     expect(lines[0]).not.toContain("SECRET");
+    expect(err?.message).toContain(`loop ${REDACTED_URL}`);
+    expect(err?.stack).toContain(`Error: loop ${REDACTED_URL}`);
+  });
+
+  // The next four are gate 1's F1-F3, appended after the others.
+  test("an own enumerable getter's URL is redacted, as the walk always did", () => {
+    const { logger, lines } = capture();
+    const error = new Error("plain failure");
+    Object.defineProperty(error, "target", { get: () => SIGNED, enumerable: true });
+    logger.error("probe failed", { err: error });
+
+    const err = parse(lines[0]).err as Record<string, unknown> | undefined;
+    expect(lines[0]).not.toContain("SECRET");
+    expect(err?.["target"]).toBe(REDACTED_URL);
+    expect(err?.["message"]).toBe("plain failure");
+  });
+
+  test("an own `message` accessor is redacted along with the stack", () => {
+    const { logger, lines } = capture();
+    const error = new Error("placeholder");
+    Object.defineProperty(error, "message", {
+      get: () => `failed ${SIGNED}`,
+      configurable: true,
+    });
+    logger.error("probe failed", { err: error });
+
+    expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0]).err?.message).toBe(`failed ${REDACTED_URL}`);
+  });
+
+  test("an error from another realm is redacted too", () => {
+    const { logger, lines } = capture();
+    const foreign: unknown = runInNewContext("new Error(text)", { text: `failed ${SIGNED}` });
+    expect(foreign instanceof Error).toBe(false);
+    logger.error("probe failed", { err: foreign });
+
+    expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0]).err?.message).toBe(`failed ${REDACTED_URL}`);
+    expect(parse(lines[0]).err?.stack).toContain("\n    at ");
+  });
+
+  test("a DOMException keeps its failure, whose message and name are prototype getters", () => {
+    const { logger, lines } = capture();
+    logger.error("probe failed", { err: new DOMException(`failed ${SIGNED}`, "AbortError") });
+
+    const line = parse(lines[0]);
+    expect(lines[0]).not.toContain("SECRET");
+    expect(line["fieldsDropped"]).toBeUndefined();
+    expect(line.err?.type).toBe("DOMException");
+    expect(line.err?.message).toBe(`failed ${REDACTED_URL}`);
+    expect(line.err?.stack).toContain(`AbortError: failed ${REDACTED_URL}`);
   });
 });
 

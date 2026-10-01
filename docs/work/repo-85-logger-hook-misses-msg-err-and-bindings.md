@@ -173,16 +173,81 @@ it needs its own pull request and a gate.
     the old downloader, which hid the downloader's `bindings` test. Then
     `npx vitest run packages/core/test/logger-redaction-routes.test.ts tools/downloader/api/test/logging-routes.test.ts`:
     `13 failed | 8 passed` of 21 on the base (`6` of `9` in core, `7` of `12` in
-    the downloader; the eight that pass are the controls — no hook, no URL,
-    nothing to redact, a cycle, a nested `Error`, bindings still stamped).
-    On the branch, rebuilt: `21 passed` of 21.
+    the downloader). On the branch, rebuilt: `21 passed` of 21. **Corrected by
+    gate 1 (F4), see the round entry below:** of the eight that passed on the
+    base I called all "controls", and only six are — the nested-`Error` and
+    `cause`-cycle tests are named as redaction tests and asserted too little to
+    fail on a leak.
   - **Suites:** `npx vitest run packages/core tools/downloader/api` — `707 passed`
     and `2 skipped` of 709, `logging.test.ts` unchanged and green;
     `npx vitest run tools/planner/api tools/ledger/api` — `541 passed` of 541.
   - **The brief's `logger.ts:136 "...options.bindings"` is the base's line**; this
     branch moves it, and the brief is left describing the base on purpose.
-  - **Could have folded in, did not:** `child` calls the hook unguarded
-    (`safe(extra)`), so a throwing hook fails `child()` and now `createLogger` with
-    bindings, where a call's fields are guarded by `emit`. Not specified anywhere,
-    no hook here throws, and guarding it means choosing what a failed `child`
-    logs — a decision, not a free piece of work.
+  - **Raised as a decision in the round below** (it was a "could have folded in"
+    aside here, which hid it): `child` calls the hook unguarded, and now so does
+    `createLogger` for its `bindings`.
+
+- 2026-10-01 — **Gate 1 round (Opus, FAIL at `76a0728`, one high), fixed.**
+  - **F1 (high), reproduced then fixed.** A probe (scratch, `node probe.mjs`;
+    `dist` built from `76a0728`) printed `LEAK` for "own enumerable getter" and
+    "own message accessor", plus F2's "cross-realm Error", and `fieldsDropped`
+    for a `DOMException` (F3). `redactError` skipped every own accessor except
+    `stack` and kept it uncopied, so the getter's URL reached pino raw — a
+    regression on the walk's `Object.entries`, which evaluated getters. Node's
+    own `ERR_SYSTEM_ERROR` has this shape. Now every own property, plus
+    `message`, `stack` and `name`, is **read through the error and written to the
+    copy as data**, with the original's enumerability. After a rebuild the same
+    probe prints `clean` on all five and the `DOMException` line carries its
+    `message`, a stack beginning `AbortError: failed https://…?[redacted]`, and
+    `code`. The doc comment that said skipping getters avoided a hazard the walk
+    already had is rewritten: it was wrong, the walk evaluated them and pino does.
+  - **F2 (low), fixed.** `isError` now also accepts `Object.prototype.toString`
+    `"[object Error]"`, so an error from another realm is copied. (`types.isNativeError`
+    needed an import line and shifted dl-58's unanchored `evidence` citations; see F6.)
+  - **F3 (low), fixed, same change.** A `DOMException`'s `message`, `name` and
+    `code` are prototype getters that throw on a plain copy and pino reads them
+    off it, so the copy owns them as data, keys taken from `for…in` as well as the
+    own names.
+  - **F4 (low), fixed.** The two mislabelled tests now assert what they claim:
+    the nested-`Error` test is renamed to say it pins pino writing `{}` and is not
+    a redaction test (an `Error` below any key but `err` has no way to leak or to
+    show its message), and asserts that shape; the `cause`-cycle test asserts
+    `message` and `stack` survive; the child-logger test reads the three lines
+    (level, `requestId`, `msg`) instead of counting them.
+  - **Red/green for F1–F3**, four new tests appended to `logging-routes.test.ts`:
+    with `tools/downloader/api/src/logger.ts` at `76a0728`,
+    `npx vitest run tools/downloader/api/test/logging-routes.test.ts` gave
+    `4 failed | 12 passed` (the getter, the `message` accessor, the cross-realm
+    error and the `DOMException`); with the fix, `16 passed` of 16. That run does
+    not need a rebuild: the downloader's own `src` is what the suite imports, and
+    core did not change between the two. Whether the strengthened `cause`-cycle
+    test now fails on `b7fb3fb` is **unmeasured**; the gate reports the base line
+    carried no message.
+  - **D1 — a hook that throws on `bindings`: decided by the owner, 2026-10-01,
+    via `AskUserQuestion`: accept it.** `createLogger` throws when `redactFields`
+    throws on the `bindings` option, as `child` already throws when it throws on a
+    child's bindings; the alternative (guard both with a `bindingsDropped`
+    marker) was declined. Reason as the owner took it: bindings are set at
+    construction or per request, not on a hot path, and a hook broken enough to
+    throw on them is better found at boot than hidden behind a marker. Recorded in
+    the comment above `bindings` in `packages/core/src/logger.ts` too. The base
+    never ran the hook at construction, so this is new behaviour, bounded to a
+    hook that throws on a bindings object it was handed.
+  - **D2 — title: decided by the owner, 2026-10-01: keep `fix(core): …`**, over
+    `fix(downloader)` (the gate's and the orchestrator's recommendation) and a
+    split into two pull requests. The commit also touches
+    `tools/downloader/api/` and so lands in the downloader's changelog under a
+    core-scoped line; that was weighed and accepted.
+  - **F5 (low)** is D1 above.
+  - **F6 (low), fixed.** repo-66's five moved citations (`packages/core/src/logger.ts`
+    at `:103`, `:114`, `:136`; `tools/downloader/api/src/logger.ts` at `:228`,
+    `:229`) are pinned to `3aaa21a`, repo-66's merge, where each anchor still
+    resolves: `node scripts/citations.mjs docs/work/repo-66-lift-the-logger-into-core.md --section Review`
+    printed five `MOVED` before and none after. The silent drift gate 1 found in
+    dl-58's unanchored `evidence` comments (they point at `logger.ts:115/125/127/142`)
+    came from the seven-line header paragraph and the `node:util` import this
+    branch added above them; both are gone, the paragraph's text now sits above
+    `createLogger` at the file's end, and the first line this branch adds is the
+    `isError(value)` line at 148, past all four cited lines
+    (`git diff origin/main -U0 -- tools/downloader/api/src/logger.ts` shows its
+    first hunk at `@@ -147,0 +148 @@`).

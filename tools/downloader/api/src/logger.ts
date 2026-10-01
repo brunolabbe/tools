@@ -41,13 +41,6 @@
  * without a fifth call site needing to remember anything. The accepted cost
  * is a walk of every field on every line, and every URL anywhere in a log
  * line loses its query string, including ones that carried nothing secret.
- *
- * Three routes to a line are not `fields` at all, and each is closed here or
- * in the adapter (repo-85): the message string, through `redactMessage` set to
- * the same `redactUrlsInText`; the `createLogger` `bindings` option, which the
- * adapter now passes through `safeFields` as a child's always were; and an
- * `Error`, whose `message` and `stack` the object walk never reached and which
- * `redactError` below copies as an `Error` so the line keeps its failure.
  */
 
 import { redactRequestContext } from "@downloader/contract";
@@ -152,7 +145,7 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
   if (ancestors.has(value)) return "[Circular]";
   ancestors.add(value);
   try {
-    if (value instanceof Error) return redactError(value, ancestors);
+    if (isError(value)) return redactError(value, ancestors);
     if (Array.isArray(value)) {
       let changed = false;
       const out = value.map((entry) => {
@@ -178,8 +171,18 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
 }
 
 /**
- * Copies an `Error` as an `Error`, with every own property run through the
- * walk (repo-85).
+ * An error by shape, not by `instanceof` alone: one built in another realm
+ * (`node:vm`, a worker's structured clone) has a different `Error`, so
+ * `instanceof` misses it and pino — which decides by shape — then writes its
+ * `message` and `stack` raw (repo-85, gate 1 F2).
+ */
+function isError(value: object): value is Error {
+  return value instanceof Error || Object.prototype.toString.call(value) === "[object Error]";
+}
+
+/**
+ * Copies an `Error` as an `Error`, with its `message`, `stack` and every own
+ * property run through the walk (repo-85).
  *
  * The generic object branch of `redactUrlsDeep` cannot take one: `message`,
  * `stack` and `cause` are own but **not enumerable**, so `Object.entries`
@@ -189,45 +192,60 @@ function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unk
  * `stack`, which is safe and useless for the failure the line was written
  * for. The copy keeps the prototype, so pino still reads it as an error of the
  * same `type`, and keeps each property's enumerability, so a non-`err` key
- * serialises exactly as the original would have. Other own *accessors* are
- * copied as they are — evaluating a getter is the walk's existing hazard, not
- * one to add on an error's behalf.
+ * serialises exactly as the original would have.
  *
- * **`stack` is the exception, and it is read and rewritten as a value.** On the
- * Node this repo runs it is an own accessor over V8's captured trace, and a
- * descriptor copied onto another object reads back `undefined` — measured:
- * the first cut of this function logged `"stack": ""`. So a copy always
- * carries `stack` as a plain, non-enumerable data property.
+ * **Every value is read through the error and written onto the copy as plain
+ * data, accessors included** (gate 1, F1). Evaluating a getter is what the
+ * walk's `Object.entries` always did and what pino's serialiser does anyway,
+ * so skipping one here, as the first cut did, only meant its URL reached the
+ * line raw: Node's own `ERR_SYSTEM_ERROR` carries `errno` and `syscall` as own
+ * enumerable accessors. Three properties cannot be copied as descriptors, so
+ * none is:
+ *
+ *  - `stack` is an own accessor over V8's captured trace on the Node this repo
+ *    runs, and a descriptor copied onto another object reads back `undefined`
+ *    — measured: the first cut logged `"stack": ""`;
+ *  - a `message` or `stack` that is an accessor would stay raw if copied;
+ *  - a `DOMException`'s `message`, `name` and `code` are getters on the
+ *    *prototype* that throw for any object that is not one, and pino reads
+ *    them off the copy. So the copy owns each as data, which also means they
+ *    are read, and redacted, though they are not own properties: the keys are
+ *    the own ones, every enumerable inherited one (pino's `for…in`), and
+ *    `message`, `stack` and `name`. Gate 1's F3 — without it that line fell
+ *    back to `fieldsDropped` and lost the whole failure.
  *
  * Returns the same reference when nothing changed, like the rest of the walk.
  */
 function redactError(error: Error, ancestors: Set<object>): Error {
-  const changes = new Map<string, unknown>();
-  for (const key of Object.getOwnPropertyNames(error)) {
-    const descriptor = Object.getOwnPropertyDescriptor(error, key);
-    if (descriptor === undefined) continue;
-    const original: unknown = key === "stack" ? error.stack : descriptor.value;
-    if (key !== "stack" && !("value" in descriptor)) continue;
+  const enumerable = new Set<string>();
+  for (const key in error) enumerable.add(key);
+  const keys = new Set([
+    ...Object.getOwnPropertyNames(error),
+    ...enumerable,
+    "message",
+    "stack",
+    "name",
+  ]);
+  const values = new Map<string, unknown>();
+  let changed = false;
+  for (const key of keys) {
+    const original: unknown = (error as unknown as Record<string, unknown>)[key];
     const redacted = redactUrlsDeep(original, ancestors);
-    if (redacted !== original) changes.set(key, redacted);
+    values.set(key, redacted);
+    if (redacted !== original) changed = true;
   }
-  if (changes.size === 0) return error;
+  if (!changed) return error;
 
-  const copy: Error = Object.create(
-    Object.getPrototypeOf(error),
-    Object.getOwnPropertyDescriptors(error),
-  );
-  Object.defineProperty(copy, "stack", {
-    value: changes.has("stack") ? changes.get("stack") : error.stack,
-    enumerable: false,
-    writable: true,
-    configurable: true,
-  });
-  for (const [key, value] of changes) {
-    if (key === "stack") continue;
+  const copy: Error = Object.create(Object.getPrototypeOf(error));
+  for (const [key, value] of values) {
+    const own = Object.getOwnPropertyDescriptor(error, key);
+    // A property the error never had and still has nothing to say about is not invented.
+    if (own === undefined && value === undefined) continue;
     Object.defineProperty(copy, key, {
-      ...Object.getOwnPropertyDescriptor(error, key),
       value,
+      enumerable: own?.enumerable ?? enumerable.has(key),
+      writable: true,
+      configurable: true,
     });
   }
   return copy;
@@ -283,6 +301,13 @@ function safeFields(
  * Hands this tool's two extra passes to the shared adapter as its
  * `redactFields` hook (repo-66). The adapter itself, and the pino instance it
  * wraps, now live in `@webtools/core/logger`.
+ *
+ * Three routes to a line are not `fields` at all (repo-85), and each is closed
+ * here or in the adapter: the message string, through `redactMessage` set to
+ * the same `redactUrlsInText`; the `bindings` option, which the adapter now
+ * passes through `safeFields` as a child's always were; and an `Error`, whose
+ * `message` and `stack` the object walk never reached and which `redactError`
+ * copies as an `Error` so the line keeps its failure.
  */
 export function createLogger(options: LoggerOptions): AppLogger {
   return createCoreLogger({

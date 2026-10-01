@@ -154,7 +154,11 @@ export function createLogger(options: LoggerOptions): AppLogger {
   // `bindings` is a route to the line like a child's are, so it takes the same hook.
   // Only when there are bindings to redact: a call with no fields is the hook's
   // job to see, a logger with no bindings is not. And a hook that returns nothing
-  // means nothing, as it does for a child — not the raw input.
+  // means nothing, as it does for a child — not the raw input. A hook that
+  // *throws* here throws out of `createLogger`, as it does out of `child`
+  // (owner's decision on repo-85, 2026-10-01): bindings are set at construction
+  // or per request, not on a hot path, and a hook broken enough to throw on
+  // them is better found at boot than hidden behind a marker field.
   const bindings =
     options.redactFields === undefined || options.bindings === undefined
       ? options.bindings
