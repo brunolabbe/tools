@@ -1005,13 +1005,10 @@ export function parseMergeTreeConflicts(output) {
  * @param {string} repo
  * @param {string} ours
  * @param {string} theirs
- * @param {typeof spawnRaw} [spawn]
+ * @param {typeof spawnRaw} [run] not `spawn`: spawn-safety matches by name (repo-83)
  */
-export function mergeTreeConflicts(repo, ours, theirs, spawn = spawnRaw) {
-  const result = spawn("git", ["merge-tree", "--write-tree", ours, theirs], {
-    cwd: repo,
-    shell: false,
-  });
+export function mergeTreeConflicts(repo, ours, theirs, run = spawnRaw) {
+  const result = run("git", ["merge-tree", "--write-tree", ours, theirs], { cwd: repo });
   const stdout = result.stdout ?? "";
   if (stdout.trim() === "") {
     throw fail(

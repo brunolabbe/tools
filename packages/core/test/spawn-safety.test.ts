@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { SPAWN_CALLS, callsWithoutShellFalse } from "./support/spawn-calls.ts";
+import { SPAWN_CALLS, callsWithoutShellFalse, mask } from "./support/spawn-calls.ts";
 import { repoSources } from "./support/workspaces.ts";
 
 /** Every source file in the repository, tracked or new — see `repoSources`. */
@@ -28,7 +28,7 @@ const SOURCES = await repoSources();
 
 /** Strips comments, so a doc block explaining the rule is not a violation of it. */
 function code(text: string): string {
-  return text.replaceAll(/\/\*[\s\S]*?\*\//gu, "").replaceAll(/(^|[^:])\/\/.*$/gmu, "$1");
+  return mask(text, true);
 }
 
 describe("no shell reaches a child process", () => {
@@ -83,8 +83,7 @@ describe("no shell reaches a child process", () => {
     // `spawnSync`, `execFile` and `execFileSync` take the same option `spawn`
     // does and are asked the same question — a pattern narrowed to `spawn(`
     // alone saw none of them (repo-77), which is why `SPAWN_CALLS` is asserted
-    // member by member below. What carrying the flag means is in `spawn-calls.ts`
-    // (spawn, spawnSync, execFile, execFileSync).
+    // member by member below. What carrying the flag means is in `spawn-calls.ts`.
     const offenders = SOURCES.flatMap((source) =>
       callsWithoutShellFalse(source.text).map((call) => `${source.file}:${call.line} ${call.call}`),
     );
@@ -158,5 +157,71 @@ describe("the per-call check can fail (repo-83)", () => {
       expect(callsWithoutShellFalse(text), name).toHaveLength(1);
       expect(callsWithoutShellFalse(text, ["spawn"]), name).toHaveLength(name === "spawn" ? 1 : 0);
     }
+  });
+
+  test("a `/*` inside a string does not hide the code up to the next `*/`", () => {
+    // gate 1: `"docs/work/*.md"` opened a block comment that ran to the next
+    // `*/`, and four calls in citations-gate.test.ts were never checked. The
+    // glob and the closer are assembled so this file does not hold either.
+    const open = `"docs/work/*${".md"}"`;
+    const close = `"*${"/"}"`;
+    const truthy = ["tr", "ue"].join("");
+    const text = fixture(
+      `const A = ${open};\nspawnSync("git", ["a"], { encoding: "utf8" });\nconst B = ${close};\n`,
+    );
+    expect(callsWithoutShellFalse(text).map((call) => call.line)).toEqual([3]);
+    // and the truthy-`shell` test reads through `code()`, which is `mask` too
+    expect(mask(`const A = ${open};\nshell: ${truthy};\nconst B = ${close};\n`, true)).toContain(
+      `shell: ${truthy}`,
+    );
+    // a regex literal holding a quote is not a string either
+    const regex = fixture(`const R = /["']/u;\nspawnSync("git", ["a"], { encoding: "utf8" });\n`);
+    expect(callsWithoutShellFalse(regex).map((call) => call.line)).toEqual([3]);
+  });
+
+  test("an assignment, or a second declaration of the name, withdraws its `shell: false`", () => {
+    const reassigned = fixture(
+      [
+        `let o = { shell: false };`,
+        `o = { encoding: "utf8" };`,
+        `spawnSync("git", ["a"], o);`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(reassigned).map((call) => call.line)).toEqual([4]);
+    const twice = fixture(
+      [
+        `function a() { const o = { shell: false }; return spawnSync("git", ["a"], o); }`,
+        `function b() { const o = { encoding: "utf8" }; return spawnSync("git", ["b"], o); }`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(twice).map((call) => call.line)).toEqual([2, 3]);
+  });
+
+  test("only a top-level `shell: false` that is the last word on `shell` counts", () => {
+    const text = fixture(
+      [
+        `const BASE = { shell: false };`,
+        `spawnSync("git", ["a"], { env: { shell: false } });`,
+        `spawnSync("git", ["b"], { ...BASE, shell: !0 });`,
+        `spawnSync("git", ["c"], { ...BASE, shell: process.env.X });`,
+        `spawnSync("git", ["d", "shell: false"]);`,
+        `spawnSync("git", ["e"], { ...BASE, ...(cwd ? { cwd } : {}) });`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text).map((call) => call.line)).toEqual([3, 4, 5, 6]);
+  });
+
+  test("an aliased call, and every way of importing child_process, are seen", () => {
+    const call = `run("git", ["a"], { encoding: "utf8" });\n`;
+    const specifier = `"node:child${"_"}process"`;
+    for (const head of [
+      `import { spawnSync as run } from ${specifier};\n`,
+      `import { spawnSync as run } from "child${"_"}process";\n`,
+      `const { spawnSync: run } = require(${specifier});\n`,
+      `const { spawnSync: run } = await import(${specifier});\n`,
+    ]) {
+      expect(callsWithoutShellFalse(head + call), head).toHaveLength(1);
+    }
+    expect(callsWithoutShellFalse(`import { run } from "./elsewhere.ts";\n${call}`)).toEqual([]);
   });
 });
