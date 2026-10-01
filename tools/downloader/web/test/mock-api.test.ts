@@ -364,6 +364,11 @@ describe("scenario coverage", () => {
     const noLongerRaised: ErrorCode[] = ["DISK_FULL", "MUX_FAILED"];
     for (const code of noLongerRaised) fromScenarios.add(code);
 
+    // Core's identity codes (lg-3), never raised by the downloader, which has
+    // no sign-in. They are in its taxonomy only because core's are.
+    const neverRaisedHere: ErrorCode[] = ["UNAUTHENTICATED", "FORBIDDEN"];
+    for (const code of neverRaisedHere) fromScenarios.add(code);
+
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));
     expect(missing).toEqual([]);
   });

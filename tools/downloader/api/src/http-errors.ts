@@ -28,6 +28,10 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // closed), because a 5xx there would invite exactly the retry loop the
   // single-use token makes pointless.
   HUMAN_CHECK_FAILED: 403,
+  // Core's identity codes. The downloader has no sign-in and raises neither;
+  // the entries exist because this table is exhaustive over the taxonomy.
+  UNAUTHENTICATED: 401,
+  FORBIDDEN: 403,
 
   NO_MEDIA_FOUND: 422,
   // 451 is the one status that means precisely this.
