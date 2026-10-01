@@ -104,7 +104,13 @@ export const CORE_ERROR_CODES = [
    * required on this endpoint, and the request carried no credential, or one
    * that failed verification — a bad signature, the wrong audience, expired.
    * Like `HUMAN_CHECK_FAILED`, the variants are reported the same way, because
-   * telling them apart tells a forger which part to fix. Answered with a 401.
+   * telling them apart tells a forger which part to fix.
+   *
+   * Answered with a 403 by every tool here, never a 401 — the downloader's
+   * reasoning for `HUMAN_CHECK_FAILED`, and the owner's decision for lg-3: a
+   * 401 must carry a `WWW-Authenticate` scheme the client could answer, and an
+   * identity-aware proxy has no such scheme for a client to use. The code stays
+   * distinct from `FORBIDDEN` all the same, because the remedy differs.
    *
    * Core rather than a tool's own because it describes the door, not the room:
    * any tool behind an identity-aware proxy has it, and the ledger is the first
@@ -125,9 +131,9 @@ export const CORE_ERROR_CODES = [
   /**
    * The caller proved who it is, and that identity is not allowed here — the
    * credential verified, but nothing grants it this tool or this route.
-   * Answered with a 403. Distinct from `UNAUTHENTICATED` because the remedy is
-   * different: a fresh sign-in fixes that one and changes nothing here, where
-   * only whoever configures access can help. Distinct from `BLOCKED_TARGET`,
+   * Answered with a 403. Distinct from `UNAUTHENTICATED`, though that is a 403
+   * too, because the remedy is different: a fresh sign-in fixes that one and
+   * changes nothing here, where only whoever configures access can help. Distinct from `BLOCKED_TARGET`,
    * also a refusal, because that one is about where a request *points*, and
    * this is about who sent it. Not retryable.
    */

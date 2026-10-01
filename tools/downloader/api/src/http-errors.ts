@@ -30,7 +30,10 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   HUMAN_CHECK_FAILED: 403,
   // Core's identity codes. The downloader has no sign-in and raises neither;
   // the entries exist because this table is exhaustive over the taxonomy.
-  UNAUTHENTICATED: 401,
+  // 403 for both, never 401, for `HUMAN_CHECK_FAILED`'s reason above: there is
+  // no `WWW-Authenticate` scheme a client here could answer (lg-3's owner
+  // decision, which the ledger follows too).
+  UNAUTHENTICATED: 403,
   FORBIDDEN: 403,
 
   NO_MEDIA_FOUND: 422,
