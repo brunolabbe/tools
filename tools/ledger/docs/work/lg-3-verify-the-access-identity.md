@@ -29,7 +29,9 @@ passing through Access.
      only.
 2. **Map email to person in configuration**, never in a table seeded from the
    repository. An address the configuration does not know gets a 403. A request
-   with a missing or invalid token gets a 401.
+   with a missing or invalid token gets a 401. _Superseded by decision A3
+   below: it gets a 403, as `UNAUTHENTICATED`, still distinct from the
+   unmapped address's `FORBIDDEN`._
 3. **Cache the JWKS, and refresh it when a key id is unknown.** A request never
    makes an unbounded number of fetches. The fetch goes to a fixed host built
    from configuration, never from anything in the request.
@@ -44,7 +46,8 @@ passing through Access.
 1. A valid token, signed by a test key the test serves as JWKS, reaches a
    route as the mapped person.
 2. Each of these gets a 401: a missing token, a token with a bad signature, one
-   with the wrong audience, and an expired one.
+   with the wrong audience, and an expired one. _Superseded by decision A3
+   below: each gets a 403 with the code `UNAUTHENTICATED`._
 3. A valid token for an unmapped email gets a 403.
 4. `/api/health` answers without a token.
 5. The development identity cannot be enabled in production mode; a config
@@ -76,6 +79,42 @@ accepting a downloader release / ledger-local codes instead.
 codes and the entries every exhaustive map needs to compile; `refactor` is
 `hidden` in `release-please-config.json`, so the downloader paths it touches cut
 no release. The second, this ticket's build, is `feat(ledger)` stacked on it.
+
+## Decisions after the first build — answered 2026-10-01 by the owner, not open
+
+The builder's report carried five open decisions. The orchestrator checked their
+premises first: Access covers the whole ledger hostname at the edge
+(`scripts/cloudflare-setup.mjs:85 "extraEmailFlag"`), `.github/workflows/ledger.yml:97 "Accept: text/html"`
+fetches `/` with no token,
+and `registry.npmjs.org` answers 200 from the container. It then put four of
+them to the owner through `AskUserQuestion`, numbered here as asked.
+
+**A1. The question was:** keep `node:crypto`, or move to `jose`? **The answer:
+keep `node:crypto`**, the orchestrator's recommendation.
+
+**A2. The question was:** should the static UI sit behind the origin check?
+Options: API only except health / everything except health. **The answer: API
+only except health**, the orchestrator's recommendation.
+
+**A3. The question was:** the brief says 401, but RFC 9110 requires
+`WWW-Authenticate` on every 401 and Access has no standard scheme. What should
+lg-3 answer? Options: 401 without the header / 401 with a custom scheme / 403
+for both, like the downloader.
+
+**The answer: 403 for both, like the downloader.** This overrode the
+orchestrator's recommendation, which was 401 without the header. As the option
+was put to the owner, `UNAUTHENTICATED` maps to 403: the two codes stay distinct,
+and only the status changes. Branch 1 maps it to 403 in the downloader too, for
+the same reason. **This supersedes the 401 in Build step 2 and Done-when 2**,
+which are marked rather than rewritten.
+
+**A4. The question was:** what should a production start with no Access settings
+do? Options: start and refuse every API call / refuse to start. **The answer:
+start and refuse**, the orchestrator's recommendation.
+
+The fifth open decision was not put to the owner: the root-level deployment
+edits riding in the `feat(ledger)` PR. They touch no other tool's path, so they
+stay as built.
 
 ## Log
 
@@ -113,7 +152,8 @@ branch.
   hidden in `release-please-config.json`, so no changelog line. It reports 19
   moved citations in 12 records this branch does not change, and fails none of
   them. One of the 19 is caused by this branch: `dl-53`'s
-  `error-presentation.ts:296`, which the new entries push down.
+  citation of line 296 in `error-presentation.ts`, which the new entries push
+  down.
 
 **Branch 2, `lg-3-verify-access-identity`** (`feat(ledger)`, on branch 1):
 
@@ -188,3 +228,23 @@ branch.
   `DEV_IDENTITY` set exited 1 with `"msg":"failed to start"` and
   `DEV_IDENTITY is set in production mode`. Done-when 6's container leg is
   `ledger.yml` on the pull request.
+
+### 2026-10-01 — UNAUTHENTICATED answers 403 (decision A3) (Opus 5.5 builder)
+
+The entry above says 401 for the token failures. That was the brief's status
+until decision A3, and is now 403, carried by `UNAUTHENTICATED`. FORBIDDEN
+stays the unmapped address's code.
+
+- **Branch 1** gains a commit mapping `UNAUTHENTICATED` to 403 in
+  `tools/downloader/api/src/http-errors.ts`. The owner's reason is the one
+  that table already gives for `HUMAN_CHECK_FAILED`, and nothing in the
+  downloader argues otherwise: it raises neither code. Core's doc comment
+  now says every tool here answers 403. Branch 2 is rebased onto it.
+- **Branch 2:** `tools/ledger/api/src/http-errors.ts` maps it to 403, and
+  every 401 expectation in `api/test/access.test.ts` is now 403. The test
+  that proves the hook runs on a path spelled another way told the two
+  failures apart by status. It now tells them apart by code. Re-proved by
+  mutating the hook to read `request.url`, which fails it with
+  `expected { code: 'UNAUTHENTICATED', … } to deeply equal { code: 'FORBIDDEN', … }`.
+- `npx vitest run --project ledger` → `7 passed (7)` files, `53 passed (53)`
+  tests.

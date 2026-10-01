@@ -108,33 +108,33 @@ describe("the Access identity check", () => {
     expect(shouting.json<MeResponse>().person.id).toBe("alex");
   });
 
-  test("a missing token is a 401", async () => {
+  test("a missing token is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
-    expectRefused(await me(harness), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness), "UNAUTHENTICATED", 403);
   });
 
-  test("a token with a bad signature is a 401", async () => {
+  test("a token with a bad signature is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
     // Names the published key's id, signed by a key that is not it.
     const forged = signToken({ key: KEY, signWith: OTHER_KEY, nowSec: harness.nowSec() });
-    expectRefused(await me(harness, forged), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, forged), "UNAUTHENTICATED", 403);
   });
 
-  test("a token for another audience is a 401", async () => {
+  test("a token for another audience is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
     const token = signToken({
       key: KEY,
       nowSec: harness.nowSec(),
       claims: { aud: ["some-other-application"] },
     });
-    expectRefused(await me(harness, token), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, token), "UNAUTHENTICATED", 403);
   });
 
-  test("an expired token is a 401", async () => {
+  test("an expired token is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
     const issued = harness.nowSec() - 7200;
     const token = signToken({ key: KEY, nowSec: issued, claims: { exp: issued + 3600 } });
-    expectRefused(await me(harness, token), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, token), "UNAUTHENTICATED", 403);
   });
 
   test("a valid token for an address the configuration does not know is a 403", async () => {
@@ -161,11 +161,11 @@ describe("the Access identity check", () => {
     const unsigned = `${Buffer.from(JSON.stringify({ alg: "none", kid: KEY.kid })).toString("base64url")}.${body}.`;
     const hmac = signToken({ key: KEY, nowSec, header: { alg: "HS256" } });
 
-    expectRefused(await me(harness, unsigned), "UNAUTHENTICATED", 401);
-    expectRefused(await me(harness, hmac), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, unsigned), "UNAUTHENTICATED", 403);
+    expectRefused(await me(harness, hmac), "UNAUTHENTICATED", 403);
   });
 
-  test("a token from another team, or one that is not a token at all, is a 401", async () => {
+  test("a token from another team, or one that is not a token at all, is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
     const nowSec = harness.nowSec();
     const otherIssuer = signToken({
@@ -174,16 +174,16 @@ describe("the Access identity check", () => {
       claims: { iss: "https://someone-else.cloudflareaccess.com" },
     });
 
-    expectRefused(await me(harness, otherIssuer), "UNAUTHENTICATED", 401);
-    expectRefused(await me(harness, "not-a-token"), "UNAUTHENTICATED", 401);
-    expectRefused(await me(harness, "a.b.c"), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, otherIssuer), "UNAUTHENTICATED", 403);
+    expectRefused(await me(harness, "not-a-token"), "UNAUTHENTICATED", 403);
+    expectRefused(await me(harness, "a.b.c"), "UNAUTHENTICATED", 403);
   });
 
-  test("a token not valid yet is a 401", async () => {
+  test("a token not valid yet is UNAUTHENTICATED, a 403", async () => {
     const harness = await start();
     const later = harness.nowSec() + 600;
     const token = signToken({ key: KEY, nowSec: later });
-    expectRefused(await me(harness, token), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, token), "UNAUTHENTICATED", 403);
   });
 
   test("with no Access settings at all, every API route but health is refused", async () => {
@@ -194,7 +194,7 @@ describe("the Access identity check", () => {
     expectRefused(
       await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() })),
       "UNAUTHENTICATED",
-      401,
+      403,
     );
     expect(harness.urls).toEqual([]);
     const health = await harness.app.server.inject({ method: "GET", url: ROUTES.health });
@@ -250,7 +250,7 @@ describe("the key set", () => {
     const responses = await Promise.all(
       strangers.map((kid) => me(harness, signToken({ key: KEY, nowSec, header: { kid } }))),
     );
-    for (const response of responses) expectRefused(response, "UNAUTHENTICATED", 401);
+    for (const response of responses) expectRefused(response, "UNAUTHENTICATED", 403);
     // One refresh for all twenty, concurrent as they were.
     expect(harness.urls).toHaveLength(2);
 
@@ -258,7 +258,7 @@ describe("the key set", () => {
     expectRefused(
       await me(harness, signToken({ key: KEY, nowSec, header: { kid: "unknown-again" } })),
       "UNAUTHENTICATED",
-      401,
+      403,
     );
     expect(harness.urls).toHaveLength(2);
   });
@@ -303,9 +303,10 @@ describe("what the check never does", () => {
   test("lets a path spelled another way past it", async () => {
     const harness = await start();
     // Valid, but for an address nobody is mapped to: the hook answers that
-    // with a 403, and only the hook does — a route reached without it would
-    // fail closed in `personOf` with a 401 instead. So a 403 proves the hook
-    // ran on the route the URL actually reached.
+    // with `FORBIDDEN`, and only the hook does — a route reached without it
+    // would fail closed in `personOf` with `UNAUTHENTICATED` instead. Both are
+    // 403s, so the code, not the status, proves the hook ran on the route the
+    // URL actually reached.
     const stranger = signToken({ key: KEY, nowSec: harness.nowSec(), claims: { email: STRANGER } });
     const ask = async (url: string) =>
       await harness.app.server.inject({ method: "GET", url, headers: { [HEADER]: stranger } });
@@ -333,6 +334,6 @@ describe("what the check never does", () => {
     });
 
     expect((await me(harness, several)).statusCode).toBe(200);
-    expectRefused(await me(harness, elsewhere), "UNAUTHENTICATED", 401);
+    expectRefused(await me(harness, elsewhere), "UNAUTHENTICATED", 403);
   });
 });
