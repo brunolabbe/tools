@@ -165,6 +165,14 @@ invalidated it — and adding a file to a branch invalidates every count of that
 branch's files.** A fix that does not generalise is how a class recurs, and "fix
 the number the gate named" is exactly such a fix.
 
+**2026-09-29:** A test that asserts a count, not content, passes on empty output.
+`"".split("\n")` has length 1 in JavaScript; both branches this batch shipped such
+a test that passed on vacuous input. Only gate mutations caught them.
+
+**Also 2026-09-29:** A mutation that does not parse fails the test file's load,
+which reads as a detection. Confirm the failure is an assertion failure, not a
+load error, before counting the mutation as caught.
+
 ## Verification traps
 
 - **A harness that cannot fail is the defect class that produced everything else

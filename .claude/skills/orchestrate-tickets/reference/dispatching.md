@@ -61,9 +61,13 @@ What only you can supply, and what every builder prompt therefore carries:
   re-verifies against the same base tree, and the one that had kept its
   base-tree extract and comparison script there took ten minutes on a round
   where the one that rebuilt them took an hour (2026-09-20).
-- **Say "maintenance" when it is one** — no ticket, or a `chore` with no
-  source change — so the builder runs on Haiku by the table and stops on a
-  judgement call instead of making it (repo-56).
+  **2026-09-30:** The per-ticket directory is shared; the builder writes under
+  `<scratchpad>/<id>/build/` and the gate under `<scratchpad>/<id>/gate-<n>/`.
+  A gate prompt must say the gate never lists `<scratchpad>/<id>/` itself to avoid
+  seeing the builder's scratch files.
+- **Say "maintenance" when it is one** — a citation pin, a rebase, a merge from `main`, one Log edit — so the builder runs on Haiku by the table
+  and stops on a judgement call instead of making it (repo-56). A chore writing rule pages or records from a fact list is not maintenance:
+  it is the docs/records-only row, `builder-standard`.
 - **The narrowest thing that can fail**, for verification runs. Agents reach for
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
@@ -203,6 +207,14 @@ merges.** The definitions read the pages from `origin/main`, so on such a branch
 every new agent fails at its first command with git's `exists on disk, but not
 in` — loudly, which is the intended failure. Gate that branch by hand or under
 the definitions on `main`, and say which in the pull request body.
+
+**2026-09-30:** When an agent-definition frontmatter change (model, effort, tools)
+merges to `main`, **check the first dispatch's model with `node scripts/agent-cost.mjs
+--agent <id>`** before counting it in the new lineup. The mechanism of when changes
+take effect from a shared checkout is not fully known from measurement; resumes and
+later dispatches pick up the new definition, but a first dispatch from a checkout
+with the new file may still run the old definition. This check confirms which model
+actually ran.
 
 ### Never write an install into a gate prompt
 
@@ -623,6 +635,10 @@ measurement behind it. What goes in each dispatch:
   a later round moved its lines, and `dl-53`'s landing dispatch ordered a
   byte-for-byte splice before re-resolution, which `review-record.mjs`
   refuses (2026-09-27); under this rule there is nothing to re-resolve.
+
+**2026-09-30:** A landing dispatch does not restate the status mechanic —
+  `roles/fixer.md` governs where `status: done` is recorded and how.
+  Do not instruct the landing agent on this point.
 
 **Which findings are mechanical is your call, and err toward the builder.** A
 finding is mechanical when its fix is fully stated by the finding and touches only

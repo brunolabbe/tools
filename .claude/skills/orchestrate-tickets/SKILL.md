@@ -78,6 +78,12 @@ you are there.
    repository's orchestrator, which checks its build report before its review
    for the same reason.
 
+   **2026-09-30:** When a `Done when` line names several subjects (e.g., "a test
+   per tool" naming planner, ledger, downloader), check all subjects against the
+   same grain in one message. Do not send back for one subject, accept, then send
+   back again for another at a different grain — this causes builds to introduce
+   grain differences undetected by the prior round.
+
 5. **Gate each accepted branch** — `ticket-reviewer-sonnet` or
    `ticket-reviewer-opus` per the pairing below, spawned by **you, never the
    builder**: the checked thing must not pick its checker. **Give the gate
@@ -316,8 +322,8 @@ edits this table and those files together, and nothing else.**
 | `standard` | `builder-standard` — Sonnet 5.5, high | **`ticket-reviewer-opus`** — Opus 5.5, high |
 | `hard` | `builder-hard` — Opus 5.5, high | `ticket-reviewer-sonnet` |
 | absent | `builder-hard` | `ticket-reviewer-sonnet` |
-| **maintenance** — no ticket, or a `chore` with no source change: a history row, a rebase, a merge from `main`, a citation pin, a Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
-| **a docs/records-only chore** — a `chore` whose whole diff is rule pages, ticket files and history rows, no source (2026-09-27) | whichever builder the dispatch names — `builder-mechanical` absent an override, or a stronger one by owner override, per `repo-64`'s own `builder-standard` | **one gate, post-PR and narrow** — `sizing.md`'s docs-ticket gate cap; a second, narrow gate only once the first has found something wrong, never a default second round |
+| **maintenance** — no ticket, or a `chore` with no source change, and only mechanical edits: a rebase, a merge from `main`, a citation pin, one Log edit, a filing whose reproduction is in hand. A chore that writes rule pages or records from a fact list, a history row included, is the next row, not this one (2026-09-30) | `builder-mechanical`, prompt saying "maintenance" | `ticket-reviewer-sonnet`, where one runs |
+| **a docs/records-only chore** — a `chore` whose whole diff is rule pages, ticket files and history rows, no source (2026-09-27); it takes precedence over maintenance for any chore that writes rule pages or records from a fact list (2026-09-30) | `builder-standard` — Sonnet 5.5, high (2026-09-30; `builder-mechanical` absent an override before it, measured below) | **one gate, post-PR and narrow** — `sizing.md`'s docs-ticket gate cap; a second, narrow gate only once the first has found something wrong, never a default second round |
 | **a round's mechanical fixes, and its landing** | `fixer` — Sonnet 5.5, high (Sonnet 5 until 2026-09-30, Haiku 4.5 until 2026-09-27) | the round's gate, woken |
 
 **2026-09-27: the docs/records-only chore row exists because `repo-64` did not
@@ -353,6 +359,12 @@ decision** — `builder-standard`, `fixer`, `seam-mapper` and
 Sonnet 5.5 recalibrates its effort levels, so the `high` and `xhigh` above are
 carried over by name, not re-measured; the first history rows under it are the
 trial.
+
+**2026-09-30: the docs/records-only chore's builder moved from
+`builder-mechanical` to `builder-standard`, on the owner's decision.** Measured on
+#329, this batch's close-out: the Haiku builder cost $1.42 and built from a
+fact list with 11 med errors (2 items missing, 4 stating what no source says), and the gate that found them cost $5.49
+(`node scripts/agent-cost.mjs`).
 
 - **Never pass `model` when dispatching one of these.** It overrides the
   definition's model and keeps its effort, which gives a pairing this table does

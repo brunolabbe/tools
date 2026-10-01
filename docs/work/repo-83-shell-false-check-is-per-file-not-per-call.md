@@ -3,7 +3,7 @@ id: repo-83
 tool: repo
 title: spawn-safety's `shell: false` check is per file, not per call, and nothing guards the widened pattern
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -42,9 +42,18 @@ alone still passes, 0 offenders, at repo-77's head — every file that has a
 ticket's own commit and repo-77 depend on is not enforced by anything that
 would fail if it regressed.
 
-## The decision
+## The decision — answered 2026-09-30: (a), the per-call check, but not this batch
 
-Whether to make the check per call, given what building it costs:
+**Asked of the owner** by the orchestrator via `AskUserQuestion` on 2026-09-30,
+with three options: build (a) this batch; **(a), but not this batch**; (b)
+accept the file-level check. **Answered by the owner: (a), but not this batch.**
+The reason: repo-47 was editing `scripts/preflight.mjs` in the same batch, and
+(a) rewrites calls in it. The cost carried with the answer: the count of 14
+below was measured at `6418f17`, and `scripts/review-record.mjs` has since grown
+by about 850 lines (repo-80) and `scripts/preflight.mjs` changed (repo-47), so
+the builder re-measures first. Nothing is built; `status` is `ready`.
+
+The options as filed:
 
 - **(a) — recommended.** Make "every file that spawns says `shell: false`
   explicitly" per call: fail a call that neither inlines `shell: false` nor
@@ -67,7 +76,7 @@ Whether to make the check per call, given what building it costs:
   `CLAUDE.md` states ("never invoke a shell"). Leaves the call pattern
   unguarded, as-is.
 
-## Build (if (a))
+## Build (decided: (a), deferred — not built)
 
 1. Rewrite "every file that spawns says `shell: false` explicitly" to
    evaluate each matched call's own argument list plus, where a call passes a
@@ -82,7 +91,7 @@ Whether to make the check per call, given what building it costs:
    `scripts/review-record.mjs` (7), `scripts/test/preflight.test.ts` (5) —
    re-measure first, this is a snapshot.
 
-## Done when (if (a))
+## Done when (decided: (a), deferred — not built)
 
 - A call to `spawnSync`, `execFile` or `execFileSync` whose own options carry
   no `shell: false`, in a file that has one elsewhere, fails
@@ -256,3 +265,10 @@ Whether to make the check per call, given what building it costs:
   offenders under the narrowed pattern — hold at `6418f17` and are reproduced
   by the two scripts above, run from a plain checkout, no scratchpad path
   required.
+
+- 2026-09-30 — **Decided via AskUserQuestion:** option (a), the per-call check,
+  deferred to a later batch because repo-47 was editing `scripts/preflight.mjs` in
+  the same batch. The filer's recommendation was chosen. The ticket's count of 14
+  calls was measured at `6418f17`. The scripts `scripts/review-record.mjs` and
+  `scripts/preflight.mjs` have changed since then, so the builder will
+  re-measure before building.

@@ -53,7 +53,10 @@ checkout step:
    hours without reporting, 2026-09-03). If the farm's stderr warns that the
    shared checkout is stale, its remedy (`npm install` there) is not yours to
    run — stop, report the missing package list to whoever dispatched you, and
-   install nothing.
+   install nothing. **2026-09-30:** The farm symlinks `node_modules/.package-lock.json`
+   into the shared checkout. Any npm command that writes this file, even
+   `--package-lock-only`, modifies `/workspaces/tools`. This does not corrupt
+   the shared checkout, but watch for lock file timing shifts in peer sessions.
 2. `npm run build`. Without built `dist`, most suites fail with
    `packageEntryFailure`, which reads as a test failure and is not.
 
@@ -112,6 +115,23 @@ instead. What holds: one plain command per call, `git commit -F <file>`, literal
 paths, `printf` over `cat <<EOF`, `awk -v`, a short `node -e`, and reading an
 exit code by redirecting a command's output to a file and running the next
 command plainly. **Rewrite the shape rather than reporting a broken channel.**
+
+**2026-09-30:** Sandbox refusals this batch: any command naming `git` more than
+once in one call; `git -C <relative-path>` (computed at runtime); a path held in
+a shell variable passed to `sed`; `NODE_OPTIONS=… node`; a `for` loop over git.
+What worked: single plain commands, `git -C <absolute-scratch-path>`, and
+`git clone --depth 1 file://…` to an absolute path. **Preflight runs longer
+than 120 seconds, so run it in the background with output redirected to a file**
+(`node scripts/preflight.mjs … > /tmp/preflight.log 2>&1 &`), then check the
+output file after a wait.
+
+**2026-09-29:** The sandbox blocks git commands aimed at the shared checkout but
+allows plain file writes to it. An unexported shell variable used inside
+`node -e` is `undefined`. Together, these created an `undefined/` directory in
+the shared checkout when a script tried to write a file with a path from an
+undefined variable. Test any shell variables used in node scripts: `node -e
+"console.log(process.env.VAR_NAME)"` and confirm they print something before
+passing them to file operations.
 
 ## Point every run at the narrowest thing that can fail
 

@@ -4379,3 +4379,62 @@ The three cold wakes each came more than an hour after the agent's previous turn
 11. **roles/common.md, sandbox list:** Measured refusals: long heredocs whose content looks like a diff; `for` loops over `$(git …)` results; `printf` with `\r\n`; `awk` with `" | "` in print. Plain `printf` and small heredocs worked. EDIT.
 12. **reference/dispatching.md:** When a dispatch names a line to edit, quote its content, not only its number. EDIT.
 13. **A re-resolve script:** gates rebuilt the same "re-resolve every unpinned citation by anchor" in 4 rounds (scratchpad/repo-80/probe/reresolve.mjs). FILE repo- ticket posing whether to add it under `scripts/`. → `repo-84`.
+
+## Session 2026-09-29 — base 6bfae8e
+
+The owner folded this batch's step 12 into repo-47's close-out (decided 2026-09-29), which is this PR. It ran in parallel with the repo-77/80 batch. Fields from the orchestrator's notes of that session:
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2**. repo-65 → #319, merged as b0f8f3c. repo-45 → #321, merged as 33d39d0. Three gate records each |
+| `agents` / `dispatches` | not recorded |
+| `builder rounds` | not recorded. Round 3 on both tickets came from re-gates finding lows in the previous round's own lines |
+| `gates` | 3 per ticket, 6 in all. Both gates woke past an hour (`cold=1` each) |
+| `wrong findings` | not recorded |
+| `subagent tokens` | not recorded |
+| `cost` | **$32.51** including the orchestrator floor (`agent-cost.mjs`, rates read 2026-09-26) |
+
+**what the skill got wrong:**
+
+1. The gate wrote section files with a blank first line, which `review-record.mjs --gate n` refuses. → `roles/reviewer.md`, _Write each section_.
+2. Each splice must be committed before the next, because `review-record.mjs` refuses a dirty ticket, and the lander's Log entry needs its own commit after the last splice. The first half was already on main at `roles/fixer.md`, _Landing, when your dispatch grants it_; the second was not, and is now in the same section (the 2026-09-30 close-out).
+3. An import-block insertion moves citations exactly as a mid-file test does. → `reference/records.md`.
+4. A comment that quotes another line's exact text is a second occurrence of that line's anchor. → `reference/records.md`.
+5. A test that asserts a count, not content, passes on empty output. → `reference/defect-shapes.md`.
+6. A mutation that does not parse fails the test file's load, which reads as a detection. → `reference/defect-shapes.md`.
+7. The sandbox blocks git aimed at the shared checkout but not plain file writes, and an unexported shell variable in `node -e` is `undefined`. → `roles/common.md`.
+8. A lander works detached and pushes `HEAD:refs/heads/<branch>`. Already on main, at `roles/fixer.md`, _Set up_ and _The work_.
+
+## Session 2026-09-30 — base e79b04f
+
+Intake at bf7fd98. The batch was dispatched from e79b04f, after the owner chose to wait for #324 (Sonnet 5 → 5.5) to merge.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4**. repo-47 (`hard`) → #326, merged as 9fadda7. repo-49 (`hard`) → #325, merged as b658179. repo-66 (`standard`) → #327, open at d1ba70d. repo-46 (`standard`) → #328, open at 39f2e40. **Filed:** repo-85 (on #327), repo-86, repo-87 and repo-88 (this PR). **Decided, not built:** repo-83 (a), deferred; repo-84 option 1, deferred |
+| `agents` / `dispatches` | **13** agents: 1 seam-mapper, 4 builders, 4 gates and 4 landing fixers. **26** dispatches and wakes: seam-mapper 2 (one resume after the session restarted); builders 11 (repo-47 2, repo-49 2, repo-66 4, repo-46 3); gates 9 (repo-49 2, repo-47 2, repo-46 3, repo-66 2); fixers 4. Not counted: this close-out's own builder and gate |
+| `builder rounds` | **11** (repo-47 2, repo-49 2, repo-66 4, repo-46 3). **The orchestrator's fault: 1 whole round, plus part of 2 others.** The whole round is repo-66's ledger send-back: the per-entry grain was introduced one tool at a time. The partial ones are repo-66's F1, where the orchestrator declined to extend that grain to the downloader and the gate then found it, and repo-47's F6, two stale ci.yml comments left because the dispatch narrowed the ci.yml edit |
+| `gates` | **9** gate rounds, and **all 9 returned findings**. Verdicts: FAIL 2 (repo-49 g1, repo-66 g1), PASS 4 (repo-49 g2, repo-47 g1 and g2, repo-66 g2), CONCERNS 3 (repo-46 g1, g2 and g3; g3 only because Done-when 1 and 3 need a post-merge release). **4** returned a finding at `med` or above |
+| `wrong findings` | **1**. repo-46 gate 2's low said the merge with #326 needed repins in repo-47's own record. The builder refuted it by measurement after #326 merged: the citations gate exited 0 with `137 enforced, 0 failing`. Gate 3 agreed that it had been a prediction taken from a scratch merge against then-unmerged repo-47. It reached no commit |
+| `subagent tokens` | **2,531,202** summed, last observed per agent (cumulative): seam-mapper 96,562 · builders repo-47 214,819, repo-49 173,052, repo-66 291,129, repo-46 335,433 · gates repo-49 307,799, repo-47 422,505, repo-46 289,983, repo-66 222,054 · fixers repo-49 47,607, repo-47 42,475, repo-66 46,135, repo-46 41,649 |
+| `cost` | **$96.09** (`node scripts/agent-cost.mjs`, rates read 2026-09-30), including an orchestrator floor of $12.00. Builders $37.22 (repo-46 $15.25, repo-66 $10.34, repo-47 $6.87, repo-49 $4.76). Gates $44.55 (repo-47 $15.44, repo-46 $14.13, repo-49 $7.97, repo-66 $7.01). Fixers $1.73. Seam-mapper $0.60. `cold=3`: the repo-46 builder, the repo-46 gate and the orchestrator, each a wake past an hour during the roughly 21-hour wait for the owner to merge #326 |
+
+**what the skill got wrong** (each ends with the page and heading its fix lands under, or the ticket id):
+
+1. A fresh dispatch ran a definition older than the file on disk. → `reference/dispatching.md`, _What an agent reads, and when_.
+2. The gate could list the builder's scratch files. → `reference/dispatching.md`, the scratch-directory bullet under _Dispatching a builder_.
+3. Landing dispatches contradicted `roles/fixer.md` on where `status: done` goes. → `reference/dispatching.md`, _Dispatching a builder_.
+4. Step 4 checked one subject of a multi-subject Done-when line at a time. → `SKILL.md`, step 4.
+5. A branch that changes the citations gate or preflight is judged by the old code until it merges. → `reference/concurrency.md`.
+6. No recipe for a multi-section landing dry run. → `roles/reviewer.md`, the dry-run section.
+7. No recipe for re-issuing a section at a new tip. → `roles/reviewer.md`, the re-gate/re-issue section.
+8. A gate had no verdict for a faithful build of an unmeetable Done-when line, nor for a line proven only by a post-merge release. The owner chose, via AskUserQuestion on 2026-09-30, to add no verdict rule in this PR: the two verdict bullets the builder drafted for `gate.md` are dropped, and the question is filed with both options and no recommendation. → `repo-88`.
+9. A gate's measurement taken on a scratch merge against an unmerged branch is a prediction. → `roles/reviewer.md`.
+10. The farm symlinks `node_modules/.package-lock.json` into the shared checkout. → `roles/common.md`.
+11. Sandbox refusal shapes and preflight runtime. → `roles/common.md`, the sandbox section.
+12. Builder gates: preflight title check, new `scripts/*.mjs` registration, and merges that move record lines. → `roles/builder.md`, _Gates before you report_.
+13. Measuring a `process.platform` skip. → `.claude/rules/testing.md`, next to the Windows spawn paragraph.
+14. `next-id.mjs` does not see an uncommitted or unpushed ticket file, so a filed id is held only from the commit that adds it being **pushed**. The fact list first said "committed", which the gate measured wrong (a local commit still printed `next free: repo-88`; only `--rev HEAD` saw it), and the orchestrator corrected it on 2026-09-30. → `docs/01-TICKETS.md`, where next-id is described.
+15. `citations.mjs` silently drops citations into extension-less files, so a wrong Dockerfile citation passes as if absent; until it is fixed, `roles/reviewer.md` warns of it. → `repo-87`.
+16. `review-record.mjs --help` is an unknown option, and its main usage line omits `--verify`, `--rev` and `--land`. Landing fixers hit it. → `repo-86`.
+17. The docs/records-only chore row named `builder-mechanical` as the builder absent an override. On #329, this close-out, the Haiku builder cost $1.42 and built from a fact list with 11 med errors (2 items missing, 4 stating what no source says), and the gate cost $5.49 (`agent-cost.mjs`). The owner decided via AskUserQuestion on 2026-09-30 that the row's builder is now `builder-standard` (Sonnet 5.5), and, on the re-gate's G2-1, that a chore writing rule pages or records from a fact list is that row and not maintenance, which drops "a history row" from its examples. → `SKILL.md`, _Which model built it, and which gated it_.

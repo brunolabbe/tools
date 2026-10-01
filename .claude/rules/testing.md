@@ -101,6 +101,13 @@ real binary answering in its place fails the test instead of passing it.
 the long form with forward slashes. Both resolve to the same place, but the
 strings are unequal. Assert the resolved directory instead.
 
+**Measuring a `process.platform` skip.** Do not fake `win32` process-wide via
+environment setup; it crashes vitest's startup with missing native modules like
+`@rollup/rollup-win32-x64-msvc`. The workaround that worked: flip the predicate
+inline in the test file (`process.platform === 'win32'` to `!== 'win32'`), run the
+suite, then restore it. `vitest 4`'s `--execArgv` flag does not reach worker
+processes, so process-wide env changes do not reliably affect tests anyway.
+
 **A test that counts entries in the shared temp directory races with concurrent
 sessions.** Point `TMPDIR`, `TEMP` and `TMP` at a private directory for the
 session so concurrent tests do not interfere.

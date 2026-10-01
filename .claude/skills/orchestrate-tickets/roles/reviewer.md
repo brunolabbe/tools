@@ -101,6 +101,18 @@ and the pin goes `unresolvable` in CI for everyone (2026-09-14).
 `.claude/skills/orchestrate-tickets/reference/records.md` has the forms that
 survive.
 
+**2026-09-30:** For a multi-section landing dry run, splice each section
+sequentially: splice, commit the splice (with a conventional message), then
+splice the next section, commit again, and run `review-record.mjs --verify` on each.
+`review-record.mjs` requires the ticket to be clean between splices, and each
+splice is a separate commit. Do not attempt to dry-run a landing with `--land`
+because the landing cannot dry-run — the `--land` flag performs an actual push.
+
+**2026-09-30:** `citations.mjs` silently drops a citation into a file with no
+extension, a `Dockerfile` among them: it is neither verified nor unchecked, so a
+wrong one passes as if absent (`repo-87`). Until that is fixed, check each such
+citation by hand with `git show <sha>:<path> | sed -n <line>p`.
+
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep
 the extract and any comparison script in the ticket's scratch directory, the
@@ -116,7 +128,9 @@ not the section you wrote, and a section split across two files has to be
 joined by hand (2026-09-26). Put the gate number and the sha the coordinates
 resolve against in each file's name — `gate-2@<sha>.md` — because a re-gate
 re-issues every earlier section, and the lander must be handed one set from
-one sha, never a mix of rounds.
+one sha, never a mix of rounds. **2026-09-29:** Start on the heading line
+(`## Review`), never a blank line, since `review-record.mjs --gate n` refuses
+a section with a blank first line.
 
 ## When you are woken to re-gate
 
@@ -160,7 +174,13 @@ not get their narrative, for the same reason you did not get the build's report.
 - **Woken only to re-issue** — the tip moved after your last round and a
   lander's `review-record.mjs` found a section `MOVED` — re-resolve every
   section against the new sha the same way and return the set; review nothing
-  else unless the orchestrator names a diff.
+  else unless the orchestrator names a diff. **2026-09-30:** The recipe is to
+  splice each old section above the new head's `## Log` and run
+  `node scripts/citations.mjs <copy> --section Review` on it. The `MOVED` list
+  is the set of citations to repoint. A citation whose anchor the round deleted,
+  or whose sentence the round made false though the anchor survives, becomes
+  prose naming the sha that section gated, and bare prose line numbers are
+  unchecked only — they must be re-listed by hand if they are still true.
 - When `origin/main` moves while you review, keep the base you were dispatched
   with in your header and say that `main` moved.
 - **When an owner closes a finding "by design" after it is committed**, use the
@@ -175,6 +195,19 @@ peer tests.
 **When a gate builds the commit an amendment names, the lander pushes that exact
 commit.** Do not let the builder or lander amend it further; the amendment's
 coordinates are read at the commit the gate built.
+
+## Measuring against a scratch merge
+
+**2026-09-30:** When the orchestrator reports a measurement taken on a scratch
+merge against an unmerged branch as part of a gate's findings, **treat it as a
+prediction, not proof.** The set of records that count as changed depends on the
+merge base; when the unmerged branch is later merged, the base moves and the
+changed set can change. If a gate records a finding based on such a measurement,
+confirm it against the head sha after the dependency merges. Measured: repo-46's
+gate 2 predicted, from a scratch merge against repo-47 before it merged, that
+repo-47's own record needed repins; once repo-47 merged,
+`node scripts/citations-gate.mjs --against origin/main` exited 0 with
+`137 enforced, 0 failing`, and the requirement was refuted.
 
 ## Check the ticket's premise, not only its code
 
