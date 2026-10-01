@@ -3159,3 +3159,23 @@ test("the CLI counts, verifies and fails an extension-less citation", () => {
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("prose shaped like a path is read, fails naming the double-backtick escape, and the escape works", () => {
+  // The open pathed rule's known cost (repo-87): it fails loudly, never silently.
+  expect(read("see and/or:5")).toEqual(["and/or"]);
+  const resolve = makeResolver(["src/a.ts"]);
+  expect(resolve("and/or")).toEqual({
+    error: expect.stringContaining("quote it in a double-backtick span"),
+  });
+  // An extension-bearing miss keeps its short message.
+  expect(resolve("gone.ts")).toEqual({ error: "no tracked file matches" });
+  // And the way out the message names does what it says.
+  expect(read("see ``and/or:5``")).toEqual([]);
+});
+
+test("a directory with no left boundary reads as its tail, which the resolver still finds", () => {
+  expect(read("`40/tools/x/Dockerfile:9`")).toEqual(["tools/x/Dockerfile"]);
+  expect(makeResolver(["tools/x/Dockerfile"])("tools/x/Dockerfile")).toEqual({
+    path: "tools/x/Dockerfile",
+  });
+});

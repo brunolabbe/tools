@@ -110,8 +110,8 @@ because the landing cannot dry-run — the `--land` flag performs an actual push
 
 **2026-10-01:** `citations.mjs` reads a citation into a file with no extension
 (`tools/planner/Dockerfile:40`, `.githooks/commit-msg:12`) since `repo-87`; before it
-silently dropped one. A bare name reads only for `Dockerfile`, `Makefile`, `LICENSE`
-or a dotfile: write any other with its directory, or check it by hand with `git show`.
+silently dropped one. A bare `Dockerfile` reads but always fails as ambiguous (several are
+tracked): give it its directory. Prose like `and/or:5` reads too: quote it in double backticks.
 
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep

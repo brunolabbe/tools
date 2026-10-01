@@ -303,21 +303,28 @@ const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
  * `.ext` after the last slash, so a citation into one of these matched nothing,
  * and a citation nothing matches is not counted, verified or unchecked — the
  * invisible failure this script exists to refuse. A wrong `Dockerfile` line
- * passed as if it had never been written (repo-66, gate 1). Two shapes, and the
- * line between them is what keeps prose out:
+ * passed as if it had never been written (repo-66, gate 1). Two shapes:
  *
  *   - **Pathed**: at least one directory, then a last segment that starts with a
  *     letter (or a dot, for `.gitkeep`) and holds only word characters and
- *     hyphens. The slash is the evidence it is a path; a directory that starts
- *     with a digit is not one, which keeps `10/12:30`, `2026/09/30:12` and
- *     `low:40/high:60` (a real one, in pl-10's record) out; and no `@` in the
- *     last segment, so `Dockerfile@e79b04f:40` reads as a name and a pin rather
- *     than one long name.
+ *     hyphens, and no `@` in it, so `Dockerfile@e79b04f:40` reads as a name and
+ *     a pin rather than one long name. **This rule is open, on purpose, and it
+ *     does read prose**: `and/or:5` is a file as far as it can tell, and an
+ *     unresolvable citation is fatal. The failure is loud (`no tracked file
+ *     matches`, and the message names the way out: a double-backtick span is a
+ *     quotation and is not read), where a closed list of names would drop a real
+ *     citation to any name not on it, silently — the one thing this exists to
+ *     refuse (the owner chose this over a list, 2026-10-01). The only guards are
+ *     lexical: a directory must start with a letter, `_`, `.` or `@`, which keeps
+ *     `10/12:30`, `2026/09/30:12` and pl-10's `low:40/high:60` out, and there is
+ *     **no left boundary**, so `40/tools/x/Dockerfile:9` reads as
+ *     `tools/x/Dockerfile`, which the resolver's suffix match still finds.
  *   - **Bare**, with no slash to vouch for it, so a closed set: `Dockerfile`,
  *     `Makefile`, `LICENSE`, or a leading-dot name (`.gitignore`), and only when
  *     not the tail of a longer token. An open rule would read `Note:5` and
- *     `Step:2` as files, and an unresolvable one is fatal. A bare name that is
- *     not on the list is written with its directory.
+ *     `Step:2` as files. A bare name that is not on the list is written with its
+ *     directory. A bare `Dockerfile` is on it so that it fails (ambiguous: this
+ *     repository tracks several) rather than vanishing.
  *
  * One definition for `INLINE`, the pin-shaped pass and a declaration, so the
  * three cannot disagree about what a file is.
@@ -889,7 +896,15 @@ export function makeResolver(tracked) {
     const suffix = file.startsWith("/") ? file : `/${file}`;
     const matches = tracked.filter((t) => t === file || t.endsWith(suffix));
     if (matches.length === 1) return { path: matches[0] };
-    if (matches.length === 0) return { error: "no tracked file matches" };
+    if (matches.length === 0) {
+      // An extension-less pathed token reads prose like `and/or:5` as a file
+      // (repo-87), so say how to quote it rather than leave the reader to guess.
+      return {
+        error: /\.\w+$/.test(file)
+          ? "no tracked file matches"
+          : "no tracked file matches — if this is prose and not a file, quote it in a double-backtick span, which is not read",
+      };
+    }
     return {
       error: `ambiguous — ${matches.length} tracked files match (${matches.slice(0, 3).join(", ")}${matches.length > 3 ? ", …" : ""})`,
     };

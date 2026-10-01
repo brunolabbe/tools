@@ -146,3 +146,46 @@ passed (119)`.
 read citations into files with no extension (repo-87)`.
   - dl-57's `moved` Dockerfile citation and the other non-fatal moves in
     unchanged records are left alone, as instructed.
+- 2026-10-01 — Gate 1 (Opus) returned FAIL at `ea901ee` on one high; the round
+  below was answered by the owner through AskUserQuestion the same day.
+  - **High, reproduced and fixed.** dl-37's record line 138 quotes dl-39's Log
+    about an `INSTALL_YTDLP=false` citation, whose lines 90-93 at the commit the
+    reviewer meant begin "Optional, and off by default" (`git show
+1aae8c8:tools/downloader/Dockerfile | sed -n 90,93p`), while at the base they begin "yt-dlp,
+    installed by default" — the opposite. My anchor had been true of the base
+    and false of the reviewer's meaning. Owner chose the pin: the citation
+    now reads `tools/downloader/Dockerfile@1aae8c8:90-93 "Optional, and off by
+default"`; `node scripts/citations.mjs <dl-37> --section Review
+--require-anchors --require-distinct-anchors` gives `10 verified … 4 pinned`,
+    exit 0. `1aae8c8` is an ancestor of the base, so the pin outlives a squash.
+  - **Med, reproduced and fixed as the owner chose (keep the open rule, fail
+    loud).** `extractCitations("see and/or:5")` returns the file `and/or`. The
+    docblock no longer claims the lexical guards keep prose out; it says the
+    rule is open, reads prose, and why that beats a closed list. The resolver's
+    `no tracked file matches` now ends "if this is prose and not a file, quote
+    it in a double-backtick span, which is not read" for a file with no
+    extension; an extension-bearing miss keeps the short message. After this,
+    any such shape written in a gate section about this checker must sit in
+    double backticks.
+  - **Low 3, reproduced and fixed (docblock).** `40/tools/x/Dockerfile:9` reads
+    as `tools/x/Dockerfile` — there is no left boundary. The false sentence is
+    gone and the truncation is stated: the resolver's suffix match still finds
+    the file. A boundary would instead drop a real path whose first directory
+    starts with a digit, silently, so I did not add one.
+  - **Low 4: dl-57 fixed, repo-48 and repo-60 declined.** dl-57's one
+    unpinned Dockerfile citation is now pinned to `eb903a3`, where line 152 is
+    `CMD ["node", "tools/downloader/api/dist/main.js"]` (`git show
+eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of the
+    base; no shorthand follows it on that line, so no inheritance changes. I
+    could also have pinned the eight into `scripts/citations.mjs` in repo-48 (2)
+    and repo-60 (6) and did not: they were never in the instruction, they are
+    non-fatal by repo-47's rule, a pin there would change what the shorthands
+    after it inherit in two merged records, and `repo-84` exists to re-resolve
+    exactly these.
+  - **Low 5, fixed.** `roles/reviewer.md` now says a bare `Dockerfile` reads
+    but always fails as ambiguous, and that prose reads too and is quoted in
+    double backticks. Same four lines. (`Makefile` and `LICENSE` stay in the
+    closed set; `LICENSE` is tracked once and resolves, `Makefile` is tracked
+    nowhere and would fail loudly if cited.)
+  - Two tests appended at the end of `scripts/test/citations.test.ts`. Not run
+    red against the previous script.
