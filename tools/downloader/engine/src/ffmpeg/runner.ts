@@ -29,7 +29,6 @@ import { FfmpegProgressParser } from "./progress.ts";
 /**
  * What a non-zero exit is reported as. Only one since dl-53: every ffmpeg run
  * fetches its own input, so any failure it has is a failure to download.
- * `MUX_FAILED` went with the separate mux pass and the file-writing runner.
  */
 export type FfmpegFailureCode = "DOWNLOAD_FAILED";
 

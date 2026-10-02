@@ -14,7 +14,7 @@ import {
   probeResponseSchema,
   ROUTES,
 } from "@downloader/contract";
-import type { CreateJobRequest, ProbeRequest } from "@downloader/contract";
+import type { CreateJobRequest, ErrorCode, ProbeRequest } from "@downloader/contract";
 import type { z } from "zod";
 import type { EventStream } from "../lib/event-stream.ts";
 import { noHumanCheck } from "../lib/human-check.ts";
@@ -65,7 +65,10 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
     if (!response.ok) {
       const payload = appErrorPayloadSchema.safeParse((body as { error?: unknown } | null)?.error);
       if (payload.success) {
-        throw new AppError(payload.data.code, payload.data.message, {
+        // Handle retired codes like MUX_FAILED by mapping them to current codes
+        const code: ErrorCode =
+          payload.data.code === "MUX_FAILED" ? "DOWNLOAD_FAILED" : (payload.data.code as ErrorCode);
+        throw new AppError(code, payload.data.message, {
           retryable: payload.data.retryable,
           ...(payload.data.details ? { details: payload.data.details } : {}),
         });

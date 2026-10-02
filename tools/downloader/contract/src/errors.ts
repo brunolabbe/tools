@@ -55,8 +55,6 @@ export const DOWNLOADER_ERROR_CODES = [
   "VARIANT_GONE",
   /** Segment fetching failed past the retry budget. */
   "DOWNLOAD_FAILED",
-  /** ffmpeg exited non-zero while remuxing or concatenating. */
-  "MUX_FAILED",
 
   // --- Serving ---
   /**
@@ -70,8 +68,24 @@ export const DOWNLOADER_ERROR_CODES = [
   "THUMBNAIL_NOT_FOUND",
 ] as const;
 
+/**
+ * Retired codes that nothing raises but old records may carry.
+ *
+ * `MUX_FAILED` — was raised when the separate mux pass joined downloaded video
+ * and audio into a file. dl-53 removed that pass: every stream is one ffmpeg
+ * that fetches its own inputs and writes straight to the visitor, and any
+ * failure it has is `DOWNLOAD_FAILED`. Job rows and browser `downloader:jobs:v1`
+ * records from before dl-53 that carry `error.code: "MUX_FAILED"` are accepted
+ * by the read-side schema (so old data still loads) but nothing can raise it
+ * (dl-74).
+ */
+const RETIRED_ERROR_CODES = ["MUX_FAILED"] as const;
+
 /** Core codes first, so the generic ones keep their familiar order. */
 export const ERROR_CODES = [...CORE_ERROR_CODES, ...DOWNLOADER_ERROR_CODES] as const;
+
+/** All valid codes, including retired ones that old records may carry. */
+export const ALL_ERROR_CODES = [...ERROR_CODES, ...RETIRED_ERROR_CODES] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -100,7 +114,6 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   LIVE_STREAM_UNSUPPORTED: "This is a live stream. Set a recording duration to capture it.",
   VARIANT_GONE: "The stream link expired. Analyse the page again.",
   DOWNLOAD_FAILED: "The download failed partway through.",
-  MUX_FAILED: "The video could not be assembled into a playable file.",
   THUMBNAIL_NOT_FOUND: "That preview image is no longer available.",
 };
 

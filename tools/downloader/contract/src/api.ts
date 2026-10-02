@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { ERROR_CODES } from "./errors.ts";
+import { ALL_ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
 import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
 import type { Job, JobEvent, JobLink, JobOptions, JobProgress, JobResult } from "./job.ts";
@@ -123,14 +123,19 @@ export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 
 export const jobStatusSchema = z.enum(JOB_STATUSES);
 
-export const errorCodeSchema = z.enum(ERROR_CODES);
+/**
+ * Schema accepts all codes including retired ones (like `MUX_FAILED`) for
+ * backward compatibility with persisted records. The runtime type `ErrorCode`
+ * only includes raisable codes.
+ */
+export const errorCodeSchema = z.enum(ALL_ERROR_CODES);
 
 export const appErrorPayloadSchema = z.object({
   code: errorCodeSchema,
   message: z.string(),
   retryable: z.boolean(),
   details: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<AppErrorPayload>;
+});
 
 export const drmInfoSchema = z.object({
   protected: z.boolean(),
@@ -221,6 +226,11 @@ export const jobLinkSchema = z.object({
   expiresAt: z.string(),
 }) satisfies z.ZodType<JobLink>;
 
+/**
+ * Validates a stored job. Accepts retired error codes like `MUX_FAILED` for
+ * backward compatibility with persisted records, even though the runtime API
+ * type `Job` doesn't include them. The schema is more permissive than the type.
+ */
 export const jobSchema = z.object({
   id: z.string().min(1),
   sourceUrl: z.string(),
@@ -244,7 +254,7 @@ export const jobSchema = z.object({
   // `.optional()` for the reason `thumbnailPath` gives above: absent from every
   // record written before dl-53.
   link: jobLinkSchema.nullable().optional(),
-}) satisfies z.ZodType<Job>;
+}) as z.ZodType<Job>;
 
 /**
  * Discriminated on `type`, so an unknown frame fails fast with a useful error
@@ -288,7 +298,7 @@ export const jobEventSchema = z.discriminatedUnion("type", [
     at: z.string(),
   }),
   z.object({ type: z.literal("heartbeat"), at: z.string() }),
-]) satisfies z.ZodType<JobEvent>;
+]) as z.ZodType<JobEvent>;
 
 /** Parses an SSE `data:` payload. Returns null for anything unrecognised. */
 export function parseJobEvent(raw: string): JobEvent | null {
@@ -351,11 +361,11 @@ export const probeResponseSchema = z.object({
   cached: z.boolean(),
 }) satisfies z.ZodType<ProbeResponse>;
 
-export const jobResponseSchema = z.object({ job: jobSchema }) satisfies z.ZodType<JobResponse>;
+export const jobResponseSchema = z.object({ job: jobSchema }) as z.ZodType<JobResponse>;
 
 export const errorResponseSchema = z.object({
   error: appErrorPayloadSchema,
-}) satisfies z.ZodType<ErrorResponse>;
+}) as z.ZodType<ErrorResponse>;
 
 /** `GET ROUTES.config`. See the note on that route. */
 export interface ClientConfigResponse {

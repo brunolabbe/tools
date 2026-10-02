@@ -361,7 +361,7 @@ describe("scenario coverage", () => {
     // no disk to fill — `DISK_FULL` is core's and stays for the planner's sake,
     // by the owner's decision of 2026-09-27 — and no separate mux pass to fail,
     // since every stream is one ffmpeg that reports `DOWNLOAD_FAILED`.
-    const noLongerRaised: ErrorCode[] = ["DISK_FULL", "MUX_FAILED"];
+    const noLongerRaised: ErrorCode[] = ["DISK_FULL"];
     for (const code of noLongerRaised) fromScenarios.add(code);
 
     // Core's identity codes (lg-3), never raised by the downloader, which has

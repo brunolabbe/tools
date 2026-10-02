@@ -171,13 +171,6 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "transient",
     allowRetry: true,
   },
-  MUX_FAILED: {
-    title: "Could not assemble the file",
-    detail:
-      "The pieces downloaded but could not be joined into a playable file. Another quality may work better.",
-    tone: "internal",
-    allowRetry: false,
-  },
   SIZE_LIMIT_EXCEEDED: {
     title: "Too large",
     detail: "This video is bigger than the configured size limit. Pick a lower quality.",

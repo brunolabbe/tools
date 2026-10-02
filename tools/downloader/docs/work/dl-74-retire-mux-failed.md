@@ -61,3 +61,13 @@ file it rather than fold it in.
 
 - 2026-09-27 — Filed from dl-53's second gate, on the owner's answer of the
   same day. Not implemented.
+- 2026-10-02 — Implemented. **Migration decision:** Kept the code readable but
+  unraised. MUX_FAILED is no longer in DOWNLOADER_ERROR_CODES, so nothing can
+  raise it; its HTTP status and message entries are removed. However, the error
+  schema (ALL_ERROR_CODES) still accepts it when reading persisted records
+  (both database rows and browser `downloader:jobs:v1` records), so old data
+  continues to load without migration. The runtime AppErrorPayload type only
+  includes raisable codes (ERROR_CODES), but persisted payloads are parsed
+  permissively. If an old record with MUX_FAILED is read in the web client,
+  the error is mapped to DOWNLOAD_FAILED for display. `npm test -- --project
+downloader` passed 1560 tests; `npm run check` passed.
