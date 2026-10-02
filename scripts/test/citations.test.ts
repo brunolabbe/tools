@@ -3208,7 +3208,7 @@ test("the prose escape the hint names survives `oxfmt`, and a plain double-backt
   expect(read(formatted)).toEqual(["and/or"]);
 });
 
-test("a leading all-digit directory is cut off on its slash, and nothing else is", () => {
+test("a leading all-digit directory is cut off on its slash; one in the middle is a known limit", () => {
   // The cut lands on a `/`, so the resolver's suffix match finds the real file.
   expect(read("`40/tools/x/Dockerfile:9`")).toEqual(["tools/x/Dockerfile"]);
   expect(makeResolver(["40/tools/x/Dockerfile"])("tools/x/Dockerfile")).toEqual({
@@ -3219,4 +3219,8 @@ test("a leading all-digit directory is cut off on its slash, and nothing else is
     "tools/9x/Dockerfile",
     "v2/sub/Dockerfile",
   ]);
+  // The limit, written down and not guarded (no tracked path has such a directory):
+  // the match cannot cross an all-digit directory in the middle of a path.
+  expect(read("`tools/2026/Dockerfile:3`")).toEqual([]);
+  expect(read("`docs/2026/x/Dockerfile:2`")).toEqual(["x/Dockerfile"]);
 });

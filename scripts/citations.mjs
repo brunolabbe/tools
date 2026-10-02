@@ -311,22 +311,22 @@ const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
  *     a pin rather than one long name. **This rule is open, on purpose, and it
  *     does read prose**: `and/or:5` is a file as far as it can tell, and an
  *     unresolvable citation is fatal. The failure is loud (`no tracked file
- *     matches`, and the message names the way out: a double-backtick span is a
- *     quotation and is not read), where a closed list of names would drop a real
- *     citation to any name not on it, silently — the one thing this exists to
- *     refuse (the owner chose this over a list, 2026-10-01). **The way out for
- *     prose is a double-backtick span around a backticked token** —
- *     `` `and/or:5` `` written exactly so — **and no other spelling of it**:
- *     `npm run format` rewrites a plain double-backtick span to single
- *     backticks, which this reads, and keeps the nested form (measured: format,
- *     then check, gate 2). The only guards are lexical: a directory is not
- *     all digits, which keeps `10/12:30`, `2026/09/30:12` and pl-10's
+ *     matches`), where a closed list of names would drop a real citation to any
+ *     name not on it, silently, the one thing this exists to refuse (the owner
+ *     chose this over a list, 2026-10-01). **The way out for prose is a
+ *     double-backtick span around a backticked token** — `` `and/or:5` `` written
+ *     exactly so — **and no other spelling**: `npm run format` rewrites a plain
+ *     double-backtick span to single backticks, which this reads, and keeps the
+ *     nested form (measured, gate 2). The only guards are lexical: a directory is
+ *     not all digits, which keeps `10/12:30`, `2026/09/30:12` and pl-10's
  *     `low:40/high:60` out, and a last segment starts with a letter or dot.
- *     There is **no left boundary**, so a leading all-digit directory is cut off:
- *     `40/tools/x/Dockerfile:9` reads as `tools/x/Dockerfile`. A cut always lands
- *     on a `/` (an all-digit directory cannot be entered part-way), so the
- *     resolver's suffix match finds the file when the tail is a real suffix of it;
- *     `tools/9x/Dockerfile:3` reads whole.
+ *     There is **no left boundary**, so a leading all-digit directory is cut off
+ *     on its `/`: `40/tools/x/Dockerfile:9` reads as `tools/x/Dockerfile`, which
+ *     the resolver's suffix match finds when it is a real suffix;
+ *     `tools/9x/Dockerfile:3` reads whole. **A limit, not a live failure:** an
+ *     all-digit directory in the middle cannot be crossed: `tools/2026/Dockerfile:3`
+ *     is dropped and `docs/2026/x/Dockerfile:2` reads as `x/Dockerfile`. 0 of 1001
+ *     tracked paths have one (`git ls-files`), so it is written down, not guarded.
  *   - **Bare**, with no slash to vouch for it, so a closed set: `Dockerfile`,
  *     `Makefile`, `LICENSE`, or a leading-dot name (`.gitignore`), and only when
  *     not the tail of a longer token. An open rule would read `Note:5` and

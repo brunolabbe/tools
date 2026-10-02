@@ -159,7 +159,9 @@ default"`; `node scripts/citations.mjs <dl-37> --section Review
 --require-anchors --require-distinct-anchors` gives `10 verified … 4 pinned`,
     exit 0. `1aae8c8` is an ancestor of the base, so the pin outlives a squash.
   - **Med, reproduced and fixed as the owner chose (keep the open rule, fail
-    loud).** `extractCitations` on a sentence containing `` `and/or:5` `` returns the file `and/or`. The
+    loud).** `extractCitations("see and/or:5")`, the unquoted sentence, returns
+    the file `and/or`. (Corrected 2026-10-02, gate 3: a draft of this entry said
+    the same of the quoted spelling, and I measured it returns `[]`.) The
     docblock no longer claims the lexical guards keep prose out; it says the
     rule is open, reads prose, and why that beats a closed list. The resolver's
     `no tracked file matches` now ends "if this is prose and not a file, quote
@@ -226,3 +228,18 @@ eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of 
   - Edited in this round: `scripts/citations.mjs`, its test file,
     `roles/reviewer.md` and this ticket's own Log. No other ticket file, and
     nothing inside any `## Review` section.
+- 2026-10-02 — Gate 3 (at `c054f59`) returned two lows; this round answers them.
+  - **Low, reproduced and written down (docblock and test title).** An
+    all-digit directory in the middle of a path is not read whole: one form is
+    dropped outright and another is cut to the tail after the digit directory,
+    both measured with `extractCitations` at the head. No tracked path has an
+    all-digit directory (`git ls-files`, 0 of 1001), so the docblock beside the
+    leading-directory sentence now states it as a limit, not a guard, the test
+    title no longer claims "nothing else is", and the test pins both results.
+    The extraction rule is unchanged, and `scripts/citations.mjs` keeps its 2449
+    lines (15 lines reworded, none added).
+  - **Low, reproduced and corrected.** The earlier entry of this Log, the one
+    headed "Med, reproduced and fixed as the owner chose", had been reworded to
+    say the quoted spelling returns the file; it returns `[]`. It now says what
+    the unquoted sentence returns, `extractCitations("see and/or:5")`, run
+    again this round, with the correction noted in place.
