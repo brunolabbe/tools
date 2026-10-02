@@ -14,7 +14,9 @@
  * { ...GIT_EXEC_OPTIONS, stdio }`, with `shell: false` one binding further up).
  * A name counts only if *every* declaration of it in the file is such a literal
  * and nothing assigns to it afterwards, so two functions each declaring
- * `options` cannot lend each other their `shell: false`.
+ * `options` cannot lend each other their `shell: false`. A spread of a name the
+ * file declares with a `shell` that is not `false`, or of an inline expression
+ * whose object literal carries one, takes the `false` away again.
  *
  * **What it reads.** Source with comments blanked and, for everything but the
  * import test, string, template and regex literal contents blanked too (`mask`),
@@ -22,23 +24,33 @@
  * `shell: false` in a string argument, a JSON payload or a nested `env` object
  * is not taken for the option.
  *
- * **Limits, none of which occur in the tree and all of which read as a miss
- * rather than a pass-by-accident:**
+ * **Limits.** Each is a fixture row in `spawn-safety.test.ts`'s "every limit the
+ * header names behaves as it says", so what follows is checked, not asserted.
+ * Two occur in the tree and pass for the right reason: an injected parameter
+ * named `spawn` in `review-record.mjs` is checked like the real function and
+ * says `shell: false`, and four calls in the downloader spread an inline
+ * `...(cwd ? { cwd } : {})`, which carries no `shell` and so changes nothing.
+ *
+ * Reported when they are not, so the fix is to say `shell: false` at the call:
  * - a call is matched by name, so a parameter that happens to be called `spawn`
  *   is checked like the real one (`preflight.mjs`'s injected runner was renamed
- *   for it), and so is `cp.spawnSync(…)`; a `{ spawnSync: run }` destructure and
- *   `spawnSync as run` are followed, `const run = cp.spawnSync` is not;
- * - not seen at all: `cp["spawnSync"](…)`, `promisify(execFile)`, `fork`, and
- *   `exec`/`execSync` through a namespace or default import — those two are
- *   banned only as a named import, by `spawn-safety.test.ts`'s own test;
- * - a spread of anything that is not a safe name, such as `...options` after a
- *   `shell: false`, is trusted not to carry a `shell` of its own;
- * - options built by a function call, destructured, imported or computed read as
- *   unsafe, and the fix is to say `shell: false` at the call;
- * - which argument is "the options" is not worked out: any later argument that
- *   is a safe literal or a safe name will do;
- * - a regex literal after `)` or `}` is read as division, and a backtick inside a
- *   template's `${}` is not understood.
+ *   for it), and so is `cp.spawnSync(…)`; `{ spawnSync: run }` and
+ *   `spawnSync as run` are followed;
+ * - options built by a function call, destructured, imported or computed.
+ *
+ * **Passed without being looked at — a miss, not a check:**
+ * - `const run = cp.spawnSync` is not followed, nor are `cp["spawnSync"](…)`,
+ *   `promisify(execFile)` and `fork`; `exec` and `execSync` through a namespace
+ *   or default import are not asked either — they are banned only as a named
+ *   import, by `spawn-safety.test.ts`'s own test;
+ * - a spread of a name or expression this file does not declare, such as
+ *   `...options` after a `shell: false`, is trusted not to carry a `shell`;
+ * - which argument is "the options" is not worked out: a later argument that is
+ *   a safe literal or a safe name excuses the call, whatever the others say;
+ * - a `/` after `}` is read as the start of a regex, which blanks the rest of
+ *   its line, call included; a regex after `)` is read as division, so a quote
+ *   in it opens a string that runs to the end of the line. A template's `${}`
+ *   is code, a nested template included.
  *
  * Not a `src` module for the same reason `workspaces.ts` is not: it is
  * scaffolding for one test, and `tsconfig.tests.json` typechecks it with it.
@@ -232,29 +244,65 @@ function splitTopLevel(text: string): string[] {
   return parts;
 }
 
+/** What a file's own object literals are known to say about `shell`. */
+interface Bindings {
+  /** Every declaration is a literal that ends with `shell: false`. */
+  readonly safe: ReadonlySet<string>;
+  /** Some declaration carries a `shell` that is not `false`, or spreads one that does. */
+  readonly tainted: ReadonlySet<string>;
+}
+
+const IDENTIFIER = /[A-Za-z_$][\w$]*/gu;
+
+/** The outermost object literals in `expression`, as written. */
+function literalsIn(expression: string): string[] {
+  const found: string[] = [];
+  for (let i = 0; i < expression.length; i += 1) {
+    if (expression[i] !== "{") continue;
+    const end = closing(expression, i);
+    if (end === -1) break;
+    found.push(expression.slice(i, end + 1));
+    i = end;
+  }
+  return found;
+}
+
 /**
- * Whether the object literal `literal` ends with `shell: false`: its own
- * top-level properties and spreads in order, the last word on `shell` winning,
- * and a spread of anything but a safe name leaving what was said as it was — a
- * conditional `...(cwd ? { cwd } : {})` is the usual one, and is not a `shell`.
+ * What the object literal `literal` ends up saying about `shell`, its own
+ * top-level properties and spreads read in order, the last word winning: `false`,
+ * `other` (anything else, including a spread that brings one in), or `none`.
+ *
+ * A spread of a safe name says `false`; of a tainted one, or of an inline
+ * expression holding a literal that carries a `shell` of its own, says `other`;
+ * of anything else — an unknown name, or the usual `...(cwd ? { cwd } : {})` —
+ * leaves what was said as it was.
  */
-function saysShellFalse(literal: string, safe: ReadonlySet<string>): boolean {
-  let says = false;
+function shellOf(literal: string, bindings: Bindings): "false" | "other" | "none" {
+  let state: "false" | "other" | "none" = "none";
   for (const raw of splitTopLevel(literal.slice(1, -1))) {
     const part = raw.trim();
-    const spread = /^\.\.\.\s*([A-Za-z_$][\w$]*)$/u.exec(part);
-    if (spread !== null && safe.has(spread[1] ?? "")) says = true;
-    else if (part.startsWith("...")) continue;
-    else if (/^shell\s*:/u.test(part)) says = /^shell\s*:\s*false$/u.test(part);
-    else if (part === "shell") says = false;
+    if (part.startsWith("...")) {
+      const expression = part.slice(3).trim();
+      const names = expression.match(IDENTIFIER) ?? [];
+      if (/^[A-Za-z_$][\w$]*$/u.test(expression) && bindings.safe.has(expression)) {
+        state = "false";
+      } else if (
+        names.some((name) => bindings.tainted.has(name)) ||
+        literalsIn(expression).some((inner) => shellOf(inner, bindings) === "other")
+      ) {
+        state = "other";
+      }
+    } else if (/^shell\s*:/u.test(part))
+      state = /^shell\s*:\s*false$/u.test(part) ? "false" : "other";
+    else if (part === "shell") state = "other";
   }
-  return says;
+  return state;
 }
 
 const escaped = (name: string): string => name.replaceAll("$", String.raw`\$`);
 
-/** Names every declaration of which, in this file, is a literal that says `shell: false`. */
-function safeBindings(text: string): Set<string> {
+/** What this file's `const`/`let`/`var` object literals say about `shell`. */
+function bindingsOf(text: string): Bindings {
   const literals = new Map<string, string[]>();
   for (const match of text.matchAll(
     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*\{/gu,
@@ -280,18 +328,31 @@ function safeBindings(text: string): Set<string> {
     }
     return true;
   });
-  const safe = new Set<string>();
-  // Fixpoint: a literal that spreads a safe name is safe, whatever order they are declared in.
-  for (let changed = true; changed;) {
-    changed = false;
-    for (const [name, bodies] of eligible) {
-      if (!safe.has(name) && bodies.every((body) => saysShellFalse(body, safe))) {
-        safe.add(name);
-        changed = true;
-      }
-    }
+  let bindings: Bindings = { safe: new Set(), tainted: new Set() };
+  // Fixpoint, whatever order the declarations come in: a literal that spreads a
+  // safe name is safe, one that spreads a tainted name is tainted. Capped, since
+  // a cycle of spreads is the one input that could keep it turning.
+  for (let round = 0; round <= literals.size + 1; round += 1) {
+    const current = bindings;
+    const safe = new Set(
+      eligible
+        .filter(([, bodies]) => bodies.every((body) => shellOf(body, current) === "false"))
+        .map(([name]) => name),
+    );
+    const tainted = new Set(
+      [...literals]
+        .filter(([, bodies]) => bodies.some((body) => shellOf(body, current) === "other"))
+        .map(([name]) => name),
+    );
+    const same =
+      safe.size === current.safe.size &&
+      tainted.size === current.tainted.size &&
+      [...safe].every((name) => current.safe.has(name)) &&
+      [...tainted].every((name) => current.tainted.has(name));
+    bindings = { safe, tainted };
+    if (same) break;
   }
-  return safe;
+  return bindings;
 }
 
 /** Every name a file calls `calls` by: itself, plus `as` and destructured aliases. */
@@ -321,7 +382,7 @@ export function callsWithoutShellFalse(
 ): UnsafeCall[] {
   if (!CHILD_PROCESS_IMPORT.test(mask(source, true))) return [];
   const text = mask(source);
-  const safe = safeBindings(text);
+  const bindings = bindingsOf(text);
   const found: UnsafeCall[] = [];
   const pattern = new RegExp(
     String.raw`(?<![\w$])(?:${namesFor(text, calls).map(escaped).join("|")})\s*\(`,
@@ -335,8 +396,8 @@ export function callsWithoutShellFalse(
     const args = splitTopLevel(text.slice(open + 1, end === -1 ? text.length : end));
     const says = args.slice(1).some((arg) => {
       const trimmed = arg.trim();
-      if (trimmed.startsWith("{")) return saysShellFalse(trimmed, safe);
-      return safe.has(trimmed);
+      if (trimmed.startsWith("{")) return shellOf(trimmed, bindings) === "false";
+      return bindings.safe.has(trimmed);
     });
     if (says) continue;
     found.push({

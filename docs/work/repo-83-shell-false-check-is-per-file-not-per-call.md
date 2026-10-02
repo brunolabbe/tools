@@ -394,3 +394,47 @@ enforced, 0 failing`. The edit still moves lines cited by merged records
     name match and drops this branch's `+3` lines in that function.
   - `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0
 failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
+- 2026-10-02 — **Gate 2's round (PASS at `d087dc5`, three new lows), owner
+  answer by `AskUserQuestion`: withdraw `shell: false` on a spread that brings in a
+  `shell` the file itself declares.** Each finding reproduced against `d087dc5`'s
+  helper before fixing; this entry supersedes the previous one's "each one true" and
+  its `spawn-calls.ts:53`.
+  - **1 — the header was still not true.** Reproduced by the reviewer's probes, and
+    by this round's fixtures: four real calls and `review-record.mjs`'s injected
+    `spawn` parameter are in the scan, so "none occur in the tree" was false;
+    the spread, any-later-argument and not-seen-at-all limits are passes, not
+    misses-by-construction; a `/` after `}` is read as a regex (the other way
+    round from what the header said) and a nested template in `${}` is masked
+    correctly. Rewritten, split into "reported" and "passed without being looked
+    at", and **held by tests**: the fixture "every limit the header names behaves
+    as it says" has one row per sentence — each is a source and the lines
+    flagged — so a header line that stops being true fails a row.
+  - **2 — the trusted spread (reproduced, then withdrawn as chosen).**
+    `const OTHER = { shell: process.env.X }` with `{ shell: false, ...OTHER }`, and
+    `{ shell: false, ...(c ? { shell: process.env.X } : {}) }`, both passed. A spread
+    now takes the `false` away when it names a same-file binding that is
+    `tainted` (a declaration carries a non-`false` `shell`, or spreads one that
+    does, to a fixpoint) or holds an inline literal that carries one. The tree's
+    own `...(cwd ? { cwd } : {})` carries no `shell`, so it changes nothing and the
+    four real calls keep passing; an unknown name is still trusted (a header
+    limit). Fixture "a spread cannot bring back a `shell` the file itself
+    declares": red against `git show d087dc5:…/spawn-calls.ts` in place
+    (`expected [] to deeply equal [ 4, 5, 6 ]`, 1 of 18 failed), green at the head.
+  - **3 — two rules no test held (both reproduced).**
+    - Removing the declaration-count check (`if (declarations?.length !==
+bodies.length) return false` → `if (declarations === null) return false`)
+      kept 14 of 14 at `d087dc5`. Fixture "a name declared twice, once as a literal and
+      once not, is not safe": with the check removed, 1 of 18 failed
+      (`expected [] to deeply equal [ 2, 3 ]`); at the head it passes.
+    - Reverting `code()` (`spawn-safety.test.ts:31`) to the old regex pair kept 14 of 14. `code()` now shares two predicates with the scan, `setsTruthyShell` and
+      `importsShellRunner`, declared at the file's foot (hoisted, and comment lines
+      compensate so `:45` and `:78` do not move), and the fixture "`code()` reads
+      through a `/*` string, so the other two tests do" calls them. With `code()`
+      reverted, 1 of 18 failed; with it reverted _and_ `shell: true` planted at
+      `scripts/test/citations-gate.test.ts:287`, 2 of 18 (that fixture and the
+      per-call scan); at the head with the plant, the truthy test and the per-call scan
+      fail (2 of 18). Control, unmutated head: 18 of 18. Plants restored.
+  - The guard still reports 0 offenders over the real tree: the scan test passes at
+    the head, 18 of 18 (`npx vitest run packages/core/test/spawn-safety.test.ts`).
+    Repo-77's record, row 89, is repointed to the new line of
+    the call list, `spawn-calls.ts:65 "execFileSync"`, since the longer header moved it.

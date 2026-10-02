@@ -56,22 +56,22 @@ describe("no shell reaches a child process", () => {
   });
 
   test("no call site sets `shell` to anything truthy", () => {
-    const offenders = SOURCES.filter((source) =>
-      /\bshell\s*:\s*(?:true|1|["'`])/u.test(code(source.text)),
-    ).map((source) => source.file);
+    // Read through `code()`, so a `/*` inside a string cannot hide a `shell: true`
+    // from it: `setsTruthyShell`, at the foot of this file, is shared with the
+    // fixture that proves exactly that.
+    const offenders = SOURCES.filter((source) => setsTruthyShell(source.text)).map(
+      (source) => source.file,
+    );
     expect(offenders).toEqual([]);
   });
 
   test("the shell-running members of node:child_process are never imported", () => {
     // `execFile` and `spawn` take an argument array and are fine. `exec` and
     // `execSync` concatenate into a command string and hand it to /bin/sh.
-    const offenders = SOURCES.filter((source) => {
-      const text = code(source.text);
-      if (!/from\s+["']node:child_process["']/u.test(text)) return false;
-      return /\bimport\s*\{[^}]*\b(?:exec|execSync)\b[^}]*\}\s*from\s+["']node:child_process["']/u.test(
-        text,
-      );
-    }).map((source) => source.file);
+    // `importsShellRunner`, at the foot of this file, reads through `code()` too.
+    const offenders = SOURCES.filter((source) => importsShellRunner(source.text)).map(
+      (source) => source.file,
+    );
     expect(offenders).toEqual([]);
   });
 
@@ -224,4 +224,113 @@ describe("the per-call check can fail (repo-83)", () => {
     }
     expect(callsWithoutShellFalse(`import { run } from "./elsewhere.ts";\n${call}`)).toEqual([]);
   });
+
+  test("a spread cannot bring back a `shell` the file itself declares", () => {
+    const text = fixture(
+      [
+        `const OTHER = { shell: process.env.X };`,
+        `const VIA = { ...OTHER };`,
+        `spawnSync("git", ["a"], { shell: false, ...OTHER });`,
+        `spawnSync("git", ["b"], { shell: false, ...VIA });`,
+        `spawnSync("git", ["c"], { shell: false, ...(c ? { shell: process.env.X } : {}) });`,
+        `spawnSync("git", ["d"], { shell: false, ...(c ? { cwd } : {}) });`,
+        `spawnSync("git", ["e"], { shell: false, ...{ cwd: "." } });`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text).map((call) => call.line)).toEqual([4, 5, 6]);
+  });
+
+  test("a name declared twice, once as a literal and once not, is not safe", () => {
+    // Removing the declaration count lets the second function borrow the first's
+    // `shell: false`: the literal alone would have been enough to excuse both.
+    const text = fixture(
+      [
+        `function a() { const o = { shell: false }; return spawnSync("git", ["a"], o); }`,
+        `function b() { const o = make(); return spawnSync("git", ["b"], o); }`,
+      ].join("\n"),
+    );
+    expect(callsWithoutShellFalse(text).map((call) => call.line)).toEqual([2, 3]);
+  });
+
+  test("`code()` reads through a `/*` string, so the other two tests do", () => {
+    // `code()` is what the truthy-`shell` test and the banned-import test read
+    // through. Reverted to a comment-stripping regex pair it kept every test but
+    // this one green, and a `shell: true` planted after a glob went unseen.
+    const glob = `"docs/work/*${".md"}"`;
+    const closer = `"*${"/"}"`;
+    const truthy = ["tr", "ue"].join("");
+    const planted = `const A = ${glob};\nspawnSync("git", [], { shell: ${truthy} });\nconst B = ${closer};\n`;
+    expect(setsTruthyShell(planted)).toBe(true);
+    const banned = `const A = ${glob};\nimport { exec } from ${`"node:child${"_"}process"`};\nconst B = ${closer};\n`;
+    expect(importsShellRunner(banned)).toBe(true);
+    // and a comment still is not code
+    expect(setsTruthyShell(`// shell: ${truthy}\n/* shell: ${truthy} */\n`)).toBe(false);
+  });
+
+  test("every limit the header names behaves as it says", () => {
+    // Held here so the header is a claim a test can fail, not prose: each row is
+    // a source, the lines `callsWithoutShellFalse` flags in it, and what the
+    // header says about it. `pass` rows are misses — the call is not reported.
+    const spec = `"node:child${"_"}process"`;
+    const ns = `import * as cp from ${spec};\n`;
+    const tick = "`";
+    const truthy = ["tr", "ue"].join("");
+    const rows: [string, string, number[]][] = [
+      // a call is matched by name: a parameter called `spawn` is checked like the real one…
+      ["a parameter named spawn", `function f(spawn) { spawn("git", ["a"], {}); }`, [2]],
+      // …and so is a member call through a namespace import
+      ["a member call", `${ns}cp.spawnSync("git", ["a"], {});`, [3]],
+      // `as` and destructured aliases are followed; an assignment of the member is not
+      ["an assigned alias", `${ns}const run = cp.spawnSync;\nrun("git", ["a"]);`, []],
+      // not seen at all
+      ["a bracket access", `${ns}cp["spawnSync"]("git", ["a"]);`, []],
+      ["promisify", `promisify(execFile)("git", ["a"]);`, []],
+      ["fork", `fork("child.js");`, []],
+      ["exec through a namespace", `${ns}cp.execSync("ls");\ncp.exec("ls");`, []],
+      // a spread of something the file does not declare is trusted
+      ["an unknown spread", `spawnSync("git", ["a"], { shell: false, ...options });`, []],
+      // options built elsewhere read as unsafe
+      ["options from a call", `spawnSync("git", ["a"], makeOptions());`, [2]],
+      ["destructured options", `const { o } = x;\nspawnSync("git", ["a"], o);`, [3]],
+      // any later argument will do
+      [
+        "a later argument excusing one that does not",
+        `spawnSync("git", { shell: false }, { shell: ${truthy} });`,
+        [],
+      ],
+      // a `/` after `}` is read as a regex, blanking the rest of its line
+      ["a division after a brace", `const n = {} / 2; spawnSync("git", ["a"]);`, []],
+      ["the same on the next line", `const n = {} / 2;\nspawnSync("git", ["a"]);`, [3]],
+      // a regex after `)` is read as division, so its quote opens a string
+      ["a regex after a paren", `if (x) /"/.test(y); spawnSync("git", ["a"]);`, []],
+      // a template's `${}` is code, a nested template included
+      [
+        "a nested template",
+        `const s = ${tick}a \${ ${tick}b \${x}${tick} } c${tick};\nspawnSync("git", ["a"]);`,
+        [3],
+      ],
+    ];
+    for (const [label, body, lines] of rows) {
+      expect(
+        callsWithoutShellFalse(fixture(body)).map((call) => call.line),
+        label,
+      ).toEqual(lines);
+    }
+  });
 });
+
+// Declared last, and hoisted, so the tests above keep the lines other records cite.
+
+/** Whether `source`, comments blanked by `code()`, has a `shell` set to something truthy. */
+function setsTruthyShell(source: string): boolean {
+  return /\bshell\s*:\s*(?:true|1|["'`])/u.test(code(source));
+}
+
+/** Whether `source`, comments blanked by `code()`, imports `exec` or `execSync`. */
+function importsShellRunner(source: string): boolean {
+  const text = code(source);
+  if (!/from\s+["']node:child_process["']/u.test(text)) return false;
+  return /\bimport\s*\{[^}]*\b(?:exec|execSync)\b[^}]*\}\s*from\s+["']node:child_process["']/u.test(
+    text,
+  );
+}
