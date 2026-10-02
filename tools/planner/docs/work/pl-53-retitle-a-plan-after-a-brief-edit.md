@@ -117,6 +117,19 @@ Gate 1 reviewed `6c354c3`; this re-issue resolves its coordinates into content t
 - **findings** · code-review at medium returned 5; 3 carried, 2 dropped.
 - NFR: security n/a (no new input; the title is derived on the server) · performance n/a (one UPDATE inside a transaction that is already open) · reliability ✓ (written in the revision's own transaction) · maintainability — above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-02 · `6c354c3..4e99d08`, this round only · re-gate of gate 1's two carried findings · gated on Opus 5.5
+
+Coordinates into this round's content resolve at `4e99d08`. The verdict is unchanged and for the same reason: the amended e2e step is still **unproven (gate)**, since Chromium is not installed here. Every Done-when line stays proven or verified, and nothing above low is open.
+
+- **fixed** · low, the pl-48 anchor moved. pl-48's record line 168 now cites `tools/planner/api/src/runs/orchestrator.ts@24acb04:201 "title: intakeTitle(brief) ?? UNTITLED,"`. The round added the pin and nothing else in that line. The quoted line also sits at 201 at `f1bde60`, the sha pl-48's gate reviewed, so the pin keeps the claim that reviewer read. `citations.mjs` on pl-48's Review gives 49 verified and 0 moved, of 53. `node scripts/citations-gate.mjs --against 24acb04` exits 0 with 144 enforced, 0 failing and 0 raised, and pl-48 has left the MOVED list (17 records, down from 18).
+- **fixed** · low, the month and restore tests now assert their own premise: `tools/planner/api/test/plan-title.test.ts:115-116 "as in the first test: both"` and `tools/planner/api/test/plan-title.test.ts:145-146 "as in the first test: the"`. I probed from a seed state the round's tests never start from: `intakeTitle`'s plural rewritten to evenings and the retitle call removed. Gate 1's copy of the spec, run beside the new one, failed only its first test, and its month and restore tests passed vacuously. The `4e99d08` spec failed all three, at lines 116 and 146: 4 failed, 4 passed (8). Both source files were restored and the copy deleted; the spec was then 4 of 4 again.
+- **decision recorded** · The pl-53 Log's fix-round entry records the owner's choice of (a), accept, made 2026-10-02 through AskUserQuestion. It names both options and says nothing is implemented or filed. The round's diff agrees: it touches only the spec, pl-48's record and pl-53's Log. It adds no source and no ticket file. The same entry also corrects the Log's earlier "no merged record is repointed", which gate 1 found contradicted.
+- Also run at `4e99d08`: `npm run check` exit 0. Planner 77 files and 1305 tests, the same as gate 1, because the round adds assertions and no tests. `node scripts/preflight.mjs --base origin/main` with the pl-53 title exits 0: check, the planner suite, lockfile sync, status, the citation gate, title and paths, and clean scratch merges with all three open pull requests.
+- **findings** · gate 2 re-verified gate 1's 2 carried findings, 2 fixed; 0 new in this round's lines; 0 dropped.
+- NFR: this round touched tests and records only. Security n/a · performance n/a · reliability n/a · maintainability ✓.
+
 ## Log
 
 **2026-09-27 — filed** from [pl-48](./pl-48-change-dates-and-budget-on-the-page.md)
