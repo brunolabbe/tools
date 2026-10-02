@@ -510,3 +510,16 @@ function selectItems(db: Database, dayId: string): PlanItem[] {
       row.travel_json === null ? null : parseOr(itemTravelSchema, row.travel_json, "item", row.id),
   }));
 }
+
+/**
+ * Rewrite the stored title (pl-53).
+ *
+ * Written where a revision is, because the title is derived from the brief and
+ * the brief is the latest revision's: any revision that changes the brief — an
+ * edit, a restore — changes what the title should say. A column rather than a
+ * read-time derivation so the plans list, which reads `Plan` rows and no
+ * revisions, stays the one cheap query it is.
+ */
+export function retitlePlan(db: Database, planId: string, title: string): void {
+  db.prepare("UPDATE plans SET title = ? WHERE id = ?").run(title, planId);
+}

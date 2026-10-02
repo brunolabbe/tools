@@ -217,8 +217,15 @@ test("re-plan, move, reload, restore, reload — the plan keeps every version", 
   await expect(plan.locator("p.crumb")).toContainText("Version 5 of 5");
   await expect(dayArticles(page)).toHaveCount(dayCountBefore + 1);
 
+  // The heading names the trip's length, and the length just changed, so it is
+  // the edited brief's title now and not `draftAPlan`'s (pl-53). The list is
+  // searched by what the plan is called *now*.
+  const retitled = (await plan.getByRole("heading").first().innerText()).trim();
+  expect(retitled).toContain(`for ${String(nightsBefore + 1)} nights`);
+  expect(retitled).not.toBe(title);
+
   // --- The reload -------------------------------------------------------
-  await reopenFromTheList(page, title);
+  await reopenFromTheList(page, retitled);
 
   await expect(plan.locator("p.crumb")).toContainText("Version 5 of 5");
   await expect(dayArticles(page)).toHaveCount(dayCountBefore + 1);
