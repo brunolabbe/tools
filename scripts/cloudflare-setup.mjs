@@ -353,7 +353,12 @@ async function call(token, path, init = {}) {
   // status code alone reads as a pass on a refusal.
   if (!res.ok || body.success === false) {
     const detail = (body.errors ?? []).map((e) => `${e.code} ${e.message}`).join("; ");
-    throw new Error(`${init.method ?? "GET"} ${path} -> ${res.status} ${detail || "(no detail)"}`);
+    // The status rides on the error so a caller can tell a refused credential
+    // from an outage; the message alone is for the operator.
+    throw Object.assign(
+      new Error(`${init.method ?? "GET"} ${path} -> ${res.status} ${detail || "(no detail)"}`),
+      { status: res.status },
+    );
   }
 
   return body.result;
@@ -471,6 +476,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const WIDGETS = `/accounts/${accountId}/challenges/widgets`;
   const PER_WIDGETS = 1000;
   const widgetList = await call(token, `${WIDGETS}?per_page=${PER_WIDGETS}`).catch((err) => {
+    // Only a refused credential is the missing permission; a 5xx or a refused
+    // connection under that hint would send the operator to the wrong place.
+    if (err.status !== 401 && err.status !== 403) throw err;
     fail(
       `${err.message}\n\n` +
         "  The downloader's human check needs Account · Turnstile · Edit on the token.\n" +
@@ -582,11 +590,14 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         body: JSON.stringify({ name: w.name, domains: w.domains, mode: w.mode }),
       });
       out(`applied  turnstile ${w.name}`);
+      // Validated before the heading prints, so an answer with no secret is an
+      // error and not a heading over nothing.
+      const lines = envLines(created);
       // Printed the moment it exists, before anything else can fail. This script
       // never asks for the secret again, so this is the only copy it makes.
       out();
       out("Paste these two lines into the host's .env — the secret is shown once:");
-      for (const line of envLines(created)) out(line);
+      for (const line of lines) out(line);
     }
   }
 }

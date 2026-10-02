@@ -8,6 +8,11 @@
  * Every case below was watched failing first, against the guard removed.
  */
 
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { expect, test, vi } from "vitest";
 
 import {
@@ -122,7 +127,9 @@ const answer = (result: unknown, status = 200) =>
  * a later read to return one. Whether the real list, or a real GET of one widget,
  * returns the secret was not measured (dl-71's Log).
  */
-function fakeAccount(initial: { widgets?: Record<string, unknown>[]; noTurnstile?: boolean } = {}) {
+function fakeAccount(
+  initial: { widgets?: Record<string, unknown>[]; widgetListStatus?: number } = {},
+) {
   const widgets = [...(initial.widgets ?? [])];
   const apps: Record<string, unknown>[] = [];
   const records: Record<string, unknown>[] = [];
@@ -151,7 +158,7 @@ function fakeAccount(initial: { widgets?: Record<string, unknown>[]; noTurnstile
       return answer(apps);
     }
     if (url.includes("/challenges/widgets")) {
-      if (initial.noTurnstile) return answer(null, 403);
+      if (initial.widgetListStatus) return answer(null, initial.widgetListStatus);
       if (method === "POST") {
         widgets.push({ sitekey: "0xFAKE-SITE", name: body.name, domains: body.domains });
         return answer({ sitekey: "0xFAKE-SITE", secret: "0xFAKE-SECRET", ...body });
@@ -240,8 +247,101 @@ test("a same-named widget with different domains refuses, and nothing is written
 });
 
 test("a token without the Turnstile permission is told which one it lacks", async () => {
-  const run = await runSetup(fakeAccount({ noTurnstile: true }));
+  // Under --apply, so "before anything is written" is asserted of a run that
+  // would have written, not only of a plan that never does.
+  for (const status of [401, 403]) {
+    const account = fakeAccount({ widgetListStatus: status });
+    const run = await runSetup(account, "--apply");
 
-  expect(run.error).toBeInstanceOf(CliError);
-  expect(String(run.error)).toContain("Account · Turnstile · Edit");
+    expect(run.error).toBeInstanceOf(CliError);
+    expect(String(run.error)).toContain(`-> ${status}`);
+    expect(String(run.error)).toContain("Account · Turnstile · Edit");
+    expect(account.writes).toEqual([]);
+  }
+});
+
+test("a failure of the widget list that is not a refused credential is not blamed on the token", async () => {
+  // The hint names a permission; under a 500 it would send the operator to the
+  // wrong place. The original error is what is left.
+  const account = fakeAccount({ widgetListStatus: 500 });
+  const run = await runSetup(account, "--apply");
+
+  expect(run.error).toBeInstanceOf(Error);
+  expect(run.error).not.toBeInstanceOf(CliError);
+  expect(String((run.error as Error).message)).toContain("-> 500");
+  expect(String((run.error as Error).message)).not.toContain("Turnstile · Edit");
+  expect(account.writes).toEqual([]);
+});
+
+test("a create answer with no secret prints no heading", async () => {
+  const account = fakeAccount();
+  const create = account.fetchFake;
+  const withoutSecret: typeof create = async (input, init) => {
+    const res = await create(input, init);
+    if (init?.method !== "POST" || !String(input).includes("/challenges/widgets")) return res;
+    return answer({ sitekey: "0xFAKE-SITE" });
+  };
+  const run = await runSetup({ ...account, fetchFake: withoutSecret }, "--apply");
+
+  expect(run.error).toBeInstanceOf(Error);
+  expect(String(run.error)).toContain("no site key and secret");
+  expect(run.out).not.toContain("Paste these two lines");
+});
+
+// --- the exit code is the contract --------------------------------------------
+//
+// `fail` throws and only the entry point exits, so nothing above can see a run
+// end with the wrong status. These start the script as a process, with a fake
+// `fetch` preloaded by `--import`, and read the status the shell would.
+
+const SCRIPT = path.resolve(import.meta.dirname, "../cloudflare-setup.mjs");
+const FAKE_FETCH = pathToFileURL(
+  path.resolve(import.meta.dirname, "fixtures/cloudflare-fake-fetch.mjs"),
+).href;
+
+function runAsProcess(scenario: "conflict" | "forbidden") {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-setup-"));
+  const writes = path.join(dir, "writes");
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        FAKE_FETCH,
+        SCRIPT,
+        ...["--domain", "example.com", "--email", "you@example.com"],
+        ...["--zone", "Z", "--account", "A", "--ledger-email", "them@example.com", "--apply"],
+      ],
+      {
+        encoding: "utf8",
+        shell: false,
+        env: {
+          PATH: process.env.PATH,
+          CLOUDFLARE_API_TOKEN: "fake-token",
+          FAKE_CF_SCENARIO: scenario,
+          FAKE_CF_WRITES: writes,
+        },
+      },
+    );
+    return { ...result, writes: fs.existsSync(writes) ? fs.readFileSync(writes, "utf8") : "" };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("run as a process, a same-named widget guarding other domains exits 1 and writes nothing", () => {
+  const run = runAsProcess("conflict");
+
+  expect(run.stdout).toContain("CONFLICT turnstile downloader");
+  expect(run.stderr).toContain("conflict(s)");
+  expect(run.status).toBe(1);
+  expect(run.writes).toBe("");
+});
+
+test("run as a process, a 403 on the widget list exits 1 and writes nothing", () => {
+  const run = runAsProcess("forbidden");
+
+  expect(run.stderr).toContain("Account · Turnstile · Edit");
+  expect(run.status).toBe(1);
+  expect(run.writes).toBe("");
 });

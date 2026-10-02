@@ -275,12 +275,15 @@ same name that guards **different domains** is a conflict, like a hostname route
 somewhere else, and the run stops before it changes anything; the script never
 edits a widget.
 
-**Lose the secret and you rotate it in the dashboard** (Turnstile, the widget,
-_Rotate secret key_). Whether Cloudflare's API will return an existing widget's
-secret on a later read is **not measured** — the script is built not to need it
-— so do not plan around being able to fetch it again. The hosts that leave the
-two variables empty keep the check off, which is correct while the hostname is
-still behind Access.
+**Lose the secret and you can rotate it in the dashboard** (Turnstile, the
+widget, _Rotate secret key_). Cloudflare's published OpenAPI document
+(`raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json`, read
+2026-10-02) lists `secret` among the required fields of what
+`GET /accounts/{account_id}/challenges/widgets/{sitekey}` returns for one
+widget, and omits it from the list; **not measured against the live API**. The
+script never needs it, so a re-run prints no keys either way. The hosts that
+leave the two variables empty keep the check off, which is correct while the
+hostname is still behind Access.
 
 **A token made on the dashboard's _Account API tokens_ page is account-owned**,
 which is now the default, and an account-owned token is not a user token: it

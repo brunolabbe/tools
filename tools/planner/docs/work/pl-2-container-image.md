@@ -161,7 +161,7 @@ same day against a running host, and the final Log entry is the measurement.
   config: the second was silently dropped, because the merge kept
   `existing.find(isCatchAll)` and discarded the rest — the function removing a
   rule it did not add, in the one place it promised not to.
-  `scripts/cloudflare-setup.mjs:127` "if (catchAlls.length > 1)" makes it a
+  `scripts/cloudflare-setup.mjs@24acb04:117` "if (catchAlls.length > 1)" makes it a
   conflict, so the run refuses and a person decides which was meant.
 - **low, fixed on this branch** · A `desired` rule with a falsy hostname
   produced a second catch-all, which matches everything and would swallow the
@@ -175,7 +175,7 @@ same day against a running host, and the final Log entry is the measurement.
   document someone approves before `--apply`, and being wrong in it is the
   defect. It now refuses.
 - **verified** ·
-  `scripts/cloudflare-setup.mjs:329` "export function applyOrder" holds for
+  `scripts/cloudflare-setup.mjs@24acb04:257` "export function applyOrder" holds for
   every partial plan the reviewer tried — no access with routing, access with no
   ingress, empty — and inverting it fails
   `scripts/test/cloudflare-setup.test.ts:270` "expect(lastAccess).toBeLessThan(firstRouting)".

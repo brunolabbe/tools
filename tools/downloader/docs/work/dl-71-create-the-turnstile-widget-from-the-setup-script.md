@@ -130,11 +130,16 @@ file. Either order works, but they must not run concurrently.
     A create response with no `secret` throws instead of printing an empty
     `TURNSTILE_SECRET_KEY=`. The fixtures' keys are `0xFAKE-…` strings made up
     for the test.
-  - **Unmeasured, and the script does not depend on it:** whether the real
-    `GET /accounts/{id}/challenges/widgets` list, or a GET of one widget by site
-    key, returns `secret`. The fake's list leaves it out, so the re-run is proven
-    not to need it; `docs/02-DEPLOYMENT.md` says a lost secret is rotated in the
-    dashboard. Also unmeasured and taken from memory of Cloudflare's API
+  - **Not measured against the live API, and the script does not depend on it:**
+    whether the real `GET /accounts/{id}/challenges/widgets` list, or a GET of one
+    widget by site key, returns `secret`. The fake's list leaves it out, so the
+    re-run is proven not to need it. (Corrected by gate 1, 2026-10-02: Cloudflare's
+    published OpenAPI document,
+    `raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json` read
+    2026-10-02, lists `secret` among the required fields of the result of
+    `GET /accounts/{account_id}/challenges/widgets/{sitekey}` and omits it from the
+    list. That is the document, not the live API: still not measured there.) Also
+    unmeasured and taken from memory of Cloudflare's API
     reference (the docs site is not reachable from here): the list's `per_page`
     ceiling of 1000, the create body's `name`/`domains`/`mode` and the
     `sitekey`/`secret` fields of its answer. The first live `--apply` is the
@@ -158,3 +163,28 @@ file. Either order works, but they must not run concurrently.
     token has "three permissions", which is now four. Not done because that
     ticket is unbuilt and its line quotes the header's own closing words, which
     are unchanged; it is for whoever builds dl-52 to see.
+- 2026-10-02 — Gate 1's findings applied by the fixer (Claude Sonnet 5.5), no
+  ship authority, no gate record committed.
+  - **The exit code now has a test.** Two cases in
+    `scripts/test/cloudflare-turnstile.test.ts` start the script as a process
+    (`spawnSync`, argument array, `shell: false`) with
+    `scripts/test/fixtures/cloudflare-fake-fetch.mjs` preloaded by `--import`, and
+    assert exit 1 and no write under `--apply` for a same-named widget guarding
+    another domain and for a 403 on the widget list. With the entry point's
+    `process.exit(1)` made `process.exit(0)` both fail (`expected +0 to be 1`);
+    restored, they pass.
+  - **The permission hint is for a 401 or a 403 only.** `call` now carries
+    `status` on the error it throws; any other failure of the widget list
+    propagates as it was, unhinted. Tested both sides, and the 401 and 403 cases
+    run under `--apply` and assert an empty write list. The heading "Paste these
+    two lines" prints after `envLines` validates, so a create answer with no
+    secret is an error and no heading.
+  - **Decisions the owner made on 2026-10-02**, both the gate's recommendation:
+    the pull request title is
+    `chore(repo): create the Turnstile widget from the Cloudflare setup script (dl-71)`,
+    not `feat(downloader)`, which preflight rejects because every path under `tools/` in this branch is markdown; and
+    the two `scripts/cloudflare-setup.mjs` citations in
+    `tools/planner/docs/work/pl-2-container-image.md` are pinned at `24acb04`
+    (lines 117 and 257 there), not repointed to bare head lines, which would
+    move again on the next edit to the script. That supersedes the repoint to
+    `:127` and `:329` recorded above.
