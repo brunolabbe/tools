@@ -260,10 +260,13 @@ you are there.
     (`git branch -r --contains <head>`). A later follow-up — a post-PR fix, a
     stacked rebase — goes to a fresh `fixer`, not a resume. A worktree lock
     naming the orchestrator session's own pid is the harness's mark, not a live
-    holder: `git worktree unlock`, then remove. **Decided by the owner on
-    2026-10-02, unprompted, reversing the hold-until-finished rule this step
-    carried since 2026-09-03**: "You can remove worktrees when pr land. I don't
-    see why we would need to keep them." Measured on the 2026-10-01 batch: 15
+    holder: `git worktree unlock`, then remove. **Unless the PR's CI shows a
+    problem at your pre-merge look, in which case ask the owner
+    (`AskUserQuestion`) whether to keep that ticket's worktrees.** **Decided by
+    the owner on 2026-10-02, unprompted, reversing the hold-until-finished rule
+    this step carried since 2026-09-03**: "You can remove worktrees when pr
+    land. I don't see why we would need to keep them", refined the same day:
+    "You might ask to keep worktree if you see a problem with CI then." Measured on the 2026-10-01 batch: 15
     worktrees removed at landing, all clean, every head on origin, one locked by
     the orchestrator's own pid. Before the landing, a round is still not over
     just because an agent said so (tested twice on 2026-09-03: both resumed).
@@ -278,8 +281,8 @@ you are there.
     the fact, not polling. See _After a merge_. **2026-10-01:** the citations
     run is not optional beside the pairwise one. All 15 pairs of six heads
     merged cleanly and the scratch merge of all six exited 1: lg-1's record
-    cites `tools/ledger/CLAUDE.md:69` unpinned and lg-3 adds three lines above
-    it. A constraint found here (here, "merge #330 before #333") goes on the
+    cites line 69 of the ledger tool's `CLAUDE.md` unpinned and lg-3 adds three
+    lines above it. A constraint found here (here, "merge #330 before #333") goes on the
     dependent draft PR as a comment, not in prose.
 
 12. **Append this session's row to [reference/history.md](reference/history.md),

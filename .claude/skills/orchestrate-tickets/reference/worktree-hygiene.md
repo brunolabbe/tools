@@ -19,7 +19,9 @@ when pr land. I don't see why we would need to keep them.").** The "finished —
 merged, or abandoned — not when its PR opens" bullet above, and the
 hold-until-finished sections below, now yield to `SKILL.md` step 10: remove
 builder, gate and fixer worktrees once the PR has landed, each checked clean and
-its head on origin; a later follow-up goes to a fresh `fixer`. The history below
+its head on origin, unless CI shows a problem at the pre-merge look, when the
+orchestrator asks the owner whether to keep them; a later follow-up goes to a
+fresh `fixer`. The history below
 stays as the reasoning the owner weighed.
 
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
