@@ -539,7 +539,6 @@ describe("probe_outcomes (dl-57)", () => {
     // Simulate a row from before dl-74 that has MUX_FAILED. The schema accepts
     // it for backward compatibility even though nothing can raise it anymore.
     create("mux-job");
-    const job = store.get("mux-job");
     const muxFailedJson = JSON.stringify({
       code: "MUX_FAILED",
       message: "The video could not be assembled into a playable file.",
