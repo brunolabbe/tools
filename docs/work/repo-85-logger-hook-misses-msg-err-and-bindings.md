@@ -167,6 +167,26 @@ Acceptance re-run at `8d182a9`, rebuilt (`isError` in the downloader `dist`): th
 - **findings** · code-review at medium over the round returned 1; 1 carried, 0 dropped.
 - NFR: security ✓ — no `SECRET` on any of 36 probe lines · performance n/a — one `for…in` and one read per key of each logged `Error` · reliability — G1 · maintainability ✓, the corrected `redactError` comment now matches what the walk and pino do.
 
+### Gate 3
+
+_Re-issued at `8487daa`, the gated sha `8b026d9` unchanged: coordinates re-resolved. The dropped bullet describes `8b026d9`; the owner had that leak folded into the branch afterwards, and gate 4 gives its verdict._
+
+**Gate: PASS** — 2026-10-02 · `8d182a9..8b026d9` only (`origin/main` still at `b7fb3fb` after fetch) · code-review at medium
+
+| Gate 2 finding                                                                           | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1 — reading every own property sent a throwing non-enumerable getter to `fieldsDropped` | **fixed** — the read set is now the keys pino reads, `tools/downloader/api/src/logger.ts:247 "const keys = new Set([...enumerable,"`; tests `tools/downloader/api/test/logging-routes.test.ts:215 "a throwing non-enumerable getter does not cost the line"` and `tools/downloader/api/test/logging-routes.test.ts:223 "nor when the message carries a signed URL"`. The spec over the `8d182a9` downloader source (core unchanged between the two): 2 failed, 16 passed of 18, the two G1 tests; over `8b026d9`: 18 of 18 ✓ |
+
+The round declined to catch each read for an _enumerable_ throwing getter, `tools/downloader/api/src/logger.ts:218 "that hazard is"`, on the ground that pino throws on the original too and `emit` catches it. Measured, and it holds: an `Error("plain")` with an enumerable throwing getter logs `{"fieldsDropped":true}` at `b7fb3fb`, `8d182a9` and `8b026d9` alike, and through the planner logger, which passes no hook, so pino alone produces it.
+
+Narrowing the read set could have dropped a non-enumerable own key that pino writes. pino-std-serializers 7.1.0 `err.js` reads `constructor` (for `type`), `message`, `stack`, `cause` (followed, and called if it is a function), `errors` and every `for…in` key, and writes nothing else, so the five named keys plus `for…in` are the whole set; the copy keeps the prototype, so `constructor` is unchanged. Probed: a non-enumerable `errors` and `cause` set with `defineProperty` are both redacted here and leak at `b7fb3fb`; a non-enumerable own data property carrying a URL is never written at all, on any of the three states.
+
+Acceptance re-run at `8b026d9`, rebuilt (no `getOwnPropertyNames` left in the downloader `dist`): the brief repro prints 0 of 5 lines with `SECRET`; `npm run check` exit 0; `npm test` 3569 passed and 2 skipped of 3571 in 193 files, the +2 over `8d182a9` being the two G1 tests; the three logger specs 74 of 74. Planner and ledger output is byte-identical to the base over 10 lines. `citations-gate.mjs --against b7fb3fb`: 139 enforced, 0 failing. The full probe, all 36 routes from gates 1 and 2: the 31 from gate 1 are byte-identical to `8d182a9`; of the 5 aimed at the rewrite, the two throwing-getter rows now keep their `err`, and none prints `SECRET`.
+
+- **dropped** · a function-valued `cause` (VError style) leaks: pino calls `err.cause()`, and the walk leaves a function as it is, so the URL in the error it returns is written raw. Measured the same at `b7fb3fb`, `8d182a9` and `8b026d9`. Out of this round: no line it touched changes the outcome. Nothing in the downloader source passes a function as `cause`, and no `verror`-style package is installed.
+- **findings** · code-review at medium over the round returned 1; 0 carried, 1 dropped.
+- NFR: security ✓ — no new leak; the one leak found predates the branch · performance ✓ — fewer reads per logged `Error` than at `8d182a9` · reliability ✓ — G1 · maintainability ✓, the comment above `redactError` names the read set and why.
+
 ## Log
 
 - 2026-09-30 — **Filed** on repo-66's branch, from gate 1's F4, on the owner's
