@@ -456,10 +456,10 @@ describe("the probe stage channel", () => {
   });
 });
 
-describe("schema accepts retired error codes for backward compatibility (dl-74)", () => {
-  test("a job with retired MUX_FAILED error code parses from persisted data", async () => {
+describe("stored MUX_FAILED records are transformed to DOWNLOAD_FAILED (dl-74)", () => {
+  test("a job with retired MUX_FAILED error code is transformed to DOWNLOAD_FAILED when read", () => {
     // Simulate a `downloader:jobs:v1` localStorage record from before dl-74
-    // that carries MUX_FAILED. The schema should accept it.
+    // that carries MUX_FAILED. The schema transforms it to DOWNLOAD_FAILED on read.
     const oldJobData = {
       id: "mux-job",
       sourceUrl: "https://example.com/video",
@@ -492,7 +492,8 @@ describe("schema accepts retired error codes for backward compatibility (dl-74)"
     const parsed = jobSchema.safeParse(oldJobData);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.error?.code).toBe("MUX_FAILED");
+      // The transform should convert MUX_FAILED to DOWNLOAD_FAILED
+      expect(parsed.data.error?.code).toBe("DOWNLOAD_FAILED");
       expect(parsed.data.status).toBe("failed");
     }
   });

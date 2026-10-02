@@ -210,7 +210,7 @@ export function errorPayload(
     message: DEFAULT_ERROR_MESSAGES[code],
     retryable: RETRYABLE_CODES.has(code),
     ...overrides,
-  }) as AppErrorPayload;
+  });
 }
 
 export interface JobOverrides extends Partial<Omit<Job, "progress">> {

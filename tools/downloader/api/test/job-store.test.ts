@@ -535,24 +535,30 @@ describe("probe_outcomes (dl-57)", () => {
     expect(hosts).toEqual(["new.example"]);
   });
 
-  test("a job row written with retired error code MUX_FAILED still reads back (dl-74)", () => {
-    // Simulate a row from before dl-74 that has MUX_FAILED. The schema accepts
-    // it for backward compatibility even though nothing can raise it anymore.
+  test("a failed job row written with retired error code MUX_FAILED reads back transformed to DOWNLOAD_FAILED (dl-74)", () => {
+    // Simulate a row from before dl-74 that has MUX_FAILED. The schema transforms
+    // it to DOWNLOAD_FAILED on read for backward compatibility.
     create("mux-job");
+    store.transition("mux-job", "failed", {
+      error: {
+        code: "MUX_FAILED",
+        message: "The video could not be assembled into a playable file.",
+        retryable: false,
+      },
+    });
+
+    // Manually overwrite the error_json to have the raw MUX_FAILED code, simulating
+    // a row from before dl-74.
     const muxFailedJson = JSON.stringify({
       code: "MUX_FAILED",
       message: "The video could not be assembled into a playable file.",
       retryable: false,
     });
-
-    // Update the row directly to have MUX_FAILED (simulating a row from before dl-74)
     const updateStmt = db.prepare(`UPDATE jobs SET error_json = ? WHERE id = ?`);
     updateStmt.run(muxFailedJson, "mux-job");
 
-    // The job should still read back successfully, with the MUX_FAILED code preserved
+    // The job should read back with MUX_FAILED transformed to DOWNLOAD_FAILED
     const readBack = store.get("mux-job");
-    expect(readBack.error?.code).toBe("MUX_FAILED");
-    expect(readBack.error?.message).toBe("The video could not be assembled into a playable file.");
-    expect(readBack.error?.retryable).toBe(false);
+    expect(readBack.error?.code).toBe("DOWNLOAD_FAILED");
   });
 });

@@ -125,10 +125,14 @@ export const jobStatusSchema = z.enum(JOB_STATUSES);
 
 /**
  * Schema accepts all codes including retired ones (like `MUX_FAILED`) for
- * backward compatibility with persisted records. The runtime type `ErrorCode`
- * only includes raisable codes.
+ * backward compatibility with persisted records, and transforms retired codes
+ * to their current equivalents. The output type is always `ErrorCode`.
  */
-export const errorCodeSchema = z.enum(ALL_ERROR_CODES);
+export const errorCodeSchema = z.enum(ALL_ERROR_CODES).transform((code) => {
+  // Map retired codes to their current equivalents on read
+  if (code === "MUX_FAILED") return "DOWNLOAD_FAILED";
+  return code as ErrorCode;
+});
 
 export const appErrorPayloadSchema = z.object({
   code: errorCodeSchema,
@@ -226,11 +230,6 @@ export const jobLinkSchema = z.object({
   expiresAt: z.string(),
 }) satisfies z.ZodType<JobLink>;
 
-/**
- * Validates a stored job. Accepts retired error codes like `MUX_FAILED` for
- * backward compatibility with persisted records, even though the runtime API
- * type `Job` doesn't include them. The schema is more permissive than the type.
- */
 export const jobSchema = z.object({
   id: z.string().min(1),
   sourceUrl: z.string(),
@@ -254,7 +253,7 @@ export const jobSchema = z.object({
   // `.optional()` for the reason `thumbnailPath` gives above: absent from every
   // record written before dl-53.
   link: jobLinkSchema.nullable().optional(),
-}) as z.ZodType<Job>;
+}) satisfies z.ZodType<Job>;
 
 /**
  * Discriminated on `type`, so an unknown frame fails fast with a useful error
@@ -298,7 +297,7 @@ export const jobEventSchema = z.discriminatedUnion("type", [
     at: z.string(),
   }),
   z.object({ type: z.literal("heartbeat"), at: z.string() }),
-]) as z.ZodType<JobEvent>;
+]) satisfies z.ZodType<JobEvent>;
 
 /** Parses an SSE `data:` payload. Returns null for anything unrecognised. */
 export function parseJobEvent(raw: string): JobEvent | null {
@@ -361,11 +360,11 @@ export const probeResponseSchema = z.object({
   cached: z.boolean(),
 }) satisfies z.ZodType<ProbeResponse>;
 
-export const jobResponseSchema = z.object({ job: jobSchema }) as z.ZodType<JobResponse>;
+export const jobResponseSchema = z.object({ job: jobSchema }) satisfies z.ZodType<JobResponse>;
 
 export const errorResponseSchema = z.object({
   error: appErrorPayloadSchema,
-}) as z.ZodType<ErrorResponse>;
+}) satisfies z.ZodType<ErrorResponse>;
 
 /** `GET ROUTES.config`. See the note on that route. */
 export interface ClientConfigResponse {
