@@ -89,14 +89,17 @@ path.** Run `npm run format` on the copy before `citations.mjs`: oxfmt rewrites
 a plain double-backtick span to single backticks, so a section that passed
 unformatted failed formatted (repo-87 gate 2: exit 0, then 13 unresolvable);
 only a backticked token inside double backticks survives. And build the copy at
-the ticket's own `docs/work/` path inside this worktree, not under the scratch
-directory: a self-citation passes in a
-copy under another path and fails once spliced (repo-83 gate 3).
+the ticket's own path inside this worktree, not under the scratch directory: a
+self-citation passes in a copy under another path and fails once spliced
+(repo-83 gate 3). That dirties your worktree, which nothing auto-cleans and
+step 10 of the skill checks clean: after the dry run, run
+`git checkout -- <ticket path>` as its own call and confirm
+`git status --porcelain` is empty before you report.
 
 **2026-10-01: a repair to a citation in a merged record is checked against the
 commit that record gated, not the tip.** repo-87's dl-37 repair anchored to
 dl-72's later text, which says the opposite of what dl-37's reviewer read: at
-`1aae8c8` lines 90–93 read "Optional, and off by default". Read the cited
+`1aae8c8`, `tools/downloader/Dockerfile` lines 90–93 read "Optional, and off by default". Read the cited
 lines at the record's own gated sha (`git show <sha>:<path>`) before accepting
 the repair.
 
@@ -203,14 +206,17 @@ not get their narrative, for the same reason you did not get the build's report.
   same `Amended at <sha>` marker as for corrections — name the exact commit
   the owner's amendment creates.
 - **2026-10-01: re-gate a rebased stacked pair with `git range-diff` over the
-  lower branch, plus `git diff` of the lower branch's own range**, rather than
-  `git diff <gated sha>..<new sha>`, which on a rebase shows every commit the
-  base moved (lg-3 gate 2).
+  upper branch's commits before and after the rebase, plus a plain `git diff`
+  of the lower branch's own range**, rather than `git diff <gated sha>..<new
+  sha>`, which on a rebase shows every commit the base moved. lg-3 gate 2 ran
+  `git range-diff dc4bd12..736aa7a bfdac13..4b9ae7b` (upper, old and new) and
+  `dc4bd12..bfdac13` (lower).
 - **2026-10-01: re-issuing a section can turn every one of its code citations
   into prose, and a later round's new text can make a re-issued anchor
   non-distinct** (repo-85 gate 2, lg-3 gate 2). Both are expected, not a
   defect in the section; find the second with
-  `--require-distinct-anchors` on the dry-run copy.
+  `--require-distinct-anchors` on the dry-run copy. The re-issue rule above
+  ("the re-issue may need a new anchor") is the same fact.
 
 **Mutation runs should set a private `TMPDIR`, `TEMP` and `TMP`.** Concurrent test
 runs race if multiple sessions count entries in the shared temp directory; point

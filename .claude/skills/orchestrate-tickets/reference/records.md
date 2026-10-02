@@ -370,7 +370,8 @@ discarded. So:
   - **2026-10-01: a repaired citation in a merged record is checked against the
     commit that record gated, not the tip.** repo-87's repair of dl-37's
     citation anchored to dl-72's later text, which says the opposite: at
-    `1aae8c8` lines 90–93 read "Optional, and off by default". `git show
+    `1aae8c8`, `tools/downloader/Dockerfile` lines 90–93 read "Optional, and
+    off by default". `git show
     <gated sha>:<path>` the cited lines before repointing or pinning
     (`roles/reviewer.md`, the dry-run section, for the gate's side).
   - A tag on the reviewed commit would also keep pins reachable, exit 0 in the

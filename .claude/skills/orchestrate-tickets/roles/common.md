@@ -150,9 +150,10 @@ passing them to file operations.
 builder). Run `git log -1` as its own call after every commit, before
 preflight.
 
-**2026-10-01: waiting on a backgrounded preflight.** `sleep` is blocked and
-`Monitor` is disabled for subagents; a foreground
-`until [ -s <exit file> ]; do :; done` with a long timeout works. `pgrep -f`
+**2026-10-01: waiting on a backgrounded preflight.** A bare foreground `sleep`
+is refused and `Monitor` is disabled for subagents; a foreground
+`until [ -s <exit file> ]; do sleep 3; done` with a long timeout works (it ran
+in three agents this batch, and a busy `do :; done` would spin a core). `pgrep -f`
 matches its own shell, and an `echo $?` inside a backgrounded call lands in the
 task's output file, not in the log you redirected to.
 

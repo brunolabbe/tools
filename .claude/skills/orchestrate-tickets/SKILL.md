@@ -255,21 +255,30 @@ you are there.
    mid-batch is the reason this is stated at both steps rather than once.
 
 10. **Remove a ticket's worktrees — builder, gate and fixer — once its PR has
-    landed (records committed, PR opened)**, after checking each is clean
-    (`git status --porcelain` empty) and its head is on origin
-    (`git branch -r --contains <head>`). A later follow-up — a post-PR fix, a
-    stacked rebase — goes to a fresh `fixer`, not a resume. A worktree lock
-    naming the orchestrator session's own pid is the harness's mark, not a live
-    holder: `git worktree unlock`, then remove. **Unless the PR's CI shows a
-    problem at your pre-merge look, in which case ask the owner
-    (`AskUserQuestion`) whether to keep that ticket's worktrees.** **Decided by
-    the owner on 2026-10-02, unprompted, reversing the hold-until-finished rule
-    this step carried since 2026-09-03**: "You can remove worktrees when pr
-    land. I don't see why we would need to keep them", refined the same day:
-    "You might ask to keep worktree if you see a problem with CI then." Measured on the 2026-10-01 batch: 15
-    worktrees removed at landing, all clean, every head on origin, one locked by
-    the orchestrator's own pid. Before the landing, a round is still not over
-    just because an agent said so (tested twice on 2026-09-03: both resumed).
+    landed (records committed, PR opened) and you have taken your one look at
+    that PR's finished checks** (`gh pr checks`, _After a merge_), after
+    checking each is clean (`git status --porcelain` empty) and its head is on
+    origin (`git branch -r --contains <head>`). **If CI shows a problem at that
+    look, ask the owner (`AskUserQuestion`) whether to keep that ticket's
+    worktrees.** A later follow-up — a post-PR fix, a stacked rebase — goes to a
+    fresh `fixer`, not a resume. **The lock is not the liveness test:**
+    subagents run inside the orchestrator's process, so every agent's lock,
+    a live one's included, names the orchestrator's pid (a live gate's
+    `git worktree list --porcelain` showed the same pid and start as the lock
+    lifted from a finished fixer on 2026-10-02). Remove only a tree whose agent
+    has delivered its completion notification and been sent nothing since;
+    then `git worktree unlock`, then remove. **Decided by the owner on
+    2026-10-02, unprompted, reversing the hold-until-finished rule this step
+    carried since 2026-09-03**: "You can remove worktrees when pr land. I don't
+    see why we would need to keep them", refined the same day: "You might ask
+    to keep worktree if you see a problem with CI then." The owner then chose
+    the order above through `AskUserQuestion` the same day: remove after the
+    one look at finished checks, not at landing, because the look is the only
+    moment a CI problem can be seen. Measured on the 2026-10-01 batch: 15
+    worktrees removed in one sweep after the PRs opened (35 min to 2 h 40 min
+    after each), all clean, every head on origin, one locked. Before the
+    landing, a round is still not over just because an agent said so (tested
+    twice on 2026-09-03: both resumed).
 
 11. **Scratch-merge the batch, then check the merge landed what it was supposed
     to.** Before any branch in the batch merges, run
@@ -461,7 +470,7 @@ with `gh run view <id> --log-failed`, and say which of the two CodeQL checks
 you mean, since `CodeQL` and `codeql` both exist here. **2026-10-01:** the
 default-setup `CodeQL` check's alert cannot be read from this container —
 `gh api` is denied and WebFetch is blocked — so say that and hand it to the
-owner, as #330's was; never put a bare `gh api` into a compound command to try,
+owner, as #330's was; never run `gh api`, alone or inside a compound command,
 because the deny refuses the whole call (it did, this batch). `--json` rather than the
 table, because the failure this guards against is reading a list by eye. To
 read one job's full log on a run that has been retried, add `--attempt N`:

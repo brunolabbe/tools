@@ -176,7 +176,9 @@ load error, before counting the mutation as caught.
 **2026-10-01:** Test a claimed invariant on inputs the fix's own tests did not
 start from. repo-85's "called as often as pino" held for every acyclic cause
 chain and failed on a cyclic one (6,264 calls, line dropped), a shape none of
-the fix's tests began from.
+the fix's tests began from. The re-gate form of this is in
+`roles/reviewer.md`, _When you are woken to re-gate_ ("Probe a fix from a seed
+state its own tests never started from").
 
 ## Verification traps
 
