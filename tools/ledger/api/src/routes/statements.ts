@@ -15,7 +15,12 @@ import { personOf } from "../identity.ts";
 import { importStatement } from "../statements.ts";
 
 export function registerStatementRoutes(app: FastifyInstance, context: AppContext): void {
-  app.post(ROUTES.statements, async (request) => {
+  // The route is the one that knows its body is a paste, so it names the
+  // sentence for a body over the cap; the error handler reads it from here.
+  const config = {
+    tooLargeMessage: "The paste is too long to store in one go. Paste a shorter stretch.",
+  };
+  app.post(ROUTES.statements, { config }, async (request) => {
     const body = importStatementRequestSchema.safeParse(request.body);
     if (!body.success) {
       // The issues name a field, never a value: the body is a bank statement.

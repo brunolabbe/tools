@@ -210,10 +210,15 @@ or 0 already stored and 1 new`), nothing stored. **That second result is
       2 keep their meaning; the cost is that a paste of rows the history holds
       twice over (`X, Retour, X` pasted again over a stored `X, Retour, X`) is
       refused rather than guessed at.
-    - **Left unstorable, on purpose.** A stored history that is only `X, Retour`
-      cannot be extended by pasting `X, Retour, X, Y` (the same ambiguity); the
-      way out is a stretch starting on an earlier row, which an account whose
-      first row is that `X` does not have. Rare, and the refusal names why.
+    - **Refused, on purpose, and settled by where the paste starts.** _(Corrected
+      after gate 2, G3; the first draft said the history could not be extended at
+      all, which the branch's own tests contradict.)_ With a stored `X, Retour`,
+      `X` pasted alone and `X, Retour, X, Y` pasted whole are refused, since each
+      fits as rows already stored and as new ones. The same rows are stored by
+      starting the paste somewhere that fits one way: `Retour, X` from 60.00, or
+      `X, Y` from 50.00 (`api/test/statements.test.ts`, "starting the same paste
+      on the reversal" and "a continuation from the stored tail may start with a
+      row the history already holds").
   - **F2 reproduced, then fixed.** Stored `Depot +5.00 (15.00)`, then paste
     `Retrait −5.00 (10.00)`: at `c214024` 422 `STATEMENT_BEFORE_HISTORY`, one row
     stored; now 200, 1 added, tail 10.00. A continuation is read before anything
@@ -256,3 +261,76 @@ scripts/citations-gate.mjs --against 24acb04` exit 0, `144 enforced, 0
 failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     `.error.code` now, because one of its three pastes succeeds: that is the fix,
     and the three are asserted in `statements.test.ts` instead.
+
+- 2026-10-02 — After gate 2 (CONCERNS at `b189ceb`; F1 to F9 closed except the
+  F7 block). Four more decisions were the owner's, each through AskUserQuestion on
+  2026-10-02; each matched the gate's and the orchestrator's recommendation, so
+  none overrode anyone.
+  - **Decision 5 — G1, how often an ambiguity refusal bites.** The question: the
+    gate's simulation drove `importStatement` over synthetic 20-month histories
+    and found 0 refusals in ordinary months (0 of 11 475 overlapping pastes, 424
+    repeats and 510 inside pastes) and, where an exact monthly deposit covers a
+    same-day or next-day mortgage payment, 78 of 14 175 overlapping pastes (0.55 %),
+    8 of 478 repeats and 3 of 630 inside pastes, each one whose stored overlap is
+    exactly that pair; no wrong answer. Options: (a) leave it as built; (b) drop a
+    reading whose first new row is dated before the stored tail, which first needs
+    the parser to refuse dates that run backwards. **Chosen: (a), the
+    recommendation.** Dates are not used to settle a reading. Done when 1 therefore
+    holds with this exception, measured and not argued: a second paste of the same
+    text is refused, not a no-op, when its rows add up to zero (8 of 478 in the
+    top-up model, 0 of 424 in the ordinary one), when its first rows repeat its
+    last ones (`X, Retour, X`), or when it is one zero-amount row; otherwise it
+    answers 200 with every row already present.
+  - **Decision 6 — F7's remainder, the 5 s event-loop block.** The question: a
+    write lock held past `busy_timeout` blocks the whole server for those 5 s
+    (measured 5009 and 5031 ms) because the driver is synchronous. Options: fix
+    it (a second connection or a worker thread), file it, or accept and note it.
+    **Chosen: accept and note it as a known limit**: not fixed here and not filed.
+    What is fixed is the answer: a retryable 504 `TIMEOUT` where it was a 500.
+  - **Decision 7 — G4, where the paste copy lives.** The question: "The paste is
+    too long" sat in the tool-wide mapper, so a body over the cap on any route,
+    present or future, was called a paste. Options: put the copy at the route; or
+    leave it in the mapper. **Chosen: at the route.** `SIZE_LIMIT_EXCEEDED` and 413
+    stay. The mapper's message is now "The request is too large." and
+    `toErrorResponse` takes an optional `{ tooLargeMessage }`; a route declares its
+    own sentence as `config: { tooLargeMessage }`, which the error handler reads
+    from `request.routeOptions.config`. Only `routes/statements.ts` declares one. Tests:
+    `http-errors.test.ts` ("a body over the cap": the default is generic and names
+    no paste or statement; a declared sentence is used) and `statements.test.ts`
+    (an oversize body on the statements route says "The paste is too long").
+    Costs the gate named and the owner accepted: core files `SIZE_LIMIT_EXCEEDED`
+    under artifacts (an output size), so the ledger uses it for a request size that
+    core does not name; `retryable: true` on the 504 reaches a web client that never
+    reads it; and whether Cloudflare passes an origin 504 through is unverified.
+  - **Decision 8 — G5, lg-7's note.** The question: the first note in lg-7's Build
+    step 4 was labelled "not new work" but sets a behaviour for the import
+    (refuse an ambiguous reading; "must agree" compares rows by position).
+    Options: keep it and relabel it; or drop that part. **Chosen: keep it and
+    relabel it.** It now reads "A constraint on this ticket, following from lg-2's
+    decision of 2026-10-02, which the import must meet"; the content is unchanged.
+  - **G2 reproduced, then fixed.** Stored `Depot +5.00 (15.00)` dated 2026-10-01
+    from 10.00, then paste `Achat −2.00 (10.00)` dated 2026-10-05, opening from
+    12.00: at `b189ceb` 422 `STATEMENT_BEFORE_HISTORY` where −3.00 is unexplained.
+    The older-history test took either condition (ends before the oldest stored
+    row's day, or ends on the balance that row opened from). The balance clause is
+    now only for the same day, so a later-dated paste is a gap: 422
+    `STATEMENT_CHAIN_BROKEN`, `unexplainedCents: -300`. The older paste that stops
+    short of the head (F6) and the one that ends exactly at it are both still
+    older history. The test, appended in `statements.test.ts` ("older history, or
+    a gap after the history"), failed before and passes after.
+  - **G3, corrected.** The "Left unstorable, on purpose" bullet in the entry above
+    is rewritten in place and marked as corrected: with a stored `X, Retour` only
+    `X` alone and `X, Retour, X, Y` whole are refused; `Retour, X` from 60.00 and
+    `X, Y` from 50.00 store.
+  - **A merged record's citation moved again.** Reading the route's declared
+    sentence in the error handler added lines above `registerNotFoundHandler` in
+    `api/src/server.ts`, so lg-3's one citation of it is repointed once more, four
+    lines later than the earlier repoint; `node scripts/citations.mjs` on lg-3's
+    record → `0 moved`.
+  - **The tests can fail.** `npx vitest run` on `statements.test.ts` and
+    `http-errors.test.ts` with the new tests and the old source (`b189ceb`'s):
+    `Tests 3 failed | 46 passed (49)`; the three are the two mapper tests and the
+    gap-after-history test. With the new source, `npx vitest run tools/ledger/api`
+    gives `Test Files 8 passed (8)`, `Tests 111 passed (111)`. The oversize-body
+    test on the statements route passed on both: it holds the route's sentence
+    through the move from mapper to route.

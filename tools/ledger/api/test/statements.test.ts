@@ -602,7 +602,7 @@ describe("an over-long paste and a busy database", () => {
     expect(response.statusCode).toBe(413);
     const error = refusal(response);
     expect(error.code).toBe("SIZE_LIMIT_EXCEEDED");
-    expect(error.message).toContain("too long");
+    expect(error.message).toContain("The paste is too long");
   });
 
   test("a write lock held by another connection answers a retryable timeout, and stores nothing", async () => {
@@ -636,5 +636,26 @@ describe("an over-long paste and a busy database", () => {
       app = undefined;
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("older history, or a gap after the history", () => {
+  test("a paste dated after the history that ends on its opening balance is a gap, not older history", async () => {
+    const target = await startApp();
+    const deposit: PasteRow = { date: "2026-10-01", description: "Depot", amountCents: 500 };
+    const purchase: PasteRow = { date: "2026-10-05", description: "Achat", amountCents: -200 };
+    await report(target, renderPaste(withBalances([deposit], 1000)));
+    const before = stored(target);
+
+    // Ends on 10,00, the balance the history opened from, but opens from 12,00
+    // where the history ended on 15,00: 3,00 went out between, and it is later.
+    const response = await post(target, renderPaste(withBalances([purchase], 1200)));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_CHAIN_BROKEN");
+    expect(error.details).toMatchObject({ unexplainedCents: -300 });
+    expect(error.message).toContain("-3.00 $ is unexplained");
+    expect(stored(target)).toEqual(before);
   });
 });

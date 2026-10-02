@@ -136,7 +136,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
  */
 function registerErrorHandling(server: FastifyInstance, context: AppContext): void {
   server.setErrorHandler((error, request, reply) => {
-    const { status, body, appError } = toErrorResponse(error);
+    const tooLargeMessage = request.routeOptions.config.tooLargeMessage;
+    const { status, body, appError } = toErrorResponse(
+      error,
+      tooLargeMessage === undefined ? {} : { tooLargeMessage },
+    );
 
     // 5xx is ours; 4xx is theirs. Logging the two at the same level makes the
     // log useless for spotting real problems.

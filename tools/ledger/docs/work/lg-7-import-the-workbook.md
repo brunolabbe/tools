@@ -40,8 +40,8 @@ prove it reproduces the workbook's own figures before it writes a row.
 4. **Rows go in as statement rows** with their classification already attached,
    marked as imported rather than pasted. Where a pasted row covers the same
    day, the two must agree.
-   - **Decided in lg-2, 2026-10-02 (a note of what the stored rows are, not new
-     work).** A statement row has **no unique identity**: date, description,
+   - **A constraint on this ticket, following from lg-2's decision of
+     2026-10-02, which the import must meet.** A statement row has **no unique identity**: date, description,
      amount and balance can repeat (a transfer, its reversal and the transfer
      again), so the table has no unique index over them and a paste is matched
      to stored rows **by position**, never by those four fields alone. "The two

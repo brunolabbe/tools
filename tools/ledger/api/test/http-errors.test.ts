@@ -45,3 +45,34 @@ describe("the ledger's stored-statement error codes", () => {
     },
   );
 });
+
+// A body over the cap is raised by Fastify before any route runs, so the mapper
+// cannot know what the route takes. It says the request is too large; a route
+// that wants its own sentence declares it (`statements.ts`), and gets it.
+describe("a body over the cap", () => {
+  const tooLarge = Object.assign(new Error("Request body is too large"), {
+    code: "FST_ERR_CTP_BODY_TOO_LARGE",
+    statusCode: 413,
+  });
+
+  test("is a 413 whose copy is generic, so a future body route is not called a paste", () => {
+    const { status, body } = toErrorResponse(tooLarge);
+
+    expect(status).toBe(413);
+    expect(body.error.code).toBe("SIZE_LIMIT_EXCEEDED");
+    expect(body.error.message).toContain("too large");
+    expect(body.error.message).not.toMatch(/paste|statement/iu);
+  });
+
+  test("takes the sentence the route declared, when it declared one", () => {
+    const { status, body } = toErrorResponse(tooLarge, {
+      tooLargeMessage: "The paste is too long to store in one go.",
+    });
+
+    expect(status).toBe(413);
+    expect(body.error).toMatchObject({
+      code: "SIZE_LIMIT_EXCEEDED",
+      message: "The paste is too long to store in one go.",
+    });
+  });
+});
