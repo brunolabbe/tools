@@ -438,3 +438,57 @@ bodies.length) return false` → `if (declarations === null) return false`)
     the head, 18 of 18 (`npx vitest run packages/core/test/spawn-safety.test.ts`).
     Repo-77's record, row 89, is repointed to the new line of
     the call list, `spawn-calls.ts:65 "execFileSync"`, since the longer header moved it.
+- 2026-10-02 — **Gate 3's round (two lows), owner answer by `AskUserQuestion`: "one
+  more round, then land".** Both reproduced against `690acd0` before fixing, and
+  the header was then checked sentence by sentence against the fixture table, since
+  gate 3's first low is that it said more than the table held. Guard behaviour is
+  unchanged: only the header, the fixture table and this entry moved.
+  - **1 — the header said more than its table held (true, and wider than named).**
+    - Three clauses had no row and nothing failed if they stopped being true; each
+      now has one, appended at the end of the table so no cited line moves, and each
+      was shown to fail under a mutation of the helper: options that are imported
+      (`import { OPTS }`, flagged: with an all-caps name trusted, the row fails),
+      options that are computed (`{ ["shell"]: false }`, flagged: with a computed
+      key read as `shell`, the row fails), and `exec` through a default import (not
+      asked: with `exec` and `execSync` added to `SPAWN_CALLS`, the row fails).
+    - The tree sentence was wrong: of the four downloader calls spreading an
+      inline conditional, three spread `...(cwd ? { cwd } : {})` (`runner.ts`, and
+      two ffmpeg test helpers) and one, in `ytdlp.ts`, spreads `...(extraEnv ===
+undefined ? {} : { env })`. The header now says that. (Gate 3 put the
+      `ytdlp.ts` spread at line 788; at this head it is at 797, and the header cites
+      no line for it.)
+    - "A spread of a name this file does not declare is trusted" understated it.
+      Probed at `690acd0`, all `[]`: `...options` for a parameter, `...OTHER` for
+      `const OTHER = make()`, `...OTHER` for `let OTHER = {}` reassigned to
+      `{ shell: process.env.X }`, `OTHER.shell = …` after `const OTHER = {}`, and
+      `...make()`. The header now names the declared-by-a-call and the
+      declared-`{}`-then-reassigned cases; a row each for the parameter, the call
+      declaration, the reassignment and `...make()`, each shown to fail when a
+      spread of that name or shape is made to take `false` away.
+    - The sweep found two more sentences nothing held, and both have rows now: "the
+      last one wins" was held only in the direction `{ ...BASE, shell: !0 }`, so
+      `{ shell: truthy, ...BASE }` (ends `false`, not reported) is a row, and a
+      later argument excusing the call was held only with the safe argument first,
+      so a safe argument after an unsafe one is a row (with the scan narrowed to the
+      first argument after the command, the old table passed and the new row fails).
+      Every other sentence was mutated in the helper and failed a test: string-,
+      regex- and template-blanking, the import test reading literals, the
+      definition-is-not-a-call rule, `as` and destructured aliases, the `/` after `}`
+      and after `)`, a spread of an inline literal carrying a `shell`, a spread of a
+      safe name, a named literal as the options, and a reassignment withdrawing it.
+  - **2 — the nested-template row could not fail (true).** Reproduced: with the
+    masker changed to read a template's `${}` as text, not code, the old table
+    stayed 18 of 18. Rows added with the call inside the interpolation — one
+    plain, one in a nested interpolation — and one with the call written in a
+    nested template's _text_ (expected not reported). Under the same mutation
+    against the old test file: 18 of 18 (unchanged); against the new one: 1 of 18
+    failed, on "a call inside a template interpolation" and "a call written in a
+    nested template's text" (a soft-assertion run lists both). The
+    nested-interpolation row does not fail under that mutation (the inner backtick
+    closes the outer template early and the call lands in code anyway); the
+    nested-text row is also the one that fails when a template inside an
+    interpolation is not masked as a template. Control, unmutated: 18 of 18.
+  - The guard still reports 0 offenders over the real tree
+    (`npx vitest run packages/core/test/spawn-safety.test.ts`). The longer header
+    moved the call list again, to `spawn-calls.ts:70`; repo-77's record, row 89,
+    is repointed to it, as the last edit, coordinate only.

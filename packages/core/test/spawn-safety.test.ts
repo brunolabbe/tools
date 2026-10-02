@@ -309,6 +309,69 @@ describe("the per-call check can fail (repo-83)", () => {
         `const s = ${tick}a \${ ${tick}b \${x}${tick} } c${tick};\nspawnSync("git", ["a"]);`,
         [3],
       ],
+      // Appended below, so the rows above keep their lines: the rest of what the
+      // header says, each of which fails here if it stops being true.
+      // a call inside a template's `${}`, or a nested one, is code and is asked
+      [
+        "a call inside a template interpolation",
+        `const s = ${tick}a \${ spawnSync("git", ["a"]) } c${tick};`,
+        [2],
+      ],
+      [
+        "a call inside a nested template interpolation",
+        `const s = ${tick}a \${ ${tick}b \${ spawnSync("git", ["a"]) }${tick} } c${tick};`,
+        [2],
+      ],
+      // …and the text of a template is not
+      [
+        "a call written in a template's text",
+        `const s = ${tick}spawnSync("git", ["a"])${tick};`,
+        [],
+      ],
+      [
+        "a call written in a nested template's text",
+        `const s = ${tick}a \${ ${tick}spawnSync("git", ["a"])${tick} } c${tick};`,
+        [],
+      ],
+      // options imported or computed read as unsafe
+      ["imported options", `import { OPTS } from "./o.ts";\nspawnSync("git", ["a"], OPTS);`, [3]],
+      ["a computed key", `spawnSync("git", ["a"], { ["shell"]: false });`, [2]],
+      // `exec` through a default import is not asked, as through a namespace
+      [
+        "exec through a default import",
+        `import cp from ${spec};\ncp.execSync("ls");\ncp.exec("ls");`,
+        [],
+      ],
+      // a spread after `shell: false` is trusted unless the file declares the name
+      // as a literal that carries a `shell`
+      [
+        "a spread of a parameter",
+        `function f(options) { spawnSync("git", ["a"], { shell: false, ...options }); }`,
+        [],
+      ],
+      [
+        "a spread of a name declared by a call",
+        `const OTHER = make();\nspawnSync("git", ["a"], { shell: false, ...OTHER });`,
+        [],
+      ],
+      [
+        "a spread of a name reassigned with a shell",
+        `let OTHER = {};\nOTHER = { shell: process.env.X };\nspawnSync("git", ["a"], { shell: false, ...OTHER });`,
+        [],
+      ],
+      ["a spread of a call", `spawnSync("git", ["a"], { shell: false, ...make() });`, []],
+      // any argument after the first will do, the unsafe one first as well as last
+      [
+        "a later argument that says it after one that does not",
+        `spawnSync("git", { shell: ${truthy} }, { shell: false });`,
+        [],
+      ],
+      // the last word wins in both directions: a later spread of a safe name counts
+      [
+        "a safe spread after a truthy shell",
+        `const BASE = { shell: false };\nspawnSync("git", ["a"], { shell: ${truthy}, ...BASE });`,
+        [],
+      ],
     ];
     for (const [label, body, lines] of rows) {
       expect(

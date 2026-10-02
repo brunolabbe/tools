@@ -29,7 +29,9 @@
  * Two occur in the tree and pass for the right reason: an injected parameter
  * named `spawn` in `review-record.mjs` is checked like the real function and
  * says `shell: false`, and four calls in the downloader spread an inline
- * `...(cwd ? { cwd } : {})`, which carries no `shell` and so changes nothing.
+ * conditional — `...(cwd ? { cwd } : {})` in three, `...(extraEnv === undefined
+ * ? {} : { env })` in `ytdlp.ts` — which carries no `shell` and so changes
+ * nothing.
  *
  * Reported when they are not, so the fix is to say `shell: false` at the call:
  * - a call is matched by name, so a parameter that happens to be called `spawn`
@@ -43,8 +45,11 @@
  *   `promisify(execFile)` and `fork`; `exec` and `execSync` through a namespace
  *   or default import are not asked either — they are banned only as a named
  *   import, by `spawn-safety.test.ts`'s own test;
- * - a spread of a name or expression this file does not declare, such as
- *   `...options` after a `shell: false`, is trusted not to carry a `shell`;
+ * - a spread after a `shell: false` is trusted not to carry a `shell` unless
+ *   the file declares the name as an object literal that does: `...options` for
+ *   a parameter or an import, `...OTHER` for `const OTHER = make()`, or for an
+ *   `OTHER` declared `{}` and later reassigned with a `shell`, and
+ *   `...make()`, are all trusted;
  * - which argument is "the options" is not worked out: a later argument that is
  *   a safe literal or a safe name excuses the call, whatever the others say;
  * - a `/` after `}` is read as the start of a regex, which blanks the rest of
