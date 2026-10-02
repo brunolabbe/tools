@@ -944,3 +944,18 @@ describe("a request Fastify itself refuses is BAD_REQUEST, not INTERNAL", () => 
     expect(rejected[0]).toContain('"code":"BAD_REQUEST"');
   });
 });
+
+/**
+ * lg-3 put two identity codes in core. The downloader raises neither, but its
+ * status table is exhaustive, so they have entries. Both are 403, never 401:
+ * a 401 promises a `WWW-Authenticate` scheme, and there is none a client here
+ * could answer — the owner's decision on lg-3, the same as `HUMAN_CHECK_FAILED`.
+ */
+describe("core identity codes", () => {
+  test("UNAUTHENTICATED and FORBIDDEN are both 403, and neither is retryable", () => {
+    expect(statusForCode("UNAUTHENTICATED")).toBe(403);
+    expect(statusForCode("FORBIDDEN")).toBe(403);
+    expect(new AppError("UNAUTHENTICATED").retryable).toBe(false);
+    expect(new AppError("FORBIDDEN").retryable).toBe(false);
+  });
+});

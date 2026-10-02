@@ -91,6 +91,24 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "transient",
     allowRetry: false,
   },
+  // Core's identity codes, which this service does not raise: the downloader
+  // has no sign-in. Like `NOT_FOUND`, a user could only see one through a
+  // server newer than this page, so the copy says that rather than inventing
+  // an account to sign in to.
+  UNAUTHENTICATED: {
+    title: "This server asked who you are",
+    detail:
+      "This service has no sign-in of its own, so this page does not know how to answer. Reload it; if that does not help, the server may have been reconfigured.",
+    tone: "internal",
+    allowRetry: false,
+  },
+  FORBIDDEN: {
+    title: "This server refused your account",
+    detail:
+      "This service has no accounts of its own, so this page cannot change the answer. Reload it; if that does not help, ask whoever runs the server.",
+    tone: "internal",
+    allowRetry: false,
+  },
   NO_MEDIA_FOUND: {
     title: "No video found",
     detail:

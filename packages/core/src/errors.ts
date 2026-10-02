@@ -99,6 +99,47 @@ export const CORE_ERROR_CODES = [
    * client with the widget can do.
    */
   "HUMAN_CHECK_FAILED",
+  /**
+   * The caller did not say who it is in a way we can trust. An identity is
+   * required on this endpoint, and the request carried no credential, or one
+   * that failed verification — a bad signature, the wrong audience, expired.
+   * Like `HUMAN_CHECK_FAILED`, the variants are reported the same way, because
+   * telling them apart tells a forger which part to fix.
+   *
+   * Answered with a 403, never a 401, by the ledger and the downloader — the
+   * downloader's reasoning for `HUMAN_CHECK_FAILED`, and the owner's decision
+   * for lg-3: a 401 must carry a `WWW-Authenticate` scheme the client could
+   * answer, and an identity-aware proxy has no such scheme for a client to use.
+   * (The planner raises neither code and does not map them, so its table's
+   * fallback, 500, is what it would answer.) The code stays distinct from
+   * `FORBIDDEN` all the same, because the remedy differs.
+   *
+   * Core rather than a tool's own because it describes the door, not the room:
+   * any tool behind an identity-aware proxy has it, and the ledger is the first
+   * (lg-3, Cloudflare Access). Which proxy, which token and which header are the
+   * tool's configuration, never this code's.
+   *
+   * **Not `HUMAN_CHECK_FAILED`**: that asks *whether* a person is there, this
+   * asks *which* one. **Not the downloader's `AUTH_REQUIRED`** either: that is a
+   * *source site* wanting a session we do not have, travelling the other way —
+   * the same split as `BOT_CHALLENGE` and `HUMAN_CHECK_FAILED`.
+   *
+   * Named for what happened rather than for HTTP's reason phrase, which says
+   * "Unauthorized" for what is an authentication failure; an authorisation
+   * failure is `FORBIDDEN`, below. Not retryable: the same request carries the
+   * same credential.
+   */
+  "UNAUTHENTICATED",
+  /**
+   * The caller proved who it is, and that identity is not allowed here — the
+   * credential verified, but nothing grants it this tool or this route.
+   * Answered with a 403. Distinct from `UNAUTHENTICATED`, though that is a 403
+   * too, because the remedy is different: a fresh sign-in fixes that one and
+   * changes nothing here, where only whoever configures access can help. Distinct from `BLOCKED_TARGET`,
+   * also a refusal, because that one is about where a request *points*, and
+   * this is about who sent it. Not retryable.
+   */
+  "FORBIDDEN",
 
   // --- Artifacts ---
   /** Output would exceed the configured per-job or global size cap. */
@@ -139,6 +180,8 @@ export const CORE_ERROR_MESSAGES: Readonly<Record<CoreErrorCode, string>> = {
   TLS_VERIFICATION_FAILED: "The site's security certificate could not be verified.",
   NOT_FOUND: "That endpoint does not exist.",
   HUMAN_CHECK_FAILED: "We could not confirm this request came from a person. Try again.",
+  UNAUTHENTICATED: "We could not confirm who you are.",
+  FORBIDDEN: "You do not have access to this.",
   SIZE_LIMIT_EXCEEDED: "The result is larger than the configured size limit.",
   DISK_FULL: "The server has run out of storage.",
   FILE_EXPIRED: "That file has been removed. Results are kept for a limited time.",
