@@ -86,3 +86,18 @@ file it rather than fold it in.
 
   Gate finding 3 (mapping in wrong path) is superseded by the transform, which
   handles conversion at the schema layer for all three data paths.
+
+- 2026-10-02 — Gate 2 repairs. `errorCodeSchema` no longer casts its transform
+  result to `ErrorCode`: with a second entry in `RETIRED_ERROR_CODES`,
+  `npx tsc --build tools/downloader/contract` exits 2 with 5 errors, where the
+  cast had let it exit 0 and pass the unmapped code through typed as `ErrorCode`
+  (reverted after the measurement). The render spec
+  `tools/downloader/web/test/mux-failed-render.test.tsx` now asserts the stored
+  job is shown with the `DOWNLOAD_FAILED` presentation (heading and code), and
+  went red on both of its cases with the schema made to reject `MUX_FAILED`;
+  the API test asserts message and `retryable` again. This branch also pinned
+  three citations in the merged dl-53 record to `@24acb04`, the ones whose
+  coordinates the removals moved (`errors.ts:89`, `runner.ts:117`,
+  `error-presentation.ts:296`, now `:314`), changing no words.
+  Verified at this head: `npm test -- --project downloader` 1564 passed, 2
+  skipped (92 files passed, 1 skipped), exit 0; `npm run check` exit 0.

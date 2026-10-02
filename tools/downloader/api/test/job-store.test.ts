@@ -541,8 +541,8 @@ describe("probe_outcomes (dl-57)", () => {
     create("mux-job");
     store.transition("mux-job", "failed", {
       error: {
-        code: "MUX_FAILED" as never,
-        message: "The video could not be assembled into a playable file.",
+        code: "DOWNLOAD_FAILED",
+        message: "placeholder, overwritten below",
         retryable: false,
       },
     });
@@ -560,5 +560,7 @@ describe("probe_outcomes (dl-57)", () => {
     // The job should read back with MUX_FAILED transformed to DOWNLOAD_FAILED
     const readBack = store.get("mux-job");
     expect(readBack.error?.code).toBe("DOWNLOAD_FAILED");
+    expect(readBack.error?.message).toBe("The video could not be assembled into a playable file.");
+    expect(readBack.error?.retryable).toBe(false);
   });
 });
