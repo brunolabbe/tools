@@ -3,7 +3,7 @@ id: lg-1
 tool: ledger
 title: Parse an AccèsD paste, and prove it with its own running balance
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: []
 difficulty: standard
@@ -64,6 +64,32 @@ Real bank data never enters the repository; see the tool's `CLAUDE.md`.
    thousands separators.
 4. An unrecognised line fails with its line number; nothing is silently dropped.
 5. `npm run check` and `npm test -- --project ledger` pass.
+
+## Review
+
+### Gate 1
+
+**Gate: PASS** — 2026-10-01 · `b7fb3fb...466771e` (base `b7fb3fb`; `origin/main` still at `b7fb3fb` after fetch) · code-review at medium · coordinates re-resolved at `952c813`
+
+Re-issued unchanged beside gates 2 and 3, every coordinate re-resolved at `952c813`. Three citations whose text the gate-2 round deleted or corrected are now prose naming `466771e`, the sha this section gated: the F2 bullet (the describe-scope parse, removed), the F3 bullet (the months.ts docblock, corrected) and the F4 bullet (the 422 assertion over every ledger code, rewritten).
+
+| Done when                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Three-month paste with a four-row same-day group parses to the right rows in the right `seq` order | `tools/ledger/books/test/statement.test.ts:113 "-500, 197045"` ✓ (the four same-day rows, by seq) · `tools/ledger/books/test/statement.test.ts:68 "toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])"` ✓. The true order differs from all ten sorts tried (amount, absolute amount, description, category, balance, each both ways) and from the unreversed listing                                                                                                                                                                                            |
+| 2. Altered balance, month total and echo each fail naming the row                                     | balance `tools/ledger/books/test/statement.test.ts:152 "expectedBalanceCents: 197045"` ✓ · total `tools/ledger/books/test/statement.test.ts:181 "sumCents: -114449"` ✓ (names the Total line and month) · echo `tools/ledger/books/test/statement.test.ts:214 "echoLine: lineOf(text,"` ✓                                                                                                                                                                                                                                                                    |
+| 3. Amounts parse with U+2212, `-`, `+`, and each of the three whitespace separators                   | `tools/ledger/books/test/amount.test.ts:6 "U+2212 minus"` ✓ · `tools/ledger/books/test/amount.test.ts:7 "hyphen minus"` ✓ · `tools/ledger/books/test/amount.test.ts:8 "explicit plus"` ✓ · `tools/ledger/books/test/amount.test.ts:10 "a plain space as the thousands separator"` ✓ · `tools/ledger/books/test/amount.test.ts:11 "a no-break space (U+00A0) as the thousands"` ✓ · `tools/ledger/books/test/amount.test.ts:12 "a narrow no-break space (U+202F) as the"` ✓ — the test strings hold the real U+00A0 and U+202F bytes (checked with `grep -P`) |
+| 4. An unrecognised line fails with its line number; nothing silently dropped                          | `tools/ledger/books/test/statement.test.ts:293 "toMatchObject({ line })"` ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 5. `npm run check` and `npm test -- --project ledger` pass                                            | **verified** — `npm run check` exit 0; `npm test -- --project ledger` 100 of 100 in 8 files at `466771e`, against 25 at the base: +75, all in three new files, no existing test file touched                                                                                                                                                                                                                                                                                                                                                                 |
+
+- **low** · The `## Log` first entry, bullet _The tests can fail_, says removing the `ROW_START` guard "fails nothing: it is an equivalent mutant". At `466771e`, deleting that guard line fails 1 of 51 in `statement.test.ts`, on `tools/ledger/books/test/statement.test.ts:296 "not a row, a header or a total"` — the very assertion the same bullet goes on to cite.
+- **low** · `nfr:maintainability` — `statement.test.ts` line 61 at `466771e` (`const { rows } = parseStatement(THREE_MONTHS)`, since removed) parses the fixture in `describe` scope, so any regression that makes the fixture throw (measured: `listed.toReversed()` → `listed`) fails the file at collection with `Tests no tests`. The suite still goes red, but the ordering assertions never run and the report names the chain, not the ordering. Moving the parse into each test (or a helper called per test) turns that into assertion failures.
+- **low** · `months.ts` line 5 at `466771e` (since corrected) and the Log (_The month abbreviation must agree_) call the nine unverified abbreviations the first three letters of the French name. `JUN` is not (`JUIN` → `JUI`), and neither is the verified `JUL` (`JUILLET` → `JUI`). The code is a reasonable guess and a wrong one fails loudly, naming its line; the comment misstates the rule the next reader will extend.
+- **low** · `http-errors.test.ts` line 12 at `466771e` (`expect(status).toBe(422)`, since rewritten) runs over every member of `LEDGER_ERROR_CODES`, so it asserts that every ledger code, present and future, is a 422. True of the four today; the first ledger code with another status fails it. lg-3 as built at `8aeb30a` puts its two codes in core and `git merge-tree` against it is clean, so nothing breaks yet.
+- **dropped** · `parseAmountCents` takes any `\s` as a thousands separator: tab, U+2007, U+2009, U+3000, U+2028 and U+FEFF all parse, each to the correct value. The brief asks for any whitespace, and no probe returned a wrong amount, so not a defect.
+- **dropped** · error `details` carry the row description, which is bank text, and `toErrorResponse` passes `details` to the HTTP body. No route raises these yet, so whether they reach a log is lg-2 to decide, not this diff.
+- **dropped** · dates are not checked to fall newest-first. The brief does not ask for it, and the chain, echo and month-header checks already refuse every reordering that moves money.
+- **findings** · code-review at medium (run by hand, no finder subagent) returned 7; 4 carried, 3 dropped.
+- NFR: security ✓ (pure, no I/O, synthetic fixture) · performance ✓ (one linear pass) · reliability ✓ (every refusal typed and line-numbered; mutations of chain, total, echo, missing-Total and refusal each fail on an assertion) · maintainability — above.
 
 ## Log
 
