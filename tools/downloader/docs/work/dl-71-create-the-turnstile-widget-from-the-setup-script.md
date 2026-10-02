@@ -200,3 +200,12 @@ file. Either order works, but they must not run concurrently.
     the test's overrides on top, as `scripts/test/agent-cost.test.ts` does, and the
     stale sentence about unmeasured fields above is corrected. Windows itself was
     not run.
+  - **Gate 3's two lows.** A process case at the end of
+    `scripts/test/cloudflare-turnstile.test.ts` copies the script into a temp
+    directory named `cf setup …` (a space), runs it with an empty token and
+    expects exit 1 and `CLOUDFLARE_API_TOKEN is not set`. With the guard reverted
+    to `file://${process.argv[1]}` it failed (`expected '' to contain
+'CLOUDFLARE_API_TOKEN is not set'`, 1 of 14); restored, 31 of 31 across the two
+    Cloudflare suites. The guard's comment no longer implies the fix covers a
+    symlink: it says a space or a %-encoded character reproduces the mismatch on
+    Linux and a symlink still mismatches.

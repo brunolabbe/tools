@@ -616,8 +616,8 @@ function fail(message) {
 
 // `pathToFileURL`, never `file://` + the path: on Windows `argv[1]` is `D:\a\...`
 // and the concatenation never matches `import.meta.url`, so `main` never runs and
-// the script exits 0 for every invocation — a refusal included. The same mismatch
-// shows on Linux through a symlink. See `scripts/commit-message.mjs`'s guard.
+// the script exits 0 for every invocation — a refusal included. A space or a %-encoded
+// character does it on Linux too; a symlink still mismatches. See `commit-message.mjs`.
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     process.stderr.write(`cloudflare-setup: ${err.message}\n`);

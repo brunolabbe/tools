@@ -354,3 +354,25 @@ test("run as a process, a 403 on the widget list exits 1 and writes nothing", ()
   expect(run.status).toBe(1);
   expect(run.writes).toBe("");
 });
+
+test("run as a process from a path with a space, a refusal still exits 1", () => {
+  // The entry guard compares `import.meta.url`, which percent-encodes the path,
+  // with a URL built from `argv[1]`. Built by string concatenation they differ for
+  // a space (and for any Windows path), `main` never runs, and the script exits 0
+  // on every refusal. Every other process case here runs from a path with neither.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cf setup "));
+  try {
+    const copy = path.join(dir, "cloudflare-setup.mjs");
+    fs.copyFileSync(SCRIPT, copy);
+    const run = spawnSync(process.execPath, [copy, "--domain", "example.com"], {
+      encoding: "utf8",
+      shell: false,
+      env: { ...process.env, CLOUDFLARE_API_TOKEN: "" },
+    });
+
+    expect(run.stderr).toContain("CLOUDFLARE_API_TOKEN is not set");
+    expect(run.status).toBe(1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
