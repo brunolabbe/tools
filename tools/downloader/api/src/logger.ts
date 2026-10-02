@@ -181,8 +181,8 @@ function isError(value: object): value is Error {
 }
 
 /**
- * Copies an `Error` as an `Error`, with its `message`, `stack` and every own
- * property run through the walk (repo-85).
+ * Copies an `Error` as an `Error`, with every property pino writes run through
+ * the walk (repo-85).
  *
  * The generic object branch of `redactUrlsDeep` cannot take one: `message`,
  * `stack` and `cause` are own but **not enumerable**, so `Object.entries`
@@ -195,12 +195,18 @@ function isError(value: object): value is Error {
  * serialises exactly as the original would have.
  *
  * **Every value is read through the error and written onto the copy as plain
- * data, accessors included** (gate 1, F1). Evaluating a getter is what the
+ * data, accessors included, for the keys named below** (gate 1, F1). Evaluating a getter is what the
  * walk's `Object.entries` always did and what pino's serialiser does anyway,
  * so skipping one here, as the first cut did, only meant its URL reached the
  * line raw: Node's own `ERR_SYSTEM_ERROR` carries `errno` and `syscall` as own
  * enumerable accessors. Three properties cannot be copied as descriptors, so
- * none is:
+ * none is, and the keys read are **exactly the ones pino reads**: every
+ * enumerable one, own or inherited (its `for…in`), plus `message`, `stack`,
+ * `name`, `cause` and `errors`. A non-enumerable own accessor is left alone
+ * (gate 2, G1): pino never reads it, so reading it here could only turn a getter
+ * that throws into `fieldsDropped` on a line that would have been written whole.
+ * An *enumerable* getter that throws still throws, here as in pino and in the
+ * walk before this function existed — that hazard is `emit`'s to catch.
  *
  *  - `stack` is an own accessor over V8's captured trace on the Node this repo
  *    runs, and a descriptor copied onto another object reads back `undefined`
@@ -209,23 +215,16 @@ function isError(value: object): value is Error {
  *  - a `DOMException`'s `message`, `name` and `code` are getters on the
  *    *prototype* that throw for any object that is not one, and pino reads
  *    them off the copy. So the copy owns each as data, which also means they
- *    are read, and redacted, though they are not own properties: the keys are
- *    the own ones, every enumerable inherited one (pino's `for…in`), and
- *    `message`, `stack` and `name`. Gate 1's F3 — without it that line fell
- *    back to `fieldsDropped` and lost the whole failure.
+ *    are read, and redacted, though they are not own properties. Gate 1's F3 —
+ *    without it that line fell back to `fieldsDropped` and lost the whole
+ *    failure.
  *
  * Returns the same reference when nothing changed, like the rest of the walk.
  */
 function redactError(error: Error, ancestors: Set<object>): Error {
   const enumerable = new Set<string>();
   for (const key in error) enumerable.add(key);
-  const keys = new Set([
-    ...Object.getOwnPropertyNames(error),
-    ...enumerable,
-    "message",
-    "stack",
-    "name",
-  ]);
+  const keys = new Set([...enumerable, "message", "stack", "name", "cause", "errors"]);
   const values = new Map<string, unknown>();
   let changed = false;
   for (const key of keys) {

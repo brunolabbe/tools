@@ -199,6 +199,36 @@ describe("an Error", () => {
     expect(line.err?.message).toBe(`failed ${REDACTED_URL}`);
     expect(line.err?.stack).toContain(`AbortError: failed ${REDACTED_URL}`);
   });
+
+  // Gate 2's G1: pino never reads a non-enumerable own accessor, so reading one
+  // here must not be what turns a writable line into `fieldsDropped`.
+  const withThrowingHiddenGetter = (error: Error): Error =>
+    Object.defineProperty(error, "hidden", {
+      get: () => {
+        throw new Error("boom");
+      },
+      enumerable: false,
+      configurable: true,
+    });
+
+  test("a throwing non-enumerable getter does not cost the line, with nothing to redact", () => {
+    const { logger, lines } = capture();
+    logger.error("probe failed", { err: withThrowingHiddenGetter(new Error("plain failure")) });
+
+    expect(parse(lines[0])["fieldsDropped"]).toBeUndefined();
+    expect(parse(lines[0]).err?.message).toBe("plain failure");
+  });
+
+  test("nor when the message carries a signed URL, which is still redacted", () => {
+    const { logger, lines } = capture();
+    logger.error("probe failed", {
+      err: withThrowingHiddenGetter(new Error(`failed ${SIGNED}`)),
+    });
+
+    expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0])["fieldsDropped"]).toBeUndefined();
+    expect(parse(lines[0]).err?.message).toBe(`failed ${REDACTED_URL}`);
+  });
 });
 
 describe("the bindings option", () => {

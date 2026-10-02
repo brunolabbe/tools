@@ -251,3 +251,33 @@ it needs its own pull request and a gate.
     `isError(value)` line at 148, past all four cited lines
     (`git diff origin/main -U0 -- tools/downloader/api/src/logger.ts` shows its
     first hunk at `@@ -147,0 +148 @@`).
+
+- 2026-10-02 — **Gate 2 (PASS at `8d182a9`), one new low, G1, fixed.**
+  - **G1, reproduced.** The probe (`node probe.mjs`, `dist` built from `8d182a9`)
+    printed `fieldsDropped` for an `Error("plain")` and for an error with a signed
+    URL in its message, each carrying a non-enumerable own getter that throws. My
+    round-1 fix read **every own property name**, so it evaluated a getter pino
+    never reads.
+  - **Remedy chosen: read only the keys pino reads, rather than catching each
+    read.** The keys are every enumerable one, own or inherited (`for…in`, which
+    is what pino iterates), plus `message`, `stack`, `name`, `cause` and `errors`.
+    Why not a per-read `try`/`catch`: it would have to decide what to do with an
+    unreadable key, and for an _enumerable_ getter that throws there is no good
+    answer — pino throws on the original too, the base walk threw there, and
+    `emit` already catches it, so swallowing it here would hide the error from the
+    one place built to handle it and write a line pino would then have thrown on
+    anyway. Narrowing the read set removes the cause instead of the symptom, and
+    leaves a throwing _enumerable_ getter exactly where it always was.
+  - **Probe across the rows, after a rebuild:** all ten print `clean` — own
+    enumerable getter, own enumerable getter with a URL in the message, own
+    `message` accessor, cross-realm error, `DOMException`, G1 plain, G1 with a
+    signed URL, a frozen `Error` with a URL, `ERR_SYSTEM_ERROR` (from
+    `os.setPriority(999999, 0)`), and an error with a `cause` carrying a URL. The
+    two G1 rows now carry `message` and `stack` instead of `fieldsDropped`.
+  - **Red/green:** two tests appended to `logging-routes.test.ts`. With
+    `tools/downloader/api/src/logger.ts` at `8d182a9`,
+    `npx vitest run tools/downloader/api/test/logging-routes.test.ts` gave
+    `2 failed | 16 passed`; with the fix, `18 passed` of 18. The suite imports the
+    downloader's `src`, so no rebuild was needed between the two.
+  - **Unchanged:** the first line this branch adds to the downloader's `logger.ts`
+    is still the `isError(value)` line at 148.
