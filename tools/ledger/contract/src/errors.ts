@@ -17,7 +17,7 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1).
+ * parser's (lg-1); the two after them are the store's (lg-2).
  */
 
 import {
@@ -55,6 +55,24 @@ export const LEDGER_ERROR_CODES = [
   "STATEMENT_TOTAL_MISMATCH",
   /** A row's echo line does not repeat its own date, description and amount. */
   "STATEMENT_ECHO_MISMATCH",
+  // --- Chaining a paste onto what is stored (lg-2) ---
+  //
+  // A gap between a paste and the stored tail is `STATEMENT_CHAIN_BROKEN` again:
+  // the same proof failing, one boundary further out, with the same
+  // `unexplainedCents` in its details. These two are what that code cannot say.
+  /**
+   * A pasted row and a stored row disagree about the same place in the history:
+   * the same identity with another category, or another row where the stored
+   * history has this one. `details` names both, so nothing is overwritten and
+   * nothing is guessed at.
+   */
+  "STATEMENT_ROW_CONFLICT",
+  /**
+   * The paste reaches back past the oldest stored row. Rows are numbered from
+   * the oldest and a stored row is never renumbered, so older history cannot be
+   * added in front of what is there.
+   */
+  "STATEMENT_BEFORE_HISTORY",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -70,6 +88,9 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "The pasted statement does not add up: a row's balance does not follow from the one before it.",
   STATEMENT_TOTAL_MISMATCH: "A month's total in the pasted statement does not match its rows.",
   STATEMENT_ECHO_MISMATCH: "A row in the pasted statement does not match its own repeated line.",
+  STATEMENT_ROW_CONFLICT: "A pasted row disagrees with the row already stored in its place.",
+  STATEMENT_BEFORE_HISTORY:
+    "The pasted statement starts before the oldest stored row, and older history cannot be added.",
 };
 
 /**

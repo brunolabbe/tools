@@ -1,15 +1,16 @@
 /**
- * The shell, and nothing else yet.
+ * The shell and the paste screen (lg-2).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
- * tickets it produces — and a screen guessed at before then is one more thing
- * to unpick. What is here proves the bundle is served and reaches its API.
+ * tickets it produces — and a screen guessed at before its ticket is one more
+ * thing to unpick, so each one lands with the work that stores what it shows.
  */
 
 import { useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
 import type { HealthResponse } from "@ledger/contract";
 import { fetchHealth } from "./api/health.ts";
+import { StatementPaste } from "./statements/StatementPaste.tsx";
 
 export function App(): React.ReactElement {
   return (
@@ -19,7 +20,7 @@ export function App(): React.ReactElement {
         <p className="muted">The household&rsquo;s shared account.</p>
       </header>
       <main>
-        <p>Nothing is recorded here yet.</p>
+        <StatementPaste />
       </main>
       <Health />
     </div>

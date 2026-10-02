@@ -25,6 +25,7 @@ import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerMeRoute } from "./routes/me.ts";
+import { registerStatementRoutes } from "./routes/statements.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
 export interface CreateAppOptions {
@@ -48,10 +49,14 @@ export interface App {
 }
 
 /**
- * Body size cap. Nothing here takes a body yet; the first route that does —
- * a pasted statement, most likely — decides whether this is enough.
+ * Body size cap, sized for a pasted statement (lg-2). A synthetic row is about
+ * 140 bytes (500 rows measured 70 865), a real one longer with its description,
+ * and the household's account makes roughly a hundred rows a year. The old 64
+ * KiB would have held a few years at best, and the first paste into an empty
+ * database may be the whole of them; 1 MiB leaves an order of magnitude over
+ * that. A paste over the cap is refused whole, as a 400.
  */
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 1024 * 1024;
 
 export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const config = loadApiConfig(options.config ?? {});
@@ -101,6 +106,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   );
   registerHealthRoute(server, context);
   registerMeRoute(server);
+  registerStatementRoutes(server, context);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
@@ -134,12 +140,17 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
 
     // 5xx is ours; 4xx is theirs. Logging the two at the same level makes the
     // log useless for spotting real problems.
+    //
+    // The details' *names*, never their values: a refused statement's details
+    // carry the offending row's description, amount and balance (lg-1 left this
+    // decision to lg-2), and a log outlives the request and is read by whoever
+    // reads logs. The caller already has them in the response body.
     const fields = {
       method: request.method,
       url: request.url,
       code: appError.code,
       status,
-      details: appError.details,
+      detailKeys: Object.keys(appError.details ?? {}),
     };
     if (status >= 500) context.logger.error("request failed", fields);
     else context.logger.info("request rejected", fields);

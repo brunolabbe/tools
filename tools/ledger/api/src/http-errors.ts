@@ -34,6 +34,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   STATEMENT_CHAIN_BROKEN: 422,
   STATEMENT_TOTAL_MISMATCH: 422,
   STATEMENT_ECHO_MISMATCH: 422,
+  // lg-2: the paste is fine on its own and does not fit what is stored.
+  STATEMENT_ROW_CONFLICT: 422,
+  STATEMENT_BEFORE_HISTORY: 422,
 };
 
 /**

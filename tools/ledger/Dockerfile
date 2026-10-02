@@ -29,6 +29,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY tools/ledger/contract/package.json tools/ledger/contract/
+COPY tools/ledger/books/package.json tools/ledger/books/
 COPY tools/ledger/api/package.json tools/ledger/api/
 COPY tools/ledger/web/package.json tools/ledger/web/
 RUN npm ci
@@ -70,6 +71,8 @@ COPY --from=build /app/packages/core/package.json packages/core/
 COPY --from=build /app/packages/core/dist packages/core/dist
 COPY --from=build /app/tools/ledger/contract/package.json tools/ledger/contract/
 COPY --from=build /app/tools/ledger/contract/dist tools/ledger/contract/dist
+COPY --from=build /app/tools/ledger/books/package.json tools/ledger/books/
+COPY --from=build /app/tools/ledger/books/dist tools/ledger/books/dist
 COPY --from=build /app/tools/ledger/api/package.json tools/ledger/api/
 COPY --from=build /app/tools/ledger/api/dist tools/ledger/api/dist
 COPY --from=build /app/tools/ledger/web/package.json tools/ledger/web/
