@@ -455,3 +455,45 @@ describe("the probe stage channel", () => {
     expect(answer.probe.variants.length).toBeGreaterThan(0);
   });
 });
+
+describe("schema accepts retired error codes for backward compatibility (dl-74)", () => {
+  test("a job with retired MUX_FAILED error code parses from persisted data", async () => {
+    // Simulate a `downloader:jobs:v1` localStorage record from before dl-74
+    // that carries MUX_FAILED. The schema should accept it.
+    const oldJobData = {
+      id: "mux-job",
+      sourceUrl: "https://example.com/video",
+      variantId: null,
+      variant: null,
+      status: "failed",
+      progress: {
+        stage: "failed",
+        percent: null,
+        downloadedBytes: 0,
+        totalBytes: null,
+        segmentsDone: null,
+        segmentsTotal: null,
+        speedBps: null,
+        etaSec: null,
+        processedSec: null,
+      },
+      result: null,
+      error: {
+        code: "MUX_FAILED",
+        message: "The video could not be assembled into a playable file.",
+        retryable: false,
+      },
+      attempts: 1,
+      createdAt: "2026-08-06T10:00:00.000Z",
+      updatedAt: "2026-08-06T10:05:00.000Z",
+      finishedAt: "2026-08-06T10:05:00.000Z",
+    };
+
+    const parsed = jobSchema.safeParse(oldJobData);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.error?.code).toBe("MUX_FAILED");
+      expect(parsed.data.status).toBe("failed");
+    }
+  });
+});

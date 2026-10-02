@@ -534,4 +534,26 @@ describe("probe_outcomes (dl-57)", () => {
     const hosts = store.probeOutcomes().map((row) => row.host);
     expect(hosts).toEqual(["new.example"]);
   });
+
+  test("a job row written with retired error code MUX_FAILED still reads back (dl-74)", () => {
+    // Simulate a row from before dl-74 that has MUX_FAILED. The schema accepts
+    // it for backward compatibility even though nothing can raise it anymore.
+    create("mux-job");
+    const job = store.get("mux-job");
+    const muxFailedJson = JSON.stringify({
+      code: "MUX_FAILED",
+      message: "The video could not be assembled into a playable file.",
+      retryable: false,
+    });
+
+    // Update the row directly to have MUX_FAILED (simulating a row from before dl-74)
+    const updateStmt = db.prepare(`UPDATE jobs SET error_json = ? WHERE id = ?`);
+    updateStmt.run(muxFailedJson, "mux-job");
+
+    // The job should still read back successfully, with the MUX_FAILED code preserved
+    const readBack = store.get("mux-job");
+    expect(readBack.error?.code).toBe("MUX_FAILED");
+    expect(readBack.error?.message).toBe("The video could not be assembled into a playable file.");
+    expect(readBack.error?.retryable).toBe(false);
+  });
 });
