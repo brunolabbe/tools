@@ -53,8 +53,10 @@ the ones that fail silently if skipped.
 6. `.github/workflows/<name>.yml` for anything slow, path-filtered to that tool.
 7. To make it releasable: `tools/<name>/Dockerfile`, a `version.txt`, and an
    entry in both `release-please-config.json` and
-   `.release-please-manifest.json`. Nothing in `release.yml` changes — it builds
-   whatever was released. Add the image gate in step 6 _before_ the first
+   `.release-please-manifest.json`: the manifest line at `"0.0.0"` and the config
+   entry with `"initial-version": "0.1.0"`, or the first release is 1.0.0 — see
+   [03-RELEASING](../../../docs/03-RELEASING.md). Nothing in `release.yml`
+   changes — it builds whatever was released. Add the image gate in step 6 _before_ the first
    release, so that release is not the first time the image is built.
 
    Copy a `Dockerfile` from an existing tool and its two hand-kept workspace
