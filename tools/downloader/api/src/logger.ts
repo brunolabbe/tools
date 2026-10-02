@@ -207,6 +207,10 @@ function isError(value: object): value is Error {
  * that throws into `fieldsDropped` on a line that would have been written whole.
  * An *enumerable* getter that throws still throws, here as in pino and in the
  * walk before this function existed — that hazard is `emit`'s to catch.
+ * A `cause` that is a *function* (VError style) is replaced by one that
+ * redacts what the original returns, and does not call it here: pino calls
+ * `err.cause()` only for an error it serialises, and the walk reaches errors
+ * under any key.
  *
  *  - `stack` is an own accessor over V8's captured trace on the Node this repo
  *    runs, and a descriptor copied onto another object reads back `undefined`
@@ -229,6 +233,14 @@ function redactError(error: Error, ancestors: Set<object>): Error {
   let changed = false;
   for (const key of keys) {
     const original: unknown = (error as unknown as Record<string, unknown>)[key];
+    if (key === "cause" && typeof original === "function") {
+      // VError style: pino calls `err.cause()` and writes the result. Redact it
+      // when pino asks, not now, so it is called as often as pino would call it
+      // and not for an error pino never serialises (repo-85, gate 3).
+      values.set(key, () => redactUrlsDeep((original as () => unknown).call(error)));
+      changed = true;
+      continue;
+    }
     const redacted = redactUrlsDeep(original, ancestors);
     values.set(key, redacted);
     if (redacted !== original) changed = true;

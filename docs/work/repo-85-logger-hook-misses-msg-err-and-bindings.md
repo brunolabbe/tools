@@ -281,3 +281,47 @@ it needs its own pull request and a gate.
     downloader's `src`, so no rebuild was needed between the two.
   - **Unchanged:** the first line this branch adds to the downloader's `logger.ts`
     is still the `isError(value)` line at 148.
+
+- 2026-10-02 — **A function-valued `cause`, folded in by the owner's decision.**
+  Gate 3's reviewer found, and recorded as dropped, a leak that is **pre-existing
+  on `main` at `b7fb3fb`** and unchanged by this branch: an `Error` whose `cause`
+  is a function (VError style) has `err.cause()` called by pino, which writes the
+  returned error's stack as `caused by: …`; the walk leaves a function as it finds
+  it, so a signed URL in what the function returns went out raw. The reviewer
+  offered (1) leave it, which was its recommendation and the orchestrator's, (2)
+  fold it into this branch, (3) file it. **The owner chose (2), overriding that
+  recommendation, via `AskUserQuestion` on 2026-10-02**; nothing in downloader
+  source passes a function as `cause` today, so this closes a latent route, not a
+  live one.
+  - **Reproduced first**, at `8b026d9`: an error with a function `cause` returning
+    `new Error("failed https://cdn.example/v.mp4?X-Amz-Signature=SECRET&x=1")`,
+    logged as `{ err }` through the downloader's `createLogger`, wrote
+    `"stack":"Error: outer … caused by: Error: failed https://cdn.example/v.mp4?X-Amz-Signature=SECRET&x=1 …"`.
+  - **How pino calls it**, read in `pino-std-serializers/lib/err-helpers.js`:
+    `getErrorCause` tests `typeof err.cause === 'function'` and calls `err.cause()`
+    — on every serialisation of the stack and of the message, down the chain — and
+    keeps the result only if it has a string `message`. And `err.js` serialises
+    only the error under the `err` key (and what that error's own enumerable
+    properties and `errors` hold); an error under any other key is plain JSON and
+    its `cause` is never asked for.
+  - **Fix: wrap, do not call.** `redactError` replaces a function `cause` on its
+    copy with one that calls the original (as a method of the original error) and
+    runs the result through the walk. The walk reaches errors under every key, so
+    calling the function eagerly there would run a function pino never runs; the
+    wrapper is called when, and as often as, pino calls it. The result's own
+    function `cause` is wrapped again by the same code, so a chain is covered.
+    Only an error with a function `cause` is copied that it was not before; every
+    other row takes the path it took.
+  - **Red/green:** four tests appended to the end of `logging-routes.test.ts`,
+    helpers included, so no citation into that file moves. With `logger.ts` at
+    `8b026d9`, `npx vitest run tools/downloader/api/test/logging-routes.test.ts`
+    gave `2 failed | 20 passed` (the redaction test and the chain test; the
+    plain-cause control and the call-count test pass there, as they should: they
+    guard the fix, not the leak); with the fix, `22 passed` of 22. The call-count
+    test compares against the shared logger with no hook, so it fails if the
+    wrapper ever calls the function more often than pino does, or at all for an
+    error under a key pino does not serialise.
+  - **Unchanged:** the fix adds nothing above `redactError`; the first line this
+    branch adds to the downloader's `logger.ts` is still the `isError(value)` line
+    at 148, and the new test and its helpers sit after the last existing line of
+    `logging-routes.test.ts`.

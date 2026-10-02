@@ -249,3 +249,75 @@ describe("the bindings option", () => {
     expect(parse(lines[0])["pid"]).toBeTypeOf("number");
   });
 });
+
+// A function-valued `cause` (VError style): pino calls `err.cause()` and writes
+// what it returns into `stack` as `caused by: …`. The walk leaves a function
+// as it finds it, so the URL in the returned error went out raw.
+describe("a function-valued cause", () => {
+  test("the error it returns is redacted, in the stack pino builds from it", () => {
+    const { logger, lines } = capture();
+    logger.error("probe failed", { err: withFunctionCause(new Error(`failed ${SIGNED}`)).error });
+
+    expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0])["fieldsDropped"]).toBeUndefined();
+    expect(parse(lines[0]).err?.stack).toContain(`caused by: Error: failed ${REDACTED_URL}`);
+  });
+
+  test("control: one with nothing to redact still reads through to the line", () => {
+    const { logger, lines } = capture();
+    logger.error("probe failed", { err: withFunctionCause(new Error("plain cause")).error });
+
+    expect(parse(lines[0]).err?.stack).toContain("caused by: Error: plain cause");
+  });
+
+  test("it is called as often as pino alone calls it, and not at all where pino would not", async () => {
+    const viaPino = withFunctionCause(new Error(`failed ${SIGNED}`));
+    (await pinoAlone()).error("probe failed", { err: viaPino.error });
+    expect(viaPino.calls()).toBeGreaterThan(0);
+
+    const viaLogger = withFunctionCause(new Error(`failed ${SIGNED}`));
+    capture().logger.error("probe failed", { err: viaLogger.error });
+    expect(viaLogger.calls()).toBe(viaPino.calls());
+
+    // pino writes an error under any other key as plain JSON and never asks for its cause.
+    const elsewhere = withFunctionCause(new Error(`failed ${SIGNED}`));
+    capture().logger.error("probe failed", { details: { failure: elsewhere.error } });
+    expect(elsewhere.calls()).toBe(0);
+  });
+
+  test("a function cause on the returned error is redacted in turn", () => {
+    const { logger, lines } = capture();
+    const inner = withFunctionCause(new Error(`failed ${SIGNED}`)).error;
+    logger.error("probe failed", { err: withFunctionCause(inner).error });
+
+    expect(lines[0]).not.toContain("SECRET");
+    expect(parse(lines[0]).err?.stack).toContain(`Error: failed ${REDACTED_URL}`);
+  });
+});
+
+/** An error whose `cause` is a function returning `result`, counting its calls. */
+function withFunctionCause(result: Error): { error: Error; calls: () => number } {
+  let calls = 0;
+  const error = new Error("outer");
+  Object.defineProperty(error, "cause", {
+    value: () => {
+      calls += 1;
+      return result;
+    },
+    configurable: true,
+    writable: true,
+  });
+  return { error, calls: () => calls };
+}
+
+/**
+ * The shared logger with no hook at all: what pino does to the same input, for
+ * the call count. Imported here rather than at the top of the file so no line
+ * above this block moves under the records that cite them.
+ */
+async function pinoAlone(): Promise<{
+  error(message: string, fields?: Record<string, unknown>): void;
+}> {
+  const { createLogger: createCoreLogger } = await import("@webtools/core/logger");
+  return createCoreLogger({ level: "debug", write: () => undefined });
+}
