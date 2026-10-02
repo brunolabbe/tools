@@ -126,6 +126,19 @@ passed (42)`. `npm run check` exit 0.
     because rewriting the tool's status line is a decision about what "scaffold"
     still means once lg-3 and this have landed, not a sentence this ticket
     makes stale on its own. `tools/ledger/CLAUDE.md`'s own opening was updated.
+  - **Merged records' citations.** The first draft moved five of them. lg-1
+    cites two lines of `http-errors.test.ts`, which a longer `STATEMENT_CODES`
+    list shifted, and one line of the tool's `CLAUDE.md`, which two new paragraphs
+    above it shifted. Both were made line-neutral (the new codes got a block at
+    the end of the test file; the new rules went to the end of `CLAUDE.md`), and
+    `node scripts/citations.mjs` on lg-1's record went from `3 moved` to
+    `1 moved`, the one already moved on `main` (the cited paragraph sits three
+    lines below where the record says). Two of lg-3's could not be: the line of
+    `Person` in the contract's `api.ts` (a route added to `ROUTES` above it) and
+    the line of `registerNotFoundHandler` in `api/src/server.ts` (the body cap, the
+    log fields and the new route, all above it). Both are repointed in lg-3's
+    record, to one line later and eleven lines later; `node scripts/citations.mjs`
+    on that record → `50 verified, 0 moved`.
   - **Not measured.** The paste screen was exercised in jsdom only; no real
     phone, no browser, and no running image (`.github/workflows/ledger.yml`
     owns the image). The mobile claim rests on the CSS (single column, 16 px

@@ -10,8 +10,6 @@ const STATEMENT_CODES = [
   "STATEMENT_CHAIN_BROKEN",
   "STATEMENT_TOTAL_MISMATCH",
   "STATEMENT_ECHO_MISMATCH",
-  "STATEMENT_ROW_CONFLICT",
-  "STATEMENT_BEFORE_HISTORY",
 ] as const;
 
 describe("the ledger's statement error codes", () => {
@@ -31,4 +29,19 @@ describe("the ledger's statement error codes", () => {
   test.each(LEDGER_ERROR_CODES)("%s has a status line and does not answer 500", (code) => {
     expect(toErrorResponse(new AppError(code)).status).not.toBe(500);
   });
+});
+
+// lg-2's two codes, in a block of their own at the end: lg-1's record cites
+// lines above, and a longer list there would move every one of them.
+describe("the ledger's stored-statement error codes", () => {
+  test.each(["STATEMENT_ROW_CONFLICT", "STATEMENT_BEFORE_HISTORY"] as const)(
+    "%s answers 422 and carries its details",
+    (code) => {
+      const { status, body } = toErrorResponse(
+        new AppError(code, undefined, { details: { date: "2026-10-01" } }),
+      );
+      expect(status).toBe(422);
+      expect(body.error).toMatchObject({ code, retryable: false, details: { date: "2026-10-01" } });
+    },
+  );
 });

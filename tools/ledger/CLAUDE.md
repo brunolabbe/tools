@@ -3,11 +3,10 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
-**This tool is being built ticket by ticket.** What exists is the seams —
-contract, API, web shell, image — and, so far, one domain: a pasted statement,
-parsed (lg-1) and stored (lg-2). `docs/02-ROADMAP.md` is what is decided and
-what comes next; `npm run status -- --tool ledger` is what is open. Treat
-anything below marked _planned_ as design until a ticket says otherwise.
+**Built a ticket at a time.** The seams exist, and one domain: the pasted
+statement (lg-1, lg-2). `docs/02-ROADMAP.md` is what is decided and what comes
+next; `npm run status -- --tool ledger` is what is open. Treat anything below
+marked _planned_ as design until a ticket says otherwise.
 
 ## What this is
 
@@ -53,18 +52,6 @@ invented descriptions, invented amounts — shaped like the real thing. The one
 exception is none: a failing real row is reproduced by writing a synthetic row
 that fails the same way.
 
-**A stored row is never edited.** Nothing in `api` issues an `UPDATE` or a
-`DELETE` against the books (`docs/00-ANALYSIS.md` §9): a correction is a later
-row that supersedes the earlier one. A pasted row that disagrees with a stored
-one is refused and named (`STATEMENT_ROW_CONFLICT`), never reconciled. A
-migration, once shipped, is never edited either — append the next one.
-
-**Error `details` carry bank text, so a log carries their names and no values.**
-A refused statement's details name the offending row's description, amount and
-balance; the response needs them and a log outlives the request. The error
-handler in `api/src/server.ts` logs `detailKeys`, and a new log line that
-spreads `details` undoes it (`api/test/statements.test.ts` holds it).
-
 **Identity comes from Cloudflare Access.** Two people, two addresses, one Access
 policy (`docs/02-DEPLOYMENT.md`, step 2). The tool has no login of its own and
 must not grow one; who did something is the Access identity on the request.
@@ -84,3 +71,15 @@ is open, never its path. The contract's `HealthResponse` has no field for it, an
 `LEDGER_ERROR_CODES`, and grows on purpose one ticket at a time. A code arrives
 with the ticket that first throws it, with its status in `api/src/http-errors.ts` in the
 same change.
+
+**A stored row is never edited.** Nothing in `api` issues an `UPDATE` or a
+`DELETE` against the books (`docs/00-ANALYSIS.md` §9): a correction is a later
+row that supersedes the earlier one. A pasted row that disagrees with a stored
+one is refused and named (`STATEMENT_ROW_CONFLICT`), never reconciled. A
+migration, once shipped, is never edited either — append the next one.
+
+**Error `details` carry bank text, so a log carries their names and no values.**
+A refused statement's details name the offending row's description, amount and
+balance; the response needs them and a log outlives the request. The error
+handler in `api/src/server.ts` logs `detailKeys`, and a new log line that
+spreads `details` undoes it (`api/test/statements.test.ts` holds it).
