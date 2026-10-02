@@ -326,3 +326,16 @@ eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of 
     say the quoted spelling returns the file; it returns `[]`. It now says what
     the unquoted sentence returns, `extractCitations("see and/or:5")`, run
     again this round, with the correction noted in place.
+- 2026-10-02 — Landed by the fixer, on a direct message from the orchestrator.
+  - **Gate 4 (at `4fce8d3`) passed with one low, and the owner chose to land
+    it unfixed** (AskUserQuestion, 2026-10-02, on the orchestrator's
+    recommendation): the docblock reflow in my gate 3 round dropped two true
+    statements, that the failure message names the way out, and why a leading
+    cut lands on a slash. Both are still true of the code; only the comment
+    lost them. Nothing was changed for it here.
+  - Four gate records spliced verbatim, one commit each, from the four files
+    gate 4 re-issued. Each splice's disclosure diff was empty, which is the
+    verbatim check. `status` moved to `done` in the first of those commits.
+  - Owner decisions this branch carries: the hidden `chore` type, and the
+    citation-text-only edits to the merged records dl-37, dl-57, pl-31 and
+    pl-32.
