@@ -3054,3 +3054,173 @@ test("the CLI finds a CRLF ## Review heading and reports a moved citation in it"
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * repo-87: a citation into a file with no extension matched nothing, so a wrong
+ * `Dockerfile` line was neither counted, verified nor unchecked.
+ */
+test("extractCitations reads a citation into a file with no extension, pinned and anchored", () => {
+  const found = extractCitations(
+    [
+      '- `tools/planner/Dockerfile@e79b04f:40 "RUN npm ci"`',
+      "- `tools/planner/Dockerfile:108-109`",
+      "- `.githooks/commit-msg:12`",
+      "- `docs/.gitkeep:1`",
+    ].join("\n"),
+  );
+  expect(found.map((c) => [c.file, c.rev, c.start, c.end, c.anchor])).toEqual([
+    ["tools/planner/Dockerfile", "e79b04f", 40, 40, "RUN npm ci"],
+    ["tools/planner/Dockerfile", undefined, 108, 109, null],
+    [".githooks/commit-msg", undefined, 12, 12, null],
+    ["docs/.gitkeep", undefined, 1, 1, null],
+  ]);
+});
+
+const read = (text: string) => extractCitations(text).map((c) => c.file);
+
+test("extractCitations reads a bare Dockerfile, LICENSE or dotfile, and nothing else bare", () => {
+  expect(read("see `Dockerfile:90-93` and `LICENSE:3` and `Makefile:2` and .gitignore:48")).toEqual(
+    ["Dockerfile", "LICENSE", "Makefile", ".gitignore"],
+  );
+  // A bare name off the closed set has no slash to vouch for it, and an
+  // unresolvable citation is fatal, so prose like this must stay unread.
+  expect(read("Note:5 and Step:2 and Gate:1 and `foo:7`")).toEqual([]);
+  // Not the tail of a longer token.
+  expect(read("MyDockerfile:4 and x.gitignore:9 and a/b.LICENSE:2")).toEqual(["a/b.LICENSE"]);
+});
+
+test("extractCitations does not read a ratio, a date or a time as an extension-less path", () => {
+  const prose =
+    "low:40/high:60 and 10/12:30 and 2026/09/30:12 and 3/4:5 and https://host.example:8080/x and http://localhost:3000/api/v1 and 1/2:30";
+  expect(extractCitations(prose).filter((c) => c.source !== "prose")).toEqual([]);
+});
+
+test("extractCitations leaves a path with an extension exactly as it read it", () => {
+  const found = extractCitations('`a/b/c.ts@e79b04f:7 "x"` and `a/b/c.test.ts:2-3` and `d.mjs:4`');
+  expect(found.map((c) => [c.file, c.rev, c.start, c.end])).toEqual([
+    ["a/b/c.ts", "e79b04f", 7, 7],
+    ["a/b/c.test.ts", undefined, 2, 3],
+    ["d.mjs", undefined, 4, 4],
+  ]);
+});
+
+test("a malformed pin on an extension-less file is reported rather than dropped", () => {
+  const found = extractCitations(
+    '`tools/planner/Dockerfile@zzz:40` and `tools/planner/Dockerfile:40@zzz "RUN npm ci"`',
+  );
+  expect(found.map((c) => [c.file, c.malformed, c.start])).toEqual([
+    ["tools/planner/Dockerfile", "tools/planner/Dockerfile@zzz:40", 40],
+    ["tools/planner/Dockerfile", "tools/planner/Dockerfile:40@zzz", 40],
+  ]);
+});
+
+test("an evidence declaration can name an extension-less citation, pinned or not", () => {
+  expect(
+    extractDeclarations(
+      "<!-- citations: evidence tools/planner/Dockerfile:40, `tools/planner/Dockerfile@e79b04f:40`, .gitignore:48 -->",
+    ).map((d) => [d.file, d.rev, d.start]),
+  ).toEqual([
+    ["tools/planner/Dockerfile", undefined, 40],
+    ["tools/planner/Dockerfile", "e79b04f", 40],
+    [".gitignore", undefined, 48],
+  ]);
+});
+
+test("the CLI counts, verifies and fails an extension-less citation", () => {
+  const dockerfile = fs
+    .readFileSync(path.join(REPO, "tools/planner/Dockerfile"), "utf8")
+    .split("\n");
+  // Read at run time: a Dockerfile edit must not turn this test red by itself.
+  const line = dockerfile.indexOf("RUN npm ci") + 1;
+  expect(line).toBeGreaterThan(0);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-noext-"));
+  const record = path.join(dir, "repo-87-noext.md");
+  fs.writeFileSync(
+    record,
+    [
+      "# t",
+      "",
+      "## Review",
+      "",
+      `- right \`tools/planner/Dockerfile:${line} "RUN npm ci"\``,
+      `- wrong \`tools/planner/Dockerfile:${line} "NOT ON THAT LINE"\``,
+      `- bare \`tools/planner/Dockerfile:${line}\``,
+      "",
+    ].join("\n"),
+  );
+  const result = spawnSync("node", [CLI, record, "--section", "Review", "--require-anchors"], {
+    ...TEXT,
+    cwd: REPO,
+  });
+  expect(result.stdout).toMatch(/3 references in /);
+  expect(result.stdout).toMatch(summary(1, 1, 1, 0, 3));
+  expect(result.stdout).toContain(`MOVED      tools/planner/Dockerfile:${line} "NOT ON THAT LINE"`);
+  expect(result.status).toBe(EXIT.moved | EXIT.unanchored);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("prose shaped like a path is read and fails with a hint, but only for a shape the older rules never read", () => {
+  // The open pathed rule's known cost (repo-87): it fails loudly, never silently.
+  expect(read("see and/or:5")).toEqual(["and/or"]);
+  const resolve = makeResolver(["src/a.ts"]);
+  const hint = { error: expect.stringContaining("a backticked token inside a double-backtick") };
+  expect(resolve("and/or")).toEqual(hint);
+  // A dotfile has an extension by `\.\w+` and is still a new shape.
+  expect(resolve(".env")).toEqual(hint);
+  // What the older rules read keeps the short message, extension or no.
+  expect(resolve("gone.ts")).toEqual({ error: "no tracked file matches" });
+  expect(resolve("a/b/gone.txt")).toEqual({ error: "no tracked file matches" });
+});
+
+test("the prose escape the hint names survives `oxfmt`, and a plain double-backtick span does not", async () => {
+  // A dynamic import: a new line at the top of this file would move every
+  // coordinate the records cite into it.
+  const { createRequire } = await import("node:module");
+  const nested = "see `` `and/or:6` `` here\n";
+  const plain = "see ``and/or:5`` here\n";
+  // Before formatting both are quotations and read nothing.
+  expect(read(nested)).toEqual([]);
+  expect(read(plain)).toEqual([]);
+
+  // The package's own entry under this node, not its shim (testing.md: Windows).
+  const require = createRequire(import.meta.url);
+  const manifest = require.resolve("oxfmt/package.json");
+  const { bin } = require("oxfmt/package.json") as { bin: { oxfmt: string } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-fmt-"));
+  const target = path.join(dir, "probe.md");
+  fs.writeFileSync(target, `# t\n\n${plain}\n${nested}`);
+  const result = spawnSync(
+    process.execPath,
+    [path.resolve(path.dirname(manifest), bin.oxfmt), target],
+    {
+      ...TEXT,
+      cwd: dir,
+    },
+  );
+  expect(result.error).toBeUndefined();
+  const formatted = fs.readFileSync(target, "utf8");
+  fs.rmSync(dir, { recursive: true, force: true });
+  // Formatting is what turned the plain span into a token this reads...
+  expect(formatted).toContain("see `and/or:5` here");
+  // ...and left the nested one alone.
+  expect(formatted).toContain("see `` `and/or:6` `` here");
+  expect(read(formatted)).toEqual(["and/or"]);
+});
+
+test("a leading all-digit directory is cut off on its slash; one in the middle is a known limit", () => {
+  // The cut lands on a `/`, so the resolver's suffix match finds the real file.
+  expect(read("`40/tools/x/Dockerfile:9`")).toEqual(["tools/x/Dockerfile"]);
+  expect(makeResolver(["40/tools/x/Dockerfile"])("tools/x/Dockerfile")).toEqual({
+    path: "40/tools/x/Dockerfile",
+  });
+  // A directory that merely starts with a digit is not all digits, and reads whole.
+  expect(read("`tools/9x/Dockerfile:3` and `v2/sub/Dockerfile:4`")).toEqual([
+    "tools/9x/Dockerfile",
+    "v2/sub/Dockerfile",
+  ]);
+  // The limit, written down and not guarded (no tracked path has such a directory):
+  // the match cannot cross an all-digit directory in the middle of a path.
+  expect(read("`tools/2026/Dockerfile:3`")).toEqual([]);
+  expect(read("`docs/2026/x/Dockerfile:2`")).toEqual(["x/Dockerfile"]);
+});

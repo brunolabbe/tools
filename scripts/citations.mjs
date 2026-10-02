@@ -298,12 +298,61 @@ export function splitLines(markdown) {
 const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
 
 /**
+ * **A file with no extension** (repo-87): `tools/planner/Dockerfile`,
+ * `.githooks/commit-msg`, `.gitignore`. The two alternatives in `INLINE` need a
+ * `.ext` after the last slash, so a citation into one of these matched nothing,
+ * and a citation nothing matches is not counted, verified or unchecked — the
+ * invisible failure this script exists to refuse. A wrong `Dockerfile` line
+ * passed as if it had never been written (repo-66, gate 1). Two shapes:
+ *
+ *   - **Pathed**: at least one directory, then a last segment that starts with a
+ *     letter (or a dot, for `.gitkeep`) and holds only word characters and
+ *     hyphens, and no `@` in it, so `Dockerfile@e79b04f:40` reads as a name and
+ *     a pin rather than one long name. **This rule is open, on purpose, and it
+ *     does read prose**: `and/or:5` is a file as far as it can tell, and an
+ *     unresolvable citation is fatal. The failure is loud (`no tracked file
+ *     matches`), where a closed list of names would drop a real citation to any
+ *     name not on it, silently, the one thing this exists to refuse (the owner
+ *     chose this over a list, 2026-10-01). **The way out for prose is a
+ *     double-backtick span around a backticked token** — `` `and/or:5` `` written
+ *     exactly so — **and no other spelling**: `npm run format` rewrites a plain
+ *     double-backtick span to single backticks, which this reads, and keeps the
+ *     nested form (measured, gate 2). The only guards are lexical: a directory is
+ *     not all digits, which keeps `10/12:30`, `2026/09/30:12` and pl-10's
+ *     `low:40/high:60` out, and a last segment starts with a letter or dot.
+ *     There is **no left boundary**, so a leading all-digit directory is cut off
+ *     on its `/`: `40/tools/x/Dockerfile:9` reads as `tools/x/Dockerfile`, which
+ *     the resolver's suffix match finds when it is a real suffix;
+ *     `tools/9x/Dockerfile:3` reads whole. **A limit, not a live failure:** an
+ *     all-digit directory in the middle cannot be crossed: `tools/2026/Dockerfile:3`
+ *     is dropped and `docs/2026/x/Dockerfile:2` reads as `x/Dockerfile`. 0 of 1001
+ *     tracked paths have one (`git ls-files`), so it is written down, not guarded.
+ *   - **Bare**, with no slash to vouch for it, so a closed set: `Dockerfile`,
+ *     `Makefile`, `LICENSE`, or a leading-dot name (`.gitignore`), and only when
+ *     not the tail of a longer token. An open rule would read `Note:5` and
+ *     `Step:2` as files. A bare name that is not on the list is written with its
+ *     directory. A bare `Dockerfile` is on it so that it fails (ambiguous: this
+ *     repository tracks several) rather than vanishing.
+ *
+ * One definition for `INLINE`, the pin-shaped pass and a declaration, so the
+ * three cannot disagree about what a file is.
+ */
+const NO_EXT_PATH = String.raw`(?:(?!\d+\/)[\w.@-]+\/)+\.?[A-Za-z][\w-]*`;
+const NO_EXT_BARE = String.raw`(?<![\w.\/@-])(?:Dockerfile|Makefile|LICENSE|\.[A-Za-z][\w-]*)`;
+const NO_EXT_FILE = `${NO_EXT_PATH}|${NO_EXT_BARE}`;
+
+/** The two shapes `INLINE` read before repo-87, whole: what a miss needs no hint for. */
+const OLDER_FILE =
+  /^(?:(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))$/;
+
+/**
  * A path token that looks like a repo file. Deliberately narrow: it needs a
  * slash or a known extension, so prose like `10:30` or `PASS:1` is not a
- * citation.
+ * citation. The extension-less shapes come last, so a path that has an extension
+ * is read exactly as it always was.
  */
 const INLINE = new RegExp(
-  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))` +
+  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh)|${NO_EXT_FILE})` +
     String.raw`(?:@(?<rev>[0-9a-fA-F]{7,40}))?` +
     String.raw`:(?<start>\d+)(?:[-–](?<end>\d+))?` +
     ANCHOR,
@@ -340,8 +389,14 @@ const INLINE = new RegExp(
  * strict grammar did not turn into a pin.
  */
 const PIN_SHAPED = [
-  /(?<file>(?:[\w.@-]+\/)*[\w.-]+\.\w+)@(?<rev>[^\s:`"]*):(?<start>\d+)(?:[-–](?<end>\d+))?/g,
-  /(?<file>(?:[\w.@-]+\/)*[\w.@-]+\.\w+):(?<start>\d+)(?:[-–](?<end>\d+))?@(?<rev>[^\s`"]*)/g,
+  new RegExp(
+    String.raw`(?<file>(?:[\w.@-]+\/)*[\w.-]+\.\w+|${NO_EXT_FILE})@(?<rev>[^\s:\x60"]*):(?<start>\d+)(?:[-–](?<end>\d+))?`,
+    "g",
+  ),
+  new RegExp(
+    String.raw`(?<file>(?:[\w.@-]+\/)*[\w.@-]+\.\w+|${NO_EXT_FILE}):(?<start>\d+)(?:[-–](?<end>\d+))?@(?<rev>[^\s\x60"]*)`,
+    "g",
+  ),
 ];
 
 /**
@@ -464,8 +519,9 @@ const DECLARATION =
  * with its pin when the citation carries one, since a declaration names a
  * citation exactly as the record writes it.
  */
-const DECLARED_LOCATION =
-  /^(?<file>[\w.@/-]+\.\w+)(?:@(?<rev>[0-9a-fA-F]{7,40}))?:(?<start>\d+)(?:[-–](?<end>\d+))?$/;
+const DECLARED_LOCATION = new RegExp(
+  String.raw`^(?<file>[\w.@/-]+\.\w+|${NO_EXT_FILE})(?:@(?<rev>[0-9a-fA-F]{7,40}))?:(?<start>\d+)(?:[-–](?<end>\d+))?$`,
+);
 
 /** A `file` cell in a table row: the first backticked path-looking token. */
 const CELL_FILE =
@@ -852,7 +908,17 @@ export function makeResolver(tracked) {
     const suffix = file.startsWith("/") ? file : `/${file}`;
     const matches = tracked.filter((t) => t === file || t.endsWith(suffix));
     if (matches.length === 1) return { path: matches[0] };
-    if (matches.length === 0) return { error: "no tracked file matches" };
+    if (matches.length === 0) {
+      // A token only the extension-less rule reads (repo-87) can be prose like
+      // `and/or:5`, so say how to quote it rather than leave the reader to guess.
+      // The test is "would the older rules have read it", not "has it an
+      // extension": a dotfile such as `.env` has one by `\.\w+` and is still new.
+      return {
+        error: OLDER_FILE.test(file)
+          ? "no tracked file matches"
+          : "no tracked file matches — if this is prose and not a file, write it as `` `x/y:5` `` (a backticked token inside a double-backtick span, the one form `npm run format` keeps), which is not read",
+      };
+    }
     return {
       error: `ambiguous — ${matches.length} tracked files match (${matches.slice(0, 3).join(", ")}${matches.length > 3 ? ", …" : ""})`,
     };

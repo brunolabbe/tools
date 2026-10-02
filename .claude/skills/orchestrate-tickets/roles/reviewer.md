@@ -108,10 +108,12 @@ splice the next section, commit again, and run `review-record.mjs --verify` on e
 splice is a separate commit. Do not attempt to dry-run a landing with `--land`
 because the landing cannot dry-run — the `--land` flag performs an actual push.
 
-**2026-09-30:** `citations.mjs` silently drops a citation into a file with no
-extension, a `Dockerfile` among them: it is neither verified nor unchecked, so a
-wrong one passes as if absent (`repo-87`). Until that is fixed, check each such
-citation by hand with `git show <sha>:<path> | sed -n <line>p`.
+**2026-10-01:** `citations.mjs` reads a citation into a file with no extension
+(`tools/planner/Dockerfile:40`, `.githooks/commit-msg:12`) since `repo-87`; before it
+silently dropped one. A bare `Dockerfile` reads but always fails as ambiguous (several are
+tracked): give it its directory. Prose like `` `and/or:5` `` reads too: write it exactly so, a
+backticked token inside double backticks — plain double backticks are rewritten to single by
+`npm run format` and are then read.
 
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep

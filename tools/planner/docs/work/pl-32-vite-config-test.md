@@ -143,9 +143,9 @@ generalises past this ticket.
 
 **F1 — the Why (its lines 19-20) mis-cites the Dockerfile. Confirmed independently by
 builder, gate and orchestrator. No change.**
-`tools/planner/Dockerfile:110` does carry `ENV HOST=0.0.0.0`, but the image never
-runs Vite: `tools/planner/Dockerfile:130` is `EXPOSE 8090` and `tools/planner/Dockerfile:139` is
-`CMD ["node", "tools/planner/api/dist/main.js"]`, and the comment at `tools/planner/Dockerfile:108-109`
+`tools/planner/Dockerfile:110 "ENV HOST=0.0.0.0"` does carry `ENV HOST=0.0.0.0`, but the image never
+runs Vite: `tools/planner/Dockerfile:130 "EXPOSE 8090"` is `EXPOSE 8090` and `tools/planner/Dockerfile:139 "api/dist/main.js"` is
+`CMD ["node", "tools/planner/api/dist/main.js"]`, and the comment at `tools/planner/Dockerfile:108-109 "is unreachable from outside"`
 names `API_DEFAULTS` itself. The real source of the dev server's `HOST` is
 `.devcontainer/devcontainer.json:97` "HOST", commented at `:95-96` "Dev servers must listen on all interfaces to be reachable". All five coordinates
 re-verified while writing this section. _Disposition:_ **Why** stays as the
