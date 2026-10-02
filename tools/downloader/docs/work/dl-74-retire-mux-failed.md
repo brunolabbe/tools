@@ -61,13 +61,25 @@ file it rather than fold it in.
 
 - 2026-09-27 — Filed from dl-53's second gate, on the owner's answer of the
   same day. Not implemented.
-- 2026-10-02 — Implemented. **Migration decision:** Kept the code readable but
-  unraised. MUX_FAILED is no longer in DOWNLOADER_ERROR_CODES, so nothing can
-  raise it; its HTTP status and message entries are removed. However, the error
-  schema (ALL_ERROR_CODES) still accepts it when reading persisted records
-  (both database rows and browser `downloader:jobs:v1` records), so old data
-  continues to load without migration. The runtime AppErrorPayload type only
-  includes raisable codes (ERROR_CODES), but persisted payloads are parsed
-  permissively. If an old record with MUX_FAILED is read in the web client,
-  the error is mapped to DOWNLOAD_FAILED for display. `npm test -- --project
-downloader` passed 1560 tests; `npm run check` passed.
+- 2026-10-02 — Gate 1 (FAIL at b523d92) found that stored MUX_FAILED crashed the
+  web UI (no ERROR_PRESENTATION entry). Raised two questions for the owner via
+  AskUserQuestion, both answered 2026-10-02, both chose the recommended option:
+
+  **Decision 1:** "How should a stored MUX_FAILED be handled?" Options were
+  "map on read" (recommended) and "readable, unmapped, with presentation and
+  status entries restored". **Chosen: map on read.** `errorCodeSchema` transforms
+  MUX_FAILED to DOWNLOAD_FAILED during parse, so the output type is always
+  `ErrorCode`. Covers both API job rows (via `jobSchema` parse) and browser
+  `downloader:jobs:v1` records (same schema path). Tests verify transformation:
+  API test reads a failed job with raw MUX_FAILED error_json; web test validates
+  schema parse of old job record with MUX_FAILED code. Satisfies restored on
+  jobSchema, jobEventSchema, jobResponseSchema, errorResponseSchema (compiler
+  was widened, now checks exact type match). Fixture cast and http.ts mapping
+  removed (mapping was in wrong path: non-ok branch carries only freshly raised
+  errors, never stored codes).
+
+  **Decision 2:** "Done-when #1's grep also matches comments that document the
+  retirement." Options were "amend it to 'outside comments'" (recommended) and
+  "strip the code's name from the comments". **Chosen: amend.** Done-when #1 is
+  read as "outside comments", by this decision. Keep the comments documenting
+  the retirement. Do not edit the Done-when line itself.
