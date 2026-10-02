@@ -159,7 +159,7 @@ default"`; `node scripts/citations.mjs <dl-37> --section Review
 --require-anchors --require-distinct-anchors` gives `10 verified … 4 pinned`,
     exit 0. `1aae8c8` is an ancestor of the base, so the pin outlives a squash.
   - **Med, reproduced and fixed as the owner chose (keep the open rule, fail
-    loud).** `extractCitations("see and/or:5")` returns the file `and/or`. The
+    loud).** `extractCitations` on a sentence containing `` `and/or:5` `` returns the file `and/or`. The
     docblock no longer claims the lexical guards keep prose out; it says the
     rule is open, reads prose, and why that beats a closed list. The resolver's
     `no tracked file matches` now ends "if this is prose and not a file, quote
@@ -189,3 +189,40 @@ eb903a3:tools/downloader/Dockerfile | sed -n 152p`) and which is an ancestor of 
     nowhere and would fail loudly if cited.)
   - Two tests appended at the end of `scripts/test/citations.test.ts`. Not run
     red against the previous script.
+- 2026-10-02 — Gate 2 (at `df818f8`) returned CONCERNS; this round answers it.
+  - **Med, reproduced: the escape the previous round taught did not survive
+    `npm run format`.** A probe with a plain double-backtick span, a nested
+    form (a backticked token inside double backticks) and the nested form
+    wrapped once more, run through `npx oxfmt` and then `extractCitations`:
+    before formatting nothing was read; after, the plain span had become single
+    backticks and was read as the file `and/or`, while the nested form stayed
+    put and stayed unread. The advice now names the nested form in all four
+    places (the resolver message, the docblock above `NO_EXT_PATH`, the test,
+    `roles/reviewer.md`) and says plain double backticks do not survive. The
+    test now formats a file with the real `oxfmt` (the package's own entry
+    under this node) and checks it, rather than asserting on unformatted text.
+  - **Low, reproduced and fixed: the hint's test was the wrong one, and the
+    pathed rule cut a real path.** `tools/9x/Dockerfile` was read as
+    `x/Dockerfile` — the rule required a directory to start with a letter, so
+    the match restarted inside the segment. The rule is now "a directory is
+    not all digits", which still rejects a ratio, a date and pl-10's
+    `low:40/high:60`, reads `tools/9x/Dockerfile` and `v2/sub/Dockerfile`
+    whole, and can only be cut on a `/` (an all-digit directory cannot be
+    entered part-way). Re-measured over every `.md` in the tree: 0 removed, and
+    the added set is the previous 24 plus this branch's own prose about the
+    checker, with no new false positive in an older record. The hint now shows
+    when the token is one the older rules would not have read (`OLDER_FILE`),
+    not when it lacks an extension: a dotfile such as `.env` gets it, and
+    `gone.txt` under a directory does not.
+  - **Low, reproduced and fixed: the old "no left boundary" test could not
+    fail.** Its resolver half resolved an exact name. It now resolves the
+    tail against a tracked path with the digit directory in front, which goes
+    through the suffix match, and checks the whole-read cases. The
+    `df818f8` script fails two of the three tests of this round (hint,
+    digit directories); the formatter test passes on both by design, since it
+    measures `oxfmt` and not this script.
+  - **Docblock sentence, "true only when the cut lands on a slash":** the
+    sentence now says the cut always lands on one, and why.
+  - Edited in this round: `scripts/citations.mjs`, its test file,
+    `roles/reviewer.md` and this ticket's own Log. No other ticket file, and
+    nothing inside any `## Review` section.

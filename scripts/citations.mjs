@@ -314,11 +314,19 @@ const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
  *     matches`, and the message names the way out: a double-backtick span is a
  *     quotation and is not read), where a closed list of names would drop a real
  *     citation to any name not on it, silently — the one thing this exists to
- *     refuse (the owner chose this over a list, 2026-10-01). The only guards are
- *     lexical: a directory must start with a letter, `_`, `.` or `@`, which keeps
- *     `10/12:30`, `2026/09/30:12` and pl-10's `low:40/high:60` out, and there is
- *     **no left boundary**, so `40/tools/x/Dockerfile:9` reads as
- *     `tools/x/Dockerfile`, which the resolver's suffix match still finds.
+ *     refuse (the owner chose this over a list, 2026-10-01). **The way out for
+ *     prose is a double-backtick span around a backticked token** —
+ *     `` `and/or:5` `` written exactly so — **and no other spelling of it**:
+ *     `npm run format` rewrites a plain double-backtick span to single
+ *     backticks, which this reads, and keeps the nested form (measured: format,
+ *     then check, gate 2). The only guards are lexical: a directory is not
+ *     all digits, which keeps `10/12:30`, `2026/09/30:12` and pl-10's
+ *     `low:40/high:60` out, and a last segment starts with a letter or dot.
+ *     There is **no left boundary**, so a leading all-digit directory is cut off:
+ *     `40/tools/x/Dockerfile:9` reads as `tools/x/Dockerfile`. A cut always lands
+ *     on a `/` (an all-digit directory cannot be entered part-way), so the
+ *     resolver's suffix match finds the file when the tail is a real suffix of it;
+ *     `tools/9x/Dockerfile:3` reads whole.
  *   - **Bare**, with no slash to vouch for it, so a closed set: `Dockerfile`,
  *     `Makefile`, `LICENSE`, or a leading-dot name (`.gitignore`), and only when
  *     not the tail of a longer token. An open rule would read `Note:5` and
@@ -329,9 +337,13 @@ const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
  * One definition for `INLINE`, the pin-shaped pass and a declaration, so the
  * three cannot disagree about what a file is.
  */
-const NO_EXT_PATH = String.raw`(?:[A-Za-z_.@][\w.@-]*\/)+\.?[A-Za-z][\w-]*`;
+const NO_EXT_PATH = String.raw`(?:(?!\d+\/)[\w.@-]+\/)+\.?[A-Za-z][\w-]*`;
 const NO_EXT_BARE = String.raw`(?<![\w.\/@-])(?:Dockerfile|Makefile|LICENSE|\.[A-Za-z][\w-]*)`;
 const NO_EXT_FILE = `${NO_EXT_PATH}|${NO_EXT_BARE}`;
+
+/** The two shapes `INLINE` read before repo-87, whole: what a miss needs no hint for. */
+const OLDER_FILE =
+  /^(?:(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))$/;
 
 /**
  * A path token that looks like a repo file. Deliberately narrow: it needs a
@@ -897,12 +909,14 @@ export function makeResolver(tracked) {
     const matches = tracked.filter((t) => t === file || t.endsWith(suffix));
     if (matches.length === 1) return { path: matches[0] };
     if (matches.length === 0) {
-      // An extension-less pathed token reads prose like `and/or:5` as a file
-      // (repo-87), so say how to quote it rather than leave the reader to guess.
+      // A token only the extension-less rule reads (repo-87) can be prose like
+      // `and/or:5`, so say how to quote it rather than leave the reader to guess.
+      // The test is "would the older rules have read it", not "has it an
+      // extension": a dotfile such as `.env` has one by `\.\w+` and is still new.
       return {
-        error: /\.\w+$/.test(file)
+        error: OLDER_FILE.test(file)
           ? "no tracked file matches"
-          : "no tracked file matches — if this is prose and not a file, quote it in a double-backtick span, which is not read",
+          : "no tracked file matches — if this is prose and not a file, write it as `` `x/y:5` `` (a backticked token inside a double-backtick span, the one form `npm run format` keeps), which is not read",
       };
     }
     return {

@@ -3160,22 +3160,63 @@ test("the CLI counts, verifies and fails an extension-less citation", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("prose shaped like a path is read, fails naming the double-backtick escape, and the escape works", () => {
+test("prose shaped like a path is read and fails with a hint, but only for a shape the older rules never read", () => {
   // The open pathed rule's known cost (repo-87): it fails loudly, never silently.
   expect(read("see and/or:5")).toEqual(["and/or"]);
   const resolve = makeResolver(["src/a.ts"]);
-  expect(resolve("and/or")).toEqual({
-    error: expect.stringContaining("quote it in a double-backtick span"),
-  });
-  // An extension-bearing miss keeps its short message.
+  const hint = { error: expect.stringContaining("a backticked token inside a double-backtick") };
+  expect(resolve("and/or")).toEqual(hint);
+  // A dotfile has an extension by `\.\w+` and is still a new shape.
+  expect(resolve(".env")).toEqual(hint);
+  // What the older rules read keeps the short message, extension or no.
   expect(resolve("gone.ts")).toEqual({ error: "no tracked file matches" });
-  // And the way out the message names does what it says.
-  expect(read("see ``and/or:5``")).toEqual([]);
+  expect(resolve("a/b/gone.txt")).toEqual({ error: "no tracked file matches" });
 });
 
-test("a directory with no left boundary reads as its tail, which the resolver still finds", () => {
+test("the prose escape the hint names survives `oxfmt`, and a plain double-backtick span does not", async () => {
+  // A dynamic import: a new line at the top of this file would move every
+  // coordinate the records cite into it.
+  const { createRequire } = await import("node:module");
+  const nested = "see `` `and/or:6` `` here\n";
+  const plain = "see ``and/or:5`` here\n";
+  // Before formatting both are quotations and read nothing.
+  expect(read(nested)).toEqual([]);
+  expect(read(plain)).toEqual([]);
+
+  // The package's own entry under this node, not its shim (testing.md: Windows).
+  const require = createRequire(import.meta.url);
+  const manifest = require.resolve("oxfmt/package.json");
+  const { bin } = require("oxfmt/package.json") as { bin: { oxfmt: string } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-fmt-"));
+  const target = path.join(dir, "probe.md");
+  fs.writeFileSync(target, `# t\n\n${plain}\n${nested}`);
+  const result = spawnSync(
+    process.execPath,
+    [path.resolve(path.dirname(manifest), bin.oxfmt), target],
+    {
+      ...TEXT,
+      cwd: dir,
+    },
+  );
+  expect(result.error).toBeUndefined();
+  const formatted = fs.readFileSync(target, "utf8");
+  fs.rmSync(dir, { recursive: true, force: true });
+  // Formatting is what turned the plain span into a token this reads...
+  expect(formatted).toContain("see `and/or:5` here");
+  // ...and left the nested one alone.
+  expect(formatted).toContain("see `` `and/or:6` `` here");
+  expect(read(formatted)).toEqual(["and/or"]);
+});
+
+test("a leading all-digit directory is cut off on its slash, and nothing else is", () => {
+  // The cut lands on a `/`, so the resolver's suffix match finds the real file.
   expect(read("`40/tools/x/Dockerfile:9`")).toEqual(["tools/x/Dockerfile"]);
-  expect(makeResolver(["tools/x/Dockerfile"])("tools/x/Dockerfile")).toEqual({
-    path: "tools/x/Dockerfile",
+  expect(makeResolver(["40/tools/x/Dockerfile"])("tools/x/Dockerfile")).toEqual({
+    path: "40/tools/x/Dockerfile",
   });
+  // A directory that merely starts with a digit is not all digits, and reads whole.
+  expect(read("`tools/9x/Dockerfile:3` and `v2/sub/Dockerfile:4`")).toEqual([
+    "tools/9x/Dockerfile",
+    "v2/sub/Dockerfile",
+  ]);
 });

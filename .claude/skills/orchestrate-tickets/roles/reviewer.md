@@ -111,7 +111,9 @@ because the landing cannot dry-run — the `--land` flag performs an actual push
 **2026-10-01:** `citations.mjs` reads a citation into a file with no extension
 (`tools/planner/Dockerfile:40`, `.githooks/commit-msg:12`) since `repo-87`; before it
 silently dropped one. A bare `Dockerfile` reads but always fails as ambiguous (several are
-tracked): give it its directory. Prose like `and/or:5` reads too: quote it in double backticks.
+tracked): give it its directory. Prose like `` `and/or:5` `` reads too: write it exactly so, a
+backticked token inside double backticks — plain double backticks are rewritten to single by
+`npm run format` and are then read.
 
 **To materialise the base tree for a before-and-after measurement**, use
 `git archive <sha> <path> | tar -x -C <scratch dir>` as one plain command. Keep
