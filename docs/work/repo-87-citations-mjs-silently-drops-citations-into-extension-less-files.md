@@ -127,6 +127,21 @@ Re-issued with gate 4 at `4fce8d3`: words, rows and verdicts unchanged. One cita
 - Re-verified at `c054f59`: `npx vitest run scripts/test/citations.test.ts` 122 of 122. `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0 failing`, with 25 moves reported in 12 records. `preflight.mjs` with the `chore(repo)` title exit 0, every check `ok`, and mergeTree clean against #330, #294 and #284.
 - **findings** · code-review at medium over this round returned 2; 2 carried, 0 dropped.
 
+### Gate 4
+
+**Gate: PASS** — 2026-10-02 · `c054f59..4fce8d3` only (`origin/main` still `b7fb3fb`) · code-review at medium · unpinned coordinates resolve at `4fce8d3`
+
+| Gate 3 finding                                      | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| low: an all-digit directory in the middle of a path | **fixed** as a written-down limit. `scripts/citations.mjs:326-328 "A limit, not a live failure"` now states both outcomes, and `scripts/test/citations.test.ts:3222 "The limit, written down and not guarded"` pins them. The test title at `scripts/test/citations.test.ts:3211 "one in the middle is a known limit"` no longer claims nothing else is cut. Still true at the head: 0 of 1001 tracked paths have such a directory |
+| low: the Log claim about the nested form            | **fixed**. The entry in `## Log` headed _Med, reproduced and fixed as the owner chose_ again says the unquoted sentence returns `and/or`, with a correction note in place. Measured at the head: that sentence returns `["and/or"]`                                                                                                                                                                                                |
+
+- **low** · the reflowed docblock paragraph dropped one true statement: that the failure message names the way out. The message at `scripts/citations.mjs:919 "the one form"` still carries the hint, but nothing in the docblock now points to it. The paragraph also dropped the reason a leading cut lands on a slash (an all-digit directory cannot be entered part-way); the claim stays and its reason is gone. Everything else the paragraph said is still there: the open rule, loud failures, the owner choice, the nested escape, the lexical guards and the leading-directory cut. Line count is 2449 before and after, so no citation below it moved.
+- Two new assertions: the one expecting nothing read for a middle all-digit directory passes against every script on this branch and against the base. It cannot go red against any earlier version, only against a change that lifts the limit or reads part of that path. The one expecting the cut tail fails against `b7fb3fb`, which reads nothing, and passes from `ea901ee` on. Both pin current behaviour rather than prove a change.
+- The fix commit appended a Log entry for this round. Its counts match my runs: 2449 lines, 15 reworded and none added, and 0 of 1001.
+- Re-verified at `4fce8d3`: `npx vitest run scripts/test/citations.test.ts` 122 of 122. `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0 failing`, with 25 moves reported in 12 records. `preflight.mjs` with the `chore(repo)` title exit 0, every check `ok`, and mergeTree clean against #330, #294 and #284.
+- **findings** · code-review at medium over this round returned 1; 1 carried, 0 dropped.
+
 ## Log
 
 - 2026-09-30 — Filed from repo-66 gate 1, reproduced at b658179. First
