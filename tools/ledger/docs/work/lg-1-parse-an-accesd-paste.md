@@ -110,6 +110,20 @@ Re-issued unchanged beside gate 3, every coordinate re-resolved at `952c813`; no
 - **findings** · code-review at medium over `466771e..7d24bf8` returned 3; 2 carried, 1 dropped. Gates at `7d24bf8`: `npm run check` exit 0; `npm test -- --project ledger` 100 of 100. Not re-swept: everything outside this diff, settled by gate 1.
 - NFR: security n/a (test and comment changes) · performance n/a · reliability ✓ · maintainability — above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-02 · `7d24bf8..952c813` only (one fixer commit, fast-forward; base `b7fb3fb`, `origin/main` still at `b7fb3fb`) · code-review at medium, run by hand · citations into branch-introduced files resolve at `952c813`
+
+| Gate 2 finding                                             | Verdict                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1 · nothing enforced a status line for a new ledger code  | **fixed** — `tools/ledger/api/test/http-errors.test.ts:30 "status).not.toBe(500)"`, over every `LEDGER_ERROR_CODES` member. Re-run at `952c813`: an unmapped `GATE_PROBE_UNMAPPED` added to the contract fails it with `expected 500 not to be 500`, 1 failed and 8 passed of 9; probe reverted and the contract `dist` rebuilt clean |
+| N2 · the corrections entry in the Log misstated two things | **fixed** — the entry now quotes the earlier Log bullet, not the docblock, as saying the first three letters, and accounts for all 7 of 51 failures under the ordering mutation                                                                                                                                                       |
+
+- **checked, holds** · the corrections entry now says the two AssertionError failures arise because the chain error is raised on a different row. Re-run at `952c813` with `listed.toReversed()` → `listed`: 7 failed and 44 passed of 51; the two report `expected { line: 9, seq: 1, …(7) } to match object { line: 21, seq: 8, …(5) }` and `… to match object { date: '2026-08-26', …(1) }`, after their code assertions passed. The Log states what this run shows.
+- **dropped** · the new case refuses any ledger code mapped to 500 on purpose. None is planned, and such a code would edit this test in its own change, so not a defect.
+- **findings** · code-review at medium over `7d24bf8..952c813` returned 1; 0 carried, 1 dropped. Gates at `952c813`: `npm run check` exit 0; `npm test -- --project ledger` 104 of 104 (the four new cases are this round). Not re-swept: everything outside this diff.
+- NFR: security n/a · performance n/a · reliability ✓ · maintainability ✓.
+
 ## Log
 
 - 2026-10-01 — Built `@ledger/books` (`parseStatement`, `parseAmountCents`) and
