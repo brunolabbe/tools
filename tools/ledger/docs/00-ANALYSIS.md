@@ -99,9 +99,15 @@ has to continue from the newest stored row's balance, or overlap with it. A gap
 means missing rows, and the user is told how much money went unexplained, not
 merely that something went wrong.
 
-**Identity of a row** is its date, description, amount and balance. Pastes
-routinely overlap, so re-importing a row is a no-op. Two rows identical in all
-four fields cannot occur, because the balance moved between them.
+**A row has no identity of its own.** Its date, description, amount and balance
+describe it, but they are not unique: a transfer, its reversal and the same
+transfer again on one day (+10,00, −10,00, +10,00) put the balance back where it
+was, so the first and third rows repeat all four fields. A paste is therefore
+matched to the stored rows by _position_: its oldest rows are the stored tail's
+last rows, field for field, or it opens from the stored tail's balance. Pastes
+routinely overlap, so re-importing rows is a no-op. Where one paste can be read
+both as rows already stored and as new rows, it is refused and a longer stretch,
+starting on an earlier row, is asked for.
 
 Not yet seen, and each needs a sample before its parsing is written:
 

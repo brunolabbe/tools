@@ -21,7 +21,7 @@ describe("the schema's migrations", () => {
     db.close();
   });
 
-  test("a row's identity is unique, so re-storing a row is refused by the database too", () => {
+  test("a row's position is unique and its identity is not: the same four fields can recur", () => {
     const db = open();
     db.prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)").run(
       "2026-10-02T00:00:00.000Z",
@@ -33,10 +33,29 @@ describe("the schema's migrations", () => {
     );
     insert.run(0, "2026-10-01", "Virements", "Virement", 100, 100);
 
-    // The same identity under another category and another position.
-    expect(() => insert.run(1, "2026-10-01", "Divers", "Virement", 100, 100)).toThrow(/UNIQUE/u);
-    // The same position under another identity.
+    // A transfer, its reversal and the transfer again on one day: the same date,
+    // description, amount and balance twice (00-ANALYSIS.md §2).
+    expect(() => insert.run(1, "2026-10-01", "Virements", "Virement", 100, 100)).not.toThrow();
+    // The same position under another row is what the database refuses.
     expect(() => insert.run(0, "2026-10-02", "Virements", "Virement", 100, 200)).toThrow(/UNIQUE/u);
+    db.close();
+  });
+
+  test("a position may be negative, so older rows can later be numbered below the oldest", () => {
+    const db = open();
+    db.prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)").run(
+      "2026-10-02T00:00:00.000Z",
+      "alex",
+    );
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+           VALUES (-1, '2026-10-01', 'Virements', 'Virement', 100, 100, 1)`,
+        )
+        .run(),
+    ).not.toThrow();
     db.close();
   });
 

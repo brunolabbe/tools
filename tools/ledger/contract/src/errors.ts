@@ -63,14 +63,16 @@ export const LEDGER_ERROR_CODES = [
   /**
    * A pasted row and a stored row disagree about the same place in the history:
    * the same identity with another category, or another row where the stored
-   * history has this one. `details` names both, so nothing is overwritten and
-   * nothing is guessed at.
+   * history has this one — or the same paste fits what is stored two ways that
+   * would store different rows, because a date, description, amount and balance
+   * can repeat. `details` names both rows, or both readings, so nothing is
+   * overwritten and nothing is guessed at.
    */
   "STATEMENT_ROW_CONFLICT",
   /**
-   * The paste reaches back past the oldest stored row. Rows are numbered from
-   * the oldest and a stored row is never renumbered, so older history cannot be
-   * added in front of what is there.
+   * The paste reaches back past the oldest stored row. A stored row's position
+   * is never changed, and adding older history means numbering rows below the
+   * oldest, which this ticket does not do; a later one may.
    */
   "STATEMENT_BEFORE_HISTORY",
 ] as const;

@@ -36,20 +36,25 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE TABLE statement_rows (
     id INTEGER PRIMARY KEY,
-    -- Position in the account's whole history, oldest = 0. A paste numbers its
-    -- own rows from 0 and the store offsets them by what is already here; once
-    -- written it is never renumbered, which is why older history cannot be
-    -- added in front.
-    seq INTEGER NOT NULL UNIQUE CHECK (seq >= 0),
+    -- Position in the account's history, oldest lowest. It is a position, not
+    -- a count: the first paste starts at 0 and each later row takes the highest
+    -- stored position plus one, so older rows can later be numbered below the
+    -- oldest, which is why it may be negative. Once written it is never changed.
+    seq INTEGER NOT NULL UNIQUE,
     date TEXT NOT NULL,
     category TEXT NOT NULL,
     description TEXT NOT NULL,
     amount_cents INTEGER NOT NULL,
     balance_cents INTEGER NOT NULL,
-    import_id INTEGER NOT NULL REFERENCES statement_imports (id),
-    -- A row's identity: pastes overlap, and re-storing a row is a no-op.
-    UNIQUE (date, description, amount_cents, balance_cents)
+    import_id INTEGER NOT NULL REFERENCES statement_imports (id)
   );
+
+  -- Not unique. A transfer, its reversal and the transfer again on one day give
+  -- two rows with the same date, description, amount and balance, so a row's
+  -- place is its position, and a paste is matched against the stored rows by
+  -- position (statements.ts). This only finds a candidate quickly.
+  CREATE INDEX statement_rows_identity
+    ON statement_rows (date, description, amount_cents, balance_cents);
   `,
 ];
 

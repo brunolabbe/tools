@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, ImportStatementReport } from "@ledger/contract";
@@ -320,15 +324,14 @@ describe("POST /api/statements", () => {
     expect(stored(target)).toEqual(before);
   });
 
-  test("two rows that cannot be told apart are refused as a conflict, not a server error", async () => {
+  test("two rows with the same four fields are both stored, as the account has them", async () => {
     const target = await startApp();
     const twin: PasteRow = { date: "2026-10-01", description: "Ajustement", amountCents: 0 };
 
-    const response = await post(target, renderPaste(withBalances([twin, twin], 1000)));
+    const result = await report(target, renderPaste(withBalances([twin, twin], 1000)));
 
-    expect(response.statusCode).toBe(422);
-    expect(refusal(response).code).toBe("STATEMENT_ROW_CONFLICT");
-    expect(stored(target)).toHaveLength(0);
+    expect(result.rowsAdded).toBe(2);
+    expect(stored(target)).toHaveLength(2);
   });
 
   test("a paste that does not prove itself is refused whole, and stores nothing", async () => {
@@ -420,5 +423,218 @@ describe("POST /api/statements", () => {
     expect(logged).not.toContain(HISTORY[8]?.description);
     expect(logged).not.toContain("Marché");
     expect(logged).not.toContain(String(ROWS[7]?.balanceCents));
+  });
+});
+
+// What the first gate found (F1 to F7), and what the owner decided on 2026-10-02.
+// Appended as a block of its own: the tests above are cited by line.
+
+/** A paste of these rows, oldest first, from an opening balance of 50,00. */
+const of = (rows: PasteRow[], opening = 5000): string => renderPaste(withBalances(rows, opening));
+
+describe("a row's identity is not unique, so a paste is read by position", () => {
+  const X: PasteRow = { date: "2026-10-01", description: "Virement X", amountCents: 1000 };
+  const RETOUR: PasteRow = { date: "2026-10-01", description: "Retour", amountCents: -1000 };
+  const Y: PasteRow = { date: "2026-10-02", description: "Achat Y", amountCents: -200 };
+  const Z: PasteRow = { date: "2026-09-30", description: "Depot Z", amountCents: 300 };
+
+  test("a transfer repeated after its reversal is never silently dropped as the stored one", async () => {
+    const target = await startApp();
+    await report(target, of([X, RETOUR]));
+    const before = stored(target);
+
+    // Opens from 50,00, where the stored history ends, and is also the stored
+    // first row. At c214024 this answered 200 with `rowsAdded: 0`.
+    const response = await post(target, of([X]));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(error.details).toMatchObject({
+      readings: [
+        { rowsAdded: 0, rowsAlreadyPresent: 1 },
+        { rowsAdded: 1, rowsAlreadyPresent: 0 },
+      ],
+    });
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("starting the same paste on the reversal settles it: the transfer is a new row", async () => {
+    const target = await startApp();
+    await report(target, of([X, RETOUR]));
+
+    const result = await report(target, of([RETOUR, X], 6000));
+
+    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 1, tailBalanceCents: 6000 });
+    expect(stored(target).map((row) => row.description)).toEqual([
+      "Virement X",
+      "Retour",
+      "Virement X",
+    ]);
+  });
+
+  test("the whole stretch, transfer, reversal and transfer again, is stored", async () => {
+    const target = await startApp();
+
+    const result = await report(target, of([X, RETOUR, X, Y]));
+
+    expect(result).toMatchObject({ rowsAdded: 4, rowsAlreadyPresent: 0 });
+    expect(stored(target)).toHaveLength(4);
+  });
+
+  test("a continuation from the stored tail may start with a row the history already holds", async () => {
+    const target = await startApp();
+    await report(target, of([X, RETOUR]));
+
+    const result = await report(target, of([X, Y]));
+
+    expect(result).toMatchObject({ rowsAdded: 2, rowsAlreadyPresent: 0 });
+    expect(stored(target)).toHaveLength(4);
+  });
+
+  test("a paste that can be read as stored rows or as new ones is refused naming both, and stores nothing", async () => {
+    const target = await startApp();
+    await report(target, of([X, RETOUR]));
+    const before = stored(target);
+
+    // Either the last rows pasted again with two more, or a second round of the same.
+    const response = await post(target, of([X, RETOUR, X, Y]));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(error.details).toMatchObject({
+      readings: [
+        { rowsAdded: 2, rowsAlreadyPresent: 2 },
+        { rowsAdded: 4, rowsAlreadyPresent: 0 },
+      ],
+    });
+    expect(error.message).toContain("longer");
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("a longer stretch that starts on an earlier row settles which reading is meant", async () => {
+    const target = await startApp();
+    await report(target, of([Z, X, RETOUR], 4700));
+
+    const result = await report(target, of([Z, X, RETOUR, X, Y], 4700));
+
+    expect(result).toEqual({ rowsAdded: 2, rowsAlreadyPresent: 3, tailBalanceCents: 5800 });
+  });
+
+  test("a paste of rows the history holds twice over is refused, never guessed at", async () => {
+    const target = await startApp();
+    await report(target, of([X, RETOUR, X]));
+
+    // The same text again: the last X, or all three? The books cannot tell.
+    const response = await post(target, of([X, RETOUR, X]));
+
+    expect(response.statusCode).toBe(422);
+    expect(refusal(response).code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(stored(target)).toHaveLength(3);
+  });
+
+  test("a continuation that ends on the balance the history began from is not older history", async () => {
+    const target = await startApp();
+    const up: PasteRow = { date: "2026-10-01", description: "Depot", amountCents: 500 };
+    const down: PasteRow = { date: "2026-10-02", description: "Retrait", amountCents: -500 };
+    await report(target, renderPaste(withBalances([up], 1000)));
+
+    const result = await report(target, renderPaste(withBalances([down], 1500)));
+
+    expect(result).toEqual({ rowsAdded: 1, rowsAlreadyPresent: 0, tailBalanceCents: 1000 });
+  });
+
+  test("an older paste that stops short of the oldest stored row is older history, not a gap", async () => {
+    const target = await startApp();
+    await report(target, paste(3, 8));
+
+    const response = await post(target, paste(0, 2));
+
+    expect(response.statusCode).toBe(422);
+    expect(refusal(response).code).toBe("STATEMENT_BEFORE_HISTORY");
+    expect(stored(target)).toHaveLength(5);
+  });
+
+  test("a new row takes the position after the highest stored one, not the row count", async () => {
+    const target = await startApp();
+    await report(target, paste(0, 3));
+    // Older rows may later be numbered below the oldest, so positions are not 0..n.
+    target.context.db.prepare("UPDATE statement_rows SET seq = seq - 5").run();
+
+    await report(target, paste(3, 6));
+
+    expect(stored(target).map((row) => row.seq)).toEqual([-5, -4, -3, -2, -1, 0]);
+  });
+
+  test("a row before a shared stretch that is not the stored row there is refused and named", async () => {
+    const target = await startApp();
+    await report(target, paste(0, 6));
+    const before = stored(target);
+
+    const retold = ROWS.slice(3, 8).map((row, index) =>
+      index === 0 ? { ...row, description: "Autre libelle" } : row,
+    );
+    const response = await post(target, renderPaste(retold));
+
+    expect(response.statusCode).toBe(422);
+    const error = refusal(response);
+    expect(error.code).toBe("STATEMENT_ROW_CONFLICT");
+    expect(error.details).toMatchObject({
+      fields: ["description"],
+      stored: { seq: 3, description: HISTORY[3]?.description },
+      pasted: { pasteIndex: 0, description: "Autre libelle" },
+    });
+    expect(stored(target)).toEqual(before);
+  });
+});
+
+describe("an over-long paste and a busy database", () => {
+  test("a body over the cap is a 413 saying the paste is too long", async () => {
+    const { server } = await startApp();
+
+    const response = await server.inject({
+      method: "POST",
+      url: ROUTES.statements,
+      payload: { text: "x".repeat(1024 * 1024 + 10) },
+    });
+
+    expect(response.statusCode).toBe(413);
+    const error = refusal(response);
+    expect(error.code).toBe("SIZE_LIMIT_EXCEEDED");
+    expect(error.message).toContain("too long");
+  });
+
+  test("a write lock held by another connection answers a retryable timeout, and stores nothing", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-busy-"));
+    const databasePath = path.join(dir, "ledger.db");
+    let other: Database.Database | undefined;
+    try {
+      app = await createApp({
+        config: {
+          databasePath,
+          logLevel: "silent",
+          access: accessConfig({ devIdentity: ALEX }),
+        },
+      });
+      // The 5 s the server waits is the production value; a test must not.
+      app.context.db.pragma("busy_timeout = 50");
+      other = new Database(databasePath);
+      other.prepare("BEGIN IMMEDIATE").run();
+
+      const response = await post(app, paste(0, 3));
+
+      expect(response.statusCode).toBe(504);
+      expect(refusal(response)).toMatchObject({ code: "TIMEOUT", retryable: true });
+      other.prepare("ROLLBACK").run();
+      expect(stored(app)).toHaveLength(0);
+      // The same paste goes through once the lock is gone.
+      expect((await post(app, paste(0, 3))).statusCode).toBe(200);
+    } finally {
+      other?.close();
+      await app?.shutdown();
+      app = undefined;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

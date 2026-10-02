@@ -56,8 +56,28 @@ function isClientRequestStatusError(error: unknown): boolean {
   return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
 }
 
+/**
+ * Fastify's own refusal of a body over `bodyLimit`. Matched by its code, not by
+ * the 413 alone, because `@fastify/static` and others raise 4xx statuses of
+ * their own.
+ */
+function isBodyTooLarge(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "FST_ERR_CTP_BODY_TOO_LARGE";
+}
+
 /** The one place that decides what `AppError` a failure *is*. */
 function toAppError(error: unknown): AppError {
+  // The one request this tool takes whose size a person can exceed is a pasted
+  // statement (lg-2), so the person is told the paste is too long rather than
+  // that the request "could not be understood". The copy is replaced here
+  // because core's default speaks of a *result*, not of something sent.
+  if (isBodyTooLarge(error)) {
+    return new AppError(
+      "SIZE_LIMIT_EXCEEDED",
+      "The paste is too long to store in one go. Paste a shorter stretch.",
+      { cause: error },
+    );
+  }
   return isClientRequestStatusError(error)
     ? new AppError("BAD_REQUEST", undefined, { cause: error })
     : AppError.from(error);

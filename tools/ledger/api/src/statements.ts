@@ -9,10 +9,17 @@
  * - **The first paste into an empty database is the anchor** and is accepted as
  *   it stands.
  * - **A later paste must overlap the stored tail exactly, or continue from it.**
- *   Its oldest row either is a stored row (identity: date, description, amount,
- *   balance) and every row after it up to the stored tail must be identical to
- *   what is stored, or it must open from the stored tail's balance. Anything
- *   between is money nobody can explain, and the error says how much.
+ *   It is read by *position*: the paste's first `k` rows must be the stored
+ *   tail's last `k` rows, field for field, and the rest is new; or, with `k = 0`,
+ *   its oldest row must open from the stored tail's balance. A paste that sits
+ *   wholly inside the stored history adds nothing. Anything between is money
+ *   nobody can explain, and the error says how much.
+ * - **A row's date, description, amount and balance are not unique** — a
+ *   transfer, its reversal and the transfer again on one day repeat all four —
+ *   so no row is ever matched by those fields alone. Where two readings of one
+ *   paste are both consistent with what is stored and they would store
+ *   different things, the paste is refused naming both, because picking one
+ *   silently is how a row gets dropped or a day gets booked twice.
  * - **Never overwrite.** A stored row is never edited and never replaced: the
  *   rows a paste adds are `INSERT`ed, and a pasted row that disagrees with a
  *   stored one is refused with both named, not reconciled.
@@ -57,10 +64,6 @@ function describeRow(row: StatementRow): string {
   return `${row.date} "${row.description}" ${formatCents(row.amountCents)} (balance ${formatCents(row.balanceCents)})`;
 }
 
-function identityKey(row: StatementRow): string {
-  return JSON.stringify([row.date, row.description, row.amountCents, row.balanceCents]);
-}
-
 /** The fields two rows can disagree on, each in the words an error uses for it. */
 const FIELDS = [
   ["date", "date"],
@@ -73,6 +76,10 @@ const FIELDS = [
 /** The fields two rows disagree on, which is what the error names. */
 function differingFields(stored: StoredRow, pasted: StatementRow): string[] {
   return FIELDS.filter(([key]) => stored[key] !== pasted[key]).map(([, word]) => word);
+}
+
+function sameRow(stored: StoredRow, pasted: StatementRow): boolean {
+  return differingFields(stored, pasted).length === 0;
 }
 
 /** A row as an error carries it, without a `seq` whose meaning differs by side. */
@@ -108,7 +115,18 @@ export function importStatement(context: ImportContext, text: string): ImportSta
   if (oldest === undefined || newest === undefined) {
     throw new AppError("BAD_REQUEST", "The paste holds no statement rows.");
   }
-  return context.db.transaction(() => store(context, rows, oldest, newest)).immediate();
+  try {
+    return context.db.transaction(() => store(context, rows, oldest, newest)).immediate();
+  } catch (error: unknown) {
+    // Another connection holds the write lock past the busy timeout. Nothing
+    // here opens a second connection, but a backup or an operator's shell can.
+    if ((error as { code?: unknown } | null)?.code === "SQLITE_BUSY") {
+      throw new AppError("TIMEOUT", "The ledger's database was busy. Try the paste again.", {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 function store(
@@ -119,109 +137,36 @@ function store(
 ): ImportStatementReport {
   const { db } = context;
   const count = (db.prepare("SELECT count(*) AS n FROM statement_rows").get() as { n: number }).n;
-  const tailColumns = db.prepare(`${SELECT} ORDER BY seq DESC LIMIT 1`).get() as
-    | Columns
-    | undefined;
-  const tail = tailColumns === undefined ? undefined : toRow(tailColumns);
+  const tail = latest(db, "DESC", 1)[0];
 
-  const byIdentity = db.prepare(
-    `${SELECT} WHERE date = ? AND description = ? AND amount_cents = ? AND balance_cents = ?`,
-  );
-  const lookup = (row: StatementRow): StoredRow | undefined => {
-    const found = byIdentity.get(row.date, row.description, row.amountCents, row.balanceCents) as
-      | Columns
-      | undefined;
-    return found === undefined ? undefined : toRow(found);
-  };
-
-  // The paste's oldest row that is already stored, and where it sits.
-  const overlapAt = rows.findIndex((row) => lookup(row) !== undefined);
-  const firstStored = overlapAt === -1 ? undefined : lookup(rows[overlapAt] ?? oldest);
-
-  // The paste index of its oldest row that is not stored yet. The stored
-  // position that row takes is `count`, because a new row is only ever the next.
-  let firstNew: number;
-  if (firstStored === undefined) {
-    // Nothing overlaps. That is only acceptable as the anchor, or as a paste
-    // that opens exactly where the stored history ends.
-    if (tail !== undefined) {
-      const head = toRow(db.prepare(`${SELECT} ORDER BY seq ASC LIMIT 1`).get() as Columns);
-      // A paste that ends exactly where the stored history begins is older
-      // history, not a gap: say so rather than quote an "unexplained" amount
-      // that is only the distance between two ends of the same account.
-      if (newest.balanceCents === head.balanceCents - head.amountCents) {
-        throw beforeHistory(head);
-      }
-      if (oldest.balanceCents - oldest.amountCents !== tail.balanceCents) throw gap(oldest, tail);
-    }
-    firstNew = 0;
-  } else {
-    if (overlapAt > 0) {
-      // Rows before the first stored one: either older than everything stored,
-      // or a row the stored history has a different row in place of.
-      if (firstStored.seq === 0) throw beforeHistory(firstStored);
-      const before = toRow(
-        db.prepare(`${SELECT} WHERE seq = ?`).get(firstStored.seq - 1) as Columns,
-      );
-      const pasted = rows[overlapAt - 1] ?? oldest;
-      conflict(
-        `The pasted row ${describeRow(pasted)} is not the stored row ${describeRow(before)} that comes before the rows they share (they differ in: ${differingFields(before, pasted).join(", ")}).`,
-        before,
-        pasted,
-      );
-    }
-    // The paste starts on a stored row: every row up to the stored tail must be
-    // the stored row that is there.
-    const overlapping = db
-      .prepare(`${SELECT} WHERE seq >= ? ORDER BY seq ASC`)
-      .all(firstStored.seq) as Columns[];
-    for (const [index, columns] of overlapping.entries()) {
-      const pasted = rows[index];
-      if (pasted === undefined) break;
-      const stored = toRow(columns);
-      const fields = differingFields(stored, pasted);
-      // Identity found the first of these; every other one is only the same row
-      // if its fields still say so, and a category — which identity leaves out —
-      // is the case that has to be caught here.
-      if (fields.length > 0) {
-        conflict(
-          `The pasted row ${describeRow(pasted)} does not match the stored row in its place, ${describeRow(stored)} (they differ in: ${fields.join(", ")}). Stored category "${stored.category}", pasted "${pasted.category}".`,
-          stored,
-          pasted,
-        );
-      }
-    }
-    firstNew = overlapping.length;
+  let alreadyPresent = 0;
+  if (tail !== undefined) {
+    const found = readings(db, rows, oldest, count, tail);
+    if (found.length === 0) fail(db, rows, oldest, newest, tail);
+    const [first] = found;
+    if (found.length > 1 || first === undefined) throw ambiguous(oldest, rows.length, found);
+    alreadyPresent = first;
   }
 
-  const added = rows.slice(firstNew);
-  // A new row cannot share an identity with a stored row or with another new
-  // row: the unique index would refuse it as a 500 rather than say which.
-  const seen = new Set<string>();
-  for (const row of added) {
-    const key = identityKey(row);
-    const stored = lookup(row);
-    if (stored !== undefined || seen.has(key)) {
-      conflict(
-        `The pasted row ${describeRow(row)} has the same date, description, amount and balance as another row, so the two cannot be told apart.`,
-        stored ?? row,
-        row,
-      );
-    }
-    seen.add(key);
-  }
-
+  const added = rows.slice(alreadyPresent);
   if (added.length > 0) {
     const imported = db
       .prepare("INSERT INTO statement_imports (imported_at, imported_by) VALUES (?, ?)")
       .run(context.now().toISOString(), context.personId);
+    // The position after the highest stored one — not the row count, which only
+    // equals it while positions run 0..n.
+    const next = (
+      db.prepare("SELECT coalesce(max(seq), -1) + 1 AS next FROM statement_rows").get() as {
+        next: number;
+      }
+    ).next;
     const insert = db.prepare(
       `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const [offset, row] of added.entries()) {
       insert.run(
-        count + offset,
+        next + offset,
         row.date,
         row.category,
         row.description,
@@ -234,12 +179,143 @@ function store(
 
   // Read back, not taken from the paste: a paste that sits inside the stored
   // history leaves the tail where it was, and this is the answer either way.
-  const stored = db.prepare("SELECT balance_cents FROM statement_rows ORDER BY seq DESC LIMIT 1");
+  const last = latest(db, "DESC", 1)[0];
   return {
     rowsAdded: added.length,
-    rowsAlreadyPresent: rows.length - added.length,
-    tailBalanceCents: (stored.get() as { balance_cents: number }).balance_cents,
+    rowsAlreadyPresent: alreadyPresent,
+    tailBalanceCents: last?.balanceCents ?? 0,
   };
+}
+
+/** The first or last `limit` stored rows, in the order asked for. */
+function latest(db: Database, order: "ASC" | "DESC", limit: number): StoredRow[] {
+  return (db.prepare(`${SELECT} ORDER BY seq ${order} LIMIT ?`).all(limit) as Columns[]).map(toRow);
+}
+
+/** Every stored row with the same date, description, amount and balance as `row`. */
+function candidates(db: Database, row: StatementRow): StoredRow[] {
+  return (
+    db
+      .prepare(
+        `${SELECT} WHERE date = ? AND description = ? AND amount_cents = ? AND balance_cents = ? ORDER BY seq DESC`,
+      )
+      .all(row.date, row.description, row.amountCents, row.balanceCents) as Columns[]
+  ).map(toRow);
+}
+
+/** Up to `limit` stored rows from position `from` on, oldest first. */
+function from(db: Database, position: number, limit: number): StoredRow[] {
+  return (
+    db
+      .prepare(`${SELECT} WHERE seq >= ? ORDER BY seq ASC LIMIT ?`)
+      .all(position, limit) as Columns[]
+  ).map(toRow);
+}
+
+/**
+ * Every way this paste can sit against the stored history, as the number of its
+ * oldest rows that are already stored. More than one is an ambiguity; none means
+ * the paste does not fit.
+ *
+ * - `k` rows overlapping the stored tail: the paste's first `k` rows are the
+ *   tail's last `k`, and `k = 0` is a continuation, opening from the tail's balance.
+ * - A paste wholly inside the history: every row already stored, so `rows.length`.
+ */
+function readings(
+  db: Database,
+  rows: StatementRow[],
+  oldest: StatementRow,
+  count: number,
+  tail: StoredRow,
+): number[] {
+  const found = new Set<number>();
+  const window = latest(db, "DESC", rows.length).toReversed();
+  for (let k = 0; k <= Math.min(rows.length, window.length); k++) {
+    const fits =
+      k === 0
+        ? oldest.balanceCents - oldest.amountCents === tail.balanceCents
+        : rows.slice(0, k).every((row, index) => {
+            const stored = window[window.length - k + index];
+            return stored !== undefined && sameRow(stored, row);
+          });
+    if (fits) found.add(k);
+  }
+  if (rows.length <= count) {
+    for (const candidate of candidates(db, oldest)) {
+      const stored = from(db, candidate.seq, rows.length);
+      if (
+        stored.length === rows.length &&
+        stored.every((row, index) => sameRow(row, rows[index] as StatementRow))
+      ) {
+        found.add(rows.length);
+      }
+    }
+  }
+  // Most already-stored first, so the readings list reads from "nothing new" up.
+  return [...found].toSorted((a, b) => b - a);
+}
+
+/** Nothing fits: say why, as precisely as the history allows. Never returns. */
+function fail(
+  db: Database,
+  rows: StatementRow[],
+  oldest: StatementRow,
+  newest: StatementRow,
+  tail: StoredRow,
+): never {
+  // The paste starts on a row the history holds, and then departs from it.
+  let best: { matched: number; stored: StoredRow } | undefined;
+  for (const candidate of candidates(db, oldest)) {
+    const stored = from(db, candidate.seq, rows.length);
+    const matched = stored.findIndex((row, index) => !sameRow(row, rows[index] as StatementRow));
+    const at = stored[matched];
+    if (matched !== -1 && at !== undefined && (best === undefined || matched > best.matched)) {
+      best = { matched, stored: at };
+    }
+  }
+  const pastedAt = best === undefined ? undefined : rows[best.matched];
+  if (best !== undefined && pastedAt !== undefined) {
+    conflict(
+      `The pasted row ${describeRow(pastedAt)} does not match the stored row in its place, ${describeRow(best.stored)} (they differ in: ${differingFields(best.stored, pastedAt).join(", ")}). Stored category "${best.stored.category}", pasted "${pastedAt.category}".`,
+      best.stored,
+      pastedAt,
+    );
+  }
+
+  // The paste starts on a row the history does not hold but runs into one it does.
+  const head = latest(db, "ASC", 1)[0];
+  for (const [index, row] of rows.entries()) {
+    const [found] = candidates(db, row);
+    if (found === undefined || index === 0) continue;
+    const before = previous(db, found.seq);
+    if (before === undefined) throw beforeHistory(found);
+    const pasted = rows[index - 1] ?? oldest;
+    conflict(
+      `The pasted row ${describeRow(pasted)} is not the stored row ${describeRow(before)} that comes before the rows they share (they differ in: ${differingFields(before, pasted).join(", ")}).`,
+      before,
+      pasted,
+    );
+  }
+
+  // Nothing in the paste is stored. Older than everything stored, or a gap after it.
+  // Dates only run forward, so a paste that ends before the oldest stored row's
+  // day, or on the balance that row opened from, is older history; quoting an
+  // "unexplained" amount for it would be the distance between two ends of one account.
+  if (
+    head !== undefined &&
+    (newest.date < head.date || newest.balanceCents === head.balanceCents - head.amountCents)
+  ) {
+    throw beforeHistory(head);
+  }
+  throw gap(oldest, tail);
+}
+
+/** The stored row just before position `seq`, if any. */
+function previous(db: Database, seq: number): StoredRow | undefined {
+  const row = db.prepare(`${SELECT} WHERE seq < ? ORDER BY seq DESC LIMIT 1`).get(seq) as
+    | Columns
+    | undefined;
+  return row === undefined ? undefined : toRow(row);
 }
 
 /** The paste opens at a balance the stored tail does not end on. */
@@ -272,6 +348,30 @@ function beforeHistory(oldestStored: StoredRow): AppError {
         description: oldestStored.description,
         amountCents: oldestStored.amountCents,
         balanceCents: oldestStored.balanceCents,
+      },
+    },
+  );
+}
+
+/** Two readings of one paste are both consistent with the books and store different things. */
+function ambiguous(oldest: StatementRow, total: number, present: number[]): AppError {
+  const described = present.map((stored) => ({
+    rowsAdded: total - stored,
+    rowsAlreadyPresent: stored,
+  }));
+  const said = described
+    .map((r) => `${r.rowsAlreadyPresent} already stored and ${r.rowsAdded} new`)
+    .join(", or ");
+  return new AppError(
+    "STATEMENT_ROW_CONFLICT",
+    `The paste starting at ${describeRow(oldest)} can be read two ways, and each fits what is stored: ${said}. The same rows come round again in the account, so the books cannot tell which was meant. Paste a longer stretch that starts on an earlier row, so only one reading fits.`,
+    {
+      details: {
+        readings: described,
+        date: oldest.date,
+        description: oldest.description,
+        amountCents: oldest.amountCents,
+        balanceCents: oldest.balanceCents,
       },
     },
   );

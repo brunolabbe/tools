@@ -127,3 +127,28 @@ test("editing the text after a preview takes the preview away", () => {
   expect(screen.queryAllByRole("listitem")).toHaveLength(0);
   expect(screen.queryByRole("button", { name: "Confirm and store" })).toBeNull();
 });
+
+test("a paste with a header and no rows is refused before anything is sent", () => {
+  paste("Date\tDescription\tMontant\tSolde\tlien\n");
+
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+  expect(screen.getByRole("alert").textContent).toContain("no statement rows");
+  expect(screen.queryByRole("button", { name: "Confirm and store" })).toBeNull();
+  expect(stored).not.toHaveBeenCalled();
+});
+
+test("Paste another empties the box and goes back to the start", async () => {
+  stored.mockResolvedValue({ rowsAdded: 2, rowsAlreadyPresent: 0, tailBalanceCents: 210_000 });
+  paste(PASTE);
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm and store" }));
+  await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+
+  fireEvent.click(screen.getByRole("button", { name: "Paste another" }));
+
+  const box = screen.getByLabelText<HTMLTextAreaElement>("Transactions copied from AccèsD");
+  expect(box.value).toBe("");
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByRole("button", { name: "Preview" })).toBeTruthy();
+});
