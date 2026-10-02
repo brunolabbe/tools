@@ -457,3 +457,8 @@ Acceptance re-run at `8487daa`, rebuilt (`copiesByLine` in the downloader `dist`
     the earlier test for an error under `details`, whose cause is not called at all.
   - **Unchanged:** nothing above line 148 of the downloader's `logger.ts`
     moved; the first added line is still `isError(value)` there.
+
+- 2026-10-02 — **Gate 5 (PASS at `8487daa`): lands with its one low, I1, recorded and
+  not fixed.** The owner's rule, set via `AskUserQuestion` on 2026-10-02 ("fix it,
+  then land": a further low after that lands recorded) applies; I1 is described in
+  gate 5's section above and is not repeated here.
