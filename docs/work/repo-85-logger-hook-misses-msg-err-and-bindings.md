@@ -311,7 +311,9 @@ it needs its own pull request and a gate.
     wrapper is called when, and as often as, pino calls it. The result's own
     function `cause` is wrapped again by the same code, so a chain is covered.
     Only an error with a function `cause` is copied that it was not before; every
-    other row takes the path it took.
+    other row takes the path it took. **Corrected by gate 4's H1, below: as first
+    written the wrapper was called as often as pino calls it only for a chain with
+    no loop.**
   - **Red/green:** four tests appended to the end of `logging-routes.test.ts`,
     helpers included, so no citation into that file moves. With `logger.ts` at
     `8b026d9`, `npx vitest run tools/downloader/api/test/logging-routes.test.ts`
@@ -325,3 +327,31 @@ it needs its own pull request and a gate.
     branch adds to the downloader's `logger.ts` is still the `isError(value)` line
     at 148, and the new test and its helpers sit after the last existing line of
     `logging-routes.test.ts`.
+
+- 2026-10-02 — **Gate 4 (PASS at `ebb5e32`), one new low, H1, fixed by the owner's
+  choice** (via `AskUserQuestion`, 2026-10-02, over landing it recorded or
+  reverting the fold-in).
+  - **H1, reproduced.** A cause chain that loops ran until the stack overflowed.
+    pino stops a loop by remembering the errors it has seen; the wrapper returned a
+    fresh copy on every call, so pino never recognised one. Two tests appended to
+    `logging-routes.test.ts`, with `logger.ts` at `ebb5e32`: a self-returning
+    `cause` called the original **6153** times where pino alone calls it **2**, and
+    two errors returning each other **[3077, 3076]** where pino alone gives
+    **[2, 2]**; both lines were `{"fieldsDropped":true}`. Nothing leaked. The Fix
+    bullet above claimed the wrapper is called as often as pino calls it, true only
+    without a loop; its call-count test never fed it one.
+  - **Fix: one copy per error per line.** `redactError` keeps a map from each
+    original error to its copy, per logged call, keyed by the `ancestors` set that
+    call's walk creates and every wrapper it made holds. An error already copied
+    comes back as the same copy, so pino's own guard stops the loop where it stops
+    it on the original. The same map makes a shared error under two keys one copy,
+    which changes nothing written.
+  - **Red/green:** five tests appended to the end of the file, helpers included.
+    Red at `ebb5e32`, `npx vitest run tools/downloader/api/test/logging-routes.test.ts`:
+    `2 failed | 25 passed` (the two loops). Green at the fix: `27 passed` of 27. Each
+    row asserts the per-error call counts equal pino alone's, the line has no
+    `fieldsDropped` and no secret. Controls that pass on both: one level, a chain of
+    three, a `cause` that throws (equal counts, `fieldsDropped` on both sides), and
+    the earlier test for an error under `details`, whose cause is not called at all.
+  - **Unchanged:** nothing above line 148 of the downloader's `logger.ts`
+    moved; the first added line is still `isError(value)` there.

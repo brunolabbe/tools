@@ -315,9 +315,115 @@ function withFunctionCause(result: Error): { error: Error; calls: () => number }
  * the call count. Imported here rather than at the top of the file so no line
  * above this block moves under the records that cite them.
  */
-async function pinoAlone(): Promise<{
+async function pinoAlone(lines: string[] = []): Promise<{
   error(message: string, fields?: Record<string, unknown>): void;
 }> {
   const { createLogger: createCoreLogger } = await import("@webtools/core/logger");
-  return createCoreLogger({ level: "debug", write: () => undefined });
+  return createCoreLogger({ level: "debug", write: (line) => lines.push(line) });
+}
+
+// A cause chain that loops (gate 4, H1). pino stops a loop by remembering the
+// errors it has already seen, so a wrapper that hands it a fresh copy on every
+// call is never recognised and is called until the stack overflows.
+describe("a function-valued cause that loops, or does not", () => {
+  const shapes: Record<string, () => CauseShape> = {
+    "returns the error itself": () => causeLoop(1),
+    "two errors that return each other": () => causeLoop(2),
+    "one level": () => causeChain(1),
+    "a chain of three": () => causeChain(3),
+  };
+
+  for (const [name, make] of Object.entries(shapes)) {
+    test(`${name}: called as often as pino alone calls it, and the line is redacted`, async () => {
+      const { pino, ours, line } = await bothWays(make);
+
+      expect(pino.reduce((sum, n) => sum + n, 0)).toBeGreaterThan(0);
+      expect(ours).toEqual(pino);
+      expect(line).not.toContain("SECRET");
+      expect(parse(line)["fieldsDropped"]).toBeUndefined();
+      expect(parse(line).err?.stack).toContain(REDACTED_URL);
+    });
+  }
+
+  test("control: a cause that throws is called as often as pino calls it, and costs the line alike", async () => {
+    const { pino, ours, line, pinoLine } = await bothWays(causeThrowing);
+
+    expect(ours).toEqual(pino);
+    expect(parse(line)["fieldsDropped"]).toBe(true);
+    expect(parse(pinoLine)["fieldsDropped"]).toBe(true);
+  });
+});
+
+interface CauseShape {
+  error: Error;
+  calls: () => number[];
+}
+
+/** Errors whose function causes return the next one, round to the first; calls counted per error. */
+function causeLoop(size: number): CauseShape {
+  const calls: number[] = Array.from({ length: size }, () => 0);
+  const errors = calls.map(() => new Error(`failed ${SIGNED}`));
+  errors.forEach((error, i) => {
+    Object.defineProperty(error, "cause", {
+      value: () => {
+        calls[i] = (calls[i] ?? 0) + 1;
+        return errors[(i + 1) % size];
+      },
+      configurable: true,
+      writable: true,
+    });
+  });
+  return { error: errors[0] as Error, calls: () => [...calls] };
+}
+
+/** `hops` function causes in a row, ending in an error with none. */
+function causeChain(hops: number): CauseShape {
+  const calls: number[] = Array.from({ length: hops }, () => 0);
+  const errors = Array.from({ length: hops + 1 }, () => new Error(`failed ${SIGNED}`));
+  calls.forEach((_, i) => {
+    Object.defineProperty(errors[i], "cause", {
+      value: () => {
+        calls[i] = (calls[i] ?? 0) + 1;
+        return errors[i + 1];
+      },
+      configurable: true,
+      writable: true,
+    });
+  });
+  return { error: errors[0] as Error, calls: () => [...calls] };
+}
+
+function causeThrowing(): CauseShape {
+  const calls = [0];
+  const error = new Error(`failed ${SIGNED}`);
+  Object.defineProperty(error, "cause", {
+    value: () => {
+      calls[0] = (calls[0] ?? 0) + 1;
+      throw new Error("boom");
+    },
+    configurable: true,
+    writable: true,
+  });
+  return { error, calls: () => [...calls] };
+}
+
+/** The same input through the downloader's logger and through pino alone. */
+async function bothWays(make: () => CauseShape): Promise<{
+  pino: number[];
+  ours: number[];
+  pinoLine: string | undefined;
+  line: string | undefined;
+}> {
+  const alone = make();
+  const pinoLines: string[] = [];
+  (await pinoAlone(pinoLines)).error("probe failed", { err: alone.error });
+  const hooked = make();
+  const { logger, lines } = capture();
+  logger.error("probe failed", { err: hooked.error });
+  return {
+    pino: alone.calls(),
+    ours: hooked.calls(),
+    pinoLine: pinoLines[0],
+    line: lines[0],
+  };
 }

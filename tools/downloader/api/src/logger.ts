@@ -181,6 +181,15 @@ function isError(value: object): value is Error {
 }
 
 /**
+ * The copy `redactError` made of each error, per line, keyed by that line's
+ * `ancestors` set (one per logged call, and held by every wrapper it made).
+ * pino stops a loop of function causes by remembering the errors it has seen,
+ * which it can only do if the same error comes back as the same copy (repo-85,
+ * gate 4 H1).
+ */
+const copiesByLine = new WeakMap<Set<object>, Map<Error, Error>>();
+
+/**
  * Copies an `Error` as an `Error`, with every property pino writes run through
  * the walk (repo-85).
  *
@@ -224,8 +233,15 @@ function isError(value: object): value is Error {
  *    failure.
  *
  * Returns the same reference when nothing changed, like the rest of the walk.
+ * A copy is made once per error per line: a function `cause` that returns an
+ * error already copied gets the same copy back, so a loop ends where pino's own
+ * guard ends it, instead of at a stack overflow.
  */
 function redactError(error: Error, ancestors: Set<object>): Error {
+  const copies = copiesByLine.get(ancestors) ?? new Map<Error, Error>();
+  copiesByLine.set(ancestors, copies);
+  const seen = copies.get(error);
+  if (seen !== undefined) return seen;
   const enumerable = new Set<string>();
   for (const key in error) enumerable.add(key);
   const keys = new Set([...enumerable, "message", "stack", "name", "cause", "errors"]);
@@ -237,7 +253,7 @@ function redactError(error: Error, ancestors: Set<object>): Error {
       // VError style: pino calls `err.cause()` and writes the result. Redact it
       // when pino asks, not now, so it is called as often as pino would call it
       // and not for an error pino never serialises (repo-85, gate 3).
-      values.set(key, () => redactUrlsDeep((original as () => unknown).call(error)));
+      values.set(key, () => redactUrlsDeep((original as () => unknown).call(error), ancestors));
       changed = true;
       continue;
     }
@@ -259,6 +275,7 @@ function redactError(error: Error, ancestors: Set<object>): Error {
       configurable: true,
     });
   }
+  copies.set(error, copy);
   return copy;
 }
 
