@@ -106,11 +106,13 @@ export const CORE_ERROR_CODES = [
    * Like `HUMAN_CHECK_FAILED`, the variants are reported the same way, because
    * telling them apart tells a forger which part to fix.
    *
-   * Answered with a 403 by every tool here, never a 401 — the downloader's
-   * reasoning for `HUMAN_CHECK_FAILED`, and the owner's decision for lg-3: a
-   * 401 must carry a `WWW-Authenticate` scheme the client could answer, and an
-   * identity-aware proxy has no such scheme for a client to use. The code stays
-   * distinct from `FORBIDDEN` all the same, because the remedy differs.
+   * Answered with a 403, never a 401, by the ledger and the downloader — the
+   * downloader's reasoning for `HUMAN_CHECK_FAILED`, and the owner's decision
+   * for lg-3: a 401 must carry a `WWW-Authenticate` scheme the client could
+   * answer, and an identity-aware proxy has no such scheme for a client to use.
+   * (The planner raises neither code and does not map them, so its table's
+   * fallback, 500, is what it would answer.) The code stays distinct from
+   * `FORBIDDEN` all the same, because the remedy differs.
    *
    * Core rather than a tool's own because it describes the door, not the room:
    * any tool behind an identity-aware proxy has it, and the ledger is the first
