@@ -158,7 +158,12 @@ you are there.
    the batch, not a guess. Measured 2026-09-28: the orchestrator offered "land
    the records first, fixes after" on repo-79, the owner chose it, and the fix
    had to move two lines the records cited, so it was re-asked; and a fixer
-   round quoted at $2–4 cost $7.58.
+   round quoted at $2–4 cost $7.58. **2026-10-01:** for an option that changes
+   a contract or a shared taxonomy, grep for exhaustive maps over the type
+   (`Record<ErrorCode, …>`) before offering it. "Add the codes to
+   `@webtools/core`" was offered on lg-3 with the downloader's two exhaustive
+   maps unread, so a downloader release from a ledger PR surfaced only after
+   the owner answered, and the question was re-asked.
 
 7. **Accept each report, or send it back — the work is not done until you do**:
    five checks, not a re-review. Does each report say what was *run*, and where
@@ -249,10 +254,31 @@ you are there.
    like any other, and the same session that had to correct all three
    mid-batch is the reason this is stated at both steps rather than once.
 
-10. **Hold every worktree — the gate's and the fixer's as well as the
-    builder's — until the ticket is finished.** "The round is over" cannot be
-    evaluated: tested twice on 2026-09-03, both times it resumed. Announce any
-    early removal to that agent.
+10. **Remove a ticket's worktrees — builder, gate and fixer — once its PR has
+    landed (records committed, PR opened) and you have taken your one look at
+    that PR's finished checks** (`gh pr checks`, _After a merge_), after
+    checking each is clean (`git status --porcelain` empty) and its head is on
+    origin (`git branch -r --contains <head>`). **If CI shows a problem at that
+    look, ask the owner (`AskUserQuestion`) whether to keep that ticket's
+    worktrees.** A later follow-up — a post-PR fix, a stacked rebase — goes to a
+    fresh `fixer`, not a resume. **The lock is not the liveness test:**
+    subagents run inside the orchestrator's process, so every agent's lock,
+    a live one's included, names the orchestrator's pid (a live gate's
+    `git worktree list --porcelain` showed the same pid and start as the lock
+    lifted from a finished fixer on 2026-10-02). Remove only a tree whose agent
+    has delivered its completion notification and been sent nothing since;
+    then `git worktree unlock`, then remove. **Decided by the owner on
+    2026-10-02, unprompted, reversing the hold-until-finished rule this step
+    carried since 2026-09-03**: "You can remove worktrees when pr land. I don't
+    see why we would need to keep them", refined the same day: "You might ask
+    to keep worktree if you see a problem with CI then." The owner then chose
+    the order above through `AskUserQuestion` the same day: remove after the
+    one look at finished checks, not at landing, because the look is the only
+    moment a CI problem can be seen. Measured on the 2026-10-01 batch: 15
+    worktrees removed in one sweep after the PRs opened (35 min to 2 h 40 min
+    after each), all clean, every head on origin, one locked. Before the
+    landing, a round is still not over just because an agent said so (tested
+    twice on 2026-09-03: both resumed).
 
 11. **Scratch-merge the batch, then check the merge landed what it was supposed
     to.** Before any branch in the batch merges, run
@@ -261,7 +287,12 @@ you are there.
     reads briefs and cannot see the gate-record pins a branch writes mid-build:
     in two batches every merge conflict was in a gate record more than one branch
     pinned, and none was in source (2026-09-12, 2026-09-14). Then one look, after
-    the fact, not polling. See _After a merge_.
+    the fact, not polling. See _After a merge_. **2026-10-01:** the citations
+    run is not optional beside the pairwise one. All 15 pairs of six heads
+    merged cleanly and the scratch merge of all six exited 1: lg-1's record
+    cites line 69 of the ledger tool's `CLAUDE.md` unpinned and lg-3 adds three
+    lines above it. A constraint found here (here, "merge #330 before #333") goes on the
+    dependent draft PR as a comment, not in prose.
 
 12. **Append this session's row to [reference/history.md](reference/history.md),
     and change the rules it names.** The row follows the schema that page fixes,
@@ -436,7 +467,11 @@ orchestrator used the weaker command for a whole batch and nearly closed with tw
 failures unseen (2026-09-18), after `skipped` had been recorded as reading green
 in three consecutive sessions, all on 2026-09-07. Read a failing check's reason
 with `gh run view <id> --log-failed`, and say which of the two CodeQL checks
-you mean, since `CodeQL` and `codeql` both exist here. `--json` rather than the
+you mean, since `CodeQL` and `codeql` both exist here. **2026-10-01:** the
+default-setup `CodeQL` check's alert cannot be read from this container —
+`gh api` is denied and WebFetch is blocked — so say that and hand it to the
+owner, as #330's was; never run `gh api`, alone or inside a compound command,
+because the deny refuses the whole call (it did, this batch). `--json` rather than the
 table, because the failure this guards against is reading a list by eye. To
 read one job's full log on a run that has been retried, add `--attempt N`:
 `gh run view <id> --job <id> --log` alone, without it, returned the wrong

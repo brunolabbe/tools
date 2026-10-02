@@ -65,6 +65,18 @@ and resolves workspace packages there, so the package you edited or are
 reviewing is not the one the compiler reads — a correct change looks broken, or
 a broken one looks fine.
 
+**2026-10-01: a red/green across packages needs a rebuild between the states,
+and a `dist` grep to prove which state you measured.** A suite that imports a
+sibling's `dist` but its own `src` needs the rebuild only for the sibling
+(repo-85's builder). A gate that built `main`'s contract measured against the
+wrong state and saw 24 false failures (lg-3).
+
+**2026-10-01: for a new workspace, check the lockfile with
+`node scripts/check-lockfile-sync.mjs`, not `npm ls`.** The farm mirrors the
+shared checkout and lacks the new link, so `npm ls` reports the package missing
+(lg-1's gate). `add-tool` step 3 says the same where a lockfile is edited by
+hand.
+
 ## The sandbox refuses some ordinary shell shapes
 
 With "too complex to verify that it stays inside the worktree", and nothing else
@@ -132,6 +144,18 @@ the shared checkout when a script tried to write a file with a path from an
 undefined variable. Test any shell variables used in node scripts: `node -e
 "console.log(process.env.VAR_NAME)"` and confirm they print something before
 passing them to file operations.
+
+**2026-10-01: confirm a commit landed before you measure it.** A refused
+`git add && git commit` let preflight measure the uncommitted tree (lg-3's
+builder). Run `git log -1` as its own call after every commit, before
+preflight.
+
+**2026-10-01: waiting on a backgrounded preflight.** A bare foreground `sleep`
+is refused and `Monitor` is disabled for subagents; a foreground
+`until [ -s <exit file> ]; do sleep 3; done` with a long timeout works (it ran
+in three agents this batch, and a busy `do :; done` would spin a core). `pgrep -f`
+matches its own shell, and an `echo $?` inside a backgrounded call lands in the
+task's output file, not in the log you redirected to.
 
 ## Point every run at the narrowest thing that can fail
 

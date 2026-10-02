@@ -163,6 +163,12 @@ the section that the acceptance came from the prompt.
    grounding's own. Both were eventually found by eye; the second was found
    twice, because the first reading caught one of its two call sites.
 
+   **2026-10-01: every "contains no X" assertion needs a companion that fails
+   on empty output.** A test that a string never appears passes on a function
+   that returns nothing; repo-85 gate 1's F4 found three such tests passing on
+   the base. Look for the companion, a positive assertion on the same output,
+   in each row that proves an absence.
+
 5. **Walk the repo's invariants.** These are not general advice — each is a rule
    the root or tool `CLAUDE.md` states, and a generic reviewer knows none of them.
    Check only the ones the diff can plausibly touch, and say which you skipped.

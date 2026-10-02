@@ -14,6 +14,16 @@ Two rules, both required:
   base-tree extract and outlives its rounds for that reason (repo-57). List it
   beside the worktrees at close-out.
 
+**Superseded 2026-10-02 (owner decision, unprompted: "You can remove worktrees
+when pr land. I don't see why we would need to keep them.").** The "finished —
+merged, or abandoned — not when its PR opens" bullet above, and the
+hold-until-finished sections below, now yield to `SKILL.md` step 10: remove
+builder, gate and fixer worktrees once the PR has landed and the orchestrator has
+looked once at its finished checks, each checked clean and its head on origin,
+unless CI shows a problem then, when the orchestrator asks the owner whether to
+keep them; a later follow-up goes to a fresh `fixer`. The history below stays as
+the reasoning the owner weighed.
+
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
 
@@ -41,7 +51,7 @@ forward is a fresh agent with the whole context rebuilt by hand, which costs far
 more than the disk did. An open PR still takes review comments, a rebase and
 follow-ups, and every one of those wants the agent that wrote it. Removing earlier
 is sometimes the right trade for 7 GB; make it a choice rather than discover it an
-hour later. The third session held every builder worktree to merge and paid almost nothing for it — 105 MB peak across a five-ticket batch, against the 7 GB above, because reviewers returned text and finished tickets were swept promptly. It is worth being precise that this is evidence about **cost, not about timing**: every branch in that batch opened its PR in its final builder round, so none was ever resumed afterwards and the trade was never actually tested. Holding to merge is cheap insurance; that batch did not have to collect on it.
+hour later. The third session held every builder worktree to merge and paid almost nothing for it — 105 MB peak across a five-ticket batch, against the 7 GB above, because reviewers returned text and finished tickets were swept promptly. It is worth being precise that this is evidence about **cost, not about timing**: every branch in that batch opened its PR in its final builder round, so none was ever resumed afterwards and the trade was never actually tested. Holding to merge is cheap insurance; that batch did not have to collect on it. **Superseded 2026-10-02 for the open-PR case:** `SKILL.md` step 10 removes the worktrees once the PR has landed and its finished checks have been looked at, so the agent is unresumable by design and a follow-up goes to a fresh `fixer`.
 
 **Split the rule by role: hold builders, retire reviewers early.** The unresumable
 cost is real for a *builder*, whose branch may still need a rebase or a follow-up.
@@ -133,6 +143,9 @@ recovery is expensive.
 
 ### Hold the reviewer's worktree until the ticket merges, like the builder's
 
+_Superseded 2026-10-02 by `SKILL.md` step 10: remove it once the PR has
+landed and you have looked once at its finished checks._
+
 **The rule used to be "remove it once its record is pushed and its exchange with
 the builder has ended". Two failures on 2026-09-03 say that condition cannot be
 evaluated, and the removal is not worth what it costs.**
@@ -168,6 +181,11 @@ Restoring is one command, `git worktree add <path> --detach <sha>`, and worked b
 times. Re-running the farm and build afterwards is on the agent, so tell it to.
 
 ### "The PR is open" is not "the exchange is over"
+
+_Superseded 2026-10-02 as a reason to hold a landed ticket's worktrees:
+`SKILL.md` step 10 removes them after the one look at finished checks, and
+tests that an agent is done by its completion notification, which is what this
+section asks for._
 
 The condition on removing a reviewer's worktree is that its record is pushed **and
 its conversation with the builder has ended**. Measured 2026-09-03, by an

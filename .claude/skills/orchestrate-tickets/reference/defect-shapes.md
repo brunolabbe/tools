@@ -173,6 +173,13 @@ a test that passed on vacuous input. Only gate mutations caught them.
 which reads as a detection. Confirm the failure is an assertion failure, not a
 load error, before counting the mutation as caught.
 
+**2026-10-01:** Test a claimed invariant on inputs the fix's own tests did not
+start from. repo-85's "called as often as pino" held for every acyclic cause
+chain and failed on a cyclic one (6,264 calls, line dropped), a shape none of
+the fix's tests began from. The re-gate form of this is in
+`roles/reviewer.md`, _When you are woken to re-gate_ ("Probe a fix from a seed
+state its own tests never started from").
+
 ## Verification traps
 
 - **A harness that cannot fail is the defect class that produced everything else
@@ -261,3 +268,7 @@ load error, before counting the mutation as caught.
   does not generalise is how a class recurs.
 - **Slow gates do not run here.** e2e and container builds stay unrun in this loop.
   Say so when reporting a PASS; the CI workflow is the first thing to exercise them.
+- **2026-10-01: a one-loop fixture table hides later rows from a mutation
+  sweep.** A mutation reports only the first failing row, so a mutation that
+  the first row catches says nothing about the other rows; target each row
+  (repo-83 gate 4 re-ran seven).

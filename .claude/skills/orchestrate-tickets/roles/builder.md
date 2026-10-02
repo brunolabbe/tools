@@ -98,6 +98,13 @@ the sentinelle repository, 2026-09-23).
   the branch edits, repoint them to the base **after** the gate reports which
   citations fail, using the MOVED list from the citations gate as your target.
 
+  **2026-10-01:** repointing one citation in a merged record makes the branch
+  own every moved citation in that record (repo-47's rule): repo-83 repointed
+  repo-77's second citation after repointing its first. And do not run
+  `npm run lint:fix` to clear lint: it rewrites files outside the branch (it
+  rewrote `scripts/preflight.mjs` from warnings on `main`; lg-1's builder
+  reverted it). Run `npm run format` and fix lint by hand.
+
 Append a dated entry to the ticket's Log in the commit that earns it. **The
 Log's shape is a claim, its command, and that command's output**
 (`.claude/skills/orchestrate-tickets/reference/records.md`).
