@@ -36,6 +36,16 @@ function capture(options: Partial<LoggerOptions> = {}): {
 
 const parse = (line: string | undefined): ErrLine => JSON.parse(line ?? "{}") as ErrLine;
 
+/** A non-enumerable own accessor: pino never reads it, so nothing here should either. */
+const withThrowingHiddenGetter = (error: Error): Error =>
+  Object.defineProperty(error, "hidden", {
+    get: () => {
+      throw new Error("boom");
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
 describe("the message", () => {
   test("a URL concatenated into it loses its query string", () => {
     const { logger, lines } = capture();
@@ -202,15 +212,6 @@ describe("an Error", () => {
 
   // Gate 2's G1: pino never reads a non-enumerable own accessor, so reading one
   // here must not be what turns a writable line into `fieldsDropped`.
-  const withThrowingHiddenGetter = (error: Error): Error =>
-    Object.defineProperty(error, "hidden", {
-      get: () => {
-        throw new Error("boom");
-      },
-      enumerable: false,
-      configurable: true,
-    });
-
   test("a throwing non-enumerable getter does not cost the line, with nothing to redact", () => {
     const { logger, lines } = capture();
     logger.error("probe failed", { err: withThrowingHiddenGetter(new Error("plain failure")) });
