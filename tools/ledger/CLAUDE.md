@@ -55,6 +55,9 @@ that fails the same way.
 **Identity comes from Cloudflare Access.** Two people, two addresses, one Access
 policy (`docs/02-DEPLOYMENT.md`, step 2). The tool has no login of its own and
 must not grow one; who did something is the Access identity on the request.
+`api/src/access.ts` verifies the token, a hook in `api/src/identity.ts` runs it
+on every API route but health, and a route reads the caller with
+`personOf(request)` — never from a header of its own.
 
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a

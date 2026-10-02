@@ -21,7 +21,24 @@ export const API_PREFIX = "/api";
  */
 export const ROUTES = {
   health: `${API_PREFIX}/health`,
+  me: `${API_PREFIX}/me`,
 } as const;
+
+/**
+ * Who a request is from: the Access identity, mapped to a person by the API's
+ * configuration (lg-3). `id` is the configured name for the person, which is
+ * what anything that records "who did this" keys on; `email` is the address
+ * Access vouched for.
+ */
+export interface Person {
+  id: string;
+  email: string;
+}
+
+/** `GET /api/me`: the caller, as the API identified them. */
+export interface MeResponse {
+  person: Person;
+}
 
 /**
  * `GET /api/health`.
