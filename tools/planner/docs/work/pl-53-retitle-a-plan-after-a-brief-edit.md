@@ -3,7 +3,7 @@ id: pl-53
 tool: planner
 title: A plan's title keeps the first draft's dates and length after a brief edit
 kind: fix
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-47]
 difficulty: standard
@@ -81,6 +81,41 @@ grows a dependency on `currentBrief` it does not otherwise have.
 - A budget-only edit's title is unchanged, asserted directly (not merely
   absent of a failure).
 - `npm run check` and `npm test -- --project planner` pass.
+
+## Review
+
+### Gate 1
+
+**Gate: CONCERNS** — 2026-10-02 · `24acb04...6c354c3` (`origin/main` still at `24acb04` after fetch) · code-review at medium · gated on Opus 5.5
+
+Gate 1 reviewed `6c354c3`; this re-issue resolves its coordinates into content the branch introduces at `4e99d08`, and content that predates the branch stays pinned to `24acb04`. Its words describe `6c354c3`: the pl-48 bullet below says that record cited line 201 without a pin and that the Log said no merged record is repointed, both true at `6c354c3` and both corrected by gate 2's round. The premise citation in the second low bullet now anchors on the comment above its assertion, because gate 2's round repeated the assertion's text in two more tests. CONCERNS rests on the e2e row alone: every Done-when line is proven or verified and nothing above low was found.
+
+| Done when                                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A brief edit that changes the day count or the departure's month is followed by a `GET` on the plan and on the plans list whose title reflects the edited brief | `tools/planner/api/test/plan-title.test.ts:107 "6 nights"` (open mode, 5 to 6 nights) ✓ · `tools/planner/api/test/plan-title.test.ts:126 "in November"` (October to November) ✓ · both readers compared on every read at `tools/planner/api/test/plan-title.test.ts:64 "toBe(detail)"` ✓. Positive control: with the retitle call removed at the head and the tests kept, the spec gave 3 failed, 1 passed (4) — proven |
+| A budget-only edit's title is unchanged, asserted directly                                                                                                      | `tools/planner/api/test/plan-title.test.ts:135-137 "budget: { kind"` — exact equality with the title read before the edit ✓ — proven                                                                                                                                                                                                                                                                                    |
+| `npm run check` and `npm test -- --project planner` pass                                                                                                        | check exit 0; planner 77 files, 1305 tests at the head against 76 and 1301 at `24acb04`; the vitest diff is one new file, nothing deleted or reworded — verified                                                                                                                                                                                                                                                        |
+| (not a Done-when line) the amended e2e step reopens the plan by its new title                                                                                   | `tools/planner/e2e/revise.spec.ts:223-225 "expect(retitled).toContain("` · `tools/planner/e2e/revise.spec.ts:228 "reopenFromTheList(page, retitled)"` — **unproven (gate)**, planner.yml; Chromium is not installed here                                                                                                                                                                                                |
+
+- **Six paths change a plan's brief or which revision is current, and all six now leave the title matching it.** Found by grepping `tools/planner/api/src` for every prepared statement, `insertPlan`, `insertRevision` and `persist(`, and by reading the four POST routes in `routes/plans.ts`:
+  1. creation: `tools/planner/api/src/runs/orchestrator.ts@24acb04:201 "title: intakeTitle(brief) ?? UNTITLED,"`, titled before this branch;
+  2. first draft: `tools/planner/api/src/runs/orchestrator.ts@24acb04:485 "composed.revision, timestamp, null)"`, composed from the same brief object as path 1, so the retitle writes the same string; every test reads its title after this point;
+  3. restore: `tools/planner/api/src/runs/revise.ts@24acb04:368 "persist(context, planId, next, createdAt"`, whose brief is the target's (`tools/planner/itinerary/src/restore.ts@24acb04:29 "brief: structuredClone(target.brief)"`); tested at `tools/planner/api/test/plan-title.test.ts:153-157 "revision: 1 }"`;
+  4. move or remove: `tools/planner/api/src/runs/revise.ts@24acb04:450 "persist(context, planId, revision, createdAt"`, brief carried unchanged; no title test, by reading only;
+  5. re-plan: `tools/planner/api/src/runs/revise.ts@24acb04:675-681 "days, ran })"`, brief carried unchanged; no title test, by reading only;
+  6. brief edit: `tools/planner/api/src/runs/revise.ts@24acb04:873-881 "everyDay: slice.length"`; tested, rows 1 and 2.
+
+  Paths 2 to 6 all reach the one new call, `tools/planner/api/src/runs/orchestrator.ts:596 "retitlePlan(context.db, planId, intakeTitle(revision.brief)"`, inside `persist`'s transaction, and `persist` is the only caller of `tools/planner/api/src/db/plans.ts@24acb04:197 "export function insertRevision(db: Database"`. Not counted: a pin, which changes neither the brief nor which revision is current; and no migration writes either table (`tools/planner/api/src/db/schema.ts@24acb04:146 "BEFORE UPDATE ON plan_revisions"`).
+
+- **No hand-set title exists for the fix to overwrite.** The mutating plan routes are `tools/planner/api/src/routes/plans.ts@24acb04:76 "app.post(ROUTES.plans"`, `tools/planner/api/src/routes/plans.ts@24acb04:92 "ROUTES.planItemPin"`, `tools/planner/api/src/routes/plans.ts@24acb04:104 "ROUTES.planRevisions"` and `tools/planner/api/src/routes/plans.ts@24acb04:134 "ROUTES.runCancel"`; no revise request kind (replan, move, remove, restore, brief) carries a title, and `web/src` has no rename control. So the retitle on paths 4 and 5 can change only a title that went stale before this ships.
+- **No contract or persisted-shape change.** Nothing under `tools/planner/contract` or in `db/schema.ts` is touched; `tools/planner/api/src/db/plans.ts:524 "UPDATE plans SET title = ? WHERE id = ?"` writes the existing column with the same function `insertPlan` already used.
+- **low** · The new import line in `runs/orchestrator.ts` moves a merged record's anchor: pl-48's Review section (record line 168) cites `tools/planner/api/src/runs/orchestrator.ts@24acb04:201 "title: intakeTitle(brief) ?? UNTITLED,"` without the pin, and at the head that text is on line 202. `node scripts/citations-gate.mjs --against 24acb04` exits 0 (144 enforced, 0 failing) and lists it as MOVED outside the changed paths, the debt CI accepts. The bare run lists 18 failing records; the other 17 cite files this branch does not touch. The Log says no merged record is repointed and does not mention this one. Remedy: pin that citation to `@24acb04` in this PR. No anchor became indistinct: pl-46's `tools/planner/e2e/revise.spec.ts@24acb04:143 ".first().innerText()"` still verifies, 26 of 26.
+- **low** · `nfr:maintainability` — only the first test asserts the premise that the draft names 5 nights (`tools/planner/api/test/plan-title.test.ts:102-103 "The premise: the first draft"`). The month and restore tests build their expected title with a string replace, which does nothing when the fragment is absent. If the fixture's dates ever stop being open with 5 nights, those two tests would expect the unedited title and pass on an unfixed tree. Repeat the premise in each.
+- **low · open decision** · A plan stored with a stale title before this ships (a dates edit since pl-47 and pl-48) stays stale until its next revision. The Log discloses this and no backfill was written. (a) Accept it: the next revision of any kind now heals the title. Recommended, because a backfill has to run `intakeTitle` in TypeScript at startup, since a SQL migration cannot. (b) File a ticket for a one-time startup backfill over every plan's latest revision.
+- **dropped** · The e2e reads the heading with a non-retrying `textContent()`. It runs after the auto-retrying assertion on the Version 5 crumb, and the crumb and the heading render from the same `PlanView`, so there is no race.
+- **dropped** · There is no test for a window-mode month. That clause is a branch of `intakeTitle` that no test under `api/test` asserts at all (a grep for an `around` plus month phrase finds none); the gap predates this branch, and Build step 3 puts `title.ts` out of scope.
+- **findings** · code-review at medium returned 5; 3 carried, 2 dropped.
+- NFR: security n/a (no new input; the title is derived on the server) · performance n/a (one UPDATE inside a transaction that is already open) · reliability ✓ (written in the revision's own transaction) · maintainability — above.
 
 ## Log
 
