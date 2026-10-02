@@ -116,6 +116,37 @@ The fifth open decision was not put to the owner: the root-level deployment
 edits riding in the `feat(ledger)` PR. They touch no other tool's path, so they
 stay as built.
 
+## Decisions after gate 1 — answered 2026-10-02 by the owner, not open
+
+Gate 1 found four points that needed an owner's answer. The orchestrator
+checked two premises first: `config.ts` compared `env["NODE_ENV"] ===
+"production"`, and no ledger ticket at `b7fb3fb` named a `/me` route. It then
+put all four to the owner through `AskUserQuestion`. They are labelled here by
+the gate's finding numbers.
+
+**F2. The question was:** how should the dev-identity production guard work?
+Options: invert it, accepting `DEV_IDENTITY` only when `NODE_ENV` is unset,
+`development` or `test` / normalise `NODE_ENV` (trim, lower-case) before
+comparing. **The answer: normalise `NODE_ENV`.** This overrode both the gate's
+recommendation and the orchestrator's, which were to invert it.
+
+**F3. The question was:** keep `GET /api/me`, `ROUTES.me`, `Person` and
+`MeResponse` in the contract? Options: keep as built / a probe route in tests
+only / the route stays and the types move to the API package. **The answer:
+keep as built**, the gate's and the orchestrator's recommendation.
+
+**F4. The question was:** cap how long a stale key set may be used while the
+key endpoint is down? Options: cap at about a day / leave it unbounded. **The
+answer: cap at about a day**, the gate's and the orchestrator's
+recommendation. After about 24 hours without a successful refresh, requests are
+refused rather than checked against the old keys.
+
+**F7. The question was:** answer 403 before 404 under `/api/`? Options: leave
+it / 403 before 404. **The answer: leave it**, the gate's and the
+orchestrator's recommendation. A path under `/api/` that matches no route still
+gets the typed 404, which tells an unauthenticated caller nothing the public
+repository does not.
+
 ## Log
 
 ### 2026-10-01 — built, as two stacked branches (Opus 5.5 builder)
@@ -248,3 +279,79 @@ stays the unmapped address's code.
   `expected { code: 'UNAUTHENTICATED', … } to deeply equal { code: 'FORBIDDEN', … }`.
 - `npx vitest run --project ledger` → `7 passed (7)` files, `53 passed (53)`
   tests.
+
+### 2026-10-02 — gate 1's round fixed (Opus 5.5 builder)
+
+Each finding was reproduced before it was fixed. The reproduction was a
+throwaway spec, written fresh rather than taken from the gate's harness, run
+against the tip the gate reviewed, after a rebuild:
+
+- F1: the dropped key still got `200` after 61 minutes.
+- F2: `"production"` was refused, while `"Production"`, `"PRODUCTION"`,
+  `" production"` and `"production "` were all accepted.
+- F4: the first request got `502` with `"details":{"status":503}`, and the
+  second got `403`. A key held 27 hours into an outage still got `200`.
+- F6: `nbf` one second ahead got `403`.
+- F8: a valid token with `!!!` appended got `200`.
+
+The same spec after the fixes printed `403`, all five spellings refused,
+`502` and `502` with no `details`, `502`, `200` and `403`. No finding was
+refuted.
+
+- **F1, fixed.** When a refresh succeeds, the new set is now the whole answer
+  (`tools/ledger/api/src/access.ts`, `JwksCache.key`). The held key stands in
+  only when no refresh succeeded.
+- **F2, fixed per the owner's answer:** `isProduction` trims and lower-cases
+  `NODE_ENV`. One part of the finding is left as it was: `overrides.production`
+  still beats the environment. That is how every field of `loadApiConfig`'s
+  overrides works, and the overrides reach only tests and embedders, never the
+  environment of a running process.
+- **F3, kept as built**, per the owner.
+- **F4, fixed.**
+  - While the last fetch failed, a key never seen answers `UNREACHABLE` for
+    every caller in the window, not only the one that made the fetch.
+  - A held key is trusted for at most 24 hours without a successful refresh,
+    per the owner's answer. After that, requests answer `UNREACHABLE`.
+  - The 502 body no longer carries the upstream's status, and no longer says
+    the key set "held no usable key". The reason is logged instead.
+- **F5, fixed.** New tests cover:
+  - the fetch being made with `redirect: "error"` and an `AbortSignal`;
+  - a token with no `kid`;
+  - a real HMAC forgery keyed with the published public key's PEM.
+
+  These guard against deletion rather than a live defect. With
+  `redirect: "error"` removed, the new test fails, and the same holds with the
+  signal removed. **The test checks that a signal is present, not that it fires
+  at 5 s.** That would need a real five-second wait or an injectable timeout,
+  and this round adds neither. The HMAC test passes even without the algorithm
+  pin, because the verifier only ever calls RSA-SHA256. It proves the forgery
+  fails, not which check stops it. The pin itself is still guarded by the
+  existing test that labels a token HS256.
+
+- **F6, fixed:** `nbf` gets 10 s of leeway. `exp` gets none.
+- **F7, left**, per the owner.
+- **F8, fixed:** all three segments must be strict base64url.
+- **F9, fixed on branch 1 by correcting the sentence**, not by giving the
+  planner two status lines. The comment in `packages/core/src/errors.ts` now
+  names the ledger and the downloader, and says the planner maps neither and
+  would answer 500. The dispatch kept branch 1 to the codes and the entries an
+  exhaustive map needs. The planner's table is `Partial`, and the planner
+  raises neither code, so the defect was the sentence. Branch 2 is rebased onto
+  branch 1.
+- **Two corrections to the first entry above.**
+  - It says the production-mode run of the built `dist` answered `/api/me` with
+    `401`. That was true at the time; since decision A3 the same call answers
+    `403`.
+  - It says a key never seen gets `UNREACHABLE` "because that failure is not
+    the caller's". Until this round, that held only for the request that made
+    the fetch. Others in the same 30-second window got `403 UNAUTHENTICATED`
+    (gate 1, F4).
+- New tests were added at the end of their specs, below every line the gate
+  cited.
+  - On the fixed code, `npx vitest run tools/ledger/api/test/access.test.ts
+tools/ledger/api/test/config-access.test.ts` gives 2 of 2 files and 39 of 39
+    tests, and `npx vitest run tools/ledger` gives 7 of 7 files and 64 of 64
+    tests.
+  - With the old `access.ts` swapped back in, 6 of the 29 access tests fail:
+    every new one that targets a live defect.
+  - With the old literal `NODE_ENV` comparison, the spelling test fails.

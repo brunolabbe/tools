@@ -337,3 +337,160 @@ describe("what the check never does", () => {
     expectRefused(await me(harness, elsewhere), "UNAUTHENTICATED", 403);
   });
 });
+
+/**
+ * Gate 1's round on lg-3 (F1, F4, F5, F6, F8). Appended rather than placed
+ * beside their neighbours, so no line above moves.
+ */
+describe("the key set, when it changes or fails", () => {
+  const HOUR_MS = 60 * 60 * 1000;
+
+  test("a key Cloudflare dropped is refused once the hour is up, by every caller", async () => {
+    let published = [KEY];
+    const harness = await start({ keys: () => published });
+    expect((await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }))).statusCode).toBe(
+      200,
+    );
+
+    published = [ROTATED_KEY];
+    advance(harness, HOUR_MS + 60_000);
+    const nowSec = harness.nowSec();
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, async () => await me(harness, signToken({ key: KEY, nowSec }))),
+    );
+
+    for (const response of responses) expectRefused(response, "UNAUTHENTICATED", 403);
+    expect(harness.urls).toHaveLength(2);
+  });
+
+  test("with nothing cached and the endpoint down, no caller is blamed for it", async () => {
+    const harness = await start({ fetch: async () => new Response("down", { status: 503 }) });
+    const token = signToken({ key: KEY, nowSec: harness.nowSec() });
+
+    // The first makes the fetch; the second, inside the floor, does not — and
+    // both are told the truth.
+    expectUnreachable(await me(harness, token));
+    expectUnreachable(await me(harness, token));
+  });
+
+  test("a key set with no usable key is the endpoint's failure, not the caller's", async () => {
+    const harness = await start({ fetch: async () => Response.json({ keys: [] }) });
+    expectUnreachable(await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() })));
+  });
+
+  test("a held key outlives an outage of the key endpoint by a day, and no longer", async () => {
+    let up = true;
+    const served = jwksFetch(() => [KEY]);
+    const harness = await start({
+      fetch: async (input, init) =>
+        up ? await served.fetch(input, init) : new Response("down", { status: 503 }),
+    });
+    expect((await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }))).statusCode).toBe(
+      200,
+    );
+
+    up = false;
+    advance(harness, 23 * HOUR_MS);
+    expect((await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }))).statusCode).toBe(
+      200,
+    );
+
+    advance(harness, 2 * HOUR_MS);
+    expectUnreachable(await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() })));
+
+    // And a successful refresh ends it.
+    up = true;
+    advance(harness, 60_000);
+    expect((await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }))).statusCode).toBe(
+      200,
+    );
+  });
+
+  test("is fetched refusing redirects, with a deadline", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    const served = jwksFetch(() => [KEY]);
+    const harness = await start({
+      fetch: async (input, init) => {
+        inits.push(init);
+        return await served.fetch(input, init);
+      },
+    });
+
+    await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }));
+
+    expect(inits).toHaveLength(1);
+    expect(inits[0]?.redirect).toBe("error");
+    expect(inits[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("the token's spelling and timing", () => {
+  test("a token with no key id is a 403", async () => {
+    const harness = await start();
+    const token = signToken({ key: KEY, nowSec: harness.nowSec(), header: { kid: undefined } });
+    expectRefused(await me(harness, token), "UNAUTHENTICATED", 403);
+    expect(harness.urls).toEqual([]);
+  });
+
+  test("an HMAC forgery keyed with the published public key is refused", async () => {
+    // The classic confusion: sign HS256 with the RSA public key as the secret,
+    // and hope the verifier uses the key it found for whatever `alg` says.
+    const { createHmac, createPublicKey } = await import("node:crypto");
+    const harness = await start();
+    const secret = createPublicKey(KEY.privateKey).export({ type: "spki", format: "pem" });
+    const valid = signToken({ key: KEY, nowSec: harness.nowSec() });
+    const head = encode({ alg: "HS256", kid: KEY.kid, typ: "JWT" });
+    const body = valid.split(".")[1] ?? "";
+    const signature = createHmac("sha256", secret).update(`${head}.${body}`).digest("base64url");
+
+    expectRefused(await me(harness, `${head}.${body}.${signature}`), "UNAUTHENTICATED", 403);
+  });
+
+  test("a not-before a few seconds ahead of this clock is tolerated, a minute is not", async () => {
+    const harness = await start();
+    const nowSec = harness.nowSec();
+
+    const slightly = signToken({ key: KEY, nowSec, claims: { nbf: nowSec + 5 } });
+    const clearly = signToken({ key: KEY, nowSec, claims: { nbf: nowSec + 60 } });
+
+    expect((await me(harness, slightly)).statusCode).toBe(200);
+    expectRefused(await me(harness, clearly), "UNAUTHENTICATED", 403);
+  });
+
+  test("a valid token written any other way is refused", async () => {
+    const harness = await start();
+    const token = signToken({ key: KEY, nowSec: harness.nowSec() });
+    const [head = "", body = "", signature = ""] = token.split(".");
+    const standardAlphabet = signature.replaceAll("-", "+").replaceAll("_", "/");
+    expect(standardAlphabet).not.toBe(signature);
+
+    expect((await me(harness, token)).statusCode).toBe(200);
+    for (const variant of [
+      `${token}!!!`,
+      `${token}=`,
+      `${head}.${body}.${standardAlphabet}`,
+      `${head}.${body}.${signature.slice(0, 10)} ${signature.slice(10)}`,
+    ]) {
+      expectRefused(await me(harness, variant), "UNAUTHENTICATED", 403);
+    }
+  });
+});
+
+function advance(harness: Harness, ms: number): void {
+  harness.clock.now = new Date(harness.clock.now.getTime() + ms);
+}
+
+function expectUnreachable(response: Awaited<ReturnType<typeof me>>): void {
+  expect(response.statusCode).toBe(502);
+  // The default sentence and no details: a caller who proved nothing is not
+  // told the upstream's status or what its answer looked like.
+  expect(response.json<ErrorResponse>().error).toEqual({
+    code: "UNREACHABLE",
+    message: DEFAULT_ERROR_MESSAGES.UNREACHABLE,
+    retryable: true,
+  });
+}
+
+function encode(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}

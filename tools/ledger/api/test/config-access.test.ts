@@ -111,3 +111,23 @@ describe("loadApiConfig: Access", () => {
     );
   });
 });
+
+/** Gate 1, F2: the guard reads production mode however it is spelled. */
+describe("loadApiConfig: production mode, however it is written", () => {
+  test("refuses the development identity for any spelling of production", () => {
+    for (const value of ["production", "Production", "PRODUCTION", " production", "production "]) {
+      expect(
+        refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX, ACCESS_PEOPLE: PEOPLE }),
+        value,
+      ).toMatch(/DEV_IDENTITY.*production/u);
+    }
+  });
+
+  test("and only production: other names still allow it", () => {
+    for (const value of ["development", "test", "", "productionish"]) {
+      expect(refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX, ACCESS_PEOPLE: PEOPLE }), value).toBe(
+        undefined,
+      );
+    }
+  });
+});

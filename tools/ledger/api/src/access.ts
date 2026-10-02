@@ -36,7 +36,8 @@ const ALGORITHM = "RS256";
  * How long a fetched key set is trusted before it is fetched again on the next
  * request. Access rotates its signing keys every six weeks and keeps the old
  * one valid for a week after; an hour bounds how long a key Cloudflare revoked
- * stays trusted here, at the cost of one fetch an hour.
+ * stays trusted here while the key endpoint answers, at the cost of one fetch
+ * an hour. While it does not, `JWKS_STALE_LIMIT_MS` is the bound.
  */
 const JWKS_MAX_AGE_MS = 60 * 60 * 1000;
 
@@ -51,6 +52,31 @@ const JWKS_MIN_REFETCH_MS = 30 * 1000;
 
 /** A key-set fetch that has not answered by now is treated as a failure. */
 const JWKS_TIMEOUT_MS = 5000;
+
+/**
+ * How long a key set may go unrefreshed and still be trusted while the key
+ * endpoint is failing (gate 1, F4; the owner's decision). Up to this, an outage
+ * at Cloudflare does not lock the household out; past it, a key Cloudflare may
+ * have revoked meanwhile is no longer taken on faith, and every request is
+ * refused as `UNREACHABLE` until a refresh succeeds.
+ */
+const JWKS_STALE_LIMIT_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Clock leeway on `nbf` only (gate 1, F6). Access stamps `nbf` at the moment it
+ * signs, so an origin clock a moment behind Cloudflare's would otherwise refuse
+ * a sign-in that is seconds old. `exp` gets none: an hour-long token loses
+ * nothing by expiring on time.
+ */
+const NBF_LEEWAY_SEC = 10;
+
+/**
+ * A base64url segment, strictly. Node's decoder skips characters outside the
+ * alphabet and accepts padding and `+/`, so without this a token could be
+ * written several ways and still verify (gate 1, F8) — harmless to the
+ * signature, but not to anything that one day keys on the token's string.
+ */
+const SEGMENT = /^[A-Za-z0-9_-]+$/u;
 
 export type Fetch = typeof globalThis.fetch;
 
@@ -108,6 +134,10 @@ function decodeJson(segment: string): Record<string, unknown> {
  * names a key the set lacks, and in either case never sooner than
  * `JWKS_MIN_REFETCH_MS` after the last attempt. So no request makes more than
  * one fetch, and no number of requests makes more than one fetch per window.
+ *
+ * When a refresh succeeds, the new set is the whole answer: a key it no longer
+ * holds is gone, whatever was cached before (gate 1, F1). Only when no refresh
+ * succeeded does the held set stand in, and only for `JWKS_STALE_LIMIT_MS`.
  */
 export class JwksCache {
   readonly #url: string;
@@ -117,6 +147,8 @@ export class JwksCache {
   #keys = new Map<string, KeyObject>();
   #fetchedAt = Number.NEGATIVE_INFINITY;
   #attemptedAt = Number.NEGATIVE_INFINITY;
+  /** Whether the most recent fetch failed — what a key never seen is judged by. */
+  #lastAttemptFailed = false;
   #inFlight: Promise<void> | undefined;
 
   constructor(options: { url: string; fetch: Fetch; now: () => Date; logger: AppLogger }) {
@@ -126,7 +158,11 @@ export class JwksCache {
     this.#logger = options.logger;
   }
 
-  /** The key for `kid`, or `undefined` when the team has none by that id. */
+  /**
+   * The key for `kid`, or `undefined` when the team has none by that id.
+   * Throws `UNREACHABLE` when the answer cannot be known: the key endpoint is
+   * failing and the set held is either missing the key or too old to trust.
+   */
   async key(kid: string): Promise<KeyObject | undefined> {
     const now = this.#now().getTime();
     const cached = this.#keys.get(kid);
@@ -141,20 +177,54 @@ export class JwksCache {
     if (this.#inFlight !== undefined) {
       try {
         await this.#inFlight;
-      } catch (error) {
-        // A key already held stays usable through an outage of the key
-        // endpoint; a key never seen cannot be checked, which is not the
-        // token's fault and is not answered as if it were.
-        if (cached === undefined) throw error;
-        this.#logger.warn("access keys could not be refreshed; using the cached set", {
-          code: AppError.from(error).code,
-        });
+        // A fresh set is the whole answer: never the key held before it (F1).
+        return this.#keys.get(kid);
+      } catch {
+        // Judged below, the same as a caller held back by the floor.
       }
     }
-    return this.#keys.get(kid) ?? cached;
+    return this.#withoutAFreshSet(kid, now);
+  }
+
+  /** No refresh succeeded for this caller: it failed, or the floor held it back. */
+  #withoutAFreshSet(kid: string, now: number): KeyObject | undefined {
+    const held = this.#keys.get(kid);
+    if (held !== undefined) {
+      // Through an outage of the key endpoint, a key already held stays usable
+      // — for a day, and no longer (F4).
+      if (now - this.#fetchedAt < JWKS_STALE_LIMIT_MS) return held;
+      throw new AppError("UNREACHABLE");
+    }
+    // A key never seen, while the endpoint that would say whether it exists is
+    // failing, cannot be checked. That is not the token's fault and is not
+    // answered as if it were — for every caller in the window, not only the one
+    // whose request made the fetch (F4).
+    if (this.#lastAttemptFailed) throw new AppError("UNREACHABLE");
+    return undefined;
   }
 
   async #refresh(): Promise<void> {
+    try {
+      this.#keys = await this.#fetchKeys();
+      this.#fetchedAt = this.#now().getTime();
+      this.#lastAttemptFailed = false;
+    } catch (error) {
+      this.#lastAttemptFailed = true;
+      throw error;
+    }
+  }
+
+  /**
+   * One fetch of the key set. A failure is logged here, with what went wrong,
+   * and leaves as a bare `UNREACHABLE`: the caller proved nothing, and the
+   * upstream's status or the shape of its answer is not theirs to read (F4).
+   */
+  async #fetchKeys(): Promise<Map<string, KeyObject>> {
+    const fail = (reason: string, fields: Record<string, unknown> = {}): never => {
+      this.#logger.warn("access keys could not be fetched", { reason, ...fields });
+      throw new AppError("UNREACHABLE");
+    };
+
     let body: unknown;
     try {
       const response = await this.#fetch(this.#url, {
@@ -162,13 +232,11 @@ export class JwksCache {
         redirect: "error",
         signal: AbortSignal.timeout(JWKS_TIMEOUT_MS),
       });
-      if (!response.ok) {
-        throw new AppError("UNREACHABLE", undefined, { details: { status: response.status } });
-      }
+      if (!response.ok) fail("status", { status: response.status });
       body = await response.json();
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError("UNREACHABLE", undefined, { cause: error });
+      fail("fetch", { error: error instanceof Error ? error.name : String(error) });
     }
 
     const keys = new Map<string, KeyObject>();
@@ -182,11 +250,8 @@ export class JwksCache {
         // One unreadable key does not cost the others.
       }
     }
-    if (keys.size === 0) {
-      throw new AppError("UNREACHABLE", "The identity provider's key set held no usable key.");
-    }
-    this.#keys = keys;
-    this.#fetchedAt = this.#now().getTime();
+    if (keys.size === 0) fail("no-usable-key");
+    return keys;
   }
 }
 
@@ -245,7 +310,9 @@ export function createIdentityVerifier(options: {
     // A repeated header is not a token, it is two claims; refuse rather than pick.
     if (typeof header !== "string" || header === "") throw new TokenRefused("missing");
     const parts = header.split(".");
-    if (parts.length !== 3) throw new TokenRefused("malformed");
+    if (parts.length !== 3 || !parts.every((part) => SEGMENT.test(part))) {
+      throw new TokenRefused("malformed");
+    }
     const [encodedHeader = "", encodedPayload = "", encodedSignature = ""] = parts;
 
     const head = decodeJson(encodedHeader);
@@ -275,7 +342,7 @@ export function createIdentityVerifier(options: {
     const exp = claims["exp"];
     if (typeof exp !== "number" || nowSec >= exp) throw new TokenRefused("expired");
     const nbf = claims["nbf"];
-    if (nbf !== undefined && (typeof nbf !== "number" || nowSec < nbf)) {
+    if (nbf !== undefined && (typeof nbf !== "number" || nowSec + NBF_LEEWAY_SEC < nbf)) {
       throw new TokenRefused("not-yet-valid");
     }
 

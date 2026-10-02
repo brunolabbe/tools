@@ -109,6 +109,15 @@ function logLevel(raw: string | undefined): LogLevel {
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
 }
 
+/**
+ * Production mode, read forgivingly (gate 1, F2; the owner's decision): the
+ * guard it feeds refuses `DEV_IDENTITY`, so `Production` or a padded
+ * ` production ` must count as production rather than slip past a literal match.
+ */
+function isProduction(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "production";
+}
+
 /** A DNS label, so the key set's host cannot be steered anywhere by its own setting. */
 const TEAM_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 
@@ -189,7 +198,7 @@ export function loadApiConfig(
     webDir: overrides.webDir ?? optionalPath(env["WEB_DIR"]),
     corsOrigins: overrides.corsOrigins ?? list(env["CORS_ORIGINS"]),
     logLevel: overrides.logLevel ?? logLevel(env["LOG_LEVEL"]),
-    production: overrides.production ?? env["NODE_ENV"] === "production",
+    production: overrides.production ?? isProduction(env["NODE_ENV"]),
     access: overrides.access ?? loadAccessConfig(env),
   };
   // After the overrides, so a test cannot build a configuration the process
