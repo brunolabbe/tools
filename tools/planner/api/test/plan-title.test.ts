@@ -112,6 +112,8 @@ describe("a plan's title follows its brief", () => {
     await withHarness(async (harness) => {
       const planId = await draft(harness);
       const drafted = await titleOf(harness, planId);
+      // The premise, as in the first test: both `replace` calls below are no-ops without it.
+      expect(drafted).toContain("for 5 nights");
 
       await editBrief(harness, planId, {
         dates: { kind: "exact", departure: "2026-10-28", return: "2026-11-02" },
@@ -140,6 +142,8 @@ describe("a plan's title follows its brief", () => {
     await withHarness(async (harness) => {
       const planId = await draft(harness);
       const drafted = await titleOf(harness, planId);
+      // The premise, as in the first test: the `replace` below is a no-op without it.
+      expect(drafted).toContain("for 5 nights");
       await editBrief(harness, planId, { dates: { kind: "open", nights: 7 } });
       expect(await titleOf(harness, planId)).toBe(drafted.replace("5 nights", "7 nights"));
 
