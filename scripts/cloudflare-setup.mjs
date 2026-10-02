@@ -40,6 +40,8 @@
  * has — so the secret is in the terminal's scrollback and nowhere else.
  */
 
+import { pathToFileURL } from "node:url";
+
 const API = "https://api.cloudflare.com/client/v4";
 
 /**
@@ -612,7 +614,11 @@ function fail(message) {
   throw new CliError(message);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// `pathToFileURL`, never `file://` + the path: on Windows `argv[1]` is `D:\a\...`
+// and the concatenation never matches `import.meta.url`, so `main` never runs and
+// the script exits 0 for every invocation — a refusal included. The same mismatch
+// shows on Linux through a symlink. See `scripts/commit-message.mjs`'s guard.
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     process.stderr.write(`cloudflare-setup: ${err.message}\n`);
     process.exit(1);

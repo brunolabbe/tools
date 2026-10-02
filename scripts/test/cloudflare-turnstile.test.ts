@@ -325,7 +325,7 @@ function runAsProcess(scenario: "conflict" | "forbidden") {
         encoding: "utf8",
         shell: false,
         env: {
-          PATH: process.env.PATH,
+          ...process.env,
           CLOUDFLARE_API_TOKEN: "fake-token",
           FAKE_CF_SCENARIO: scenario,
           FAKE_CF_WRITES: writes,

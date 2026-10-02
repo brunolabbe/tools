@@ -138,12 +138,13 @@ file. Either order works, but they must not run concurrently.
     `raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json` read
     2026-10-02, lists `secret` among the required fields of the result of
     `GET /accounts/{account_id}/challenges/widgets/{sitekey}` and omits it from the
-    list. That is the document, not the live API: still not measured there.) Also
-    unmeasured and taken from memory of Cloudflare's API
-    reference (the docs site is not reachable from here): the list's `per_page`
-    ceiling of 1000, the create body's `name`/`domains`/`mode` and the
-    `sitekey`/`secret` fields of its answer. The first live `--apply` is the
-    check; a wrong field name fails loudly there (`envLines` throws), not
+    list. That is the document, not the live API: still not measured there.) The
+    list's `per_page` ceiling of 1000, the create body's `name`/`domains`/`mode`
+    and the `sitekey`/`secret` fields of its answer were taken from memory of
+    Cloudflare's API reference when built (the docs site is not reachable from
+    here); gate 1 later confirmed all of them against the published OpenAPI and the
+    `cloudflare` SDK, which is still not the live API. The first live `--apply` is
+    the check; a wrong field name fails loudly there (`envLines` throws), not
     silently.
   - **The brief had wrong or left open:** (1) Build 5 says the tests go in
     `scripts/test/cloudflare-setup.test.ts`; they are in a new
@@ -188,3 +189,14 @@ file. Either order works, but they must not run concurrently.
     (lines 117 and 257 there), not repointed to bare head lines, which would
     move again on the next edit to the script. That supersedes the repoint to
     `:127` and `:329` recorded above.
+  - **Gate 2's three findings.** The entry guard is now
+    `process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href`
+    (the form `scripts/commit-message.mjs` uses), so the process tests do not
+    depend on the Windows-broken `file://` concatenation. Shown on Linux with a
+    script in a directory whose name has a space: before, exit 0 and no output;
+    after, exit 1 and the permission message. Not shown through a symlink: there
+    `argv[1]` is the link and `import.meta.url` the real path, so the guard
+    mismatches before and after. The child process now gets `...process.env` with
+    the test's overrides on top, as `scripts/test/agent-cost.test.ts` does, and the
+    stale sentence about unmeasured fields above is corrected. Windows itself was
+    not run.
