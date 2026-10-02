@@ -3,7 +3,7 @@ id: repo-83
 tool: repo
 title: spawn-safety's `shell: false` check is per file, not per call, and nothing guards the widened pattern
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -76,7 +76,7 @@ The options as filed:
   `CLAUDE.md` states ("never invoke a shell"). Leaves the call pattern
   unguarded, as-is.
 
-## Build (decided: (a), deferred — not built)
+## Build (decided: (a); built 2026-10-01)
 
 1. Rewrite "every file that spawns says `shell: false` explicitly" to
    evaluate each matched call's own argument list plus, where a call passes a
@@ -91,7 +91,7 @@ The options as filed:
    `scripts/review-record.mjs` (7), `scripts/test/preflight.test.ts` (5) —
    re-measure first, this is a snapshot.
 
-## Done when (decided: (a), deferred — not built)
+## Done when (decided: (a); built 2026-10-01)
 
 - A call to `spawnSync`, `execFile` or `execFileSync` whose own options carry
   no `shell: false`, in a file that has one elsewhere, fails
@@ -99,6 +99,101 @@ The options as filed:
 - A pattern narrowed back to `spawn(` alone fails the new guard test.
 - Every call in the scan passes the per-call check.
 - `npm run check` and the `core` and `repo` suites pass.
+
+## Review
+
+### Gate 1
+
+**Gate: CONCERNS** — 2026-10-01 · `b7fb3fb...6970cee` (base `b7fb3fb`, still `origin/main` after the gate fetched; gated at `6970cee`, coordinates re-resolved at `bf143f4`) · code-review at medium
+
+Re-issued at `bf143f4` with its words, rows and verdicts unchanged. Five citations became prose naming `6970cee`, because gate 2 deleted the text they pointed at: `blankComments`, the old header limits, the old `CHILD_PROCESS_IMPORT`, the `SHELL_FALSE.test(args)` check and the line-87 parenthetical. The other branch citations are repointed by coordinate only.
+
+| Done when                                                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A call to `spawnSync`, `execFile` or `execFileSync` whose own options carry no `shell: false`, in a file that has one elsewhere, fails `spawn-safety.test.ts`, shown red before the fix | **proven** — `packages/core/test/spawn-safety.test.ts:113 "{ line: 3, call:"` (a `spawnSync` beside a safe one) and `packages/core/test/spawn-safety.test.ts:157 "name).toHaveLength(1)"` (each member alone). Red reproduced by the gate: the base copies of the three fixed files under the head test failed 1 of 10 and named nine calls, two of them `execFileSync` in files that say `shell: false` elsewhere ✓ |
+| A pattern narrowed back to `spawn(` alone fails the new guard test                                                                                                                      | **proven** — `packages/core/test/spawn-safety.test.ts:158 "toHaveLength(name ==="`. Mutations `SPAWN_CALLS = ["spawn"]` and a pattern hard-coded to `spawn` each failed 3 of 10, on assertions ✓                                                                                                                                                                                                                     |
+| Every call in the scan passes the per-call check                                                                                                                                        | **proven** — `packages/core/test/spawn-safety.test.ts:88 "callsWithoutShellFalse(source.text).map"`, 10 of 10 at head; four real calls are outside the scan (the med below) ✓                                                                                                                                                                                                                                        |
+| `npm run check` and the `core` and `repo` suites pass                                                                                                                                   | **verified** — `scripts/preflight.mjs` ran `npm run check` and `npm test`, both ok; `npm test -- --project core --project repo` 19 files, 689 of 689 at head against 684 of 684 at `b7fb3fb` (+5, the new describe block). The one replaced test is stricter; no other test lost an assertion ✓                                                                                                                      |
+
+- Population, measured independently of the branch (a `@babel/parser` pass over every file `git ls-files` lists): 31 files import `node:child_process`, all by a named import; 159 calls bound to an import — 126 `spawnSync`, 21 `execFileSync`, 12 `spawn`, none to `execFile`, `exec`, `execSync` or `fork` — every one carrying `shell: false`. The guard asks 157: 155 of those, plus two injected parameters named `spawn`. The four it never asks are the med below.
+- **med** · `nfr:security` — two findings, one mechanism. Comment blanking is string-unaware: a `/*` inside a string literal (a glob such as `docs/work/*.md`) blanks everything up to the next `*/`. `blankComments` in `spawn-calls.ts` as of `6970cee` does that to several spans of `scripts/test/citations-gate.test.ts`, so four real `spawnSync` calls there (head lines 287, 298, 1043 and 1051) are never asked; removing `...TEXT` from the call in `scripts/test/citations-gate.test.ts@b7fb3fb:284 "names the record when a record fails"` keeps the spec at 10 of 10. The older `code()` behind `packages/core/test/spawn-safety.test.ts@b7fb3fb:58 "no call site sets"` has the same hole: planting `shell: true` on that same call also keeps 10 of 10. All four calls carry `shell: false` today. **Open decision:** (a, recommended) make the blanking skip string and template literals, as `closing()` already does, share it with `code()`, and add a fixture with a `/*` string ahead of a call; (b) document it as a limit, which leaves a `shell: true` able to pass the repo-wide rule.
+- **low** · `nfr:maintainability` — the documented limits at the header of `spawn-calls.ts` as of `6970cee` say such options read as unsafe. Measured: `let o = { shell: false }; o = { encoding: "utf8" }; spawnSync("git", ["a"], o)` reads safe, and two same-named bindings in different functions resolve to whichever is declared last, so an unsafe call is accepted when the safe binding comes second. The header is wrong in the permissive direction.
+- **low** · `nfr:security` — five mechanisms, one bullet: shapes every test in the file accepts, none present in the tree and none documented. (1) A renamed or aliased callee — `import { spawnSync as run }`, `const { spawnSync: run } = cp`, `cp["spawnSync"](...)`, `promisify(execFile)`. (2) The whole-file gate `CHILD_PROCESS_IMPORT` in `spawn-calls.ts` as of `6970cee` skips `require("node:child_process")`, a bare `"child_process"` specifier and a dynamic `import()`. (3) `shell: false` anywhere in the argument list is accepted, by the `SHELL_FALSE.test(args)` check in `spawn-calls.ts` as of `6970cee` — nested in `env`, inside a string argument, inside a JSON payload. (4) `{ ...BASE, shell: process.env.X }` or `{ ...BASE, shell: !0 }` after a safe spread passes both the per-call check and the truthy-`shell` test. (5) `exec` and `execSync` are banned only as a named import, by `packages/core/test/spawn-safety.test.ts@b7fb3fb:65 "shell-running members"`; `cp.execSync(...)` through a namespace or default import passes every test.
+- **low** · `nfr:maintainability` — the merged repo-77 record proves its call pattern by citing line 87 of `spawn-safety.test.ts` with the anchor `execFileSync)`. At the base that line was the pattern itself; at head it is a parenthetical comment on line 87 of `spawn-safety.test.ts` as of `6970cee`, laid out to hold the anchor (the Log says so), while the list now lives at `packages/core/test/support/spawn-calls.ts:70 "export const SPAWN_CALLS"`. The citation verifies and no longer points at its proof. **Open decision:** (a, recommended) repoint the row at `docs/work/repo-77-shell-false-check-sees-only-spawn.md@b7fb3fb:89 "One untracked fixture per function"` to line 70 of `spawn-calls.ts` and drop the parenthetical, which brings that record into the enforced set; (b) keep it, and say in the Log that line 87 is held for a citation.
+- **low** · `nfr:maintainability` — the per-call match is by name, so an injected parameter called `spawn` is asked too: `scripts/preflight.mjs@b7fb3fb:1010 "spawn = spawnRaw"` now passes `shell: false` to `scripts/preflight.mjs@b7fb3fb:969 "function spawnRaw(command, args, options = {})"`, which reads only `options.cwd` and drops it. Harmless, since that wrapper sets `shell: false` itself, but the added flag reads as doing something it does not, and the header does not say injected callees are matched.
+- **dropped** · a regex literal holding a quote or a bracket inside a call misaligns `closing()`, so a later `shell: false` in the file excuses the call (measured, 0 offenders); dropped because the header already says a regex literal is not understood.
+- **dropped** · the `shell: false` additions newly move 19 citations in four merged records (repo-80 15, repo-71 2, repo-47 1, repo-64 1); `node scripts/citations-gate.mjs --against origin/main` exits 0 at head, 139 enforced and 0 failing, 36 moved in 12 records against 17 in 10 at the base. Not a defect: repo-47 reports this debt rather than failing it, and the Log names it.
+- **dropped** · a method shorthand named `spawn(...) {` reads as a call: a false positive, in the safe direction, with none in the tree.
+- **findings** · code-review at medium returned 13, counting each mechanism once: 10 carried in five bullets (2 + 1 + 5 + 1 + 1), 3 dropped.
+- Invariants: no shell — the subject, above; style ✓ (no `any`, `.ts` relative import, the new support file typechecked by `npm run check`). Skipped as untouched: tool isolation, `AppError`, redaction, SSRF, progress, contracts, `Dockerfile`.
+- NFR: security — the med and the five-mechanism low · performance n/a (one spec, under a second) · reliability n/a (the nine edits add the default value; no runtime behaviour changes) · maintainability — above.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-02 · `6970cee..d087dc5` · re-gate of one round, code-review at medium over its lines only
+
+Reviewed `git diff 6970cee..d087dc5` only, against base `b7fb3fb`; `origin/main` is still `b7fb3fb`. Owner answers relayed by the orchestrator: fix the med here, and repoint the repo-77 row and drop the placeholder comment; the bypass shapes were left to the builder, on condition that the header limits are true. No refutation came back. Branch lines are cited unpinned, re-resolved against `bf143f4`. Re-issued at `bf143f4` with its words, rows and verdicts unchanged. Six citations became prose naming `d087dc5`, because gate 3 rewrote the header text they quoted or corrected what they claimed of `code()`, the spread branch and the declaration count. One more, a pin into this brief, became prose because it is a self-citation once spliced here. The rest are repointed by coordinate only.
+
+| Gate 1 finding                                                                        | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **med** · string-unaware comment stripping hid four calls and a planted `shell: true` | **fixed** — fixture `packages/core/test/spawn-safety.test.ts:162 "does not hide the code up to the next"`. Both gate-1 reproductions now fail: dropping `...TEXT` at line 287 of `citations-gate.test.ts` fails 1 of 14 naming that line, and planting `shell: true` there fails 2 of 14, the per-call and the truthy test. The guard now asks 160 calls: all 159 of the independent AST count plus the injected `spawn` at line 1245 of `review-record.mjs`, 0 offenders                                                                                                                                                                                                                                   |
+| **low** · header limits wrong for a reassignment or a same-named binding              | **fixed** — `packages/core/test/spawn-safety.test.ts:182 "withdraws its"`; the gate-1 fixtures now report 1 and 2 offenders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **low** · five bypass mechanisms                                                      | **fixed in part, declined in part** — `packages/core/test/spawn-safety.test.ts:200 "is the last word on"` and `packages/core/test/spawn-safety.test.ts:214 "every way of importing child_process"`. The gate-1 table of 27 shapes went from 8 caught to 22, and no shape caught at `6970cee` is missed now. The five still missed are the five the header declines: bracket access, `promisify(execFile)`, `fork`, and `exec`/`execSync` through a namespace or default import. Each limit is true as stated. The scope reason holds, since the exec ban is the older test and its rule; the claim that a namespace `.exec(` needs a parser is overstated, since the namespace name sits in the import line |
+| **low** · the repo-77 citation held by a placeholder comment                          | **fixed** — the row at `docs/work/repo-77-shell-false-check-sees-only-spawn.md:89 "One untracked fixture per function"` now cites the call list itself, `packages/core/test/support/spawn-calls.ts:70 "export const SPAWN_CALLS"`, and the comment is gone. The second edit, `docs/work/repo-77-shell-false-check-sees-only-spawn.md:118 "reproduction cannot be re-run from the repository"`, pins to line 108 of this brief as of `b7fb3fb`, the sentence that dates the 14 to `42e6405`, which is what that reviewer meant. `citations.mjs` over the repo-77 Review exits 0, 17 verified                                                                                                                 |
+| **low** · an injected `spawn` parameter given a no-op flag                            | **fixed differently** — renamed, with the flag dropped, at `scripts/preflight.mjs:1010 "run = spawnRaw"`. The wrapper still sets `shell: false` itself                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+- **low** · `nfr:maintainability` — the header is not yet true, which was the condition on the declined shapes. the opening of the limits list in `spawn-calls.ts` as of `d087dc5` says no limit occurs in the tree and that all of them read as a miss. But the spread limit at its spread item as of `d087dc5` is what four real calls pass on: making a non-safe spread withdraw `shell: false` fails line 187 of `runner.ts`, line 40 of `media.ts`, line 59 of `preview-frame.test.ts` and line 788 of `ytdlp.ts`. The injected `spawn` at line 1245 of `review-record.mjs` is also checked today. And the spread limit, the any-later-argument limit and every shape not seen at all read as a pass, not a miss. Two items are wrong as well. its regex item as of `d087dc5` says a regex after `}` is read as division, but `}` is in `packages/core/test/support/spawn-calls.ts:84 "const REGEX_AFTER_PUNCTUATION ="`, so a division after `}` is read as a regex: in `{}/2; z(1);`, the `z` call is blanked to the end of the line. The same item calls a backtick inside `${}` not understood, when a nested template there is masked correctly.
+- **low** · `nfr:security` — the trusted spread passes a `shell` that the file itself declares. `const OTHER = { shell: process.env.X }` followed by `{ shell: false, ...OTHER }` passes every test, as does `{ shell: false, ...(c ? { shell: process.env.X } : {}) }`, though the guard already holds the literal of `OTHER`. Only an inline `shell: true` is caught, by the truthy test. **Open decision:** (a, recommended) in the spread branch of `saysShellFalse` as of `d087dc5`, withdraw `shell: false` on a spread of a same-file name whose literal carries a top-level `shell`, or on an inline conditional whose branches carry one — the four real calls spread `{}` or `{ cwd }` and still pass; (b) keep it as the documented limit.
+- **low** · `nfr:maintainability` — two findings, one theme: two rules of the round that no test holds. Reverting `code()` in `spawn-safety.test.ts` as of `d087dc5` to the old regex pair keeps 14 of 14, because the fixture tests `mask` and never `code()`. With that revert, `...{ shell: true }` planted at line 287 of `citations-gate.test.ts` passes 14 of 14, where the head fails the truthy test. Removing the declaration count at the declaration count in `spawn-calls.ts` as of `d087dc5` keeps 14 of 14. Two functions, one with `const o = { shell: false }` and one with `const o = make()`, then let the second call through: 0 offenders, against 2 at the head.
+- **dropped** · keeping literals in the per-call text (`mask(source, true)`) keeps 14 of 14, but a probe with a `(` inside a string argument is still flagged, only with a longer extent. A near-equivalent mutant, not a hole.
+- **dropped** · an apostrophe in JSX text blanks the rest of its line, so a call later on that line is unseen. Line-bounded, and no `.tsx` here imports `child_process`.
+- **dropped** · the two older repo-77 citations into the repo-83 brief (lines 24 and 37) are unpinned into content that predates the branch, but both verify, and this round did not write them.
+- **dropped** · `{ "shell": false }` with a quoted key is flagged: a false positive in the safe direction.
+- Mutations of the round, each failing on an assertion: last-word rule 1 of 14, assignment rule 1 of 14, alias following 1 of 14, import gate narrowed to `from node:` 1 of 14, and the gate-1 `SPAWN_CALLS = ["spawn"]` mutation 7 of 14. The survivors are the three above. Head control: 14 of 14.
+- Gates: `npm run check` exit 0; `npm test -- --project core --project repo` 19 files, 693 of 693, against 689 at `6970cee` (+4 new tests); `node scripts/citations-gate.mjs --against origin/main` exit 0, 139 enforced and 0 failing, 34 moved in 11 records outside the branch. Preflight was not re-run this round.
+- **findings** · code-review at medium over the round returned 8: 4 carried in three bullets (1 + 1 + 2), 4 dropped.
+- NFR: security — the trusted-spread low · performance n/a (the spec runs in under a second) · reliability n/a · maintainability — the header and untested-rule lows.
+
+### Gate 3
+
+**Gate: PASS** — 2026-10-02 · `d087dc5..690acd0` · re-gate of one round, code-review at medium over its lines only
+
+Reviewed `git diff d087dc5..690acd0` only, against base `b7fb3fb`; `origin/main` is still `b7fb3fb`. Owner answer relayed by the orchestrator: option (a) for the trusted spread. No refutation came back. Branch lines are cited unpinned, re-resolved against `bf143f4`. Re-issued at `bf143f4` with its words, rows and verdicts unchanged. Five citations in its first low became prose naming `690acd0`, because gate 4 corrected what they claimed. The rest are repointed by coordinate only.
+
+| Gate 2 finding                                                          | Verdict                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **low** · the header was not yet true                                   | **fixed in part** — the list now separates what is reported from what is passed unseen, names the cases that occur in the tree, and corrects the regex and template items. A per-limit table backs it, at `packages/core/test/spawn-safety.test.ts:270 "every limit the header names behaves as it says"`. Its residue is the first low below          |
+| **low** · a trusted spread could bring back a `shell` the file declares | **fixed**, as option (a) — `packages/core/test/spawn-safety.test.ts:240 "toEqual([4, 5, 6])"`. My gate-2 probes for a same-file literal, a conditional and a safe-then-tainted spread are now each flagged. Dropping the tainted-name check, or the inline-literal check, each fails 1 of 18. The four real calls that spread a conditional still pass |
+| **low** · two rules no test held                                        | **fixed** — reverting `code()` to the regex pair now fails `packages/core/test/spawn-safety.test.ts:255 "reads through a"`, and removing the declaration count fails `packages/core/test/spawn-safety.test.ts:243 "a name declared twice"`, each 1 of 18                                                                                               |
+
+- **low** · `nfr:maintainability` — three mechanisms, one bullet: the header still says more than its table holds. (1) The header as of `690acd0` says each limit is a fixture row, but three clauses have no row: options that are imported or computed, and exec through a default import. All three behave as stated when probed, so the sentences are true, but nothing would fail if they stopped being true. (2) Its tree sentence as of `690acd0` names the spread as one carrying a `cwd`, yet the one in `ytdlp.ts`, line 788, spreads an `env`. (3) Its spread-trust item as of `690acd0` understates the trust. A name the file declares by a call, `const OTHER = make()`, or declares as `{}` and later reassigns with a `shell`, is trusted when spread after `shell: false` too: 0 offenders on both probes.
+- **low** · `nfr:maintainability` — the nested-template row cannot fail if its sentence becomes false. Making a template stop reading its interpolation as code, the claim at `packages/core/test/support/spawn-calls.ts:58 "is code, a nested template included"`, keeps 18 of 18, because the row at `packages/core/test/spawn-safety.test.ts:306 "a nested template included"` checks only a call on the line after the template. A row with the call inside the interpolation tells the two apart: 2 at head, nothing once mutated.
+- **dropped** · the repo-77 row now cites `packages/core/test/support/spawn-calls.ts:70 "export const SPAWN_CALLS"`, the call list that reviewer meant, and `citations.mjs` over that Review exits 0. It is unpinned into a file this branch edited three times, and nothing on `main` holds it yet. Not a defect: the next edit of that header moves it as a reported `moved`.
+- Mutations of the round, each failing 1 of 18 on an assertion: tainted names ignored, inline literals in a spread ignored, `}` dropped from the regex context, `fork` added to `SPAWN_CALLS`, undeclared spreads distrusted. The production scan stayed green under that last one, so no real call spreads an undeclared name. The survivor is the second low above. Head control: 18 of 18.
+- Re-measured as a batch: the gate-1 table of 27 shapes catches 22, as at `d087dc5`; the gate-2 table of 15 catches 9 where it caught 6, and none regressed. Of the other six, four are limits the header names, one is the line-bounded JSX case gate 2 dropped, and one is `exec as run`, which the named-import ban catches but that table does not run. An independent AST count gives 494 files, 31 importing `node:child_process`, 159 calls, all carrying `shell: false`; the guard asks 160 (those plus the injected `spawn` in `review-record.mjs`), 0 offenders.
+- Beside repo-87: with the `scripts/test/citations.test.ts` of `origin/repo-87-extensionless-citations` (`c054f59`) in place, the spec passes 18 of 18. Its new `oxfmt` call at line 3193 of that file is asked and is excused by `...TEXT`; the guard asks 162 calls, 0 offenders.
+- Gates: `npm run check` exit 0; `npm test -- --project core --project repo` 19 files, 697 of 697 (+4 on the 693 at `d087dc5`); `node scripts/citations-gate.mjs --against origin/main` exit 0, 139 enforced and 0 failing, 34 moved in 11 records outside the branch. Preflight was not re-run this round.
+- **findings** · code-review at medium over the round returned 5: 4 carried in two bullets (3 + 1), 1 dropped.
+- NFR: security ✓ (the trusted-spread hole is closed for what the file declares) · performance n/a (the spec runs in under a second) · reliability n/a · maintainability — the two lows above.
+
+### Gate 4
+
+**Gate: PASS** — 2026-10-02 · `690acd0..bf143f4` · re-gate of one round, code-review at medium over its lines only
+
+Reviewed `git diff 690acd0..bf143f4` only, against base `b7fb3fb`; `origin/main` is still `b7fb3fb`. Owner decision relayed by the orchestrator: one more round, then land, so a low raised here is recorded, not fixed. No refutation came back. Branch lines are cited unpinned against `bf143f4`.
+
+| Gate 3 finding                                     | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **low** · the header said more than its table held | **fixed**. (1) Rows now exist for imported options, `packages/core/test/spawn-safety.test.ts:337 "imported options"`, for a computed key, `packages/core/test/spawn-safety.test.ts:338 "a computed key"`, and for exec through a default import, `packages/core/test/spawn-safety.test.ts:341 "exec through a default import"`. (2) The tree sentence now names the `env` spread, at `packages/core/test/support/spawn-calls.ts:33 "? {} : { env }"`; in `ytdlp.ts` the call starts on line 788 and its spread sits on line 797. (3) The spread-trust item now lists parameters, imports, names declared by a call or reassigned, and calls, at `packages/core/test/support/spawn-calls.ts:52 "are all trusted"`, each with its own row: `packages/core/test/spawn-safety.test.ts:353 "a spread of a name declared by a call"`, `packages/core/test/spawn-safety.test.ts:358 "a spread of a name reassigned with a shell"` and `packages/core/test/spawn-safety.test.ts:362 "a spread of a call"` |
+| **low** · the nested-template row could not fail   | **fixed differently** — the old row is kept, and new rows now hold the sentence: `packages/core/test/spawn-safety.test.ts:316 "a call inside a template interpolation"` fails when interpolation stops being read as code, `packages/core/test/spawn-safety.test.ts:321 "a call inside a nested template interpolation"` fails when a nested template is read as a flat string, and the two template-text rows fail when template text, outer or nested, is not blanked. The kept row still fails under neither mutation, but it asserts something true, that a call after a nested template is seen, and no longer stands alone for its sentence                                                                                                                                                                                                                                                                                                                                                 |
+
+- Per-sentence mutation sweep, with a harness written for this gate: 27 mutations of `spawn-calls.ts`, each run against the spec, and every one failed at least one test on an assertion. For each header clause listed here, a mutation that makes it false fails the row for that clause: member calls, aliases (in the aliased test), the assigned alias, options that are destructured, imported, built by a call or computed, exec through a namespace and through a default import, fork, spreads of an unknown name, a parameter, a call-declared name, a reassigned name and a call, tainted and inline-literal spreads, the later-argument rule in both orders, the regex contexts after a paren and a brace, interpolation as code, nested interpolation, template and nested-template text, and the last word in both directions. The table asserts its rows in one loop, so a mutation reports only its first failing row; the seven clauses masked that way in the first pass were each re-run with a mutation aimed at that clause alone, and each failed its own row. Not mutated: the parameter-named-`spawn`, bracket-access and `promisify` clauses, which no small mutation flips without rewriting the matcher; their rows assert current behaviour.
+- Re-measured: the gate-1 table catches 22 of 27 shapes and the gate-2 table 9 of 15, as at `690acd0`; the guard asks 160 calls, the 159 of the independent AST count plus the injected `spawn` in `review-record.mjs`, with 0 offenders; head control 18 of 18. The AST count is carried from `690acd0`, since this round changed no file that imports `node:child_process`.
+- The repo-77 record, row 89, now cites line 70 of `spawn-calls.ts`, which is the call list, `packages/core/test/support/spawn-calls.ts:70 "export const SPAWN_CALLS"`; `citations.mjs` over that Review exits 0, 17 verified.
+- Gates: `npm run check` exit 0; `npm test -- --project core --project repo` 19 files, 697 of 697, unchanged since the round adds rows inside an existing test; `node scripts/citations-gate.mjs --against origin/main` exit 0, 139 enforced and 0 failing, 34 moved in 11 records outside the branch. Preflight was not re-run this round.
+- **dropped** · the kept nested-template row cannot fail on its own (see the table). Not a defect, now that rows that can fail hold its sentence.
+- **findings** · code-review at medium over the round returned 1: 0 carried, 1 dropped.
+- NFR: security ✓ · performance n/a · reliability n/a · maintainability ✓ (every mutated header clause now fails its own row).
 
 ## Log
 
@@ -272,3 +367,223 @@ The options as filed:
   calls was measured at `6418f17`. The scripts `scripts/review-record.mjs` and
   `scripts/preflight.mjs` have changed since then, so the builder will
   re-measure before building.
+- 2026-10-01 — **Deferral lifted and built, option (a).** The owner selected
+  repo-83 for this batch at intake on 2026-10-01 (asked via `AskUserQuestion`,
+  "which groups go into this batch", the repo-tooling group chosen); the
+  deferral's stated reason was repo-47 editing `scripts/preflight.mjs`, and
+  repo-47 merged as `9fadda7`. Built at base `b7fb3fb`.
+  - **The brief's population was stale, as it warned.** Re-measured by running
+    the brief's own `percall.mjs` (extracted from this file's first code block)
+    at `b7fb3fb`: `files scanned 493, importing child_process 31, calls 157,
+calls lacking own shell:false 12`, against the brief's 28 / 137 / 14. By
+    file the brief's `preflight.mjs (2), review-record.mjs (7),
+preflight.test.ts (5)` is now `preflight.mjs (2), review-record.mjs (2),
+preflight.test.ts (5)` plus three in `scripts/citations-gate.mjs` that did
+    not exist at the brief's head. Those three are a false positive of
+    `percall.mjs`, not of the new check: each passes `options`, a binding that
+    spreads `GIT_EXEC_OPTIONS` (`scripts/citations-gate.mjs:811`, `:362`), which
+    says `shell: false` — `percall.mjs` resolves one level of name and not a
+    spread, and the new check resolves the chain. Real offenders: **9**.
+  - **Red before the fix.** The rewritten test run over the unfixed tree:
+    `npx vitest run packages/core/test/spawn-safety.test.ts` failed 1 of 10
+    ("every file that spawns says `shell: false` at each of its calls") and
+    named exactly the nine — `scripts/preflight.mjs:1011` and `:1658`,
+    `scripts/review-record.mjs:317` and `:346`, `scripts/test/preflight.test.ts:76`,
+    `:704`, `:810`, `:839`, `:862`. After adding `shell: false` to each, the same
+    command passes 10 of 10; `percall.mjs` over the tip reports `calls lacking
+own shell:false 3`, only the three spread-resolved ones above.
+  - **The guard fails when the call list narrows.** With `SPAWN_CALLS` in
+    `packages/core/test/support/spawn-calls.ts` temporarily set to `["spawn"]`,
+    the same command failed 3 of 10 — "a call lacking its own `shell: false`
+    fails beside one that has it", "a literal that does not say it, or options
+    built elsewhere, do not excuse a call" and "every member of SPAWN_CALLS is
+    asked" (`expected [ 'spawn' ] to include 'spawnSync'`). The production scan
+    itself stays green under that mutation, which is the brief's own finding:
+    nothing in the tree differs, so only the fixtures can notice. Restored
+    afterwards.
+  - **Where the check lives.** `callsWithoutShellFalse` and `SPAWN_CALLS` in
+    `packages/core/test/support/spawn-calls.ts`, beside `workspaces.ts`, rather
+    than inline in the test, so the fixtures can call it with a narrowed list.
+    A call is safe when its own argument list says `shell: false`, or names an
+    identifier whose same-file object literal does — directly or through a
+    spread, to a fixpoint. **Documented limits**, in that file's header: options
+    built by a call, destructured, imported or assigned after the literal read as
+    unsafe (say `shell: false` at the call); a safe identifier anywhere in the
+    argument list is accepted; string literals are skipped when matching
+    brackets, regex literals and template `${}` are not understood.
+  - **Citations: no record fails, and none was repointed.**
+    `node scripts/citations-gate.mjs --against origin/main` exits 0 with `139
+enforced, 0 failing`. The edit still moves lines cited by merged records
+    outside this branch, which repo-47 makes reported debt and not a failure:
+    at `b7fb3fb` the same command prints 17 moved citations in 10 records outside the
+    branch's; at the tip, 36 in 12 (39 before the three repairs below). Three of the
+    new ones were breakages and were avoided rather than repointed:
+    `spawn-safety.test.ts:45` (repo-75) would have moved by the one import
+    line, so the header paragraph was rewrapped one line shorter; `:78`
+    (repo-75) anchors "every file that spawns says", so the test keeps that
+    wording; `:87` (repo-77) anchors "execFileSync)", so the comment is laid out
+    to keep that text on line 87. All three resolve at the tip. **What remains
+    is the line shifts from adding `shell: false`**: `scripts/review-record.mjs`
+    +1 line at `:347` (15 of the 19 new moved citations sit below it),
+    `scripts/preflight.mjs` +3 at `:1011` and +4 at `:1658`,
+    `scripts/test/preflight.test.ts` +1 at `:842` and `:863` (3 of the 19; the other is
+    `preflight.mjs:1278`). None of those
+    records is edited here, so nothing fails; the debt is the same kind the
+    repo-47 option-B rule describes and rides on the next branch that edits
+    those records.
+  - **Could have folded in, did not:** repointing those merged records'
+    citations (12 records outside this branch) — repo-47's rule says
+    a branch repoints only what it edits, and doing it here would widen a
+    one-check change into a record sweep; and `scripts/review-record.mjs`'s
+    repo-86 work, held to a later batch and sharing that file.
+  - `npm run check` exit 0; `npm test -- --project core --project repo` 19
+    files, 689 of 689 passed.
+- 2026-10-01 — **Gate 1's round (Opus, CONCERNS at `6970cee`): one med, five
+  lows, all reproduced before fixing; owner answers by `AskUserQuestion` the
+  same day: fix the med here, and repoint repo-77's row and drop the
+  placeholder comment.** This entry supersedes the first entry's `:87` layout
+  sentence and its `preflight.mjs` `+3` line.
+  - **Med — the guard read comments before strings (reproduced).** Mutating
+    `scripts/test/citations-gate.test.ts:287` from `{ ...TEXT, cwd: dir }` to
+    `{ encoding: "utf8", cwd: dir }` and then to `{ ...TEXT, cwd: dir, shell: true }`
+    left `npx vitest run packages/core/test/spawn-safety.test.ts` at `10 passed`
+    both times at `6970cee`: `"docs/work/*.md"` opened a block comment that ran to the
+    next `*/`, hiding four calls. Fixed at `f27ecfa` by one tokenizer, `mask` in
+    `spawn-calls.ts`, that blanks comments and, unless asked to keep them, string,
+    template and regex literal contents; `code()` in `spawn-safety.test.ts` is
+    `mask(text, true)`. On `f27ecfa`, control (unmutated) 14 of 14 passed; mutation 1
+    failed 1 of 14 — "every file that spawns says `shell: false` at each of its calls",
+    naming `scripts/test/citations-gate.test.ts:287`; mutation 2 failed 2 of 14 — that
+    one and "no call site sets `shell` to anything truthy". Restored, 14 of 14.
+    The fixture test for a `/*` string ahead of a call is "a `/*` inside a string does
+    not hide the code up to the next `*/`".
+  - **Low — the header's limits were false.** An assignment after the literal, or
+    two functions each declaring `options`, passed on the other's `shell: false`.
+    Now a name is safe only if _every_ declaration of it in the file is a safe
+    literal and nothing assigns to it (fixture: "an assignment, or a second
+    declaration of the name, withdraws its `shell: false`"). The header was
+    rewritten to list the limits that remain, each one true.
+  - **Low — bypass shapes.** Fixed, with fixtures: `shell: false` nested in `env`,
+    in a string argument or a JSON payload (only a top-level property of the options
+    literal counts), `{ ...BASE, shell: !0 }` and `{ ...BASE, shell: process.env.X }`
+    (the last word on `shell` wins), a safe name used as a non-options argument (the
+    first argument is never options), `spawnSync as run` and `{ spawnSync: run }`
+    aliases, `require(...)`, `import(...)` and the bare `child_process` specifier.
+    **Declined, and listed as limits in the header:** `cp["spawnSync"](…)`,
+    `promisify(execFile)`, `fork`, and `exec`/`execSync` through a namespace or default
+    import — the last needs a ban on the member, which is a different rule from this
+    ticket's (the named-import ban is `spawn-safety.test.ts`'s own test), and
+    `.exec(` cannot be told from `RegExp#exec` without a parser. A spread of anything
+    that is not a safe name is trusted not to carry `shell` — the tree's own
+    `...(cwd === undefined ? {} : { cwd })` needs that — which is also a limit.
+  - **Low — repo-77's citation.** `docs/work/repo-77-shell-false-check-sees-only-spawn.md`
+    row 89 now cites `packages/core/test/support/spawn-calls.ts:53 "execFileSync"`, the
+    call list itself, and the placeholder comment is gone from the test. Owning that
+    record meant owning its other `moved`: its `repo-83` citation is repointed
+    coordinate-only to `…per-call.md@b7fb3fb:108`, where the anchor already sat at the
+    base (the brief's `:99` had drifted before this branch). The gate then exits 0.
+  - **Low — the injected `spawn` parameter.** Confirmed: `spawnRaw`
+    (`scripts/preflight.mjs`) reads only `options.cwd` and sets `shell: false` itself, so
+    the flag added to `mergeTreeConflicts`'s call was a no-op that read as a fix. The
+    flag is removed and the parameter renamed `run`, which keeps the call out of the
+    name match and drops this branch's `+3` lines in that function.
+  - `node scripts/citations-gate.mjs --against origin/main` exit 0, `139 enforced, 0
+failing`, 34 moved in 11 records outside the branch (base: 17 in 10).
+- 2026-10-02 — **Gate 2's round (PASS at `d087dc5`, three new lows), owner
+  answer by `AskUserQuestion`: withdraw `shell: false` on a spread that brings in a
+  `shell` the file itself declares.** Each finding reproduced against `d087dc5`'s
+  helper before fixing; this entry supersedes the previous one's "each one true" and
+  its `spawn-calls.ts:53`.
+  - **1 — the header was still not true.** Reproduced by the reviewer's probes, and
+    by this round's fixtures: four real calls and `review-record.mjs`'s injected
+    `spawn` parameter are in the scan, so "none occur in the tree" was false;
+    the spread, any-later-argument and not-seen-at-all limits are passes, not
+    misses-by-construction; a `/` after `}` is read as a regex (the other way
+    round from what the header said) and a nested template in `${}` is masked
+    correctly. Rewritten, split into "reported" and "passed without being looked
+    at", and **held by tests**: the fixture "every limit the header names behaves
+    as it says" has one row per sentence — each is a source and the lines
+    flagged — so a header line that stops being true fails a row.
+  - **2 — the trusted spread (reproduced, then withdrawn as chosen).**
+    `const OTHER = { shell: process.env.X }` with `{ shell: false, ...OTHER }`, and
+    `{ shell: false, ...(c ? { shell: process.env.X } : {}) }`, both passed. A spread
+    now takes the `false` away when it names a same-file binding that is
+    `tainted` (a declaration carries a non-`false` `shell`, or spreads one that
+    does, to a fixpoint) or holds an inline literal that carries one. The tree's
+    own `...(cwd ? { cwd } : {})` carries no `shell`, so it changes nothing and the
+    four real calls keep passing; an unknown name is still trusted (a header
+    limit). Fixture "a spread cannot bring back a `shell` the file itself
+    declares": red against `git show d087dc5:…/spawn-calls.ts` in place
+    (`expected [] to deeply equal [ 4, 5, 6 ]`, 1 of 18 failed), green at the head.
+  - **3 — two rules no test held (both reproduced).**
+    - Removing the declaration-count check (`if (declarations?.length !==
+bodies.length) return false` → `if (declarations === null) return false`)
+      kept 14 of 14 at `d087dc5`. Fixture "a name declared twice, once as a literal and
+      once not, is not safe": with the check removed, 1 of 18 failed
+      (`expected [] to deeply equal [ 2, 3 ]`); at the head it passes.
+    - Reverting `code()` (`spawn-safety.test.ts:31`) to the old regex pair kept 14 of 14. `code()` now shares two predicates with the scan, `setsTruthyShell` and
+      `importsShellRunner`, declared at the file's foot (hoisted, and comment lines
+      compensate so `:45` and `:78` do not move), and the fixture "`code()` reads
+      through a `/*` string, so the other two tests do" calls them. With `code()`
+      reverted, 1 of 18 failed; with it reverted _and_ `shell: true` planted at
+      `scripts/test/citations-gate.test.ts:287`, 2 of 18 (that fixture and the
+      per-call scan); at the head with the plant, the truthy test and the per-call scan
+      fail (2 of 18). Control, unmutated head: 18 of 18. Plants restored.
+  - The guard still reports 0 offenders over the real tree: the scan test passes at
+    the head, 18 of 18 (`npx vitest run packages/core/test/spawn-safety.test.ts`).
+    Repo-77's record, row 89, is repointed to the new line of
+    the call list, `spawn-calls.ts:65 "execFileSync"`, since the longer header moved it.
+- 2026-10-02 — **Gate 3's round (two lows), owner answer by `AskUserQuestion`: "one
+  more round, then land".** Both reproduced against `690acd0` before fixing, and
+  the header was then checked sentence by sentence against the fixture table, since
+  gate 3's first low is that it said more than the table held. Guard behaviour is
+  unchanged: only the header, the fixture table and this entry moved.
+  - **1 — the header said more than its table held (true, and wider than named).**
+    - Three clauses had no row and nothing failed if they stopped being true; each
+      now has one, appended at the end of the table so no cited line moves, and each
+      was shown to fail under a mutation of the helper: options that are imported
+      (`import { OPTS }`, flagged: with an all-caps name trusted, the row fails),
+      options that are computed (`{ ["shell"]: false }`, flagged: with a computed
+      key read as `shell`, the row fails), and `exec` through a default import (not
+      asked: with `exec` and `execSync` added to `SPAWN_CALLS`, the row fails).
+    - The tree sentence was wrong: of the four downloader calls spreading an
+      inline conditional, three spread `...(cwd ? { cwd } : {})` (`runner.ts`, and
+      two ffmpeg test helpers) and one, in `ytdlp.ts`, spreads `...(extraEnv ===
+undefined ? {} : { env })`. The header now says that. (Gate 3 put the
+      `ytdlp.ts` spread at line 788; at this head it is at 797, and the header cites
+      no line for it.)
+    - "A spread of a name this file does not declare is trusted" understated it.
+      Probed at `690acd0`, all `[]`: `...options` for a parameter, `...OTHER` for
+      `const OTHER = make()`, `...OTHER` for `let OTHER = {}` reassigned to
+      `{ shell: process.env.X }`, `OTHER.shell = …` after `const OTHER = {}`, and
+      `...make()`. The header now names the declared-by-a-call and the
+      declared-`{}`-then-reassigned cases; a row each for the parameter, the call
+      declaration, the reassignment and `...make()`, each shown to fail when a
+      spread of that name or shape is made to take `false` away.
+    - The sweep found two more sentences nothing held, and both have rows now: "the
+      last one wins" was held only in the direction `{ ...BASE, shell: !0 }`, so
+      `{ shell: truthy, ...BASE }` (ends `false`, not reported) is a row, and a
+      later argument excusing the call was held only with the safe argument first,
+      so a safe argument after an unsafe one is a row (with the scan narrowed to the
+      first argument after the command, the old table passed and the new row fails).
+      Every other sentence was mutated in the helper and failed a test: string-,
+      regex- and template-blanking, the import test reading literals, the
+      definition-is-not-a-call rule, `as` and destructured aliases, the `/` after `}`
+      and after `)`, a spread of an inline literal carrying a `shell`, a spread of a
+      safe name, a named literal as the options, and a reassignment withdrawing it.
+  - **2 — the nested-template row could not fail (true).** Reproduced: with the
+    masker changed to read a template's `${}` as text, not code, the old table
+    stayed 18 of 18. Rows added with the call inside the interpolation — one
+    plain, one in a nested interpolation — and one with the call written in a
+    nested template's _text_ (expected not reported). Under the same mutation
+    against the old test file: 18 of 18 (unchanged); against the new one: 1 of 18
+    failed, on "a call inside a template interpolation" and "a call written in a
+    nested template's text" (a soft-assertion run lists both). The
+    nested-interpolation row does not fail under that mutation (the inner backtick
+    closes the outer template early and the call lands in code anyway); the
+    nested-text row is also the one that fails when a template inside an
+    interpolation is not masked as a template. Control, unmutated: 18 of 18.
+  - The guard still reports 0 offenders over the real tree
+    (`npx vitest run packages/core/test/spawn-safety.test.ts`). The longer header
+    moved the call list again, to `spawn-calls.ts:70`; repo-77's record, row 89,
+    is repointed to it, as the last edit, coordinate only.
