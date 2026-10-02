@@ -113,6 +113,14 @@ discarded. So:
     decision, a FAIL whose author stops — the last set the gate returned is
     committed then, with `in-flight`. That is `dl-58`'s "the gate record is
     committed whatever else is held" (2026-09-17), which still binds.
+  - **2026-10-01: the per-gate invocation, which was written nowhere.**
+    `review-record.mjs <ticket> <file>` splices gate 1, whose file starts
+    `## Review` and takes no `--gate`; gate n takes `--gate n`, and its file
+    starts `### Gate n`. The ticket must be clean between splices, so commit
+    after each one. `--land` does all of it, one commit per gate, and pushes
+    (its usage line is in the script, `--land <ticket> <section>... --base
+    <ref> --status done|in-flight --title "<title>"`). Every gate on the
+    2026-10-01 batch read the invocation off the script.
 
   **Re-resolved, never pinned — a pin here is exactly the branch-only sha this
   page forbids two sections down, and this is not hypothetical.** This page
@@ -359,6 +367,12 @@ discarded. So:
     as prose naming the reviewed sha, or declare it as evidence.** `dl-58`'s
     owner decision D4(b) is the worked example: pins dropped from the record in
     favour of prose plus declarations (2026-09-17).
+  - **2026-10-01: a repaired citation in a merged record is checked against the
+    commit that record gated, not the tip.** repo-87's repair of dl-37's
+    citation anchored to dl-72's later text, which says the opposite: at
+    `1aae8c8` lines 90–93 read "Optional, and off by default". `git show
+    <gated sha>:<path>` the cited lines before repointing or pinning
+    (`roles/reviewer.md`, the dry-run section, for the gate's side).
   - A tag on the reviewed commit would also keep pins reachable, exit 0 in the
     same simulation; the owner chose prose (2026-09-15). Do not re-derive the tag
     remedy without re-asking.

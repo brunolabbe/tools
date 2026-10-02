@@ -617,7 +617,12 @@ measurement behind it. What goes in each dispatch:
   split between them.
 - **Neither gets your judgement of a finding.** If you think one is wrong, say
   so as a question the agent answers by reproducing it; a verdict of yours is a
-  relay, and `SKILL.md`'s relaying table says what those cost.
+  relay, and `SKILL.md`'s relaying table says what those cost. **2026-10-01:
+  nor your expectation of its remedy.** On lg-1 a dispatch added "fail on
+  assertions rather than at collection" to a finding whose remedy was "parse
+  inside each test"; the fixer refuted the addition by command and the gate
+  agreed it had never written it. A fixer's dispatch carries the gate's remedy
+  word for word.
 - **Land from the gate's own file, and diff what landed against it.** The gate
   writes each section to a named file (`roles/reviewer.md`); hand the lander
   that path, and after it reports, compare the committed section with the file

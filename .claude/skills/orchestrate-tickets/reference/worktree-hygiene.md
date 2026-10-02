@@ -14,6 +14,14 @@ Two rules, both required:
   base-tree extract and outlives its rounds for that reason (repo-57). List it
   beside the worktrees at close-out.
 
+**Superseded 2026-10-02 (owner decision, unprompted: "You can remove worktrees
+when pr land. I don't see why we would need to keep them.").** The "finished —
+merged, or abandoned — not when its PR opens" bullet above, and the
+hold-until-finished sections below, now yield to `SKILL.md` step 10: remove
+builder, gate and fixer worktrees once the PR has landed, each checked clean and
+its head on origin; a later follow-up goes to a fresh `fixer`. The history below
+stays as the reasoning the owner weighed.
+
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
 
@@ -132,6 +140,9 @@ recovery is expensive.
   could not strand it on `origin`.
 
 ### Hold the reviewer's worktree until the ticket merges, like the builder's
+
+_Superseded 2026-10-02 by `SKILL.md` step 10: remove it once the PR has
+landed._
 
 **The rule used to be "remove it once its record is pushed and its exchange with
 the builder has ended". Two failures on 2026-09-03 say that condition cannot be

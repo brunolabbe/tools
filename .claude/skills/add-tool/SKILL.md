@@ -34,6 +34,12 @@ the ones that fail silently if skipped.
    the reference from the root. Skipping this is silent, which is exactly why it
    is listed here.
 
+   A new workspace also needs its entries in `package-lock.json`, and a
+   worktree cannot `npm install` to write them. If you edit the lockfile by
+   hand, check it with `node scripts/check-lockfile-sync.mjs`, not `npm ls`:
+   the farm mirrors the shared checkout and lacks the new link, so `npm ls`
+   reports the package missing (lg-1, 2026-10-01).
+
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
    it. Do not restate anything on this page. Beside it, `tools/<name>/README.md`: what the
    tool does, how to run it on its own and how it deploys, with a table of its

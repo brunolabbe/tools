@@ -66,7 +66,7 @@ So read in this order:
 **Dry-run your section against the checker before you return it, and run it
 from inside this worktree — already checked out at the head sha you are
 reviewing, never a different checkout.** You have no `Write`, so build the
-scratch copy with Bash and `node -e` in the ticket's scratch directory: the
+copy with Bash and `node -e` at the ticket's real path (2026-10-01, below): the
 ticket as it is on the branch, every section you are returning spliced in above
 `## Log` in gate order — on a re-gate, the earlier ones you re-issued too, since
 the lander commits them together — then
@@ -83,6 +83,22 @@ is only real from the worktree you already detached to
 (`.claude/skills/orchestrate-tickets/reference/records.md`). An anchor cannot
 contain a double quote, and a coordinate into the ticket's own file can never
 be distinct — name the section instead.
+
+**2026-10-01: format the spliced copy, and splice it at the ticket's real
+path.** Run `npm run format` on the copy before `citations.mjs`: oxfmt rewrites
+a plain double-backtick span to single backticks, so a section that passed
+unformatted failed formatted (repo-87 gate 2: exit 0, then 13 unresolvable);
+only a backticked token inside double backticks survives. And build the copy at
+the ticket's own `docs/work/` path inside this worktree, not under the scratch
+directory: a self-citation passes in a
+copy under another path and fails once spliced (repo-83 gate 3).
+
+**2026-10-01: a repair to a citation in a merged record is checked against the
+commit that record gated, not the tip.** repo-87's dl-37 repair anchored to
+dl-72's later text, which says the opposite of what dl-37's reviewer read: at
+`1aae8c8` lines 90–93 read "Optional, and off by default". Read the cited
+lines at the record's own gated sha (`git show <sha>:<path>`) before accepting
+the repair.
 
 **Pin a citation of content that already existed at the base to the base —
 or to any other `main` commit that holds it** — `file@<base sha>:line`,
@@ -186,6 +202,15 @@ not get their narrative, for the same reason you did not get the build's report.
 - **When an owner closes a finding "by design" after it is committed**, use the
   same `Amended at <sha>` marker as for corrections — name the exact commit
   the owner's amendment creates.
+- **2026-10-01: re-gate a rebased stacked pair with `git range-diff` over the
+  lower branch, plus `git diff` of the lower branch's own range**, rather than
+  `git diff <gated sha>..<new sha>`, which on a rebase shows every commit the
+  base moved (lg-3 gate 2).
+- **2026-10-01: re-issuing a section can turn every one of its code citations
+  into prose, and a later round's new text can make a re-issued anchor
+  non-distinct** (repo-85 gate 2, lg-3 gate 2). Both are expected, not a
+  defect in the section; find the second with
+  `--require-distinct-anchors` on the dry-run copy.
 
 **Mutation runs should set a private `TMPDIR`, `TEMP` and `TMP`.** Concurrent test
 runs race if multiple sessions count entries in the shared temp directory; point

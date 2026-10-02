@@ -53,6 +53,15 @@ _Landing_ section below for what that means in practice.
   `git push origin HEAD:refs/heads/<branch>`. A push that is rejected as
   non-fast-forward means someone else moved the branch: stop and report, never
   force.
+- **2026-10-01: a reflow kept at the same line count can still delete an anchor
+  another gate's section cites** — repo-87's fixer reflowed a paragraph to hold
+  its line count and removed one, caught only by the re-issue dry run. Keep the
+  line count *and* grep each record that cites the file for its anchors
+  before committing.
+- **2026-10-01: narrowing a test can drop a guard the old shape gave for
+  free.** lg-1's F4 fix removed the "every ledger code is mapped" check along
+  with the shape it narrowed (gate 2, N1). Name what the old test asserted and
+  say where each assertion went, before you delete one.
 
 ## Landing, when your dispatch grants it
 
@@ -93,7 +102,10 @@ with `pl-48`'s record at "1 moved, 5 unanchored," where the reviewer's own
 dry-run of the same section had 0 unanchored — and the whole round was
 discarded rather than repaired. Both are why this role now runs on a
 different model — see _Why you exist_, above. Your account of what you fixed
-goes in the ticket's Log, in its own commit after the last splice (2026-09-29).
+goes in the ticket's Log, in its own commit after the last splice (2026-09-29),
+or in none when the fix commit already carries it (2026-10-01: three landers on
+one batch read the landing order three ways; it is the one above, with each
+later gate's splice a commit of its own).
 
 Set the ticket's `status: done` — or `in-flight`, for work that lands partial
 — in the first record commit of your landing, per `roles/builder.md`'s
