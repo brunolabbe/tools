@@ -244,13 +244,43 @@ and routes its hostname to a service that is not there, which answers with a
 login and then an error. Harmless, and untidy; a one-tool host that minds does
 steps 2 and 3 by hand instead.
 
-The token wants exactly three permissions, and one of them is per-zone:
+The token wants exactly four permissions, and one of them is per-zone:
 
 | Scope   | Permission                | Access |
 | ------- | ------------------------- | ------ |
 | Account | Cloudflare Tunnel         | Edit   |
 | Account | Access: Apps and Policies | Edit   |
+| Account | Turnstile                 | Edit   |
 | Zone    | DNS                       | Edit   |
+
+**A token made before the fourth was added stops at the Turnstile read**, with a
+message naming it, before anything is written. Add `Account · Turnstile · Edit`
+to the token and run again.
+
+**The same run creates the downloader's Turnstile widget.** The downloader's
+human check ([dl-50](../tools/downloader/docs/work/dl-50-a-human-check-without-an-account.md))
+needs a widget for `downloader.<your domain>` in Managed mode, and the plan lists
+it as `ADD turnstile` beside the rest. `--apply` creates it and prints **the site
+key and the secret key once**, as two lines to paste into the host's `.env`:
+
+```
+TURNSTILE_SITE_KEY=…
+TURNSTILE_SECRET_KEY=…
+```
+
+Nothing is written to disk: the secret is in your terminal's scrollback, the same
+as the API token you exported to run the script, and is yours to clear. A second
+run reports the widget as already there and prints no keys. A widget with the
+same name that guards **different domains** is a conflict, like a hostname routed
+somewhere else, and the run stops before it changes anything; the script never
+edits a widget.
+
+**Lose the secret and you rotate it in the dashboard** (Turnstile, the widget,
+_Rotate secret key_). Whether Cloudflare's API will return an existing widget's
+secret on a later read is **not measured** — the script is built not to need it
+— so do not plan around being able to fetch it again. The hosts that leave the
+two variables empty keep the check off, which is correct while the hostname is
+still behind Access.
 
 **A token made on the dashboard's _Account API tokens_ page is account-owned**,
 which is now the default, and an account-owned token is not a user token: it
