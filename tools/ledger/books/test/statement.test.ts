@@ -381,3 +381,32 @@ describe("parseStatement never skips what it does not recognise", () => {
     expect(failure(text).code).toBe("STATEMENT_UNRECOGNIZED_LINE");
   });
 });
+
+describe("parseStatement on a line built to make a regex backtrack", () => {
+  // 50 000 characters cost the quadratic forms of these regexes seconds; the
+  // linear ones take milliseconds, so the bound is two orders of magnitude off
+  // either and does not measure the runner.
+  const padding = " ".repeat(50_000);
+
+  function timedFailure(text: string): { error: AppError; ms: number } {
+    const start = performance.now();
+    const error = failure(text);
+    return { error, ms: performance.now() - start };
+  }
+
+  test("an amount line padded with whitespace and no closing $ fails fast", () => {
+    const text = edit(THREE_MONTHS, "−5,00 $\t1 970,45 $", `−5,00 $${padding}x`);
+    const { error, ms } = timedFailure(text);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: lineOf(text, "−5,00 $ ") });
+    expect(ms).toBeLessThan(500);
+  });
+
+  test("a Total padded with whitespace before a line separator fails fast", () => {
+    const text = edit(THREE_MONTHS, "Total\t1 200,00 $", `Total${padding}x y`);
+    const { error, ms } = timedFailure(text);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: lineOf(text, `Total${padding}`) });
+    expect(ms).toBeLessThan(500);
+  });
+});

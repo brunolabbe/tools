@@ -53,9 +53,18 @@ const DATE_LINE = /^(\d{1,2})\s+(\p{L}+)(\d{1,2})\s+(\p{L}+)$/u;
 /** Where a row can start; anything else at the top level must be a known line. */
 const ROW_START = /^\d{1,2}\s/u;
 const MONTH_HEADER = /^(\p{L}+)\s+(\d{4})$/u;
-const TOTAL_LINE = /^Total\s+(.+)$/iu;
-/** `amount⇥balance⇥` — split on the `$` that ends each, never on the tab. */
-const AMOUNT_BALANCE_LINE = /^([^$]*\$)\s*([^$]*\$)$/u;
+/**
+ * One `\s`, not `\s+`: `.+` matches whitespace too, and two adjacent
+ * quantifiers that can trade the same run make a failed match quadratic.
+ * `parseAmountCents` trims whatever whitespace the capture keeps.
+ */
+const TOTAL_LINE = /^Total\s(.+)$/iu;
+/**
+ * `amount⇥balance⇥` — split on the `$` that ends each, never on the tab. No
+ * `\s*` between the two: `[^$]*` already takes the tab, and the two together
+ * made a failed match quadratic, as `TOTAL_LINE`'s would be.
+ */
+const AMOUNT_BALANCE_LINE = /^([^$]*\$)([^$]*\$)$/u;
 const COLUMN_HEADER = ["DATE", "DESCRIPTION", "MONTANT", "SOLDE"];
 
 /** A row as listed, with where it came from, until the chain has been proven. */
