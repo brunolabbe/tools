@@ -1,0 +1,81 @@
+Septembre 2026
+Date	Description	Montant	Solde	lien
+28 SEP28 Septembre
+Taxes municipales/scolaires
+Taxes /Ville Exemple
+
+−1 100,00 $	520,95 $	
+28 Septembre Taxes /Ville Exemple −1 100,00 $
+12 SEP12 Septembre
+Virements
+Virement - AccèsD Internet /Caisse du Lac
+
++350,50 $	1 620,95 $	
+12 Septembre Virement - AccèsD Internet /Caisse du Lac +350,50 $
+12 SEP12 Septembre
+Loyer/Prêt hypothécaire
+Hypothèque /Prêteur Exemple
+
+−700,00 $	1 270,45 $	
+12 Septembre Hypothèque /Prêteur Exemple −700,00 $
+12 SEP12 Septembre
+Frais de service
+Frais mensuels
+
+−5,00 $	1 970,45 $	
+12 Septembre Frais mensuels −5,00 $
+12 SEP12 Septembre
+Virements
+Virement entre folios /Caisse du Lac
+
++400,00 $	1 975,45 $	
+12 Septembre Virement entre folios /Caisse du Lac +400,00 $
+1 SEP1 Septembre
+Assurances
+Assurance habitation /Assureur Exemple
+
+−89,99 $	1 575,45 $	
+1 Septembre Assurance habitation /Assureur Exemple −89,99 $
+Total	−1 144,49 $
+Août 2026
+Date	Description	Montant	Solde	lien
+26 AOÛ26 Août
+Virements
+Virement entre folios /Caisse du Lac
+
++400,00 $	1 665,44 $	
+26 Août Virement entre folios /Caisse du Lac +400,00 $
+12 AOÛ12 Août
+Loyer/Prêt hypothécaire
+Hypothèque /Prêteur Exemple
+
+−700,00 $	1 265,44 $	
+12 Août Hypothèque /Prêteur Exemple −700,00 $
+3 AOÛ3 Août
+Taxes municipales/scolaires
+Taxes /Ville Exemple
+
+−1 234,56 $	1 965,44 $	
+3 Août Taxes /Ville Exemple −1 234,56 $
+Total	−1 534,56 $
+Juillet 2026
+Date	Description	Montant	Solde	lien
+29 JUL29 Juillet
+Virements
+Virement - AccèsD Internet /Caisse du Lac
+
++400,00 $	3 200,00 $	
+29 Juillet Virement - AccèsD Internet /Caisse du Lac +400,00 $
+15 JUL15 Juillet
+Loyer/Prêt hypothécaire
+Hypothèque /Prêteur Exemple
+
+−700,00 $	2 800,00 $	
+15 Juillet Hypothèque /Prêteur Exemple −700,00 $
+3 JUL3 Juillet
+Virements
+Virement entre folios /Caisse du Lac
+
++1 500,00 $	3 500,00 $	
+3 Juillet Virement entre folios /Caisse du Lac +1 500,00 $
+Total	1 200,00 $
