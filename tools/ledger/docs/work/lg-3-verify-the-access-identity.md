@@ -417,3 +417,9 @@ tools/ledger/api/test/config-access.test.ts` gives 2 of 2 files and 39 of 39
   - With the old `access.ts` swapped back in, 6 of the 29 access tests fail:
     every new one that targets a live defect.
   - With the old literal `NODE_ENV` comparison, the spelling test fails.
+
+### 2026-10-02 — landed (fixer, Sonnet 5.5)
+
+Both gate sections were committed verbatim with `scripts/review-record.mjs`, one commit per gate, at tip `4b9ae7b`, the tip gate 2 reviewed: gate 1 with `status: done` set in the same commit, then gate 2 with `--gate 2`. Each splice reported its references as verified (25 of 25, then 48 of 48) and an empty disclosure diff. No code, test or prose was changed.
+
+The owner chose, on 2026-10-02, to land with gate 2's one new low, **N1**, recorded and unfixed. The container leg of Done-when 6 is **unproven until `ledger.yml` runs on the pull request**; this sandbox has no Docker daemon, and gate 2 is CONCERNS only for that reason.
