@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 import { ALL_ERROR_CODES } from "./errors.ts";
-import type { AppErrorPayload } from "./errors.ts";
+import type { AppErrorPayload, ErrorCode } from "./errors.ts";
 import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
 import type { Job, JobEvent, JobLink, JobOptions, JobProgress, JobResult } from "./job.ts";
 import { DRM_SYSTEMS, STREAM_PROTOCOLS, SUBTITLE_FORMATS } from "./media.ts";

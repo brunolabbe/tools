@@ -541,7 +541,7 @@ describe("probe_outcomes (dl-57)", () => {
     create("mux-job");
     store.transition("mux-job", "failed", {
       error: {
-        code: "MUX_FAILED",
+        code: "MUX_FAILED" as never,
         message: "The video could not be assembled into a playable file.",
         retryable: false,
       },

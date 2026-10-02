@@ -83,3 +83,6 @@ file it rather than fold it in.
   "strip the code's name from the comments". **Chosen: amend.** Done-when #1 is
   read as "outside comments", by this decision. Keep the comments documenting
   the retirement. Do not edit the Done-when line itself.
+
+  Gate finding 3 (mapping in wrong path) is superseded by the transform, which
+  handles conversion at the schema layer for all three data paths.
