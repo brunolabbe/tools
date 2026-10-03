@@ -237,8 +237,8 @@ export function scriptsTouched(diffPaths) {
 /**
  * `npm run check`, plus whichever `npm test` a diff's own paths call for: the
  * full suite when shared config moved, the `repo` project when `scripts/`
- * moved, and one project per tool the diff touches — all three read from the
- * diff's own paths, never from a flag.
+ * moved, one project per tool the diff touches, and `core` after those (repo-90)
+ * — all read from the diff's own paths, never from a flag.
  *
  * @param {string[]} diffPaths
  * @returns {[string, string[]][]}
@@ -249,11 +249,11 @@ export function testPlan(diffPaths) {
     commands.push(["npm", ["test"]]);
     return commands;
   }
-  if (scriptsTouched(diffPaths)) {
-    commands.push(["npm", ["test", "--", "--project", "repo"]]);
-  }
-  for (const tool of touchedTools(diffPaths)) {
-    commands.push(["npm", ["test", "--", "--project", tool]]);
+  const tools = touchedTools(diffPaths);
+  const projects = scriptsTouched(diffPaths) ? ["repo", ...tools] : tools;
+  // `core` last, whenever code moved: its source scans read every file under scripts/ and tools/ (repo-90)
+  for (const project of projects.length > 0 ? [...projects, "core"] : projects) {
+    commands.push(["npm", ["test", "--", "--project", project]]);
   }
   return commands;
 }
