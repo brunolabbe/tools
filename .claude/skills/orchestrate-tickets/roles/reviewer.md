@@ -59,7 +59,7 @@ confirm it. So read in this order:
 ## Returning the gate
 
 - **Write the section to one file in your scratch directory with the Write
-  tool**, named `gate-<n>@<head sha>.md`, starting on its heading line —
+  tool**, named `gate-<n>@<short head sha>.md`, starting on its heading line —
   `## Review` for gate 1, `### Gate <n>` for a later one — and name the path in
   your report. The lander commits that file as it stands; your report's text
   reaches the orchestrator HTML-escaped and is not what lands. Write nowhere
@@ -87,4 +87,5 @@ its output.
 - Return **one new `### Gate <n>` file**. Earlier sections are not yours to
   re-issue or edit: each names the sha it gated and stays as written.
 - **Say plainly whether anything you found is a `high`.** A third gate runs only
-  for one; anything less is recorded and the ticket lands.
+  for one. A `med` that a `Done when` line depends on is still fixed, without
+  another gate; anything less is recorded and the ticket lands.

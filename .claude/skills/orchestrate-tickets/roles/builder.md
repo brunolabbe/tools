@@ -42,7 +42,8 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
 - `npm run format` after touching any `.md`. Fix lint by hand; never
   `npm run lint:fix`, which rewrites files outside the branch.
 - `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`,
-  exit 0. It runs `npm run check`, the suite of every tool the diff touches,
+  exit 0. It runs `npm run check`, the suite of every tool the diff touches
+  (and `core` and `repo` when `scripts/` moved),
   every other `ci.yml` check-job command, the `## Review` presence test, the
   title's type against the paths it touches, and a merge-tree probe against
   every other open pull request head. Run full `npm test` yourself if shared

@@ -47,7 +47,8 @@ batch while this page stated it twice (2026-10-03).
 
 3. **Dispatch builders**, one per ticket, as the agent the pairing table names.
    Never pass `model`. Before each dispatch, create the ticket's scratch
-   directories (`<scratchpad>/<id>/build`, `gate-1`, `gate-2`, `land`) and check
+   directories (`<scratchpad>/<id>/build`, `gate-1`, `gate-2`, `land`; `gate-3`
+   if one is ever dispatched) and check
    the branch name is free. The builder builds, pushes, and **opens a draft pull
    request**, so CI — the Windows leg, the container jobs, CodeQL — runs while
    the gate works.
@@ -107,7 +108,7 @@ batch while this page stated it twice (2026-10-03).
    resumed for it, otherwise a `fixer` — on ship authority in its own dispatch
    or a direct message from you. One command per ticket
    ([reference/records.md](reference/records.md)):
-   `node scripts/review-record.mjs --land <ticket> <gate files…> --base origin/main --status done --title "<PR title>" --branch <branch>`.
+   `node scripts/review-record.mjs --land <ticket> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
    Then it posts each gate's full report to the PR thread, names every model in
    the PR body, and marks the PR ready — unless you are holding it as a draft
    for merge order, in which case you say so in a PR comment.
@@ -217,7 +218,10 @@ receiving agent needed in full.
 Lead with what changed and what needs them. Name the finding that matters and
 why it would have bitten. Keep a board — ticket, gates, verdict, PR — and give
 merge order when branches are stacked or conflict. Close with `# Done` once
-nothing waits on an answer; open pull requests awaiting merge go under it.
+nothing waits on an answer; open pull requests awaiting merge go under it, and
+so does every finding the severity floor left recorded and unfixed, named as
+such. A `high`, or a `med` an acceptance line depends on, that nobody has
+repaired ends in a question instead.
 
 **End every batch with a per-agent accounting table**, unasked:
 

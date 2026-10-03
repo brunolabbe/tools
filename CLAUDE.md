@@ -269,7 +269,10 @@ releasing are denied on purpose and the gate workflow deliberately ends at "open
 the PR", so a branch waiting on a merge is the normal finished state here, not an
 unfinished one. What is not finished is anything still waiting on an _answer_.
 
-**Nothing else earns it.** Not a gate that named findings nobody has repaired, not
+**Nothing else earns it.** Not a gate that named findings nobody has repaired —
+other than those the severity floor leaves recorded on purpose
+([adr/006](./docs/adr/006-gate-records-carry-no-citations.md)), which are named
+under the heading — not
 a branch carrying an open decision, not a report that ends by offering to do more
 work — each of those ends in `AskUserQuestion`, because in each the next move is
 the user's to choose. A report of work not done already reads exactly like a

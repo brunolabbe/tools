@@ -410,10 +410,7 @@ const OXFMT = (() => {
  * @param {string} ticketAbsolutePath
  * @param {string} sectionFileAbsolutePath
  * @param {number | null} gate
- * @param {{requireClaudePins?: boolean}} [options] `requireClaudePins` is
- *   `--land`'s own addition (repo-78 gate 2, F2/G2-d): its splice refuses what
- *   CI refuses, not only what a plain splice has always checked.
- * @returns {{relative: string, diff: string, checkStdout: string}}
+ * @returns {{relative: string, diff: string}}
  */
 export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate) {
   const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
@@ -906,12 +903,8 @@ function verifyMain(argv) {
 // ---------------------------------------------------------------------------
 
 /*
- * Appended below `main` and `--verify` for the same reason those are appended
- * below the top-level helpers: `repo-55`, `repo-62`, `repo-63`, `repo-67` and
- * `repo-82`'s own merged gate records already cite this file by unpinned
- * line, so every one of them is repointed onto a `main` commit that holds the
- * cited text once this branch lands — see this ticket's own Log — rather than
- * chased line by line every time this file grows.
+ * Appended below `main` and `--verify`, an order that was forced while merged
+ * gate records cited this file by line and is only history now (adr/006).
  *
  * The Why names seven manual mistakes across six landings: running `--verify`
  * before the commit, flipping status before the splice, missing
@@ -935,7 +928,6 @@ export const LAND_USAGE =
  * <n>` for a later one), and `detectGate` reads it from there, the same
  * source `validateFirstLine` already trusts.
  *
- * @param {string[]} argv
  * `--branch` names the branch to push to. It is required from a detached
  * HEAD, which is where a lander works: the builder's worktree holds the
  * branch name.
@@ -1155,9 +1147,8 @@ export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
  * CLI "name the failed step" instead of printing a stack trace.
  *
  * Every step before `"splice"` runs before anything is written or
- * committed, so a refusal there — including `unpinnedPreexistingCitations`'s
- * own — touches nothing (this ticket's `Done when`: "refused before it is
- * spliced").
+ * committed, so a refusal there — a detached HEAD with no `--branch`, a
+ * dirty tree — touches nothing.
  *
  * **Every section is validated — spliced and committed, in order — against a
  * disposable scratch clone before any of them touches the real repository**

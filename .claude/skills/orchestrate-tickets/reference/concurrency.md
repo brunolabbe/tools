@@ -340,10 +340,11 @@ branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, whi
 reads like a content problem and is not: it is history shape. Do not send a builder
 to resolve those conflicts by hand.
 
-**When merging `main` into a branch, resolve with `git merge -X ours`, not
-`git checkout --ours <file>`.** The first resolves only the conflicting hunks;
-the second takes the whole file and drops the other side's non-conflicting
-changes.
+**When merging `main` into a branch, resolve each conflict by reading it.**
+Never `git merge -X ours` and never `git checkout --ours <file>`: the first
+silently keeps the branch's side of every conflicting hunk and exits 0, so a fix
+`main` made on the same line is dropped; the second drops `main`'s
+non-conflicting changes to the file as well.
 
 **When a batch holds a branch that changes preflight itself, merge it first.**
 Every sibling's preflight judges that sibling by the old code until it merges.

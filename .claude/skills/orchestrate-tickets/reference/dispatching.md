@@ -7,7 +7,9 @@ prompt that repeats them pays twice and buries the part that is yours.
 **The frontmatter is read at launch from the shared checkout; the role pages at
 the agent's first command, from `origin/main`.** So a branch that edits a role
 page is built and gated under the page on `main`, and a woken agent runs the page
-it read at its first launch. After a definition's model or effort changes, check
+it read at its first launch. After a merge that changes a definition — a model,
+an effort, a tool — bring the shared checkout to `main` before the next
+dispatch, and check
 the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
 
 ## Before any dispatch
