@@ -12,11 +12,16 @@ Your context is the one thing that must survive the whole batch, so it holds the
 board and nothing else.
 
 **This page is the current rule and nothing else.** Why a rule exists is in
-[adr/006](../../../docs/adr/006-gate-records-carry-no-citations.md) and, for the
-older ones, in `reference/history.md`, which is an archive: read it only when you
-are revising this skill. A page that carries its own history gets skimmed, and
-the rule on it gets missed — an orchestrator broke one rule three times in a
-batch while this page stated it twice (2026-10-03).
+[adr/006](../../../docs/adr/006-gate-records-carry-no-citations.md) and in
+`reference/history.md`.
+
+**You never edit this skill, a role page, an agent definition, a rule under
+`.claude/rules/` or any `CLAUDE.md`, and you dispatch no agent to.** You log
+what went wrong (step 12), and the owner runs a review session over the log once
+in a while that changes the rules in one pass. An orchestrator that edits its own
+rules adds one each time it is bitten and never removes any: 81 of 203 finished
+tickets were process tickets by 2026-10-03 (adr/006). If a rule is so wrong that
+the batch cannot proceed, put it to the user at once.
 
 ## Reference
 
@@ -29,6 +34,7 @@ batch while this page stated it twice (2026-10-03).
 | [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt for a risky branch |
 | [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | A worktree that will not go away, or every agent dying at once |
 | [reference/model-pairing.md](reference/model-pairing.md) | Why the pairing table reads as it does. Never needed to dispatch |
+| [reference/history.md](reference/history.md) | Appending step 12's entry — read only its last section, never the archive above it |
 
 ## The loop
 
@@ -121,12 +127,15 @@ batch while this page stated it twice (2026-10-03).
 
 11. **After a merge, look once at `main`.** See _After a merge_.
 
-12. **Close the batch.** The accounting table below, then the skill's defects:
-    ask every agent for them in its dispatch, and for each one either edit the
-    page that holds the rule or file a ticket carrying a reproduction. Page
-    edits go in one pull request for the batch, gated once, narrowly. No history
-    row is written; the table is `agent-cost.mjs` output and goes in that pull
-    request's body.
+12. **Close the batch by logging it.** Write one entry — the accounting table
+    below, then the skill's defects — to a file in your scratchpad, in the shape
+    `reference/history.md` fixes under _The log since the last review_, and
+    have a `fixer` append it to that page verbatim and open a `docs(repo)` pull
+    request. No gate: it is your own account, and the review session checks it
+    against the transcripts. Ask every agent for the defects in its dispatch;
+    each item names the page and heading it concerns and carries a reproduction
+    — a command and its output. Change no rule. When the log holds about twenty
+    items, or five entries, tell the user a review is due.
 
 ## Which model built it, and which gated it
 
@@ -140,7 +149,7 @@ files together.
 | `standard` | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-opus` (Opus 5.5, high) |
 | `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
 | maintenance — a rebase, a merge from `main`, one Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | none, or `ticket-reviewer-sonnet` where one runs |
-| a docs-only chore — rule pages, ticket files, no source | `builder-standard` | one gate, narrow, after the PR opens |
+| a docs-only chore — ticket files, tool docs, no source | `builder-standard` | one gate, narrow, after the PR opens |
 | a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | the round's gate, woken |
 
 - Never `haiku` for a gate or for prose and records; never `fable` for either

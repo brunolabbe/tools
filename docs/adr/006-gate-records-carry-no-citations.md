@@ -1,4 +1,4 @@
-# 006 — Gate records carry no line citations, and a ticket gets two gates
+# 006 — Gate records carry no line citations, a ticket gets two gates, and the orchestrator logs instead of editing its rules
 
 **Status:** accepted · **Date:** 2026-10-03 · **Affects:** every tool, and the
 `orchestrate-tickets` and `review-ticket` skills
@@ -75,6 +75,14 @@ record mechanics. Its sixth gate was a documentation-only PASS.
    CI runs while the gate works and the gate can read it. A pull request stays a
    draft until its records land, or while it is held for merge order.
 
+6. **The orchestrator does not edit its own rules.** It never changes a skill
+   page, a role page, an agent definition, a rule under `.claude/rules/` or a
+   `CLAUDE.md`. Each batch it appends its accounting table and its defect list,
+   each defect with a reproduction, to the skill's `reference/history.md`; the
+   owner runs a review session over that log from time to time, which changes
+   the rules in one pass. A rule so wrong that a batch cannot proceed is put to
+   the owner at once.
+
 ## Consequences
 
 - **A record can go stale and nothing will say so.** A reader who wants to check
@@ -91,6 +99,12 @@ record mechanics. Its sixth gate was a documentation-only PASS.
   tests, line-neutral edits, re-issued sections, pin-to-base, the whole-batch
   citations merge. Preflight still probes every other open pull request for a
   plain merge conflict.
+- **A logged defect stays unfixed until the next review.** Between 2026-09-12
+  and 2026-09-18 about seventy logged items changed no page and the same
+  defects recurred, which is why same-PR rule edits were adopted on 2026-09-20.
+  This decision takes that cost back deliberately, bounded by the log's
+  threshold — about twenty items or five batches — and by the escape for a
+  rule that blocks a batch.
 - **Open pull requests built under the old rules** carry records with citations
   and may touch the removed scripts. Their records land as written; a branch
   that edits `scripts/citations*.mjs` conflicts with this change and is closed
