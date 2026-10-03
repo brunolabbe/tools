@@ -16,7 +16,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { parseArgs, render, reResolve } from "../re-resolve-citations.mjs";
 
 const CLI = path.resolve(import.meta.dirname, "..", "re-resolve-citations.mjs");
-const TEXT = { encoding: "utf8" } as const;
+const TEXT = { encoding: "utf8", shell: false } as const;
 
 const BASE_APP = [
   "// header",
@@ -45,6 +45,11 @@ const BASE_SHORT = Array.from({ length: 10 }, (_, i) => `// short ${i + 1}`);
 // Shortened below the line the record cites, which `checkCitations` alone calls
 // unresolvable before it looks at the anchor.
 const TIP_SHORT = ["// short 1", "// short 2", "// short 9"];
+// The anchor starts on two lines at the base and on one at the tip (gate 1, F2).
+const BASE_DUP = ["// d", "const DUPX = 1;", "// m", "// n", "const DUPX = 2;"];
+const TIP_DUP = ["// a", "// b", "// c", "// d", "// m", "// n", "const DUPX = 1;"];
+const PAGE_BASE = ["# Page", "## Heading"];
+const PAGE_TIP = ["# Page", "intro", "## Heading"];
 
 let dir = "";
 let base = "";
@@ -76,11 +81,16 @@ beforeAll(() => {
   git("config", "commit.gpgsign", "false");
   write("app.ts", BASE_APP);
   write("short.ts", BASE_SHORT);
+  write("dupx.ts", BASE_DUP);
+  fs.mkdirSync(path.join(dir, ".claude"));
+  write(".claude/page.md", PAGE_BASE);
   git("add", "-A");
   git("commit", "-qm", "base");
   base = git("rev-parse", "--short=7", "HEAD");
   write("app.ts", TIP_APP);
   write("short.ts", TIP_SHORT);
+  write("dupx.ts", TIP_DUP);
+  write(".claude/page.md", PAGE_TIP);
   git("add", "-A");
   git("commit", "-qm", "tip");
   tip = git("rev-parse", "--short=7", "HEAD");
@@ -223,7 +233,7 @@ test("render prints a row and the suggestion for each non-holding citation, and 
 test("a record whose every citation holds renders exit 0", () => {
   const { text, exit } = render(run('a `app.ts:9 "export const epsilon"`\n'), "rec.md");
   expect(exit).toBe(0);
-  expect(text).toContain("exit 0 — nothing to change");
+  expect(text).toContain("exit 0 — every re-resolved citation holds");
 });
 
 test("parseArgs refuses a missing record, a second record, an unknown flag and a flag with no value", () => {
@@ -268,4 +278,26 @@ test("the CLI exits 1 on a citation that wants a change, 0 on one that does not,
   const noArgs = exec();
   expect(noArgs.status).toBe(2);
   expect(noArgs.stderr).toContain("usage: node scripts/re-resolve-citations.mjs");
+});
+
+test("with --base, an anchor on several base lines is ambiguous, never a pin to the first (gate 1, F2)", () => {
+  // One line at the tip, so only the base side is ambiguous.
+  const row = only('At `dupx.ts:7 "const DUPX"`.\n', { base });
+  expect(row).toMatchObject({ action: "ambiguous", suggestion: null });
+  expect(row.detail).toContain("starts on 2 lines there (2, 5)");
+  expect(row.detail).toContain("At the tip: holds");
+  // Without --base the same citation holds, so the verdict is the base's own.
+  expect(only('At `dupx.ts:7 "const DUPX"`.\n').action).toBe("holds");
+});
+
+test("a repoint into a .claude page says a bare line is refused there", () => {
+  const row = only('At `.claude/page.md:2 "## Heading"`.\n');
+  expect(row).toMatchObject({ action: "repoint", suggestion: ".claude/page.md:3" });
+  expect(row.detail).toContain("never a bare line");
+  expect(only('At `app.ts:2 "export const alpha"`.\n').detail).not.toContain(".claude/");
+});
+
+test("an exit-0 run says it did not check anchor distinctness or .claude pins", () => {
+  const { text } = render(run('a `app.ts:9 "export const epsilon"`\n'), "rec.md");
+  expect(text).toContain("not checked here: distinct anchors, .claude pins");
 });

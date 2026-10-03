@@ -199,12 +199,18 @@ not get their narrative, for the same reason you did not get the build's report.
   splice each old section above the new head's `## Log` and run
   `node scripts/citations.mjs <copy> --section Review` on it. The `MOVED` list
   is the set of citations to repoint. `node scripts/re-resolve-citations.mjs
-  <copy> --section Review --base <base>` (repo-84) turns that list into the
-  repair: each unpinned anchored citation re-resolved by its anchor over the
-  whole file, as `repoint` to the line it is now on, `pin` to the base line if
-  the text predates the branch, or `gone`/`ambiguous` for a human; it edits
-  nothing, and leaves pinned and anchorless citations out and counted. A
-  citation whose anchor the round deleted,
+  <copy> --section Review --base <base>` (repo-84) turns that list into a
+  proposed repair: each unpinned anchored citation re-resolved by its anchor
+  over the whole file, as `repoint` to the line it is now on, `pin` to the base
+  line if the text predates the branch, or `gone`, `ambiguous` or
+  `unresolvable` for a human. It edits nothing, leaves pinned and anchorless
+  citations out and counted, and **proposes coordinates only**: it reads the
+  working tree, not the commit the section gated, and cannot tell a claim the
+  round moved from one it corrected, so check each `repoint` against the commit
+  the section reviewed (above) before taking it. Its exit 0 is narrower than
+  CI's: it applies neither `--require-distinct-anchors` nor
+  `--require-claude-pins`, so run `citations.mjs` with them after. A citation
+  whose anchor the round deleted,
   or whose sentence the round made false though the anchor survives, becomes
   prose naming the sha that section gated, and bare prose line numbers are
   unchecked only — they must be re-listed by hand if they are still true.

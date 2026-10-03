@@ -45,7 +45,11 @@
  * summary line, and none of them sets the exit code.
  *
  * Exit 0 when every re-resolved citation holds, 1 when at least one wants a
- * change, 2 for a usage error or a ref that is not a commit.
+ * change, 2 for a usage error or a ref that is not a commit. **Exit 0 is narrower
+ * than CI's**: neither `--require-distinct-anchors` nor `--require-claude-pins`
+ * is applied, so a holding anchor that starts on two lines, or a bare line into a
+ * `.claude/` page, prints `ok` here and fails `citations.mjs` with those flags.
+ * Run that last (repo-84 gate 1, F4).
  *
  * Plain `.mjs`, no dependencies, matching `citations.mjs`.
  *
@@ -197,8 +201,10 @@ export function reResolve({ markdown, repo, section = null, base = null }) {
     const anchor = /** @type {string} */ (c.anchor);
     const hits = tip.state === "unresolvable" ? [] : (tip.foundAt ?? []);
     const baseResult = baseResults?.[i];
-    const baseLine =
-      baseResult?.state === "verified" ? (baseResult.foundAt?.[0] ?? baseResult.start) : null;
+    // Every line the anchor starts on at the base: a pin to one of several is a pin
+    // `--require-distinct-anchors` refuses, so more than one is never a `pin` (F2).
+    const baseHits = baseResult?.state === "verified" ? (baseResult.foundAt ?? []) : [];
+    const baseLine = baseHits.length === 1 ? baseHits[0] : null;
     const width = c.end - c.start;
     const where = rangeOf(c.start, c.end);
     const inRange = hits.filter((n) => n >= c.start && n <= c.end);
@@ -215,6 +221,17 @@ export function reResolve({ markdown, repo, section = null, base = null }) {
 
     const row = { line: c.line, file, start: c.start, end: c.end, anchor, hits, baseLine };
 
+    if (baseHits.length > 1) {
+      return {
+        ...row,
+        action: "ambiguous",
+        suggestion: null,
+        detail:
+          `the anchor is already in ${file} at ${baseSha}, but starts on ${baseHits.length} lines there ` +
+          `(${list(baseHits)}), so no single pin is distinct: quote more of the line, then pin it. ` +
+          `At the tip: ${tipSays}`,
+      };
+    }
     if (baseLine !== null) {
       return {
         ...row,
@@ -252,7 +269,11 @@ export function reResolve({ markdown, repo, section = null, base = null }) {
       suggestion: `${file}:${rangeOf(to, to + width)}`,
       detail:
         `the anchor is not in ${where}; it starts on line ${to} of ${tip.resolved}` +
-        (width > 0 ? `, and the suggested range keeps the old width, so check its end` : ""),
+        (width > 0 ? `, and the suggested range keeps the old width, so check its end` : "") +
+        // CI refuses a bare line into a .claude page (`--require-claude-pins`); this does not apply it.
+        (tip.resolved?.startsWith(".claude/")
+          ? `. A .claude/ page takes a pin or a page-and-heading citation, never a bare line`
+          : ""),
     };
   });
 
@@ -327,7 +348,9 @@ export function render(result, record) {
     counts.map(({ a, n }) => `${n} ${a}`).join(", ") + ` — of ${rows.length} re-resolved`,
     `not re-resolved: ${skipped.pinned} pinned, ${skipped.malformed} malformed pin, ${skipped.unanchored} unanchored, ` +
       `${skipped.unchecked} prose or file-less, ${skipped.declared} declared evidence`,
-    wanting === 0 ? "exit 0 — nothing to change" : `exit 1 — ${wanting} citation(s) want a change`,
+    wanting === 0
+      ? "exit 0 — every re-resolved citation holds (not checked here: distinct anchors, .claude pins)"
+      : `exit 1 — ${wanting} citation(s) want a change`,
   );
   return { text: `${out.join("\n")}\n`, exit: wanting === 0 ? 0 : 1 };
 }

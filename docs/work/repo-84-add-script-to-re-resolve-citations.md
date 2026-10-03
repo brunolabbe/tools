@@ -20,9 +20,12 @@ During the 2026-09-29 batch, a reviewer built the same "re-resolve every unpinne
 **Asked of the owner** by the orchestrator via `AskUserQuestion` on 2026-09-30,
 with four options: build it now; **build it later** (option 1 below, chosen);
 document it only (option 2); leave it ad hoc (option 3). **Answered by the
-owner: option 1, built later, after repo-47.** The reason: repo-47 changed what
+owner: option 1, built later, after repo-47.** The reason as filed: repo-47 changed what
 "moved" means to the gate, so the script is written against the new meaning.
-The script's semantics are documented in `roles/reviewer.md` meanwhile. Nothing
+The script's semantics are documented in `roles/reviewer.md` meanwhile.
+**Both premises were wrong, and the Log's 2026-10-03 entry says so** (gate 1, F6):
+repo-47 changed which records fail, not what `moved` is, and that page held a
+recipe, not script semantics. Nothing
 is built; `status` is `ready`, and the builder re-measures after repo-47.
 
 ## Build (decided: option 1, built later — the step below is the options as filed, superseded)
@@ -50,6 +53,23 @@ made here):
 ## Why
 
 The script was rebuilt four times by the same gate round over successive fix rounds, suggesting it would have been more efficient to have a stable, documented version available. Evidence: the four recreations across gate rounds 2-5 of repo-80's branch.
+
+## Done when
+
+Derived from the Decision, since the brief carried none (gate 1, F3). Each line
+is checked by a test in `scripts/test/re-resolve-citations.test.ts` unless it
+names a command.
+
+- `node scripts/re-resolve-citations.mjs <record> [--section <name>] [--base <ref>]`
+  exists under `scripts/`, re-resolves each unpinned anchored citation over the
+  whole file, and prints one verdict per citation: `holds`, `repoint`,
+  `ambiguous`, `gone`, `unresolvable`, and with `--base` `pin`.
+- It edits nothing, counts the references it leaves out, and exits 0, 1 or 2 as
+  its docblock says.
+- On a real record in this repo its output agrees with a second method (see the
+  Log).
+- The suite fails when each branch of it is removed (the Log's mutation runs).
+- `npm run check` and the `repo` and `core` projects pass, and preflight exits 0.
 
 ## Log
 
@@ -125,3 +145,31 @@ record> | grep -n -F "starts on two"` printed line 173, the suggested pin, and
   specifies it, it would rewrite a gate's text where a round that _corrected_ a
   claim, not merely moved a line, wants a human, and a report is what the four
   rebuilt scripts were.
+- 2026-10-03 — **Gate 1 round: F1 and F2 fixed, F3 to F6 taken.**
+  - **F1 (high), fixed.** `TEXT` in the new suite now carries `shell: false`, which
+    the spawn scan accepts through a named literal and through a spread of one.
+    Before: `npx vitest run packages/core/test/spawn-safety.test.ts` was 1 failed of
+    18, naming both calls in `scripts/test/re-resolve-citations.test.ts`. After: 18
+    of 18. The cause one layer up is filed and fixed as repo-90.
+  - **F2 (med), fixed with option (a).** When the anchor starts on more than one
+    line at the base, the verdict is `ambiguous` and lists the base lines, with the
+    tip's own state beside it, instead of a pin to the first. Why (a) and not (b),
+    keep `pin` and warn: the tip side already refuses to choose among several, so
+    one rule on both sides; and a pin to one of several lines is a pin
+    `--require-distinct-anchors` refuses at the dry run, so `pin` stating one
+    would be a suggestion known to fail. New test `with --base, an anchor on
+several base lines is ambiguous, never a pin to the first`; removing the new
+    branch turns it red (1 failed of 21). Mutating `[0]` alone survives and is an
+    equivalent mutant now, since the ambiguous branch returns first.
+  - **F3, taken.** The ticket now has a `## Done when`, derived from the Decision.
+  - **F4, taken, as documentation and one hint.** The docblock, the final line of
+    the output and the reviewer.md sentence now say the exit 0 applies neither
+    `--require-distinct-anchors` nor `--require-claude-pins`, and a `repoint` into
+    a `.claude/` page says a bare line is refused there. Applying the two rules
+    inside the script was not done: it would copy `citations.mjs`'s own checks for
+    a second report of the same verdict, and `citations.mjs` with the flags is the
+    authority the page now names.
+  - **F5, taken.** The reviewer.md sentence now says a `repoint` is a proposal read
+    from the working tree, not the commit the section gated, and lists
+    `unresolvable` among the verdicts for a human.
+  - **F6, taken.** The Decision paragraph above carries the correction in place.
