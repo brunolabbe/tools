@@ -534,3 +534,11 @@ add a tool, add its gate before its first release, not after.
 in [`.release-please-manifest.json`](../.release-please-manifest.json), a
 `version.txt`, and a `tools/<name>/Dockerfile`. The build matrix is whatever was
 released, resolved at runtime.
+
+**A new tool's entry carries `"initial-version": "0.1.0"`.** With no tag for the
+tool yet, release-please falls back to the manifest's version — except `0.0.0`,
+which it skips as "never released" — and with nothing to bump from it cuts
+`initial-version`, whose default is `1.0.0`. The ledger was seeded at `0.0.0`
+without one and its first release pull request (#337) came up as 1.0.0. Seed the
+manifest line at `0.0.0` and set `initial-version`; seeding the manifest at
+`0.1.0` instead, as the planner was, makes the first release 0.2.0.

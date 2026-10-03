@@ -45,7 +45,8 @@
           "path": "/package-lock.json",
           "jsonpath": "$.packages['tools/ledger/api'].version"
         }
-      ]
+      ],
+      "initial-version": "0.1.0"
     }
   },
 
