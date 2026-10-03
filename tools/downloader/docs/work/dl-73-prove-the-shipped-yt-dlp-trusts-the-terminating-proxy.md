@@ -316,3 +316,9 @@ manual measurement"), and it now fires automatically.
   verifying at all", edited in place. The `docker` step's comment gains two
   lines about the control, so the step moved from line 206 to line 208. The
   entry above was repointed to match.
+
+  **In CI, at `beb0289`.** PR #343 run `37140019969`, `docker` job
+  `111252322360`, finished `success`. Its trust step printed probe 1 `HTTP 200`,
+  `control: replacing 2 trust bundle(s) with an unrelated root`, probe 2
+  `HTTP 502; origin saw []`, then `PASS`. `test (ubuntu-latest)` passed in run
+  `37140019955`.
