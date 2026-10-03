@@ -1,6 +1,6 @@
 {
   "name": "@ledger/api",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "HTTP API and persistence. The only place in the tool that reads the environment or touches the database.",
   "type": "module",
