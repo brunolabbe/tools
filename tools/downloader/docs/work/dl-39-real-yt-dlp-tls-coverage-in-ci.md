@@ -224,3 +224,11 @@ was chosen, so there is one line and it is met:
   [dl-73](./dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md).
   This ticket stays `done`: its decision was right under the premise it
   recorded.
+
+- **2026-10-03** — The two questions the 2026-09-05 entry left open are answered in
+  [dl-73](./dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md)'s
+  Log. `--compat-options no-certifi` exists from `2022.04.08`, the same release
+  that made yt-dlp prefer `certifi`. The CI runner reaches the releases host:
+  dl-72's container gate downloaded the binary. The pair is no longer
+  measured by hand only, because the downloader container gate now runs it
+  against the shipped binary on every run.
