@@ -694,9 +694,9 @@ raising `PROBE_TIMEOUT_MS` shortens it. It is capped at 50 s, where there is non
 The UI links to `/terms.html`, a static page the image ships
 ([`terms.html`](../tools/downloader/web/public/terms.html)). It says what the
 service may be used for, that no video is stored, what it records and for how
-long, and where to write. It is marked **a draft** until the owner approves it in
-the pull request that adds it; that approval is `dl-54`'s fifth done-when, and the
-paragraph with `id="draft"` is what to delete.
+long, and where to write. The owner approved the text on 2026-10-03, in the pull
+request that adds it (`dl-54`'s fifth done-when), and the draft label was removed
+from the page then.
 
 **Create the contact alias on the dashboard.** The page names `abuse@oludoi.com`
 (the owner's choice, 2026-09-28): in Cloudflare, **Email → Email Routing**, add a

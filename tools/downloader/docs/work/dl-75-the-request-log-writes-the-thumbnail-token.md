@@ -3,7 +3,7 @@ id: dl-75
 tool: downloader
 title: The request log writes a thumbnail token in full, and the contract calls it a capability
 kind: fix
-status: ready
+status: needs-decision
 milestone: null
 depends_on: []
 difficulty: standard

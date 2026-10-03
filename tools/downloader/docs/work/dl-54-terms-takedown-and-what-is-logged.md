@@ -258,3 +258,20 @@ raw=1811 wrapped=2551` for those three calls (the gate saw 1,812 and 2,552), the
   - **The Access login in front of the page** stays until dl-49, by the owner's
     choice. Nothing built; `docs/02-DEPLOYMENT.md` says so.
   - The dropped finding is `dl-75`, not built.
+- 2026-10-03 — Done-when 5, the owner's approval of the terms text.
+  - **Approved as written.** The owner was shown the full terms text as it stood at
+    `8f131d8` and asked, through AskUserQuestion, to approve it. The options were:
+    approve as written (recommended); approve with edits; not yet. The owner chose
+    **approve as written**, and the draft banner is removed in this commit: the
+    `<p class="draft" id="draft">` paragraph in `terms.html`.
+  - **Two files beyond the banner, as the approval implies.** The `.draft` rule in
+    `terms.css`, which only that paragraph used, is deleted; its `--warn-bg` and
+    `--warn-border` custom properties are now unused and were left. The
+    `docs/02-DEPLOYMENT.md` sentence that called the page a draft and named the
+    paragraph to delete now says the owner approved it on 2026-10-03, kept to the
+    same number of lines. No test asserted the banner either way.
+  - **`dl-75` is now `needs-decision`, not `ready`.** It poses a question, whether
+    `ROUTES.thumbnail`'s token is a capability to redact or not, and
+    `docs/01-TICKETS.md` says a ticket that poses a question starts as
+    `needs-decision`. It was filed `ready` on the orchestrator's instruction, which
+    was wrong.

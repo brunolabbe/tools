@@ -59,10 +59,3 @@ code {
 li {
   margin-block-end: 0.9rem;
 }
-
-.draft {
-  padding: 0.6rem 0.8rem;
-  border: 1px solid var(--warn-border);
-  border-radius: 6px;
-  background: var(--warn-bg);
-}
