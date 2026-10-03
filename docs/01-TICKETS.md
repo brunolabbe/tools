@@ -294,7 +294,7 @@ as a ticket whose work merged without its status being flipped, and a filing gat
 in that section makes a perfectly ordinary unstarted ticket look like a defect.
 
 It is one table — a row per acceptance line, naming the test that proves it,
-`file.test.ts:88` rather than "covered" — a list of findings by severity, and a
+the spec file and the test's name rather than "covered" — a list of findings by severity, and a
 single word:
 
 | Gate         | When                                                              |
@@ -360,7 +360,8 @@ disclosure note it now requires of the builder, are stated in
 writes it or why:
 
 - **The acceptance table** — one row per `Done when` line, each naming the test
-  that proves it (`file.test.ts:88`, not "covered"), with the verdict from the
+  that proves it (the spec file and the test's name, not "covered"; no line
+  numbers, [adr/006](./adr/006-gate-records-carry-no-citations.md)), with the verdict from the
   skill's four: `proven`, `unproven`, `unproven (gate)`, `verified`. This is the
   half that records the acceptance-to-test link, and it is the half a finding
   table will silently replace if only one is asked for.

@@ -3,73 +3,17 @@
 **Reviewers occupy slots.** A cap of four means four agents total — planning around
 builders alone means constantly rediscovering the cap.
 
-**The builder/reviewer split is not a planning constant, and it is not the lever.**
-Reviews were 60% of token spend in the first session, 23% in the second, 25% in
-the third, **30% in the fourth** (604 k of 2.04 M) and **38% in the fifth**
-(333 k of 877 k) — the third running 75% builder on the same loop and the same
-repo. Five sessions, five different answers.
-Do not budget from any of those numbers. **Budget from resume cost**, which is the
-thing that actually moves: a resumed builder pays a full context reload priced by
-transcript length, not by the work in front of it. Measure your own split as you
-go, but expect the answer to be that builders are winning and that the fix is
-fewer builder rounds rather than fewer gates. See [sizing.md](sizing.md).
-
-The fourth session is the cleanest read on that, because every one of its four
-builders produced a **complete branch on its first round** — nothing needed a
-second dispatch to fix a build. It still spent **ten builder invocations on four
-tickets** — one ticket took four rounds by itself. Most of the extra ones were gate
-relays; the exceptions widened a fix after a gate measured that it could be, and
-folded in a sibling ticket. Budget the invocations, not the tickets.
-
-Its per-round costs still rose as the work shrank, exactly as the table below
-predicts: one builder went 93 k → 135 k while its second round applied five small
-findings, and the documentation branch went 97 k → 177 k → 231 k → 283 k across
-four rounds. That one branch cost **787 k against a sibling's 206 k** (per-round
-figures rounded; the exact sum is 787.2 k) — more than the other three tickets'
-builders combined — and its diffs got smaller every round.
-**Rounds, not difficulty, is what a batch pays for.**
-
 **Never run two tickets over one seam.** The most expensive agent in the reference
 session (559 k) was a builder that rebased three times onto a sibling branch whose
 contract kept moving. Every rebase is a full re-read. Serialise them: it costs
 wall-clock and saves tokens, context reloads and a whole class of coordination
 message.
 
-**The positive case for doing this at intake, measured.** The fourth session built
-the seam map before dispatch — reading each candidate, finding two colliding
-pairs, and offering the user only batches that broke them up: **one member of each
-pair could still run, the other was held.** The four tickets it ran touched
-**fifteen files with zero overlap**, confirmed by diffing the four pull requests
-against each other. (It was fourteen until a late round folded a sibling ticket's
-one-line deliverable into one of the branches — and the pass that wrote *that*
-paragraph left this count at fourteen. Fourth instance of the class on this page,
-caught by the gate that read both paragraphs together.) No rebase, no serialisation, no cross-builder
-coordination message, and merge order that did not matter. Ten minutes of reading
-at intake is the cheapest thing on this page.
-
-Be careful what that proves. Zero overlap is measured; *"the seam map prevented
-the rebases"* is a counterfactual, and two things confound it — `main` never moved
-during the batch, and no branch merged while another was open, so no branch was
-ever in a position to need a rebase. The honest claim is the narrower one: **the
-whole class of failure was never available to that batch.** Whether the map is
-what did it went untested, exactly as the third session's worktree evidence was
-about cost and not about timing.
-
-It is worth naming what the map is made of, because a ticket's header does only
-half of it: each ticket's **Packages** line, *plus* what its Build section
-actually touches. In that batch the `api/src/server.ts` collision was visible in
-two Packages lines; the `vite.config.ts` one was **not** — one of those tickets
-carries no Packages line at all and the collision is in the second prose paragraph
-of its Why.
-Two of the ten tickets `npm run status -- --ready` returned had no Packages line —
-three of the twelve that read `status: ready`. A map built from headers alone would
-have missed a live collision.
-
-**And no map can see gate-record pins, because those are written mid-build.** In
-two batches every merge conflict was in a gate record more than one branch had
-pinned, none was in source, and the seam map had reported zero overlap
-(2026-09-12, 2026-09-14). The check that can see them is `git merge-tree` over
-the finished heads, which is step 11 of the skill page.
+**Map the seams at intake.** A ticket's `Packages` line is half the map; the
+other half is what its Build section actually touches, and a real collision has
+sat in the second prose paragraph of a ticket's Why. The `seam-mapper` reads
+both. `git merge-tree` over the finished heads — preflight runs it against
+every open pull request — is the check for what a map cannot see.
 
 **Your own batch's work is not available to your own builders.** Obvious stated
 plainly, and easy to lose after a few hours of shipping: every builder branches
@@ -78,22 +22,9 @@ for any of the others until it **merges**. A batch is exactly the situation that
 erodes this — you have been reading, relaying and celebrating that work all
 session, and it starts to feel landed.
 
-Measured 2026-09-03. One branch implemented a `--section` flag on a repo script and
-opened its PR. The orchestrator then told a *different* builder, in a dispatch, to
-use that flag — "note it gained a working `--section` on `main` today". It had not:
-the PR was open, never merged. The builder ran the tool, got
-`usage: node scripts/citations.mjs <ticket-file> [--rev <sha>]`, and reported back
-that whatever landed on `main` was not in its base. Confirmed afterwards in one
-line — `git show origin/main:scripts/citations.mjs | grep -c section` returns **1**
-(the stale usage line that was the defect), against **26** on the branch.
-
-Harmless there, because the builder checked. It would not be harmless in a brief
-that told an agent to *rely* on the capability, and it is the same class as the
-intake rule at the top of the loop — a ticket reads `ready` until something
-merges — arriving from the other direction. **The state of your own batch is
-`gh pr list`, not memory.** If a dispatch depends on a sibling branch's work, either
-say "this is unmerged, on branch X, do not depend on it" or stack the branch
-deliberately and say so.
+**The state of your own batch is `gh pr list`, not memory.** If a dispatch
+depends on a sibling branch's work, either say "this is unmerged, on branch X, do
+not depend on it" or stack the branch deliberately and say so.
 
 **Never edit a branch while it is being reviewed.** Batch the fixes and send them
 after the gate returns, or the reviewer is judging a moving target.
@@ -128,8 +59,7 @@ Two rules, and the orchestrator has to set them because agents will not:
 **namespace every scratch path by the ticket or agent it belongs to** (say so in
 the dispatch prompt, and do it in the paths you hand out yourself), and **write the
 file you are about to publish immediately before publishing it**, never reusing a
-path written earlier in the round. The same applies to the gate records you stage
-for a builder to commit — name them for their branch and gate number.
+path written earlier in the round.
 
 **Branch refs are shared the same way, and `git checkout -B` is a reset of
 whatever already holds the name.** Worktrees isolate files, not refs. A
@@ -356,9 +286,7 @@ have to run:
 
 This does not remove the post-squash reconciliation. It moves it to one known
 point after A lands, and B's conflict is then with duplicate content rather
-than with a second design. It also does nothing for gate-record citations:
-whatever moves a cited line breaks that citation on the branch behind it, so
-re-resolve the citations after the rebase.
+than with a second design.
 
 **Re-check the seams whenever an owner decision widens a branch, not only at
 intake.** An intake map cannot see a seam that a decision creates after
@@ -388,7 +316,7 @@ open B's pull request against A's branch and choose **Create stack**, or accept
 the banner GitHub shows on a chain that already exists. The pull requests
 step 2 above opens are exactly that chain. Do not install the `gh stack`
 extension for the pilot. It would need an allowlist entry and a deny rule for
-`gh stack merge`, and neither was decided. Record in the batch's history row
+`gh stack merge`, and neither was decided. Record in the batch's close-out
 what the pilot measured, including the three points repo-48 could not test:
 
 - whether a builder's `git merge origin/main` into a stacked branch still
@@ -412,18 +340,10 @@ branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, whi
 reads like a content problem and is not: it is history shape. Do not send a builder
 to resolve those conflicts by hand.
 
-**When merging `main` into a branch and citations collide, take the union of pins.**
-`git checkout --ours <file>` takes the whole file and drops the other side's
-non-conflicting hunks. `git merge -X ours` resolves only the conflicting hunks,
-keeping non-conflicting changes from both sides. When merging `main` into a
-branch, `--theirs` refers to `main`. Where both sides pinned different citations
-on the same line, the resolution is the union of those pins, verified by
-`citations-gate.mjs` at the merged result.
+**When merging `main` into a branch, resolve with `git merge -X ours`, not
+`git checkout --ours <file>`.** The first resolves only the conflicting hunks;
+the second takes the whole file and drops the other side's non-conflicting
+changes.
 
-**2026-09-30:** **When a batch holds a branch that changes the citations gate or
-preflight script, merge it first.** Every sibling's preflight fold will judge that
-sibling by the old code until the branch merges. A dispatch into this collision
-should name the expected fold failure and cost; merging the citations-changing
-branch first saves the round. Measured: repo-66's preflight exited 16 on its fold
-against an unmerged repo-47, with 30 moved citations in 11 records neither branch
-edits.
+**When a batch holds a branch that changes preflight itself, merge it first.**
+Every sibling's preflight judges that sibling by the old code until it merges.

@@ -1,5 +1,12 @@
 # What the sessions cost
 
+**Closed on 2026-10-03: an archive, not appended to.** A batch now closes with
+its accounting table in the close-out pull request and its skill defects fixed on
+the page that holds the rule (`SKILL.md` step 12). Rows below describe the loop
+as it was when each was written — line citations, pins, re-issued records and
+uncapped gate rounds included — and none of that is current
+([adr/006](../../../../docs/adr/006-gate-records-carry-no-citations.md)).
+
 Provenance for the rules on this page's parent, kept out of `SKILL.md` because it
 is evidence rather than instruction, and because everything at the top of
 `SKILL.md` is what survives a compaction.

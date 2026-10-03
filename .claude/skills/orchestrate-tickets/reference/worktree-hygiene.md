@@ -1,37 +1,35 @@
 # Worktree hygiene
 
-Worktrees auto-clean only when unchanged. A reviewer that writes into its worktree
-leaves it dirty, so it never cleans. The reference session leaked **7.0 GB across
-20 worktrees**.
+## When a worktree goes
 
-Two rules, both required:
+`SKILL.md` step 10 is the rule: a ticket's worktrees — builder, gate and fixer —
+are removed once its records are committed, its pull request is open, and you
+have looked once at that pull request's finished checks. Before removing each:
 
-- Reviewers **return** their section as text; they never write it to a file.
-- Remove each worktree once its ticket is **finished** — merged, or abandoned —
-  not when its PR opens: `git worktree remove --force <path>`, then
-  `git worktree prune`, then delete the `review-*` branch, then the ticket's
-  scratch directory `<scratchpad>/<ticket-id>/`, which holds the reviewer's
-  base-tree extract and outlives its rounds for that reason (repo-57). List it
-  beside the worktrees at close-out.
+- `git status --porcelain` is empty, and its head is on origin
+  (`git branch -r --contains <head>`);
+- its agent has delivered its completion notification and been sent nothing
+  since. **The lock is not the test**: subagents run inside your process, so
+  every lock names your pid, a live agent's included.
 
-**Superseded 2026-10-02 (owner decision, unprompted: "You can remove worktrees
-when pr land. I don't see why we would need to keep them.").** The "finished —
-merged, or abandoned — not when its PR opens" bullet above, and the
-hold-until-finished sections below, now yield to `SKILL.md` step 10: remove
-builder, gate and fixer worktrees once the PR has landed and the orchestrator has
-looked once at its finished checks, each checked clean and its head on origin,
-unless CI shows a problem then, when the orchestrator asks the owner whether to
-keep them; a later follow-up goes to a fresh `fixer`. The history below stays as
-the reasoning the owner weighed.
+Then `git worktree unlock`, then remove. If CI shows a problem at that look, ask
+the owner whether to keep the ticket's worktrees.
 
-Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
-long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
+**Removing a worktree makes its agent unresumable.** A follow-up after that — a
+post-PR fix, a stacked rebase — goes to a fresh `fixer`, not a resume.
 
-**Branch refs leak even when the directories do not.** Removing a worktree leaves
-its `worktree-agent-*` branch behind, and they accumulate across sessions — the
-second session found **51** of them while its own disk usage was back at the 4 KB
-baseline. Sweep them at the end of a batch, but **check each for unmerged commits
-first** and delete only those with none:
+**Before the landing, a round is not over because an agent said so.** A builder
+can always be woken for one more finding; hold the worktrees until the landing.
+
+**Isolated workflow agents that detach HEAD leave their worktree behind.** Remove
+those by hand after the run.
+
+## Branch refs leak even when the directories do not
+
+Removing a worktree leaves its `worktree-agent-*` branch behind, and they
+accumulate across sessions. Sweep them at the end of a batch, but check each for
+unmerged commits first and delete only those with none — never by name pattern
+alone:
 
 ```bash
 for b in $(git branch --list 'worktree-*' | sed 's/^[* ]*//'); do
@@ -39,257 +37,39 @@ for b in $(git branch --list 'worktree-*' | sed 's/^[* ]*//'); do
 done
 ```
 
-Of those 51, seven carried real commits — including one belonging to a *live
-worktree in another session*, which `git branch -D` refuses to delete, so the
-guard is belt-and-braces rather than the only protection. Never blanket-delete by
-name pattern.
+## When every agent dies at once
 
-**Removing a worktree also makes its agent unresumable**, which is why the second
-rule waits for the ticket rather than the PR. A follow-up sent to a builder whose
-worktree is gone is refused — *its worktree no longer exists* — and the only way
-forward is a fresh agent with the whole context rebuilt by hand, which costs far
-more than the disk did. An open PR still takes review comments, a rebase and
-follow-ups, and every one of those wants the agent that wrote it. Removing earlier
-is sometimes the right trade for 7 GB; make it a choice rather than discover it an
-hour later. The third session held every builder worktree to merge and paid almost nothing for it — 105 MB peak across a five-ticket batch, against the 7 GB above, because reviewers returned text and finished tickets were swept promptly. It is worth being precise that this is evidence about **cost, not about timing**: every branch in that batch opened its PR in its final builder round, so none was ever resumed afterwards and the trade was never actually tested. Holding to merge is cheap insurance; that batch did not have to collect on it. **Superseded 2026-10-02 for the open-PR case:** `SKILL.md` step 10 removes the worktrees once the PR has landed and its finished checks have been looked at, so the agent is unresumable by design and a follow-up goes to a fresh `fixer`.
+A session usage limit can kill every in-flight agent at the same instant. The
+recovery is cheap and the wrong recovery is expensive.
 
-**Split the rule by role: hold builders, retire reviewers early.** The unresumable
-cost is real for a *builder*, whose branch may still need a rebase or a follow-up.
-It is near zero for a *reviewer* the moment its record is safe, and the test for
-that is one condition, not three: **the record is pushed** — in the ticket commit
-and on the PR thread — somewhere you do not have to be alive to recover it. The
-copy you saved when it returned is redundancy, and the least durable of the three.
-At that point the worktree holds nothing you cannot get back, and reviewer trees
-are the ones that never auto-clean, because reviewing dirties them.
-
-The fourth session ran this deliberately: it retired each reviewer tree as its
-record landed and held all four builder trees, going 133 MB → 61 MB mid-batch with
-no loss of optionality. (Held *to merge* is the intent; nothing had merged when
-that was written, so like the third session's figure this is evidence about cost,
-not about whether holding ever paid.) It kept exactly one reviewer alive past its
-report — the one whose builder had been told to *reproduce* a finding before
-accepting it, because a builder that comes back "this does not reproduce" is a
-question only that reviewer can answer. **When there is no pull request, the ticket commit is the whole test** — the
-second location does not exist, and waiting for it retires nothing, ever. That is
-the state the skill's own default produces. That is the test: **hold a reviewer only
-while a specific open question could go back to it.**
-
-**"Alive" is the wrong word, and it misled the first run of this loop.** No agent
-sits listening between messages; both end their turn after sending, and
-`SendMessage` wakes a `completed` sibling back into its own context. What has to
-survive is therefore the **agent record and its worktree**, so a wake has
-something to resume into — removing a reviewer's tree while the builder may still
-answer it is what actually closes the channel.
-
-**That exception is now the common case, not the rare one.** You wake the gate
-for every re-gate (`SKILL.md` step 8) and a builder's or fixer's refutation goes
-back to it, so "a specific open question could go back to it" is true for every
-gate until the round is landed. From 2026-09-01 to 2026-09-26 the same held for a
-different reason — the gate sent its findings to the builder directly and fielded
-the pushback itself. Retire a reviewer when its record is committed **and** the
-ticket's last round has landed — not on the record alone. A `fixer` is held the
-same way, until the round it fixed has been re-gated. The fourth session's 133 MB → 61 MB
-saving came from retiring four reviewers at report time; expect to keep them a
-round longer now and to give some of that back. That is the price of the hop this
-removes, and it is disk rather than context.
-
-Before removing any of them, confirm what the tree actually holds. A reviewer that
-checked out the builder's branch shows commits ahead of `main` — those are the
-*builder's*, already pushed, not review work. One command settles it:
-`git merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" origin/<builder-branch>`.
-Sweep the leftover `worktree-agent-*` ref at the same time; removal leaves it
-behind, and that is the leak that reached 51 stale branches in the second session.
-
-### When every agent dies at once
-
-A session usage limit killed all five in-flight gates simultaneously in the fourth
-session, and the fifth ended mid-batch on a deliberate machine shutdown. It is worth planning for because the recovery is cheap and the wrong
-recovery is expensive.
-
-- **A snapshot of a live worktree is a moment, not a state — and it goes stale
-  while you write it.** Facing a shutdown, the fifth session's orchestrator captured
-  each builder's uncommitted diff into a handover file. Both were wrong within
-  minutes: one builder was recorded with **one** dirty file and had **three**,
-  because it kept working after the capture; the other was written up as "assume
-  the work is lost" when it was in fact complete. **The worktree is the artefact;
-  a transcription of it is a second thing to keep true.** So capture *pointers* —
-  the worktree path, the branch, the pushed tip — and re-read the tree on the way
-  back in. Copy content out only for what dies with the session and exists nowhere
-  else: a reviewer's returned report is the clear case, an uncommitted diff is not.
-- **Prefer pushing over describing.** The best thing that happened under that
-  shutdown was a builder told to secure its work choosing to commit and push the
-  **gate record first**, ahead of its own half-finished code fixes, under a `docs`
-  type so it released nothing. That is the right instinct to name in the message:
-  *push the thing that exists nowhere else; the code you can rewrite.*
-- **Check for damage before resuming anything.** Agents die at an arbitrary
-  instant, so one may have been mid-mutation with a source file still mutated, or
-  one step from pushing a scratch branch. Confirm the shared checkout is clean,
+- **Capture pointers, not content**: the worktree path, the branch, the pushed
+  tip. A transcription of a live worktree goes stale while you write it. Copy
+  content out only for what exists nowhere else — a gate's returned section.
+- **Prefer pushing over describing.** Tell an agent securing its work to push
+  the thing that exists nowhere else first; the code can be rewritten.
+- **Check for damage before resuming anything**: the shared checkout is clean,
   every builder branch is intact at its reported tip, and nothing stray reached
-  `origin` (`git ls-remote --heads origin`). All four checks were clean that time;
-  the point is that they are four commands and you do not get to assume.
-- **Resume by message, do not re-dispatch.** A message resumes the agent from its
-  own transcript and keeps its partial work — one gate was on its final confirming
-  run, another had already reached "found something". Re-dispatching pays a fresh
-  context reload and throws that away.
-- **Every resume must re-establish the positive control.** This is the part that
-  matters: a gate that died mid-mutation may be sitting on a mutated tree, so any
-  result it was holding is worthless. Say it explicitly — *a result carried across
-  an interruption is not evidence* — and have it restore to the branch tip and
-  re-run the control before continuing.
-- **Tighten the destructive step on the way back in.** The gate authorised to push
-  a scratch branch was told to delete it as its *immediate next action* after
-  capturing output rather than at the end of its review, so a second interruption
-  could not strand it on `origin`.
+  `origin` (`git ls-remote --heads origin`).
+- **Resume by message, do not re-dispatch.** A message resumes the agent from
+  its own transcript and keeps its partial work.
+- **A result carried across an interruption is not evidence.** A gate that died
+  mid-mutation may be sitting on a mutated tree: have it restore to the branch
+  tip and re-run its positive control before continuing.
 
-### Hold the reviewer's worktree until the ticket merges, like the builder's
+## The worktree an agent is in is not always the tree it just tested
 
-_Superseded 2026-10-02 by `SKILL.md` step 10: remove it once the PR has
-landed and you have looked once at its finished checks._
+Two ways to get a green run that proves nothing, and neither announces itself:
 
-**The rule used to be "remove it once its record is pushed and its exchange with
-the builder has ended". Two failures on 2026-09-03 say that condition cannot be
-evaluated, and the removal is not worth what it costs.**
+- **Running from the shared checkout.** A command given an absolute path under
+  `/workspaces/tools` tests `main`'s copy, not the branch.
+- **Testing a worktree with no `dist`.** A directory timed at 2 s was really
+  28 s: 17 of 18 files failed to import. Read the test count, never the wall
+  clock alone.
 
-First attempt: the orchestrator checked "record pushed", inferred "exchange over"
-from the pull request existing, and removed the worktree. The exchange was live and
-the record on that branch had gone in *wrong*, so the reviewer lost Bash at exactly
-the moment it needed it.
+## Give a new worktree its dependencies without installing them
 
-Second attempt, after the orchestrator had explicitly promised to ask first: **both
-agents reported closed, and it still was not over.** The builder pushed a
-follow-up commit and re-engaged the reviewer; the removal landed mid-`npm run
-check`, producing an `exit 1` the reviewer had to specifically disclaim so it would
-not be read as a finding, and leaving two of its verification claims unconfirmed.
-
-**"Both sides say they are finished" is not a durable state.** A builder can always
-push one more commit and wake the reviewer, and neither of them is lying when they
-say they are done — they are done *until the next thing*. There is no observable
-moment that means "no further exchange will occur" short of the branch merging.
-
-**And the trade is lopsided.** Holding costs about **18 MB** of disk per reviewer.
-Removing early costs an agent its tools mid-command, a misattributed failure, and a
-round. So: **hold the reviewer's worktree on the same condition as the builder's —
-until the ticket is finished.** Then remove both.
-
-If you must remove one earlier, **say so to that agent unprompted, in the same
-breath**. From inside, a worktree you removed and the documented auto-reclaim are
-indistinguishable: the failure text names the worktree, not the cause. That is why
-the first reviewer misdiagnosed it, and why its builder repeated the misdiagnosis
-upward — a tidying failure that arrives disguised as an infrastructure one.
-
-Restoring is one command, `git worktree add <path> --detach <sha>`, and worked both
-times. Re-running the farm and build afterwards is on the agent, so tell it to.
-
-### "The PR is open" is not "the exchange is over"
-
-_Superseded 2026-10-02 as a reason to hold a landed ticket's worktrees:
-`SKILL.md` step 10 removes them after the one look at finished checks, and
-tests that an agent is done by its completion notification, which is what this
-section asks for._
-
-The condition on removing a reviewer's worktree is that its record is pushed **and
-its conversation with the builder has ended**. Measured 2026-09-03, by an
-orchestrator that had just written that sentence down: it checked the first,
-assumed the second because the pull request existed, and ran
-`git worktree remove … --force`. The exchange was in fact still live — and worse,
-the record on that branch had gone in **wrong**, so the reviewer needed its tools
-at exactly that moment. It lost Bash mid-correction.
-
-**The tell to distrust is the pull request itself.** An open PR looks terminal and
-is not: the gate record can still be in flight, a citation can still need
-re-resolving, and a reviewer's confirmation of a fix can still be outstanding.
-None of those are visible in `gh pr view`. **Ask the reviewer whether it is done
-rather than inferring it from artifacts** — it is one message, and the reviewer is
-the only participant who knows.
-
-**The second-order cost is the one worth naming.** The reviewer, unable to run
-Bash, diagnosed it as the documented auto-reclaim of a worktree with nothing
-uncommitted — a reasonable read, since a reviewer legitimately never commits
-anything, and the pattern is real and is on this page. It was about to report a
-hazard that had not occurred, which would have taught the next reviewer to commit
-defensive WIP markers against nothing. **An orchestrator's tidying failure
-disguises itself as an infrastructure failure**, because the agent cannot see who
-removed its worktree. So if you take one away and the agent notices, say that you
-did it, immediately and unprompted.
-
-Restoring it is one command — `git worktree add <path> --detach <sha>` at the same
-path — and worked here.
-
-### The worktree an agent is in is not the tree it just tested
-
-Two independent sightings on 2026-09-03, in the same session, from different
-agents — which is why this is a section and not a footnote. Both produce a
-**green run that proves nothing**, and neither announces itself.
-
-**Running from the shared checkout.** A builder ran `vitest` from
-`/workspaces/tools` while its edits were in
-`.claude/worktrees/agent-<id>/` — three directories away. The run reported **35
-passing tests** for the file it thought it was testing, and a mutation that
-should have gone red stayed green. It caught this itself and re-ran everything
-from the worktree; nothing in the tooling would have told it.
-
-**Testing a worktree with no `dist`.** An orchestrator timing a directory got
-**2 s** and a plausible-looking result. The real figure was 28 s: 17 of 18 files
-had failed to import and **23 tests ran instead of 322**, because
-`worktree-farm.sh` had been run but `npm run build` had not. The farm script says
-this in its own output — "without dist, suites fail with packageEntryFailure" —
-and it is still easy to walk past, because the broken run is the fast one and the
-fast one is the one that confirms whatever you were hoping.
-
-Both collapse to one instruction worth putting in every dispatch and every gate
-prompt:
-
-- **Read the test count on every run, never the wall clock alone.** A suite that
-  cannot load is the fastest suite there is, and a suite that ran 23 of 322 tests
-  looks exactly like a suite that ran.
-- **Print the resolved path before believing a result** in any session that has
-  more than one tree on disk — which is every orchestrated batch.
-- **`npm run build` after the farm, before the first timing**, not just before
-  the first suite.
-
-This is the same family as the entries in the repo's own note on tests that
-measure the sandbox rather than the code. The distinguishing feature is that the
-sandbox failures are *silent and flattering*: they do not error, they agree with
-you.
-
-### Give a new worktree its dependencies without installing them
-
-A fresh worktree has no `node_modules`, so every agent pays `npm install` plus
-`npm run build` before it can read a test result — minutes each, and in the
-reference session two dozen agents each paid it. A **selective symlink farm**
-built from the shared checkout's `node_modules` removes the install half in well
-under a second and costs tens of kilobytes instead of hundreds of megabytes. The
-build still has to run.
-
-The shape, and the whole of it is *why*:
-
-- **Symlink each third-party entry individually**, absolute, into the worktree's
-  own real `node_modules` directory.
-- **Include the dotfiles** — `.bin` above all. A `*` glob silently misses it and
-  every binary the scripts call disappears with it; enumerate with `ls -A`.
-- **But create the workspace scopes — `@planner`, `@downloader`, `@webtools` —
-  as real directories**, re-creating each inner link with its *original relative
-  target*.
-
-That last rule is the load-bearing one. npm writes workspace links relatively
-(`@planner/api -> ../../tools/planner/api`), and a relative link resolves from
-where it **physically** lives. Inside a real directory in the worktree it lands
-on the worktree's own `tools/planner/api`, which is the point. Hence the first
-trap:
-
-- **Do not symlink `node_modules` wholesale.** One command, silently wrong: the
-  worktree's `node_modules` *is* the shared one, so every workspace link resolves
-  into the **shared checkout** — an agent editing a contract then typechecks
-  against the other tree's copy of it, and the suite goes green on the wrong code.
-  Verified: under a wholesale link `@planner/api` resolves to
-  `/workspaces/tools/tools/planner/api` rather than into the worktree.
-- **Hard links are not the escape either.** In this container `node_modules` is
-  its own mount, so `cp -al` fails on the first file with
-  `Invalid cross-device link`. Check with `df` before assuming otherwise; the
-  mount layout is specific to this environment, while the relative-link reasoning
-  above is not.
-
-Verify a farm the same way rather than trusting it: resolve one workspace link
-with `readlink -f` and confirm it points inside the worktree, then run one real
-suite there. A farm that is wrong is wrong *quietly*, which is the only reason it
-needs a check at all.
+`bash /workspaces/tools/.claude/scripts/worktree-farm.sh`, then `npm run build`.
+Never `npm install` or `npm ci` in a worktree: it takes minutes, and can fail
+outright when a postinstall cannot reach the network. The farm mirrors the shared
+checkout, so after a new workspace merges, the shared checkout itself needs one
+`npm install` — the owner's to run, or yours when no peer session is live.

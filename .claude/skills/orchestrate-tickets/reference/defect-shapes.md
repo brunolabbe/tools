@@ -10,8 +10,8 @@ gets read as already-covered; these two do not cover each other.
 ## Before routing a finding, check it against the tool's own contract
 
 A finding's framing can contradict the tool's own documented behaviour. If a finding
-asks for a range pin while the tool's output says "pin only the line the text starts
-on", routing that contradiction forward costs rounds correcting the misdirection. Read
+asks for one behaviour while the tool's own output documents another, routing that
+contradiction forward costs rounds correcting the misdirection (two, on repo-80). Read
 the tool's own help text, messages and documented options before treating the finding
 as a fact worth relaying. This prevents a category of errors that are not flawed
 reasoning — sound premises applied to wrong constraints.
