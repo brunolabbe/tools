@@ -189,6 +189,18 @@ Re-issued at `cb37835` with words, rows and verdicts unchanged; unpinned coordin
 - **findings** · 2 new in the round's lines, both low and carried; gate 1's 9 finding bullets and its dropped token: 8 fixed, 1 left (L7), 1 filed (dl-75).
 - Gates at `8f131d8`: `node scripts/preflight.mjs` with the dl-54 title exit 0 (it runs `npm run check`, the downloader suite and the citation gate against `origin/main`, all ok, "type and paths agree"); `npm test -- --project downloader` exit 0, 1579 passed, 2 skipped of 1581 in 98 files: +2 over gate 1, the two cases of the new `thumbnail-purge.test.ts`. No log line in the live run carried a page query, a media query, a cookie or a password.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-03 · `8f131d8..cb37835` only · Done-when 5's verdict, by hand · coordinates resolve at `cb37835`
+
+| Done when                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5. The owner has approved the terms text and the draft label is gone | **verified** — the approval is recorded in this ticket's Log, the 2026-10-03 entry for Done-when 5: approved as written, through AskUserQuestion, against the text at `8f131d8` (the answer itself is the orchestrator's relay; I saw the record, not the question). The banner is gone: the round's only change to the page is the four lines of the draft paragraph, so what ships is the approved text with nothing else moved, and `tools/downloader/web/public/terms.html:13 "<h1>Terms, and what this service records"` now runs straight into the first section. `docs/02-DEPLOYMENT.md:697 "The owner approved the text on 2026-10-03"` says the same, line-neutral |
+
+- **low** · `tools/downloader/web/public/terms.css:12 "--warn-bg: #fff4d6;"` and the three lines like it are dead now that `.draft` is gone. Harmless.
+- **findings** · 1 in the round's lines, low, carried; none dropped. `dl-75` is `needs-decision` now, which `docs/01-TICKETS.md` asks of a ticket that poses a question.
+- Gates at `cb37835`: `npm run check` exit 0; `terms-page.test.ts` and `terms-link.test.tsx` 5 passed of 5; `node scripts/citations-gate.mjs --against origin/main` exit 0 (148 enforced, 0 failing); `node scripts/status.mjs --json` exit 0. Preflight and the full suite not re-run: the round touches no source and no test.
+
 ## Log
 
 - 2026-09-13 — Filed as `needs-decision`. The log fields named above were read
