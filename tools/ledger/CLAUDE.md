@@ -59,6 +59,12 @@ must not grow one; who did something is the Access identity on the request.
 on every API route but health, and a route reads the caller with
 `personOf(request)` — never from a header of its own.
 
+**Every API route but health is rate limited, per person.** A route takes
+`{ onRequest: rateLimitsFor(context).read }` or `.write` from
+`api/src/rate-limit.ts`, over core's token bucket, keyed on `personOf(request)`
+and not the address. A route added without one is unlimited, and
+`api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead.
+
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a
 backstop — not as permission.

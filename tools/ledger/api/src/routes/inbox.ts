@@ -12,15 +12,18 @@ import type { ClassificationRecord, InboxResponse } from "@ledger/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { classifyRow, inbox } from "../classifications.ts";
+import { rateLimitsFor } from "../rate-limit.ts";
 import { ruleContext } from "./rules.ts";
 
 export function registerInboxRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get(ROUTES.inbox, async () => {
+  const { read, write } = rateLimitsFor(context);
+
+  app.get(ROUTES.inbox, { onRequest: read }, async () => {
     const body: InboxResponse = { rows: inbox(context.db) };
     return body;
   });
 
-  app.post(ROUTES.classifications, async (request) => {
+  app.post(ROUTES.classifications, { onRequest: write }, async (request) => {
     const body = classifyRequestSchema.safeParse(request.body);
     if (!body.success) {
       throw new AppError(

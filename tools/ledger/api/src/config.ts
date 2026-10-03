@@ -40,6 +40,15 @@ export interface ApiConfig {
   corsOrigins: readonly string[];
   logLevel: LogLevel;
 
+  /**
+   * Requests a person may make per minute to the routes that read, and to the
+   * routes that write (lg-4). Per person, not per address: behind the tunnel
+   * both people may share one, and the identity is what Access vouched for.
+   * Zero disables a limiter, as it does for the other tools.
+   */
+  rateLimitReadsPerMinute: number;
+  rateLimitWritesPerMinute: number;
+
   /** `NODE_ENV=production`, which the image sets. Decides what may not be configured. */
   production: boolean;
 
@@ -78,6 +87,10 @@ export const API_DEFAULTS = {
   dataDir: "./storage/ledger",
   databaseFile: "ledger.db",
   logLevel: "info",
+  // Two people on a phone. A tap on the inbox is one write and a screen is a
+  // handful of reads, so neither is near these; a script is.
+  rateLimitReadsPerMinute: 120,
+  rateLimitWritesPerMinute: 60,
 } as const satisfies Partial<Record<string, unknown>>;
 
 function int(
@@ -198,6 +211,12 @@ export function loadApiConfig(
     webDir: overrides.webDir ?? optionalPath(env["WEB_DIR"]),
     corsOrigins: overrides.corsOrigins ?? list(env["CORS_ORIGINS"]),
     logLevel: overrides.logLevel ?? logLevel(env["LOG_LEVEL"]),
+    rateLimitReadsPerMinute:
+      overrides.rateLimitReadsPerMinute ??
+      int(env["RATE_LIMIT_READS_PER_MINUTE"], API_DEFAULTS.rateLimitReadsPerMinute, { min: 0 }),
+    rateLimitWritesPerMinute:
+      overrides.rateLimitWritesPerMinute ??
+      int(env["RATE_LIMIT_WRITES_PER_MINUTE"], API_DEFAULTS.rateLimitWritesPerMinute, { min: 0 }),
     production: overrides.production ?? isProduction(env["NODE_ENV"]),
     access: overrides.access ?? loadAccessConfig(env),
   };

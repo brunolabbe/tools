@@ -16,6 +16,7 @@ import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/con
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
 import { personOf } from "../identity.ts";
+import { rateLimitsFor } from "../rate-limit.ts";
 import { createRule, currentRules, editRule, retireRule } from "../rules.ts";
 import type { RuleContext } from "../rules.ts";
 
@@ -51,30 +52,32 @@ function draft(request: FastifyRequest): RuleDraft {
 }
 
 export function registerRuleRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get(ROUTES.rules, async () => {
+  const { read, write } = rateLimitsFor(context);
+
+  app.get(ROUTES.rules, { onRequest: read }, async () => {
     const body: RulesResponse = { rules: currentRules(context.db) };
     return body;
   });
 
-  app.get(ROUTES.people, async () => {
+  app.get(ROUTES.people, { onRequest: read }, async () => {
     // The configuration's names for now; lg-5 gives people a table of their own.
     const body: PeopleResponse = { people: peopleOf(context) };
     return body;
   });
 
-  app.post(ROUTES.rules, async (request) => {
+  app.post(ROUTES.rules, { onRequest: write }, async (request) => {
     const rule: Rule = createRule(ruleContext(context, request), draft(request));
     return rule;
   });
 
   // The rule as edited, under a new id: the version it replaces is not changed.
-  app.post(ROUTES.rule, async (request) => {
+  app.post(ROUTES.rule, { onRequest: write }, async (request) => {
     const rule: Rule = editRule(ruleContext(context, request), ruleId(request), draft(request));
     return rule;
   });
 
   // The rule as it stood. Rows it classified keep their records.
-  app.post(ROUTES.ruleRetire, async (request) => {
+  app.post(ROUTES.ruleRetire, { onRequest: write }, async (request) => {
     const rule: Rule = retireRule(ruleContext(context, request), ruleId(request));
     return rule;
   });

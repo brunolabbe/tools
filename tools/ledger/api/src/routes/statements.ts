@@ -12,6 +12,7 @@ import type { ImportStatementReport } from "@ledger/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { personOf } from "../identity.ts";
+import { rateLimitsFor } from "../rate-limit.ts";
 import { importStatement } from "../statements.ts";
 
 export function registerStatementRoutes(app: FastifyInstance, context: AppContext): void {
@@ -20,16 +21,20 @@ export function registerStatementRoutes(app: FastifyInstance, context: AppContex
   const config = {
     tooLargeMessage: "The paste is too long to store in one go. Paste a shorter stretch.",
   };
-  app.post(ROUTES.statements, { config }, async (request) => {
-    const body = importStatementRequestSchema.safeParse(request.body);
-    if (!body.success) {
-      // The issues name a field, never a value: the body is a bank statement.
-      throw new AppError("BAD_REQUEST", "Send the pasted statement as { text }, and not empty.");
-    }
-    const report: ImportStatementReport = importStatement(
-      { db: context.db, personId: personOf(request).id, now: context.now },
-      body.data.text,
-    );
-    return report;
-  });
+  app.post(
+    ROUTES.statements,
+    { config, onRequest: rateLimitsFor(context).write },
+    async (request) => {
+      const body = importStatementRequestSchema.safeParse(request.body);
+      if (!body.success) {
+        // The issues name a field, never a value: the body is a bank statement.
+        throw new AppError("BAD_REQUEST", "Send the pasted statement as { text }, and not empty.");
+      }
+      const report: ImportStatementReport = importStatement(
+        { db: context.db, personId: personOf(request).id, now: context.now },
+        body.data.text,
+      );
+      return report;
+    },
+  );
 }

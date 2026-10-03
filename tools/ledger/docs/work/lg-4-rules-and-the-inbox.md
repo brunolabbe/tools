@@ -184,3 +184,64 @@ scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
   so no recommendation was overridden. **The gate's measurement, carried with
   it:** as built, rows stored before lg-4 stay in the inbox until tapped, and
   the API accepts a bare `*` pattern. **Status:** decided, nothing to build.
+
+- 2026-10-03 — Rate limiting, after the landing (PR #345). **The finding:**
+  GitHub's default-setup CodeQL check failed #345 with "Missing rate limiting
+  (High)" on `routes/inbox.ts` (twice) and `routes/rules.ts`: "This route handler
+  performs a database access, but is not rate-limited." **Measured before
+  building:** `git grep -il "rate-limit\|RateLimit" HEAD -- tools/ledger/api/src`
+  printed nothing, so no ledger route was limited, `POST /api/statements` (lg-2)
+  among them; the gap is the tool's and not the three routes'. **The question put
+  to the owner:** how to handle it. **Options:** (1) file lg-11 and build it after
+  #345 merges, the coordinator's recommendation; (2) fold it into lg-4 now; (3)
+  dismiss it as won't-fix, since every `/api` route is behind Cloudflare Access
+  with two known users. **The owner chose (2), overriding the recommendation of
+  (1).** This entry is that work.
+  - **Coverage: every API route but health.** `GET /api/me`, `/api/rules`,
+    `/api/people`, `/api/inbox` and `POST /api/statements`, `/api/rules`,
+    `/api/rules/:id`, `/api/rules/:id/retire`, `/api/classifications` each take
+    `{ onRequest: rateLimitsFor(context).read }` or `.write`. Health is exempt: a
+    probe must always be answered and it reads only whether the database is open.
+    `api/test/route-limits.test.ts` types a table over `keyof typeof ROUTES` and
+    asserts its keys equal `ROUTES`' keys, so a route added to the contract
+    without a line there fails; every limited route is then driven twice against
+    a bucket of one and the second must be `429`.
+  - **Mechanism: `@webtools/core/rate-limit`'s `RateLimiter`, as the planner and
+    the downloader use it.** No new dependency and no new workspace import:
+    `@webtools/core` was already in `api`'s `dependencies` and in the ledger
+    `Dockerfile`'s closure, so `image-closure` needed nothing. The Fastify hook
+    stays per tool, as core's header says: `api/src/rate-limit.ts`.
+  - **Error code: core's `RATE_LIMITED`.** It already was in the ledger's
+    taxonomy through `CORE_ERROR_CODES` and mapped to 429 in `http-errors.ts`; no
+    new code, and none belongs here.
+  - **Key: the Access identity (`personOf(request).id`), not `request.ip`.** The
+    planner keys on the address. Here both people can arrive from one address
+    behind the tunnel, and `request.ip` is the client only when `TRUST_PROXY` is
+    set to the proxy's range, whereas the identity is what the tool already
+    trusts to say who did something. The hook runs after the identity check, and
+    `personOf` fails closed with `UNAUTHENTICATED` if it did not. The person's id
+    is safe to log, which an address or a token is not.
+  - **Limits: 120 reads and 60 writes a minute per person**, each its own bucket
+    (a burst of a full minute's worth, core's default),
+    `RATE_LIMIT_READS_PER_MINUTE` and `RATE_LIMIT_WRITES_PER_MINUTE`, zero turning
+    one off, in `config.ts` and `.env.example`. The numbers are a judgement: a tap
+    on the inbox is one write and a screen a handful of reads, so a person is far
+    inside them, and a loop is not. Two buckets because a write takes the
+    database's one lock and a paste is parsed over up to a megabyte. A test taps
+    through 40 inbox reads on the defaults.
+  - **The tests can fail.** Each applied to the source alone and restored,
+    `npx vitest run tools/ledger/api/test/route-limits.test.ts` (17 tests): taking
+    `{ onRequest: read }` off the inbox route → `1 failed | 16 passed (17)`
+    ("inbox refuses the second request"); making the hook return at once → `13
+failed | 4 passed (17)`; keying on `request.ip` for the person → `3 failed |
+14 passed (17)`.
+  - **Citations.** `routes/statements.ts`'s route line now carries the hook, so
+    lg-2's record, which quotes `app.post(ROUTES.statements, { config }` there,
+    is moved by that anchor as well as by the import line above it; it was already
+    moved by this ticket's first build, and preflight reports it and does not
+    fail it. **The test file is `route-limits.test.ts` and not `rate-limit.test.ts`
+    on purpose:** the first name made preflight's citations check FAIL on the
+    downloader's `dl-32` record, whose bare `api/test/rate-limit.test.ts:249`
+    resolves by suffix and became ambiguous the moment a second file of that name
+    existed (`2 unresolvable`, exit 18). A new test file's basename is a coordinate
+    other tools' bare citations may already be using.
