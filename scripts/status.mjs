@@ -24,7 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { extractSections, splitLines } from "./citations.mjs";
+import { extractSections, splitLines } from "./markdown.mjs";
 
 /** Every field a ticket's frontmatter may carry, and whether it is required. */
 const FIELDS = {

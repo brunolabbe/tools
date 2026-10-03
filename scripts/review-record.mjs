@@ -2,12 +2,11 @@
  * Splice a reviewer's returned `## Review` section (or a later `### Gate <n>`)
  * into its ticket, check it, format it, and hand back the disclosure note.
  *
- * `review-ticket` step 8 asks a builder to do five things by hand every time a
- * gate lands: find the right spot in the ticket, paste the section in
- * verbatim, run `citations.mjs --section Review --require-anchors
- * --require-distinct-anchors`, run the formatter, then diff the result against
- * what was pasted to prove nothing but table padding moved. repo-55's Why
- * section names four incidents where one of those five steps was skipped or
+ * Landing a gate is four things done by hand: find the right spot in the
+ * ticket, paste the section in verbatim, run the formatter, then diff the
+ * result against what was pasted to prove nothing but table padding moved.
+ * (It was five until adr/006 retired the citation checker.) repo-55's Why
+ * section names four incidents where one of those steps was skipped or
  * done wrong under a different context each time — a record spliced into the
  * middle of an earlier one because the insertion anchored on a heading string
  * quoted 500 lines above the real heading, three of four tickets in one batch
@@ -17,7 +16,7 @@
  * procedure, done by hand, under pressure to move on to the next ticket.
  *
  * **The insertion point is found by heading form, never by searching for the
- * bare heading text.** `citations.mjs`'s own `extractSections` is reused for
+ * bare heading text.** `markdown.mjs`'s `extractSections` is used for
  * this: its heading regex only matches a line that syntactically *is* an ATX
  * heading, so a heading name quoted inline inside a sentence — the repo-13
  * mechanism — is never mistaken for the real thing. The first gate on a ticket
@@ -65,19 +64,52 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import {
-  candidateFiles,
-  checkCitations,
-  extractCitations,
-  extractDeclarations,
-  extractSections,
-  locateRecord,
-  makeReader,
-  makeResolver,
-  selectSection,
-  splitLines,
-} from "./citations.mjs";
+import { extractSections, selectSection, splitLines } from "./markdown.mjs";
 import { parseFrontmatter } from "./status.mjs";
+
+/**
+ * Whether two spellings name one directory. `realpathSync.native` and not the
+ * plain one, because only the native variant expands a Windows 8.3 short name.
+ *
+ * @param {string} a
+ * @param {string} b
+ */
+function sameDirectory(a, b) {
+  if (a === b) return true;
+  try {
+    return fs.realpathSync.native(a) === fs.realpathSync.native(b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Name the record the way **git** names it, so `git show <rev>:<path>` finds
+ * it. String arithmetic between a path git printed and a path Node resolved is
+ * only sound while the filesystem admits one spelling of each, so git is asked
+ * and the arithmetic is the fallback.
+ *
+ * @param {string} repo
+ * @param {string} file
+ */
+function locateRecord(repo, file) {
+  const resolved = path.resolve(file);
+  const arithmetic = path.relative(repo, resolved);
+  let answer;
+  try {
+    answer = execFileSync("git", ["rev-parse", "--show-toplevel", "--show-prefix"], {
+      cwd: path.dirname(resolved),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      shell: false,
+    }).split("\n");
+  } catch {
+    return arithmetic;
+  }
+  if (!sameDirectory(answer[0].trim(), repo)) return arithmetic;
+  // `--show-prefix` is empty at the root and otherwise already ends in a slash.
+  return `${answer[1].trim()}${path.basename(resolved)}`;
+}
 
 export const USAGE =
   "usage: node scripts/review-record.mjs <ticket-file> <section-file> [--gate <n>]";
@@ -363,7 +395,7 @@ const OXFMT = (() => {
 /**
  * Ticket steps 1-5, pulled out of `main` so `--land` (repo-80) can run the
  * same splice over more than one section without reimplementing the checks
- * — the formatter, the citations check, the verbatim-after-formatting
+ * — the formatter, the verbatim-after-formatting
  * comparison, and the restore-from-HEAD discipline all stay in one place.
  * `main` is the only other caller, and calling this with no `options`
  * reproduces its behaviour exactly.
@@ -383,8 +415,7 @@ const OXFMT = (() => {
  *   CI refuses, not only what a plain splice has always checked.
  * @returns {{relative: string, diff: string, checkStdout: string}}
  */
-export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate, options = {}) {
-  const requireClaudePins = options.requireClaudePins ?? false;
+export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate) {
   const markdown = fs.readFileSync(ticketAbsolutePath, "utf8");
   const sectionText = fs.readFileSync(sectionFileAbsolutePath, "utf8");
 
@@ -475,31 +506,6 @@ export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate,
     });
   }
 
-  const citationsCli = path.join(path.dirname(fileURLToPath(import.meta.url)), "citations.mjs");
-  const checkArgs = [
-    citationsCli,
-    ticketAbsolutePath,
-    "--section",
-    "Review",
-    "--require-anchors",
-    "--require-distinct-anchors",
-  ];
-  if (requireClaudePins) checkArgs.push("--require-claude-pins");
-  const check = spawnSync(process.execPath, checkArgs, {
-    cwd: ticketRepoRoot,
-    encoding: "utf8",
-    shell: false,
-  });
-  if (check.error) throw check.error;
-  if (check.status !== 0) {
-    restoreFromHead();
-    throw Object.assign(new Error("the citations check failed"), {
-      stdout: check.stdout,
-      stderr: check.stderr,
-      exitCode: check.status ?? 1,
-    });
-  }
-
   // Step 4.
   const formatted = fs.readFileSync(ticketAbsolutePath, "utf8");
   const block = locateInsertedBlock(formatted, gate);
@@ -534,7 +540,7 @@ export function spliceSection(ticketAbsolutePath, sectionFileAbsolutePath, gate,
     });
   }
 
-  return { relative, diff, checkStdout: check.stdout };
+  return { relative, diff };
 }
 
 function main() {
@@ -558,7 +564,6 @@ function main() {
     throw error;
   }
 
-  process.stdout.write(result.checkStdout);
   // Before the disclosure note, never after it: everything below that header
   // is the diff a lander pastes into the Log.
   process.stdout.write(
@@ -579,10 +584,8 @@ function main() {
 
 /*
  * Everything from here down is appended below `main` rather than threaded
- * through `parseArgs` and the helpers above it, because merged gate records
- * (repo-55's among them) cite this file by line and anchor, and a line added
- * above one of those coordinates displaces it and fails the citations gate on
- * a ticket this change never touched.
+ * through `parseArgs` and the helpers above it. That order was forced while
+ * merged gate records cited this file by line; it is only history now.
  *
  * Why a separate mode at all: the splice never commits. The lander commits,
  * and on 2026-09-26 two landers committed a gate record whose words were not
@@ -919,7 +922,7 @@ function verifyMain(argv) {
  */
 
 export const LAND_USAGE =
-  'usage: node scripts/review-record.mjs --land <ticket-file> <section-file>... --base <ref> --status done|in-flight --title "<title>"';
+  'usage: node scripts/review-record.mjs --land <ticket-file> <section-file>... --base <ref> --status done|in-flight --title "<title>" [--branch <name>]';
 
 /**
  * Parse `--land`'s argv: a ticket and one or more section files, in landing
@@ -933,21 +936,28 @@ export const LAND_USAGE =
  * source `validateFirstLine` already trusts.
  *
  * @param {string[]} argv
- * @returns {{ticket: string, sections: string[], base: string, status: "done" | "in-flight", title: string}}
+ * `--branch` names the branch to push to. It is required from a detached
+ * HEAD, which is where a lander works: the builder's worktree holds the
+ * branch name.
+ *
+ * @param {string[]} argv
+ * @returns {{ticket: string, sections: string[], base: string, status: "done" | "in-flight", title: string, branch: string | null}}
  */
 export function parseLandArgs(argv) {
   const positional = [];
+  let branch = null;
   let base = null;
   let status = null;
   let title = null;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--land") continue;
-    if (arg === "--base" || arg === "--status" || arg === "--title") {
+    if (arg === "--base" || arg === "--status" || arg === "--title" || arg === "--branch") {
       const value = argv[++i];
       if (value === undefined) throw new Error(`${arg} needs a value\n${LAND_USAGE}`);
       if (arg === "--base") base = value;
       else if (arg === "--status") status = value;
+      else if (arg === "--branch") branch = value;
       else title = value;
       continue;
     }
@@ -965,7 +975,7 @@ export function parseLandArgs(argv) {
       `--status must be "done" or "in-flight", got ${JSON.stringify(status)}\n${LAND_USAGE}`,
     );
   }
-  return { ticket, sections, base, status, title };
+  return { ticket, sections, base, status, title, branch };
 }
 
 /**
@@ -998,7 +1008,7 @@ const stripCR = (line) => line.replace(/\r$/, "");
  * than one, rather than guessing which to change — the same discipline
  * `status.mjs`'s own `parseFrontmatter` holds the rest of the file to.
  *
- * **CRLF-safe, the same way `citations.mjs`'s `splitLines` is (repo-82)**:
+ * **CRLF-safe, the same way `markdown.mjs`'s `splitLines` is (repo-82)**:
  * every line-anchored comparison below strips a trailing `\r` before
  * matching, never the whole line, so a frontmatter closed with `"---\r"`
  * still closes it. Reproduced before the fix: `split("\n")` on a
@@ -1030,120 +1040,6 @@ export function setStatus(markdown, newStatus) {
   const hadCR = lines[statusLines[0]].endsWith("\r");
   lines[statusLines[0]] = `status: ${newStatus}${hadCR ? "\r" : ""}`;
   return lines.join("\n");
-}
-
-/** A citation or a declaration, keyed by what `unpinnedPreexistingCitations` compares them on. */
-const citationKey = (c) => `${c.file}:${c.start}-${c.end}:${c.rev ?? ""}`;
-
-/**
- * `--land`'s own refusal (repo-78 gate 1, F3; this ticket's Build): a
- * qualified, anchored citation with no pin, in a section about to be
- * spliced, whose anchor text already exists somewhere in `base`'s own copy
- * of the file, is a citation of content that predates the branch —
- * `records.md`'s "a citation of content that already existed at the base
- * pins to the base ... by default." Landing is the one place in the whole
- * pipeline that already knows the base (`--base` names it), which is why the
- * check lives here rather than in `citations.mjs` or `citations-gate.mjs`:
- * neither runs with a second tree to compare against.
- *
- * **Checked against the whole file, never against the citation's own
- * `[start, end]`** — gate 1's finding F1, and the owner's answer to it
- * (2026-09-29): the citation names the line at the *tip*, and a branch that
- * inserts lines above an unchanged one shifts every citation below it, so
- * checking the tip's own coordinate against `base` reports `moved`, not
- * `verified`, and the pre-existing content slips through unpinned — this
- * repo's own history is the reproduction: this ticket's earlier round cited
- * `scripts/review-record.mjs:446` and `:163`, the tip's own coordinates for
- * text that already sat, unmoved, at `base`'s lines `416` and `151`, and both
- * were missed by the first version of this function. So each candidate's
- * anchor is searched over `base`'s whole file — `checkCitations` with the
- * citation's range widened to `[1, the file's own length at base]` — and the
- * chosen line is the first one the anchor starts on there, which is what the
- * suggested pin names. The owner's own framing of the residual gap: "the
- * only misjudged case is a line deleted at base and re-added elsewhere with
- * identical text, which gets flagged as old" — accepted, since
- * `--require-distinct-anchors` already makes the anchor unique at the tip
- * (`scripts/citations.mjs@7b48996:140`).
- *
- * Reuses `citations.mjs`'s own `checkCitations` — the same function that
- * decides `verified` for the working-tree check `spliceSection` already
- * runs — pointed at `base`'s tree instead. A citation the branch itself
- * introduces has nothing to verify there: it comes back `unresolvable`
- * against `base` regardless of range, and stays exempt, per the same rule. A
- * citation already declared as evidence in the section is exempt too — a
- * declaration says the coordinate is deliberately wrong, which a citation
- * this refuses for being *right* at `base` never is; declaredness is judged
- * on the citation's own coordinate at the tip, never on the widened one used
- * only to search `base`.
- *
- * @param {string} sectionText
- * @param {string} repo
- * @param {string} base
- * @returns {{file: string, start: number, end: number, line: number, reason: string}[]}
- */
-export function unpinnedPreexistingCitations(sectionText, repo, base) {
-  const candidates = extractCitations(sectionText).filter(
-    (c) => c.file !== null && c.rev === undefined && c.malformed === undefined && c.anchor !== null,
-  );
-  if (candidates.length === 0) return [];
-
-  const declarations = extractDeclarations(sectionText);
-  const declared = new Set(declarations.map(citationKey));
-
-  const baseResolve = makeResolver(candidateFiles(repo, base));
-  const baseRead = makeReader(repo, base);
-
-  // Widen every candidate to the whole file at `base` before checking it —
-  // never the head's own [start, end], which is a fact about the tip and not
-  // about where the same text sits at `base` (F1). A citation whose file does
-  // not resolve, or does not read, at `base` is left with its original range:
-  // `checkCitations` will call it `unresolvable` either way, harmlessly.
-  const widened = candidates.map((c) => {
-    const resolved = baseResolve(c.file);
-    if ("error" in resolved) return c;
-    const content = baseRead(resolved.path);
-    if (content === null) return c;
-    return { ...c, start: 1, end: Math.max(content.length, 1) };
-  });
-
-  const baseResults = checkCitations(widened, baseRead, baseResolve);
-
-  // The suggested pin is the anchor's own base line — nothing recomputed
-  // from it (gate 4, G4-a, replacing the range arithmetic gate 3's G3-b put
-  // here: it tried to reconstruct the base *range*'s start from the tip's
-  // own distance between the range start and the anchor, which broke the
-  // moment that distance was nonzero — gate 4 measured a citation whose
-  // range and anchor had not moved at all still coming back `MOVED` once
-  // pinned to the recomputed start). `checkCitations` already reports the
-  // one line the anchor starts on at `base`; a single-line citation naming
-  // exactly that line verifies by construction, whatever the original
-  // citation's own range was, whether the branch grew, shrank or shifted
-  // it, and whatever the anchor's own distance from that range's start.
-  // The message already says as much — "pin only the line the text starts
-  // on" — so the suggestion now names that line and nothing else.
-  const issues = [];
-  baseResults.forEach((baseResult, index) => {
-    if (baseResult.state !== "verified") return;
-    const original = candidates[index];
-    if (declared.has(citationKey(original))) return;
-
-    const baseAnchorLine = baseResult.foundAt?.[0] ?? baseResult.start;
-
-    const originalRange =
-      original.start === original.end ? `${original.start}` : `${original.start}-${original.end}`;
-    issues.push({
-      file: /** @type {string} */ (original.file),
-      start: original.start,
-      end: original.end,
-      line: original.line,
-      reason:
-        `record line ${original.line}: \`${original.file}:${originalRange}\` cites text that already ` +
-        `exists in ${original.file} at ${base}, starting around line ${baseAnchorLine} — the end of the ` +
-        `original range is not checked, so pin only the line the text starts on: ` +
-        `\`${original.file}@${base}:${baseAnchorLine}\``,
-    });
-  });
-  return issues;
 }
 
 /** `git -C <repo> <args>`, `shell: false` said explicitly (repo-77's own rule). */
@@ -1194,7 +1090,7 @@ function spliceAndCommitAll(ticketPath, repoRoot, plans, ticketId, tool, status,
     // text, which says nothing about which of several sections it came from.
     let result;
     try {
-      result = spliceSection(ticketPath, plan.path, plan.gate, { requireClaudePins: true });
+      result = spliceSection(ticketPath, plan.path, plan.gate);
     } catch (error) {
       throw Object.assign(/** @type {Error} */ (error), { sectionPath: plan.path });
     }
@@ -1298,6 +1194,7 @@ export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
  *   base: string,
  *   status: "done" | "in-flight",
  *   title: string,
+ *   branch?: string | null,
  *   run?: (repo: string, args: string[]) => string,
  *   verify?: (ticketAbsolutePath: string, sectionAbsolutePath: string, gate: number | null, rev: string) => {relative: string, block: {start: number, end: number}},
  *   runPreflight?: (repo: string, base: string, title: string) => {ok: boolean, output: string},
@@ -1360,10 +1257,7 @@ export function land(options) {
   // could then disagree, either printing a false "commit(s) already made"
   // reset hint on a validation that never wrote anything, or committing a
   // real gate before a later one fails on content only the working tree
-  // holds. Untracked files are not a fact about any existing citation's
-  // content, so they are not checked — the same reasoning `candidateFiles`'s
-  // own docblock in `citations.mjs` uses for reading them in anyway when
-  // resolving a citation, the opposite side of the same distinction.
+  // holds. Untracked files are not part of what lands, so they are not checked.
   let dirtyStatus;
   try {
     dirtyStatus = run(ticketRepoRoot, ["status", "--porcelain", "--untracked-files=no"]);
@@ -1408,6 +1302,24 @@ export function land(options) {
   } catch (error) {
     return fail("setup", /** @type {Error} */ (error).message);
   }
+  // Settle where the push goes before anything is committed. A lander works
+  // on a detached HEAD, where `--abbrev-ref` answers "HEAD" and
+  // `git push origin HEAD` is refused: every fixer landing on 2026-10-03
+  // committed, failed at the push and pushed by hand.
+  let branch = options.branch ?? null;
+  if (branch === null) {
+    try {
+      branch = run(ticketRepoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    } catch (error) {
+      return fail("setup", /** @type {Error} */ (error).message);
+    }
+    if (branch === "HEAD") {
+      return fail(
+        "setup",
+        "HEAD is detached, so there is no branch name to push to; pass --branch <name>.",
+      );
+    }
+  }
   pass("setup", `${ticketId} (${tool}) at base ${base}, pre-landing sha ${preLandingSha}`);
 
   let plans;
@@ -1421,20 +1333,6 @@ export function land(options) {
     return fail("sections", /** @type {Error} */ (error).message);
   }
   pass("sections", `${plans.length} section file(s), in landing order`);
-
-  // Refuse before splicing anything.
-  const pinIssues = [];
-  for (const plan of plans) {
-    let issues;
-    try {
-      issues = unpinnedPreexistingCitations(plan.text, ticketRepoRoot, base);
-    } catch (error) {
-      return fail("citations-pin", /** @type {Error} */ (error).message);
-    }
-    for (const issue of issues) pinIssues.push(`${path.basename(plan.path)} — ${issue.reason}`);
-  }
-  if (pinIssues.length > 0) return fail("citations-pin", pinIssues.join("\n"));
-  pass("citations-pin", "no unpinned citation of pre-existing content");
 
   // A failure after every section has really landed prints the pre-landing
   // sha and the reset command — never an automatic reset. See the docblock.
@@ -1498,10 +1396,8 @@ export function land(options) {
 
   // Push, fast-forward only — never `--force`. Not rolled back on failure —
   // see the docblock above.
-  let branch;
   try {
-    branch = run(ticketRepoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
-    run(ticketRepoRoot, ["push", "-u", "origin", branch]);
+    run(ticketRepoRoot, ["push", "origin", `HEAD:refs/heads/${branch}`]);
   } catch (error) {
     return fail("push", `${/** @type {Error} */ (error).message}${resetHint()}`);
   }
@@ -1536,8 +1432,8 @@ export function land(options) {
 }
 
 function landMain(argv) {
-  const { ticket, sections, base, status, title } = parseLandArgs(argv);
-  const result = land({ ticket, sections, base, status, title });
+  const { ticket, sections, base, status, title, branch } = parseLandArgs(argv);
+  const result = land({ ticket, sections, base, status, title, branch });
   for (const step of result.steps) {
     process.stdout.write(`\n== ${step.name} ==\n${step.ok ? "ok" : "FAIL"}  ${step.detail}\n`);
   }

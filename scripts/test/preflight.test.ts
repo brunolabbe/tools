@@ -30,17 +30,13 @@ import { expect, test } from "vitest";
 import {
   CI_WORKFLOW_PATH,
   EXIT,
-  buildScratchMerge,
   checkBuild,
   checkCiCommands,
-  checkCitations,
   checkMergeTree,
   checkReview,
-  checkScratchMergeCitations,
   checkTitle,
   deriveExtraCiCommands,
   extractCheckJobCommands,
-  grandfatheredFor,
   isTicketPath,
   mergeTreeConflicts,
   parseArgs,
@@ -105,7 +101,6 @@ const TLS = [
   "}",
   "",
 ].join("\n");
-const TLS_SHIFTED = ["// inserted", ...TLS.split("\n")].join("\n");
 const ANCHORED_REVIEW = '## Review\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n';
 
 // --- pure helpers -----------------------------------------------------------
@@ -252,97 +247,6 @@ test("checkBuild stops at the first failing command and sets the check bit", () 
   expect(result.ok).toBe(false);
   expect(result.bit).toBe(EXIT.check);
   expect(result.lines.some((l) => l.startsWith("FAIL"))).toBe(true);
-});
-
-// --- check 2: citations gate, planted against a real fixture ---------------
-
-test("checkCitations exits 0 over a clean corpus", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("base");
-    const base = repo.git("rev-parse", "HEAD");
-
-    const result = checkCitations(repo.dir, base, new Map());
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * repo-47, option B: a moved citation in a merged record this branch does not
- * change is reported and not failed. `ANCHORED_REVIEW` is merged at `base`; the
- * branch shifts the cited line without touching the record. Until repo-47 this
- * was repo-51's first planted failure; the control is at the end of this file.
- */
-test("checkCitations reports, and does not fail, a moved citation in a record the branch leaves alone", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("base");
-    const base = repo.git("rev-parse", "HEAD");
-
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("shift the cited line");
-
-    const result = checkCitations(repo.dir, base, new Map());
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-    expect(result.lines.join("\n")).toMatch(/note {2}1 moved citation\(s\) in 1 record\(s\)/);
-    expect(result.lines.join("\n")).toMatch(/docs\/work\/a\.md/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * Round 2's low finding 7: `checkCitations` used to default to this script's
- * own `GRANDFATHERED`, so scanning a `--repo` fixture reported that
- * checkout's own debt list as `STALE` against a corpus that never held it.
- * `grandfatheredFor` reads the repository under test's own copy instead.
- */
-test("grandfatheredFor reads the target repository's own citations-gate.mjs, not this script's", () => {
-  const repo = makeRepo();
-  try {
-    repo.write(
-      "scripts/citations-gate.mjs",
-      'export const GRANDFATHERED = new Map([\n  ["docs/work/only-here.md", 3],\n]);\n',
-    );
-    repo.commitAll("seed a fixture debt list");
-    expect(grandfatheredFor(repo.dir)).toEqual(new Map([["docs/work/only-here.md", 3]]));
-  } finally {
-    repo.cleanup();
-  }
-});
-
-test("grandfatheredFor is empty for a repository with no citations-gate.mjs at all", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("docs/work/seed.md", "seed\n");
-    repo.commitAll("base");
-    expect(grandfatheredFor(repo.dir)).toEqual(new Map());
-  } finally {
-    repo.cleanup();
-  }
-});
-
-test("checkCitations defaults to the target repo's own list and reports no STALE entries for one with none", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("base");
-    const base = repo.git("rev-parse", "HEAD");
-
-    // No `grandfathered` argument — exercising the default, not `new Map()`.
-    const result = checkCitations(repo.dir, base);
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-    expect(result.lines.join("\n")).not.toMatch(/STALE/);
-  } finally {
-    repo.cleanup();
-  }
 });
 
 // --- check 3: the `## Review` presence test ---------------------------------
@@ -732,7 +636,6 @@ test("preflight sets no bit at all on a clean branch", () => {
       base,
       run: realRun,
       buildRun: stubBuild,
-      grandfathered: new Map(),
       listOpenHeads: () => [],
     });
     const bitmask = results.reduce((mask, r) => mask | r.bit, 0);
@@ -775,7 +678,7 @@ test("preflight raises EXIT.setup, not git's raw status, on a --base that does n
  * `listOpenHeads` here plays the part `gh` auth failure measured against the
  * real CLI: a throw from inside check 5 alone.
  */
-test("preflight isolates a throwing check to its own bit and still runs the other four", () => {
+test("preflight isolates a throwing check to its own bit and still runs the others", () => {
   const repo = makeRepo();
   try {
     repo.write("src/tls.ts", TLS);
@@ -787,7 +690,6 @@ test("preflight isolates a throwing check to its own bit and still runs the othe
       base,
       run: realRun,
       buildRun: stubBuild,
-      grandfathered: new Map(),
       listOpenHeads: () => {
         throw new Error("gh: authentication failed");
       },
@@ -796,7 +698,6 @@ test("preflight isolates a throwing check to its own bit and still runs the othe
     expect(byName("mergeTree")).toMatchObject({ ok: false, bit: EXIT.mergeTree });
     expect(byName("mergeTree")?.lines.join("\n")).toMatch(/authentication failed/);
     expect(byName("check")).toMatchObject({ ok: true, bit: 0 });
-    expect(byName("citations")).toMatchObject({ ok: true, bit: 0 });
     expect(byName("review")).toMatchObject({ ok: true, bit: 0 });
     expect(byName("title")).toMatchObject({ ok: true, bit: 0 });
   } finally {
@@ -935,7 +836,7 @@ function plantFakeGh(shimDir: string, cwd: string): void {
   }
 }
 
-// --- repo-79: every ci.yml check-job command, plus citations on a scratch merge ---
+// --- repo-79: every ci.yml check-job command ---
 
 /**
  * Read off the real `ci.yml`, not a copy — a fixture's own text could drift
@@ -948,8 +849,6 @@ test("extractCheckJobCommands reads this repo's own ci.yml check job, in order",
     "node scripts/check-lockfile-sync.mjs",
     "npm run check",
     "node scripts/status.mjs --json > /dev/null",
-    "node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors",
-    "node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
   ]);
 });
 
@@ -983,8 +882,7 @@ test("extractCheckJobCommands throws rather than silently skip a block-scalar ru
 
 /**
  * The two commands this file actually runs for real: `npm ci` (setup, not a
- * check), `npm run check` (check 1's own first command) and
- * `citations-gate.mjs --against` (check 2, called as functions) are all
+ * check) and `npm run check` (check 1's own first command) are
  * excluded by name, over the real ci.yml — so a step ci.yml adds to that job
  * later is picked up here automatically, and only a step this file already
  * covers some other way has to be told apart by hand.
@@ -993,10 +891,6 @@ test("deriveExtraCiCommands runs only what no other check already covers", () =>
   expect(deriveExtraCiCommands(REAL_CI_YAML)).toEqual([
     ["node", ["scripts/check-lockfile-sync.mjs"]],
     ["node", ["scripts/status.mjs", "--json"]],
-    [
-      "node",
-      ["scripts/citations.mjs", ".claude/skills/orchestrate-tickets/SKILL.md", "--require-anchors"],
-    ],
   ]);
 });
 
@@ -1042,8 +936,8 @@ test("assertSpawnable throws on a shell operator or a trailing comment", () => {
 function plantCiCheckScripts(dir: string): void {
   fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
   fs.copyFileSync(
-    path.join(REPO_ROOT, "scripts", "citations.mjs"),
-    path.join(dir, "scripts", "citations.mjs"),
+    path.join(REPO_ROOT, "scripts", "markdown.mjs"),
+    path.join(dir, "scripts", "markdown.mjs"),
   );
   fs.copyFileSync(
     path.join(REPO_ROOT, "scripts", "status.mjs"),
@@ -1052,7 +946,7 @@ function plantCiCheckScripts(dir: string): void {
   fs.mkdirSync(path.join(dir, "tools"), { recursive: true });
 }
 
-/** A minimal `ci.yml` carrying the same five `check`-job commands as the real one. */
+/** A minimal `ci.yml` carrying the same `check`-job commands as the real one. */
 const FIXTURE_CI_YAML = [
   "name: CI",
   "on: push",
@@ -1063,8 +957,6 @@ const FIXTURE_CI_YAML = [
   "      - run: npm ci",
   "      - run: npm run check",
   "      - run: node scripts/status.mjs --json > /dev/null",
-  "      - run: node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors",
-  "      - run: node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
   "  changes:",
   "    runs-on: ubuntu-latest",
   "    steps:",
@@ -1100,40 +992,7 @@ test("checkCiCommands runs the ci.yml commands no other check covers, for real, 
     const result = checkCiCommands(repo.dir);
     expect(result).toMatchObject({ ok: true, bit: 0 });
     expect(result.lines.join("\n")).toMatch(/^ok {4}node scripts\/status\.mjs --json$/m);
-    expect(result.lines.join("\n")).toMatch(
-      /^ok {4}node scripts\/citations\.mjs \.claude\/skills\/orchestrate-tickets\/SKILL\.md --require-anchors$/m,
-    );
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * Done when's first planted failure, in the same shape rather than replayed
- * exactly: #305's first head failed this same command over a `SKILL.md`
- * citation the gate found `moved`; this fixture plants one that is
- * `unanchored` instead, which the same command fails on for the same reason
- * — `--require-anchors` in force and nothing preflight ran before this ticket
- * to catch either.
- */
-test("checkCiCommands fails on a branch shaped like #305's first head — an unanchored SKILL.md citation", () => {
-  const repo = makeRepo();
-  try {
-    plantCiCheckScripts(repo.dir);
-    repo.write(CI_WORKFLOW_PATH, FIXTURE_CI_YAML);
-    repo.write("src/foo.ts", "export const one = 1;\n");
-    repo.write(
-      ".claude/skills/orchestrate-tickets/SKILL.md",
-      "# Orchestration\n\nSee `src/foo.ts:1`.\n",
-    );
-    repo.commitAll("seed a SKILL.md with an unanchored citation");
-
-    const result = checkCiCommands(repo.dir);
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.ciCommands);
-    expect(result.lines.join("\n")).toMatch(
-      /FAIL {2}node scripts\/citations\.mjs \.claude\/skills\/orchestrate-tickets\/SKILL\.md --require-anchors/,
-    );
+    expect(result.lines.join("\n")).toMatch(/^ok {4}node scripts\/status\.mjs --json$/m);
   } finally {
     repo.cleanup();
   }
@@ -1174,463 +1033,6 @@ test("checkCiCommands fails when status.mjs --json finds a dangling depends_on",
     expect(result.ok).toBe(false);
     expect(result.bit).toBe(EXIT.ciCommands);
     expect(result.lines.join("\n")).toMatch(/FAIL {2}node scripts\/status\.mjs --json/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-// --- repo-79: check 5's other half — citations over a scratch merge of every open head ---
-
-/**
- * Gate 2's med repair changed this contract: an empty `otherHeads` alone no
- * longer means there is no work here — `base` must also already be an
- * ancestor of `HEAD`, or the fold runs anyway (below). A bogus repo path
- * and a zeroed oid, this test's own fixture until this round, could no
- * longer stand in for "this never touches git at all": the fix's whole
- * point is that something now does, even with zero other heads.
- */
-test("checkScratchMergeCitations says explicitly that an empty list checked nothing, when HEAD already contains base", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("docs/work/seed.md", "seed\n");
-    repo.commitAll("base");
-    const headOid = repo.git("rev-parse", "HEAD");
-
-    const result = checkScratchMergeCitations(repo.dir, headOid, [], "main", new Map());
-    expect(result).toMatchObject({ ok: true });
-    expect(result.lines.join("\n")).toMatch(
-      /no other open pull request to fold into a scratch merge, and HEAD already contains base/,
-    );
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * `buildScratchMerge`'s own conflict path: folding in two heads that both
- * touch the same line of the same file the way `checkMergeTree`'s pairwise
- * probe already would, so this only has to prove the *fold* reports it, not
- * that a conflict can exist.
- */
-test("buildScratchMerge reports which head it could not fold in on a genuine conflict", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("f.txt", "one\n");
-    repo.commitAll("base");
-    const headOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "a");
-    repo.write("f.txt", "one-from-a\n");
-    repo.commitAll("edit from a");
-    const oidA = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "b");
-    repo.write("f.txt", "one-from-b\n");
-    repo.commitAll("edit from b");
-    const oidB = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    const result = buildScratchMerge(repo.dir, headOid, [
-      { number: 1, headRefName: "a", oid: oidA },
-      { number: 2, headRefName: "b", oid: oidB },
-    ]);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.conflictHead.headRefName).toBe("b");
-      expect(result.paths).toEqual(["f.txt"]);
-    }
-    // The scratch worktree is gone either way, not left behind for the next run.
-    expect(repo.git("worktree", "list")).not.toMatch(/preflight-scratch-/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-test("buildScratchMerge folds every reachable head in and cleans the worktree up when the caller is done", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("f.txt", "one\n");
-    repo.commitAll("base");
-    const headOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "a");
-    repo.write("other.md", "from a\n");
-    repo.commitAll("add from a");
-    const oidA = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    const result = buildScratchMerge(repo.dir, headOid, [
-      { number: 1, headRefName: "a", oid: oidA },
-    ]);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(fs.readFileSync(path.join(result.dir, "other.md"), "utf8")).toBe("from a\n");
-      removeWorktreeForTest(repo.dir, result.dir);
-    }
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** Not exported — `buildScratchMerge`'s own cleanup is proven by the conflict test above. */
-function removeWorktreeForTest(repo: string, dir: string): void {
-  spawnSync("git", ["worktree", "remove", "--force", dir], { cwd: repo, shell: false });
-  fs.rmSync(dir, { recursive: true, force: true });
-}
-
-/**
- * Done when's second planted failure: a pair of heads that each pass the
- * citations gate alone but fail together, reproducing repo-60's record
- * against repo-63's splice. `HEAD` (as "mine") adds an anchored record citing
- * `src/tls.ts:2`, untouched by "mine" itself — passes alone, trivially, since
- * nothing it changed can move a citation. "b" independently inserts a line
- * above that same region — its own citations gate has nothing to check,
- * since "b" carries no `## Review` record, so it too "passes alone". Neither
- * touches a file the other does, so `git merge-tree` reports the pair clean;
- * only the citation gate, run over the actual fold, catches that "mine"'s
- * anchor no longer points at line 2 in the merged state.
- */
-test("checkScratchMergeCitations fails on a citation two clean-merging heads move between them", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "b");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("insert a line above the cited region");
-    const oidB = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [{ number: 7, headRefName: "b", oid: oidB }],
-      mainOid,
-      new Map(),
-    );
-    expect(result.ok).toBe(false);
-    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** The positive control: the same shape, but "b"'s change does not touch the cited file at all. */
-test("checkScratchMergeCitations passes when the fold does not move any cited line", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "b");
-    repo.write("other.md", "unrelated\n");
-    repo.commitAll("an unrelated change");
-    const oidB = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [{ number: 7, headRefName: "b", oid: oidB }],
-      mainOid,
-      new Map(),
-    );
-    expect(result).toMatchObject({ ok: true });
-    expect(result.lines.join("\n")).toMatch(/clean over/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** `checkMergeTree`'s own wiring: the scratch-merge step only runs when a `base` is given. */
-test("checkMergeTree skips the scratch-merge citations step when no base is given", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("docs/work/x-1.md", "## Review\n\nFirst pass.\n");
-    repo.commitAll("base");
-
-    const result = checkMergeTree(repo.dir, { listOpenHeads: () => [] });
-    expect(result).toMatchObject({ ok: true, bit: 0 });
-    expect(result.lines.join("\n")).not.toMatch(/scratch merge/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** And runs it, folding it into the same bit, when one is. */
-test("checkMergeTree runs the scratch-merge citations step and fails on the same bit when it does", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "b");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("insert a line above the cited region");
-    const oidB = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkMergeTree(repo.dir, {
-      base: mainOid,
-      grandfathered: new Map(),
-      listOpenHeads: () => [{ number: 7, headRefName: "b", oid: oidB }],
-    });
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.mergeTree);
-    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * The orchestrator's own finding on this ticket, reproduced: two open heads
- * that are not `HEAD` — shaped like this repository's own #284 and #294,
- * two release-please pull requests — conflict with *each other* on a shared
- * file, and each merges cleanly with `HEAD` on its own. Folding every
- * reachable head into one worktree (this function's first shape) reported
- * that as `HEAD`'s own conflict; two open release pull requests is this
- * repository's ordinary standing state, so that shape would have failed
- * preflight for almost every branch, almost always. Folding one head onto
- * `HEAD` at a time — this function's repaired shape — asks only whether
- * `HEAD` and that one head conflict, and can never itself see the other two
- * heads collide.
- */
-test("checkScratchMergeCitations does not fail HEAD for a conflict between two other heads", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("manifest.json", "1\n");
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/seed.md", "seed\n");
-    repo.commitAll("an unrelated change, never touching manifest.json");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "downloader-release");
-    repo.write("manifest.json", "2\n");
-    repo.commitAll("downloader release-please: bump to 2");
-    const oidDownloader = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "planner-release");
-    repo.write("manifest.json", "3\n");
-    repo.commitAll("planner release-please: bump to 3");
-    const oidPlanner = repo.git("rev-parse", "HEAD");
-
-    // Sanity: the two release heads really do conflict with each other, and
-    // neither conflicts with "mine" — otherwise this is not the shape measured.
-    const crossConflict = mergeTreeConflicts(repo.dir, oidDownloader, oidPlanner);
-    expect(crossConflict.conflict).toBe(true);
-    repo.git("checkout", "-q", "mine");
-    expect(mergeTreeConflicts(repo.dir, "HEAD", oidDownloader).conflict).toBe(false);
-    expect(mergeTreeConflicts(repo.dir, "HEAD", oidPlanner).conflict).toBe(false);
-
-    const result = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [
-        { number: 284, headRefName: "downloader-release", oid: oidDownloader },
-        { number: 294, headRefName: "planner-release", oid: oidPlanner },
-      ],
-      mainOid,
-      new Map(),
-    );
-    expect(result).toMatchObject({ ok: true });
-    expect(result.lines.join("\n")).toMatch(
-      /ok {4}scratch merge of HEAD with #284 downloader-release/,
-    );
-    expect(result.lines.join("\n")).toMatch(
-      /ok {4}scratch merge of HEAD with #294 planner-release/,
-    );
-  } finally {
-    repo.cleanup();
-  }
-});
-
-// --- repo-79, gate 1 round: a non-conflict merge failure is not a conflict --
-
-/**
- * Gate 1's low finding: a non-zero `git merge` with no unmerged path is not a
- * content conflict, and reporting it as one prints `FAIL … conflicts on: `
- * with nothing after the colon — measured live before `--no-verify` was
- * added, when this repo's own `commit-msg` hook rejected the scratch commit's
- * message and the merge itself was clean. `--no-verify` closes that one
- * cause; an oid this checkout cannot merge at all — unreachable, or simply
- * not a commit — is a different one, reproduced here without needing a hook:
- * `git merge --no-ff --no-verify <bogus>` exits 1 with "not something we can
- * merge" and no unmerged path, the same shape.
- */
-test("buildScratchMerge throws rather than report a non-conflict merge failure as a conflict", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("f.txt", "one\n");
-    repo.commitAll("base");
-    const headOid = repo.git("rev-parse", "HEAD");
-
-    expect(() =>
-      buildScratchMerge(repo.dir, headOid, [
-        { number: 1, headRefName: "bogus", oid: "a".repeat(40) },
-      ]),
-    ).toThrow(/not a content conflict/);
-    // Cleaned up despite throwing, same as every other exit from this function.
-    expect(repo.git("worktree", "list")).not.toMatch(/preflight-scratch-/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** `git worktree add`'s own status is checked, not silently ignored. */
-test("buildScratchMerge throws naming git worktree add when it cannot create the scratch worktree", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("f.txt", "one\n");
-    repo.commitAll("base");
-
-    expect(() =>
-      buildScratchMerge(repo.dir, "a".repeat(40), [
-        { number: 1, headRefName: "irrelevant", oid: "b".repeat(40) },
-      ]),
-    ).toThrow(/git worktree add/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * Owner decision, 2026-09-28 (option B): the fold also carries `base`'s
- * current tip in when `HEAD` does not already contain it, because a real
- * `pull_request` run checks `HEAD` merged with `base`, not `HEAD` alone.
- * `main` advances past the commit "mine" branched from, shifting the line
- * "mine"'s own record cites — a real base moving underneath an open branch.
- * "o" is an unrelated other open head, needed only to give the loop
- * something to iterate over; it neither touches `src/tls.ts` nor conflicts
- * with anything. Without folding `base` in, the merged tree is `HEAD` (whose
- * own `src/tls.ts` never moved) plus "o" (which never touches it either), so
- * the citation reads clean — the gap the owner measured. With it, the merged
- * tree also carries `main`'s shift, and the citation moves.
- */
-test("checkScratchMergeCitations folds base in when HEAD does not contain it, catching a citation base itself moved", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-    const rootOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "o", rootOid);
-    repo.write("other.md", "unrelated\n");
-    repo.commitAll("an unrelated open pull request");
-    const oidOther = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("main moves on: insert a line above the cited region");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [{ number: 9, headRefName: "o", oid: oidOther }],
-      "main",
-      new Map(),
-    );
-    expect(result.ok).toBe(false);
-    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
-    expect(result.lines.join("\n")).toMatch(/plus main, which HEAD does not yet contain/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/** The positive control: `HEAD` already contains `base`, so nothing extra is folded. */
-test("checkScratchMergeCitations does not fold base in when HEAD already contains it", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "o");
-    repo.write("other.md", "unrelated\n");
-    repo.commitAll("an unrelated open pull request");
-    const oidOther = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [{ number: 9, headRefName: "o", oid: oidOther }],
-      "main",
-      new Map(),
-    );
-    expect(result).toMatchObject({ ok: true });
-    expect(result.lines.join("\n")).not.toMatch(/which HEAD does not yet contain/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * Gate 2's med: the base fold used to run only when some other head was
- * reachable, so a branch that is the only open pull request — no filler
- * head at all, `otherHeads` genuinely empty — passed silently even though
- * `base` had moved a line its own record cites. No "o" here on purpose: the
- * point of this test is that none is needed for the fold to happen.
- */
-test("checkScratchMergeCitations folds base in when there are no other open heads at all", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("add the anchored record");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("main moves on: insert a line above the cited region");
-
-    repo.git("checkout", "-q", "mine");
-    const result = checkScratchMergeCitations(repo.dir, mineOid, [], "main", new Map());
-    expect(result.ok).toBe(false);
-    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
-    expect(result.lines.join("\n")).toMatch(/main alone, which HEAD does not yet contain/);
   } finally {
     repo.cleanup();
   }
@@ -1996,7 +1398,6 @@ test("preflight's check 1 runs the repo project's suite for an edit still only i
       base,
       run: realRun,
       buildRun,
-      grandfathered: new Map(),
       listOpenHeads: () => [],
     });
 
@@ -2090,127 +1491,3 @@ test("preflight blames the working tree, not --base, when git status itself fail
 });
 
 // --- repo-47: which records the citation checks enforce on `moved` ----------
-
-/**
- * The control for the rewritten repo-51 test above: the same shift, but the
- * branch also edits the record, so it is in the touched set and its `moved`
- * fails exactly as it did before repo-47.
- */
-test("checkCitations still fails a moved citation in a record the branch edits", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.write("docs/work/a.md", ANCHORED_REVIEW);
-    repo.commitAll("base");
-    const base = repo.git("rev-parse", "HEAD");
-
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.write("docs/work/a.md", `${ANCHORED_REVIEW}\n## Log\n\n- touched.\n`);
-    repo.commitAll("shift the cited line and edit the record");
-
-    const result = checkCitations(repo.dir, base, new Map());
-    expect(result.ok).toBe(false);
-    expect(result.bit).toBe(EXIT.citations);
-    expect(result.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/a\.md — 1 moved/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * The choice repo-47's Build left to `preflight.mjs`: a scratch fold's touched
- * set is `HEAD`'s own diff, not the union with the folded head's. "mine" is a
- * code change that shifts the cited line; "b" adds a record citing it. In the
- * fold, b's record is `moved` — but it is b's record, so it is reported here and
- * left to b's own preflight, which folds "mine" in and does enforce it.
- */
-test("checkScratchMergeCitations enforces HEAD's own records, not the folded head's", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("insert a line above the cited region");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "b");
-    repo.write("docs/work/b.md", ANCHORED_REVIEW);
-    repo.commitAll("add a record citing line 2");
-    const oidB = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "mine");
-    const heads = [{ number: 7, headRefName: "b", oid: oidB }];
-    const fromMine = checkScratchMergeCitations(repo.dir, mineOid, heads, mainOid, new Map());
-    expect(fromMine.ok).toBe(true);
-    expect(fromMine.lines.join("\n")).toMatch(
-      /note {2}1 moved citation\(s\)[\s\S]*docs\/work\/b\.md/,
-    );
-
-    // The other side of the same pair: from b's point of view the record is its
-    // own, so the same fold fails.
-    repo.git("checkout", "-q", "b");
-    const mine = [{ number: 8, headRefName: "mine", oid: mineOid }];
-    const fromB = checkScratchMergeCitations(repo.dir, oidB, mine, mainOid, new Map());
-    expect(fromB.ok).toBe(false);
-    expect(fromB.lines.join("\n")).toMatch(/FAIL {2}docs\/work\/b\.md — 1 moved/);
-  } finally {
-    repo.cleanup();
-  }
-});
-
-/**
- * repo-47 gate 1, F3(c). The note used to name every reported record on one
- * line, about 900 characters on the live corpus, and repeat it once per fold.
- * Check 2 now lists one record per line; a fold, which says the same thing
- * again, lists at most three and points at check 2 for the rest.
- */
-test("the moved note lists one record per line in check 2, and at most three in a fold", () => {
-  const repo = makeRepo();
-  try {
-    repo.write("src/tls.ts", TLS);
-    for (const name of ["a", "b", "c", "d"]) repo.write(`docs/work/${name}.md`, ANCHORED_REVIEW);
-    repo.commitAll("base");
-    const mainOid = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "-b", "o");
-    repo.write("other.md", "unrelated\n");
-    repo.commitAll("an unrelated open pull request");
-    const oidOther = repo.git("rev-parse", "HEAD");
-
-    repo.git("checkout", "-q", "main");
-    repo.git("checkout", "-q", "-b", "mine");
-    repo.write("src/tls.ts", TLS_SHIFTED);
-    repo.commitAll("shift the cited line");
-    const mineOid = repo.git("rev-parse", "HEAD");
-
-    const check2 = checkCitations(repo.dir, mainOid, new Map());
-    expect(check2.ok).toBe(true);
-    expect(check2.lines).toContain(
-      `note  4 moved citation(s) in 4 record(s) not changed since the merge base with ${mainOid}, reported and not failed:`,
-    );
-    for (const name of ["a", "b", "c", "d"]) {
-      expect(check2.lines).toContain(`        docs/work/${name}.md — 1 moved`);
-    }
-
-    const fold = checkScratchMergeCitations(
-      repo.dir,
-      mineOid,
-      [{ number: 3, headRefName: "o", oid: oidOther }],
-      mainOid,
-      new Map(),
-    );
-    expect(fold.ok).toBe(true);
-    expect(fold.lines.filter((l) => l.startsWith("        docs/work/"))).toHaveLength(3);
-    expect(fold.lines).toContain("        … and 1 more; check 2 lists every one");
-    // The note's own lines only: check 2's ok line carries compareAgainst's
-    // bootstrap message here, since this fixture has no copy of the gate.
-    const noteLines = [...check2.lines, ...fold.lines].filter((l) => /^(note|        )/.test(l));
-    for (const line of noteLines) expect(line.length).toBeLessThan(160);
-  } finally {
-    repo.cleanup();
-  }
-});
