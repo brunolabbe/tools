@@ -249,8 +249,7 @@ export class YtDlpResolver implements Resolver {
         ? undefined
         : this.#proxyTrustBundlePath;
     if (trustBundle !== undefined) {
-      // dl-73 red: dropped on purpose to show the container gate fail.
-      // args.push("--compat-options", "no-certifi");
+      args.push("--compat-options", "no-certifi");
     }
     if (options.cookieHeader !== undefined && options.cookieHeader !== "") {
       args.push("--add-header", `Cookie:${sanitiseHeaderValue(options.cookieHeader)}`);
