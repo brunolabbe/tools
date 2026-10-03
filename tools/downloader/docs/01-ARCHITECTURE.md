@@ -247,6 +247,19 @@ and their defaults.
 | `TURNSTILE_SECRET_KEY`        | —            | the secret half of the above, and a credential: it is never logged or sent to the page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
+**What is kept about a visitor, and for how long** (`dl-54`; the page that says it
+to visitors is `web/public/terms.html`, and `api/test/log-fields.test.ts` pins the
+log fields it describes). The client address is on the `request` line of every
+request. The page URL is in the `jobs` row of a download, query string included —
+and again in a failed job's `error_json` — until the sweep deletes the row 14 days
+after it was made (`JOB_RETENTION_DAYS`, a constant, not a setting, because the
+page states it). A URL inside a log line's fields keeps its origin and path and loses its
+query; the `request` line's own `url` is the route called, and keeps that request's query by
+design (the page travels in a POST body, so it is never in it).
+`probe_outcomes` holds a hostname for `OUTCOME_RETENTION_DAYS`. The container's log
+is capped by size in `compose.downloader.prod.yaml`; Docker has no age limit, which
+`docs/02-DEPLOYMENT.md` § "Log retention" is about.
+
 ---
 
 ## Security posture

@@ -222,6 +222,13 @@ export function App(): React.JSX.Element {
           />
         )}
       </main>
+
+      {/* A plain link, not a route: the page is a static file beside the bundle
+          (`public/terms.html`), served same-origin, so the document policy needs
+          no change for it (dl-54). */}
+      <footer className="footer">
+        <a href="/terms.html">Terms, and what this service records</a>
+      </footer>
     </div>
   );
 }
