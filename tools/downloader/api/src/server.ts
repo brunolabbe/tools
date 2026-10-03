@@ -29,7 +29,12 @@ import type { HumanCheck } from "./human-check.ts";
 import { readOperatorCa, withSystemRoots } from "./operator-ca.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
-import { cancelError, LINK_ROW_GRACE_MS, recordCanceled } from "./jobs/links.ts";
+import {
+  cancelError,
+  JOB_RETENTION_DAYS,
+  LINK_ROW_GRACE_MS,
+  recordCanceled,
+} from "./jobs/links.ts";
 import { JobOrchestrator } from "./jobs/orchestrator.ts";
 import { ProbeCache } from "./jobs/probe-cache.ts";
 import { ProbeStageHub } from "./probe-stages.ts";
@@ -766,6 +771,8 @@ async function warnAboutStoredFiles(storageDir: string, logger: AppLogger): Prom
  * never started it, which is not a failure of the tool. Its row stays for
  * `LINK_ROW_GRACE_MS` so a late `GET` still answers `410`.
  *
+ * A job row, with the page URL in it, is deleted at `JOB_RETENTION_DAYS` (dl-54).
+ *
  * Exported so a test can run exactly one pass against a clock it controls.
  * Swallows its own failures: a pass that throws must not stop the next one.
  */
@@ -790,6 +797,10 @@ export function runSweep(context: AppContext): void {
 
     const linksPruned = context.store.pruneLinks(new Date(nowMs - LINK_ROW_GRACE_MS).toISOString());
 
+    const jobsPruned = context.store.pruneJobs(
+      new Date(nowMs - JOB_RETENTION_DAYS * 24 * 3_600_000).toISOString(),
+    );
+
     // `probe_outcomes` carries no address and no path, so this bound is about
     // table size, not privacy (dl-57). 0 keeps every row, the same convention
     // the rate limits use for "off".
@@ -800,7 +811,12 @@ export function runSweep(context: AppContext): void {
             new Date(nowMs - context.config.outcomeRetentionDays * 24 * 3_600_000).toISOString(),
           );
 
-    context.logger.debug("sweep complete", { linksExpired, linksPruned, outcomesPruned });
+    context.logger.debug("sweep complete", {
+      linksExpired,
+      linksPruned,
+      jobsPruned,
+      outcomesPruned,
+    });
   } catch (error: unknown) {
     context.logger.warn("sweep failed", { error: String(error) });
   }

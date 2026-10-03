@@ -146,3 +146,71 @@ In this order:
   caller of `JobStore.delete`, so every premise above still holds. Added the
   outcome record's 90-day hostname retention to what the page must say,
   because dl-57 landed after this ticket was filed.
+- 2026-10-03 — Built, on `origin/main` `ebb808b`, awaiting a gate. The measurement
+  came first, as the ticket orders. **Claim: at `info`, the level
+  `compose.downloader.yaml` sets, one probe, one job and one opened link write
+  six lines, and these are every field on them.** Command: a throwaway test
+  (deleted; `api/test/log-fields.test.ts` is its permanent form) driving the
+  stub-resolver harness at `info` with the client address `203.0.113.9`. Output,
+  fields beyond pino's `level time pid hostname msg`:
+  - `request` (three, one per route): `requestId method url status durationMs ip`.
+    `url` is the route called — `/api/probe`, `/api/jobs`, `/api/files/[redacted]`
+    — so the page, which travels in the POST body, is never on it.
+  - `probe complete`: `resolver variants drm preview previewSource requestContext`.
+    **No `requestId`, no `ip`**: it logs through `context.logger`, not the request's
+    child. `requestContext.headers.Referer` is the page, as
+    `https://site.example/watch/42?[redacted]`, so origin and path are kept and
+    the query is not. With the direct resolver the Referer is `origin + "/"`.
+  - `job accepted`: `requestId jobId variantId`. `job completed`:
+    `jobId requestId sizeBytes container transcodes attempts`. Neither has a URL.
+  - At `debug` only, `re-probe complete` carries the same Referer, and
+    `/api/health` polling.
+  - **A failure is different.** `request failed` (5xx) and `request rejected`
+    (4xx) carry `requestId method url code status details`, and `details.url` is
+    the page with its path: `http://127.0.0.1/clip/9?[redacted]` for a resolver
+    error, `http://127.0.0.1/private/x` for a `BLOCKED_TARGET`. Those lines share a
+    `requestId` with the `request` line that holds `ip`, so for a failure the
+    address and the page are joined by id. For a success they are joined only by
+    timestamp, plus the `jobs` row (`jobId` to `source_url`) and `job accepted`
+    (`requestId` to `jobId`).
+  - Size: those six lines are 1,540 bytes, 2,184 once wrapped in Docker's
+    `json-file` envelope (`JSON.stringify({log, stream, time})`, computed over the
+    measured lines; not read from a Docker host).
+  - **The database holds more than the log does.** A failed job's `error_json`
+    carries `details.url` with its query string intact (`...?sig=SECRETQ`),
+    as does `source_url`, so the retention sweep deletes the **row**
+    (`JobStore.pruneJobs`); clearing `source_url` alone would have left the
+    credential in a second column. `api/test/job-retention.test.ts` asserts the
+    premise before it asserts the deletion.
+    What was built: the sweep (`runSweep` in `api/src/server.ts`), the terms page
+    (`web/public/terms.html`, a static file, so dl-35's policy needed no change and
+    `api/test/terms-page.test.ts` asserts it uses nothing that policy refuses), the footer link,
+    the compose log cap, and the `docs/02-DEPLOYMENT.md` section.
+    **What the brief had wrong or left out:**
+  - _Docker cannot express "14 days"._ The ticket said so and offered two
+    routes, a size derived from traffic or a driver that expires by age. The first
+    holds the lines **longer** on a quiet host, which breaks the promise in the
+    direction that matters, and the second (`journald`) fails to start the
+    container on a host without it, which nothing here can check. The compose cap
+    is therefore a size (5 x 10 MB), its comment says so, and the page says
+    "about 14 days" and that a quiet service keeps lines longer. The traffic the
+    size assumes (1,400 visits a day) is an assumption, not a measurement of the
+    host. Reported as an open decision for the owner; the page is worded to be true
+    either way, and goes back to "14 days" if one of the two age routes is taken.
+  - _Deleting jobs shortens `LINK_ROW_GRACE_MS`._ `job_links` cascades from `jobs`,
+    so the 30-day grace for answering `410` rather than `404` could never take
+    effect; it is now `JOB_RETENTION_DAYS` days, and `api/src/jobs/links.ts` says why.
+  - _`docs/02-DEPLOYMENT.md` said "neither table carries a path, a query string or
+    an address"._ True of `probe_outcomes` and of what `report.js` prints, false of
+    `jobs`, which holds the full `source_url`. Corrected there, along with the
+    report's download window, which the sweep now caps at 14 days.
+  - _The page is behind Access._ A rights holder sent to `/terms.html` meets a login
+    until dl-49 removes it. The alias works regardless. The deployment doc says how
+    to bypass the path; I did not touch `scripts/cloudflare-setup.mjs`.
+    **Could have been folded in, and was not:** a Bypass for `terms.html` in
+    `scripts/cloudflare-setup.mjs` (it is a decision about whether the page should be
+    public before dl-49, and the script belongs to dl-52's lane); and a UI test that
+    the footer is absent from the mock build (nothing asks for it).
+    **Not done:** done-when 5 (the owner's approval, and removing the draft
+    paragraph); done-when 3's "how the size was derived" rests on an assumed day's
+    traffic, not a measured one.

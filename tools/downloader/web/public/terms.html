@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Terms and what this service records · Downloader</title>
+    <link rel="stylesheet" href="/terms.css" />
+  </head>
+  <body>
+    <main>
+      <p><a href="/">Back to the downloader</a></p>
+      <h1>Terms, and what this service records</h1>
+
+      <p class="draft" id="draft">
+        Draft. The operator has not yet approved this text. Delete this paragraph when they do.
+      </p>
+
+      <h2>What it is for</h2>
+      <p>
+        You give this service the address of a web page. It looks for the video the page plays and,
+        if you ask, streams that video to you once, as a file, through a link that works one time
+        and expires fifteen minutes after it is made.
+      </p>
+      <p>
+        Use it for video you have the right to save: your own, video its owner offers for saving, or
+        video the law where you live lets you keep. What you ask it to fetch is your responsibility.
+        Do not use it to put load on someone else's site, and do not use it to reach anything that
+        is not public.
+      </p>
+
+      <h2>The one thing it will not do</h2>
+      <p>
+        It does not get around copy protection. When a video is protected by DRM (Widevine,
+        PlayReady or FairPlay) it says so and stops. It never tries to obtain a key or a licence.
+      </p>
+
+      <h2>No video is stored</h2>
+      <p>
+        Each file is passed to the person who opened its link while it is being prepared, and no
+        copy is written on the server. A preview image, when there is one, is held in the server's
+        memory for ten minutes and then dropped.
+      </p>
+
+      <h2>What it records, and for how long</h2>
+      <p>
+        There are no accounts. Three things are written down on the server, and they are kept for
+        different lengths of time.
+      </p>
+      <ul>
+        <li>
+          <strong>The server's log, about 14 days.</strong>
+          Every request writes one line: the time, what was asked of this service, how it ended, how
+          long it took, and the network address it came from. A line about a failed request, or
+          about a page that was analysed, can also hold that page's domain and path, never anything
+          after a <code>?</code>. For a failed request that line shares a request number with the
+          line holding the address. The log is kept in files of a fixed size, and the oldest file is
+          discarded when they are full, so "about 14 days" is what ordinary use fills; a quiet
+          service keeps its lines longer.
+        </li>
+        <li>
+          <strong>A record for each download you start, 14 days.</strong>
+          It holds the full address of the page you gave, including anything after a
+          <code>?</code>, the options you chose, and how the download ended. It is deleted 14 days
+          after it was made.
+        </li>
+        <li>
+          <strong>A record of how each analysis ended, 90 days.</strong>
+          It holds the page's domain only, never its path or anything after a <code>?</code>, and
+          never your network address. It also holds which methods were tried and how long each took.
+          It is kept for 90 days, a length the operator can change.
+        </li>
+      </ul>
+      <p>
+        Put together, the log and the download record let the operator work out which address asked
+        for which page while both still exist. That is what answers a report of abuse, and the logs
+        are read for that, and to run the service and set its limits.
+      </p>
+      <p>
+        Your browser keeps your list of downloads and your light or dark choice in its own storage
+        on your device. The service does not read them. The service is reached through Cloudflare,
+        which handles the connection and keeps its own records under its own terms; when the check
+        that you are a person is switched on, Cloudflare runs it in your browser.
+      </p>
+
+      <h2>If something should be stopped</h2>
+      <p>
+        If you hold the rights to a video, or run a site that is being fetched through this service,
+        write to
+        <a href="mailto:abuse@oludoi.com">abuse@oludoi.com</a>. Say which page or site, and what you
+        want stopped. A person reads it.
+      </p>
+    </main>
+  </body>
+</html>

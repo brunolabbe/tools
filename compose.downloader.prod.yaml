@@ -44,6 +44,32 @@ services:
     image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
     pull_policy: always
 
+    # How long the container's log keeps a visitor's address (dl-54). The terms
+    # page promises 14 days, and every `request` line carries the client address.
+    #
+    # **This is a size cap, not an age limit, and Docker has no option for age:**
+    # `json-file` rotates when a file reaches `max-size` and keeps `max-file`
+    # files, and the `local` driver takes the same two options. So the figure
+    # below is a size chosen to hold about 14 days of the traffic it was sized
+    # for, and it holds longer on a quiet host and shorter on a busy one.
+    #
+    # How it was derived. One visit, a probe then a download then the link opened,
+    # writes six lines at `info` — the level `compose.downloader.yaml` sets and
+    # `/api/health`'s polling stays under — which measured 2,184 bytes once Docker
+    # wraps each in its own JSON envelope (`api/test/log-fields.test.ts` pins the
+    # fields; the bytes are in dl-54's Log). A failed visit adds a `request failed`
+    # line, so 2.5 KB a visit. 10 MB x 5 files is 50 MB, which at 2.5 KB is 20,000
+    # visits, or 1,400 a day for 14 days. **That traffic is an assumption: nothing
+    # measured this host's day.** Replace it with
+    # `docker compose logs --since 24h downloader | wc -c` once there is one, and
+    # see "Log retention" in docs/02-DEPLOYMENT.md for the host-side purge that
+    # turns the cap into an age.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
     networks: [edge]
     environment:
       # The proxy's CIDR, never `true`. `true` lets any client name its own

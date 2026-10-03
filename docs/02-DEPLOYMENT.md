@@ -578,7 +578,7 @@ only copy of anything a user typed.
 ### Reading the downloader's outcome report
 
 Every `POST /api/probe` and every download leaves a durable row — `probe_outcomes`
-and `jobs` respectively — and `report.js` reads both, read-only, so it never
+(90 days) and `jobs` (14) respectively — and `report.js` reads both, read-only, so it never
 contends with the server's own writer. Run it inside the container, with the
 full path from `/app` — the container's working directory, which `docker
 compose exec` inherits — not `dist/report.js` alone, which resolves to a path
@@ -591,10 +591,13 @@ docker compose exec downloader node tools/downloader/api/dist/report.js --days 7
 It prints, over the window given: probe success rate overall and by winning
 resolver, the hosts that fail most with their codes and the tiers tried, p50/p95
 probe duration per resolver, download success rate and the job error codes
-behind the rest, and p50 download duration. Neither table carries a path, a
-query string or an address; `OUTCOME_RETENTION_DAYS` (default 90) bounds
-`probe_outcomes` by size rather than by privacy — see
+behind the rest, and p50 download duration. The report prints no path, query
+string or address, and `probe_outcomes` holds none; `OUTCOME_RETENTION_DAYS`
+(default 90) bounds it by size rather than by privacy — see
 [dl-57](../tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md).
+The `jobs` table is different: it holds the full page URL, and the sweep deletes a
+row 14 days after it was made (dl-54), so the download figures cover at most the
+last 14 days whatever `--days` says.
 
 ### Things that bite every tool
 
@@ -685,6 +688,65 @@ twice, when the first attempt fails in a way a fresh probe can fix — so the AP
 bounds the wait for a slot so that it and two `PROBE_TIMEOUT_MS` together stay
 under 100 s, and answers `429` past it. At the 45 s default that is a 10 s wait;
 raising `PROBE_TIMEOUT_MS` shortens it. It is capped at 50 s, where there is none.
+
+### Terms, a contact, and what is logged
+
+The UI links to `/terms.html`, a static page the image ships
+([`terms.html`](../tools/downloader/web/public/terms.html)). It says what the
+service may be used for, that no video is stored, what it records and for how
+long, and where to write. It is marked **a draft** until the owner approves it in
+the pull request that adds it; that approval is `dl-54`'s fifth done-when, and the
+paragraph with `id="draft"` is what to delete.
+
+**Create the contact alias on the dashboard.** The page names `abuse@oludoi.com`
+(the owner's choice, 2026-09-28): in Cloudflare, **Email → Email Routing**, add a
+custom address `abuse` on `oludoi.com` and forward it to the private inbox, which
+Cloudflare asks you to verify. The inbox is never published and the alias can be
+retired without touching it. It is by hand because `scripts/cloudflare-setup.mjs`
+would need a permission its token does not have (see `dl-52`). I have not run
+these steps; the menu names are as the dashboard documents them.
+
+**Until the login is gone, a rights holder cannot read the page.** `/terms.html`
+sits behind the same Access application as the UI, so a stranger who was sent
+the address meets a login first. The alias works regardless, since it is mail.
+If the page should be readable without one before `dl-49` removes the login, add
+a Bypass application for the path `terms.html` and `terms.css`, the way
+[the download links](#the-downloaders-keep-the-download-links-shareable) get one.
+
+**What is kept, and when it goes**
+
+| What                                               | Where                      | Gone after                                            |
+| -------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| Client address, per request                        | the container's log        | the log's size cap (below); about 14 days at the size |
+| Page domain and path, on some lines, never a query | the container's log        | the same                                              |
+| The full page URL, query included                  | `jobs`, a row per download | 14 days, by the sweep (`JOB_RETENTION_DAYS`)          |
+| A hostname and resolver timings                    | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default               |
+
+The log fields are measured and pinned by `api/test/log-fields.test.ts`.
+
+**Log retention.** `compose.downloader.prod.yaml` caps the downloader's log at
+5 files of 10 MB, which is a **size, not an age** — Docker's `json-file` and
+`local` drivers have no age option. A host with less traffic than the cap was
+sized for keeps lines longer than 14 days; one with more keeps them shorter. The
+terms page says "about 14 days" and that a quiet service keeps lines longer,
+because that is what a size cap delivers. Size it against your own day:
+
+```bash
+docker compose logs --since 24h downloader | wc -c
+```
+
+Multiply by 14 and compare with 50 MB; the file also carries Docker's envelope,
+about 40% more than the lines themselves (measured: 2,184 bytes against 1,540 for
+one visit's six lines). To make it an age, there are two ways, neither of which
+this repository can do for you:
+
+- the `journald` logging driver with `MaxRetentionSec=14day` in the host's
+  `journald.conf`, which expires by time. It needs systemd-journald on the host,
+  and a host without it fails to start the container, so it is not set here;
+- a daily job on the host that deletes the downloader's **rotated** files older
+  than 14 days (the `*-json.log.N` beside the path `docker inspect -f '{{.LogPath}}'`
+  prints for the container). It leaves the live file, which keeps up to 10 MB of
+  whatever is newest. Not run by the author.
 
 ### Tightening it past one user
 

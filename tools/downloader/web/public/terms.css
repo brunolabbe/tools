@@ -1,0 +1,68 @@
+/*
+ * The terms page's own stylesheet (dl-54). The page is a static file beside the
+ * bundle, so it cannot import the app's hashed one, and the document policy
+ * allows `style-src 'self'` only: no <style> block, no style attribute.
+ */
+
+:root {
+  --bg: #f6f7f9;
+  --text: #16191f;
+  --muted: #5c6472;
+  --accent: #2f5fe0;
+  --warn-bg: #fff4d6;
+  --warn-border: #9a6400;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101317;
+    --text: #e8ebf0;
+    --muted: #98a2b3;
+    --accent: #7aa2ff;
+    --warn-bg: #2b2412;
+    --warn-border: #e5b567;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  line-height: 1.55;
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  margin-block-start: 2rem;
+  font-size: 1.15rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-size: 0.9em;
+}
+
+li {
+  margin-block-end: 0.9rem;
+}
+
+.draft {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  background: var(--warn-bg);
+}

@@ -51,6 +51,7 @@ export type { CancelReason } from "./jobs/links.ts";
 export {
   cancelError,
   createJobLink,
+  JOB_RETENTION_DAYS,
   LINK_ROW_GRACE_MS,
   LINK_TTL_MS,
   maxLinkWaitMs,
