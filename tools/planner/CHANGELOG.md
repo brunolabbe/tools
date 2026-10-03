@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/brunolabbe/tools/compare/planner-v0.7.0...planner-v0.8.0) (2026-10-03)
+
+
+### Features
+
+* **planner:** change a plan's dates or budget from the plan page (pl-48) ([#297](https://github.com/brunolabbe/tools/issues/297)) ([6988b65](https://github.com/brunolabbe/tools/commit/6988b6555f51f6d8158832478871f15b8d9089e4))
+
+
+### Fixes
+
+* **planner:** map malformed request bodies to BAD_REQUEST instead of INTERNAL (pl-51) ([#287](https://github.com/brunolabbe/tools/issues/287)) ([96d4383](https://github.com/brunolabbe/tools/commit/96d4383c5b3af9b55c10ea045436ffc80a7fbfa9))
+* **planner:** retitle a plan when a revision changes its brief (pl-53) ([#338](https://github.com/brunolabbe/tools/issues/338)) ([f0e07ef](https://github.com/brunolabbe/tools/commit/f0e07efa3466f0982a6ad5e8f5ba46b71983d10e))
+
 ## [0.7.0](https://github.com/brunolabbe/tools/compare/planner-v0.6.0...planner-v0.7.0) (2026-09-20)
 
 
