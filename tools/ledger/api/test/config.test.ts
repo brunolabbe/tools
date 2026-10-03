@@ -44,3 +44,29 @@ describe("loadApiConfig", () => {
     expect(loadApiConfig({}, { DATABASE_PATH: ":memory:" }).databasePath).toBe(":memory:");
   });
 });
+
+// lg-4: the two rate limits, in a block of their own at the end.
+describe("loadApiConfig, rate limits", () => {
+  test("defaults to 120 reads and 60 writes a minute per person", () => {
+    const config = loadApiConfig({}, {});
+
+    expect(config.rateLimitReadsPerMinute).toBe(120);
+    expect(config.rateLimitWritesPerMinute).toBe(60);
+  });
+
+  test("reads both from the environment, and zero turns one off", () => {
+    const config = loadApiConfig(
+      {},
+      { RATE_LIMIT_READS_PER_MINUTE: "30", RATE_LIMIT_WRITES_PER_MINUTE: "0" },
+    );
+
+    expect(config.rateLimitReadsPerMinute).toBe(30);
+    expect(config.rateLimitWritesPerMinute).toBe(0);
+  });
+
+  test("falls back to the default for something that is not a number", () => {
+    const config = loadApiConfig({}, { RATE_LIMIT_READS_PER_MINUTE: "plenty" });
+
+    expect(config.rateLimitReadsPerMinute).toBe(120);
+  });
+});

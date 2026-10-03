@@ -10,6 +10,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { AppError } from "@ledger/contract";
+import { RateLimiter } from "@webtools/core/rate-limit";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
@@ -24,7 +25,9 @@ import { registerIdentityCheck } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerHealthRoute } from "./routes/health.ts";
+import { registerInboxRoutes } from "./routes/inbox.ts";
 import { registerMeRoute } from "./routes/me.ts";
+import { registerRuleRoutes } from "./routes/rules.ts";
 import { registerStatementRoutes } from "./routes/statements.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
@@ -77,6 +80,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     config,
     logger,
     db,
+    rateLimits: {
+      reads: new RateLimiter({ perMinute: config.rateLimitReadsPerMinute }),
+      writes: new RateLimiter({ perMinute: config.rateLimitWritesPerMinute }),
+    },
     startedAt: now(),
     now,
     isShuttingDown: () => shuttingDown,
@@ -105,8 +112,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     }),
   );
   registerHealthRoute(server, context);
-  registerMeRoute(server);
+  registerMeRoute(server, context);
   registerStatementRoutes(server, context);
+  registerRuleRoutes(server, context);
+  registerInboxRoutes(server, context);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.

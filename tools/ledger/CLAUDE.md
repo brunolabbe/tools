@@ -3,8 +3,8 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
-**Built a ticket at a time.** The seams exist, and one domain: the pasted
-statement (lg-1, lg-2). `docs/02-ROADMAP.md` is what is decided and what comes
+**Built a ticket at a time.** The seams exist, and two domains: the pasted
+statement (lg-1, lg-2) and what files each row (lg-4). `docs/02-ROADMAP.md` is what is decided and what comes
 next; `npm run status -- --tool ledger` is what is open. Treat anything below
 marked _planned_ as design until a ticket says otherwise.
 
@@ -18,15 +18,15 @@ by hand. Both people use it, mostly from a phone.
 
 ```
 contract     types, error taxonomy, zod schemas — no logic
-books        pure: the statement parser and its proofs; no model, network or clock
+books        pure: the statement parser, its proofs and the rule matching; no model, network or clock
 api          Fastify, persistence, HTTP — the only place that reads process.env
 web          React + Vite UI, mobile-first
 e2e          Playwright specs — none yet; e2e/README.md says what earns the first
 ```
 
-`books` holds the statement-paste parser and its running-balance proof (lg-1);
-the split arithmetic and the classification rules join it as their tickets
-land. The name is `books` because `ledger` is the tool. _Planned_, arriving
+`books` holds the statement-paste parser and its running-balance proof (lg-1) and
+`classify`, which files a row under a rule only on an exact match (lg-4); the
+split arithmetic joins it as its ticket lands. The name is `books` because `ledger` is the tool. _Planned_, arriving
 with the ticket that first needs it rather than as an empty package now:
 **`receipts`**, the one package that talks to a model, reading a receipt photo.
 
@@ -59,6 +59,12 @@ must not grow one; who did something is the Access identity on the request.
 on every API route but health, and a route reads the caller with
 `personOf(request)` — never from a header of its own.
 
+**Every API route but health is rate limited, per person.** A route takes
+`{ onRequest: rateLimitsFor(context).read }` or `.write` from
+`api/src/rate-limit.ts`, over core's token bucket, keyed on `personOf(request)`
+and not the address. A route added without one is unlimited, and
+`api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead.
+
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a
 backstop — not as permission.
@@ -77,6 +83,17 @@ same change.
 row that supersedes the earlier one. A pasted row that disagrees with a stored
 one is refused and named (`STATEMENT_ROW_CONFLICT`), never reconciled. A
 migration, once shipped, is never edited either — append the next one.
+
+**Rules and classifications are appended the same way.** A rule is edited by
+filing a version that supersedes it and retired by filing a retirement; a row is
+reclassified by appending a record, and the latest stands (`current_rules` and
+`current_classifications`, in `api/src/db/schema.ts`).
+`api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
+a `DELETE`.
+
+**Rules live in the database only.** Caisse names identify a household, so no
+rule is seeded from the repository: not in a migration, not in a fixture. A test
+names invented descriptions.
 
 **Error `details` carry bank text, so a log carries their names and no values.**
 A refused statement's details name the offending row's description, amount and

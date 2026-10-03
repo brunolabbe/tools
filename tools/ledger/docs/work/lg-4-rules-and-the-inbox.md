@@ -3,7 +3,7 @@ id: lg-4
 tool: ledger
 title: Classify rows by rule, and put everything else in an inbox
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: [lg-2]
 difficulty: standard
@@ -49,4 +49,236 @@ transfer that differs from its usual amount is a question, not a guess
 4. Web tests cover accepting a suggestion and creating a rule from an answer.
 5. Gates green.
 
+## Review
+
+### Gate 1
+
+**Gate: CONCERNS** — 2026-10-03 · `ebb808b...d9c4ae8` (base `ebb808b`, still `origin/main` after the gate’s fetch) · code-review at medium, run by the gate itself · every unpinned coordinate below resolves at `d9c4ae8`
+
+| Done when                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. An exact match is classified on paste; a row off its rule’s fixed amount is the inbox with that rule suggested | `tools/ledger/api/test/classifications.test.ts:58 "row_id: rowId(target, TRANSFER, 40000)"` ✓ · `tools/ledger/api/test/classifications.test.ts:86 "suggestion: { id: rule.id, amountCents: 40000"` ✓                                                                                                                            |
+| 2. Two rules matching one row send it to the inbox, never to the first                                            | `tools/ledger/api/test/classifications.test.ts:184 "row?.matching.map((rule) => rule.id)"` ✓, and in the other order `tools/ledger/api/test/classifications.test.ts:196 "MORTGAGE)[0]?.reason"` ✓                                                                                                                               |
+| 3. Reclassifying keeps the earlier classification as history                                                      | `tools/ledger/api/test/classifications.test.ts:217 "expect(stored[0]).toMatchObject({"` ✓ · `tools/ledger/api/test/classifications.test.ts:234 "expect(standing).toEqual"` ✓                                                                                                                                                    |
+| 4. Web tests cover accepting a suggestion and creating a rule from an answer                                      | `tools/ledger/web/test/inbox.test.tsx:111 "rowId: ODD.id, ruleId: RULE.id"` ✓ · `tools/ledger/web/test/inbox.test.tsx:158 "descriptionPattern: GROCERIES.description,"` ✓                                                                                                                                                       |
+| 5. Gates green                                                                                                    | **verified** — `npm run check` exit 0; `npm test -- --project ledger` 313 of 313 in 20 files (at `ebb808b`: 203 in 13); preflight exit 0; `citations-gate.mjs --against origin/main` exit 0, 148 enforced, 0 failing; image-closure 7 of 7. The `ledger.yml` image build was not run; no `package.json` or `Dockerfile` changed |
+
+- **med** · `tools/ledger/web/src/rules/RuleForm.tsx:72 "setProblem(AppError.from(error).message);"` — the form’s own rendering of a server refusal is tested by nothing, and `RuleForm.tsx` has no test file of its own. Only the inbox’s offer reaches it; the rules screen’s `change` catches every refusal itself. Replacing the line with `void error;` leaves `inbox.test.tsx` and `rules.test.tsx` at 16 of 16. Failure scenario: a person takes the offer, the API refuses the rule (`BAD_REQUEST` for a person the configuration lacks, `UNAUTHENTICATED` once Access lapses), the form re-enables in silence, and the person believes the rule exists. No Done-when line rests on it.
+- **low** · `tools/ledger/web/test/rules.test.tsx:127 "expect(editRule).toHaveBeenCalledWith(7, {"` — “sends the new version for that rule’s id” runs over a list of one rule, so it cannot tell that rule’s id from the first rule’s: `editRule(rules[0]?.id ?? 0, draft)` at `tools/ledger/web/src/rules/Rules.tsx:107 "editRule(rule.id, draft)"` leaves `rules.test.tsx` at 7 of 7. Editing the second of two rules closes it, as the retire test already does.
+- **low** · `tools/ledger/web/src/inbox/Inbox.tsx:107 "await classifyRow({ rowId: row.id, personId, bucket });"` — the refusal of a person’s own answer is untested: a fixed sentence in place of the server’s leaves `inbox.test.tsx` at 9 of 9. The same mutation on the accept path goes red.
+- **low** · `tools/ledger/api/src/db/schema.ts:84 "the second insert is refused by the database"`, and the Log’s “a unique partial index so two people editing one rule cannot both win; the second is `RULE_NOT_FOUND`”. Through the API the second edit is refused by the in-force check in the same `IMMEDIATE` transaction (`tools/ledger/api/src/rules.ts:115 "read(context.db, insert(context, draft, id, false))"`), never by the index. Measured: two concurrent `POST /api/rules/1` give 200 and 404 `RULE_NOT_FOUND`; a direct `INSERT` superseding the same version gives `SQLITE_CONSTRAINT_UNIQUE`; a raw SQLite error inside a route surfaces as 500 `INTERNAL`. So the index is a backstop the API cannot reach, and were it ever to fire the caller would get `INTERNAL`, not `RULE_NOT_FOUND`.
+- **low** · `tools/ledger/web/src/App.tsx:27 "A failure leaves the number out"` — the `catch` keeps the previous count, so after one success a failed refresh shows a stale number, not none.
+- **low** · `tools/ledger/api/src/classifications.ts:164 "export function inboxCount"` — exported and used nowhere in `tools/ledger`.
+- **low** · `tools/ledger/api/test/schema.test.ts@ebb808b:76 "migrating a migrated database again changes nothing"` — no suite test migrates a version-1 database that holds rows; this one starts at version 2. The gate did it by hand: a database built by the base’s own `migrate` and `importStatement` (12 rows) opened by the head at `user_version` 2 with rows and imports identical, no classification, all 12 in the inbox.
+- **low** · `parseTypedAmountCents` in `tools/ledger/books/src/amount.ts` refuses `1 100.00`, `1,100.00`, `+350.5` and `0.5` while taking `-1 100,00` and `1100.00`. Every `formatCents` output round-trips (14 of 14), so the pre-filled offer is safe.
+- **dropped** · bare `Error` in `api/test/helpers/classification.ts` and `web/test/inbox.test.tsx`: test code, not a raise site; no `src` file raises one.
+- **dropped** · accepting any rule in force for any row, matching or not: that is a person’s answer, and a `differs` row needs it.
+- **findings** · code-review at medium returned 10; 8 carried, 2 dropped.
+- NFR: security ✓ (all seven lg-4 routes answer 403 `UNAUTHENTICATED` with no identity; `GET /api/people` returns configured ids, no address, and logs nothing) · performance ✓ (no regular expression is built from a pattern; ten `*` over 200,000 characters, 4 ms) · reliability ✓ (a planted failure on an extending paste leaves rows, imports and classifications unchanged) · maintainability — the lows above.
+- **For the open decision** (file the waiting rows when a rule is created), measured and not decided: as built, every row stored before lg-4 stays in the inbox until a person taps it — a new exactly matching rule filed 0 of 12 (3 shown as `matches`), and re-pasting the same statement filed 0. The API also accepts a bare `*` as a pattern, which matches every description.
+- **Not verified** · the image build; e2e (none exists); the screens against a running server in a browser; a rule edit raced from a second database connection.
+- **Citations** · the branch moves 1 citation in lg-1’s record and 10 in lg-2’s and edits neither record, so under repo-47’s rule (`.claude/skills/orchestrate-tickets/reference/records.md@ebb808b:350 "only the records it also edits"`) they are reported, not failed, and are not this branch’s to repoint.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-03 · `0e6bb53..6a5a73b`, the rate-limiting round the owner folded into lg-4 after #345’s CodeQL check · code-review at medium, run by the gate itself · coordinates resolve at `6a5a73b`. Gate 1 above is re-issued unchanged: all 18 of its citations still verify at `6a5a73b`. The round has no Done-when line of its own; its acceptance came from the coordinator’s dispatch.
+
+| The round’s claim                                                       | Proof                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every API route but health passes the limiter, after the identity check | `tools/ledger/api/test/route-limits.test.ts:77 "expect(second.json<ErrorResponse>().error.code)"` ✓ over 8 routes; the gate’s own `printRoutes({ includeHooks: true })` lists 13 of 13 non-health method-path pairs (HEAD included) with the identity hook first and `rateLimit()` second, and drove each twice against a bucket of one: 13 of 13 answered 429 |
+| 429 with `Retry-After` and `RateLimit-*`                                | `tools/ledger/api/test/route-limits.test.ts:78 "Number(second.headers["` ✓; the gate saw `Retry-After: 60`, `RateLimit-Limit: 1`, `-Remaining: 0`, `-Reset: 60` on all 13                                                                                                                                                                                      |
+| Keyed on the person, not the address                                    | `tools/ledger/api/test/route-limits.test.ts:175 ".resolves.toBeUndefined()"` ✓                                                                                                                                                                                                                                                                                 |
+| Fails closed with no identity                                           | `tools/ledger/api/test/route-limits.test.ts:189 "call(hook, null,"` ✓; through the app, five requests with no identity gave five 403 `UNAUTHENTICATED`, with no `RateLimit-*` header and no database access                                                                                                                                                    |
+| Health is never limited                                                 | `tools/ledger/api/test/route-limits.test.ts:91 "expect(statuses).toEqual([200, 200, 200, 200, 200])"` ✓                                                                                                                                                                                                                                                        |
+| 120 reads and 60 writes a minute; zero turns one off                    | `tools/ledger/api/test/config.test.ts:54 "expect(config.rateLimitWritesPerMinute).toBe(60)"` ✓ · `tools/ledger/api/test/config.test.ts:64 "expect(config.rateLimitWritesPerMinute).toBe(0)"` ✓                                                                                                                                                                 |
+| Gates green                                                             | **verified** — `npm run check` exit 0; `npm test -- --project ledger` 333 of 333 in 21 files; image-closure and spawn-safety 25 of 25 (`@webtools/core` was already a dependency); preflight exit 0; `citations-gate.mjs --against origin/main` exit 0, 149 enforced, 0 failing                                                                                |
+
+- **low** · `tools/ledger/api/src/routes/inbox.ts:26 "app.post(ROUTES.classifications, { onRequest: write }"` — which bucket a route draws from is asserted only for `/api/rules`. With this line changed to `{ onRequest: read }`, `route-limits.test.ts` still passes 17 of 17, because every per-route test runs both buckets at one token. A write then spends the read budget, and the next inbox load is refused after a run of taps.
+- **low** · `tools/ledger/api/test/route-limits.test.ts:34 "rules: ["` and `tools/ledger/CLAUDE.md:66 "so that it fails instead"` — the walk maps each `ROUTES` key to one verb, so `POST /api/rules` is not walked, and neither would be a second verb added to an existing path. Taking `{ onRequest: write }` off `POST /api/rules` is caught by an unrelated test, “a refused write changes nothing” (1 failed of 17); a new `GET` on `/api/statements` would ship unlimited and keep this file green. CLAUDE.md’s sentence promises more than the walk does.
+- **low** · `tools/ledger/api/src/config.ts:216 "API_DEFAULTS.rateLimitReadsPerMinute, { min: 0 }"` — production disables a limiter with no refusal and no log line: `RATE_LIMIT_READS_PER_MINUTE=0` loads as 0, and `-1` is clamped to 0, which is also off; `abc` falls back to 120 and `1.5` truncates to 1 (all measured through `loadApiConfig` with `NODE_ENV=production`). The planner and the downloader parse theirs the same way, so the shape is the repo’s, not this round’s.
+- **low** · `tools/ledger/api/src/routes/statements.ts:26 "{ config, onRequest: rateLimitsFor(context).write }"` — reformatting this call deleted the text lg-2’s record anchors on: `citations.mjs` reports `app.post(ROUTES.statements, { config }` as “not anywhere” in the file. The Log’s Citations bullet calls it moved, but a coordinate-only repoint cannot fix it. Whoever next edits lg-2’s record rewrites that citation as prose. Not failed now, because this branch does not edit that record.
+- **dropped** · CodeQL’s “Missing rate limiting” still fails #345 at `6a5a73b` (`gh pr checks 345`). The limiter limits (above), and CodeQL’s model does not recognise an in-repo Fastify hook; how to clear the check is an open owner decision, not a defect.
+- **dropped** · a request with no identity is never rate limited. It is refused at the identity hook with 403 before any route code or database access runs, and Access sits in front of it.
+- **findings** · code-review at medium returned 6; 4 carried, 2 dropped.
+- **Mutations** · five run, three of them the builder’s: no hook on the inbox read, 1 failed of 17; the hook returning at once, 13 failed; keyed on `request.ip`, 3 failed. Of the gate’s own two, no hook on `POST /api/rules` failed 1, and the classification write on the read bucket survived (the first low above).
+- NFR: security ✓ (per-person key; the log line names the person id, never an address or token) · performance ✓ (one `Map` lookup per request, capped keys) · reliability ✓ (a refused write stores nothing) · maintainability — the lows above.
+
 ## Log
+
+- 2026-10-03 — Built, on `origin/main` at `ebb808b`: `classify` and
+  `matchesPattern` in `books/src/classify.ts`; migration 2 (`rules`,
+  `current_rules`, `classifications`, `current_classifications`) in
+  `api/src/db/schema.ts`; `api/src/rules.ts` and `api/src/classifications.ts`;
+  `GET/POST /api/rules`, `POST /api/rules/:id` (an edit), `POST /api/rules/:id/retire`,
+  `GET /api/inbox`, `POST /api/classifications` and `GET /api/people`; two codes,
+  `RULE_NOT_FOUND` and `ROW_NOT_FOUND` (both 404); and in `web` the inbox, the
+  offer to make an answer a rule, the rules screen and tabs that carry the
+  inbox's count.
+  - **The suite passes.** `npm test -- --project ledger` → `Test Files 20 passed
+(20)`, `Tests 313 passed (313)`; `npm run check` exit 0; `node scripts/preflight.mjs
+--base origin/main --title "feat(ledger): classify rows by rule and put the
+rest in an inbox (lg-4)"` → `preflight passed (exit 0)`.
+  - **Done when 1–4, and where each is proved.** (1) An exact match is classified
+    on paste: `api/test/classifications.test.ts`, "a row matching one rule
+    exactly is classified, and the rest are the inbox"; a changed amount is the
+    inbox with that rule suggested: "a transfer that is not its usual amount
+    lands in the inbox with that rule suggested". (2) "send it to the inbox,
+    never to the first rule", and the same with the rules added the other way
+    round. (3) "keeps the earlier classification, with who changed it and when",
+    which reads both records and `current_classifications`. (4)
+    `web/test/inbox.test.tsx`, "accepting a suggestion sends its rule and the row
+    leaves the inbox" and "answering with a person and a bucket, then taking the
+    offer, creates a rule from the row".
+  - **The tests can fail.** Each mutation was applied to the source alone and
+    restored. In `books/src/classify.ts`, taking the first match
+    (`matching.length === 1` → `>= 1`): `npx vitest run` on `classify.test.ts`
+    and `classifications.test.ts` → `4 failed | 46 passed (50)`, all four in
+    `classify.test.ts`, because the API reads books' `dist` and the source edit
+    reached nothing there; after `npx tsc --build tools/ledger/books`,
+    `classifications.test.ts` alone → `2 failed | 18 passed (20)` ("send it to
+    the inbox, never to the first rule" and the reversed order). Ignoring the
+    amount (`amountMiss = false`, rebuilt): the same two files → 11 failed, 6 in
+    `classify.test.ts` and 5 in `classifications.test.ts`. In
+    `api/src/classifications.ts`, a `DELETE` of the row's earlier records before
+    the `INSERT`: `classifications.test.ts` and `classification-schema.test.ts`
+    → `2 failed | 26 passed (28)`, the reclassify test and the scan that no API
+    source issues an `UPDATE` or a `DELETE`. In `Inbox.tsx`, `onAccept(row.id)`
+    for `onAccept(suggestion.id)` fails "accepting a suggestion" (1 of 9), and
+    `amountCents: null` for the row's amount in the offer fails the offer test
+    (1 of 9).
+  - **A paste is stored with its classifications or not at all.** A trigger on
+    `classifications` that aborts every insert makes the paste answer 500 and
+    leave `statement_rows` and `statement_imports` both at 0
+    (`classifications.test.ts`, "a paste is stored with its classifications or
+    not at all").
+  - **Decisions the brief left open, made here.**
+    - **A pattern is the whole description, case, accents and runs of spaces
+      ignored, with `*` for any run of characters** — never a regular
+      expression. A person types these, and a pattern built into a regular
+      expression from their input is the shape that backtracks without end. The
+      matcher is the iterative two-pointer one; a test runs 30 stars against
+      2000 characters.
+    - **Nearest rule.** Only a rule whose pattern matches is a candidate. Order:
+      fewest criteria failed, smallest gap between the rule's fixed amount and
+      the row's, most criteria named, longest literal pattern. Level means no
+      winner, and the suggestion is `null` rather than the older rule.
+    - **A rule is edited and retired by appending** (`supersedes`, and `retired`
+      on a retirement), with a unique partial index so two people editing one
+      rule cannot both win; the second is `RULE_NOT_FOUND`. A classification
+      cites the rule version it used.
+    - **A new rule does not reclassify rows already stored.** A rule applies to
+      the rows a paste adds. An inbox row a rule now matches exactly shows as
+      reason `matches`, one tap to accept. See the fold-in note below.
+    - **The offer to make a rule fills in the amount**, on purpose: a rule that
+      names the usual amount asks about a different one, where a rule that does
+      not would file it without a word. A person clears the field to loosen it.
+    - **`GET /api/people`, and a `personId` on rules and classifications,** come
+      from the configured names (`ACCESS_PEOPLE`): the brief's "lg-3's person" is
+      the `Person.id` lg-3 landed, and lg-5's `people` table does not exist yet.
+      lg-5's Build now says to point the route at the table.
+  - **What the brief had wrong.** "lg-3's person, when it lands" is stale: lg-3
+    has landed, and `personOf(request)` is what records who. The brief names no
+    way for the web to learn who a rule may name, so `GET /api/people` was
+    added.
+  - **Moved citations, not repointed.** The branch moves lines that two merged
+    records cite: `lg-2-store-a-pasted-statement.md` (10) and
+    `lg-1-parse-an-accesd-paste.md` (1, in `tools/ledger/CLAUDE.md`). Preflight
+    reports them as moved and does not fail them, since the branch edits
+    neither record (repo-47's rule). Repointing is mechanical: `node
+scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
+    lists the new lines.
+  - **Fold-in: one done, one not.** Done: `tools/ledger/README.md` still said
+    "the books do not yet", false since lg-1 and more so now; one sentence. Not
+    done: applying a new rule to the rows already in the inbox would make the
+    offer worth more (one answer files the backlog of a recurring transfer), and
+    is a few lines in `api/src/rules.ts`. It is a decision and not a rename: it
+    classifies rows nobody has looked at, on a pattern a person typed seconds
+    ago, and a `*` rule would file everything. Reported to the orchestrator as
+    an open decision.
+  - **Not covered.** No e2e spec: `e2e/README.md` says the first one is a paste
+    surviving a reload. The inbox and rules screens were exercised in jsdom with
+    the API client faked, never against a running server in a browser.
+
+- 2026-10-03 — Owner's decision on the open question above. **The question:**
+  should creating a rule also file the rows already waiting in the inbox?
+  **Put to the owner through AskUserQuestion:** (A) new pastes only, as built; an
+  inbox row a new rule matches exactly shows as `matches`, with one tap to
+  accept; (B) also file the inbox on rule creation; (C) ask on creation, "N inbox
+  rows match — file them?". **The owner chose A**, the builder's recommendation,
+  so no recommendation was overridden. **The gate's measurement, carried with
+  it:** as built, rows stored before lg-4 stay in the inbox until tapped, and
+  the API accepts a bare `*` pattern. **Status:** decided, nothing to build.
+
+- 2026-10-03 — Rate limiting, after the landing (PR #345). **The finding:**
+  GitHub's default-setup CodeQL check failed #345 with "Missing rate limiting
+  (High)" on `routes/inbox.ts` (twice) and `routes/rules.ts`: "This route handler
+  performs a database access, but is not rate-limited." **Measured before
+  building:** `git grep -il "rate-limit\|RateLimit" HEAD -- tools/ledger/api/src`
+  printed nothing, so no ledger route was limited, `POST /api/statements` (lg-2)
+  among them; the gap is the tool's and not the three routes'. **The question put
+  to the owner:** how to handle it. **Options:** (1) file lg-11 and build it after
+  #345 merges, the coordinator's recommendation; (2) fold it into lg-4 now; (3)
+  dismiss it as won't-fix, since every `/api` route is behind Cloudflare Access
+  with two known users. **The owner chose (2), overriding the recommendation of
+  (1).** This entry is that work.
+  - **Coverage: every API route but health.** `GET /api/me`, `/api/rules`,
+    `/api/people`, `/api/inbox` and `POST /api/statements`, `/api/rules`,
+    `/api/rules/:id`, `/api/rules/:id/retire`, `/api/classifications` each take
+    `{ onRequest: rateLimitsFor(context).read }` or `.write`. Health is exempt: a
+    probe must always be answered and it reads only whether the database is open.
+    `api/test/route-limits.test.ts` types a table over `keyof typeof ROUTES` and
+    asserts its keys equal `ROUTES`' keys, so a route added to the contract
+    without a line there fails; every limited route is then driven twice against
+    a bucket of one and the second must be `429`.
+  - **Mechanism: `@webtools/core/rate-limit`'s `RateLimiter`, as the planner and
+    the downloader use it.** No new dependency and no new workspace import:
+    `@webtools/core` was already in `api`'s `dependencies` and in the ledger
+    `Dockerfile`'s closure, so `image-closure` needed nothing. The Fastify hook
+    stays per tool, as core's header says: `api/src/rate-limit.ts`.
+  - **Error code: core's `RATE_LIMITED`.** It already was in the ledger's
+    taxonomy through `CORE_ERROR_CODES` and mapped to 429 in `http-errors.ts`; no
+    new code, and none belongs here.
+  - **Key: the Access identity (`personOf(request).id`), not `request.ip`.** The
+    planner keys on the address. Here both people can arrive from one address
+    behind the tunnel, and `request.ip` is the client only when `TRUST_PROXY` is
+    set to the proxy's range, whereas the identity is what the tool already
+    trusts to say who did something. The hook runs after the identity check, and
+    `personOf` fails closed with `UNAUTHENTICATED` if it did not. The person's id
+    is safe to log, which an address or a token is not.
+  - **Limits: 120 reads and 60 writes a minute per person**, each its own bucket
+    (a burst of a full minute's worth, core's default),
+    `RATE_LIMIT_READS_PER_MINUTE` and `RATE_LIMIT_WRITES_PER_MINUTE`, zero turning
+    one off, in `config.ts` and `.env.example`. The numbers are a judgement: a tap
+    on the inbox is one write and a screen a handful of reads, so a person is far
+    inside them, and a loop is not. Two buckets because a write takes the
+    database's one lock and a paste is parsed over up to a megabyte. A test taps
+    through 40 inbox reads on the defaults.
+  - **The tests can fail.** Each applied to the source alone and restored,
+    `npx vitest run tools/ledger/api/test/route-limits.test.ts` (17 tests): taking
+    `{ onRequest: read }` off the inbox route → `1 failed | 16 passed (17)`
+    ("inbox refuses the second request"); making the hook return at once → `13
+failed | 4 passed (17)`; keying on `request.ip` for the person → `3 failed |
+14 passed (17)`.
+  - **Citations.** `routes/statements.ts`'s route line now carries the hook, so
+    lg-2's record, which quotes `app.post(ROUTES.statements, { config }` there,
+    is moved by that anchor as well as by the import line above it; it was already
+    moved by this ticket's first build, and preflight reports it and does not
+    fail it. **The test file is `route-limits.test.ts` and not `rate-limit.test.ts`
+    on purpose:** the first name made preflight's citations check FAIL on the
+    downloader's `dl-32` record, whose bare `api/test/rate-limit.test.ts:249`
+    resolves by suffix and became ambiguous the moment a second file of that name
+    existed (`2 unresolvable`, exit 18). A new test file's basename is a coordinate
+    other tools' bare citations may already be using.
+
+- 2026-10-03 — Owner's decision on the CodeQL alerts that remain at `6a5a73b`.
+  **The question:** CodeQL still fails #345, because its MissingRateLimiting
+  library models only express-rate-limit, express-brute, express-limiter and
+  rate-limiter-flexible, and not `@webtools/core`'s `RateLimiter`, which
+  `route-limits.test.ts` proves limits every route. So how is the check cleared?
+  **Put through AskUserQuestion:** (1) dismiss both alerts as false positives,
+  the recommendation; (2) swap to rate-limiter-flexible; (3) a custom CodeQL
+  model pack. **The owner chose (1), for now, which matched the
+  recommendation.** The owner dismisses the two alerts in the GitHub UI, since
+  the token here cannot. A `repo-` ticket evaluating rate-limiter-flexible is
+  filed in this batch's close-out pull request. **Status:** decided, nothing to
+  build.

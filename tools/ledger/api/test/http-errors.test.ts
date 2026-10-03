@@ -76,3 +76,16 @@ describe("a body over the cap", () => {
     });
   });
 });
+
+// lg-4: an id the caller named that is not there. Core's NOT_FOUND is a URL that
+// matched no route and is not what either of these says.
+describe("the rules and inbox error codes", () => {
+  test.each(["RULE_NOT_FOUND", "ROW_NOT_FOUND"] as const)(
+    "%s answers 404, not retryable",
+    (code) => {
+      const { status, body } = toErrorResponse(new AppError(code));
+      expect(status).toBe(404);
+      expect(body.error).toMatchObject({ code, retryable: false });
+    },
+  );
+});
