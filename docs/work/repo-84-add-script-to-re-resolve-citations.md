@@ -57,3 +57,71 @@ The script was rebuilt four times by the same gate round over successive fix rou
   as a permanent utility. The filer's recommendation was chosen. To be built
   after repo-47, since repo-47 changed what "moved" means to the gate. The
   script's semantics are documented in `roles/reviewer.md`.
+- 2026-10-03 — **Built** `scripts/re-resolve-citations.mjs <record> [--section <name>] [--base <ref>]`,
+  its suite `scripts/test/re-resolve-citations.test.ts`, one `include` line in
+  `scripts/test/tsconfig.json`, and one sentence in `roles/reviewer.md`'s
+  "Woken only to re-issue" bullet pointing at it. **What it does:** for every
+  unpinned, anchored citation it searches the anchor over the _whole_ file in the
+  working tree and prints one verdict — `holds`, `repoint` (the line it is now
+  on, at the old width), `ambiguous`, `gone`, `unresolvable`, and with `--base`
+  `pin` (the anchor is already in the file at the base, so cite the base line as
+  `file@<sha7>:<line>`, which wins over every other verdict and says what the
+  tip does). It edits nothing. Pinned, malformed-pin, anchorless, prose and
+  declared-evidence references are counted on the summary line and set no exit
+  bit. Exit 0 / 1 (something wants a change) / 2 (usage, or a ref that is not a
+  commit).
+- 2026-10-03 — **Why not `citations.mjs` alone:** it already reports `moved` with
+  the line the anchor went to. It cannot say `pin`, which needs a second tree,
+  and it reports a range the branch shortened the file below as `unresolvable`
+  before looking at the anchor, so the line the text went to is never printed.
+  The suite's `a range the branch shortened the file below is still found`
+  case is that gap; mutation M1 below turns it red.
+- 2026-10-03 — **The suite, and that it can fail:** `npx vitest run
+scripts/test/re-resolve-citations.test.ts` is 18 of 18. Seven mutations of the
+  script, each applied alone and restored (a `finally` rewrites the original, and
+  the run printed `restored true`): tip range not widened, 1 failed; range width
+  dropped from the suggestion, 1; `pin` branch disabled, 3; declared-evidence
+  skip removed, 1; ambiguous branch disabled, 1; `--section` scope ignored, 1;
+  base verdict forced to never verified, 3. None survived.
+- 2026-10-03 — **Run once on a real record, checked by two other methods.**
+  `node scripts/re-resolve-citations.mjs docs/work/repo-80-land-records-one-command.md --section Review`
+  exited 1: `24 holds, 15 repoint, 0 pin, 0 ambiguous, 0 gone, 0 unresolvable —
+of 39 re-resolved`, and `not re-resolved: 2 pinned, 0 malformed pin, 0
+unanchored, 6 prose or file-less, 0 declared evidence`. (1) Against
+  `node scripts/citations.mjs <same record> --section Review` (exit 2): 15
+  `MOVED`, and a comparison script over both outputs keyed on record line, cited
+  file and start line, and new line printed `only in re-resolve: []` and `only in
+citations.mjs: []` — but both read `locateAnchor`, so this shows the report is
+  faithful to the checker, not that the checker is right. (2) So four of the 15
+  were re-found with no shared code, by `grep -n -F` of the anchor in
+  `scripts/review-record.mjs`: `--untracked-files=no` at 1369, `dirtyStatus.trimEnd()`
+  at 1388, `const baseAnchorLine = baseResult.foundAt` at 1130, `export function
+runPreflightDefault(repo, base, title, spawn` at 1243 — each the line the script
+  suggested. The `pin` verdict was checked the same way with `--base 2ffb72a`
+  (1 pin, the one anchor that predates repo-80): `git show 2ffb72a:<repo-62
+record> | grep -n -F "starts on two"` printed line 173, the suggested pin, and
+  `git show 2ffb72a:scripts/review-record.mjs | grep -c -F baseAnchorLine` printed
+  0, so that anchor, which repo-80 introduced, was rightly not a pin. The run's
+  other 38 verdicts (23 holds, 15 repoint) were not checked against the base by a
+  second method.
+- 2026-10-03 — **What the brief had wrong or left open.** It says repo-47 changed
+  what "moved" means to the gate and that the script is written against the new
+  meaning. repo-47 changed _who is billed_ for a moved citation (only records the
+  branch edits fail; the rest are reported), not what `moved` is, so the script
+  has no gate-scope logic: it takes one record and answers for it. It also says
+  the semantics are documented in `roles/reviewer.md`; what that page held was the
+  recipe (splice, run `citations.mjs`, repoint the `MOVED` list), which is what
+  this script now computes. So the verdict set above is the builder's reading of
+  the four gate rounds described in the Why, not a transcription.
+- 2026-10-03 — **Folded in, and not folded in.** Folded in: the pointer sentence
+  in `roles/reviewer.md`, since a utility nobody is told about is rebuilt a fifth
+  time. **Could have, did not:** make `unpinnedPreexistingCitations` in
+  `scripts/review-record.mjs` call this script's base half, since the two widen the
+  base range identically. That file was being edited by two other branches
+  (repo-86, repo-89) and the dispatch forbade touching it, and the two answers
+  differ (it returns the pin line inside a sentence, this returns it as a field),
+  so the lift is a change of its own. **Could have, did not:** a `--write` mode
+  that applies the unambiguous `repoint` verdicts to the record. Nothing
+  specifies it, it would rewrite a gate's text where a round that _corrected_ a
+  claim, not merely moved a line, wants a human, and a report is what the four
+  rebuilt scripts were.

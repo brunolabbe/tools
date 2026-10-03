@@ -29,6 +29,7 @@
     "../cloudflare-setup.mjs",
     "../agent-cost.mjs",
     "../review-record.mjs",
+    "../re-resolve-citations.mjs",
     "../preflight.mjs",
     "../check-lockfile-sync.mjs",
     "../../.claude/scripts/check-farm-freshness.mjs"
