@@ -174,6 +174,17 @@ The owner live run stays **unproven (gate)**, and the Windows half of the guard 
 - **findings** · re-gate of 3: 3 fixed (1 unproven (gate) on Windows), 0 not fixed, 1 refutation held, against gate 2 own reproduction; 2 new (low 2), 0 dropped. Mutants re-run: 14; 13 red, and the guard mutant green, which is the first low.
 - NFR: security n/a · performance n/a · reliability — the guard fix, Windows unmeasured · maintainability — the symlink comment.
 
+### Gate 4
+
+**Gate: CONCERNS** — 2026-10-03 · `329b1b9..f2d9572` only · verdicts on gate 3 two lows · reviewed on Claude Opus 5.5 · coordinates resolve at `f2d9572`
+
+The owner live run and the Windows half of the guard fix stay **unproven (gate)**; nothing else holds the gate below PASS.
+
+- **fixed** · low, no test pins the guard — `scripts/test/cloudflare-turnstile.test.ts:358-373 "run as a process from a path with a space"` copies the script into a temp directory with a space in its name and expects exit 1. Reverting the guard to concatenation now fails it, `expected '' to contain 'CLOUDFLARE_API_TOKEN is not set'`; the exit-0 mutant fails it too. Restored: 31 of 31 in the two Cloudflare suites. All 14 mutants are red at `f2d9572`.
+- **fixed** · low, the symlink comment — `scripts/cloudflare-setup.mjs:620 "a symlink still mismatches"`, matching gate 3 measurements: a space or `é` reproduced the old mismatch, and a symlink still exits 0.
+- **unmeasured** · the new case on the `windows-latest` leg, where the temp directory may be an 8.3 short path. That leg is informational, and it is the first run there.
+- **findings** · re-gate of 2: 2 fixed, 0 not fixed, 0 refuted; 0 new, 0 dropped.
+
 ## Log
 
 - 2026-09-22 — Filed at the owner's request while dl-50 was in review, to help
