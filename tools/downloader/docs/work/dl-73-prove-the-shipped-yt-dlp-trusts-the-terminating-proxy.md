@@ -322,3 +322,12 @@ manual measurement"), and it now fires automatically.
   `control: replacing 2 trust bundle(s) with an unrelated root`, probe 2
   `HTTP 502; origin saw []`, then `PASS`. `test (ubuntu-latest)` passed in run
   `37140019955`.
+
+- **2026-10-03, landing** — Gate 2 returned CONCERNS at `3003534` and left the
+  last clause of Done-when 2, "confirmed by the first real bump pull request",
+  `unproven (gate)`: no `ytdlp-bump.yml` pull request can exist until yt-dlp
+  releases. The question for the owner was what status the ticket lands with.
+  Put through `AskUserQuestion`, the options were: done, with the first real
+  bump pull request named as the remaining confirmation (recommended); or
+  in-flight until that pull request shows the `docker` check running the trust
+  step. The owner chose **done**, the recommendation.
