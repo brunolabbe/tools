@@ -40,6 +40,21 @@ prove it reproduces the workbook's own figures before it writes a row.
 4. **Rows go in as statement rows** with their classification already attached,
    marked as imported rather than pasted. Where a pasted row covers the same
    day, the two must agree.
+   - **A constraint on this ticket, following from lg-2's decision of
+     2026-10-02, which the import must meet.** A statement row has **no unique identity**: date, description,
+     amount and balance can repeat (a transfer, its reversal and the transfer
+     again), so the table has no unique index over them and a paste is matched
+     to stored rows **by position**, never by those four fields alone. "The two
+     must agree" is therefore a comparison of the rows in the same place
+     (`api/src/statements.ts`), and where one reading of the data is ambiguous
+     the import refuses rather than guessing, as a paste does.
+   - **Decided in lg-2, 2026-10-02.** A row's `seq` is a **position**, not a
+     count: it may be negative, and a new row takes the highest stored position
+     plus one. Older rows, which is what the workbook's 2022 onward are once
+     pastes are stored, can therefore be numbered below the oldest stored row
+     with no table rebuild. lg-2 still **refuses an older paste**
+     (`STATEMENT_BEFORE_HISTORY`); only this import numbers rows below the
+     oldest, and doing so is this ticket's to build.
 5. **Period sheets** become closed periods, each with its lines and its recorded
    settlement **as it actually happened**. Their formula version is `v1` or
    `v2`, told apart by the formula text in the `Montant à déposer` cell. The open

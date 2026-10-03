@@ -34,6 +34,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   STATEMENT_CHAIN_BROKEN: 422,
   STATEMENT_TOTAL_MISMATCH: 422,
   STATEMENT_ECHO_MISMATCH: 422,
+  // lg-2: the paste is fine on its own and does not fit what is stored.
+  STATEMENT_ROW_CONFLICT: 422,
+  STATEMENT_BEFORE_HISTORY: 422,
 };
 
 /**
@@ -53,8 +56,44 @@ function isClientRequestStatusError(error: unknown): boolean {
   return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
 }
 
+/**
+ * Fastify's own refusal of a body over `bodyLimit`. Matched by its code, not by
+ * the 413 alone, because `@fastify/static` and others raise 4xx statuses of
+ * their own.
+ */
+function isBodyTooLarge(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "FST_ERR_CTP_BODY_TOO_LARGE";
+}
+
+/** What the mapper cannot know about the route a failure came from. */
+export interface ErrorContext {
+  /**
+   * The route's own sentence for a body over the cap, declared on the route as
+   * `config: { tooLargeMessage }`. Fastify refuses an oversize body before any
+   * handler runs, so the mapper is the only place that can answer it, and it
+   * knows nothing of what the route takes.
+   */
+  tooLargeMessage?: string;
+}
+
+declare module "fastify" {
+  interface FastifyContextConfig {
+    tooLargeMessage?: string;
+  }
+}
+
 /** The one place that decides what `AppError` a failure *is*. */
-function toAppError(error: unknown): AppError {
+function toAppError(error: unknown, context: ErrorContext): AppError {
+  // Core's default for `SIZE_LIMIT_EXCEEDED` speaks of a *result*, not of
+  // something sent, so the copy is replaced here: generically, for any route,
+  // unless the route declared its own (the statements route does, lg-2).
+  if (isBodyTooLarge(error)) {
+    return new AppError(
+      "SIZE_LIMIT_EXCEEDED",
+      context.tooLargeMessage ?? "The request is too large.",
+      { cause: error },
+    );
+  }
   return isClientRequestStatusError(error)
     ? new AppError("BAD_REQUEST", undefined, { cause: error })
     : AppError.from(error);
@@ -66,12 +105,15 @@ function toAppError(error: unknown): AppError {
  * computations of "what `AppError` is this" is how a response and its log line
  * once disagreed about a `BAD_REQUEST`'s code (dl-66).
  */
-export function toErrorResponse(error: unknown): {
+export function toErrorResponse(
+  error: unknown,
+  context: ErrorContext = {},
+): {
   status: number;
   body: ErrorResponse;
   appError: AppError;
 } {
-  const appError = toAppError(error);
+  const appError = toAppError(error, context);
   return {
     status: STATUS_BY_CODE[appError.code] ?? 500,
     body: { error: appError.toPayload() },

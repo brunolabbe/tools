@@ -22,6 +22,7 @@ export const API_PREFIX = "/api";
 export const ROUTES = {
   health: `${API_PREFIX}/health`,
   me: `${API_PREFIX}/me`,
+  statements: `${API_PREFIX}/statements`,
 } as const;
 
 /**
@@ -38,6 +39,27 @@ export interface Person {
 /** `GET /api/me`: the caller, as the API identified them. */
 export interface MeResponse {
   person: Person;
+}
+
+/** `POST /api/statements`: an AccèsD paste, exactly as the clipboard held it. */
+export const importStatementRequestSchema = z.object({
+  text: z.string().min(1),
+}) satisfies z.ZodType<ImportStatementRequest>;
+
+export interface ImportStatementRequest {
+  text: string;
+}
+
+/**
+ * What storing a paste did. `rowsAdded + rowsAlreadyPresent` is every row the
+ * paste held, so a paste pasted twice reads `0` and all of them the second time.
+ * `tailBalanceCents` is the account's balance after the newest stored row, which
+ * is what the user checks against the bank's own figure.
+ */
+export interface ImportStatementReport {
+  rowsAdded: number;
+  rowsAlreadyPresent: number;
+  tailBalanceCents: number;
 }
 
 /**

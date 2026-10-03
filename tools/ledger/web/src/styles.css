@@ -73,6 +73,97 @@ h1 {
   border-top: 1px solid var(--border);
 }
 
+/*
+ * The paste screen (lg-2). One column on a phone; 16px text in the textarea so
+ * iOS does not zoom the page when it takes focus; buttons at least 44px tall.
+ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.5rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 24rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+/* Date and amount on the first line, description and balance on the second. */
+.rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rows .when {
+  grid-area: 1 / 1;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.rows .amount {
+  grid-area: 1 / 2;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows .amount.out {
+  color: var(--bad);
+}
+
+.rows .what {
+  grid-area: 2 / 1;
+  overflow-wrap: anywhere;
+}
+
+.rows .balance {
+  grid-area: 2 / 2;
+  text-align: right;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (min-width: 48rem) {
   .shell {
     padding: calc(var(--gap) * 2);
