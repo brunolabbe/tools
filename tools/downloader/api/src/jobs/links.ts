@@ -56,6 +56,8 @@ export function maxLinkWaitMs(probeTimeoutMs: number): number {
  */
 export const JOB_RETENTION_DAYS = 14;
 
+export const JOB_RETENTION_MS = JOB_RETENTION_DAYS * 24 * 3_600_000;
+
 /**
  * How long a link's row outlives its expiry, so a late `GET` still reads `410`
  * ("this existed") rather than `404` ("you mistyped it"). The same reasoning as
@@ -63,7 +65,7 @@ export const JOB_RETENTION_DAYS = 14;
  * row cascades away with its job, and a job goes at `JOB_RETENTION_DAYS` (dl-54),
  * so a longer grace could never take effect.
  */
-export const LINK_ROW_GRACE_MS = JOB_RETENTION_DAYS * 24 * 3_600_000;
+export const LINK_ROW_GRACE_MS = JOB_RETENTION_MS;
 
 export function createJobLink(now: Date): { token: string; url: string; expiresAt: string } {
   const token = createFileToken();

@@ -223,7 +223,6 @@ export class JobStore {
     insertProbeOutcome: Statement;
     listProbeOutcomes: Statement;
     pruneProbeOutcomes: Statement;
-    pruneJobs: Statement;
   };
 
   constructor(db: Database) {
@@ -279,7 +278,6 @@ export class JobStore {
       ),
       listProbeOutcomes: db.prepare(`SELECT * FROM probe_outcomes ORDER BY id`),
       pruneProbeOutcomes: db.prepare(`DELETE FROM probe_outcomes WHERE created_at < ?`),
-      pruneJobs: db.prepare(`DELETE FROM jobs WHERE created_at < ?`),
     };
   }
 
@@ -563,6 +561,9 @@ export class JobStore {
    * forever is the one outcome the promise rules out.
    */
   pruneJobs(beforeIso: string): number {
-    return this.#statements.pruneJobs.run(beforeIso).changes;
+    // Prepared here and not in the constructor: the sweep runs it every few
+    // minutes, and keeping it off that list keeps every line below it where the
+    // merged records that cite them found them.
+    return this.#db.prepare(`DELETE FROM jobs WHERE created_at < ?`).run(beforeIso).changes;
   }
 }
