@@ -207,3 +207,9 @@ manual measurement"), and it now fires automatically.
   was folded in. `01-ARCHITECTURE.md`'s yt-dlp bullet now says that the gate
   runs the pair. Nothing else was free to fold in: the open downloader tickets
   are dl-49, dl-52 and dl-54, and none is touched by this work.
+
+  **dl-39 is not edited.** A pointer appended to its Log made preflight fail
+  `review` (`dl-39-… is marked done but has no ## Review section`): dl-39 was
+  closed by decision, without a gate, and preflight wants a `## Review` on
+  every `done` ticket a branch touches. Its 2026-09-22 entry already links here, so the
+  answers are one hop from it.
