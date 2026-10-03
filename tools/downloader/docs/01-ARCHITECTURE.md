@@ -357,7 +357,11 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
     the shipped binary is a PyInstaller build carrying its own `certifi` and
     prefers it, so `SSL_CERT_FILE` on its own is read by OpenSSL and never
     consulted — as are `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE`. Merged rather
-    than replaced for the reason `-ca_file` is not.
+    than replaced for the reason `-ca_file` is not. The container gate in
+    `downloader.yml` runs the shipped binary through this proxy on every run,
+    so a yt-dlp release that stops honouring the pair fails its bump pull
+    request rather than YouTube in production
+    ([`dl-73`](./work/dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md)).
   - **The verdict comes back by side channel.** The status-line trick above
     works for yt-dlp, which quotes it, and not for Chromium: every non-200
     `CONNECT` response reaches it as `net::ERR_TUNNEL_CONNECTION_FAILED` and
