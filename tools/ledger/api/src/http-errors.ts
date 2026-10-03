@@ -37,6 +37,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // lg-2: the paste is fine on its own and does not fit what is stored.
   STATEMENT_ROW_CONFLICT: 422,
   STATEMENT_BEFORE_HISTORY: 422,
+  // lg-4: an id the caller named that is not there — a rule in force, a stored row.
+  RULE_NOT_FOUND: 404,
+  ROW_NOT_FOUND: 404,
 };
 
 /**
