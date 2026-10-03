@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatCents, parseAmountCents } from "../src/index.ts";
+import { formatCents, parseAmountCents, parseTypedAmountCents } from "../src/index.ts";
 
 describe("parseAmountCents", () => {
   test.each([
@@ -41,5 +41,31 @@ describe("formatCents", () => {
     expect(formatCents(-70000)).toBe("-700.00 $");
     expect(formatCents(5)).toBe("0.05 $");
     expect(formatCents(123456)).toBe("1234.56 $");
+  });
+});
+
+// lg-4: what a form field accepts, in a block of its own at the end.
+describe("parseTypedAmountCents", () => {
+  test.each([
+    ["a bare number is dollars", "400", 40000],
+    ["a decimal point", "400.50", 40050],
+    ["a decimal comma", "400,50", 40050],
+    ["a minus and a dollar sign", "-700,00 $", -70000],
+    ["a dollar sign alone after a bare number", "12 $", 1200],
+    ["a thousands space", "1 100,00", 110000],
+    ["a plus", "+5.05", 505],
+  ])("reads %s", (_name, text, cents) => {
+    expect(parseTypedAmountCents(text)).toBe(cents);
+  });
+
+  test.each([
+    ["one decimal digit", "1,5"],
+    ["three decimal digits", "1.234"],
+    ["words", "abc"],
+    ["a sign alone", "-"],
+    ["nothing", ""],
+    ["a dollar sign alone", "$"],
+  ])("refuses %s", (_name, text) => {
+    expect(parseTypedAmountCents(text)).toBeNull();
   });
 });

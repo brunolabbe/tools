@@ -17,7 +17,8 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1); the two after them are the store's (lg-2).
+ * parser's (lg-1); the two after them are the store's (lg-2), and the last two
+ * are the rules' and the inbox's (lg-4).
  */
 
 import {
@@ -75,6 +76,18 @@ export const LEDGER_ERROR_CODES = [
    * oldest, which this ticket does not do; a later one may.
    */
   "STATEMENT_BEFORE_HISTORY",
+  // --- Rules and the inbox (lg-4) ---
+  //
+  // Both are about an id the caller named. Neither is core's `NOT_FOUND`, which
+  // is a URL that matched no route, nor `JOB_NOT_FOUND`, which is a job.
+  /**
+   * The rule named is not in force: it never existed, or it has since been edited
+   * or retired — which is what two people working at once will meet. The
+   * caller reloads the rules rather than retries.
+   */
+  "RULE_NOT_FOUND",
+  /** The statement row named is not stored. */
+  "ROW_NOT_FOUND",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -93,6 +106,9 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   STATEMENT_ROW_CONFLICT: "A pasted row disagrees with the row already stored in its place.",
   STATEMENT_BEFORE_HISTORY:
     "The pasted statement starts before the oldest stored row, and older history cannot be added.",
+  RULE_NOT_FOUND:
+    "There is no such rule in force. It may have been changed or retired since the list was loaded.",
+  ROW_NOT_FOUND: "There is no such statement row.",
 };
 
 /**

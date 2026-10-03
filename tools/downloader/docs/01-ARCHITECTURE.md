@@ -247,6 +247,19 @@ and their defaults.
 | `TURNSTILE_SECRET_KEY`        | —            | the secret half of the above, and a credential: it is never logged or sent to the page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
+**What is kept about a visitor, and for how long** (`dl-54`; the page that says it
+to visitors is `web/public/terms.html`, and `api/test/log-fields.test.ts` pins the
+log fields it describes). The client address is on the `request` line of every
+request. The page URL is in the `jobs` row of a download, query string included —
+and again in a failed job's `error_json` — until the sweep deletes the row 14 days
+after it was made (`JOB_RETENTION_DAYS`, a constant, not a setting, because the
+page states it). A URL inside a log line's fields keeps its origin and path and loses its
+query; the `request` line's own `url` is the route called, and keeps that request's query by
+design (the page travels in a POST body, so it is never in it).
+`probe_outcomes` holds a hostname for `OUTCOME_RETENTION_DAYS`. The container's log
+is capped by size in `compose.downloader.prod.yaml`; Docker has no age limit, which
+`docs/02-DEPLOYMENT.md` § "Log retention" is about.
+
 ---
 
 ## Security posture
@@ -357,7 +370,15 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
     the shipped binary is a PyInstaller build carrying its own `certifi` and
     prefers it, so `SSL_CERT_FILE` on its own is read by OpenSSL and never
     consulted — as are `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE`. Merged rather
-    than replaced for the reason `-ca_file` is not.
+    than replaced for the reason `-ca_file` is not. The container gate in
+    `downloader.yml` runs the shipped binary through this proxy on every run.
+    It also requires that binary to refuse the leaf once its bundle names an
+    unrelated root. A yt-dlp release that stops honouring the pair, or stops
+    verifying at all, should therefore turn its bump pull request's container
+    check red before the owner merges it by hand. Nothing blocks that merge,
+    and no bump pull request has run the check yet; the first real one is what
+    confirms the trigger
+    ([`dl-73`](./work/dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md)).
   - **The verdict comes back by side channel.** The status-line trick above
     works for yt-dlp, which quotes it, and not for Chromium: every non-200
     `CONNECT` response reaches it as `net::ERR_TUNNEL_CONNECTION_FAILED` and

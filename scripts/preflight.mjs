@@ -224,8 +224,8 @@ export function scriptsTouched(diffPaths) {
 /**
  * `npm run check`, plus whichever `npm test` a diff's own paths call for: the
  * full suite when shared config moved, the `repo` project when `scripts/`
- * moved, and one project per tool the diff touches — all three read from the
- * diff's own paths, never from a flag.
+ * moved, one project per tool the diff touches, and `core` after those (repo-90)
+ * — all read from the diff's own paths, never from a flag.
  *
  * @param {string[]} diffPaths
  * @returns {[string, string[]][]}
@@ -236,11 +236,11 @@ export function testPlan(diffPaths) {
     commands.push(["npm", ["test"]]);
     return commands;
   }
-  if (scriptsTouched(diffPaths)) {
-    commands.push(["npm", ["test", "--", "--project", "repo"]]);
-  }
-  for (const tool of touchedTools(diffPaths)) {
-    commands.push(["npm", ["test", "--", "--project", tool]]);
+  const tools = touchedTools(diffPaths);
+  const projects = scriptsTouched(diffPaths) ? ["repo", ...tools] : tools;
+  // `core` last, whenever code moved: its source scans read every file under scripts/ and tools/ (repo-90)
+  for (const project of projects.length > 0 ? [...projects, "core"] : projects) {
+    commands.push(["npm", ["test", "--", "--project", project]]);
   }
   return commands;
 }
@@ -1100,11 +1100,9 @@ export function workingTreePaths(repo, run) {
  * suite under active edit — staged, unstaged or untracked, not yet committed
  * — is still selected rather than silently skipped (repo-65's own
  * reproduction: an uncommitted edit under `scripts/test/` ran no `repo`
- * project suite at all). This still leaves two trees rather than one — checks
- * 1 alone on the working tree, checks 3–4 on committed state, check 2
- * (`checkCitations`) unconditional on disk for a record's contents but
- * index-based for which records it selects — repo-65's Why has the full
- * three-way split this narrows from. Widening checks 3–4 the same way was
+ * project suite at all). This still leaves two trees rather than one — check
+ * 1 alone on the working tree, checks 3–4 on committed state — and repo-65's
+ * Why has the split this narrows from. Widening checks 3–4 the same way was
  * repo-65's option (a), decided against: it would have meant refusing a dirty
  * tree outright, which costs three rewritten places across
  * orchestrate-tickets' own builder and fixer pages — the pre-report gate list

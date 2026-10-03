@@ -35,3 +35,18 @@ export function formatCents(cents: number): string {
   const abs = Math.abs(cents);
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")} $`;
 }
+
+/**
+ * An amount as a person types it into a form: `400`, `400.50`, `-1 100,00`, with
+ * or without the `$`. The bank's format stays strict because a paste must never
+ * be guessed at; a form field is the person's own, so a decimal point is read as
+ * the comma it means and a missing `$` is supplied. A bare `400` is four hundred
+ * dollars, never four hundred cents. Anything else is `null`.
+ */
+export function parseTypedAmountCents(text: string): number | null {
+  let typed = text.trim();
+  if (typed.endsWith("$")) typed = typed.slice(0, -1).trimEnd();
+  if (/^[+\-−]?\s*\d+$/u.test(typed)) typed = `${typed},00`;
+  else typed = typed.replace(/^([+\-−]?\s*\d+)\.(\d{2})$/u, "$1,$2");
+  return parseAmountCents(`${typed} $`);
+}

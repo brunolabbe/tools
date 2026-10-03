@@ -137,23 +137,23 @@ test("scriptsTouched fires on scripts/ and its own scripts/test/ subtree", () =>
 });
 
 test("testPlan runs the repo project on scripts/, the full suite on shared config, one project per tool otherwise", () => {
+  // `core` follows any code change since repo-90; the scripts/-only plan is the
+  // first test appended at the end of this file, so these rows stay where they were.
   expect(testPlan(["tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "core"]],
   ]);
   expect(testPlan(["packages/core/src/a.ts", "tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test"]],
   ]);
   expect(testPlan(["docs/work/repo-1-a.md"])).toEqual([["npm", ["run", "check"]]]);
-  expect(testPlan(["scripts/preflight.mjs"])).toEqual([
-    ["npm", ["run", "check"]],
-    ["npm", ["test", "--", "--project", "repo"]],
-  ]);
   expect(testPlan(["scripts/preflight.mjs", "tools/downloader/api/src/a.ts"])).toEqual([
     ["npm", ["run", "check"]],
     ["npm", ["test", "--", "--project", "repo"]],
     ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "core"]],
   ]);
 });
 
@@ -239,7 +239,7 @@ test("checkBuild runs check plus one project per touched tool and sets no bit wh
   const calls: string[] = [];
   const result = checkBuild("/repo", ["tools/downloader/api/src/a.ts"], recordingRun(calls));
   expect(result).toMatchObject({ ok: true, bit: 0 });
-  expect(calls).toEqual(["npm run check", "npm test -- --project downloader"]);
+  expect(calls.slice(0, 2)).toEqual(["npm run check", "npm test -- --project downloader"]);
 });
 
 test("checkBuild stops at the first failing command and sets the check bit", () => {
@@ -1490,4 +1490,48 @@ test("preflight blames the working tree, not --base, when git status itself fail
   }
 });
 
-// --- repo-47: which records the citation checks enforce on `moved` ----------
+// --- repo-90: the core project's source scans reach scripts/ and every tool ---
+
+test("testPlan runs core after the repo project when only scripts/ moved, and after each tool", () => {
+  expect(testPlan(["scripts/re-resolve-citations.mjs"])).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test", "--", "--project", "repo"]],
+    ["npm", ["test", "--", "--project", "core"]],
+  ]);
+  expect(testPlan(["tools/planner/api/src/a.ts", "tools/downloader/api/src/a.ts"])).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "planner"]],
+    ["npm", ["test", "--", "--project", "core"]],
+  ]);
+});
+
+test("testPlan adds no core project to a diff that touches neither scripts/ nor a tool, and runs it once under shared config", () => {
+  expect(testPlan(["docs/work/repo-1-a.md"])).toEqual([["npm", ["run", "check"]]]);
+  expect(testPlan([".claude/skills/orchestrate-tickets/SKILL.md"])).toEqual([
+    ["npm", ["run", "check"]],
+  ]);
+  const shared = testPlan(["scripts/preflight.mjs", "package.json"]);
+  expect(shared).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test"]],
+  ]);
+});
+
+test("checkBuild fails on a scripts/ diff when only core's suite fails", () => {
+  // The defect: a new test spawning without `shell: false` fails core's
+  // spawn-safety scan and nothing else, and preflight passed it (repo-90).
+  const calls: string[] = [];
+  const onlyCoreFails = (command: string, args: string[]) => {
+    calls.push(`${command} ${args.join(" ")}`);
+    if (args.includes("core")) throw new Error("spawn-safety: 1 failed");
+    return "";
+  };
+  const result = checkBuild("/repo", ["scripts/test/a.test.ts"], onlyCoreFails);
+  expect(result).toMatchObject({ ok: false, bit: EXIT.check });
+  expect(calls).toEqual([
+    "npm run check",
+    "npm test -- --project repo",
+    "npm test -- --project core",
+  ]);
+});

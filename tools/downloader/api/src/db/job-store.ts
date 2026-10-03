@@ -542,4 +542,28 @@ export class JobStore {
   pruneProbeOutcomes(beforeIso: string): number {
     return this.#statements.pruneProbeOutcomes.run(beforeIso).changes;
   }
+
+  // --- retention (dl-54) ----------------------------------------------------
+
+  /**
+   * Deletes every job created before `beforeIso`, whatever state it is in, and
+   * returns how many went.
+   *
+   * The **row**, not just `source_url`. The page URL is also in `error_json`
+   * (`details.url`, query string included — measured on a failed probe), and a
+   * variant's media URL, which routinely carries a signed credential, is in
+   * `variant_json` and `result_json`. Clearing one column would leave the others
+   * and make the terms page's "deleted" untrue. The job's link row goes with it
+   * (`ON DELETE CASCADE`), so a link older than this answers `404`, not `410`.
+   *
+   * No status guard: a job still `downloading` fourteen days on is a row the
+   * restart reconciliation failed long ago or a bug, and keeping its URL
+   * forever is the one outcome the promise rules out.
+   */
+  pruneJobs(beforeIso: string): number {
+    // Prepared here and not in the constructor: the sweep runs it every
+    // minute by default, and keeping it off that list keeps every line below it where the
+    // merged records that cite them found them.
+    return this.#db.prepare(`DELETE FROM jobs WHERE created_at < ?`).run(beforeIso).changes;
+  }
 }

@@ -14,7 +14,7 @@
 # downloader's half and `compose.planner.prod.yaml` is the planner's; they are
 # the same shape on purpose.
 #
-# It changes three things about the service `compose.downloader.yaml` defines:
+# It changes four things about the service `compose.downloader.yaml` defines:
 #
 #  - the image is **pulled, not built**. That file builds from source because
 #    that is what a developer wants; a deployed host wants a released artifact it
@@ -23,6 +23,8 @@
 #    `request.ip`, and with a proxy in front that address is cloudflared's on
 #    every request unless the header is trusted.
 #  - `cloudflared` waits on this service's health check before it registers.
+#  - its log is capped by size, which is what the terms page's retention rests on
+#    (dl-54); the comment on `logging` below says what that does and does not do.
 #
 # The loopback port inherited from `compose.downloader.yaml` stays, but it is for
 # debugging from the host — it is not how anything is served.
@@ -43,6 +45,38 @@ services:
     # matches this line because release-please stamps both.
     image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
     pull_policy: always
+
+    # How long the container's log keeps a visitor's address (dl-54). The terms
+    # page promises 14 days, and every `request` line carries the client address.
+    #
+    # **This is a size cap, not an age limit, and Docker has no option for age:**
+    # `json-file` rotates when a file reaches `max-size` and keeps `max-file`
+    # files, and the `local` driver takes the same two options. So the figure
+    # below is a size chosen to hold about 14 days of the traffic it was sized
+    # for, and it holds longer on a quiet host and shorter on a busy one.
+    #
+    # How it was derived. A first visit, run against a live API with the real
+    # engine at `info` — the level `compose.downloader.yaml` sets, under which
+    # `/api/health`'s polling is not written — wrote 16 lines: 11 `request` lines
+    # (the page, its two assets, a favicon, `/api/config`, the probe and its event
+    # stream, the job, its link and its event stream, a preview), one `request
+    # rejected` for the preview miss, and `probe complete`, `job accepted`,
+    # `engine stream complete` and `job completed`. That is 5,848 bytes once
+    # Docker wraps each line in its own JSON envelope (curl stood in for the
+    # browser, and the preview was a miss, which costs a line more than a hit; the
+    # bytes are in dl-54's Log). The API alone, with no page, is 7 lines and 2,551
+    # bytes. Call a visit 6 KB: 10 MB x 5 files is 50 MB, which is about 8,300
+    # visits, or 600 a day for 14 days. A failed visit adds a `request failed`
+    # line, and a return visit is smaller because the assets are cached.
+    # **That traffic is an assumption: nothing measured this host's day.** Replace it with
+    # `docker compose logs --since 24h downloader | wc -c` once there is one, and
+    # see "Log retention" in docs/02-DEPLOYMENT.md for the host-side purge that
+    # turns the cap into an age.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
     networks: [edge]
     environment:

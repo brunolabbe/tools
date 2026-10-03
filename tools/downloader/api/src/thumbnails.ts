@@ -216,6 +216,25 @@ export class ThumbnailStore {
   clear(): void {
     this.#entries.clear();
   }
+
+  /**
+   * Drops every entry past its lifetime, and returns how many went (dl-54).
+   *
+   * Without it an entry leaves only when its own token is asked for after it
+   * expired, or when 400 newer ones push it out, so on a quiet instance a
+   * visitor's preview would stay in memory until the process restarted. The
+   * terms page says ten minutes; the sweep calls this so that is true within
+   * the sweep's interval. The test is `get`'s own, so the two cannot disagree.
+   */
+  purgeExpired(): number {
+    let purged = 0;
+    for (const [token, entry] of this.#entries) {
+      if (this.#now() - entry.storedAtMs < this.#ttlMs) continue;
+      this.#entries.delete(token);
+      purged += 1;
+    }
+    return purged;
+  }
 }
 
 /**
