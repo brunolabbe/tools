@@ -91,9 +91,13 @@ search appends only `.com` and `.exe` to a bare name, so an extension-less
 `#!/bin/sh` fake named `gh` is never found — and the spawn does not fail, it
 reaches whatever real `gh` the machine carries (repo-71, a test that timed out
 on the Windows leg only). Make the fake a real executable on every platform
-(`scripts/test/preflight.test.ts`'s `plantFakeGh` reaches `process.execPath`
-under the fake's name) and **have it print a marker the test asserts**, so a
-real binary answering in its place fails the test instead of passing it.
+(`scripts/test/fake-gh.ts`'s `fakeGhPath` reaches `process.execPath` under the
+fake's name; `preflight.test.ts` keeps its own `plantFakeGh` of the same shape)
+and **have it print a marker the test asserts**, so a real binary answering in
+its place fails the test instead of passing it. The hazard is not only a test
+that names `gh`: anything that runs `preflight.mjs` for real reaches `gh pr
+list` in its check 5, and the `--land` CLI case in `review-record.test.ts` does
+(repo-89).
 
 **On Windows, a path from `mkdtemp` and the same directory from `git rev-parse
 --show-toplevel` spell differently — never assert equality between them.** A
