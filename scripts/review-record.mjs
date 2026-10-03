@@ -1553,7 +1553,10 @@ function landMain(argv) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const argv = process.argv.slice(2);
-    if (argv.includes("--land")) landMain(argv);
+    if (argv.includes("--help")) {
+      process.stdout.write(`${USAGE}\n${VERIFY_USAGE}\n${LAND_USAGE}\n`);
+      process.exitCode = 0;
+    } else if (argv.includes("--land")) landMain(argv);
     else if (argv.includes("--verify")) verifyMain(argv);
     else main();
   } catch (error) {

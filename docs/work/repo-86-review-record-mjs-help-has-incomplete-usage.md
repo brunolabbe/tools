@@ -57,3 +57,4 @@ option does today. Not decided here.
 - 2026-09-30 — Filed from landing fixer reports, reproduced at b658179.
   Three fixers on 2026-09-30 reported needing `--verify`/`--rev` without
   finding them in the usage line printed by `--help`.
+- 2026-10-03 — Fixed by adding --help handling to the entry point. Added a check for `argv.includes("--help")` before the routing to `landMain`/`verifyMain`/`main`, which prints all three usage lines and exits with code 0. Exit code choice: 0 (success). Rationale: a requested help text is not a failure, and Unix convention is to exit 0 when --help is requested. Tests pass, preflight passes.
