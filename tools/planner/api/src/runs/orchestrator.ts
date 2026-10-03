@@ -79,6 +79,7 @@ import {
   insertPlan,
   insertRevision,
   planExists,
+  retitlePlan,
   selectPlan,
   selectPlans,
   touchPlan,
@@ -590,6 +591,9 @@ export function persist(
 
     insertRevision(context.db, revision);
     touchPlan(context.db, planId, now);
+    // The title names the brief's length or month, and this revision's brief is
+    // the one that stands now — an edit's, or a restored version's (pl-53).
+    retitlePlan(context.db, planId, intakeTitle(revision.brief) ?? UNTITLED);
     return revision.id;
   })();
 }
