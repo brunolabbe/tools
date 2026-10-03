@@ -3,7 +3,7 @@ id: repo-90
 tool: repo
 title: Preflight exits 0 on a change that fails the core project's source scans
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -71,6 +71,30 @@ merged records cite that file by unpinned line number into the code below it.
 - A diff touching neither selects no `core`, and shared config still runs the full suite once. Proved by the next test, "testPlan adds no core project to a diff that touches neither scripts/ nor a tool".
 - A failure in `core` alone fails `checkBuild` with the `check` bit. Proved by the third appended test, "checkBuild fails on a scripts/ diff when only core's suite fails".
 - **The positive control**, on a real run: preflight over a head that still carries the defect exits non-zero, naming the scan's failing test; after the repair it exits 0. See the Log.
+
+## Review
+
+### Gate 1
+
+**Gate: PASS** — 2026-10-03 · `9ed966d..fcb3be0`, the repo-84 branch this ticket was filed and fixed in (base `ebb808b`; `origin/main` still there) · code-review at medium
+
+Acceptance is the ticket's own `## Done when`. Unpinned coordinates resolve against `fcb3be0`.
+
+| Done when                                                                                                                            | Proof                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `scripts/`-only diff selects `core` after `repo`, and a tool diff selects it after the tool's own project                          | **proven** — `scripts/test/preflight.test.ts:2220-2232 "testPlan runs core after the repo project when only scripts/ moved"`. With `core` dropped from `testPlan`, 3 tests fail, this one among them                                                           |
+| A diff touching neither selects no `core`, and shared config runs the full suite once                                                | **proven** — `scripts/test/preflight.test.ts:2234-2244 "testPlan adds no core project to a diff that touches neither"`. With `core` appended unconditionally, 2 tests fail, this one among them                                                                |
+| A failure in `core` alone fails `checkBuild` with the `check` bit                                                                    | **proven** — `scripts/test/preflight.test.ts:2256 "ok: false, bit: EXIT.check"`                                                                                                                                                                                |
+| The positive control: preflight over a head still carrying the defect exits non-zero naming the failing test, and 0 after the repair | **verified** — at `b9175ca`, `node scripts/preflight.mjs --base origin/main --title …` exit 1, `FAIL  npm test -- --project core`, `packages/core/test/spawn-safety.test.ts (18 tests, 1 failed)`; at `fcb3be0` exit 0 with `ok    npm test -- --project core` |
+
+- **Line-neutrality, verified by enumeration.** Every unpinned citation in every `docs/work/` record into `scripts/preflight.mjs` (83, in 11 records: repo-47 6, repo-51 24, repo-64 8, repo-65 9, repo-67 6, repo-75 9, repo-77 1, repo-78 1, repo-79 13, repo-82 1, repo-83 5) and into `scripts/test/preflight.test.ts` (34): the text of the cited lines at `ebb808b` against `fcb3be0` differs for 0 of 117. `citations-gate.mjs --against ebb808b` reports the same 45 moved in 16 records as at `9ed966d`, and `--against origin/main` exits 0.
+- **low** · R90-1 · The selection is narrower than the scan it serves. The scan reads every source file in the repository (`packages/core/test/spawn-safety.test.ts@ebb808b:12 "The scan therefore reads every source"`), and `core` is selected only when `scripts/` or a tool moved (`scripts/preflight.mjs:255 "projects.length > 0 ? [...projects,"`), with a comment, `scripts/preflight.mjs:254 "read every file under scripts/ and tools/"`, that states the narrower reading as fact. Tracked source outside both prefixes: `.claude/scripts/check-farm-freshness.mjs`, which the `repo` project also typechecks (`scripts/test/tsconfig.json@ebb808b:34 "check-farm-freshness.mjs"`); `testPlan` on that path alone returns only `npm run check`, neither `repo` nor `core`. A new root-level source file other than `vitest.config.ts` is the same. That file spawns nothing today, so there is no live miss; CI still runs the scan. The image-closure scan is covered: `tools/ledger/Dockerfile` selects `ledger` and `core`, and `packages/` and root `package.json` run the full suite.
+- **low** · R90-2 · `scripts/test/preflight.test.ts:247 "calls.slice(0, 2)"` turns an exact assertion into a prefix one, so the test named "checkBuild runs check plus one project per touched tool" no longer says what else runs. Measured: with `core` dropped from `testPlan`, it still passed while 3 others failed. Nothing slips, since the `testPlan` rows and the appended `checkBuild` test pin the exact list; the slice keeps the line count, and with it the citations above, unchanged.
+- **low** · R90-3 · A merged record now cites a thinner test. repo-51 cites line 144 of `scripts/test/preflight.test.ts` for check 1 on a `scripts/`-only branch (`docs/work/repo-51-one-preflight-command-before-a-pull-request.md@ebb808b:120 "check 1 on a"`); this round moved the `scripts/`-only row out of that test to the end of the file. The citation still verifies, since its anchor is the test name, and the new comment at `scripts/test/preflight.test.ts:145 "the scripts/-only plan is the"` points onward, so the record is not false, only no longer self-contained.
+- **Premises:** the Why's account of repo-75 widening the scan to `scripts/`, every `test/` and every `.mjs` matches the scan's own header; the reproduction matches repo-84 gate 1, which measured it at `9ed966d`. `in-flight` is right until the lander sets `done` with this section.
+- **findings** · code-review at medium over the `scripts/preflight.mjs` and `scripts/test/preflight.test.ts` lines of `9ed966d..fcb3be0` returned 3; 3 carried, 0 dropped.
+- NFR: security ✓, it closes a gap in front of the no-shell scan · performance — one more project per code diff, 58 tests · reliability ✓ · maintainability — R90-1, R90-2, R90-3.
+- **Not verified:** the Build's 2-second timing of the `core` project; the Windows leg.
 
 ## Log
 
