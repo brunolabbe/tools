@@ -3,7 +3,7 @@ id: repo-90
 tool: repo
 title: Preflight exits 0 on a change that fails the core project's source scans
 kind: fix
-status: done
+status: in-flight
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -67,30 +67,13 @@ merged records cite that file by unpinned line number into the code below it.
 
 ## Done when
 
-- A diff touching only `scripts/` selects the `core` project after `repo`, and a
-  tool diff selects it after the tool's own project:
-  `scripts/test/preflight.test.ts`, the test appended at the end of the file,
-  `testPlan runs core after the repo project when only scripts/ moved, and after
-each tool`.
-- A diff touching neither selects no `core`, and shared config still runs the
-  full suite once: the next test, `testPlan adds no core project to a diff that
-touches neither scripts/ nor a tool`.
-- A failure in `core` alone fails `checkBuild` with the `check` bit: the third
-  appended test, `checkBuild fails on a scripts/ diff when only core's suite
-fails`.
-- **The positive control**, on a real run: preflight over a head that still
-  carries the defect exits non-zero, naming the scan's failing test; after the
-  repair it exits 0. See the Log.
+- A diff touching only `scripts/` selects the `core` project after `repo`, and a tool diff selects it after the tool's own project. Proved by the test "testPlan runs core after the repo project when only scripts/ moved, and after each tool", appended at the end of `scripts/test/preflight.test.ts`.
+- A diff touching neither selects no `core`, and shared config still runs the full suite once. Proved by the next test, "testPlan adds no core project to a diff that touches neither scripts/ nor a tool".
+- A failure in `core` alone fails `checkBuild` with the `check` bit. Proved by the third appended test, "checkBuild fails on a scripts/ diff when only core's suite fails".
+- **The positive control**, on a real run: preflight over a head that still carries the defect exits non-zero, naming the scan's failing test; after the repair it exits 0. See the Log.
 
 ## Log
 
-- 2026-10-03 — Filed and fixed inside repo-84's branch, on the owner's
-  instruction after the gate named the gap: it is the same branch's defect
-  surfacing, and a separate branch would have re-run a whole gate for a six-line
-  change. Positive control: commit `b9175ca` (the fix, on top of repo-84's head
-  that still carried F1) ran `node scripts/preflight.mjs --base origin/main`
-  and exited 1, `FAIL  npm test -- --project core`, naming `every file that
-spawns says `shell: false` at each of its calls` and both offending calls in
-  `scripts/test/re-resolve-citations.test.ts`. The same defect on the previous
-  head had exited 0 (above). After repo-84's own F1 repair the run exits 0; its
-  output is in the report of the commit that landed it.
+- 2026-10-03 — Filed and fixed inside repo-84's branch, on the owner's instruction after repo-84's gate 1 named the gap: it is the same branch's defect surfacing, and a separate branch would have re-run a whole gate for a six-line change.
+- 2026-10-03 — **Positive control.** Commit `b9175ca` is the fix, laid on repo-84's head that still carried the unsafe spawns. `node scripts/preflight.mjs --base origin/main` on it exited 1: `FAIL  npm test -- --project core`, then `1 failed` in `packages/core/test/spawn-safety.test.ts` ("every file that spawns says shell: false at each of its calls"), listing both offending calls in `scripts/test/re-resolve-citations.test.ts`. The same defect without the fix, head `9ed966d`, had exited 0 (above). After repo-84's own spawns were repaired (`shell: false` in the suite's `TEXT`), the same command exits 0 with this ticket `in-flight`; the report names the head.
+- 2026-10-03 — **Status is `in-flight`, not `done`, and why.** The instruction was to mark this ticket done in the branch. Preflight's `## Review` check fails a `done` ticket with no review section: `FAIL  docs/work/repo-90-preflight-never-runs-the-core-project.md is marked done but has no ## Review section`, exit 4, measured at head `760871a` where the ticket said `done`. The review section lands with the gate, so whoever lands sets `done` in the first record commit, as the builder page says.
