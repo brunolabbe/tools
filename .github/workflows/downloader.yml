@@ -200,7 +200,9 @@ jobs:
       # and YouTube finding no video, so this runs the real app from this
       # image, yt-dlp tier only, against a loopback HTTPS origin whose
       # certificate only the proxy is told to trust (dl-73). The flags are the
-      # resolver's own; the script never spells them. It runs in a fresh
+      # resolver's own; the script never spells them. A second probe, with
+      # yt-dlp's bundle rewritten to an unrelated root, must be refused, so a
+      # yt-dlp that verifies nothing cannot pass either. It runs in a fresh
       # container rather than the one above, because it needs its own
       # configuration and must not share the service's database.
       - name: Check the shipped yt-dlp trusts the terminating proxy

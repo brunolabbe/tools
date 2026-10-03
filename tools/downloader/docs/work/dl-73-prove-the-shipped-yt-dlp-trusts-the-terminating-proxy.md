@@ -57,7 +57,10 @@ manual measurement"), and it now fires automatically.
 1. The downloader container gate performs a proxied TLS fetch with the shipped
    yt-dlp and fails when the trust flags are removed. Show the failing run as
    well as the passing one.
-2. A `ytdlp-bump.yml` pull request runs that gate before it can merge.
+2. A `ytdlp-bump.yml` pull request runs that gate, and shows it red, before
+   the owner merges it by hand. Nothing enforces the order: `main` has no
+   required checks. The first real bump pull request is what confirms it.
+   (Reworded 2026-10-03 by the owner's decision; see the Log for the original.)
 3. dl-39's two unanswered questions are answered in this ticket's Log.
 
 ## Log
@@ -71,7 +74,7 @@ manual measurement"), and it now fires automatically.
   was opened as a draft early, by the owner's choice, so that the gate could be
   shown red and green in CI.
 
-  **What the gate is.** `.github/workflows/downloader.yml:206 "Check the shipped yt-dlp trusts the terminating proxy"`
+  **What the gate is.** `.github/workflows/downloader.yml:208 "Check the shipped yt-dlp trusts the terminating proxy"`
   is a new step in the `docker` job. It runs
   `tools/downloader/e2e/container/ytdlp-proxy-trust.mjs` with `docker run`,
   inside the image the job has just built.
@@ -79,7 +82,7 @@ manual measurement"), and it now fires automatically.
   The script builds the real app from the image's own `dist` with `createApp`.
   Only the yt-dlp tier is on, and `ffmpegTlsIntercept` is set to `true`
   explicitly at
-  `tools/downloader/e2e/container/ytdlp-proxy-trust.mjs:143 "ffmpegTlsIntercept: true"`.
+  `tools/downloader/e2e/container/ytdlp-proxy-trust.mjs:192 "ffmpegTlsIntercept: true"`.
   An operator root goes in as `egressCaFile`. The script then probes a
   loopback HTTPS origin, whose certificate that root issued, through an
   injected `POST /api/probe`. It passes only if `yt-dlp` answers with at least
@@ -213,3 +216,103 @@ manual measurement"), and it now fires automatically.
   closed by decision, without a gate, and preflight wants a `## Review` on
   every `done` ticket a branch touches. Its 2026-09-22 entry already links here, so the
   answers are one hop from it.
+
+- **2026-10-03, after gate 1** — Gate 1 returned FAIL at `2ce406b`, with three
+  findings. All three are fixed on the branch, and each was reproduced before it
+  was fixed.
+
+  **F1 (high): the gate passed a yt-dlp that verifies nothing.** The entry
+  above argues that "the only certificate it can verify on this path is
+  therefore the proxy's leaf". That holds only if yt-dlp verifies at all, and
+  nothing checked that.
+
+  Reproduced: the compiled `resolvers/dist/resolvers/ytdlp.js` was mutated to
+  pass `--no-check-certificates` in place of `no-certifi`. The script then
+  exited 0 and printed `PASS: ... verified the proxy's leaf`.
+
+  **The remedy is both of the gate's options**, because they fail in different
+  places:
+
+  - **A control in the script, which is the behavioural half.**
+    - The first probe is unchanged.
+    - Then the trust bundle the app handed yt-dlp is overwritten with an
+      unrelated root, at
+      `tools/downloader/e2e/container/ytdlp-proxy-trust.mjs:229 "for (const bundle of bundles)"`.
+    - A second probe, with `refresh: true`, must come back
+      `TLS_VERIFICATION_FAILED`, and the origin must see no requests. A `200` is
+      a failure, at
+      `tools/downloader/e2e/container/ytdlp-proxy-trust.mjs:235 "if (second.status === 200)"`.
+    - This catches a release that fails open, which no argv test can see. It
+      also catches a resolver that drops the proxy.
+    - The bundle is found by pointing `TMPDIR` at the script's own directory
+      before `createApp`, because `createApp` does not expose the bundle.
+      Finding none is a failure, not a skip.
+    - I did not build the gate's suggested variant, which spawns the binary
+      directly with an unrelated `SSL_CERT_FILE`. It would test argv written in
+      the script rather than the resolver's.
+  - **A resolver unit test, which is the fast half.**
+    `tools/downloader/resolvers/test/ytdlp.test.ts:1145 "the resolver never switches certificate verification off"`
+    covers all four combinations of proxy and bundle. It asserts that no
+    argument matches `--no-?check-?cert`; the stem catches optparse prefixes
+    and yt-dlp's `--nocheckcertificate` spelling. With a proxy and a bundle, it
+    also asserts `--compat-options no-certifi`. It runs on every push, where the
+    script runs only in the `docker` job.
+
+  Measured locally against `/usr/local/bin/yt-dlp` `2026.08.19`, mutating the
+  compiled resolver with a scratch script and restoring it from a copy, one
+  `node tools/downloader/e2e/container/ytdlp-proxy-trust.mjs` per state:
+
+  | Compiled resolver                                      | Probe 1 | Probe 2 (control) | Exit |
+  | ------------------------------------------------------ | ------- | ----------------- | ---- |
+  | as built                                               | 200     | 502               | 0    |
+  | `no-certifi` replaced by `--no-check-certificates`     | 200     | **200**           | 1    |
+  | same, and `args.push("--proxy", proxyUrl)` removed too | 200     | **200**           | 1    |
+  | `no-certifi` removed                                   | 502     | 502               | 1    |
+
+  Both `--no-check-certificates` rows failed with
+  `FAIL: control: yt-dlp accepted a leaf no root it was given vouches for`.
+
+  The unit test was made to fail first, against `src`:
+  - With `args.push("--no-check-certificates")` added inside the trust branch,
+    `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts` gave
+    `1 failed | 68 passed (69)` (`'a proxy and a bundle'`).
+  - With `"--no-check-cert"` added to the base arguments, it gave
+    `4 failed | 65 passed (69)`.
+  - Restored, it gave `69 passed (69)`.
+
+  **F2 (med): the architecture sentence claimed more than was shown.**
+  `01-ARCHITECTURE.md` now says that a bad release "should" turn the bump PR's
+  container check red before the owner merges it by hand. It also says that
+  nothing blocks the merge, and that the first real bump confirms the trigger.
+
+  **The owner's decision on Done-when 2**, taken through `AskUserQuestion`
+  before this gate returned. The question was how "before it can merge" is met.
+  The options were:
+  - A: the gate runs and shows red before the owner merges by hand
+    (recommended);
+  - B: make `docker` a required check;
+  - C: A, plus a ticket for required checks.
+
+  **The owner chose A.** Done-when 2 is reworded to that meaning. Its original
+  wording was "A `ytdlp-bump.yml` pull request runs that gate before it can
+  merge." The first real bump PR is marked as what confirms it.
+
+  **F3 (low), folded in because it was free.** The gate measured the two wiring
+  tests staying green under two mutations, and two tests were appended for
+  them:
+  - `continue-on-error: true` on the step:
+    `tools/downloader/api/test/ytdlp-in-the-image.test.ts:225 "nothing lets the trust step fail"`
+    fails on any `continue-on-error` in the `docker` job, and on an `if:` on
+    the step.
+  - `!tools/downloader/Dockerfile` appended to the `pull_request` paths:
+    `tools/downloader/api/test/ytdlp-in-the-image.test.ts:239 "no negated path takes the downloader Dockerfile"`
+    holds the trigger's negations to exactly `["!**.md"]`.
+
+  With both of the gate's mutations applied to `downloader.yml`,
+  `npx vitest run tools/downloader/api/test/ytdlp-in-the-image.test.ts` gave
+  `2 failed | 10 passed (12)`. Restored, it gave `12 passed (12)`.
+
+  **Two other edits in this round.** The bump PR body sentence gains "or stops
+  verifying at all", edited in place. The `docker` step's comment gains two
+  lines about the control, so the step moved from line 206 to line 208. The
+  entry above was repointed to match.

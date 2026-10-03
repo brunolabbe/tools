@@ -221,4 +221,29 @@ describe("the container gate proves the shipped yt-dlp trusts the terminating pr
     );
     expect(underTheTool.length).toBeGreaterThan(0);
   });
+
+  test("nothing lets the trust step fail without failing the job", () => {
+    // A gate finding: `continue-on-error: true` on the step, or on the job,
+    // left the two tests above green and the gate unable to turn a pull
+    // request red. An `if:` on the step can skip it outright.
+    const docker = block("docker");
+    const start = docker.indexOf("- name: Check the shipped yt-dlp trusts the terminating proxy");
+    expect(start).toBeGreaterThan(-1);
+    const rest = docker.slice(start + 1);
+    const end = rest.search(/\n      - /u);
+    const step = end === -1 ? rest : rest.slice(0, end);
+    expect(step).not.toMatch(/^\s+if:/mu);
+    expect(docker).not.toMatch(/continue-on-error/u);
+  });
+
+  test("no negated path takes the downloader Dockerfile back out of the trigger", () => {
+    // The same finding, the other way round: `!tools/downloader/Dockerfile`
+    // after the glob would leave a bump pull request with no container gate.
+    // Negations are held to a list rather than matched as globs here, so a new
+    // one has to be argued against the pin files in this file, not assumed.
+    const negations = [...block("pull_request").matchAll(/^\s+-\s+"(![^"]+)"/gmu)].map(
+      (match) => match[1],
+    );
+    expect(negations).toEqual(["!**.md"]);
+  });
 });

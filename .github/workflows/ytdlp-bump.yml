@@ -147,7 +147,7 @@ jobs:
             echo
             echo "Release notes: https://github.com/yt-dlp/yt-dlp/releases/tag/${latest}"
             echo
-            echo "**What the checks prove.** The container gate in \`downloader.yml\` builds the image with this pin, fails unless \`yt-dlp --version\` inside it prints \`${latest}\`, and runs that binary through the API's TLS-terminating egress proxy against a local HTTPS origin, so it fails if this release stops honouring dl-39's trust pair (\`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`) (dl-73)."
+            echo "**What the checks prove.** The container gate in \`downloader.yml\` builds the image with this pin, fails unless \`yt-dlp --version\` inside it prints \`${latest}\`, and runs that binary through the API's TLS-terminating egress proxy against a local HTTPS origin, so it fails if this release stops honouring dl-39's trust pair, or stops verifying at all (\`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`) (dl-73)."
             echo
             echo "**What they do not.** Worth a look before merging:"
             echo

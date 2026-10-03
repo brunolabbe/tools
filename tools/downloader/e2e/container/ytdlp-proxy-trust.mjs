@@ -35,15 +35,28 @@
 // with every other tier off. Dropping either half of the pair from
 // `resolvers/src/resolvers/ytdlp.ts` turns this red; dl-73's Log has the run.
 //
-// ## Why the result means the pair worked
+// ## Two probes, because a success alone proves nothing about verification
 //
 // The origin's certificate is issued by a root that only the proxy is told
-// about (`egressCaFile`, as `EGRESS_CA_FILE` would be). yt-dlp never sees that
-// root, and the resolver never passes `--no-check-certificates`, so the only
-// certificate yt-dlp can verify on this path is the proxy's leaf — and the only
-// way it can verify that is the generated root in `SSL_CERT_FILE`, consulted
-// because of `no-certifi`. A probe answered by `yt-dlp` is therefore the pair
-// working, end to end, with the proxy verifying the origin on the other side.
+// about (`egressCaFile`, as `EGRESS_CA_FILE` would be), and yt-dlp is never
+// given it. So the first probe can only succeed if yt-dlp verified the proxy's
+// leaf against the generated root in `SSL_CERT_FILE` — **or if yt-dlp verified
+// nothing at all**. A `--no-check-certificates` added to the resolver, or a
+// release that fails open, would pass that probe just as well, with or without
+// the proxy (dl-73's first gate measured both).
+//
+// So the second probe is the control. Same app, same resolver, same flags,
+// same proxy, same origin — and the trust bundle the app handed yt-dlp
+// rewritten to hold an unrelated root instead. yt-dlp must now refuse, and the
+// API must say `TLS_VERIFICATION_FAILED`. The first probe passing **and** the
+// second refusing is the pair working; either alone is not.
+//
+// The bundle is found on disk, which is the one place this reaches past the
+// app's public surface: `createApp` does not expose it, and the per-process
+// generated root is deliberately unreachable. `TMPDIR` is pointed at a
+// directory of this script's own before `createApp`, so the interceptions'
+// directories are the only `downloader-egress-ca-*` there; finding none is a
+// failure rather than a skipped control.
 //
 // No third-party site: the origin is in this process, on loopback.
 
@@ -106,14 +119,50 @@ function listen(server) {
   });
 }
 
+/** Every trust bundle an interception wrote under `dir`. See the header. */
+async function trustBundlesUnder(dir) {
+  const found = [];
+  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("downloader-egress-ca-")) continue;
+    const bundle = path.join(dir, entry.name, "egress-trust-bundle.pem");
+    try {
+      await fs.access(bundle);
+      found.push(bundle);
+    } catch {
+      // A directory without a bundle is not the one yt-dlp was handed.
+    }
+  }
+  return found;
+}
+
+/** @param {import("fastify").FastifyInstance} server */
+async function probe(server, url) {
+  const response = await server.inject({
+    method: "POST",
+    url: "/api/probe",
+    // `refresh`, or the control would be answered from the probe cache.
+    payload: { url, refresh: true },
+  });
+  return { status: response.statusCode, body: response.json() };
+}
+
 async function main() {
   const work = await fs.mkdtemp(path.join(os.tmpdir(), "dl-73-"));
-  // The operator's private root, standing in for a corporate CA. Issued with
-  // the same code the proxy uses only because Node writes no certificate on
-  // its own; it is a separate root, and yt-dlp is never given it.
+  // The operator's private root, standing in for a corporate CA, and a second
+  // root that vouches for nothing on this path — the control's anchor. Both
+  // are issued with the code the proxy uses only because Node writes no
+  // certificate on its own; neither is the proxy's root, and yt-dlp is given
+  // neither until the control hands it the unrelated one.
   const operator = await createTlsInterception({});
+  const unrelated = await createTlsInterception({});
   const operatorCaFile = path.join(work, "operator-ca.pem");
   await fs.writeFile(operatorCaFile, operator.rootCaPem);
+
+  // Before `createApp`: `os.tmpdir()` reads this on every call, so the app's
+  // interceptions put their directories here and nowhere else.
+  const appTmp = path.join(work, "app-tmp");
+  await fs.mkdir(appTmp);
+  process.env["TMPDIR"] = appTmp;
 
   /** @type {string[]} */
   const requests = [];
@@ -149,7 +198,7 @@ async function main() {
     },
   });
 
-  let failed = false;
+  const failures = [];
   try {
     const health = await app.server.inject({ method: "GET", url: "/api/health" });
     const ytdlp = health.json().ytdlp;
@@ -159,34 +208,51 @@ async function main() {
       return 1;
     }
 
-    say(`probing ${target} through the terminating proxy, yt-dlp tier only`);
-    const response = await app.server.inject({
-      method: "POST",
-      url: "/api/probe",
-      payload: { url: target },
-    });
-    const body = response.json();
-    say(`HTTP ${String(response.statusCode)}`);
-    say(`origin saw: ${JSON.stringify(requests)}`);
-
-    if (response.statusCode !== 200) {
-      say(`FAIL: the probe was refused: ${JSON.stringify(body.error ?? body)}`);
-      failed = true;
-    } else if (body.probe?.resolver !== "yt-dlp") {
-      say(`FAIL: answered by ${String(body.probe?.resolver)}, not yt-dlp.`);
-      failed = true;
-    } else if (!(body.probe.variants?.length > 0)) {
-      say("FAIL: yt-dlp answered with no variants.");
-      failed = true;
+    say(`probe 1: ${target} through the terminating proxy, yt-dlp tier only`);
+    const first = await probe(app.server, target);
+    say(`  HTTP ${String(first.status)}; origin saw ${JSON.stringify(requests)}`);
+    if (first.status !== 200) {
+      failures.push(`probe 1 was refused: ${JSON.stringify(first.body.error ?? first.body)}`);
+    } else if (first.body.probe?.resolver !== "yt-dlp") {
+      failures.push(`probe 1 was answered by ${String(first.body.probe?.resolver)}, not yt-dlp`);
+    } else if (!(first.body.probe.variants?.length > 0)) {
+      failures.push("probe 1: yt-dlp answered with no variants");
     } else if (!requests.includes("/master.m3u8")) {
-      say("FAIL: the origin never served the manifest, so nothing crossed the proxy.");
-      failed = true;
+      failures.push("probe 1: the origin never served the manifest");
+    }
+
+    const bundles = await trustBundlesUnder(appTmp);
+    say(`control: replacing ${String(bundles.length)} trust bundle(s) with an unrelated root`);
+    if (bundles.length === 0) {
+      failures.push("control: no trust bundle found under the app's TMPDIR, so nothing was tested");
     } else {
+      for (const bundle of bundles) await fs.writeFile(bundle, unrelated.rootCaPem);
+      const seenBefore = requests.length;
+      say(`probe 2: ${target}, same everything, yt-dlp now trusting only that root`);
+      const second = await probe(app.server, target);
+      const reached = requests.slice(seenBefore);
+      say(`  HTTP ${String(second.status)}; origin saw ${JSON.stringify(reached)}`);
+      if (second.status === 200) {
+        failures.push(
+          "control: yt-dlp accepted a leaf no root it was given vouches for — it is not verifying (--no-check-certificates, or a release that fails open)",
+        );
+      } else if (second.body.error?.code !== "TLS_VERIFICATION_FAILED") {
+        failures.push(
+          `control: refused, but not on trust: ${JSON.stringify(second.body.error ?? second.body)}`,
+        );
+      } else if (reached.length > 0) {
+        failures.push(`control: refused, yet the origin served ${JSON.stringify(reached)}`);
+      }
+    }
+
+    if (failures.length === 0) {
       say(
-        `PASS: ${String(ytdlp.path)} verified the proxy's leaf and found ` +
-          `${String(body.probe.variants.length)} variant(s).`,
+        `PASS: ${String(ytdlp.path)} verified the proxy's leaf through SSL_CERT_FILE ` +
+          `(${String(first.body.probe.variants.length)} variant(s)), and refused it once that ` +
+          "file named an unrelated root.",
       );
     }
+    for (const failure of failures) say(`FAIL: ${failure}`);
   } finally {
     await app.shutdown();
     await new Promise((resolve) => {
@@ -194,9 +260,10 @@ async function main() {
       origin.closeAllConnections();
     });
     await operator.close();
+    await unrelated.close();
     await fs.rm(work, { recursive: true, force: true });
   }
-  return failed ? 1 : 0;
+  return failures.length === 0 ? 0 : 1;
 }
 
 process.exitCode = await main();

@@ -358,9 +358,13 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
     prefers it, so `SSL_CERT_FILE` on its own is read by OpenSSL and never
     consulted — as are `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE`. Merged rather
     than replaced for the reason `-ca_file` is not. The container gate in
-    `downloader.yml` runs the shipped binary through this proxy on every run,
-    so a yt-dlp release that stops honouring the pair fails its bump pull
-    request rather than YouTube in production
+    `downloader.yml` runs the shipped binary through this proxy on every run.
+    It also requires that binary to refuse the leaf once its bundle names an
+    unrelated root. A yt-dlp release that stops honouring the pair, or stops
+    verifying at all, should therefore turn its bump pull request's container
+    check red before the owner merges it by hand. Nothing blocks that merge,
+    and no bump pull request has run the check yet; the first real one is what
+    confirms the trigger
     ([`dl-73`](./work/dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md)).
   - **The verdict comes back by side channel.** The status-line trick above
     works for yt-dlp, which quotes it, and not for Chromium: every non-200

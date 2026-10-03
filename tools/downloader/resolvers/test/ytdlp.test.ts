@@ -1133,3 +1133,45 @@ describe("a marker inside the request URL's own text (dl-67)", () => {
     ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
   });
 });
+
+/**
+ * dl-73: the container gate proves the real yt-dlp verifies the proxy's leaf,
+ * and its control would also catch this — but only in the docker job. This is
+ * the same rule at unit speed: whatever the resolver passes, it never turns
+ * verification off. optparse accepts any unambiguous prefix of a long option,
+ * and yt-dlp also spells this one `--nocheckcertificate`, so the match is on
+ * the stem rather than the exact flag.
+ */
+describe("the resolver never switches certificate verification off (dl-73)", () => {
+  const DISABLES_VERIFICATION = /(^|\s)--no-?check-?cert/iu;
+  const PROXY = "http://127.0.0.1:45999";
+
+  test.each([
+    { name: "no proxy, no bundle", bundle: undefined, proxyUrl: undefined },
+    { name: "no proxy, a bundle", bundle: "/tmp/egress-trust-bundle.pem", proxyUrl: undefined },
+    { name: "a proxy, no bundle", bundle: undefined, proxyUrl: PROXY },
+    { name: "a proxy and a bundle", bundle: "/tmp/egress-trust-bundle.pem", proxyUrl: PROXY },
+  ])("$name", async ({ bundle, proxyUrl }) => {
+    const resolver = new YtDlpResolver({
+      binaryPath: process.execPath,
+      binaryArgs: [FAKE_BINARY, "echo-args"],
+      ...(bundle === undefined ? {} : { proxyTrustBundlePath: bundle }),
+    });
+
+    const probe = await resolver.resolve(
+      SOURCE,
+      options({
+        ...(proxyUrl === undefined ? {} : { proxyUrl }),
+        cookieHeader: "a=b",
+        locale: "fr",
+      }),
+    );
+
+    expect(probe.title).not.toMatch(DISABLES_VERIFICATION);
+    // The other half of the claim: where trust is being conveyed, it is
+    // conveyed by the pair, not by switching the check off.
+    if (bundle !== undefined && proxyUrl !== undefined) {
+      expect(probe.title).toContain("--compat-options no-certifi");
+    }
+  });
+});
