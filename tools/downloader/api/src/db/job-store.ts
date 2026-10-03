@@ -561,8 +561,8 @@ export class JobStore {
    * forever is the one outcome the promise rules out.
    */
   pruneJobs(beforeIso: string): number {
-    // Prepared here and not in the constructor: the sweep runs it every few
-    // minutes, and keeping it off that list keeps every line below it where the
+    // Prepared here and not in the constructor: the sweep runs it every
+    // minute by default, and keeping it off that list keeps every line below it where the
     // merged records that cite them found them.
     return this.#db.prepare(`DELETE FROM jobs WHERE created_at < ?`).run(beforeIso).changes;
   }

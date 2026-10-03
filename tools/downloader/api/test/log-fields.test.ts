@@ -8,6 +8,12 @@
  *
  * Run at `info`, the level `compose.downloader.yaml` sets in production, and
  * over the whole route stack: a probe, a job, and the visitor opening its link.
+ *
+ * **The engine here is a stub, and the real one writes one more line**: `engine
+ * stream complete`, with `jobId` and `bytes` and no URL (`engine/src/stream.ts`).
+ * It is not asserted below, so the byte figures behind the log cap in
+ * `compose.downloader.prod.yaml` were taken from a live API with ffmpeg, which
+ * this suite cannot be.
  */
 
 import { AppError, ROUTES } from "@downloader/contract";

@@ -709,9 +709,10 @@ these steps; the menu names are as the dashboard documents them.
 **Until the login is gone, a rights holder cannot read the page.** `/terms.html`
 sits behind the same Access application as the UI, so a stranger who was sent
 the address meets a login first. The alias works regardless, since it is mail.
-If the page should be readable without one before `dl-49` removes the login, add
-a Bypass application for the path `terms.html` and `terms.css`, the way
-[the download links](#the-downloaders-keep-the-download-links-shareable) get one.
+The owner chose on 2026-10-03 to leave it so until `dl-49` removes the login. A
+Bypass application for the paths `terms.html` and `terms.css`, the way
+[the download links](#the-downloaders-keep-the-download-links-shareable) get one,
+would open it sooner; nothing here builds that.
 
 **What is kept, and when it goes**
 
@@ -736,9 +737,13 @@ docker compose logs --since 24h downloader | wc -c
 ```
 
 Multiply by 14 and compare with 50 MB; the file also carries Docker's envelope,
-about 40% more than the lines themselves (measured: 2,184 bytes against 1,540 for
-one visit's six lines). To make it an age, there are two ways, neither of which
-this repository can do for you:
+about 40% more than the lines themselves (measured: 5,848 bytes against 4,138 for
+a first visit's 16 lines against a live API, curl standing in for the browser;
+the API alone is 2,551 against 1,811 for 7). The cap's own figure, 600 first
+visits a day for 14 days, is an assumption about traffic, not a measurement of
+this host. The owner chose this size cap over the two ways below on 2026-10-03.
+To make it an age instead, there are two ways, neither of which this repository
+can do for you:
 
 - the `journald` logging driver with `MaxRetentionSec=14day` in the host's
   `journald.conf`, which expires by time. It needs systemd-journald on the host,

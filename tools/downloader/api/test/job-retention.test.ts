@@ -99,22 +99,29 @@ describe("job retention", () => {
     }
   });
 
-  test("a job exactly at the limit is kept; the sweep takes only what is older", async () => {
+  test("the cutoff is exactly fourteen days: a millisecond older goes, the limit and a millisecond younger stay", async () => {
     const harness = await createHarness({ now: () => NOW });
     try {
       const { store } = harness.app.context;
-      store.create({
-        id: "edge",
-        sourceUrl: SIGNED,
-        options: {},
-        variantId: null,
-        createdAt: isoAgo(JOB_RETENTION_DAYS),
-        link: { token: "tok-edge", url: "/api/files/tok-edge", expiresAt: isoAgo(0) },
-      });
+      const limit = NOW.getTime() - JOB_RETENTION_DAYS * DAY_MS;
+      for (const [id, offsetMs] of [
+        ["older", -1],
+        ["at", 0],
+        ["younger", 1],
+      ] as const) {
+        store.create({
+          id,
+          sourceUrl: SIGNED,
+          options: {},
+          variantId: null,
+          createdAt: new Date(limit + offsetMs).toISOString(),
+          link: { token: `tok-${id}`, url: `/api/files/tok-${id}`, expiresAt: isoAgo(0) },
+        });
+      }
 
       runSweep(harness.app.context);
 
-      expect(store.find("edge")).not.toBeNull();
+      expect(["older", "at", "younger"].filter((id) => store.find(id) === null)).toEqual(["older"]);
     } finally {
       await harness.dispose();
     }

@@ -791,6 +791,7 @@ export function runSweep(context: AppContext): void {
     const linksPruned = context.store.pruneLinks(new Date(nowMs - LINK_ROW_GRACE_MS).toISOString());
 
     const jobsPruned = context.store.pruneJobs(new Date(nowMs - JOB_RETENTION_MS).toISOString());
+    const thumbnailsPurged = context.thumbnails.purgeExpired();
 
     // `probe_outcomes` carries no address and no path, so this bound is about
     // table size, not privacy (dl-57). 0 keeps every row, the same convention
@@ -806,6 +807,7 @@ export function runSweep(context: AppContext): void {
       linksExpired,
       linksPruned,
       jobsPruned,
+      thumbnailsPurged,
       outcomesPruned,
     });
   } catch (error: unknown) {

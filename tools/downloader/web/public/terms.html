@@ -32,7 +32,8 @@
       <h2>The one thing it will not do</h2>
       <p>
         It does not get around copy protection. When a video is protected by DRM (Widevine,
-        PlayReady or FairPlay) it says so and stops. It never tries to obtain a key or a licence.
+        PlayReady or FairPlay) it says so and stops. The service's own code never asks for a key or
+        a licence.
       </p>
 
       <h2>No video is stored</h2>
@@ -50,19 +51,21 @@
       <ul>
         <li>
           <strong>The server's log, about 14 days.</strong>
-          Every request writes one line: the time, what was asked of this service, how it ended, how
-          long it took, and the network address it came from. A line about a failed request, or
-          about a page that was analysed, can also hold that page's domain and path, never anything
-          after a <code>?</code>. For a failed request that line shares a request number with the
-          line holding the address. The log is kept in files of a fixed size, and the oldest file is
+          Each request, apart from the host's routine health check, writes one line when it
+          finishes: the time, what was asked of this service, how it ended, how long it took, and
+          the network address it came from. A line about a failed request, or about a page that was
+          analysed, can also hold that page's domain and path, never anything after a
+          <code>?</code>. For a failed request that line shares a request number with the line
+          holding the address. The log is kept in files of a fixed size, and the oldest file is
           discarded when they are full, so "about 14 days" is what ordinary use fills; a quiet
           service keeps its lines longer.
         </li>
         <li>
           <strong>A record for each download you start, 14 days.</strong>
           It holds the full address of the page you gave, including anything after a
-          <code>?</code>, the options you chose, and how the download ended. It is deleted 14 days
-          after it was made.
+          <code>?</code>, the full address of the video file that was chosen, which can also carry a
+          <code>?</code> part, the options you chose, and how the download ended. It is deleted 14
+          days after it was made.
         </li>
         <li>
           <strong>A record of how each analysis ended, 90 days.</strong>

@@ -214,3 +214,47 @@ In this order:
     **Not done:** done-when 5 (the owner's approval, and removing the draft
     paragraph); done-when 3's "how the size was derived" rests on an assumed day's
     traffic, not a measured one.
+- 2026-10-03 — Gate 1 (FAIL at `b47d5a4`), repaired. Owner decisions that round:
+  keep the size cap as built (option A of the three); leave the terms page behind
+  Access until dl-49 and build no bypass; purge expired previews in the sweep;
+  file the thumbnail-token finding as dl-75.
+  - **The 6-line, 1,540/2,184-byte figure above was the stub harness, and was
+    wrong as a per-visit number.** Claim: a first visit is 16 lines and 5,848
+    bytes in Docker's envelope, not 6 and 2,184. Command: a live
+    `node tools/downloader/api/dist/main.js` at `LOG_LEVEL=info`, direct resolver,
+    real ffmpeg, a local origin (scratch `origin.mjs`) that 302s `/page` to
+    `/m.mp4?sig=SECRETQ`; `POST /api/probe`, `POST /api/jobs`, `GET` the link, then
+    a measuring script over the bytes appended to the log. Output: `lines=7
+raw=1811 wrapped=2551` for those three calls (the gate saw 1,812 and 2,552), the
+    seventh line being `engine stream complete`, which the stub engine omits. Then
+    `GET /`, the stylesheet, the script, `/favicon.ico`, `/api/config`, the probe's
+    and the job's event streams and `/api/thumbnail/<token>` (a miss) added nine
+    more: `lines=16 raw=4138 wrapped=5848`. The gate measured 7 more lines and
+    2,524 bytes for the same things; I get 9 and 3,297, because my event streams
+    each wrote a line when curl's `-m 3` closed them and my preview miss wrote two.
+    A browser's EventSource reconnects, so neither count is exact; call it 6 KB.
+    At 6 KB the 50 MB cap holds about 8,300 first visits, 600 a day for 14 days, not
+    the 1,400 the first comment stated. The cap is unchanged: the owner chose it
+    knowing it is a size, and "about 14 days" on the page is the ordinary-use
+    wording, which does not change with this number. `compose.downloader.prod.yaml`
+    and `docs/02-DEPLOYMENT.md` carry the new figures. The traffic is still an
+    assumption.
+  - **H1, previews outlived their ten minutes.** Reproduced as the gate did, from the
+    code: `ThumbnailStore.get` is the only expiry and nothing sweeps it. Fixed with
+    `ThumbnailStore.purgeExpired`, called from `runSweep`, which tests with `get`'s
+    own comparison. `api/test/thumbnail-purge.test.ts`: 2 cases green; with the
+    call replaced by `0` both go red (`Tests 2 failed (2)`). The page's sentence is
+    unchanged and now true within the sweep's 60 s.
+  - **Taken from the low findings:** L1 (the architecture sentence now says the
+    `request` line's own `url` keeps the request's query), L2 and L3 (page text:
+    health check excepted, and the video file's own address named), L4 (the
+    retention test now plants rows at the limit and a millisecond either side; moving
+    the cutoff to 14 days 23 hours turns it red), L5 (both stale comments) and L6
+    (the page says the service's own code never asks for a key or a licence, which
+    is what the code shows, and nothing about the browser tier's page player).
+    **Left:** L7 (`cloudflared` has no log cap; its default lines are unmeasured here
+    and it is the shared overlay's service, not this tool's, so it belongs to a
+    `repo-` ticket if anyone measures it).
+  - **The Access login in front of the page** stays until dl-49, by the owner's
+    choice. Nothing built; `docs/02-DEPLOYMENT.md` says so.
+  - The dropped finding is `dl-75`, not built.
