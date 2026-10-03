@@ -164,6 +164,133 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The tabs, the inbox and the rules (lg-4). Same rules as the paste screen: one
+ * column, 16px fields so iOS does not zoom, and targets a thumb can hit.
+ */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tabs button {
+  flex: 1;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.tabs button[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.secondary {
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 2.75rem;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0 0.5rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.rule-form,
+.answer {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rule-form label,
+.answer label {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.offer {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+  padding: var(--gap);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.offer h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.inbox,
+.rules,
+.matching {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox > li,
+.rules > li {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.inbox p,
+.rules p {
+  margin: 0;
+}
+
+.inbox .line {
+  display: flex;
+  justify-content: space-between;
+}
+
+.inbox .when {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.inbox .amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox .amount.out {
+  color: var(--bad);
+}
+
+.inbox .what,
+.rules .what {
+  overflow-wrap: anywhere;
+}
+
+.matching {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
 @media (min-width: 48rem) {
   .shell {
     padding: calc(var(--gap) * 2);

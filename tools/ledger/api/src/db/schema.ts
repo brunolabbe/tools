@@ -56,6 +56,67 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX statement_rows_identity
     ON statement_rows (date, description, amount_cents, balance_cents);
   `,
+
+  // 2 — the rules, and the classification of each row (lg-4).
+  `
+  -- A rule version. Editing a rule inserts a new version that supersedes the
+  -- old, and retiring one inserts a retirement that does, so a classification
+  -- that cites a rule cites it as it read then. Nothing here is ever updated.
+  CREATE TABLE rules (
+    id INTEGER PRIMARY KEY,
+    -- The description as the bank writes it; * is any run of characters.
+    description_pattern TEXT NOT NULL,
+    -- NULL in either of the next two means "any".
+    category TEXT,
+    amount_cents INTEGER,
+    -- A configured Person.id; NULL is joint.
+    person_id TEXT,
+    bucket TEXT NOT NULL CHECK (bucket IN ('mortgage', 'current-expenses')),
+    -- The version this one replaces, if any.
+    supersedes INTEGER REFERENCES rules (id),
+    -- 1 on a retirement: a copy of what it retires, which is no longer in force.
+    retired INTEGER NOT NULL DEFAULT 0 CHECK (retired IN (0, 1)),
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+  );
+
+  -- A version is replaced at most once, so two people editing the same rule at
+  -- once cannot both win: the second insert is refused by the database.
+  CREATE UNIQUE INDEX rules_supersedes ON rules (supersedes) WHERE supersedes IS NOT NULL;
+
+  -- The rules in force: not replaced by anything, and not a retirement.
+  CREATE VIEW current_rules AS
+    SELECT * FROM rules
+    WHERE retired = 0
+      AND NOT EXISTS (SELECT 1 FROM rules newer WHERE newer.supersedes = rules.id);
+
+  -- A classification is a record about a row, never a column on it. Reclassifying
+  -- appends another, with who did it and when; the latest one stands.
+  CREATE TABLE classifications (
+    id INTEGER PRIMARY KEY,
+    row_id INTEGER NOT NULL REFERENCES statement_rows (id),
+    bucket TEXT NOT NULL CHECK (bucket IN ('mortgage', 'current-expenses')),
+    -- NULL is joint: a rebate, the sale of a shared thing, one half of an error pair.
+    person_id TEXT,
+    -- The rule version applied or accepted; NULL for a person's own answer.
+    rule_id INTEGER REFERENCES rules (id),
+    -- 'rule': the paste applied it. 'accepted': a person took a suggested rule.
+    -- 'manual': a person's own answer, which is the only one with no rule.
+    source TEXT NOT NULL CHECK (source IN ('rule', 'accepted', 'manual')),
+    classified_at TEXT NOT NULL,
+    -- The Access identity's configured name (Person.id), never an address.
+    classified_by TEXT NOT NULL,
+    CHECK ((source = 'manual') = (rule_id IS NULL))
+  );
+
+  CREATE INDEX classifications_row ON classifications (row_id, id);
+
+  -- The classification that stands for each row: the latest appended. Ordered by
+  -- id, which only ever grows, rather than by a timestamp two writers could tie.
+  CREATE VIEW current_classifications AS
+    SELECT * FROM classifications
+    WHERE id = (SELECT max(id) FROM classifications later WHERE later.row_id = classifications.row_id);
+  `,
 ];
 
 export function migrate(db: Database): void {

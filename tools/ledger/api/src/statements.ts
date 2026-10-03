@@ -25,7 +25,8 @@
  *   stored one is refused with both named, not reconciled.
  *
  * The whole thing runs in one `IMMEDIATE` transaction, so two pastes arriving
- * at once cannot both read the same tail and both extend it.
+ * at once cannot both read the same tail and both extend it. The rows it adds
+ * are classified by the rules in force in that same transaction (lg-4).
  */
 
 import { AppError } from "@ledger/contract";
@@ -33,6 +34,7 @@ import type { ImportStatementReport } from "@ledger/contract";
 import { formatCents, parseStatement } from "@ledger/books";
 import type { StatementRow } from "@ledger/books";
 import type { Database } from "better-sqlite3";
+import { classifyAdded, lastRowId } from "./classifications.ts";
 
 /** A stored row: the parser's row, with `seq` now the position in the whole history. */
 type StoredRow = StatementRow;
@@ -116,7 +118,18 @@ export function importStatement(context: ImportContext, text: string): ImportSta
     throw new AppError("BAD_REQUEST", "The paste holds no statement rows.");
   }
   try {
-    return context.db.transaction(() => store(context, rows, oldest, newest)).immediate();
+    return context.db
+      .transaction(() => {
+        // Taken before the rows are stored, so the paste's own are the ones after it.
+        const before = lastRowId(context.db);
+        const report = store(context, rows, oldest, newest);
+        // A row with exactly one matching rule is classified here; the rest wait
+        // in the inbox (lg-4). Inside the paste's transaction, so a paste is
+        // never stored without its classifications or classified without it.
+        classifyAdded(context, before);
+        return report;
+      })
+      .immediate();
   } catch (error: unknown) {
     // Another connection holds the write lock past the busy timeout. Nothing
     // here opens a second connection, but a backup or an operator's shell can.

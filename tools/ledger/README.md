@@ -4,8 +4,11 @@ A household ledger for a joint bank account two people share: statements in,
 split into buckets, and who owes what computed rather than kept by hand in a
 spreadsheet.
 
-> **A scaffold.** The seams exist — contract, API, a web shell, the image — and
-> the books do not yet. What is decided and what comes next is in
+> **Under construction.** The seams exist — contract, API, a web shell, the
+> image — and the books arrive a ticket at a time: so far a pasted statement,
+> stored and chained onto what is stored, and its rows filed by rule, with an
+> inbox for the rest. The split and who owes what are not built. What is decided
+> and what comes next is in
 > [docs/02-ROADMAP.md](./docs/02-ROADMAP.md); where it stands is
 > `npm run status -- --tool ledger`.
 

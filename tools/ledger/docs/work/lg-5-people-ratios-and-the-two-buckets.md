@@ -22,6 +22,11 @@ down the salary and ratio history the owner wants charted (§9).
 1. Migration:
    - `people`, holding the display names. The email mapping stays in lg-3's
      configuration.
+     - lg-4 already stores a **person id** (`Person.id`, the configured name)
+       on rules and classifications, as plain text with no foreign key, and
+       serves `GET /api/people` from that configuration. When this table lands,
+       point that route at it, and keep the ids equal to the configured names
+       so the rows lg-4 stored still name someone.
    - `salaries`: person, amount in cents, year, entered-at.
    - `ratios`: parts per million per person, effective-from date, and the
      salary records it came from, if any.
