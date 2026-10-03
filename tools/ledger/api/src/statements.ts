@@ -299,15 +299,18 @@ function fail(
 
   // Nothing in the paste is stored. Older than everything stored, or a gap after it.
   // Dates only run forward, so a paste that ends before the oldest stored row's
-  // day is older history; so is one that ends on that very day on the balance the
-  // row opened from. The balance alone is not enough: a gap after the history can
-  // end on any balance, that one included, and it is dated later. Quoting an
-  // "unexplained" amount for older history would be the distance between two ends
-  // of one account.
+  // day is older history. On that very day it is older history when the history
+  // runs past the day, because a paste dated then cannot follow the tail, which is
+  // on a later one; with a one-day history the day cannot tell the two apart, so
+  // the balance the oldest row opened from does. The balance alone is never
+  // enough: a gap after the history can end on any balance, that one included, and
+  // it is dated later. Quoting an "unexplained" amount for older history would be
+  // the distance between two ends of one account.
   if (
     head !== undefined &&
     (newest.date < head.date ||
-      (newest.date === head.date && newest.balanceCents === head.balanceCents - head.amountCents))
+      (newest.date === head.date &&
+        (newest.date < tail.date || newest.balanceCents === head.balanceCents - head.amountCents)))
   ) {
     throw beforeHistory(head);
   }

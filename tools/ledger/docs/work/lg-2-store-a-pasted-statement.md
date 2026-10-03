@@ -287,6 +287,9 @@ failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     it (a second connection or a worker thread), file it, or accept and note it.
     **Chosen: accept and note it as a known limit**: not fixed here and not filed.
     What is fixed is the answer: a retryable 504 `TIMEOUT` where it was a 500.
+    Its costs, named by the gate: `retryable: true` reaches a web client that
+    never reads it, and whether Cloudflare passes an origin 504 through or shows
+    its own page is unverified.
   - **Decision 7 — G4, where the paste copy lives.** The question: "The paste is
     too long" sat in the tool-wide mapper, so a body over the cap on any route,
     present or future, was called a paste. Options: put the copy at the route; or
@@ -298,10 +301,13 @@ failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     `http-errors.test.ts` ("a body over the cap": the default is generic and names
     no paste or statement; a declared sentence is used) and `statements.test.ts`
     (an oversize body on the statements route says "The paste is too long").
-    Costs the gate named and the owner accepted: core files `SIZE_LIMIT_EXCEEDED`
-    under artifacts (an output size), so the ledger uses it for a request size that
-    core does not name; `retryable: true` on the 504 reaches a web client that never
-    reads it; and whether Cloudflare passes an origin 504 through is unverified.
+    The cost of the mapping the gate named and the owner accepted: core files
+    `SIZE_LIMIT_EXCEEDED` under artifacts (an output size), so the ledger uses it
+    for a request size that core does not name. _(Corrected after gate 3, H2: this
+    entry first listed two more costs here, `retryable: true` on the 504 reaching a
+    web client that never reads it, and whether Cloudflare passes an origin 504
+    through being unverified. Those are costs of F7's `TIMEOUT` answer, not of the
+    oversize mapping; both stand, under decision 6.)_
   - **Decision 8 — G5, lg-7's note.** The question: the first note in lg-7's Build
     step 4 was labelled "not new work" but sets a behaviour for the import
     (refuse an ambiguous reading; "must agree" compares rows by position).
@@ -334,3 +340,36 @@ failing`, `0 raised`. The probe's `P3d` case throws in its own reading of
     gives `Test Files 8 passed (8)`, `Tests 111 passed (111)`. The oversize-body
     test on the statements route passed on both: it holds the route's sentence
     through the move from mapper to route.
+
+- 2026-10-03 — After gate 3 (CONCERNS at `1234701`; G1 to G5 closed, and the gate
+  upheld the G2 refutation: requiring both conditions would have undone F6).
+  - **Decision 9 — H1, fix now or file.** The question: a paste dated on the
+    oldest stored row's day, ending on another balance, was called a gap even when
+    the history runs past that day, so it cannot follow the tail; still refused,
+    the advice wrong. Options: land and file a ticket; or fix it in one more round.
+    **Chosen on 2026-10-02: fix it now, in one more round, which overrode the
+    orchestrator's recommendation, to land and file.** The two other gate items,
+    pinning lg-3's two citations at `24acb04` (H3) and setting `status: done`
+    (H4), are the lander's and are not done here.
+  - **H1 reproduced, then fixed.** Stored rows 3 to 7 (the oldest on 2026-09-12,
+    the newest on 2026-10-01), paste one row dated 2026-09-12 from 10.00: at
+    `1234701` 422 `STATEMENT_CHAIN_BROKEN`; now `STATEMENT_BEFORE_HISTORY`. A
+    paste on the oldest row's day is older history when the tail is on a later
+    day; with a one-day history the day cannot tell the two apart, so the balance
+    the oldest row opened from does, as before. Gate 3's edge table, each row a
+    test in `statements.test.ts` ("a paste that shares nothing with the history, by
+    date", and "older history, or a gap after the history" for the first row):
+    dated after the history on its opening balance → `STATEMENT_CHAIN_BROKEN`,
+    −3.00; the day before the oldest row, on its opening balance and on another
+    → `STATEMENT_BEFORE_HISTORY`; the oldest row's day, on its opening balance →
+    `STATEMENT_BEFORE_HISTORY`; the oldest row's day, other balance, history
+    spanning days → `STATEMENT_BEFORE_HISTORY` (the H1 case); a one-day history,
+    paste ending on its opening balance → `STATEMENT_BEFORE_HISTORY`. "Oldest
+    row's day, rows running into it" was already the straddling-paste test.
+  - **The test can fail.** `npx vitest run tools/ledger/api/test/statements.test.ts`
+    with the five new tests and `1234701`'s source: `Tests 1 failed | 39 passed
+(40)`, the H1 case; with the fix, `Tests 40 passed (40)`. The other four are
+    regressions held through the change, not red.
+  - **H2, corrected.** Decision 7's entry listed two of F7's costs as costs of the
+    oversize mapping. It is rewritten in place and marked corrected, and the two
+    costs now sit under decision 6.

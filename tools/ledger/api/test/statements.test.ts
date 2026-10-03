@@ -659,3 +659,73 @@ describe("older history, or a gap after the history", () => {
     expect(stored(target)).toEqual(before);
   });
 });
+
+// Where a paste that shares nothing with the history lies against it: older
+// history, or a gap after it. The edges, gate 3's table.
+describe("a paste that shares nothing with the history, by date", () => {
+  /** The stored rows 3 to 7: the oldest on 2026-09-12, the newest on 2026-10-01. */
+  async function spanningSeveralDays(): Promise<{ target: App; before: StoredRowColumns[] }> {
+    const target = await startApp();
+    await report(target, paste(3, 8));
+    return { target, before: stored(target) };
+  }
+
+  const headOpening = ROWS[2]?.balanceCents ?? 0;
+
+  async function refused(target: App, row: PasteRow, opening: number) {
+    const response = await post(target, renderPaste(withBalances([row], opening)));
+    expect(response.statusCode).toBe(422);
+    return refusal(response);
+  }
+
+  test("the day before the oldest row, on the balance it opened from, is older history", async () => {
+    const { target, before } = await spanningSeveralDays();
+    const row: PasteRow = { date: "2026-09-11", description: "Autre", amountCents: 700 };
+
+    const error = await refused(target, row, headOpening - 700);
+
+    expect(error.code).toBe("STATEMENT_BEFORE_HISTORY");
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("the day before the oldest row, on another balance, is older history", async () => {
+    const { target } = await spanningSeveralDays();
+    const row: PasteRow = { date: "2026-09-11", description: "Autre", amountCents: 700 };
+
+    expect((await refused(target, row, 1000)).code).toBe("STATEMENT_BEFORE_HISTORY");
+  });
+
+  test("the oldest row's day, on the balance it opened from, is older history", async () => {
+    const { target } = await spanningSeveralDays();
+    const row: PasteRow = { date: "2026-09-12", description: "Autre", amountCents: 700 };
+
+    expect((await refused(target, row, headOpening - 700)).code).toBe("STATEMENT_BEFORE_HISTORY");
+  });
+
+  test("the oldest row's day, on another balance, is older history when the history runs past that day", async () => {
+    const { target, before } = await spanningSeveralDays();
+    const row: PasteRow = { date: "2026-09-12", description: "Autre", amountCents: 700 };
+
+    // At 1234701 this answered a gap, with an "unexplained" amount that is only
+    // the distance from the newest stored row, which a paste dated on the oldest
+    // row's day cannot follow.
+    const error = await refused(target, row, 1000);
+
+    expect(error.code).toBe("STATEMENT_BEFORE_HISTORY");
+    expect(stored(target)).toEqual(before);
+  });
+
+  test("a one-day history, and a paste on that day ending on the balance it opened from, is older history", async () => {
+    const target = await startApp();
+    await report(
+      target,
+      renderPaste(
+        withBalances([{ date: "2026-10-01", description: "Depot", amountCents: 500 }], 1000),
+      ),
+    );
+    const row: PasteRow = { date: "2026-10-01", description: "Retrait", amountCents: -200 };
+
+    // Opens from 12,00, not the stored 15,00, and ends on the 10,00 the history opened from.
+    expect((await refused(target, row, 1200)).code).toBe("STATEMENT_BEFORE_HISTORY");
+  });
+});
