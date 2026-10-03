@@ -136,6 +136,26 @@ Re-issued at `f2d9572` with words, rows and verdicts unchanged: the citations wh
 - **findings** · code-review at medium returned 9; 6 carried (med 1, low 5), 3 dropped.
 - NFR: security ✓ (secret to stdout only, one consumer) · performance n/a · reliability — the med and the `.catch` low · maintainability — the pl-2 repoint.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-02 · `3074307..ca5bff7` only · re-gate of gate 1 six findings · reviewed on Claude Opus 5.5 · coordinates re-resolved at `f2d9572`
+
+Re-issued at `f2d9572` with words, rows and verdicts unchanged: the child-env citation, whose line the third round rewrote, is prose naming `ca5bff7`, the sha this section gated.
+
+The owner answered both gate-1 open decisions on 2026-10-02, each as recommended: the title is `chore(repo): create the Turnstile widget from the Cloudflare setup script (dl-71)`, and the pl-2 citations are pinned at `24acb04`. The owner live run stays **unproven (gate)**.
+
+- **fixed** · med, the exit code untested — `scripts/test/cloudflare-turnstile.test.ts:341-346 "guarding other domains exits 1"` and its 403 twin at `scripts/test/cloudflare-turnstile.test.ts:350 "run as a process, a 403 on the widget list"`. The exit-0 mutant now fails 2 of 30. The spawn takes an argument array with `shell: false` and `process.execPath`, and preloads the fixture by file URL. The fixture replaces `fetch` before the script loads and answers 404 for anything unknown, so it cannot reach the network.
+- **fixed** · low, the lost-secret docs — `docs/02-DEPLOYMENT.md:283 "not measured against the live API"` now cites the OpenAPI document, and matches what gate 1 read there: `secret` required on the one-widget GET, absent from the list.
+- **fixed** · low, the no-write claim tested only in plan mode — `scripts/test/cloudflare-turnstile.test.ts:252 "for (const status of [401, 403])"` runs under `--apply` and asserts an empty write list.
+- **fixed** · low, the permission hint on every failure — `scripts/cloudflare-setup.mjs:483 "if (err.status !== 401"`. Proven by `scripts/test/cloudflare-turnstile.test.ts:270 "not.toBeInstanceOf(CliError)"`: dropping the filter fails 1 of 30, and not attaching `status` fails 2. The `status` attached at `scripts/cloudflare-setup.mjs:362 "{ status: res.status },"` is a number, and only the filter reads it; the message is unchanged and the token is not in it (a sentinel token: 0 hits in the output). A refused connection has no `status`, so it is rethrown and reads `cloudflare-setup: fetch failed`, exit 1, no write (process run). It names no call, the same as every other call in the script.
+- **fixed** · low, the heading before validation — `scripts/cloudflare-setup.mjs:597 "const lines = envLines(created);"`. Proven by `scripts/test/cloudflare-turnstile.test.ts:276-288 "a create answer with no secret prints no heading"`; the lazy mutant fails 1 of 30.
+- **fixed** · low, the pl-2 repoint, by the owner answer — both citations are pinned at `24acb04`; `citations.mjs` on the pl-2 Review exits 0: 9 verified, 3 pinned. Unverified: whether `24acb04` holds what pl-2 gated, because its sha `0ca4d87` is not an object in this clone.
+- **med** · new · The two process tests will fail on the `windows-latest` leg. The entry guard at `scripts/cloudflare-setup.mjs@24acb04:481 "if (import.meta.url === "` builds its URL by concatenation. That is the mismatch `scripts/commit-message.mjs@24acb04:310 "exits 0 for every message"` records: on Windows `main` never runs, so the script exits 0 doing nothing. Reproduced here through a symlinked path: exit 0, no output, where the real path exits 1. Not measured on Windows. The guard predates the branch, but these tests are the first to depend on it. Remedy: the form at `scripts/commit-message.mjs@24acb04:317 "pathToFileURL(process.argv[1]).href"`.
+- **low** · new · The child env is `PATH` alone (line 328 of `scripts/test/cloudflare-turnstile.test.ts` at `ca5bff7`), where every other spawning suite here spreads `process.env`. It drops `SystemRoot` and `TEMP` on Windows. Unmeasured; it may be harmless.
+- **low** · new · The Log sentence rewrapped this round still calls the `per_page` ceiling and the create and answer fields unmeasured and taken from memory. Gate 1 confirmed all of them against the OpenAPI document and the SDK.
+- **findings** · re-gate of 6: 6 fixed, 0 not fixed, 0 refuted; 3 new (med 1, low 2), 0 dropped. Mutants re-run: 13, every one red at `ca5bff7`.
+- NFR: security ✓ (no new data on any error) · performance n/a · reliability — the Windows med · maintainability — the Log low.
+
 ## Log
 
 - 2026-09-22 — Filed at the owner's request while dl-50 was in review, to help
