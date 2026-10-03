@@ -147,11 +147,11 @@ jobs:
             echo
             echo "Release notes: https://github.com/yt-dlp/yt-dlp/releases/tag/${latest}"
             echo
-            echo "**What the checks prove.** The container gate in \`downloader.yml\` builds the image with this pin and fails unless \`yt-dlp --version\` inside it prints \`${latest}\`. Nothing in CI runs yt-dlp against a real site."
+            echo "**What the checks prove.** The container gate in \`downloader.yml\` builds the image with this pin, fails unless \`yt-dlp --version\` inside it prints \`${latest}\`, and runs that binary through the API's TLS-terminating egress proxy against a local HTTPS origin, so it fails if this release stops honouring dl-39's trust pair, or stops verifying at all (\`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`) (dl-73)."
             echo
             echo "**What they do not.** Worth a look before merging:"
             echo
-            echo "- The trust pair from dl-39 — \`SSL_CERT_FILE\` **and** \`--compat-options no-certifi\`, both required — is measured by hand only. Re-run it if the release notes mention certifi, compat options or TLS."
+            echo "- Nothing in CI runs yt-dlp against a real site. Whether this release still resolves YouTube is untested until the image is released; try one video then."
             echo "- If a YouTube probe starts losing formats, this is where a JavaScript runtime (deno) gets added; dl-72 deferred it while it bought nothing measurable."
             echo
             echo "Merging releases the downloader: \`fix\` is a releasing type and the Dockerfile is under \`tools/downloader/\`."
