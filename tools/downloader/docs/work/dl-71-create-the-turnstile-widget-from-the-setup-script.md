@@ -156,6 +156,24 @@ The owner answered both gate-1 open decisions on 2026-10-02, each as recommended
 - **findings** · re-gate of 6: 6 fixed, 0 not fixed, 0 refuted; 3 new (med 1, low 2), 0 dropped. Mutants re-run: 13, every one red at `ca5bff7`.
 - NFR: security ✓ (no new data on any error) · performance n/a · reliability — the Windows med · maintainability — the Log low.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-10-02 · `ca5bff7..329b1b9` only · re-gate of gate 2 three new findings · reviewed on Claude Opus 5.5 · coordinates re-resolved at `f2d9572`
+
+Re-issued at `f2d9572` with words, rows and verdicts unchanged: the comment citation, whose text the fourth round rewrote, is prose naming `329b1b9`, the sha this section gated, and the child-env citation anchors on its scenario line, because the fourth round new test repeats the spread.
+
+The owner live run stays **unproven (gate)**, and the Windows half of the guard fix is proven only when the `windows-latest` leg runs.
+
+- **fixed, unproven (gate) on Windows** · med, the process tests on Windows — the guard is now `scripts/cloudflare-setup.mjs:621 "import.meta.url === pathToFileURL(process.argv[1]).href"`. Measured on Linux, a run with an empty token from a directory whose name has a space, and from one containing `é`: at `24acb04` and at `ca5bff7` it exits 0 with no output; at `329b1b9` it exits 1 with `CLOUDFLARE_API_TOKEN is not set`. The Windows comparison was simulated, not run: with `pathToFileURL(p, { windows: true })` standing in for `import.meta.url`, the old concatenation does not match a `D:` path and the new form does.
+- **refutation held** · Gate 2 said the defect was reproduced through a symlinked path. That run does not discriminate: through a symlink the script exits 0 with no output at `329b1b9` too, because `argv[1]` is the link and `import.meta.url` the real file. The finding stands on the space-path run above, not on gate 2 reproduction.
+- **fixed** · low, the child env — `scripts/test/cloudflare-turnstile.test.ts:328-330 "FAKE_CF_SCENARIO: scenario,"` spreads the environment first, so the fake token and both scenario variables still override it.
+- **fixed** · low, the stale Log sentence — the build entry of the Log now says gate 1 confirmed the fields against the OpenAPI document and the SDK, and that neither is the live API.
+- **low** · new · No test fails if the guard goes back to concatenation: that mutant leaves 30 of 30 green on Linux, where every gating leg runs, because no test path has a space or non-ASCII character in it. One more process case would pin it: copy the script into a temp directory whose name has a space and run it with an empty token, expecting exit 1.
+- **low** · new · The comment at line 620 of `scripts/cloudflare-setup.mjs` at `329b1b9`, "shows on Linux through a symlink", says the symlink case is the same mismatch the new guard fixes. It is not: a symlink still exits 0 at `329b1b9`, as the round Log itself says. Delete the sentence, or say that a symlink still mismatches.
+- **note on `main`** · At `24acb04`, running the script from any path containing a space or a character that `pathToFileURL` percent-encodes prints nothing and exits 0, with or without `--apply`, so nothing is created. The empty output makes it visible rather than a false success. This branch fixes it. Whether the owner checkout path has such a character was not checked; `/workspaces/tools` does not.
+- **findings** · re-gate of 3: 3 fixed (1 unproven (gate) on Windows), 0 not fixed, 1 refutation held, against gate 2 own reproduction; 2 new (low 2), 0 dropped. Mutants re-run: 14; 13 red, and the guard mutant green, which is the first low.
+- NFR: security n/a · performance n/a · reliability — the guard fix, Windows unmeasured · maintainability — the symlink comment.
+
 ## Log
 
 - 2026-09-22 — Filed at the owner's request while dl-50 was in review, to help
