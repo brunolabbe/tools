@@ -187,3 +187,63 @@ describe("the bump workflow opens a pull request that releases", () => {
     expect(workflow()).toMatch(/grep -lE "\$\{pin\}/);
   });
 });
+
+describe("the container gate proves the shipped yt-dlp trusts the terminating proxy (dl-73)", () => {
+  const SCRIPT = "tools/downloader/e2e/container/ytdlp-proxy-trust.mjs";
+
+  /** One top-level block of `downloader.yml`, by its two-space-indented key. */
+  function block(key: string): string {
+    const text = read(".github/workflows/downloader.yml");
+    const start = text.indexOf(`\n  ${key}:\n`);
+    if (start === -1) return "";
+    const rest = text.slice(start + 1);
+    const next = /\n  [\w-]+:\n/.exec(rest.slice(1));
+    return next === null ? rest : rest.slice(0, next.index + 1);
+  }
+
+  test("the docker job runs the trust check inside the image it just built", () => {
+    // A check that exists and is never run is the gap dl-39 closed on cost.
+    const docker = block("docker");
+    expect(docker).toContain("downloader:local");
+    expect(docker).toContain(`node ${SCRIPT}`);
+    expect(() => read(SCRIPT)).not.toThrow();
+  });
+
+  test("a bump pull request triggers that job, because the pin it moves under the tool is in its paths", () => {
+    // `ytdlp-bump.yml` opens a pull request rewriting each pin `pins()` finds.
+    // The gate only answers for a release if one of those files is in the
+    // `pull_request` filter, and not excluded by its trailing `!**.md`.
+    const trigger = block("pull_request");
+    expect(trigger).toContain(`"tools/downloader/**"`);
+    expect(trigger).not.toMatch(/^\s+branches(-ignore)?:/m);
+    const underTheTool = pins().filter(
+      (pin) => pin.file.startsWith("tools/downloader/") && !pin.file.endsWith(".md"),
+    );
+    expect(underTheTool.length).toBeGreaterThan(0);
+  });
+
+  test("nothing lets the trust step fail without failing the job", () => {
+    // A gate finding: `continue-on-error: true` on the step, or on the job,
+    // left the two tests above green and the gate unable to turn a pull
+    // request red. An `if:` on the step can skip it outright.
+    const docker = block("docker");
+    const start = docker.indexOf("- name: Check the shipped yt-dlp trusts the terminating proxy");
+    expect(start).toBeGreaterThan(-1);
+    const rest = docker.slice(start + 1);
+    const end = rest.search(/\n      - /u);
+    const step = end === -1 ? rest : rest.slice(0, end);
+    expect(step).not.toMatch(/^\s+if:/mu);
+    expect(docker).not.toMatch(/continue-on-error/u);
+  });
+
+  test("no negated path takes the downloader Dockerfile back out of the trigger", () => {
+    // The same finding, the other way round: `!tools/downloader/Dockerfile`
+    // after the glob would leave a bump pull request with no container gate.
+    // Negations are held to a list rather than matched as globs here, so a new
+    // one has to be argued against the pin files in this file, not assumed.
+    const negations = [...block("pull_request").matchAll(/^\s+-\s+"(![^"]+)"/gmu)].map(
+      (match) => match[1],
+    );
+    expect(negations).toEqual(["!**.md"]);
+  });
+});
