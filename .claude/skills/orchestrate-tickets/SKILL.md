@@ -41,9 +41,9 @@ batch while this page stated it twice (2026-10-03).
 
 2. **Map the seams, then ask which batch.** Dispatch `seam-mapper` over the
    candidate ids rather than reading the tickets yourself. Put the batch to the
-   user with `AskUserQuestion`; never pick it. In the same question, name every
-   candidate with no `difficulty`: an unrated ticket builds on Opus, so ask the
-   user to rate it or accept that. Never rate one yourself.
+   user with `AskUserQuestion`; never pick it. Every open ticket carries a
+   `difficulty` — `npm run status` fails on one that does not — and you never
+   rate or re-rate one yourself.
 
 3. **Dispatch builders**, one per ticket, as the agent the pairing table names.
    Never pass `model`. Before each dispatch, create the ticket's scratch
@@ -138,7 +138,7 @@ files together.
 | --- | --- | --- |
 | `mechanical` — code only | `builder-mechanical` (Haiku 4.5) | `ticket-reviewer-sonnet`, narrow: named attacks only |
 | `standard` | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-opus` (Opus 5.5, high) |
-| `hard`, or absent | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
+| `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
 | maintenance — a rebase, a merge from `main`, one Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | none, or `ticket-reviewer-sonnet` where one runs |
 | a docs-only chore — rule pages, ticket files, no source | `builder-standard` | one gate, narrow, after the PR opens |
 | a round's mechanical fixes, and a landing | `fixer` (Sonnet 5.5, high) | the round's gate, woken |

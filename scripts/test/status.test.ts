@@ -38,12 +38,13 @@ function repoWith(tickets: Record<string, string>): string {
   return root;
 }
 
-const ticket = (fields: Record<string, string>) =>
+const ticket = (fields: Record<string, string | undefined>) =>
   `---\n${Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
     .map(([key, value]) => `${key}: ${value}`)
     .join("\n")}\n---\n\n# body\n`;
 
-const pl = (id: string, over: Record<string, string> = {}) =>
+const pl = (id: string, over: Record<string, string | undefined> = {}) =>
   ticket({
     id,
     tool: "planner",
@@ -52,6 +53,7 @@ const pl = (id: string, over: Record<string, string> = {}) =>
     status: "ready",
     milestone: "null",
     depends_on: "[]",
+    difficulty: "standard",
     ...over,
   });
 
@@ -67,6 +69,7 @@ const repoTicket = (id: string, over: Record<string, string> = {}) =>
     status: "ready",
     milestone: "null",
     depends_on: "[]",
+    difficulty: "standard",
     ...over,
   });
 
@@ -247,8 +250,23 @@ test("a difficulty outside the taxonomy is a failure, like a kind", () => {
 // and none of them were rated. Absent has to keep meaning "the builder
 // inherits", or adding the field would have silently re-dispatched every open
 // ticket at a different model.
-test("difficulty is optional, and absent reads as null rather than missing", () => {
-  const root = repoWith({ [at("pl-1")]: pl("pl-1") });
+test("difficulty is optional on a finished ticket, and absent reads as null", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done", difficulty: undefined }) });
+  expect(readTickets(root)[0]?.difficulty).toBe(null);
+});
+
+// Required while a dispatcher could still pick the ticket up: an unrated one
+// builds on the most expensive model without anyone having chosen that.
+test.each(["ready", "needs-decision", "in-flight"])(
+  "a %s ticket with no difficulty is a failure, by file",
+  (status) => {
+    const root = repoWith({ [at("pl-1")]: pl("pl-1", { status, difficulty: undefined }) });
+    expect(() => readTickets(root)).toThrow(/pl-1-slug\.md: a ".+" ticket needs a difficulty/);
+  },
+);
+
+test("a dropped ticket needs no difficulty", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "dropped", difficulty: undefined }) });
   expect(readTickets(root)[0]?.difficulty).toBe(null);
 });
 
@@ -256,7 +274,7 @@ test("difficulty is optional, and absent reads as null rather than missing", () 
 // a ticket that spells the field out as unset must not be a parse error — the
 // author who writes `difficulty: null` is saying what the omission says.
 test("difficulty spelled out as null is the same as omitting it", () => {
-  const root = repoWith({ [at("pl-1")]: pl("pl-1", { difficulty: "null" }) });
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done", difficulty: "null" }) });
   expect(readTickets(root)[0]?.difficulty).toBe(null);
 });
 
@@ -403,7 +421,7 @@ test("a quoted empty value is quoted too, rather than reading as the field being
 
 test("a quoted note is rejected too — it is the field the markdown renders instead of the title", () => {
   expect(() => parseFrontmatter(pl("pl-1", { note: '"a quoted note"' }), "t.md")).toThrow(
-    /^t\.md:9: "note" is quoted/,
+    /^t\.md:10: "note" is quoted/,
   );
 });
 
@@ -779,7 +797,7 @@ const closingLine = (stdout: string) => stdout.trimEnd().split("\n").at(-1);
 test("--show reports the difficulty, and an em dash when nobody rated it", () => {
   const root = repoWith({
     [at("pl-1")]: pl("pl-1", { difficulty: "hard" }),
-    [at("pl-2")]: pl("pl-2"),
+    [at("pl-2")]: pl("pl-2", { status: "done", difficulty: undefined }),
   });
   expect(run(["--show", "pl-1"], root).stdout).toContain("difficulty  hard");
   expect(run(["--show", "pl-2"], root).stdout).toContain("difficulty  —");
@@ -1450,7 +1468,7 @@ test("the error carries the file and line, and says to delete the line rather th
   } catch (error) {
     message = (error as Error).message;
   }
-  expect(message).toContain("t.md:9");
+  expect(message).toContain("t.md:10");
   expect(message).toMatch(/delete the line/);
 });
 
@@ -1692,6 +1710,7 @@ test("the command reports the duplicate by name and exits non-zero, which is the
       status: "ready",
       milestone: "null",
       depends_on: "[]",
+      difficulty: "standard",
     }),
     "docs/work/repo-66-theirs.md": ticket({
       id: "repo-66",
@@ -1701,6 +1720,7 @@ test("the command reports the duplicate by name and exits non-zero, which is the
       status: "ready",
       milestone: "null",
       depends_on: "[]",
+      difficulty: "standard",
     }),
   });
   const { stdout, stderr, status } = run(["--json"], root);

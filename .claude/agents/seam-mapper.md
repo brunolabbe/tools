@@ -54,9 +54,9 @@ Nothing but this, and keep it under about forty lines:
   contradicts its own opening section, a `depends_on` that names something
   already merged, a Build section that describes work a recent commit already
   did. State these as findings, not corrections.
-- **Every candidate with no `difficulty`**, listed by id. An unrated ticket
-  builds on the most expensive model, and the orchestrator asks the user about
-  it rather than rating it.
+- **A rating that looks wrong for the work**, as a finding: a `mechanical`
+  ticket whose Build needs a design choice, a `hard` one that is a rename. You
+  do not re-rate it; the orchestrator puts it to the user.
 - **Ordering constraints inside a Build**, as distinct from open decisions. An
   open decision blocks a build; an ordering constraint — "put X to the owner
   *before* the parser is written" — permits it and binds the sequence, and a

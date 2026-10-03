@@ -107,7 +107,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `milestone`  | A milestone from that tool's roadmap, or `null`                                             |
 | `depends_on` | Ticket ids that must land first                                                             |
 | `note`       | Optional. What the status view shows instead of the title                                   |
-| `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs                  |
+| `difficulty` | `mechanical` · `standard` · `hard` — how much judgement it needs. Required until `done`     |
 | `awaiting`   | Optional. What this ticket still owes, and what would close it                              |
 
 **A value runs to the end of its line and is taken literally, so wrapping one in
@@ -516,10 +516,11 @@ they are the three ways a correct change fails here.
 
 ## Rate `difficulty` at filing
 
-**When you file a ticket, set its `difficulty` field.** Leaving it blank defaults
-the ticket to the strongest builder (Opus on the pairing table in
-[`SKILL.md`](./.claude/skills/orchestrate-tickets/SKILL.md)), which costs more
-than building it on the right model. Four tickets filed without difficulty in one
-batch defaulted to Opus; one was a ~20-line fix that cost $1.48 to build (repo-72).
+**When you file a ticket, set its `difficulty` field. `npm run status` fails on
+an open ticket without one**, and CI runs it. A blank used to default the ticket
+to the strongest builder, which costs more than building it on the right model:
+four tickets filed without difficulty in one batch defaulted to Opus, and one was
+a ~20-line fix that cost $1.48 to build (repo-72). Finished and dropped tickets
+are exempt; about a hundred predate the field.
 See the `difficulty` field's explanation in the _Fields_ section above for the
 three ratings and when to use each.
