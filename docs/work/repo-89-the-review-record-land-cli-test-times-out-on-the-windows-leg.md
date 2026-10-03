@@ -149,3 +149,21 @@ scripts/test/review-record.test.ts -t "the --land CLI lands"` fails with
   records make into that file at line 900 or later, so it moves them all for no
   behaviour. It is a rename-level cleanup for whoever next edits that file
   anyway.
+- 2026-10-03 — **How this lands: in-flight, by the owner's decision.**
+  - **The question.** Done-when 1 (name the slow step) and 2 (three consecutive
+    `windows-latest` runs without a timeout) can only be proven on CI, so how
+    does the ticket land?
+  - **The options put through AskUserQuestion.** Land in-flight and close later
+    (recommended); land done now; an instrumented commit first.
+  - **The answer.** The owner chose in-flight, the recommendation.
+  - **What closes it.** Read the `--land` CLI case's per-test duration on the
+    next three `windows-latest` runs (this pull request's, then main's after the
+    merge), comparing it against its `land()` sibling as the gate did. If all
+    three are under the 30 s timeout and the excess is about 1 to 2 s, set
+    `status: done`. If the 5 s to 49 s spread persists, the cause was not `gh`
+    and the ticket stays open.
+  - **Disclosed, not fixed.** Gate 1's three lows. F1: the 41 s attributed to
+    the real `gh` in a comment and a Log entry was repo-71's timing of its
+    test, whose cause repo-71 did not explain. F2: the unstub sits outside a
+    `finally`. F3: a doubled "in" in the `vi.stubEnv` sub-bullet above. They are
+    in the gate's record below as the reviewer wrote them.
