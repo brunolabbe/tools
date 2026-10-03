@@ -191,6 +191,25 @@ jobs:
           echo "pinned ${pinned}, shipped ${shipped}"
           test -n "$pinned"
           test "$shipped" = "$pinned"
+      # A yt-dlp that starts is not one that can reach anything. Behind the
+      # API's egress proxy, which terminates TLS (dl-37), the shipped binary
+      # trusts the proxy's leaf only through `SSL_CERT_FILE` **and**
+      # `--compat-options no-certifi`: it is a PyInstaller build that prefers
+      # its own `certifi`, so the first alone is read and never consulted.
+      # A bump that stopped honouring the pair would leave the image healthy
+      # and YouTube finding no video, so this runs the real app from this
+      # image, yt-dlp tier only, against a loopback HTTPS origin whose
+      # certificate only the proxy is told to trust (dl-73). The flags are the
+      # resolver's own; the script never spells them. It runs in a fresh
+      # container rather than the one above, because it needs its own
+      # configuration and must not share the service's database.
+      - name: Check the shipped yt-dlp trusts the terminating proxy
+        timeout-minutes: 5
+        run: >-
+          docker run --rm --init
+          -v "$PWD/tools/downloader/e2e/container:/app/tools/downloader/e2e/container:ro"
+          downloader:local
+          node tools/downloader/e2e/container/ytdlp-proxy-trust.mjs
       # `-v` is safe here and nowhere else: this is a throwaway runner whose
       # volume was created sixty seconds ago. On a host, that flag is what
       # destroys the job database — see docs/02-DEPLOYMENT.md.
