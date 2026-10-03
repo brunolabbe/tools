@@ -1,8 +1,7 @@
 /**
- * `review-record.mjs`'s guards — the pure logic in isolation, then the CLI
- * spawned against a real git fixture for the process-boundary claims (a check
- * that fails, a formatter that repads a table, a restore proven against
- * `HEAD`).
+ * `review-record.mjs`'s guards — the pure logic in isolation, then the CLI spawned
+ * against a real git fixture for the process-boundary claims (a check that fails, a
+ * formatter that repads a table, a restore proven against `HEAD`).
  *
  * Two layers, the same split `next-id.test.ts` and `citations.test.ts` use and
  * for the same reason: the pure functions can be asserted quickly and
@@ -27,6 +26,7 @@ import {
   USAGE,
   validateFirstLine,
 } from "../review-record.mjs";
+import { FAKE_GH_MARKER, fakeGhPath } from "./fake-gh.ts";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "review-record.mjs");
@@ -1556,7 +1556,7 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
       "gate1.md",
       `## Review\n\n### Gate 1 — smoke\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`,
     );
-
+    vi.stubEnv("PATH", fakeGhPath(dir));
     const result = runCli(dir, [
       "--land",
       ticketAbs,
@@ -1568,7 +1568,7 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
       "--title",
       "docs(repo): land the fixture ticket (zz-1)",
     ]);
-
+    vi.unstubAllEnvs();
     expect(result.status).not.toBe(0);
     expect(result.stdout).toMatch(/== splice ==\nok/);
     expect(result.stdout).toMatch(/== push ==\nok/);
@@ -1576,13 +1576,13 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
     expect(result.stdout).toMatch(/== preflight ==\nFAIL/);
     expect(result.stderr).toMatch(/--land failed at "preflight"/);
 
-    // The real preflight really ran against this fixture and really failed on
-    // its own check 1 (`npm run check` has no `package.json` to read here) —
-    // asserted on the step name preflight itself prints, never on npm's own
-    // wording (gate 1, F4): `npm.cmd` on Windows fails differently, through a
-    // shell `npm` cannot find without one, and this is exactly the seam
-    // `runPreflightDefault`'s own docblock names as the reason `land()`'s
-    // `runPreflight` is injectable at all.
+    // The real preflight really ran against this fixture and really failed on its
+    // own check 1 (`npm run check` has no `package.json` to read here) — asserted
+    // on the step name it prints, never on npm's wording (gate 1, F4: `npm.cmd` on
+    // Windows fails differently). Its `gh` is the planted fake, not the runner's:
+    // the one spawn here that can reach a network (repo-89, a 49 s timeout), and the
+    // marker proves the fake answered, since a real `gh` here exits non-zero too.
+    expect(result.stdout).toContain(FAKE_GH_MARKER);
     expect(result.stdout).toMatch(/== check ==\nFAIL/);
 
     // Everything before "preflight" really landed, real push included.
