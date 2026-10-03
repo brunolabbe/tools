@@ -245,3 +245,16 @@ failed | 4 passed (17)`; keying on `request.ip` for the person → `3 failed |
     resolves by suffix and became ambiguous the moment a second file of that name
     existed (`2 unresolvable`, exit 18). A new test file's basename is a coordinate
     other tools' bare citations may already be using.
+
+- 2026-10-03 — Owner's decision on the CodeQL alerts that remain at `6a5a73b`.
+  **The question:** CodeQL still fails #345, because its MissingRateLimiting
+  library models only express-rate-limit, express-brute, express-limiter and
+  rate-limiter-flexible, and not `@webtools/core`'s `RateLimiter`, which
+  `route-limits.test.ts` proves limits every route. So how is the check cleared?
+  **Put through AskUserQuestion:** (1) dismiss both alerts as false positives,
+  the recommendation; (2) swap to rate-limiter-flexible; (3) a custom CodeQL
+  model pack. **The owner chose (1), for now, which matched the
+  recommendation.** The owner dismisses the two alerts in the GitHub UI, since
+  the token here cannot. A `repo-` ticket evaluating rate-limiter-flexible is
+  filed in this batch's close-out pull request. **Status:** decided, nothing to
+  build.
