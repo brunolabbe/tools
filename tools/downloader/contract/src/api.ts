@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { ERROR_CODES } from "./errors.ts";
+import { ALL_ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
 import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
 import type { Job, JobEvent, JobLink, JobOptions, JobProgress, JobResult } from "./job.ts";
@@ -123,14 +123,23 @@ export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 
 export const jobStatusSchema = z.enum(JOB_STATUSES);
 
-export const errorCodeSchema = z.enum(ERROR_CODES);
+/**
+ * Schema accepts all codes including retired ones (like `MUX_FAILED`) for
+ * backward compatibility with persisted records, and transforms retired codes
+ * to their current equivalents. The output type is always `ErrorCode`.
+ */
+export const errorCodeSchema = z.enum(ALL_ERROR_CODES).transform((code) => {
+  // Map retired codes to their current equivalents on read
+  if (code === "MUX_FAILED") return "DOWNLOAD_FAILED";
+  return code;
+});
 
 export const appErrorPayloadSchema = z.object({
   code: errorCodeSchema,
   message: z.string(),
   retryable: z.boolean(),
   details: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<AppErrorPayload>;
+});
 
 export const drmInfoSchema = z.object({
   protected: z.boolean(),

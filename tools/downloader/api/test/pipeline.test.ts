@@ -486,14 +486,14 @@ describe("re-probing", () => {
   test("a non-retryable failure is not retried at all", async () => {
     harness = await createHarness({
       resolver: new StubResolver(probeResult()),
-      engineOptions: { failWith: () => new AppError("MUX_FAILED") },
+      engineOptions: { failWith: () => new AppError("SIZE_LIMIT_EXCEEDED") },
     });
 
     const created = await createJob(harness);
     const finished = await runToTerminal(harness, created.id);
 
     expect(finished.status).toBe("failed");
-    expect(finished.error?.code).toBe("MUX_FAILED");
+    expect(finished.error?.code).toBe("SIZE_LIMIT_EXCEEDED");
     expect(harness.engine.calls).toBe(1);
   });
 
