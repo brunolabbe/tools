@@ -144,3 +144,13 @@ scripts/citations.mjs tools/ledger/docs/work/lg-2-store-a-pasted-statement.md`
   - **Not covered.** No e2e spec: `e2e/README.md` says the first one is a paste
     surviving a reload. The inbox and rules screens were exercised in jsdom with
     the API client faked, never against a running server in a browser.
+
+- 2026-10-03 — Owner's decision on the open question above. **The question:**
+  should creating a rule also file the rows already waiting in the inbox?
+  **Put to the owner through AskUserQuestion:** (A) new pastes only, as built; an
+  inbox row a new rule matches exactly shows as `matches`, with one tap to
+  accept; (B) also file the inbox on rule creation; (C) ask on creation, "N inbox
+  rows match — file them?". **The owner chose A**, the builder's recommendation,
+  so no recommendation was overridden. **The gate's measurement, carried with
+  it:** as built, rows stored before lg-4 stay in the inbox until tapped, and
+  the API accepts a bare `*` pattern. **Status:** decided, nothing to build.
