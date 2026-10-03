@@ -40,6 +40,7 @@ const ready = [
   "status: ready",
   "milestone: null",
   "depends_on: []",
+  "difficulty: standard",
   "---",
   "",
   "# repo-1 — the thing",

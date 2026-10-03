@@ -63,6 +63,7 @@ release-please rewrites on every release does not belong in the middle of it.
 - [003 — The status tables are generated from the tickets](./adr/003-the-status-page-is-generated.md)
 - [004 — One compose fragment per tool, merged on the host](./adr/004-one-compose-fragment-per-tool.md)
 - [005 — Excusing a code-scanning finding, in the code it excuses](./adr/005-excusing-a-code-scanning-finding.md)
+- [006 — Gate records carry no line citations, a ticket gets two gates, and the orchestrator logs instead of editing its rules](./adr/006-gate-records-carry-no-citations.md)
 
 An ADR belongs here only when the decision constrains **two or more tools** —
 what earns a place in `packages/core`, which runtime the repo targets, how CI is

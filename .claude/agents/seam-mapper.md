@@ -54,21 +54,9 @@ Nothing but this, and keep it under about forty lines:
   contradicts its own opening section, a `depends_on` that names something
   already merged, a Build section that describes work a recent commit already
   did. State these as findings, not corrections.
-- **Which gate records each candidate is likely to move lines in.** A branch
-  that edits a file an enforced `## Review` section cites fails the citations
-  gate until that record is repointed, and two branches repointing one record
-  conflict on it. Name the record and the citing line where you can find them
-  with `git grep` over `docs/work` and `tools/*/docs/work`. Say plainly that the
-  pins a branch writes mid-build are invisible to you — in two batches every
-  merge conflict was in a gate record, none in source, and the map had reported
-  zero overlap — and that `git merge-tree` over finished heads is the
-  orchestrator's check for those.
-
-  The second record in that collision is usually **not a candidate at all**: it
-  is an already-merged ticket whose `## Review` cites a line a candidate will
-  move. On 2026-09-26 every hit was that shape (dl-57 and dl-63 by dl-70, dl-55 and dl-68 by dl-69, and repo-52 by repo-50), and dl-69 moved ten citations across two merged records where the
-  map named three — relocating or rewrapping a docstring breaks anchors even
-  when every word survives. Name the merged records, not only the candidates'.
+- **A rating that looks wrong for the work**, as a finding: a `mechanical`
+  ticket whose Build needs a design choice, a `hard` one that is a rename. You
+  do not re-rate it; the orchestrator puts it to the user.
 - **Ordering constraints inside a Build**, as distinct from open decisions. An
   open decision blocks a build; an ordering constraint — "put X to the owner
   *before* the parser is written" — permits it and binds the sequence, and a

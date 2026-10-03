@@ -1,5 +1,12 @@
 # What the sessions cost
 
+**Everything above _The log since the last review_, at the end of this page, is
+an archive.** It describes the loop as it was when each row was written — line
+citations, pins, re-issued records and uncapped gate rounds included — and none
+of that is current
+([adr/006](../../../../docs/adr/006-gate-records-carry-no-citations.md)). The
+orchestrator appends to the last section and reads nothing else here.
+
 Provenance for the rules on this page's parent, kept out of `SKILL.md` because it
 is evidence rather than instruction, and because everything at the top of
 `SKILL.md` is what survives a compaction.
@@ -4576,3 +4583,29 @@ Intake at ebb808b (the shared checkout equal to origin/main). Two peer sessions 
 - The different-model pairing: dl-73's Sonnet gate found the high in an Opus build whose own red/green CI demo had passed.
 - Running `--land`'s pin check in every gate prompt after lg-4's refusal: no further pin refusals.
 - The whole-batch scratch merge (step 11) caught the one cross-PR citation collision before any merge.
+
+## The log since the last review
+
+**Last review: 2026-10-03**, by an interactive session with the owner, over every
+row above (adr/006). The orchestrator appends one entry per batch below and
+changes no rule page; the next review reads these entries against the agents'
+transcripts, changes the rules in one pass, and moves this heading's date.
+
+An entry is this and nothing more:
+
+```markdown
+### Batch <date> — base <sha>
+
+<the per-agent accounting table from `node scripts/agent-cost.mjs`, with its rate date and total>
+
+**Tickets:** <id → PR, gate verdicts in order, one line each>
+
+**Defects in the skill:**
+
+1. <page and heading> — <what it got wrong or left out>. Reproduction: `<command>` → <the output that shows it>.
+
+**Worked, and worth keeping:** <one line each, only what a review should not remove>
+```
+
+No narrative, no proposed rule text, and no item without a reproduction: a
+defect nobody can re-run is an opinion, and the review will drop it.

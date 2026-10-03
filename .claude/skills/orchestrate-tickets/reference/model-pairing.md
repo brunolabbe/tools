@@ -7,6 +7,24 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
+## 2026-10-03: what the history says about Haiku and about gate rounds
+
+**Haiku stays the `mechanical` builder, behind a gate, for code only.** Both
+controlled trials below produced correct work at about 60% of Sonnet's cost, and
+the 2026-10-03 batch's Haiku build cost $0.25 and passed. What it gets wrong is
+its account of its own work — dl-36's unrun "red-green", pl-51's PASS on a
+deleted probe — and prose and records: four failed landings as the fixer, and 11
+med errors building a history row from a fact list (#329). So its gate is never
+dropped, and records and rule pages never go to it.
+
+**The `mechanical` gate is narrow.** A Sonnet `xhigh` gate on a four-line Haiku
+change cost $2.06, eight times the build, for two lows. Narrowing it to named
+attacks is a trial, not a measurement; so is leaving the Sonnet gate at `xhigh`,
+which nothing has compared with `high`.
+
+**Two gates, a third only on a high.** The count and dl-58's six rounds are in
+[adr/006](../../../../docs/adr/006-gate-records-carry-no-citations.md).
+
 ## 2026-09-26: pinned definitions, and what they change
 
 **The pairing moved from a `model` parameter into the agent definitions.** Until

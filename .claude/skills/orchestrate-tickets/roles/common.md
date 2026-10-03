@@ -1,206 +1,103 @@
 # What every dispatched agent needs
 
 Read by every builder, fixer and gate before its own role page, in the same
-`git show`. The agent definitions in `.claude/agents/` carry only what a
-definition alone can set — the model, the effort, the tools, the worktree — and
-point here. Anything written into a definition's body reaches one agent type and
-nobody reviewing the skill sees it; that is why the bodies are a pointer.
-
-## Your model and effort are not yours to choose
-
-They are pinned in your agent definition's frontmatter, chosen by the
-orchestrator from the ticket's `difficulty` — the table is in the skill's
-`.claude/skills/orchestrate-tickets/SKILL.md` under _Which model built it_.
-You do not need it to work. A builder's or a gate's definition also pins a **1-hour prompt-cache TTL**
-(`experimental: cacheTtl: 1h`), because both are woken after idling past the
-5-minute default; it needs Claude Code v2.1.248 or later, and Claude Code
-ignores it while the subscription is on usage credits. **If your
-prompt did not tell you which model you are, say so rather than guessing** in
-anything you write, a pull request body included: a model named wrongly is worse
-than one left blank, and the orchestrator reads the real one from your
-transcript.
+`git show`. Your model and effort are pinned in your agent definition; if your
+prompt did not tell you which model you are, say so rather than guessing in
+anything you write, a pull request body included.
 
 ## Your worktree
 
 **You already have your own isolated git worktree. Do not call
-`EnterWorktree`.** Your working directory is pinned at launch; entering another
-worktree moves only your write access and leaves the Bash sandbox pinned here,
-which then refuses every command, `pwd` included. Two agents launched that way
-stalled, and one concluded it should work in the shared checkout instead.
+`EnterWorktree`**, and never touch `/workspaces/tools` itself or any other
+worktree: several sessions run against this repo at once.
 
-**Never touch `/workspaces/tools` itself, or any other worktree.** Several
-sessions run against this repo at once. If a command seems to need the shared
-checkout, that is the signal to stop and report. The one intended exception is
-the farm script below, run *from* the shared checkout's copy on purpose; it
-writes only into your worktree.
+- **Use worktree-relative paths.** An absolute path built from
+  `/workspaces/tools/<repo-relative-path>` resolves silently to the shared
+  checkout's copy.
+- **`origin/main` moves under you** whenever any session fetches. Use the sha
+  your dispatch names, or `git rev-parse origin/main` once and reuse it.
+- **Populate and build before you measure anything**, after your role page's
+  checkout step:
+  1. `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. **Never
+     `npm install` or `npm ci`**, and no npm command that writes the lockfile.
+     If the farm warns that the shared checkout is stale, stop and report it.
+  2. `npm run build`. Without `dist`, suites fail with `packageEntryFailure`,
+     which reads as a test failure and is not.
 
-**Use worktree-relative paths everywhere.** An absolute path built from
-`/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's
-copy — no error, and content that looks exactly like the right content.
+  Neither step fails loudly if skipped: Node resolves workspace packages from
+  the shared checkout instead, so a correct change looks broken or a broken one
+  looks fine.
+- **A red/green across packages needs a rebuild between the two states**, and a
+  grep of `dist` to prove which state you measured.
+- **For a new workspace, check the lockfile with
+  `node scripts/check-lockfile-sync.mjs`**, not `npm ls`.
 
-**`origin/main` is a shared ref that moves.** When any session runs `git fetch`,
-the ref moves under a running agent that holds the ref without fetching. Verify
-against the resolved base sha, not the floating ref — `git rev-parse origin/main`
-before any check, or use the sha your dispatch explicitly names.
+## Your scratch directory
 
-**Populate and build before you measure anything**, after your role page's
-checkout step:
-
-1. `bash /workspaces/tools/.claude/scripts/worktree-farm.sh` — `node_modules` in
-   about half a second. **Never `npm install` or `npm ci`**: minutes, the
-   largest fixed cost of a dispatch, and it can fail outright when a
-   postinstall cannot reach the network (a gate told to run `npm ci` ran two
-   hours without reporting, 2026-09-03). If the farm's stderr warns that the
-   shared checkout is stale, its remedy (`npm install` there) is not yours to
-   run — stop, report the missing package list to whoever dispatched you, and
-   install nothing. **2026-09-30:** The farm symlinks `node_modules/.package-lock.json`
-   into the shared checkout. Any npm command that writes this file, even
-   `--package-lock-only`, modifies `/workspaces/tools`. This does not corrupt
-   the shared checkout, but watch for lock file timing shifts in peer sessions.
-2. `npm run build`. Without built `dist`, most suites fail with
-   `packageEntryFailure`, which reads as a test failure and is not.
-
-**Neither step fails loudly if skipped.** Node walks up to the shared checkout
-and resolves workspace packages there, so the package you edited or are
-reviewing is not the one the compiler reads — a correct change looks broken, or
-a broken one looks fine.
-
-**2026-10-01: a red/green across packages needs a rebuild between the states,
-and a `dist` grep to prove which state you measured.** A suite that imports a
-sibling's `dist` but its own `src` needs the rebuild only for the sibling
-(repo-85's builder). A gate that built `main`'s contract measured against the
-wrong state and saw 24 false failures (lg-3).
-
-**2026-10-01: for a new workspace, check the lockfile with
-`node scripts/check-lockfile-sync.mjs`, not `npm ls`.** The farm mirrors the
-shared checkout and lacks the new link, so `npm ls` reports the package missing
-(lg-1's gate). `add-tool` step 3 says the same where a lockfile is edited by
-hand.
+Your dispatch names one, and it already exists. Write every scratch file there,
+under your own subdirectory (`build/`, `gate-<n>/`, `land/`), and never list the
+ticket's scratch root: a gate must not see a builder's files.
 
 ## The sandbox refuses some ordinary shell shapes
 
-With "too complex to verify that it stays inside the worktree", and nothing else
-warns you. Refused (2026-09-12 to 2026-09-20): a git command followed by
-`echo $?`; a heredoc, whether a commit message or a script body; a variable
-holding a path; a `for` loop over `git`, `gh` or `sed`; an `awk` program
-containing `>>`; `python3`; and the literal token `git` anywhere inside a
-`node -e` program, even in a string that never runs. Also reported
-(2026-09-27, one dispatch's own report): a git command chained after any
-other command, not only after `echo $?`. **Corrected across two later
-sessions the same day, gate 1's and gate 2's own (gate 2, finding C, on this
-paragraph's own second draft, which still had it wrong): neither session's
-own refusal was a general git-chain rule.** A session gating this ticket ran
-`echo … && git -C <worktree> log …`, several `cd <worktree> && git …` and
-`git …; git …` chains without incident, and had **two** refusals of its own —
-not the one first recorded here — a compound running `bash <script>`, too
-complex to verify, and **one large heredoc carrying a whole gate section**,
-refused, where eight smaller heredocs appended afterward all worked; that
-confirms the large-heredoc report below rather than leaving it
-unreproduced. A later gate's own session had one refusal too: a single call
-chaining five git commands and ending `echo anc=$?` was refused — naming
-`git` in a form too complex to verify, which is consistent with the
-**original**, narrower rule above (a git command followed by `echo $?`), not
-evidence of a separate one. So: the large heredoc is confirmed; the "any
-chain" broadening is not, and the original narrower rule stands unchanged.
-Also reported (2026-09-27, relayed, not independently reproduced): `sed -i` with
-a `Na\…` insert-at-line script, and a long `node -e` program, on its length
-alone rather than any token inside it; setting
-`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*` as shell env vars
-(workaround: set `process.env` inside a `node` script that spawns the command);
-a git command chained with a non-git command by `&&` (in one case the commit
-silently did not happen and a chained check read the uncommitted tree) — this
-paragraph's own earlier `echo … && git -C <worktree> log …` ran without
-incident, so the refusal is inconsistent across sessions rather than a shape to
-avoid: split the chain into separate calls if a session refuses it, rather than
-avoiding the shape outright (a gate's own session on 2026-09-28 saw none of the
-listed shapes refused, itself unreproduced); a string containing `.github`
-refused as naming git; a `sed` pattern containing `&&`; `timeout -s INT … ;
-echo` as a compound command; `git checkout -- <file>` chained after other
-commands.
-Also measured (2026-09-29): long heredocs whose content looks like a diff; a
-`for` loop whose list comes from `$(git …)` substitution; `printf` with `\r\n`
-in its format string; `awk` with `" | "` in a print string. By contrast, plain
-single-quoted `printf` lines and small heredoc pieces worked.
-**`pkill -f` can match the shell that is running it and kill your own
-session** — never reach for it here; find the pid and `kill` it by number
-instead. What holds: one plain command per call, `git commit -F <file>`, literal
-paths, `printf` over `cat <<EOF`, `awk -v`, a short `node -e`, and reading an
-exit code by redirecting a command's output to a file and running the next
-command plainly. **Rewrite the shape rather than reporting a broken channel.**
+It says "too complex to verify that it stays inside the worktree" and nothing
+else warns you. **Rewrite the shape; do not report a broken channel.**
 
-**2026-09-30:** Sandbox refusals this batch: any command naming `git` more than
-once in one call; `git -C <relative-path>` (computed at runtime); a path held in
-a shell variable passed to `sed`; `NODE_OPTIONS=… node`; a `for` loop over git.
-What worked: single plain commands, `git -C <absolute-scratch-path>`, and
-`git clone --depth 1 file://…` to an absolute path. **Preflight runs longer
-than 120 seconds, so run it in the background with output redirected to a file**
-(`node scripts/preflight.mjs … > /tmp/preflight.log 2>&1 &`), then check the
-output file after a wait.
+What works:
 
-**2026-09-29:** The sandbox blocks git commands aimed at the shared checkout but
-allows plain file writes to it. An unexported shell variable used inside
-`node -e` is `undefined`. Together, these created an `undefined/` directory in
-the shared checkout when a script tried to write a file with a path from an
-undefined variable. Test any shell variables used in node scripts: `node -e
-"console.log(process.env.VAR_NAME)"` and confirm they print something before
-passing them to file operations.
+- one plain command per call, with literal absolute or worktree-relative paths;
+- a script or a long text **written to your scratch directory with the Write
+  tool**, then run or passed by path (`node <file>`, `git commit -F <file>`,
+  `gh pr comment --body-file <file>`);
+- reading an exit code by redirecting output to a file in one call and reading
+  the file in the next.
 
-**2026-10-01: confirm a commit landed before you measure it.** A refused
-`git add && git commit` let preflight measure the uncommitted tree (lg-3's
-builder). Run `git log -1` as its own call after every commit, before
-preflight.
+What is refused, or silently does the wrong thing:
 
-**2026-10-01: waiting on a backgrounded preflight.** A bare foreground `sleep`
-is refused and `Monitor` is disabled for subagents; a foreground
-`until [ -s <exit file> ]; do sleep 3; done` with a long timeout works (it ran
-in three agents this batch, and a busy `do :; done` would spin a core). `pgrep -f`
-matches its own shell, and an `echo $?` inside a backgrounded call lands in the
-task's output file, not in the log you redirected to.
+- heredocs, and `cat >` or `>>` redirections that build a file;
+- a command naming `git` more than once, a git command followed by `echo $?`,
+  and any text containing `git` or `github` inside a `node -e` program or a URL
+  argument;
+- a path held in a shell variable, and `for` loops over `git`, `gh` or `sed`;
+- `python3`, `NODE_OPTIONS=… node`, a bare foreground `sleep`;
+- `pkill -f` and `pgrep -f`, which match your own shell — kill by pid.
+
+**Confirm a commit landed** with `git log -1` as its own call before you measure
+anything that depends on it: a refused `git add && git commit` leaves the tree
+uncommitted and says nothing.
+
+**Preflight runs longer than a foreground call allows.** Run it in the
+background with its output and its exit code written to files in your scratch
+directory, then wait with `until [ -s <exit file> ]; do sleep 3; done`. The
+harness's "completed" notice reports the outer shell, not preflight; the exit
+file is the signal.
 
 ## Point every run at the narrowest thing that can fail
 
-One spec file, not its directory: measured warm here at 2 s against 41 s for
-the directory and ~50 s for the project
-(`.claude/skills/orchestrate-tickets/reference/sizing.md`). Run the spec while
-you work and the project once at the end.
+One spec file while you work — seconds — and the tool's project once at the end.
+Read the test count on every timing: a suite that cannot load is the fastest
+suite there is.
 
 ## Your report
 
 Your final message is a report to the orchestrator, which checks it before it
-accepts it. Write it so the checks are answerable without a follow-up question:
+accepts it:
 
 - **Never report a verification you did not run.** If you substituted something
-  for a required check — an in-test demonstration for a real red run, an
-  argument for a command — say which check you replaced and why, in those words.
-  A builder once reported an in-test block over a local copy of the old function
-  as "the test is red-green" (2026-09-01).
+  for a required check, say which check you replaced and why.
 - **Each command you ran, with the lines of its output that matter**, and every
-  count with its denominator and the command it came from — `4 of 71,
-  npx vitest run <spec>`, not "tests pass".
-- **What you could not do, named as unmeasured**, rather than filled with
-  reasoning. A gap filled with reasoning is worse than an admitted one.
-- **Any open decision, as options with a recommendation** — a choice with two
-  defensible answers, a scope question, anything contract-adjacent. Neither you
-  nor any other agent may settle it; the orchestrator is the only participant
-  that can ask a human. Do not resolve it in a commit or leave it as a Log
-  observation.
-- **End with what these pages got wrong or omitted for this job** — a step that
-  did not fit, a rule that misled you, a cost nobody named — whether or not your
-  dispatch asked. It is the field the skill's history is built from, and it
-  does not arrive unasked.
-- **Never write `# Done`.** That heading closes the session that talks to the
-  user; in your report it lands mid-transcript claiming a batch is over that you
-  cannot see the end of (twice on 2026-09-17, and again from a builder on
-  2026-09-27 whose page already carried this rule). Say what you finished.
-- **Do not spawn subagents.** Dispatch is the orchestrator's; nesting it hides
-  cost and makes the agent tree unreadable.
+  count with its denominator: `4 of 71, npx vitest run <spec>`, not "tests pass".
+- **What you could not do, named as unmeasured**, not filled with reasoning.
+- **Any open decision, as options with a recommendation.** You may not settle
+  it in a commit or leave it as a Log observation; only the orchestrator can ask
+  a human.
+- **End with what these pages got wrong or omitted for this job.**
+- **Never write `# Done`**, and **do not spawn subagents**.
 
 ## Findings you are handed
 
-Builders and fixers receive a gate's findings **pasted as the reviewer wrote
-them**. Reproduce each one before changing anything — a check that fails before
-the fix and passes after it — and push back rather than transcribe: if a
-finding's framing does not survive contact with the code, do not fix it, and
-report the command and output that refute it. Reviewers are usually right and
-occasionally not, and you are the one in contact with the code; this repo has
-recorded a builder refuting a finding whose every premise was true (2026-09-01).
+Builders and fixers receive a gate's findings pasted as the reviewer wrote them.
+Reproduce each one before changing anything — a check that fails before the fix
+and passes after it — and push back rather than transcribe: if a finding does not
+survive contact with the code, do not fix it, and report the command and output
+that refute it.

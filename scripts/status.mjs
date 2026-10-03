@@ -24,7 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { extractSections, splitLines } from "./citations.mjs";
+import { extractSections, splitLines } from "./markdown.mjs";
 
 /** Every field a ticket's frontmatter may carry, and whether it is required. */
 const FIELDS = {
@@ -41,11 +41,12 @@ const FIELDS = {
   note: { required: false },
   // Optional, and the one field written for a dispatcher rather than for a
   // reader: how much judgement the work needs, which `orchestrate-tickets`
-  // maps to a builder's model. Absent builds as `hard`, on the strongest
-  // builder, which is what inheriting an Opus orchestrator already produced.
-  // The *author* fills it in, because the author has read the work and the
-  // orchestrator deliberately has not — see repo-17 and the `builder-*`
-  // definitions in `.claude/agents/`.
+  // maps to a builder's model. The *author* fills it in, because the author
+  // has read the work and the orchestrator deliberately has not — see repo-17
+  // and the `builder-*` definitions in `.claude/agents/`. Not required as a
+  // *field*, because about a hundred finished tickets predate it and nothing
+  // dispatches a finished ticket; `validate` requires it on every ticket that
+  // is still open.
   difficulty: { required: false },
   // Optional, and the only field that describes what a ticket still owes rather
   // than what it is: the obligation a `done` ticket carries when one acceptance
@@ -461,6 +462,14 @@ function validate(fields, tool, entry, file) {
   if (ticket.difficulty != null && !DIFFICULTIES.includes(ticket.difficulty)) {
     throw new Error(
       `${file}: "${ticket.difficulty}" is not a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
+    );
+  }
+  // An open ticket is one a dispatcher may pick up, and an unrated one builds
+  // on the most expensive model without anyone having chosen that (repo-72:
+  // about twenty lines, on Opus). Finished and dropped tickets are exempt.
+  if (ticket.difficulty == null && !["done", "dropped"].includes(ticket.status)) {
+    throw new Error(
+      `${file}: a "${ticket.status}" ticket needs a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
     );
   }
   const match = /^[a-z]+-(?<number>[1-9]\d*)$/.exec(ticket.id);

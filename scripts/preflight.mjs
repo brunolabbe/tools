@@ -1,8 +1,9 @@
 /**
  * One command in place of the four pre-PR checks the orchestration history
- * kept forgetting by hand: the citations gate, the `## Review` record, the
- * title's type against its paths, and a merge-tree probe against every other
- * open pull request.
+ * kept forgetting by hand: the `## Review` record, the title's type against
+ * its paths, and a merge-tree probe against every other open pull request. A
+ * fourth, the citations gate, was check 2 until adr/006 retired the citation
+ * checker; its exit bit is not reused.
  *
  * repo-51's Why names four recurring "what the skill got wrong" items, each
  * one command, each costing a round when missed — the citations gate not run
@@ -24,9 +25,6 @@
  *     touches, `npm test -- --project <tool>` — read from the diff's own
  *     paths, never from a flag, so a forgotten `--project` cannot silently
  *     skip a tool's suite the way a hand-typed one can.
- *   - check 2 imports `gate`, `compareAgainst` and `touchedPaths` from
- *     `citations-gate.mjs`, over the same `SCOPE` and touched set CI uses, so a
- *     citation this failed on is the same citation CI's `check` job fails on.
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
  *     `git show HEAD:<ticket>` — the same command
  *     `orchestrate-tickets/SKILL.md` step 9 names as this precondition today.
@@ -40,8 +38,7 @@
  *     requests are open is the only part that cannot be answered from the
  *     tree in hand.
  *
- * **The exit code is a bitmask** (`EXIT`), the same shape `citations.mjs`
- * chose for the same reason: the five failure classes co-occur, and a ranking
+ * **The exit code is a bitmask** (`EXIT`): the failure classes co-occur, and a ranking
  * would collapse them exactly when there is most to say. The bit names are
  * printed with the number, so a CI log or a ship-condition check says what the
  * number meant next to the number.
@@ -51,19 +48,10 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { EXTRA_SCOPES, TYPES, releasingTypes, toolScopes, validate } from "./commit-message.mjs";
-import {
-  SCOPE,
-  SELF as CITATIONS_GATE_SELF,
-  compareAgainst,
-  gate as citationsGate,
-  parseGrandfathered,
-  touchedPaths,
-} from "./citations-gate.mjs";
 import { hasGateRecord } from "./status.mjs";
 
 export const USAGE =
@@ -128,8 +116,7 @@ function runGit(command, args, options = {}) {
  * **`ciCommands` is repo-79's addition.** Checks 1–5 above reuse the tool that
  * already enforces the rule they check; this bit is what is left over once
  * that reuse is subtracted from `ci.yml`'s own `check` job — `npm ci` (setup,
- * not a check), `npm run check` (check 1's own first command) and
- * `citations-gate.mjs --against` (check 2, called as functions) all have a
+ * not a check) and `npm run check` (check 1's own first command) have a
  * dedicated check already and are matched exactly, by name, in `COVERED`; what
  * is left is derived from `ci.yml` itself and spawned for real, so a step that
  * job gains later is caught by construction rather than by someone updating
@@ -139,7 +126,7 @@ function runGit(command, args, options = {}) {
  */
 export const EXIT = /** @type {const} */ ({
   check: 1,
-  citations: 2,
+  // 2 was `citations`, retired with the citation checker (adr/006).
   review: 4,
   title: 8,
   mergeTree: 16,
@@ -148,12 +135,10 @@ export const EXIT = /** @type {const} */ ({
 });
 
 /**
- * A path this repository's ticket format could hold, read off
- * `citations-gate.mjs`'s own `SCOPE.records` rather than a second copy of the
- * glob — the two must agree on where a ticket lives, or check 3 and check 5
- * could disagree with the gate that already enforces this shape in CI.
+ * A path this repository's ticket format could hold, per `TICKET_GLOBS`
+ * below.
  *
- * `SCOPE.records` is always one `*` per path segment standing in for "not a
+ * Each glob is always one `*` per path segment standing in for "not a
  * slash", which is what makes a textual translation to `RegExp` safe here; a
  * glob with a `**` or a character class would need a real glob library, and
  * repo-25's own note on why the pathspec is spelled `*.md` and not `work/` is
@@ -166,7 +151,9 @@ function globToRegExp(glob) {
   return new RegExp(`^${escaped}$`, "u");
 }
 
-const TICKET_PATTERNS = SCOPE.records.map(globToRegExp);
+/** Where a ticket lives: the repo's own work directory, and each tool's. */
+const TICKET_GLOBS = ["docs/work/*.md", "tools/*/docs/work/*.md"];
+const TICKET_PATTERNS = TICKET_GLOBS.map(globToRegExp);
 
 /** @param {string} candidate */
 export function isTicketPath(candidate) {
@@ -457,10 +444,8 @@ function canonicalize(raw) {
  * not a check; this script's own precondition, `worktree-farm.sh` then
  * `npm run build`, already establishes the tree, and running it again would
  * need the network this repo's own worktree rule forbids reaching for),
- * `npm run check` (check 1's own first command, in every `testPlan` already)
- * and `node scripts/citations-gate.mjs --against …` (check 2, `checkCitations`,
- * which imports the very `gate`/`compareAgainst` this line would otherwise
- * spawn a second, slower time for the same answer).
+ * and `npm run check` (check 1's own first command, in every `testPlan`
+ * already).
  *
  * **Each entry both recognises a step and holds it to an exact form.**
  * `guard` is deliberately looser than `exact` — it is what lets this tell "an
@@ -501,15 +486,6 @@ const COVERED = [
       return c === "npm run check" || c.startsWith("npm run check ");
     },
     exact: "npm run check",
-  },
-  {
-    guard: (raw) => {
-      const c = canonicalize(raw);
-      return (
-        c === "node scripts/citations-gate.mjs" || c.startsWith("node scripts/citations-gate.mjs ")
-      );
-    },
-    exact: "node scripts/citations-gate.mjs --against \"origin/${{ github.base_ref || 'main' }}\"",
   },
 ];
 
@@ -650,8 +626,7 @@ export function deriveExtraCiCommands(yamlText) {
  * already run through a dedicated check, spawned exactly as `ci.yml` spawns
  * it. A repository with no `ci.yml` at all — every fixture in this suite that
  * does not plant one — has nothing to check here, which is a real state and
- * not an error, the same reasoning `grandfatheredFor` gives for a repository
- * with no `citations-gate.mjs`.
+ * not an error.
  *
  * @param {string} repo
  * @param {typeof runBuildCommand} [run]
@@ -705,128 +680,10 @@ export function checkCiCommands(repo, run = runBuildCommand) {
 }
 
 /**
- * The grandfather list `repo` itself carries, not this script's own
- * checkout's. **Low finding 7 on repo-51's first gate**: `checkCitations`
- * used to default to the imported `GRANDFATHERED` constant, which is this
- * script's own installation's list — right for the ordinary case, where
- * `repo` *is* this checkout, and silently wrong for `--repo <fixture>`, where
- * every entry belongs to a corpus the fixture does not have and printed as
- * `STALE`. Reading `repo`'s own copy of `citations-gate.mjs` off disk, via the
- * same `parseGrandfathered` the ratchet itself uses to read a historical
- * commit, means the two can never disagree about whose list this is.
- *
- * A `repo` with no such file — a fixture with no `scripts/` at all, or the
- * bootstrap commit before this gate existed — has no debt to grandfather,
- * which is a real state and not an error; `new Map()` says so without
- * `parseGrandfathered` ever running on a file that is not there.
- *
- * @param {string} repo
- * @returns {Map<string, number>}
- */
-export function grandfatheredFor(repo) {
-  let source;
-  try {
-    source = fs.readFileSync(path.join(repo, CITATIONS_GATE_SELF), "utf8");
-  } catch {
-    return new Map();
-  }
-  return parseGrandfathered(source) ?? new Map();
-}
-
-/**
- * The `moved` citations the gate reported rather than failed — enforced records
- * not changed since the merge base with `base` (repo-47, option B) — as a
- * summary line and one line per record, or nothing. `limit` caps the records
- * listed: a fold repeats what check 2 already listed, and on the live corpus
- * one line naming all of them ran to about 900 characters (gate 1, F3).
- *
- * @param {{reported?: {record: string, moved: object[]}[]}} result
- * @param {string} base
- * @param {number} [limit]
- */
-const movedNote = (result, base, limit = Infinity) => {
-  const reported = result.reported ?? [];
-  if (reported.length === 0) return [];
-  const count = reported.reduce((n, r) => n + r.moved.length, 0);
-  const shown = reported.slice(0, limit);
-  return [
-    `note  ${count} moved citation(s) in ${reported.length} record(s) not changed since the ` +
-      `merge base with ${base}, reported and not failed:`,
-    ...shown.map((r) => `        ${r.record} — ${r.moved.length} moved`),
-    ...(reported.length > shown.length
-      ? [`        … and ${reported.length - shown.length} more; check 2 lists every one`]
-      : []),
-  ];
-};
-
-/** The `state: count` half of a record's counts, for a one-line summary. */
-const countLine = (counts = {}) =>
-  Object.entries(counts)
-    .map(([state, n]) => `${n} ${state}`)
-    .join(", ") || "nothing";
-
-/**
- * Check 2: `citations-gate.mjs`'s own verdict over the corpus, plus its ratchet
- * against `base` — the same two things `node scripts/citations-gate.mjs
- * --against <base>` reports, called as functions rather than spawned so a test
- * can point both at one fixture repository without a second copy of
- * `scripts/` inside it.
- *
- * @param {string} repo
- * @param {string} base
- * @param {Map<string, number>} [grandfathered]
- */
-export function checkCitations(repo, base, grandfathered = grandfatheredFor(repo)) {
-  const result = citationsGate(repo, SCOPE, grandfathered, null, touchedPaths(repo, base));
-  const problems = [];
-  for (const r of result.failed) problems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
-  for (const r of result.regressed) {
-    problems.push(`WORSE ${r.record} — ${r.failing} failing, its entry allows ${r.allowed}`);
-  }
-  for (const r of result.staleEntries) problems.push(`STALE ${r.record} — ${r.why}`);
-
-  let history;
-  try {
-    history = compareAgainst(repo, base, grandfathered);
-  } catch (error) {
-    return {
-      ok: false,
-      bit: EXIT.citations,
-      name: "citations",
-      lines: [...problems, `FAIL  compareAgainst ${base}: ${/** @type {Error} */ (error).message}`],
-    };
-  }
-  for (const r of history.raised) {
-    problems.push(`RAISED ${r.record} — its GRANDFATHERED entry went from ${r.was} to ${r.now}`);
-  }
-
-  if (problems.length === 0) {
-    return {
-      ok: true,
-      bit: 0,
-      name: "citations",
-      lines: [
-        `ok    citation gate clean over ${result.inScope.length} record(s), ` +
-          `${result.excused.length} grandfathered` +
-          (history.skipped === null ? ` — checked against ${base}` : ` (${history.skipped})`),
-        ...movedNote(result, base),
-      ],
-    };
-  }
-  return {
-    ok: false,
-    bit: EXIT.citations,
-    name: "citations",
-    lines: [...problems, ...movedNote(result, base)],
-  };
-}
-
-/**
  * Check 3: every ticket this branch marks `done` carries a `## Review`
  * section, as `status.mjs`' `hasGateRecord` reads one (repo-73), per ticket, with a
  * distinct message for the one that has none. `diffPaths` is the one already
- * computed against `${base}...HEAD`, filtered to the ticket roots
- * `citations-gate.mjs`'s own `SCOPE` names.
+ * computed against `${base}...HEAD`, filtered to the ticket roots.
  *
  * @param {string} repo
  * @param {string[]} diffPaths
@@ -1061,297 +918,6 @@ function defaultListOpenHeads(run) {
 }
 
 /**
- * Remove a scratch worktree — best-effort, and never the reason a check
- * throws. `git worktree remove` also deregisters it from `repo`'s own
- * `.git`, which a bare `fs.rmSync` alone would leave behind as a phantom
- * entry the next `git worktree list` still names.
- *
- * @param {string} repo
- * @param {string} dir
- */
-function removeWorktree(repo, dir) {
-  spawnSync("git", ["worktree", "remove", "--force", dir], { cwd: repo, shell: false });
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {
-    // Already gone, or `worktree remove` above already took it — either way
-    // there is nothing left to clean up and nothing to report.
-  }
-}
-
-/**
- * Fold every reachable other open head into one real working tree beside
- * `headOid`, sequentially, and hand back where it landed — or which head it
- * could not fold in, on a genuine merge conflict.
- *
- * A linked worktree, not `merge-tree --write-tree`'s tree object: the citation
- * gate reads files off disk and off the index (`makeReader`, `candidateFiles`
- * in `citations.mjs`), never off an arbitrary tree oid, so proving what it
- * would say about the folded state needs a real checkout.
- *
- * **Each fold is a real, committed merge, not `--no-commit`.** A worktree mid
- * merge refuses a second `git merge` outright — "You have not concluded your
- * merge (MERGE_HEAD exists)" — so folding in a second head needs the first
- * one finished first. The commits are as scratch as the worktree itself: nothing
- * here ever points a real branch at them, and `removeWorktree` discards the
- * whole directory once the caller is done reading it.
- *
- * **`--no-verify`, because this repo's own `commit-msg` hook runs here too.**
- * A linked worktree shares `core.hooksPath` with `repo`, and measured directly
- * against this repository: `git merge --no-ff -m "scratch merge: fold in …"`
- * exited 1 on "not a conventional commit", the tree merged cleanly and the
- * commit simply never happened — which this file then read as a content
- * conflict with no conflicting paths at all, the wrong verdict for the right
- * symptom. This commit is never pushed, never inspected for its message and
- * never becomes real history; the convention it would otherwise be held to
- * describes a change somebody reads, not a scratch fold nobody does.
- *
- * @param {string} repo
- * @param {string} headOid
- * @param {{number: number, headRefName: string, oid: string}[]} otherHeads reachable only
- * @returns {{ok: true, dir: string} | {ok: false, conflictHead: {number: number, headRefName: string, oid: string}, paths: string[]}}
- */
-export function buildScratchMerge(repo, headOid, otherHeads) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-scratch-")));
-  const added = spawnSync("git", ["worktree", "add", "--detach", "--quiet", dir, headOid], {
-    cwd: repo,
-    encoding: "utf8",
-    shell: false,
-  });
-  if (added.status !== 0) {
-    removeWorktree(repo, dir);
-    throw fail(
-      `git worktree add ${dir} ${headOid} exited ${added.status}\n${(added.stderr ?? "").trim()}`,
-      added.status ?? 1,
-    );
-  }
-  for (const head of otherHeads) {
-    const result = spawnSync(
-      "git",
-      [
-        "merge",
-        "--no-ff",
-        "--no-verify",
-        "-m",
-        `scratch merge: fold in ${head.headRefName}`,
-        head.oid,
-      ],
-      { cwd: dir, encoding: "utf8", shell: false },
-    );
-    if (result.status !== 0) {
-      const conflicted = spawnSync("git", ["diff", "--name-only", "--diff-filter=U"], {
-        cwd: dir,
-        encoding: "utf8",
-        shell: false,
-      });
-      const paths = lines(conflicted.stdout ?? "");
-      spawnSync("git", ["merge", "--abort"], { cwd: dir, shell: false });
-      // A non-zero `git merge` with no unmerged path is not a content conflict
-      // at all — measured live, this repo's own `commit-msg` hook rejecting the
-      // scratch commit's message read exactly this way before `--no-verify`
-      // was added, reporting a clean tree as `FAIL … conflicts on: ` with
-      // nothing after the colon. Anything else that can leave a merge
-      // non-zero with no unmerged path — a missing commit identity, signing —
-      // is the same misdiagnosis and gets the same repair: say so and stop,
-      // rather than report a conflict that was never there.
-      if (paths.length === 0) {
-        removeWorktree(repo, dir);
-        throw fail(
-          `git merge --no-ff --no-verify ${head.oid} in a scratch worktree exited ` +
-            `${result.status} with no conflicting path — not a content conflict, so this will not ` +
-            `report one:\n${(result.stderr ?? "").trim()}`,
-          result.status ?? 1,
-        );
-      }
-      removeWorktree(repo, dir);
-      return { ok: false, conflictHead: head, paths };
-    }
-  }
-  return { ok: true, dir };
-}
-
-/**
- * Check 5's second half (repo-79): the citation gate over a scratch merge of
- * `HEAD` with each other reachable open pull request head **in turn** —
- * never with two of them at once — which is the check `git merge-tree`
- * cannot make. Two heads that touch no common line merge cleanly by git's
- * own definition and can still leave an anchored citation in one of them
- * pointing at the wrong line in the merged state — repo-79's own Why:
- * repo-60's record against repo-63's splice, `hasGateRecord` against
- * repo-63's unmerged record, and `preflight.mjs` line 410 against repo-67's
- * record, all clean merges by `git merge-tree`'s own reckoning and all found
- * only by a hand-built scratch merge until now.
- *
- * **One fold per head, not one fold of all of them, and that is a repair of
- * this function's own first shape, not the original design.** Folding every
- * reachable head into a single worktree tests whether *those heads* merge
- * with each other, which is nobody's question here and can be false for
- * reasons that have nothing to do with `HEAD` — the orchestrator measured it
- * live, sha for sha, against this repository's own two open release-please
- * pull requests: #284 and #294 each merge cleanly with `HEAD`, and conflict
- * with *each other* on `.release-please-manifest.json`, which the first
- * version of this function folded into one FAIL blamed on `HEAD`. Two open
- * release pull requests is an ordinary standing state here, so that
- * shape would have failed preflight for every branch in the repository
- * most of the time. Folding one head onto `HEAD` at a time asks the only
- * question this check exists to ask — "if this one landed beside mine,
- * would my citations still hold" — and can never itself report a conflict
- * between two heads that are not `HEAD`.
- *
- * An empty `otherHeads` says so explicitly, for the same reason the
- * zero-heads case above does — **but only when `base` also needs nothing
- * folded in.** `HEAD` not containing `base` is itself something to check,
- * with no other open head required to make it worth checking: an
- * `otherHeads` of zero and a `base` this branch has fallen behind still runs
- * one fold, of `base` alone, so "checked everything, found nothing" and
- * "nothing to check" never read alike merely because this branch happens to
- * be the only open pull request.
- *
- * **Owner decision, 2026-09-28 (option B of three offered): the fold also
- * carries `base`'s current tip in, when `HEAD` does not already contain it.**
- * `git`'s own `pull_request` checkout defaults to the merge of the PR branch
- * with the base it targets — `refs/pull/<n>/merge` — so a branch that has
- * fallen behind `base` is not the tree CI actually checks, and this fold
- * quietly checked the stale one. `git merge-base --is-ancestor base headOid`
- * decides once per call, not once per head: true (the ordinary case, a
- * branch built recently off a `base` that has not since moved) folds nothing
- * extra; false folds `base`'s tip into the *same* worktree as the head under
- * test, ahead of it, so the tree matches what a real pull request run would
- * see. **A three-party gap is disclosed rather than closed**: two heads that
- * are each clean paired with `HEAD` (and with `base`, once folded) can still
- * break a citation only when *both* land beside `HEAD` together, and this
- * check — one other head at a time — cannot see that. Option C (fold every
- * mutually-clean head together, in addition to this) was not built: it
- * reintroduces exactly the shape option B's sibling repair (folding every
- * head together, full stop) just closed for two heads that conflict with
- * each other, one layer up for three that do not — this repository's own
- * orchestrator already runs a whole-batch scratch merge before a batch lands
- * (`.claude/skills/orchestrate-tickets/SKILL.md` step 11, "Scratch-merge the
- * batch"), which is where that question is answered today.
- *
- * @param {string} repo
- * @param {string} headOid
- * @param {{number: number, headRefName: string, oid: string}[]} otherHeads reachable only
- * @param {string} base
- * @param {Map<string, number>} grandfathered
- */
-export function checkScratchMergeCitations(repo, headOid, otherHeads, base, grandfathered) {
-  // Resolved once, before the "nothing to check" decision: every head's fold
-  // reads the same answer, and whether the base itself needs folding in is
-  // exactly what decides whether an empty `otherHeads` is "nothing to check"
-  // or "one fold, base alone" — a `base` that does not resolve here is
-  // already `preflight()`'s own `EXIT.setup`, never reached through this
-  // function in the ordinary pipeline.
-  const baseAncestor = spawnSync("git", ["merge-base", "--is-ancestor", base, headOid], {
-    cwd: repo,
-    shell: false,
-  });
-  const baseIsAncestor = baseAncestor.status === 0;
-  const baseOid = baseIsAncestor
-    ? null
-    : spawnSync("git", ["rev-parse", base], {
-        cwd: repo,
-        encoding: "utf8",
-        shell: false,
-      }).stdout?.trim();
-
-  // **The owner's option B holds unconditionally, zero other open heads
-  // included.** The first shape returned "nothing was checked" the moment
-  // `otherHeads` was empty, before `base` was even resolved — so a base that
-  // moved a line this branch's own record cites passed silently whenever
-  // this branch was the only open pull request, which is not a rare shape,
-  // it is every solo ticket. `targets`, below, is only ever `[null]` here
-  // (repo-79 gate 3's low, closed by repo-82: this comment named `otherHeads`,
-  // which stays empty in exactly this branch) — one sentinel entry standing
-  // for "fold base alone, no other head at all"; every other branch below
-  // already treats a head as optional context on top of the same base fold.
-  if (otherHeads.length === 0 && baseIsAncestor) {
-    return {
-      ok: true,
-      lines: [
-        "no other open pull request to fold into a scratch merge, and HEAD already contains " +
-          "base — nothing was checked",
-      ],
-    };
-  }
-
-  // repo-47, option B, and the choice its Build left here: the touched set is
-  // this branch's own committed diff from its merge base with `base`, **not**
-  // the union with each folded head's. The question a fold asks is whether
-  // *this* branch's records still hold once that head lands, and B bills a
-  // branch only for the records it changes — a union would bill this branch
-  // for the other head's record, the exact cost B removed. The other head's
-  // records are its own preflight's to enforce, folding this one in. Every
-  // state but `moved` is still enforced on every record here, as in CI.
-  const touched = touchedPaths(repo, base, headOid);
-  const out = [];
-  let problems = 0;
-  const targets = otherHeads.length > 0 ? otherHeads : [null];
-  for (const head of targets) {
-    const foldingBase = !baseIsAncestor && baseOid;
-    const label =
-      head === null
-        ? `HEAD with ${base} alone, which HEAD does not yet contain`
-        : foldingBase
-          ? `HEAD with #${head.number} ${head.headRefName} (plus ${base}, which HEAD does not yet contain)`
-          : `HEAD with #${head.number} ${head.headRefName}`;
-    const toFold =
-      head === null
-        ? [{ number: 0, headRefName: base, oid: baseOid }]
-        : foldingBase
-          ? [{ number: 0, headRefName: base, oid: baseOid }, head]
-          : [head];
-    const merge = buildScratchMerge(repo, headOid, toFold);
-    if (!merge.ok) {
-      problems += 1;
-      out.push(
-        `FAIL  scratch merge of ${label} — folding in ${merge.conflictHead.headRefName} ` +
-          `conflicts on: ${merge.paths.join(", ")}`,
-      );
-      continue;
-    }
-    try {
-      const result = citationsGate(merge.dir, SCOPE, grandfathered, null, touched);
-      const headProblems = [];
-      for (const r of result.failed)
-        headProblems.push(`FAIL  ${r.record} — ${countLine(r.counts)}`);
-      for (const r of result.regressed) {
-        headProblems.push(
-          `WORSE ${r.record} — ${r.failing} failing, its entry allows ${r.allowed}`,
-        );
-      }
-      for (const r of result.staleEntries) headProblems.push(`STALE ${r.record} — ${r.why}`);
-
-      let history;
-      try {
-        history = compareAgainst(merge.dir, base, grandfathered);
-      } catch (error) {
-        headProblems.push(`FAIL  compareAgainst ${base}: ${/** @type {Error} */ (error).message}`);
-        history = null;
-      }
-      for (const r of history?.raised ?? []) {
-        headProblems.push(
-          `RAISED ${r.record} — its GRANDFATHERED entry went from ${r.was} to ${r.now}`,
-        );
-      }
-
-      if (headProblems.length === 0) {
-        out.push(
-          `ok    scratch merge of ${label} is clean over ${result.inScope.length} record(s)`,
-          ...movedNote(result, base, 3),
-        );
-      } else {
-        problems += 1;
-        out.push(`scratch merge of ${label}:`, ...headProblems, ...movedNote(result, base, 3));
-      }
-    } finally {
-      removeWorktree(repo, merge.dir);
-    }
-  }
-  return problems === 0 ? { ok: true, lines: out } : { ok: false, lines: out };
-}
-
-/**
  * Check 5: `git merge-tree --write-tree HEAD <head>` against every other open
  * pull request head's own commit oid, naming the conflicting paths and which
  * of them are ticket files — a conflict there is a gate record two branches
@@ -1377,16 +943,8 @@ export function checkScratchMergeCitations(repo, headOid, otherHeads, base, gran
  * everything, found nothing" — repo-51's own Done when names this as the
  * positive control a silent pass would defeat.
  *
- * **Its second half, added by repo-79, is `checkScratchMergeCitations`
- * above**: each reachable head is folded onto `HEAD` on its own, in its own
- * scratch worktree, and the citation gate runs over the result — which is
- * what catches a citation two clean-merging heads move between them. Only
- * run when a `base` is given — every fixture in this suite that calls
- * `checkMergeTree` directly and does not pass one keeps this file's older,
- * narrower verdict.
- *
  * @param {string} repo
- * @param {{run?: typeof runGit, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[], base?: string, grandfathered?: Map<string, number>}} [options]
+ * @param {{run?: typeof runGit, spawn?: typeof spawnRaw, listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[]}} [options]
  */
 export function checkMergeTree(repo, options = {}) {
   const run = options.run ?? runGit;
@@ -1398,7 +956,6 @@ export function checkMergeTree(repo, options = {}) {
 
   const out = [`comparing HEAD against ${heads.length} other open pull request head(s)`];
   let problems = 0;
-  const reachableHeads = [];
   for (const head of heads) {
     let reachable = true;
     try {
@@ -1415,7 +972,6 @@ export function checkMergeTree(repo, options = {}) {
       );
       continue;
     }
-    reachableHeads.push(head);
 
     let result;
     try {
@@ -1443,19 +999,6 @@ export function checkMergeTree(repo, options = {}) {
         ? "no other open pull request to compare against — nothing was checked"
         : "no conflicts with any other open pull request head",
     );
-  }
-
-  if (options.base !== undefined) {
-    const grandfathered = options.grandfathered ?? grandfatheredFor(repo);
-    const scratch = checkScratchMergeCitations(
-      repo,
-      headOid,
-      reachableHeads,
-      options.base,
-      grandfathered,
-    );
-    out.push(...scratch.lines);
-    if (!scratch.ok) problems += 1;
   }
 
   return problems === 0
@@ -1557,11 +1100,9 @@ export function workingTreePaths(repo, run) {
  * suite under active edit — staged, unstaged or untracked, not yet committed
  * — is still selected rather than silently skipped (repo-65's own
  * reproduction: an uncommitted edit under `scripts/test/` ran no `repo`
- * project suite at all). This still leaves two trees rather than one — checks
- * 1 alone on the working tree, checks 3–4 on committed state, check 2
- * (`checkCitations`) unconditional on disk for a record's contents but
- * index-based for which records it selects — repo-65's Why has the full
- * three-way split this narrows from. Widening checks 3–4 the same way was
+ * project suite at all). This still leaves two trees rather than one — check
+ * 1 alone on the working tree, checks 3–4 on committed state — and repo-65's
+ * Why has the split this narrows from. Widening checks 3–4 the same way was
  * repo-65's option (a), decided against: it would have meant refusing a dirty
  * tree outright, which costs three rewritten places across
  * orchestrate-tickets' own builder and fixer pages — the pre-report gate list
@@ -1585,12 +1126,11 @@ export function workingTreePaths(repo, run) {
  *   run?: typeof runGit,
  *   buildRun?: typeof runBuildCommand,
  *   spawn?: typeof spawnRaw,
- *   grandfathered?: Map<string, number>,
  *   listOpenHeads?: (repo: string) => {number: number, headRefName: string, oid: string}[],
  * }} options
  */
 export function preflight(repo, options) {
-  const { base, title, run = runGit, buildRun, spawn, grandfathered, listOpenHeads } = options;
+  const { base, title, run = runGit, buildRun, spawn, listOpenHeads } = options;
   if (!base) throw fail(`--base is required\n${USAGE}`, EXIT.setup);
 
   let diffPaths;
@@ -1622,12 +1162,9 @@ export function preflight(repo, options) {
   return [
     guarded("check", EXIT.check, () => checkBuild(repo, testSelectionPaths, buildRun)),
     guarded("ciCommands", EXIT.ciCommands, () => checkCiCommands(repo, buildRun)),
-    guarded("citations", EXIT.citations, () => checkCitations(repo, base, grandfathered)),
     guarded("review", EXIT.review, () => checkReview(repo, diffPaths, run)),
     guarded("title", EXIT.title, () => checkTitle(repo, diffPaths, title, run)),
-    guarded("mergeTree", EXIT.mergeTree, () =>
-      checkMergeTree(repo, { run, spawn, listOpenHeads, base, grandfathered }),
-    ),
+    guarded("mergeTree", EXIT.mergeTree, () => checkMergeTree(repo, { run, spawn, listOpenHeads })),
   ];
 }
 

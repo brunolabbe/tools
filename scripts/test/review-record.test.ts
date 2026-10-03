@@ -344,31 +344,6 @@ test('a gate appended later lands inside the existing "## Review" block, after g
   }
 });
 
-test("a section that fails the checker leaves the ticket byte-identical to HEAD, exit non-zero", () => {
-  const { dir, ticketAbs, cleanup } = withTicketRepo();
-  try {
-    const before = fs.readFileSync(ticketAbs, "utf8");
-    const atHead = gitIn(dir, "show", `HEAD:${TICKET_PATH}`);
-    expect(before).toBe(`${atHead}\n`); // sanity: git strips no trailing newline of its own
-
-    // Unanchored: resolves, but --require-anchors fails it.
-    const section = writeSectionFile(dir, "section.md", "## Review\n\nProof: `src/tls.ts:2`.\n");
-    const result = runCli(dir, [ticketAbs, section]);
-
-    expect(result.status).not.toBe(0);
-    expect(result.status).toBeGreaterThan(0);
-    expect(`${result.stdout}${result.stderr}`).toMatch(/unanchored/);
-
-    // The restore, proven against HEAD itself rather than a copy this test made.
-    const restoredFromHead = gitIn(dir, "show", `HEAD:${TICKET_PATH}`);
-    const onDisk = fs.readFileSync(ticketAbs, "utf8");
-    expect(onDisk).toBe(`${restoredFromHead}\n`);
-    expect(onDisk).toBe(before);
-  } finally {
-    cleanup();
-  }
-});
-
 test("a table the formatter re-pads reports an empty normalised diff", () => {
   const { dir, ticketAbs, cleanup } = withTicketRepo();
   try {
@@ -962,7 +937,6 @@ import {
   runPreflightDefault,
   setStatus,
   spliceSection,
-  unpinnedPreexistingCitations,
   verifySection,
 } from "../review-record.mjs";
 
@@ -1028,6 +1002,7 @@ test("parseLandArgs reads a ticket, one or more sections in order, and the three
     base: "origin/main",
     status: "done",
     title: "fix(repo): a thing (repo-1)",
+    branch: null,
   });
 });
 
@@ -1072,83 +1047,6 @@ test("parseLandArgs refuses a missing flag, an unknown one, and a bad --status",
 });
 
 // --- unpinnedPreexistingCitations -------------------------------------------
-
-test("unpinnedPreexistingCitations flags an anchored, unpinned citation that verifies at base", () => {
-  const { dir, cleanup } = withTicketRepo();
-  try {
-    const base = gitIn(dir, "rev-parse", "HEAD");
-    const section = '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n';
-    const issues = unpinnedPreexistingCitations(section, dir, base);
-    expect(issues).toHaveLength(1);
-    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 2, end: 2 });
-    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2`);
-  } finally {
-    cleanup();
-  }
-});
-
-test("unpinnedPreexistingCitations exempts a citation already pinned, or of content the base never had", () => {
-  const { dir, cleanup } = withTicketRepo();
-  try {
-    const base = gitIn(dir, "rev-parse", "HEAD");
-    const pinned = `## Review\n\n### Gate 1\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`;
-    expect(unpinnedPreexistingCitations(pinned, dir, base)).toEqual([]);
-
-    // Nothing at `base` resolves this file at all: it is exempt, not merely
-    // unverified — the branch's own new content, per records.md.
-    const introduced =
-      '## Review\n\n### Gate 1\n\nProof: `scripts/brand-new.mjs:1 "export const x = 1;"`.\n';
-    expect(unpinnedPreexistingCitations(introduced, dir, base)).toEqual([]);
-  } finally {
-    cleanup();
-  }
-});
-
-test("unpinnedPreexistingCitations exempts a citation excused by its own evidence declaration", () => {
-  const { dir, cleanup } = withTicketRepo();
-  try {
-    const base = gitIn(dir, "rev-parse", "HEAD");
-    const section = [
-      "## Review",
-      "",
-      "### Gate 1",
-      "",
-      'Proof: `src/tls.ts:2 "Defence in depth"`.',
-      "",
-      "<!-- citations: evidence src/tls.ts:2 -->",
-      "",
-    ].join("\n");
-    expect(unpinnedPreexistingCitations(section, dir, base)).toEqual([]);
-  } finally {
-    cleanup();
-  }
-});
-
-test("unpinnedPreexistingCitations flags pre-existing content cited at the branch's own shifted line (gate 1, F1)", () => {
-  const { dir, cleanup } = withTicketRepo();
-  try {
-    const base = gitIn(dir, "rev-parse", "HEAD");
-
-    // The branch inserts a line above the unchanged one, shifting it from
-    // line 2 to line 3 — a citation written against the tip therefore names
-    // 3, which does not verify against `base`'s own line 3 at all.
-    const before = fs.readFileSync(path.join(dir, "src", "tls.ts"), "utf8");
-    fs.writeFileSync(path.join(dir, "src", "tls.ts"), `// inserted\n${before}`);
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "insert a line above the unchanged one");
-
-    const section = '## Review\n\n### Gate 1\n\nProof: `src/tls.ts:3 "Defence in depth"`.\n';
-    const issues = unpinnedPreexistingCitations(section, dir, base);
-    expect(issues).toHaveLength(1);
-    expect(issues.at(0)).toMatchObject({ file: "src/tls.ts", start: 3, end: 3 });
-    // The suggested pin names the line the text is actually at *in base* (2),
-    // never the tip's own coordinate (3) — that is the whole of F1's fix.
-    expect(issues.at(0)?.reason).toContain(`src/tls.ts@${base}:2`);
-    expect(issues.at(0)?.reason).not.toContain(`src/tls.ts@${base}:3`);
-  } finally {
-    cleanup();
-  }
-});
 
 // --- land() ------------------------------------------------------------------
 
@@ -1228,7 +1126,6 @@ test("land() splices two gates, sets status, pushes and verifies — one call, a
     expect(result.steps.map((s) => `${s.name}:${s.ok}`)).toEqual([
       "setup:true",
       "sections:true",
-      "citations-pin:true",
       "splice:true",
       "push:true",
       "verify:true",
@@ -1261,40 +1158,6 @@ test("land() splices two gates, sets status, pushes and verifies — one call, a
   }
 });
 
-test("land() refuses before splicing anything when a section cites pre-existing content unpinned (repo-78 gate 1, F3)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    const before = fs.readFileSync(ticketAbs, "utf8");
-    const beforeHead = gitIn(dir, "rev-parse", "HEAD");
-
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      '## Review\n\n### Gate 1 — 2026-09-29\n\nProof: `src/tls.ts:2 "Defence in depth"`.\n',
-    );
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1],
-      base,
-      status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: okPreflight,
-    });
-
-    expect(result.ok).toBe(false);
-    const failed = result.steps.at(-1);
-    expect(failed?.name).toBe("citations-pin");
-    expect(failed?.detail).toContain(`src/tls.ts@${base}:2`);
-
-    // Refused before touching anything: no new commit, ticket byte-identical.
-    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(beforeHead);
-    expect(fs.readFileSync(ticketAbs, "utf8")).toBe(before);
-  } finally {
-    cleanup();
-  }
-});
-
 test('land() lands every commit and the push, then names "preflight" when it fails, without rolling anything back', () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
   try {
@@ -1317,7 +1180,6 @@ test('land() lands every commit and the push, then names "preflight" when it fai
     expect(result.steps.map((s) => s.name)).toEqual([
       "setup",
       "sections",
-      "citations-pin",
       "splice",
       "push",
       "verify",
@@ -1365,7 +1227,7 @@ test("land() validates every section against a scratch clone before any commit, 
     const gate2 = writeSectionFile(
       dir,
       "gate2.md",
-      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+      "## Review\n\n### Gate 1 — 2026-09-29, again\n\nA second first review.\n",
     );
 
     const result = land({
@@ -1380,7 +1242,7 @@ test("land() validates every section against a scratch clone before any commit, 
     expect(result.ok).toBe(false);
     const failed = result.steps.at(-1);
     expect(failed?.name).toBe("splice");
-    expect(failed?.detail).toMatch(/--require-claude-pins is in force/);
+    expect(failed?.detail).toMatch(/already has a "## Review" section/);
     // Never "rolled back" — validated in a scratch clone, so there was
     // nothing in the real repository to roll back in the first place.
     expect(failed?.detail).toMatch(/Validated against a scratch clone/);
@@ -1429,7 +1291,7 @@ test("land() never touches the real repository while validating — an unrelated
     const gate2 = writeSectionFile(
       dir,
       "gate2.md",
-      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+      "## Review\n\n### Gate 1 — 2026-09-29, again\n\nA second first review.\n",
     );
 
     const result = land({
@@ -1598,40 +1460,6 @@ test('the --land CLI lands the commit and the push for real, then fails naming "
 // mutation at any of these four passed 52 of 52 before this round. Each test
 // below is red on exactly the mutation the gate named, run alone.
 // ---------------------------------------------------------------------------
-
-test("land() refuses an unpinned .claude/ citation the branch itself introduces — proves --require-claude-pins reaches the splice (F2/M1)", () => {
-  const { dir, ticketAbs, base, cleanup } = withLandRepo();
-  try {
-    fs.mkdirSync(path.join(dir, ".claude"), { recursive: true });
-    fs.writeFileSync(path.join(dir, ".claude", "rule.md"), "line one\nline two\n");
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "docs(repo): add a rule page");
-
-    // Not pre-existing content (the branch just added it), so `citations-pin`
-    // does not catch it — only `spliceSection`'s own `requireClaudePins: true`
-    // does. Flip that literal to `false` and this section splices clean.
-    const gate1 = writeSectionFile(
-      dir,
-      "gate1.md",
-      '## Review\n\n### Gate 1 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
-    );
-
-    const result = land({
-      ticket: ticketAbs,
-      sections: [gate1],
-      base,
-      status: "done",
-      title: "docs(repo): land the fixture ticket (zz-1)",
-      runPreflight: okPreflight,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.steps.at(-1)?.name).toBe("splice");
-    expect(result.steps.at(-1)?.detail).toMatch(/--require-claude-pins is in force/);
-  } finally {
-    cleanup();
-  }
-});
 
 test("land() sets status in the FIRST commit, not only at HEAD (F2/M2)", () => {
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
@@ -1863,7 +1691,7 @@ test("land() names the failing section file in a splice failure's detail (gate 2
     const second = writeSectionFile(
       dir,
       "second.md",
-      '### Gate 2 — 2026-09-29\n\nProof: `.claude/rule.md:2 "line two"`.\n',
+      "## Review\n\n### Gate 1 — 2026-09-29, again\n\nA second first review.\n",
     );
 
     const result = land({
@@ -1929,7 +1757,7 @@ test("land() leaves no scratch directory behind, whether validation passes or fa
     );
     const failed = land({
       ticket: ticketAbs,
-      sections: [badGate],
+      sections: [badGate, badGate],
       base,
       status: "done",
       title: "x",
@@ -2015,103 +1843,73 @@ test("land() prints the reset command on a push failure too, not only on preflig
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// repo-80 gate 3 — G3-b: the range-pin arithmetic gate 2's own G2-d fix used
-// assumed the anchor sits on the range's own first line, and that the branch
-// left the cited span the same size. Neither holds in general; gate 3
-// measured three fixture cases where the suggested pin's line numbers were
-// wrong although every one of them still verified. Replaces the G2-d test
-// above, whose "keeps the range" claim this correction retracts: the
-// suggested pin now names one line — where the text starts — and says so,
-// never a range whose end was never checked.
-//
-// repo-80 gate 4 — G4-a: gate 3's own fix above was itself wrong whenever the
-// anchor's distance from the range start was nonzero — it reconstructed a
-// base *range start* from that distance, which gate 4 measured coming back
-// `MOVED` even for a citation whose range and anchor had not moved at all.
-// The suggestion is now the anchor's own base line, unrecomputed, so cases
-// 1-3 below assert that line rather than a derived range start.
+// A lander works on a detached HEAD: the builder's worktree holds the branch
+// name. Every fixer landing on 2026-10-03 committed, then failed at the push.
 // ---------------------------------------------------------------------------
 
-/** Twenty lines, each with a marker unique to that line number — a small stand-in for gate 3's own 40-line probe fixture. */
-const markerLines = (n: number) =>
-  Array.from({ length: n }, (_, i) => `// line ${i + 1} marker M${i + 1}X`).join("\n") + "\n";
+test("parseLandArgs reads --branch", () => {
+  expect(
+    parseLandArgs([
+      "--land",
+      "t.md",
+      "g.md",
+      "--base",
+      "origin/main",
+      "--status",
+      "done",
+      "--title",
+      "x",
+      "--branch",
+      "feature",
+    ]).branch,
+  ).toBe("feature");
+});
 
-test("unpinnedPreexistingCitations corrects the range-pin's start line for an anchor that is not on the range's own first line (gate 3, G3-b, case 1: unmoved)", () => {
-  const { dir, cleanup } = withTicketRepo();
+test("land() refuses a detached HEAD with no --branch before it commits anything", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
   try {
-    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "add the marker fixture");
-    const base = gitIn(dir, "rev-parse", "HEAD");
-    // Unmoved: the tip is identical to base for this file. The citation's
-    // own range is 9-11, three lines, but its anchor is only line 10's own
-    // text — one line into the range, not at its start.
-    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:9-11 "marker M10X"`.\n';
-    const issues = unpinnedPreexistingCitations(section, dir, base);
-    expect(issues).toHaveLength(1);
-    // The anchor text "marker M10X" sits on line 10 at base, unmoved — the
-    // suggestion names that line (gate 4, G4-a), never the range's own start
-    // (9, gate 3's own answer) nor a recomputed range ("10-12").
-    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
-    expect(issues.at(0)?.reason).not.toContain(":10-12");
-    expect(issues.at(0)?.reason).not.toContain(`scripts/mix.mjs@${base}:9\``);
+    const gate1 = writeSectionFile(dir, "gate1.md", "## Review\n\n### Gate 1\n\nA first review.\n");
+    gitIn(dir, "checkout", "-q", "--detach");
+    const before = gitIn(dir, "rev-parse", "HEAD");
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.steps.at(-1)).toMatchObject({ name: "setup", ok: false });
+    expect(result.steps.at(-1)?.detail).toMatch(/--branch/);
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(before);
   } finally {
     cleanup();
   }
 });
 
-test("unpinnedPreexistingCitations corrects the range-pin's start line when the branch grew the cited span (gate 3, G3-b, case 2)", () => {
-  const { dir, cleanup } = withTicketRepo();
+test("land() pushes a detached HEAD to the branch --branch names", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
   try {
-    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "add the marker fixture");
-    const base = gitIn(dir, "rev-parse", "HEAD");
+    const gate1 = writeSectionFile(dir, "gate1.md", "## Review\n\n### Gate 1\n\nA first review.\n");
+    gitIn(dir, "push", "-q", "origin", "feature");
+    gitIn(dir, "checkout", "-q", "--detach");
 
-    // The branch inserts one new line between base's line 10 and line 11 —
-    // base's own 2-line span (10-11) is now 3 tip lines (10-12).
-    const lines = markerLines(20).split("\n");
-    lines.splice(10, 0, "// inserted by the branch, not in base at all");
-    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), lines.join("\n"));
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "grow the span by one line");
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      branch: "feature",
+      runPreflight: okPreflight,
+    });
 
-    // Anchor on the range's own first tip line (distance 0), so this case
-    // isolates the growth, not the anchor-offset case 1 already covers.
-    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:10-12 "marker M10X"`.\n';
-    const issues = unpinnedPreexistingCitations(section, dir, base);
-    expect(issues).toHaveLength(1);
-    // Gate 3's own table: base actually holds it at 10-11 — start 10.
-    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
-  } finally {
-    cleanup();
-  }
-});
-
-test("unpinnedPreexistingCitations corrects the range-pin's start line when the branch shrank the cited span (gate 3, G3-b, case 3)", () => {
-  const { dir, cleanup } = withTicketRepo();
-  try {
-    fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), markerLines(20));
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "add the marker fixture");
-    const base = gitIn(dir, "rev-parse", "HEAD");
-
-    // The branch removes base's own line 11 — base's 3-line span (10-12) is
-    // now 2 tip lines (10-11).
-    const lines = markerLines(20).split("\n");
-    lines.splice(10, 1);
-    fs.writeFileSync(path.join(dir, "scripts", "mix.mjs"), lines.join("\n"));
-    gitIn(dir, "add", "-A");
-    gitIn(dir, "commit", "-qm", "shrink the span by one line");
-
-    const section = '## Review\n\n### Gate 1\n\nProof: `scripts/mix.mjs:10-11 "marker M10X"`.\n';
-    const issues = unpinnedPreexistingCitations(section, dir, base);
-    expect(issues).toHaveLength(1);
-    // Gate 3's own table: base actually holds it at 10-12 — start 10.
-    expect(issues.at(0)?.reason).toContain(`scripts/mix.mjs@${base}:10`);
+    expect(result.steps.map((s) => `${s.name}:${s.ok}`)).toContain("push:true");
+    expect(result.ok).toBe(true);
+    expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
   } finally {
     cleanup();
   }

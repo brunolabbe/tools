@@ -16,8 +16,8 @@ The output is a `## Review` section **committed to the ticket file by the
 session that lands the ticket** — the builder, or `orchestrate-tickets`' fixer —
 because `docs/01-TICKETS.md` already holds that the file is the unit of work
 from brief to record. Under `orchestrate-tickets` every gate's section is
-committed once, at the landing, rather than round by round (its `records.md`,
-since `repo-67`). A verdict that lives in a terminal scrollback is not a
+committed once, at the landing, rather than round by round (its
+`reference/records.md`). A verdict that lives in a terminal scrollback is not a
 record — and neither is one written into a worktree that is about to be deleted,
 which is the sharper version of the same rule and the reason the lander commits
 it rather than the reviewer.
@@ -90,9 +90,9 @@ definition's `effort` overrides the session's, and nothing about a per-call
 `model`. Hand it the ticket id, the
 ticket's path, the base sha and the head sha. The definition carries the rest:
 it reads [gate.md](gate.md) and the orchestrator's gate role from `origin/main`,
-has no `Write`, `Edit`, `Agent`, `Skill` or `SendMessage` tool, and gets its
-own worktree. Those omissions are what make "returns text, commits nothing" and
-"runs the defect hunt itself" facts rather than requests.
+has no `Edit`, `Agent`, `Skill` or `SendMessage` tool, and gets its own
+worktree. Its `Write` is for its scratch directory only: the section file it
+returns, and scripts it runs. It commits nothing and runs the defect hunt itself.
 
 **Do not tell it to call `EnterWorktree`, and do not write its setup into the
 prompt.** Its checkout, farm and build order is in the gate role, and a gate that
@@ -148,12 +148,10 @@ this repo, and an unformatted table fails `npm run check`, which is the merge
 gate; formatting is not a rewrite and does not conflict with committing it
 verbatim, since it pads table cells to column width and touches nothing else.
 **Each gate on a ticket is its own commit**: the script refuses to run on a
-ticket dirty against `HEAD`, so land gate 1, commit, then land the next, and a
-four-gate ticket is four commits (repo-55, 2026-09-20). A record with several
-gates is restated at the current tip when a later round moves the lines an
-earlier gate cited: a coordinate that resolves onto the repair is not a
-citation of the defect, so re-resolve, or rewrite the finding's coordinate as
-prose that names the sha it was true at.
+ticket dirty against `HEAD`, so land gate 1, commit, then land the next
+(repo-55). `--land` does all of it in one call. **A section carries no line
+numbers and no commit pins** — its header names the sha it gated, and it is
+never restated against a later one ([adr/006](../../../docs/adr/006-gate-records-carry-no-citations.md)).
 
 **Verbatim is the whole point, and it is now the builder who could break it.**
 Under the old wording a caller that edited the section had "handed the review back
@@ -188,8 +186,7 @@ Steps 1 to 7 are the gate's, and live in [gate.md](gate.md), which only the gate
 agents read. Step 8 is the lander's — the session that commits to the branch
 under review: the builder, or in `orchestrate-tickets` the fixer on a mechanical
 last round. Under `orchestrate-tickets` it runs once per ticket, at the
-landing, over the set of sections the final gate returned, one
-`review-record.mjs` call and one commit per gate in gate order.
+landing, over each gate's own section file, one commit per gate in gate order.
 
 8. **Commit the section, post the report, then say what would clear it.** This
    step is the builder's, and it has three acts. First, write the reviewer's
@@ -198,28 +195,19 @@ landing, over the set of sections the final gate returned, one
    `node scripts/review-record.mjs <ticket-path> <section-file> [--gate <n>]`. The
    script finds the insertion point by heading form, never by a bare-text
    search — a first review lands above `## Log`, a later gate at the end of the
-   existing `## Review` block — inserts the text verbatim, runs the formatter,
-   then runs `citations.mjs --section Review --require-anchors
-   --require-distinct-anchors` itself; on a failure it restores the ticket from
-   `git show HEAD:<ticket>` and prints the checker's own output, so fix what it
-   says and run it again. On success it prints a normalised diff between the
-   section file and what landed, ignoring table padding and rule width: paste
-   that into the Log as the disclosure note — say that you transcribed it and
-   what, if anything, differs, "nothing" included — in the same commit. That is
-   the check CI is about to run; catching it here costs one command, and
-   catching it in CI costs a push. Once it is committed,
+   existing `## Review` block — inserts the text verbatim and runs the formatter; on a
+   failure it restores the ticket from `git show HEAD:<ticket>` and prints what
+   went wrong. On success it prints a normalised diff between the section file
+   and what landed, ignoring table padding and rule width: paste that into the
+   Log as the disclosure note — say that you transcribed it and what, if
+   anything, differs, "nothing" included — in the same commit. Once it is
+   committed,
    `node scripts/review-record.mjs --verify <ticket-path> <section-file> [--gate <n>]`
-   compares the committed record with the file, ignoring table padding and what
-   the formatter rewrites, and exits 1 naming every ticket line that differs; a
-   difference is a change to the reviewer's words, which goes back to the
-   reviewer and never into the record (repo-62). Where a citation is deliberately
-   unresolvable — a coordinate quoted as the evidence of a finding — declare it
-   with `<!-- citations: evidence file.ts:120 -->` in the section file before
-   running the script, and the declaration is itself an error if it excuses
-   nothing. Before repo-55 this act was four hand steps, and each had failed at
-   least once: a record spliced into the middle of an earlier one, a section
-   red the moment it was committed, a record that went uncommitted, a
-   formatter rewrap that split a citation from its anchor (2026-09-20). Second,
+   compares the committed record with the file and exits 1 naming every ticket
+   line that differs; a difference is a change to the reviewer's words, which
+   goes back to the reviewer and never into the record (repo-62). Under
+   `orchestrate-tickets`, `--land` runs the splice, the commits, the push and
+   the verification in one command (its `reference/records.md`). Second,
    **post the reviewer's report to the pull request thread** — `gh pr comment
    <number> --body-file <file>` — so the transcription can be audited against
    what the reviewer actually said; if the branch has no pull request yet, that
