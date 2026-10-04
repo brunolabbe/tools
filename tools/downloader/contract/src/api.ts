@@ -417,7 +417,8 @@ export const ROUTES = {
    */
   file: (token: string) => `/api/files/${token}`,
   /**
-   * Same shape and same reason as `file`: the token is the capability. It also
+   * Same shape and same reason as `file`: the token is the capability, so the
+   * request log redacts it as it does the file token (dl-75). It also
    * exists so that no route anywhere takes a URL to fetch from a caller — the
    * client asks for an image this server already decided to fetch, by a name
    * only this server could have minted.

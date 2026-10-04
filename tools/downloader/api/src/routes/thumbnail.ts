@@ -30,6 +30,14 @@
  * would hand a leaked token a fresh allowance per address it is fetched from.
  * `capabilityBucketKey` carries the rest, including what the malformed-token
  * fallback does and does not buy.
+ *
+ * ## The token is a credential in the path, so the log does not write it (dl-75)
+ *
+ * It is the only thing that authorises the image and there is no session or
+ * owner check behind it, which is what makes a file token a capability. The
+ * request log therefore replaces it with `[redacted]` on the `request` line and
+ * on the `request rejected` line a miss or a 429 writes, as it does for
+ * `/api/files/:token` (`CAPABILITY_PREFIXES` in `request-log.ts`).
  */
 
 import { AppError, ROUTES } from "@downloader/contract";

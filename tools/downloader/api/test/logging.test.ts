@@ -570,9 +570,10 @@ async function issuedToken(current: Harness): Promise<{ url: string; token: stri
 /**
  * A file token is a credential, and it travels in the *path*.
  *
- * `/api/files/:token` is the only URL in this service whose path segment is a
- * secret rather than an identifier — `jobs/tokens.ts` says so outright: the
- * token *is* the authorisation, and job ids deliberately are not. Two hooks log
+ * `/api/files/:token` is one of two URLs in this service whose path segment is a
+ * secret rather than an identifier (the other is the thumbnail route, below) —
+ * `jobs/tokens.ts` says so outright: the token *is* the authorisation, and job
+ * ids deliberately are not. Two hooks log
  * `request.url` for every route: the `onResponse` line in `request-log.ts` and
  * the error handler in `server.ts`. Both wrote the token verbatim until dl-23.
  *
@@ -664,9 +665,79 @@ describe("a file token never reaches a log line", () => {
   });
 });
 
+/**
+ * A thumbnail token is a credential too (dl-75).
+ *
+ * The contract and the route called it "the capability" and rate-limit it keyed
+ * on the token, while the log wrote it verbatim. The owner answered on
+ * 2026-10-04 that it is one, so it is redacted as the file token is. These read
+ * the raw serialised line, as the file-token tests do, so a redactor that
+ * changed the field name rather than its value would still be caught.
+ */
+describe("a thumbnail token never reaches a log line", () => {
+  // A 2x2 GIF, as rate-limit.test.ts uses: small, real, in the allowlist.
+  const GIF = Buffer.from("R0lGODlhAgACAIAAAP///wAAACH5BAAAAAAALAAAAAACAAIAAAIDRAJZADs=", "base64");
+
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  test("not when the image is served, and not when the token misses", async () => {
+    const { logger, lines } = capturing();
+    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+
+    const token = harness.app.context.thumbnails.put({ contentType: "image/gif", bytes: GIF });
+    // Well-formed and unknown: the route answers it with THUMBNAIL_NOT_FOUND,
+    // which is the ordinary result after the ten minutes are up.
+    const missed = "m".repeat(token.length);
+
+    expect(
+      (await harness.app.server.inject({ method: "GET", url: ROUTES.thumbnail(token) })).statusCode,
+    ).toBe(200);
+    expect(
+      (await harness.app.server.inject({ method: "GET", url: ROUTES.thumbnail(missed) }))
+        .statusCode,
+    ).toBe(404);
+
+    const serialised = lines.map((line) => JSON.stringify(line));
+    // The lines are genuinely there — otherwise this passes by logging nothing.
+    expect(serialised.filter((line) => line.includes("/api/thumbnail/"))).toHaveLength(3);
+    expect(serialised.filter((line) => line.includes(token))).toEqual([]);
+    expect(serialised.filter((line) => line.includes(missed))).toEqual([]);
+
+    const served = lines.find((line) => line.msg === "request" && line.status === 200);
+    expect(served?.url).toBe(`/api/thumbnail/${REDACTED}`);
+    const rejected = lines.find((line) => line.msg === "request rejected");
+    expect(rejected?.url).toBe(`/api/thumbnail/${REDACTED}`);
+  });
+
+  test("nor when the request is rate limited", async () => {
+    const { logger, lines } = capturing();
+    harness = await createHarness({
+      logger,
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitThumbnailPerMinute: 1 },
+    });
+
+    const token = harness.app.context.thumbnails.put({ contentType: "image/gif", bytes: GIF });
+    const url = ROUTES.thumbnail(token);
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(200);
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(429);
+
+    expect(lines.map((line) => JSON.stringify(line)).filter((l) => l.includes(token))).toEqual([]);
+  });
+});
+
 describe("redactLoggedUrl", () => {
   test("replaces the capability segment and nothing else", () => {
     expect(redactLoggedUrl(ROUTES.file("abc"))).toBe(`/api/files/${REDACTED}`);
+    expect(redactLoggedUrl(ROUTES.thumbnail("abc"))).toBe(`/api/thumbnail/${REDACTED}`);
+    expect(redactLoggedUrl(`${ROUTES.thumbnail("abc")}?x=1`)).toBe(
+      `/api/thumbnail/${REDACTED}?x=1`,
+    );
     expect(redactLoggedUrl(`${ROUTES.file("abc")}?x=1`)).toBe(`/api/files/${REDACTED}?x=1`);
     expect(redactLoggedUrl(`${ROUTES.file("abc")}/extra`)).toBe(`/api/files/${REDACTED}/extra`);
   });

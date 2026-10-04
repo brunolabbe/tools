@@ -3,7 +3,7 @@ id: dl-75
 tool: downloader
 title: The request log writes a thumbnail token in full, and the contract calls it a capability
 kind: fix
-status: needs-decision
+status: in-flight
 milestone: null
 depends_on: []
 difficulty: standard
@@ -63,6 +63,17 @@ minutes the token lives in memory. It cannot start a download. The line carries
 Decide it before building either half: the code is a one-line change and the
 comments are not.
 
+### The answer
+
+**Yes.** Given by the owner on 2026-10-04, in answer to this question with these
+two options; it was the orchestrator's recommendation, so no recommendation was
+overridden. The reason given: the token is the only thing that authorises the
+image, and there is no session or owner check behind it, which makes it a bearer
+credential in a URL path, and the root `CLAUDE.md`'s redaction rule covers that.
+The contract and the route's rate-limit keying already treat it like the file
+token. The exposure is small (one preview, up to 512 KB, for 10 minutes), but the
+fix costs one line.
+
 ## Build
 
 1. Settle the question above, on this ticket.
@@ -87,3 +98,23 @@ comments are not.
 - 2026-10-03 — Filed by the dl-54 builder from gate 1's dropped finding, at the
   owner's direction. The measurement above is the builder's own re-run, not the
   gate's. Not built.
+- 2026-10-04 — Question answered **yes** by the owner (see "The answer"); built.
+  `CAPABILITY_PREFIXES` in `request-log.ts` is now
+  `[ROUTES.file(""), ROUTES.thumbnail("")]` and its "Exactly one qualifies"
+  comment says two and why. `ROUTES.thumbnail`'s comment, `routes/thumbnail.ts`'s
+  docblock and `server.ts`'s error-handler comment now say the log redacts the
+  token. Tests in `logging.test.ts`, "a thumbnail token never reaches a log line"
+  (served plus missed, then rate limited) and the thumbnail cases in
+  `redactLoggedUrl`, read the raw serialised lines. **Red on the other answer:**
+  with the prefix list reverted to `[ROUTES.file("")]`,
+  `npx vitest run tools/downloader/api/test/logging.test.ts` gives
+  `Tests  3 failed | 46 passed (49)`, the three being the two new describe tests
+  (`expected [ Array(1) ] to deeply equal []`, `expected [ …(3) ] to deeply equal
+[]`) and `redactLoggedUrl > replaces the capability segment and nothing else`
+  (`expected '/api/thumbnail/abc' to be '/api/thumbnail/[redacted]'`). Restored,
+  the file is `49 passed (49)`.
+  **Folded in:** the stale "only URL … whose path segment is a secret" sentence in
+  `logging.test.ts`'s file-token docblock, which the change made false. **The
+  brief was right** on every point I checked; the miss case writes two lines
+  carrying the path (the `request` line and the `request rejected` line), so with
+  the served one the test counts three.
