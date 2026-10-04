@@ -7,8 +7,8 @@
  * old one, retiring files a retirement that does, and a classification cites the
  * version it used. What is "in force" is the `current_rules` view.
  *
- * Who a rule may name is configuration, not a table: `people` is the set of
- * person ids the Access mapping yields. lg-5 gives people a table of their own.
+ * Who a rule may name is the `people` table (lg-5), whose ids are the names the
+ * Access mapping yields; `people` here is that set, read once per request.
  */
 
 import { AppError } from "@ledger/contract";
@@ -63,7 +63,7 @@ function currentRule(db: Database, id: number): Rule {
   return toRule(found);
 }
 
-/** A person id the configuration does not know is a typo, and is never stored. */
+/** A person id the household does not hold is a typo, and is never stored. */
 export function requireKnownPerson(people: ReadonlySet<string>, personId: string | null): void {
   if (personId !== null && !people.has(personId)) {
     throw new AppError("BAD_REQUEST", "That person is not one of the household.");

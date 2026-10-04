@@ -24,10 +24,13 @@ import { toErrorResponse } from "./http-errors.ts";
 import { registerIdentityCheck } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
+import { configuredPeople, enrollPeople } from "./people.ts";
+import { registerBucketRoutes } from "./routes/buckets.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerInboxRoutes } from "./routes/inbox.ts";
 import { registerMeRoute } from "./routes/me.ts";
 import { registerRuleRoutes } from "./routes/rules.ts";
+import { registerSalaryRoutes } from "./routes/salaries.ts";
 import { registerStatementRoutes } from "./routes/statements.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
@@ -73,6 +76,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   }
   const db = new Database(config.databasePath);
   migrate(db);
+  // Before any route can be asked who the household is (people.ts).
+  enrollPeople(db, configuredPeople(config.access.people), now());
 
   let shuttingDown = false;
 
@@ -116,6 +121,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerStatementRoutes(server, context);
   registerRuleRoutes(server, context);
   registerInboxRoutes(server, context);
+  registerBucketRoutes(server, context);
+  registerSalaryRoutes(server, context);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.

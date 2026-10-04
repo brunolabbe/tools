@@ -37,6 +37,9 @@ const VERBS = {
   inbox: ["GET", ROUTES.inbox],
   classifications: ["POST", ROUTES.classifications],
   people: ["GET", ROUTES.people],
+  buckets: ["GET", ROUTES.buckets],
+  salaries: ["POST", ROUTES.salaries],
+  ratios: ["POST", ROUTES.ratios],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
@@ -187,5 +190,21 @@ describe("the key", () => {
     const hook = hookFor(new RateLimiter({ perMinute: 5 }));
 
     await expect(call(hook, null, "10.0.0.1")).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+});
+
+// lg-5: the table above takes one verb per route, and the salaries and the ratios
+// answer a `GET` as well as the `POST` it walks.
+describe("the routes that answer two verbs", () => {
+  test.each([
+    ["salaries", ROUTES.salaries],
+    ["ratios", ROUTES.ratios],
+  ])("GET %s refuses the second request in a minute too", async (_name, url) => {
+    const target = await startTight();
+
+    await target.server.inject({ method: "GET", url });
+    const second = await target.server.inject({ method: "GET", url });
+
+    expect(second.statusCode).toBe(429);
   });
 });

@@ -17,8 +17,8 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1); the two after them are the store's (lg-2), and the last two
- * are the rules' and the inbox's (lg-4).
+ * parser's (lg-1); the two after them are the store's (lg-2), the next two
+ * are the rules' and the inbox's (lg-4), and the last is the salaries' (lg-5).
  */
 
 import {
@@ -88,6 +88,14 @@ export const LEDGER_ERROR_CODES = [
   "RULE_NOT_FOUND",
   /** The statement row named is not stored. */
   "ROW_NOT_FOUND",
+  // --- Salaries and the ratio (lg-5) ---
+  /**
+   * A salary record named to derive a ratio from does not stand: it never
+   * existed, or it has since been corrected — which is what confirming a ratio
+   * the other person has just changed the salaries under will meet. The caller
+   * reloads, rather than retries.
+   */
+  "SALARY_NOT_FOUND",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -109,6 +117,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   RULE_NOT_FOUND:
     "There is no such rule in force. It may have been changed or retired since the list was loaded.",
   ROW_NOT_FOUND: "There is no such statement row.",
+  SALARY_NOT_FOUND:
+    "That salary is not the one on record. It may have been corrected since it was loaded.",
 };
 
 /**

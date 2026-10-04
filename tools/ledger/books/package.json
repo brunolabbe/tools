@@ -2,7 +2,7 @@
   "name": "@ledger/books",
   "version": "0.0.0",
   "private": true,
-  "description": "The household's arithmetic: the statement-paste parser and its running-balance proof. No database, no network, no clock.",
+  "description": "The household's arithmetic: the statement-paste parser and its running-balance proof, the rule matching, the two buckets and the salary ratio. No database, no network, no clock.",
   "files": [
     "dist"
   ],

@@ -1,5 +1,5 @@
 /**
- * The rules and the people they may name (lg-4).
+ * The rules and the people they may name (lg-4; the people from lg-5's table).
  *
  * Every route is behind the identity check, and records who acted from
  * `personOf` — never from anything the body says. **Every write is a `POST`
@@ -16,21 +16,17 @@ import type { PeopleResponse, Rule, RuleDraft, RulesResponse } from "@ledger/con
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
 import { personOf } from "../identity.ts";
+import { knownPeople } from "../people.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { createRule, currentRules, editRule, retireRule } from "../rules.ts";
 import type { RuleContext } from "../rules.ts";
-
-/** The configured names, once, sorted so the list a person picks from is stable. */
-export function peopleOf(context: AppContext): string[] {
-  return [...new Set(context.config.access.people.values())].toSorted();
-}
 
 export function ruleContext(context: AppContext, request: FastifyRequest): RuleContext {
   return {
     db: context.db,
     personId: personOf(request).id,
     now: context.now,
-    people: new Set(peopleOf(context)),
+    people: new Set(knownPeople(context.db)),
   };
 }
 
@@ -60,8 +56,8 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   });
 
   app.get(ROUTES.people, { onRequest: read }, async () => {
-    // The configuration's names for now; lg-5 gives people a table of their own.
-    const body: PeopleResponse = { people: peopleOf(context) };
+    // The table, which boot fills from the configuration (people.ts).
+    const body: PeopleResponse = { people: knownPeople(context.db) };
     return body;
   });
 
