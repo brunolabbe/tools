@@ -111,7 +111,7 @@ describe("the mortgage bucket", () => {
   // A uniform history would hold this by accident: here every payment is a
   // different odd or even amount, on every date, so a per-payment rounding that
   // drifted, or a split that lost a cent, would show.
-  test("the parts sum to the balance on every date of a long, varied history", () => {
+  test("the parts sum to the balance on every date of a long, varied history, and never drift", () => {
     const rows: FiledRow[] = [];
     let seed = 7;
     const next = (): number => {
@@ -133,12 +133,17 @@ describe("the mortgage bucket", () => {
     for (const { date } of rows) {
       const position = mortgageAsOf(rows, PEOPLE, date);
       expect(sumOwn(position), date).toBe(position.balanceCents);
-      // Rounded once on the cumulative joint total: the halves are never more than a cent apart.
-      const joint = rows
-        .filter((entry) => entry.personId === null && entry.date <= date)
-        .reduce((sum, entry) => sum + entry.amountCents, 0);
-      const [alexHalf = 0, samHalf = 0] = splitCents(joint, 2);
-      expect(Math.abs(alexHalf - samHalf)).toBeLessThanOrEqual(1);
+      // Rounded once on the cumulative joint total, so each person's half of the
+      // payments — their own money less their own rows — is never a cent further
+      // from the other's than one odd cent. Rounding each payment would drift.
+      const [alexHalf = 0, samHalf = 0] = position.own.map(
+        (person) =>
+          person.ownCents -
+          rows
+            .filter((entry) => entry.personId === person.personId && entry.date <= date)
+            .reduce((sum, entry) => sum + entry.amountCents, 0),
+      );
+      expect(Math.abs(alexHalf - samHalf), date).toBeLessThanOrEqual(1);
     }
   });
 });
