@@ -39,8 +39,9 @@ database or the filesystem can trip it, in any tool**.
   `server.ts`, `context.ts`, `rate-limit.ts`, `thumbnails.ts` and routes
   `probe.ts` and `files.ts`) and from `tools/planner/api/src` (`server.ts`,
   `context.ts`, `rate-limit.ts`). `grep -rn "webtools/core/rate-limit"
-tools/*/api/src` lists them. The ledger's import is on #345 and is not on
-  `main` yet.
+tools/*/api/src` lists them. The ledger imports it too, in `server.ts`,
+  `context.ts` and `rate-limit.ts`, since #345 merged (corrected 2026-10-04; see
+  the Log).
 - `rate-limiter-flexible` appears in no `package.json` in the repo
   (`grep -n "rate-limiter-flexible" package.json packages/*/package.json
 tools/*/*/package.json` prints nothing), so adopting it is a new dependency.
@@ -122,3 +123,69 @@ into this ticket's Log. Then the option's own work.
   documentation's class list, #345's current `CodeQL` check run. Relayed, not
   verified: the first run URL, the line numbers at 0e6bb53 and 6a5a73b, the
   owner's dismissal, and every claim about `rate-limiter-flexible` itself.
+- 2026-10-04: **the measurement, taken at the owner's choice ("Run the
+  measurement") and no option chosen; `status` stays `needs-decision`.** Probe
+  pull request #352 (draft, closed unmerged, branch deleted), base 3a7d8a9, one
+  commit per variant, each a ledger route doing `readFileSync("/etc/hostname")`.
+  `rate-limiter-flexible` and `express` were in no `package.json` and installed
+  nowhere in any variant; the CodeQL job runs no install.
+
+  | Variant (head sha)                                                                                | `CodeQL` check | Alert                                         |
+  | ------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------------- |
+  | A, core's `RateLimiter` in `{ onRequest }`, the tools' way today (2b3977e), positive control      | FAILURE        | Missing rate limiting (High), `probe.ts` 19   |
+  | B, Fastify, `consume()` in a hook passed as the route's `{ onRequest }` option (75e5b89), subject | FAILURE        | Missing rate limiting (High), `probe.ts` 23   |
+  | C, Fastify, `consume()` inside the handler (442f65b)                                              | FAILURE        | Missing rate limiting (High), `probe.ts` 20   |
+  | D, Express, `consume(req.ip)` inside the handler (54c0c27), control                               | FAILURE        | Missing rate limiting (High), `probe.ts` 23   |
+  | E, Express, `consume(req.ip)` in a separate middleware before the handler (69879bf), control      | SUCCESS        | none ("No new alerts in code changed by ...") |
+  | F, Fastify, `consume(request.ip)` in a hook added with `app.addHook("onRequest", fn)` (7c72dc3)   | SUCCESS        | none                                          |
+
+  **Read plainly:** CodeQL does **not** recognise `consume()` called from a hook
+  passed as a route's `{ onRequest }` option (B), nor inside a Fastify handler
+  (C). It **does** recognise it from a hook registered with
+  `app.addHook("onRequest", fn)` (F), and from a separate Express middleware (E).
+  A is the positive control and alerted, so F's pass is not an absent route.
+  E's pass shows the library is matched by its import name with the package
+  uninstalled, so B and C are not failing for want of `node_modules`. Why B
+  differs from F is **not explained**: `Fastify.qll` was not read, only the
+  `MissingRateLimiting.qll` class text and the query's own test
+  (`MissingRateLimit/tst.js`, an Express middleware, which is the shape E copies).
+  Each variant is one run; no repeat.
+
+  **Not tested**, so unknown: `preHandler` or a `{ onRequest: [fn] }` array; a hook
+  added inside a child plugin scope; a route registered before the `addHook`
+  call or on a different instance than the hook; `RateLimiterRedis` or any store
+  other than `RateLimiterMemory`; core's limiter wrapped around `consume()`.
+
+  **What the brief had wrong.** `.github/workflows/security.yml` is an
+  **advanced-setup** CodeQL workflow (`github/codeql-action/init@v4` and
+  `analyze@v4`, `queries: security-extended`, pack `codeql/javascript-queries`
+  2.4.6 on CodeQL 2.27.1 per run 37141901816's log), not GitHub's default setup.
+  The `CodeQL` check with no workflow name is the code-scanning result check
+  fed by that upload; the `codeql` job in the `security` workflow passes either
+  way. So option 3's cost line, "probably means leaving default setup for an
+  advanced one", describes a step already taken, and adr/005's SARIF-suppression
+  register is the path this repo already has for an excused finding. The
+  ticket's "Why" and options still say "default setup"; they are left as
+  written for the owner to re-pose. The other stale claim, that the ledger's
+  import of core's limiter was "not on `main` yet", is corrected above:
+  `tools/ledger/api/src/server.ts:13` is
+  `import { RateLimiter } from "@webtools/core/rate-limit";`.
+
+  **The commands.** The check conclusions are in `gh pr view 352 --json
+statusCheckRollup`, filtered to `CodeQL` and `codeql`, and the alert text is
+  not in `gh` output at all: it was read by fetching each check run's
+  `detailsUrl` as a web page, which worked without authentication on this public
+  repository. Run URLs: A <https://github.com/brunolabbe/tools/runs/111550841424>,
+  B <https://github.com/brunolabbe/tools/runs/111551252163>, C
+  <https://github.com/brunolabbe/tools/runs/111551619044>, D
+  <https://github.com/brunolabbe/tools/runs/111552085454>, E
+  <https://github.com/brunolabbe/tools/runs/111552638732>, F
+  <https://github.com/brunolabbe/tools/runs/111553034085>. The alert line is the
+  closing line of the `app.get(...)` call, not its first. Cleanup:
+  `git ls-remote --heads origin | grep -c repo-91-codeql-probe-scratch` printed
+  `0`. The probe's other checks (`check`, `docker`, `test`) went red from B on,
+  because the probe imports an uninstalled package; that is the probe, not a
+  finding. The probe PR's title is `test(ledger): DO NOT MERGE — repo-91 CodeQL
+measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
+  `.claude/hooks/check-pr-title.sh` refuses a title that is not a conventional
+  commit.
