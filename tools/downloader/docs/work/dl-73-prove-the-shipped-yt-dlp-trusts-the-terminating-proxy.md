@@ -6,6 +6,7 @@ kind: work-package
 status: done
 milestone: null
 depends_on: [dl-72]
+awaiting: Done when 2 — the first real ytdlp-bump.yml pull request shows the docker check running the trust step before it is merged
 ---
 
 # dl-73 — the shipped yt-dlp, a real TLS fetch, and a gate that runs it
@@ -405,3 +406,10 @@ So the control cannot pass on a bundle that was not found, on a `TMPDIR` that di
   bump pull request named as the remaining confirmation (recommended); or
   in-flight until that pull request shows the `docker` check running the trust
   step. The owner chose **done**, the recommendation.
+
+- **2026-10-05, `awaiting` added** — from the review of repo-88's answer (PR
+  #357). The landing entry above names the first real bump pull request as the
+  remaining confirmation, and nothing in the frontmatter did. `gh pr list
+--state all --search "yt-dlp in:title"` showed no bump pull request today, so
+  the clause is still owed. Whoever reads that pull request's checks deletes
+  the line.
