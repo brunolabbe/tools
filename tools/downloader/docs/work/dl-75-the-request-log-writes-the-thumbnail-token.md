@@ -118,3 +118,7 @@ fix costs one line.
   brief was right** on every point I checked; the miss case writes two lines
   carrying the path (the `request` line and the `request rejected` line), so with
   the served one the test counts three.
+- 2026-10-05 — Gate 1's first low (a percent-encoded or non-canonical route name,
+  such as `/api/%74humbnail/<token>`, is served or 404s but still logs the token
+  in full) is filed as dl-76, at the owner's choice; it predates this ticket and
+  covers the file route too.
