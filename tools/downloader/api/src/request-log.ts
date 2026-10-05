@@ -47,16 +47,20 @@ export function requestIdFrom(request: { headers: Record<string, unknown> }): st
 /**
  * Path prefixes whose next segment is a **credential rather than an identifier**.
  *
- * Exactly one qualifies. `jobs/tokens.ts` states the rule this reads off: the
- * file token *is* the authorisation, there is no session and no owner check
- * behind it, and a job id deliberately is not a secret because it already
- * appears in URLs the client holds and in every orchestrator line. So a job id
- * stays legible in the log and a file token does not.
+ * Two qualify: the file token and the thumbnail token (dl-75). It was one until
+ * dl-75, which asked whether the thumbnail token counts and was answered yes on
+ * 2026-10-04. `jobs/tokens.ts` states the rule this reads off: a file token
+ * *is* the authorisation, there is no session and no owner check behind it, and
+ * a job id deliberately is not a secret because it already appears in URLs the
+ * client holds and in every orchestrator line. A thumbnail token meets the same
+ * test, since it alone authorises the image, and what it buys is small (one
+ * preview, up to `MAX_THUMBNAIL_BYTES`, for ten minutes) but not nothing. So a
+ * job id stays legible in the log and neither token does.
  *
  * Taken from `ROUTES` rather than written out, so a route that moves takes its
  * redaction with it.
  */
-const CAPABILITY_PREFIXES: readonly string[] = [ROUTES.file("")];
+const CAPABILITY_PREFIXES: readonly string[] = [ROUTES.file(""), ROUTES.thumbnail("")];
 
 /**
  * The form of a request URL that is safe to log.

@@ -641,8 +641,9 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
     // log useless for spotting real problems.
     const fields = {
       method: request.method,
-      // The file route's token is a credential in the path, and this handler
-      // fires on its FILE_EXPIRED, JOB_NOT_FOUND and RATE_LIMITED alike.
+      // The file and thumbnail routes' tokens are credentials in the path, and
+      // this handler fires on FILE_EXPIRED, JOB_NOT_FOUND, THUMBNAIL_NOT_FOUND
+      // and RATE_LIMITED alike.
       url: redactLoggedUrl(request.url),
       code: appError.code,
       status,
