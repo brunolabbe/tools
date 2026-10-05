@@ -13,8 +13,9 @@ difficulty: standard
 
 ## Why
 
-On PR #345 (lg-4, the ledger's rule classifier and inbox), GitHub's
-default-setup `CodeQL` check failed with **"Missing rate limiting (High)"** on
+On PR #345 (lg-4, the ledger's rule classifier and inbox), the `CodeQL` check
+(the code-scanning result check of the advanced-setup `security.yml` workflow,
+not GitHub's default setup; see the Log) failed with **"Missing rate limiting (High)"** on
 two ledger routes: `routes/inbox.ts` (line 21) and `routes/rules.ts` (line 57)
 at 0e6bb53. The ledger then added `@webtools/core/rate-limit` to every route,
 with `tools/ledger/api/test/route-limits.test.ts` proving the 429s, and the
@@ -29,9 +30,16 @@ rather than the behaviour. CodeQL's `MissingRateLimiting` library documents
 `RouteHandlerLimitedByRateLimiterFlexible`), plus a general
 `RateLimitingMiddleware` class for a middleware that "acts as a rate limiter"
 (<https://codeql.github.com/codeql-standard-libraries/javascript/semmle/javascript/security/dataflow/MissingRateLimiting.qll/module.MissingRateLimiting.html>,
-read by this ticket's builder on 2026-10-03). The repo's own limiter is none of
-those, so it is invisible to the query, and **every Fastify route that touches a
-database or the filesystem can trip it, in any tool**.
+read by this ticket's builder on 2026-10-03). **That list was incomplete.** The
+file at the tag the run used, `codeql-cli/v2.27.1`, also models Fastify's own
+limiter twice: `FastifyRateLimiter` matches an import of `@fastify/rate-limit` or
+`fastify-rate-limit`, and `FastifyPerRouteRateLimit` matches an options object,
+passed as the second argument of a Fastify shorthand route call with three or
+more arguments, that carries `config.rateLimit` or `rateLimit` (found by the
+2026-10-04 gate and re-read by the builder; the file was read through a
+summarising fetch, not a clone). The repo's own limiter is none of those, so it
+is invisible to the query, and **every Fastify route that touches a database or
+the filesystem can trip it, in any tool**.
 
 **What the repo has, measured here at the base (ebb808b):**
 
@@ -63,27 +71,80 @@ advantages?"** What follows is the orchestrator's answer from its own knowledge,
 - The cost: a new dependency, and moving off the tested shared
   `@webtools/core/rate-limit`, which two tools use and which has its own suite.
 
-**The measurement that must come first.** Does CodeQL recognise
+**The measurement that came first, and what it found.** Does CodeQL recognise
 `rate-limiter-flexible`'s `consume()` when it is called from a Fastify
-`onRequest` hook? **It is unverified**, and a single command cannot settle it:
-default-setup CodeQL runs only on a pull request, so it is answerable only by a
-CI run on a throwaway branch with one route behind such a hook. The class names
-above are Express-shaped, and nothing read so far says they follow a Fastify hook.
+`onRequest` hook? The `CodeQL` check is a code-scanning result check, which
+`security.yml` produces on a pull request, on a push to `main`, weekly and on
+dispatch; it is answerable only by a CI run on a throwaway branch, so it was run
+twice (the Log, 2026-10-04 and 2026-10-05; probe pull requests #352 and #356,
+both closed). In short, one run per variant:
 
-**Options.** No recommendation is set before that run; the measurement decides
-whether the first is even available.
+- `consume()` from a hook passed as the route's `{ onRequest }` option: **alerts**.
+  From a hook added with `app.addHook("onRequest", fn)`: **no alert**.
+- `@fastify/rate-limit` registered once with `register`, the route left as the
+  tools write it today (`{ onRequest: read }`, core's hook): **no alert**, in the
+  same function and when registered in another file. Imported and never
+  registered: **alerts**.
+- A bare `rateLimit` key, or `config: { rateLimit }`, in a route's options beside
+  core's hook, with no plugin registered: **no alert**. The model matches the key,
+  not whether anything limits; see option 4.
+
+**Options, re-posed 2026-10-05 against that.** No recommendation is set. Each
+cost below is either measured (with its variant in the Log) or marked
+**unmeasured**.
 
 1. **Adopt `rate-limiter-flexible` in `@webtools/core`, behind the existing
-   `RateLimiter` interface**, so no tool's call sites move. Costs a dependency in
-   a shared package, a migration of the existing suite, and only helps if the
-   measurement says CodeQL sees it from a hook.
-2. **Keep core's limiter and dismiss each alert** as a false positive with a
-   written reason, as the owner did on #345. Costs a manual dismissal per new
-   route in any tool that trips it.
-3. **Add a CodeQL model pack teaching it core's `RateLimiter`** (the general
-   `RateLimitingMiddleware` class is the extension point). Probably means leaving
-   default setup for an advanced one, which costs a workflow file and owning the
-   query-pack version.
+   `RateLimiter` interface.** The interface holds, but the call sites **do move**:
+   the limited routes in all three tools attach their limiter as a route option,
+   `{ onRequest: ... }` (`git grep -c "onRequest" origin/main --
+'tools/*/api/src/routes/*.ts'` lists 10 route files, and no `addHook` in
+   `tools/*/api/src` is a limiter; they are CORS, request logging, identity and
+   `onSend`), and that is the shape variant B alerted on. What cleared was a
+   hook added with `app.addHook`. So the option means moving every limited route
+   to one hook per instance, which gives up the per-route attachment that
+   `tools/ledger/api/src/rate-limit.ts` documents and that
+   `route-limits.test.ts` walks every route to check, plus a new dependency in a
+   shared package and a migration of core's suite. **Unmeasured:** whether a hook
+   that keys on the Access identity, a function of `request` and not a read of one
+   of its properties, is recognised (the model requires a read of a `request`
+   property to flow into `consume()`, and F's `request.ip` is exactly that);
+   and core's limiter wrapped around `consume()`.
+2. **Keep core's limiter and excuse each alert in code, under adr/005.** Not the
+   UI dismissal #345 used: adr/005 > "Alternatives considered" rejects "Dismiss
+   each recurrence in the GitHub UI", because the reason lives outside version
+   control and does not survive an alert moving. The repo's path is a
+   `// codeql[js/missing-rate-limiting]` comment on the line above the alert
+   carrying five fields (the query id, the file, the date, the reasoning, and the
+   test that would catch the true positive; rule 3 there is "no test, no
+   excuse"), with `security.yml` dismissing on a push to `main`. Under it a pull
+   request touching the file **still gets a red `CodeQL` check** until then.
+   The cost lands per route, in any tool that trips it: a comment of five fields,
+   a red check on every PR that edits that route, and a push to `main` before it
+   clears. **Unmeasured:** where the comment goes, since the annotation sits on
+   the closing line of the `app.get(...)` call (every alert in the Log), and
+   whether the suppression matches an alert there.
+3. **Add a CodeQL model, a pack or an extension, teaching it core's
+   `RateLimiter`.** The "leaving default setup for an advanced one" cost is
+   void: the repo already runs the advanced workflow, with `packs:` already
+   used for `AlertSuppression.ql`. What is left is a model extension and owning
+   it across query-pack upgrades (the run used `codeql/javascript-queries`
+   2.4.6). **Unmeasured:** whether an extension can teach the Fastify route
+   option, and the cost of keeping it current.
+4. **Adopt `@fastify/rate-limit`, which CodeQL models.** The tools' routes can
+   stay as they are: registering the plugin once on the instance cleared a route
+   written `{ onRequest: read }` (variants G4 and G6), so no call site moves for
+   CodeQL's sake. Costs: a new dependency; and what it does to the tools is
+   **unmeasured**, since its documentation was not read here: whether it can keep
+   each tool's `RATE_LIMITED` `AppError` body and `RateLimit-*` headers, key on the
+   Access identity as the ledger does and not on an address, and leave health
+   unlimited as the ledger does. Registered with defaults it would also apply to
+   every route on its instance, and so stack with core's limiter unless core's
+   moves out of those routes. **A measured hazard:** variants G1 and G2 show the
+   model is satisfied by a `rateLimit` or `config.rateLimit` key beside core's
+   hook with no plugin registered at all, so the check would go green with
+   nothing added that limits; adr/005's rule 3 calls an excuse with nothing
+   behind it worse than an open alert. Whether anything would stop that is
+   unmeasured, and no test in the repo does.
 
 ## Reproduction
 
@@ -110,8 +171,8 @@ into this ticket's Log. Then the option's own work.
   `onRequest` hook, with the run URL, and the owner's choice among the options
   is recorded here.
 - A new ledger route (or any route) that is limited by the repo's chosen limiter
-  passes the default-setup `CodeQL` check without a dismissal, or the Log says
-  why the chosen option is a dismissal instead.
+  passes the `CodeQL` check without a dismissal, or the Log says why the chosen
+  option is a dismissal instead.
 
 ## Log
 
@@ -143,8 +204,12 @@ into this ticket's Log. Then the option's own work.
   passed as a route's `{ onRequest }` option (B), nor inside a Fastify handler
   (C). It **does** recognise it from a hook registered with
   `app.addHook("onRequest", fn)` (F), and from a separate Express middleware (E).
-  A is the positive control and alerted, so F's pass is not an absent route.
-  E's pass shows the library is matched by its import name with the package
+  A alerted, so the control holds for the `{ onRequest }` shape. F's own route
+  is a different shape (`app.get(path, handler)`, no options), so A does not
+  prove F's pass is not an absent route; C, the same two-argument shape, alerted,
+  and F's run log shows `probe.ts` extracted and the query evaluated, and those
+  are what do (the 2026-10-04 gate's evidence; the builder did not read that
+  log). E's pass shows the library is matched by its import name with the package
   uninstalled, so B and C are not failing for want of `node_modules`. Why B
   differs from F is **not explained**: `Fastify.qll` was not read, only the
   `MissingRateLimiting.qll` class text and the query's own test
@@ -165,8 +230,9 @@ into this ticket's Log. Then the option's own work.
   way. So option 3's cost line, "probably means leaving default setup for an
   advanced one", describes a step already taken, and adr/005's SARIF-suppression
   register is the path this repo already has for an excused finding. The
-  ticket's "Why" and options still say "default setup"; they are left as
-  written for the owner to re-pose. The other stale claim, that the ledger's
+  ticket's "Why", its measurement paragraph, its options and its `Done when` said
+  "default setup" (and that it "runs only on a pull request", which `security.yml`'s
+  triggers contradict); they are corrected on 2026-10-05, below. The other stale claim, that the ledger's
   import of core's limiter was "not on `main` yet", is corrected above:
   `tools/ledger/api/src/server.ts:13` is
   `import { RateLimiter } from "@webtools/core/rate-limit";`.
@@ -189,3 +255,67 @@ statusCheckRollup`, filtered to `CodeQL` and `codeql`, and the alert text is
 measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
   `.claude/hooks/check-pr-title.sh` refuses a title that is not a conventional
   commit.
+
+- 2026-10-05: **second probe, #356 (draft, closed unmerged, branch deleted), after
+  the 2026-10-04 gate (CONCERNS) and the owner's choice to re-pose the options
+  and probe once more.** `status` stays `needs-decision`; no option is chosen.
+  Base 3a7d8a9, one commit per variant, each replacing the last, each a ledger
+  route reading `/etc/hostname`, and `@fastify/rate-limit` installed nowhere.
+  **What the class text says**, read from `codeql-cli/v2.27.1`'s
+  `MissingRateLimiting.qll` through a summarising fetch (not a clone), before
+  choosing variants:
+  `FastifyRateLimiter` is `this = DataFlow::moduleImport(["fastify-rate-limit",
+"@fastify/rate-limit"])`; `FastifyPerRouteRateLimit` requires a
+  `Fastify::RouteSetup` whose method is not `route` or `addHook`, with three or
+  more arguments, where an object flowing to argument 1 has
+  `getAPropertySource("config").getAPropertySource("rateLimit")` or
+  `getAPropertySource("rateLimit")`. Neither checks that anything limits.
+
+  | Variant (head sha)                                                                                                                                               | `CodeQL` check | Alert                                                                                                    |
+  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+  | H, four routes, core's hook in `{ onRequest }`: H1 fs/no parameter (**the positive control, A**), H2 fs/`request`, H3 db/no parameter, H4 db/`request` (9913cde) | FAILURE        | four alerts, `probe.ts` 22 (H1, file system), 27 (H2, file system), 32 (H3, database), 37 (H4, database) |
+  | G4, `app.register(rateLimit)` in the route's function, route left as `{ onRequest: read }` (13074f6)                                                             | SUCCESS        | none                                                                                                     |
+  | G1, `{ onRequest: read, config: { rateLimit: {...} } }`, no plugin (3410b9d)                                                                                     | SUCCESS        | none                                                                                                     |
+  | G2, `{ onRequest: read, rateLimit: {...} }`, no plugin (e54ac72)                                                                                                 | SUCCESS        | none                                                                                                     |
+  | G5, `@fastify/rate-limit` imported and never registered, route as G4 (25eed13)                                                                                   | FAILURE        | Missing rate limiting (High), `probe.ts` 20                                                              |
+  | G6, `await server.register(rateLimit, ...)` in `server.ts` before any route, route in `routes/probe.ts` which never mentions it (74cc5e3)                        | SUCCESS        | none                                                                                                     |
+
+  **Read plainly.** G5 alerting beside G4 and G6 passing is the control for the
+  plugin cases: the same route fails with the import and passes with the
+  registration, so it is the registration, not the import, that the model keys
+  on, and it reaches a route in another file on the same instance (G6). G1 and G2
+  pass with no plugin at all, as the class text predicts: the model matches the
+  key. **No variant sets whether a registration inside a child plugin scope,
+  after the route, or on another instance clears; `preHandler` and arrays were
+  not tried.** One run per variant.
+
+  **The lg-5 gate's data point, recorded and unexplained.** The lg-5 gate on #354
+  (#354's head was ce0a97b when the builder looked) observed: "all the handlers flagged on
+  this PR are `async () =>` with no parameter, and the two database-reading `GET`s
+  here that take `request` (`/api/buckets`, `/api/ratios`) are not flagged".
+  Variant H tested the parameter directly, with core's hook on all four: H2 and H4,
+  which take and read `request`, **alerted** like H1 and H3, for file system
+  and database access alike. So a `request` parameter alone does not explain
+  it. What is left is **untested**: `/api/buckets` and `/api/ratios` themselves
+  (not on `main` at 3a7d8a9), a handler that reaches its database through a
+  helper in another module as the real routes do (H3 and H4 call `prepare`
+  in the handler), and whether those handlers' database access is modelled at
+  all.
+
+  **The commands.** Same as 2026-10-04: conclusions from `gh pr view 356 --json
+statusCheckRollup` filtered to `CodeQL` and `codeql` (the `codeql` job was
+  SUCCESS on every head), alert text from fetching each `detailsUrl` as a web
+  page. Run URLs: H <https://github.com/brunolabbe/tools/runs/111596813723>, G4
+  <https://github.com/brunolabbe/tools/runs/111597212755>, G1
+  <https://github.com/brunolabbe/tools/runs/111597548195>, G2
+  <https://github.com/brunolabbe/tools/runs/111597947397>, G5
+  <https://github.com/brunolabbe/tools/runs/111598343364>, G6
+  <https://github.com/brunolabbe/tools/runs/111598769570>. The G4 and G6
+  pages read "No new alerts in code changed by this pull request"; G1 and G2 were
+  read by conclusion only. Cleanup: `git ls-remote --heads origin | grep -c
+repo-91-codeql-probe-scratch` printed `0`. The 2026-10-04 gate's other
+  findings are folded into the body above (the cause, options 1 and 2) and were
+  reproduced: `git grep -c "onRequest" origin/main --
+'tools/*/api/src/routes/*.ts'` lists 10 route files, and `git grep -n "addHook"
+origin/main -- tools packages` lists seven calls, none a limiter (CORS in all
+  three servers' `registerCors`, request logging, identity, `onSend`).
