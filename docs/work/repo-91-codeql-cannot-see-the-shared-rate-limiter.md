@@ -69,7 +69,8 @@ advantages?"** What follows is the orchestrator's answer from its own knowledge,
 - Block durations, an insurance limiter that takes over when the primary store
   fails, and unions of limiters.
 - The cost: a new dependency, and moving off the tested shared
-  `@webtools/core/rate-limit`, which two tools use and which has its own suite.
+  `@webtools/core/rate-limit`, which three tools use (the ledger since #345) and
+  which has its own suite.
 
 **The measurement that came first, and what it found.** Does CodeQL recognise
 `rate-limiter-flexible`'s `consume()` when it is called from a Fastify
@@ -87,7 +88,9 @@ both closed). In short, one run per variant:
   registered: **alerts**.
 - A bare `rateLimit` key, or `config: { rateLimit }`, in a route's options beside
   core's hook, with no plugin registered: **no alert**. The model matches the key,
-  not whether anything limits; see option 4.
+  not whether anything limits. Both literals also failed `npm run check` and
+  `npm run build` with TS2353 in the probe's CI, with the plugin not installed;
+  see option 4.
 
 **Options, re-posed 2026-10-05 against that.** No recommendation is set. Each
 cost below is either measured (with its variant in the Log) or marked
@@ -119,10 +122,11 @@ cost below is either measured (with its variant in the Log) or marked
    excuse"), with `security.yml` dismissing on a push to `main`. Under it a pull
    request touching the file **still gets a red `CodeQL` check** until then.
    The cost lands per route, in any tool that trips it: a comment of five fields,
-   a red check on every PR that edits that route, and a push to `main` before it
-   clears. **Unmeasured:** where the comment goes, since the annotation sits on
-   the closing line of the `app.get(...)` call (every alert in the Log), and
-   whether the suppression matches an alert there.
+   a red check on every PR whose diff introduces or relocates the alert (adr/005
+   > Context), which includes editing anything above the route in the same file
+   > and not only the route itself, and a push to `main` before it clears. **Unmeasured:** where the comment goes, since the annotation sits on
+   > the closing line of the `app.get(...)` call (every alert in the Log), and
+   > whether the suppression matches an alert there.
 3. **Add a CodeQL model, a pack or an extension, teaching it core's
    `RateLimiter`.** The "leaving default setup for an advanced one" cost is
    void: the repo already runs the advanced workflow, with `packs:` already
@@ -137,14 +141,24 @@ cost below is either measured (with its variant in the Log) or marked
    **unmeasured**, since its documentation was not read here: whether it can keep
    each tool's `RATE_LIMITED` `AppError` body and `RateLimit-*` headers, key on the
    Access identity as the ledger does and not on an address, and leave health
-   unlimited as the ledger does. Registered with defaults it would also apply to
-   every route on its instance, and so stack with core's limiter unless core's
-   moves out of those routes. **A measured hazard:** variants G1 and G2 show the
-   model is satisfied by a `rateLimit` or `config.rateLimit` key beside core's
-   hook with no plugin registered at all, so the check would go green with
-   nothing added that limits; adr/005's rule 3 calls an excuse with nothing
-   behind it worse than an open alert. Whether anything would stop that is
-   unmeasured, and no test in the repo does.
+   unlimited as the ledger does. **Unmeasured, from recollection of the plugin
+   and not from its documentation:** that registered with its defaults it would
+   also apply to every route on its instance, and so stack with core's limiter
+   unless core's moves out of those routes. **Measured, with a narrower remainder:** variants
+   G1 and G2 show CodeQL is satisfied by a `rateLimit` or `config.rateLimit` key
+   beside core's hook with no plugin registered, so by itself the model would let
+   a route go green with nothing added that limits, which adr/005's rule 3 calls
+   worse than an open alert. But the probe's own CI refused both literals: with
+   the plugin installed nowhere, `npm run check` and `npm run build` failed on
+   G1 (run 37257413673, `probe.ts(19,34): error TS2353: Object literal may only
+specify known properties, and 'rateLimit' does not exist in type
+'FastifyContextConfig'`) and on G2 (run 37257508695, `probe.ts(20,24):
+error TS2353: ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`).
+   So the literal forms do not get past `npm run check`. **Unmeasured:** a form
+   that gets past TypeScript's excess-property check, such as an options object
+   held in a variable or a cast (the class uses `flowsTo`, so CodeQL may still
+   match it), and, under this option, whether the plugin's own type augmentation
+   makes `config.rateLimit` typecheck, which would reopen G1.
 
 ## Reproduction
 
@@ -285,7 +299,16 @@ measurement`, not the dispatch's bare `DO NOT MERGE — ...`, because
   registration, so it is the registration, not the import, that the model keys
   on, and it reaches a route in another file on the same instance (G6). G1 and G2
   pass with no plugin at all, as the class text predicts: the model matches the
-  key. **No variant sets whether a registration inside a child plugin scope,
+  key. **But the probe's own CI rejected both literals** (run 37257413673 for
+  G1: `probe.ts(19,34): error TS2353 ... 'rateLimit' does not exist in type
+'FastifyContextConfig'`; run 37257508695 for G2: `probe.ts(20,24): error
+TS2353 ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>'`,
+  both from `npm run check` and `npm run build`; found by the 2026-10-05 gate and
+  reproduced with `gh run view <id> --log-failed | grep -m2 "error TS"`). So with
+  no plugin installed the literal forms do not pass the repo's own checks. Not
+  measured: an options object held in a variable or a cast, which could pass
+  TypeScript and which CodeQL's `flowsTo` may still match, and the plugin's own
+  type augmentation, which may make `config.rateLimit` typecheck. **No variant sets whether a registration inside a child plugin scope,
   after the route, or on another instance clears; `preHandler` and arrays were
   not tried.** One run per variant.
 
