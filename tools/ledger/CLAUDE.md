@@ -97,8 +97,9 @@ a `DELETE`.
 **People come from configuration, never the repository.** The `people` table
 (lg-5) is filled at boot from `ACCESS_PEOPLE`'s names, and a person's id is that
 name — the text lg-4 stores on rules and classifications — so it must stay that
-name. Migration 3 also enrols every id lg-4 had already stored. Why a name is
-permanent is in `docs/00-ANALYSIS.md` §7.
+name. Migration 3 also enrols the person ids lg-4 had already stored on rules and
+classifications, and nothing else. Why a name is permanent is in
+`docs/00-ANALYSIS.md` §7.
 
 **Rules live in the database only.** Caisse names identify a household, so no
 rule is seeded from the repository: not in a migration, not in a fixture. A test

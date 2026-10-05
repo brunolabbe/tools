@@ -198,3 +198,29 @@ vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
     The home screen's "Both have paid the same." over three unequal amounts was
     reachable before the change too: `GET /api/buckets` already answered `own`
     for all three with `lead: null`. Reported as an open decision.
+
+- 2026-10-05 — The owner's decisions after gates 1 and 2, each as question,
+  answer and whose recommendation it followed. The first three are recorded
+  above; the recommendation each followed was not.
+  - **CodeQL alerts: excuse in code or dismiss in the UI?** In code, per
+    `docs/adr/005`. This **overrode gate 1's recommendation** of a UI dismissal,
+    as on #345. The `CodeQL` code-scanning check is expected to stay red until
+    merge, because `dismiss-alerts` clears the alerts on push to `main`; gate 2
+    left the comments' placement unproven until then.
+  - **The `people` display name: add a column or keep `people(id, added_at)`?**
+    Kept as built. This **followed the builder's recommendation**.
+  - **Retiring a person: document it now, or leave it?** (A), document it now,
+    in `docs/00-ANALYSIS.md` §7. This **followed gate 1's recommendation**.
+  - **A third enrolled person blocks the Salaries form: what to do?** Leave it.
+    This **followed the orchestrator's recommendation**. The other options were
+    removing the enrolment, asking only the configured people, and skipping blank
+    salaries.
+  - **The enrolment covers `person_id` but not the `*_by` columns, and three
+    sentences said it covers more: narrow the sentences, or enrol the columns?**
+    Narrow the sentences. This **followed gate 2's recommendation**, option (1),
+    over "record only" and option (2). Changed, words only: the migration 3
+    comment in `api/src/db/schema.ts`, the sentence in `tools/ledger/CLAUDE.md`
+    and the sentence in `docs/00-ANALYSIS.md` §7 now say the person ids on
+    `rules` and `classifications` are enrolled, and nothing else. `npx vitest run
+tools/ledger/api/test/schema.test.ts tools/ledger/api/test/people.test.ts` →
+    `Test Files 2 passed (2)`, `Tests 13 passed (13)`.

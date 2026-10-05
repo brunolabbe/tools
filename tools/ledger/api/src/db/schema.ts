@@ -132,10 +132,10 @@ const MIGRATIONS: readonly string[] = [
     added_at TEXT NOT NULL
   );
 
-  -- Everyone lg-4 already named, configured now or not, so no stored row names
-  -- nobody: added as of the first record naming them. Boot then adds the
-  -- configured names this leaves out (people.ts). From here on a person id is
-  -- checked against this table before it is stored.
+  -- The person ids lg-4 already stored on rules and classifications, configured
+  -- now or not, and nothing else: added as of the first record naming them.
+  -- Boot then adds the configured names this leaves out (people.ts). From here
+  -- on a person id is checked against this table before it is stored.
   INSERT INTO people (id, added_at)
     SELECT person_id, min(at) FROM (
       SELECT person_id, created_at AS at FROM rules WHERE person_id IS NOT NULL
