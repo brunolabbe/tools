@@ -4584,33 +4584,9 @@ Intake at ebb808b (the shared checkout equal to origin/main). Two peer sessions 
 - Running `--land`'s pin check in every gate prompt after lg-4's refusal: no further pin refusals.
 - The whole-batch scratch merge (step 11) caught the one cross-PR citation collision before any merge.
 
-## The log since the last review
+## Batch 2026-10-04 — base 3a7d8a9
 
-**Last review: 2026-10-03**, by an interactive session with the owner, over every
-row above (adr/006). The orchestrator appends one entry per batch below and
-changes no rule page; the next review reads these entries against the agents'
-transcripts, changes the rules in one pass, and moves this heading's date.
-
-An entry is this and nothing more:
-
-```markdown
-### Batch <date> — base <sha>
-
-<the per-agent accounting table from `node scripts/agent-cost.mjs`, with its rate date and total>
-
-**Tickets:** <id → PR, gate verdicts in order, one line each>
-
-**Defects in the skill:**
-
-1. <page and heading> — <what it got wrong or left out>. Reproduction: `<command>` → <the output that shows it>.
-
-**Worked, and worth keeping:** <one line each, only what a review should not remove>
-```
-
-No narrative, no proposed rule text, and no item without a reproduction: a
-defect nobody can re-run is an opinion, and the review will drop it.
-
-### Batch 2026-10-04 — base 3a7d8a9
+Reviewed on 2026-10-05 by an interactive session with the owner. Each item was read against the pages on `main` at 6a5481e and its reproduction re-run where it had one; the agents' transcripts were searched only for item 5. Each item ends with where it went.
 
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -4636,25 +4612,57 @@ Total $35.7874, active 3h26m55s, rates read 2026-09-30 (`node scripts/agent-cost
 
 **Defects in the skill:**
 
-1. `roles/reviewer.md` › "When you are woken to re-gate". It scopes a re-gate to "only `git diff <gated sha>..<new sha>`", and so does `SKILL.md` step 8. repo-91's gate 2 found its high outside that diff, in the second probe PR's CI, which the diff only cites. Reproduction: `gh run view 37257413673 --log-failed | grep -m2 "error TS"` → `probe.ts(19,34): error TS2353: Object literal may only specify known properties, and 'rateLimit' does not exist in type 'FastifyContextConfig'.` from both `Run npm run check` and `Run npm run build`. The record at 4cc2fbf said nothing would stop that key.
+1. `roles/reviewer.md` › "When you are woken to re-gate". It scopes a re-gate to "only `git diff <gated sha>..<new sha>`", and so does `SKILL.md` step 8. repo-91's gate 2 found its high outside that diff, in the second probe PR's CI, which the diff only cites. Reproduction: `gh run view 37257413673 --log-failed | grep -m2 "error TS"` → `probe.ts(19,34): error TS2353: Object literal may only specify known properties, and 'rateLimit' does not exist in type 'FastifyContextConfig'.` from both `Run npm run check` and `Run npm run build`. The record at 4cc2fbf said nothing would stop that key. → no change: `git diff 40f65c7..4cc2fbf` added the sentences the high refutes, so the finding was in the lines the round touched and the scope rule held.
 2. `reference/dispatching.md` › "A builder prompt carries" has no line on `status` when the orchestrator relays an answer to a `needs-decision` ticket. Three sources disagree:
    - `docs/01-TICKETS.md` says "Move it to `ready` in the commit that records the answer".
    - `roles/builder.md` says "**Leave `status` as it is**".
    - My dl-75 dispatch said `in-flight`, and the builder followed the dispatch.
 
    Reproduction: `git show f1a43cc:tools/downloader/docs/work/dl-75-the-request-log-writes-the-thumbnail-token.md | grep ^status` → `status: in-flight`.
+
+   → `roles/builder.md` (the `needs-decision` paragraph, and _Before you report_), `reference/dispatching.md`, _A builder prompt carries_, and `docs/01-TICKETS.md`. Owner decision through AskUserQuestion, 2026-10-05: the answer is recorded in the build branch's first commit, which sets `ready`; the other option was a separate answer pull request first.
 3. `reference/dispatching.md` › "Authorising an outward-facing action" names a throwaway branch, but does not say that a throwaway *pull request* must carry a conventional title, or that other branches' preflight will see it. My dispatch's title was refused, and the open probe failed a sibling's preflight.
    - Title reproduction: `gh pr create --draft --title "DO NOT MERGE — repo-91 CodeQL measurement" …` → refused by `.claude/hooks/check-pr-title.sh`. Relayed by the repo-91 builder.
    - Preflight reproduction: `node scripts/preflight.mjs --base origin/main --title "feat(ledger): …(lg-5)"` at ce0a97b → exit 16, a merge-tree conflict on `tools/ledger/api/src/server.ts` with draft #356, the probe. Relayed by the lg-5 builder.
-4. `reference/records.md` › "Landing" says nothing of a records-only pull request on a ticket that stays `needs-decision`. `--land` takes only two statuses, so the repo-91 measurement could not have landed its three gate records unless the owner had answered first. Reproduction: `node scripts/review-record.mjs --help` → `--status done|in-flight`.
+
+   → `reference/dispatching.md`, _A probe pull request_, and `roles/builder.md`, _Before you report_ (exit 16). Owner decision through AskUserQuestion, 2026-10-05: a prose rule, new files only, over a change to `scripts/preflight.mjs`. The title half was already covered by _Dry-run anything you prescribe_. This also answers the 2026-10-03 batch's item 16.
+4. `reference/records.md` › "Landing" says nothing of a records-only pull request on a ticket that stays `needs-decision`. `--land` takes only two statuses, so the repo-91 measurement could not have landed its three gate records unless the owner had answered first. Reproduction: `node scripts/review-record.mjs --help` → `--status done|in-flight`. → held, no change: it did not happen, and the reproduction shows the flag rather than a failure. Log it again with the failing command if it does.
 5. `roles/common.md` › "The sandbox refuses some ordinary shell shapes" says a command naming `git` twice is refused. In this batch one agent was refused and another was not.
    - Refused, relayed by the repo-91 builder: "any command naming `git` twice is refused".
    - Not refused: repo-91's gate 1 ran `git checkout --detach 40f65c7…; git log --oneline -3; git diff --stat 3a7d8a9...HEAD`, which printed `HEAD is now at 40f65c7` and the stat.
-6. `SKILL.md` › "Which model built it, and which gated it" gives a docs-only chore "one gate, narrow". repo-91's measurement record was docs-only and needed three gates: gate 1 found three meds in the options, and gate 2 found a high. A record an owner chooses an option from does not behave like a docs chore. Reproduction: `git diff --stat 3a7d8a9..40f65c7` → one file under `docs/work/`, +69/−2, gated CONCERNS with three meds.
-7. Data point for repo-88, not this skill: lg-5's Done-when 4, "Gates green", cannot be met before merge when the owner chooses an adr/005 excusal. Gate 1 and gate 2 both recorded it as `unproven (gate)`. Reproduction: `gh pr checks 354` at 6cccc38 → `CodeQL	fail`, with every other check pass or pending.
+
+   → held, no change: the refusal carries no command. Log it again with the refused command and its output.
+6. `SKILL.md` › "Which model built it, and which gated it" gives a docs-only chore "one gate, narrow". repo-91's measurement record was docs-only and needed three gates: gate 1 found three meds in the options, and gate 2 found a high. A record an owner chooses an option from does not behave like a docs chore. Reproduction: `git diff --stat 3a7d8a9..40f65c7` → one file under `docs/work/`, +69/−2, gated CONCERNS with three meds. → no change: repo-91 is rated `standard`, was paired as one, and ran three gates as step 8 prescribes. The docs-only row was never applied to it.
+7. Data point for repo-88, not this skill: lg-5's Done-when 4, "Gates green", cannot be met before merge when the owner chooses an adr/005 excusal. Gate 1 and gate 2 both recorded it as `unproven (gate)`. Reproduction: `gh pr checks 354` at 6cccc38 → `CodeQL	fail`, with every other check pass or pending. → added to `repo-88` as a fourth reproduction and a `Done when` line.
 
 **Worked, and worth keeping:**
 
 - Gating a measurement record before the owner chose from it. Gate 1's three meds and gate 2's high would each have put a false cost in front of the choice.
 - Probe positive controls (A, then H1) in the same run as the subject. The builder's added controls (D, E, then G5) are what separated "unknown library" from "unfollowed hook", and "imported" from "registered".
 - Reproducing a gate's high with one command before routing it (step 6), and checking the gate's 10-file claim before relaying it.
+
+## The log since the last review
+
+**Last review: 2026-10-05**, by an interactive session with the owner, over every
+row above (adr/006). The orchestrator appends one entry per batch below and
+changes no rule page; the next review reads these entries against the agents'
+transcripts, changes the rules in one pass, and moves this heading's date.
+
+An entry is this and nothing more:
+
+```markdown
+### Batch <date> — base <sha>
+
+<the per-agent accounting table from `node scripts/agent-cost.mjs`, with its rate date and total>
+
+**Tickets:** <id → PR, gate verdicts in order, one line each>
+
+**Defects in the skill:**
+
+1. <page and heading> — <what it got wrong or left out>. Reproduction: `<command>` → <the output that shows it>.
+
+**Worked, and worth keeping:** <one line each, only what a review should not remove>
+```
+
+No narrative, no proposed rule text, and no item without a reproduction: a
+defect nobody can re-run is an opinion, and the review will drop it.

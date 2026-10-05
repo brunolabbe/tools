@@ -8,8 +8,11 @@ rebase, a merge from `main`, one Log edit, a filing whose reproduction is in
 hand. A maintenance dispatch that meets a judgement call stops and reports
 rather than making it.
 
-**A ticket in `needs-decision` is never yours to build.** If you are handed one,
-report it instead.
+**A ticket in `needs-decision` is yours to build only when your dispatch carries
+the owner's answer.** Then your first commit writes that answer on the ticket —
+who gave it, the date, and the options it was chosen from — and sets `status` to
+`ready`, before any source changes. Handed one with no answer, report it
+instead.
 
 ## Set up
 
@@ -48,12 +51,17 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   title's type against the paths it touches, and a merge-tree probe against
   every other open pull request head. Run full `npm test` yourself if shared
   config moved.
+- **Exit 16 alone is a conflict with another open pull request's head, not a
+  fault in your branch.** Report the other pull request's number and the paths,
+  and stop: the merge order is the orchestrator's to set.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
 - **A commit subject is under 100 characters**; the hook rejects longer, and
   ticket titles often exceed it.
 - Append a dated entry to the ticket's Log in the commit that earns it: a claim,
   its command, and that command's output. **Leave `status` as it is** — the
-  lander sets it with the gate record. Preflight fails any `done` ticket your
+  lander sets it with the gate record, and the one move that is yours is
+  `needs-decision` to `ready` in the commit that records an answer. Never
+  `in-flight`, whatever the dispatch says. Preflight fails any `done` ticket your
   branch touches that carries no `## Review`, so do not edit another finished
   ticket's file.
 - **Push, then open a draft pull request**: `git push -u origin <branch>`, check

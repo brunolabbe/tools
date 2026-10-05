@@ -153,7 +153,9 @@ means the filing is complete and the work is not dispatchable, because the ticke
 poses a question its own page says must not be settled by whoever picks it up.
 Move it to `ready` in the commit that records the answer — the answer goes on the
 ticket, never into a builder's prompt alone, or the board says blocked while the
-file says otherwise.
+file says otherwise. That commit may be the first on the branch that builds the
+ticket: an answer does not need a pull request of its own, and the build does
+not wait on one merging.
 
 It exists because `ready` was carrying two meanings, _unclaimed_ and
 _dispatchable_, and only the first was recorded anywhere. Every other status
