@@ -136,6 +136,13 @@ Three gate records on `main`, each graded by hand. All three are under
   `tools/downloader/docs/work/dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md`,
   the section headed `### Gate 2`. Its header says the one thing between it and
   PASS is a clause "that only a real bump pull request can prove".
+- **lg-5's gates 1 and 2, CONCERNS with Done-when 4 "Gates green" left
+  `unproven (gate)`.** In
+  `tools/ledger/docs/work/lg-5-people-ratios-and-the-two-buckets.md`, the
+  `## Review` section and `### Gate 2`. Every check passed but the
+  code-scanning `CodeQL` check, which the owner had excused until merge under
+  adr/005. Whether that is an event after the merge by the `awaiting` test, or
+  a line nothing will run, is not settled by the answer above.
 
 There is no record yet of the case the narrowed rule grades CONCERNS: a build
 that matches the Decision, a Done-when line it cannot meet, and no test that
@@ -182,6 +189,8 @@ before editing, and do not settle either here.
   gate 1, PASS for repo-46's gate 3 and PASS for dl-73's gate 2.
 - The rule says which of repo-89's two `unproven (gate)` rows it moves, and
   why.
+- The rule says how it grades lg-5's Done-when 4, a check the owner excused
+  until merge, and why.
 - A lander's page names the `awaiting` step, and the four pages in Build step
   4 agree with `gate.md`.
 - `npm run check` passes.
@@ -208,3 +217,7 @@ before editing, and do not settle either here.
   because both owed a post-merge line that nothing showed. Not checked:
   whether the other session's review of history items 17 and 19 has changed
   `gate.md`.
+- 2026-10-05 — lg-5's gates 1 and 2 added as a fourth reproduction, with a
+  `Done when` line, from item 7 of the 2026-10-04 batch's history entry. The
+  owner's answer is unchanged; how the rule grades an excused check is left to
+  the Build.

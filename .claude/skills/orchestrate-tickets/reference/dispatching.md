@@ -34,6 +34,10 @@ the first dispatch with `node scripts/agent-cost.mjs --agent <id>`.
   context for this one.
 - **What is already settled**, on a resume: which findings are addressed, what a
   previous round measured.
+- **The owner's answer, when the ticket is `needs-decision`**: the answer, its
+  date and the options it was chosen from, pasted. The builder records it on
+  the ticket and sets `ready` in its first commit (`roles/builder.md`). Name no
+  `status` yourself.
 - **Ship authority, or not.** The default is: build, push, open a draft pull
   request, stop. Authority to land goes in the agent's own dispatch or a direct
   message from you, never through a gate.
@@ -80,6 +84,28 @@ next action after capturing the output; proof of deletion in the report
 (`git ls-remote --heads origin | grep -c <name>` → 0), which you then check; and
 an explicit way out — "if it is not worth the churn, say so and verify as far as
 you can".
+
+### A probe pull request
+
+A measurement that needs CI to run on a real pull request — a code-scanning
+check, a workflow leg — is the opposite case: workflows must fire, so the
+conditions above do not fit. Every sibling's preflight merges against its head
+for as long as it is open, so:
+
+- **It adds new files only.** Where the measurement needs an edit to an existing
+  file, pick one that no open pull request and no ticket in the batch touches,
+  and name it in the dispatch.
+- **Its title is checked like any other**
+  (`node scripts/commit-message.mjs --text "<title>"`) before you write it into
+  the prompt; "DO NOT MERGE" goes after the type and scope.
+- **It is a draft, and it is closed with its branch deleted** as the next action
+  after the reading is captured. A sibling whose preflight exits 16 against a
+  probe waits for that, and changes nothing.
+
+**Preflight exit 16 against a sibling that will merge** blocks `gh pr ready` on
+the branch that merges second, not on both: set the order, hold the second as a
+draft, and rebase it once the first has merged
+([concurrency.md](concurrency.md)).
 
 ## Routing a round
 
