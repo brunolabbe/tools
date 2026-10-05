@@ -157,3 +157,44 @@ down the salary and ratio history the owner wants charted (§9).
     looked at on a phone. Neither bucket counts the account's balance before the
     first stored row, so until lg-7 imports the history the two balances sum to
     the account's balance less that opening amount.
+
+- 2026-10-05 — Round 1 after gate 1 (CONCERNS at `4a7647b`), with the owner's
+  three answers.
+  - **The `CodeQL` alerts are excused in code, per `docs/adr/005`** (the
+    owner's choice (a), over the gate's (b), UI dismissal). Two `// codeql[...]`
+    comments, one above `GET /api/people` in `routes/rules.ts` and one above
+    `GET /api/salaries` in `routes/salaries.ts`, each with the five fields. The
+    rule id is `js/missing-rate-limiting`: the check run's page names the alerts
+    "Missing rate limiting", "This route handler performs a database access, but
+    is not rate-limited", and that is the `@name` and message of
+    `javascript/ql/src/Security/CWE-770/MissingRateLimiting.ql` in
+    github/codeql, whose `@id` is `js/missing-rate-limiting`. The page shows
+    lines 62 and 29, each the handler's last line, so the comment sits above the
+    `app.get(` line where the handler starts. **The guard was measured, not
+    argued:** taking `{ onRequest: read }` off `GET /api/people` makes `npx
+vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
+21 passed (22)` ("people refuses the second request in a minute, as
+    RATE_LIMITED"); off `GET /api/salaries`, `1 failed | 21 passed (22)` ("GET
+    salaries refuses the second request in a minute too"). Both restored.
+  - **The display name stays as built** (`people(id, added_at)`), by the owner's
+    answer.
+  - **A name in `ACCESS_PEOPLE` is permanent**, by the owner's choice (A),
+    recorded in `docs/00-ANALYSIS.md` §7. Retiring a person is future work.
+  - **Migration 3 now enrols every person id lg-4 stored** on a rule or a
+    classification, as of the first record naming it; migration 3 is unshipped,
+    so it was edited rather than followed by a fourth. `migrate` takes an
+    optional target version so a test can build a database as lg-4 left it.
+    `api/test/people.test.ts`, "every person id its rules and classifications
+    name is enrolled, configured or not", failed before the change (`expected [
+'alex', 'sam' ] to deeply equal [ 'alex', 'casey', 'dana', 'sam' ]`) and
+    passes after.
+  - **What three people does, reproduced** on a database at migration 2 with
+    rows classified to alex, sam and casey, the configuration naming alex and
+    sam. Before the change `GET /api/people` was `["alex","sam"]`, so the
+    salaries screen asked for two salaries and worked; after it, it is
+    `["alex","casey","sam"]`, and rendered with three people the screen refuses
+    a blank casey ("casey's salary is not an amount") and, with casey at 0,
+    stores three salaries and proposes no ratio, so there is no Confirm button.
+    The home screen's "Both have paid the same." over three unequal amounts was
+    reachable before the change too: `GET /api/buckets` already answered `own`
+    for all three with `lead: null`. Reported as an open decision.

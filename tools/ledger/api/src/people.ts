@@ -7,11 +7,13 @@
  * and classifications — so every row stored before the table existed still names
  * someone in it.
  *
- * The configuration is the only writer. At boot, each name it holds that the
- * table does not is added; nothing is ever removed, because a person a stored
- * row names stays named after the configuration stops letting them in. No name
- * is seeded from the repository: a fresh database with no configuration has no
- * people.
+ * Two writers, both of names the household already uses. Migration 3 enrols
+ * every person id lg-4 had stored on a rule or a classification, configured or
+ * not; then, at every boot, each name the configuration holds that the table
+ * does not is added. Nothing is ever removed, because a person a stored row names
+ * stays named after the configuration stops letting them in (a name is
+ * permanent: `docs/00-ANALYSIS.md` §7). No name is seeded from the repository: a
+ * fresh database with no configuration has no people.
  */
 
 import type { Database } from "better-sqlite3";

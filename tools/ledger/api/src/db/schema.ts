@@ -132,6 +132,18 @@ const MIGRATIONS: readonly string[] = [
     added_at TEXT NOT NULL
   );
 
+  -- Everyone lg-4 already named, configured now or not, so no stored row names
+  -- nobody: added as of the first record naming them. Boot then adds the
+  -- configured names this leaves out (people.ts). From here on a person id is
+  -- checked against this table before it is stored.
+  INSERT INTO people (id, added_at)
+    SELECT person_id, min(at) FROM (
+      SELECT person_id, created_at AS at FROM rules WHERE person_id IS NOT NULL
+      UNION ALL
+      SELECT person_id, classified_at FROM classifications WHERE person_id IS NOT NULL
+    )
+    GROUP BY person_id;
+
   -- A person's salary for a year. A correction is a later record that
   -- supersedes the earlier, which stays.
   CREATE TABLE salaries (
@@ -186,7 +198,12 @@ const MIGRATIONS: readonly string[] = [
   `,
 ];
 
-export function migrate(db: Database): void {
+/**
+ * Brings `db` up to `target`, every migration by default. A test passes a lower
+ * `target` to build a database as an earlier release left it, then migrates the
+ * rest of the way, which is what an upgrade does.
+ */
+export function migrate(db: Database, target: number = MIGRATIONS.length): void {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   // Without this, a concurrent writer fails instantly with SQLITE_BUSY rather
@@ -194,7 +211,7 @@ export function migrate(db: Database): void {
   db.pragma("busy_timeout = 5000");
 
   const current = Number((db.pragma("user_version", { simple: true }) as number) ?? 0);
-  for (let version = current; version < MIGRATIONS.length; version++) {
+  for (let version = current; version < Math.min(target, MIGRATIONS.length); version++) {
     const statement = MIGRATIONS[version];
     if (statement === undefined) continue;
     db.exec("BEGIN");

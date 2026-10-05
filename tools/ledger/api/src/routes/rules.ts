@@ -55,6 +55,15 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
     return body;
   });
 
+  // CodeQL's `js/missing-rate-limiting` models express-rate-limit and its kin,
+  // not `@webtools/core`'s `RateLimiter`, so it reads the `read` hook on this
+  // route as no limit at all; the route is limited per person like every other
+  // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
+  // `api/src/routes/rules.ts`. Guarded by `api/test/route-limits.test.ts`:
+  // taking `{ onRequest: read }` off this route fails 1 of its 22 tests, "people
+  // refuses the second request in a minute, as RATE_LIMITED" — that test, not
+  // this comment, is what holds it. Measured 2026-10-05 at 4a7647b.
+  // codeql[js/missing-rate-limiting]
   app.get(ROUTES.people, { onRequest: read }, async () => {
     // The table, which boot fills from the configuration (people.ts).
     const body: PeopleResponse = { people: knownPeople(context.db) };

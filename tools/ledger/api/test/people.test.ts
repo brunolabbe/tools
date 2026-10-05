@@ -182,3 +182,58 @@ describe("migration 3: salaries and ratios", () => {
     db.close();
   });
 });
+
+// Gate 1 of lg-5: a person id lg-4 stored, from a configuration that has since
+// changed, must still name someone once the table exists.
+describe("upgrading a database lg-4 wrote", () => {
+  test("every person id its rules and classifications name is enrolled, configured or not", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-upgrade-"));
+    const databasePath = path.join(dir, "ledger.db");
+    try {
+      // As lg-4's release left it: two migrations, a rule naming casey and a row
+      // classified to dana, neither of whom the configuration below names.
+      const old = new Database(databasePath);
+      migrate(old, 2);
+      old
+        .prepare(
+          "INSERT INTO statement_imports (imported_at, imported_by) VALUES ('2026-09-01T00:00:00.000Z', 'casey')",
+        )
+        .run();
+      old
+        .prepare(
+          `INSERT INTO statement_rows (seq, date, category, description, amount_cents, balance_cents, import_id)
+           VALUES (0, '2026-09-02', 'Virements', 'Virement', 100, 100, 1)`,
+        )
+        .run();
+      old
+        .prepare(
+          `INSERT INTO rules (description_pattern, category, amount_cents, person_id, bucket, created_at, created_by)
+           VALUES ('Virement', NULL, NULL, 'casey', 'mortgage', '2026-09-01T00:00:00.000Z', 'casey')`,
+        )
+        .run();
+      old
+        .prepare(
+          `INSERT INTO classifications (row_id, bucket, person_id, rule_id, source, classified_at, classified_by)
+           VALUES (1, 'mortgage', 'dana', NULL, 'manual', '2026-09-03T00:00:00.000Z', 'casey')`,
+        )
+        .run();
+      old.close();
+
+      app = await createApp({
+        config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
+      });
+
+      expect(people(app)).toEqual(["alex", "casey", "dana", "sam"]);
+      // Added when the id was first recorded, not when the upgrade ran.
+      expect(app.context.db.prepare("SELECT added_at FROM people WHERE id = 'dana'").get()).toEqual(
+        { added_at: "2026-09-03T00:00:00.000Z" },
+      );
+      const response = await app.server.inject({ method: "GET", url: ROUTES.people });
+      expect(response.json<PeopleResponse>().people).toEqual(["alex", "casey", "dana", "sam"]);
+    } finally {
+      await app?.shutdown();
+      app = undefined;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

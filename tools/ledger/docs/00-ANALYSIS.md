@@ -424,6 +424,14 @@ entirely.
   production image refuses.
 - **The email-to-person mapping** is configuration, never a table seeded from
   the repository.
+- **A name in `ACCESS_PEOPLE` is permanent.** _Decided by the owner on
+  2026-10-05, in lg-5._ The books name people by that name: lg-4 stores it on
+  rules and classifications, and lg-5's `people` table holds every name the
+  configuration or a stored row has ever used. Nothing removes one, so a
+  renamed or departed person stays a person: listed by `/api/people`, asked
+  for on the salaries screen, and given a share of the mortgage's joint rows.
+  Changing an address is safe; changing the name it maps to is not. Retiring a
+  person is future work, for when someone first needs it.
 
 ## 8. The one-off import
 
