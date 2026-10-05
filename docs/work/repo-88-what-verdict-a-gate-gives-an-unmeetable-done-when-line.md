@@ -3,7 +3,7 @@ id: repo-88
 tool: repo
 title: what verdict a gate gives a faithful build of an unmeetable Done-when line, or a line proven only by a release
 kind: work-package
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -57,6 +57,27 @@ recommendation is set here; it is the owner's to choose.**
 What the page does today, for comparison, is neither: it has no rule, so the
 verdict depends on the gate.
 
+### The answer
+
+**Option 2.** Chosen by the owner on 2026-10-05, in answer to these two options
+plus "leave it open". The orchestrator recommended it, so no recommendation was
+overridden. Two facts the filing did not have were put to the owner with it:
+
+- pl-40's gate 2 had already graded lines only the owner's run could prove as
+  "awaiting owner run", and returned **PASS**. Under option 1 that record would
+  be the outlier.
+- `docs/01-TICKETS.md` now defines an `awaiting` frontmatter field for "waiting
+  on an event that will happen". `npm run status` shows it until it is closed.
+  A release after the merge is exactly that kind of event.
+
+So:
+
+- **A line proven only by a post-merge release is PASS.** The row names the
+  event that proves it, and the ticket's `awaiting` field carries the line, so
+  the obligation survives the merge.
+- **An open decision found on a faithful build is CONCERNS, not FAIL.** The row
+  names the contradictory facts so the owner can see what is open.
+
 ## Reproductions
 
 Two gate records, each a case the gate graded by hand:
@@ -66,25 +87,29 @@ Two gate records, each a case the gate graded by hand:
   under `## Review`, the section headed `### Gate 1`: its first row (Done-when
   1. and its first finding, F1, _open decision_. Read the verdict line and
      that F1.
-- **repo-46's gate 3, CONCERNS resting only on Done-when 1 and 3.** This record
-  is not on `main` yet. It is on open PR #328, branch `repo-46-lockfile-stamp`,
-  in the ticket for repo-46, under `## Review`, the section headed
-  `### Gate 3`. Its first line gives the verdict and the reason: "CONCERNS only
+- **repo-46's gate 3, CONCERNS resting only on Done-when 1 and 3.** On `main`
+  since PR #328 merged, in
+  `docs/work/repo-46-release-commits-never-update-the-lockfile.md`, under
+  `## Review`, the section headed `### Gate 3`. Its first line gives the verdict and the reason: "CONCERNS only
   because Done when 1 and 3 are still **unproven (gate)** until a release".
 
 ## Build
 
-Not until the decision is answered. Once it is: the verdict rule goes in
-`.claude/skills/review-ticket/gate.md`, and `roles/reviewer.md` restates it
-wherever it restates the verdicts; the two bullets dropped from PR #329 are the
-starting draft and must state their effect on the verdict.
+The verdict rule from "The answer" goes in
+`.claude/skills/review-ticket/gate.md`, under _Severity and the gate_ and in step
+4's row verdicts. `.claude/skills/orchestrate-tickets/roles/reviewer.md` restates
+it wherever it restates the verdicts. The two bullets dropped from PR #329 are
+the starting draft, and each must state its effect on the verdict. The
+post-merge case also says what goes in `awaiting`, in the form
+`docs/01-TICKETS.md` gives.
 
 ## Done when
 
 - `gate.md` states the verdict for a faithful build of an unmeetable Done-when
-  line and for a line proven only by a post-merge release.
+  line (CONCERNS) and for a line proven only by a post-merge release (PASS,
+  with the line in `awaiting`).
 - Both reproductions above, read against the new rule, give the verdict it
-  states.
+  states: CONCERNS for repo-49's gate 1, PASS for repo-46's gate 3.
 - `npm run check` passes.
 
 ## Log
@@ -93,3 +118,9 @@ starting draft and must state their effect on the verdict.
   close-out: drop the two verdict bullets the builder drafted for `gate.md`, and
   pose the question here with the gate's options and no recommendation. The
   reproductions are the two gate records above.
+- 2026-10-05 — Answered by the owner: **option 2** (see "The answer"). `status`
+  is now `ready`. The premise was re-checked against `gate.md` on `3a7d8a9`
+  first: its verdict list (FAIL, CONCERNS, `unproven (scope)`, PASS, WAIVED)
+  still has no entry for either case. Build and Done when are now written
+  against the answer. Folded in: repo-46's gate 3 is on `main` now that #328
+  has merged, so the reproduction says so.
