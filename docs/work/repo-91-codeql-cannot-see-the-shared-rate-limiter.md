@@ -122,11 +122,12 @@ cost below is either measured (with its variant in the Log) or marked
    excuse"), with `security.yml` dismissing on a push to `main`. Under it a pull
    request touching the file **still gets a red `CodeQL` check** until then.
    The cost lands per route, in any tool that trips it: a comment of five fields,
-   a red check on every PR whose diff introduces or relocates the alert (adr/005
-   > Context), which includes editing anything above the route in the same file
-   > and not only the route itself, and a push to `main` before it clears. **Unmeasured:** where the comment goes, since the annotation sits on
-   > the closing line of the `app.get(...)` call (every alert in the Log), and
-   > whether the suppression matches an alert there.
+   a red check on every PR whose diff introduces or relocates the alert (adr/005,
+   Context), which includes editing anything above the route in the same file and
+   not only the route itself, and a push to `main` before it clears.
+   **Unmeasured:** where the comment goes, since the annotation sits on the
+   closing line of the `app.get(...)` call (every alert in the Log), and whether
+   the suppression matches an alert there.
 3. **Add a CodeQL model, a pack or an extension, teaching it core's
    `RateLimiter`.** The "leaving default setup for an advanced one" cost is
    void: the repo already runs the advanced workflow, with `packs:` already
@@ -159,6 +160,24 @@ error TS2353: ... 'rateLimit' does not exist in type 'RouteShorthandOptions<...>
    held in a variable or a cast (the class uses `flowsTo`, so CodeQL may still
    match it), and, under this option, whether the plugin's own type augmentation
    makes `config.rateLimit` typecheck, which would reopen G1.
+
+### The answer
+
+**Option 2, chosen by the owner on 2026-10-05, relayed by the orchestrator:** keep
+core's limiter and excuse each alert in code under adr/005, on the options as
+re-posed at ab68bad (1 to 4). It was the orchestrator's recommendation when it
+asked and overrode none; this ticket carried none, by design. It meets `Done when`
+line 2 by that line's own "or": the Log says why the chosen option is an excuse
+and not a pass, which is that CodeQL does not model core's limiter, and the
+route stays flagged until `security.yml` dismisses on a push to `main`. The
+two measured ways to make the check pass without an excuse (an `app.addHook`
+limiter, or `@fastify/rate-limit` registered) were not chosen. lg-5 (#354, open
+at this entry) is the first work to use the path: its branch carries
+`// codeql[js/missing-rate-limiting]` in `routes/rules.ts` and
+`routes/salaries.ts` (read from `refs/pull/354/head`; the two routes, `GET
+/api/people` and `GET /api/salaries`, are relayed). Whether the suppression
+matches an alert reported on the closing line is still **unmeasured** and is
+not observable before that merge.
 
 ## Reproduction
 
@@ -342,3 +361,18 @@ repo-91-codeql-probe-scratch` printed `0`. The 2026-10-04 gate's other
 'tools/*/api/src/routes/*.ts'` lists 10 route files, and `git grep -n "addHook"
 origin/main -- tools packages` lists seven calls, none a limiter (CORS in all
   three servers' `registerCors`, request logging, identity, `onSend`).
+
+- 2026-10-05: **the owner chose option 2; the ticket is landed `done`.** The
+  choice is recorded under "The decision" > "The answer" above; the options and
+  the measurement are unchanged. The three gates (2026-10-04, 2026-10-05 twice)
+  are the `## Review` and `### Gate` sections above this Log, committed as the
+  gates wrote them. Gate 3 (PASS) left one low, that option 2's text wrapped a
+  line to begin `> Context)`, which markdown reads as a block quote and `oxfmt`
+  extended over three more lines; it is fixed in this change by writing "(adr/005,
+  Context)". Check: `grep -n -E "^\s*>" docs/work/repo-91-codeql-cannot-see-the-shared-rate-limiter.md`
+  printed four lines at ab68bad and prints none after `npx oxfmt`. The two probe
+  pull requests (#352, #356) are closed and their branches deleted. Still
+  **unmeasured**, from the entries above and not settled by this choice: whether
+  an adr/005 suppression matches an alert reported on the closing line of a
+  route call (first observable when #354 merges), and everything under "Not
+  measured" in the 2026-10-04 and 2026-10-05 entries.
