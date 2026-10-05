@@ -1,10 +1,11 @@
 /**
- * The shell: the paste screen (lg-2), then the inbox and the rules (lg-4).
+ * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
+ * and the inbox and the rules (lg-4).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
  * thing to unpick, so each one lands with the work that stores what it shows.
- * Three screens do not need a router: a tab is a piece of state, and the inbox
+ * Five screens do not need a router: a tab is a piece of state, and the inbox
  * carries the number of rows waiting so a paste that left some is not missed.
  */
 
@@ -13,14 +14,16 @@ import { AppError } from "@ledger/contract";
 import type { HealthResponse } from "@ledger/contract";
 import { fetchHealth } from "./api/health.ts";
 import { fetchInbox } from "./api/inbox.ts";
+import { Home } from "./home/Home.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { Rules } from "./rules/Rules.tsx";
+import { Salaries } from "./salaries/Salaries.tsx";
 import { StatementPaste } from "./statements/StatementPaste.tsx";
 
-type Tab = "paste" | "inbox" | "rules";
+type Tab = "home" | "paste" | "inbox" | "rules" | "salaries";
 
 export function App(): React.ReactElement {
-  const [tab, setTab] = useState<Tab>("paste");
+  const [tab, setTab] = useState<Tab>("home");
   const [waiting, setWaiting] = useState<number | null>(null);
 
   // Asked again on every change of tab, which is when a paste has just left some.
@@ -40,6 +43,9 @@ export function App(): React.ReactElement {
         <p className="muted">The household&rsquo;s shared account.</p>
       </header>
       <nav className="tabs" aria-label="Screens">
+        <button type="button" aria-pressed={tab === "home"} onClick={() => setTab("home")}>
+          Home
+        </button>
         <button type="button" aria-pressed={tab === "paste"} onClick={() => setTab("paste")}>
           Paste
         </button>
@@ -49,11 +55,16 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "rules"} onClick={() => setTab("rules")}>
           Rules
         </button>
+        <button type="button" aria-pressed={tab === "salaries"} onClick={() => setTab("salaries")}>
+          Salaries
+        </button>
       </nav>
       <main>
+        {tab === "home" && <Home />}
         {tab === "paste" && <StatementPaste />}
         {tab === "inbox" && <Inbox onCount={setWaiting} />}
         {tab === "rules" && <Rules />}
+        {tab === "salaries" && <Salaries />}
       </main>
       <Health />
     </div>

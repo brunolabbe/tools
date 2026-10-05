@@ -3,8 +3,9 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
-**Built a ticket at a time.** The seams exist, and two domains: the pasted
-statement (lg-1, lg-2) and what files each row (lg-4). `docs/02-ROADMAP.md` is what is decided and what comes
+**Built a ticket at a time.** The seams exist, and three domains: the pasted
+statement (lg-1, lg-2), what files each row (lg-4), and what each bucket holds
+with the salaries and the ratio (lg-5). `docs/02-ROADMAP.md` is what is decided and what comes
 next; `npm run status -- --tool ledger` is what is open. Treat anything below
 marked _planned_ as design until a ticket says otherwise.
 
@@ -25,8 +26,8 @@ e2e          Playwright specs — none yet; e2e/README.md says what earns the fi
 ```
 
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
-`classify`, which files a row under a rule only on an exact match (lg-4); the
-split arithmetic joins it as its ticket lands. The name is `books` because `ledger` is the tool. _Planned_, arriving
+`classify`, which files a row under a rule only on an exact match (lg-4), and
+what each bucket holds as of a date and the ratio from two salaries (lg-5). The name is `books` because `ledger` is the tool. _Planned_, arriving
 with the ticket that first needs it rather than as an empty package now:
 **`receipts`**, the one package that talks to a model, reading a receipt photo.
 
@@ -87,9 +88,18 @@ migration, once shipped, is never edited either — append the next one.
 **Rules and classifications are appended the same way.** A rule is edited by
 filing a version that supersedes it and retired by filing a retirement; a row is
 reclassified by appending a record, and the latest stands (`current_rules` and
-`current_classifications`, in `api/src/db/schema.ts`).
+`current_classifications`, in `api/src/db/schema.ts`). Salaries and ratios are
+corrected the same way (lg-5, `current_salaries` and `current_ratios`), and a
+corrected salary never moves a ratio already confirmed from it.
 `api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
 a `DELETE`.
+
+**People come from configuration, never the repository.** The `people` table
+(lg-5) is filled at boot from `ACCESS_PEOPLE`'s names, and a person's id is that
+name — the text lg-4 stores on rules and classifications — so it must stay that
+name. Migration 3 also enrols the person ids lg-4 had already stored on rules and
+classifications, and nothing else. Why a name is permanent is in
+`docs/00-ANALYSIS.md` §7.
 
 **Rules live in the database only.** Caisse names identify a household, so no
 rule is seeded from the repository: not in a migration, not in a fixture. A test

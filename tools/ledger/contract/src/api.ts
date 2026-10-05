@@ -30,6 +30,10 @@ export const ROUTES = {
   inbox: `${API_PREFIX}/inbox`,
   classifications: `${API_PREFIX}/classifications`,
   people: `${API_PREFIX}/people`,
+  // lg-5: what each bucket holds and whose it is, the salaries, and the ratio.
+  buckets: `${API_PREFIX}/buckets`,
+  salaries: `${API_PREFIX}/salaries`,
+  ratios: `${API_PREFIX}/ratios`,
 } as const;
 
 /**
@@ -153,7 +157,11 @@ export interface RulesResponse {
   rules: Rule[];
 }
 
-/** `GET /api/people`: who a rule or a classification may name, from the API's configuration. */
+/**
+ * `GET /api/people`: who a rule, a classification or a salary may name. Each is a
+ * configured name (`Person.id`), kept in the database's `people` table from lg-5
+ * on, so a row that names someone still does after the configuration changes.
+ */
 export interface PeopleResponse {
   people: string[];
 }
@@ -226,4 +234,140 @@ export interface ClassificationRecord {
   source: ClassificationSource;
   classifiedAt: string;
   classifiedBy: string;
+}
+
+/** `yyyy-mm-dd`, a real calendar day. */
+export const isoDateSchema = z.iso.date();
+
+/**
+ * The query `GET /api/buckets` and `GET /api/ratios` take. With no `asOf` the
+ * API answers for today, by its own clock.
+ */
+export const asOfQuerySchema = z.strictObject({ asOf: isoDateSchema.optional() });
+
+/** One person's own money in the mortgage bucket: their deposits less half of every payment. */
+export interface OwnMoney {
+  personId: string;
+  ownCents: number;
+}
+
+/** `GET /api/buckets`: what each bucket holds as of a date, and whose it is (lg-5). */
+export interface BucketsResponse {
+  /** `yyyy-mm-dd`: every row dated on or before it, classified as it now stands. */
+  asOf: string;
+  /**
+   * The mortgage bucket is not shared money (`docs/00-ANALYSIS.md` §4): each
+   * person's own amounts sum to `balanceCents` exactly. `lead` is who has paid
+   * more in, and by how much; `null` when the two are level.
+   */
+  mortgage: {
+    balanceCents: number;
+    own: OwnMoney[];
+    lead: { personId: string; byCents: number } | null;
+  };
+  /** The current-expenses bucket: shared money, and what each person has put in. */
+  buffer: {
+    balanceCents: number;
+    contributions: { personId: string; contributedCents: number }[];
+  };
+  /** Rows no classification has filed yet, which neither bucket counts. */
+  unclassified: number;
+}
+
+/**
+ * One salary record: a person's salary for a year (lg-5). Never edited: a
+ * correction is a later record that supersedes this one, and both are kept.
+ */
+export interface Salary {
+  id: number;
+  personId: string;
+  year: number;
+  amountCents: number;
+  /** The record this one corrects, if any. */
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+/** `GET /api/salaries`: the salaries that stand, newest year first. */
+export interface SalariesResponse {
+  salaries: Salary[];
+}
+
+/** `POST /api/salaries`: a year's salaries, one per person. */
+export interface SalaryEntry {
+  year: number;
+  salaries: { personId: string; amountCents: number }[];
+}
+
+export const salaryEntrySchema = z.strictObject({
+  year: z.number().int().min(1900).max(2200),
+  salaries: z
+    .array(
+      z.strictObject({
+        personId: z.string().min(1).max(100),
+        amountCents: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .min(1)
+    .max(10),
+}) satisfies z.ZodType<SalaryEntry>;
+
+/** A person's share of a ratio, in parts per million, and the salary it came from. */
+export interface RatioShare {
+  personId: string;
+  partsPerMillion: number;
+  /** `null` for a ratio that was not derived from a salary. */
+  salaryId: number | null;
+}
+
+/** What the API derives from a year's salaries, for a person to confirm. Nothing is stored yet. */
+export interface RatioProposal {
+  /** Proposed: the day the salaries were entered. The person may choose another. */
+  effectiveFrom: string;
+  shares: RatioShare[];
+}
+
+/** What `POST /api/salaries` answers: the year's salaries as they now stand, and the ratio they give. */
+export interface SalaryEntryResponse {
+  salaries: Salary[];
+  /** `null` when the year does not yet hold a salary for each of the two people. */
+  proposal: RatioProposal | null;
+}
+
+/**
+ * A ratio, as confirmed (lg-5). It is stored as well as derived, because a
+ * settlement must be recomputable with the ratio it actually used. Never edited:
+ * confirming another ratio for the same day supersedes this one.
+ */
+export interface Ratio {
+  id: number;
+  effectiveFrom: string;
+  /** In id order; the parts sum to exactly 1 000 000. */
+  shares: RatioShare[];
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+/**
+ * `POST /api/ratios`: confirm the ratio derived from these salary records,
+ * taking effect on `effectiveFrom`. The API derives it again from the records
+ * named, so what is stored is what those salaries give.
+ */
+export interface ConfirmRatioRequest {
+  effectiveFrom: string;
+  salaryIds: number[];
+}
+
+export const confirmRatioRequestSchema = z.strictObject({
+  effectiveFrom: isoDateSchema,
+  salaryIds: z.array(z.number().int().positive()).min(1).max(10),
+}) satisfies z.ZodType<ConfirmRatioRequest>;
+
+/** `GET /api/ratios`: every ratio that stands, oldest first, and the one in effect on `asOf`. */
+export interface RatiosResponse {
+  asOf: string;
+  ratios: Ratio[];
+  inEffect: Ratio | null;
 }

@@ -6,8 +6,9 @@ spreadsheet.
 
 > **Under construction.** The seams exist — contract, API, a web shell, the
 > image — and the books arrive a ticket at a time: so far a pasted statement,
-> stored and chained onto what is stored, and its rows filed by rule, with an
-> inbox for the rest. The split and who owes what are not built. What is decided
+> stored and chained onto what is stored, its rows filed by rule, with an
+> inbox for the rest, and what each bucket holds and whose it is, with the
+> salaries and the ratio. The periods and the settlement are not built. What is decided
 > and what comes next is in
 > [docs/02-ROADMAP.md](./docs/02-ROADMAP.md); where it stands is
 > `npm run status -- --tool ledger`.

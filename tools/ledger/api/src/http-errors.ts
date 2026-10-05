@@ -40,6 +40,8 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // lg-4: an id the caller named that is not there — a rule in force, a stored row.
   RULE_NOT_FOUND: 404,
   ROW_NOT_FOUND: 404,
+  // lg-5: a salary record named to derive a ratio from, which no longer stands.
+  SALARY_NOT_FOUND: 404,
 };
 
 /**

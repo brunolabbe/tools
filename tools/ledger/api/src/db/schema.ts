@@ -117,9 +117,93 @@ const MIGRATIONS: readonly string[] = [
     SELECT * FROM classifications
     WHERE id = (SELECT max(id) FROM classifications later WHERE later.row_id = classifications.row_id);
   `,
+
+  // 3 — the people, their salaries and the ratio (lg-5).
+  `
+  -- The household. A person's id is the name the configuration maps their
+  -- Access address to (Person.id), which is also what is shown, and what lg-4's
+  -- rules and classifications already store as plain text: so the ids here must
+  -- stay those names, or the rows stored before this table would name nobody.
+  -- The addresses stay in configuration. A person is added at boot, when the
+  -- configuration first names them, and is never removed: the rows they are
+  -- named on outlive any change to who may sign in.
+  CREATE TABLE people (
+    id TEXT PRIMARY KEY,
+    added_at TEXT NOT NULL
+  );
+
+  -- The person ids lg-4 already stored on rules and classifications, configured
+  -- now or not, and nothing else: added as of the first record naming them.
+  -- Boot then adds the configured names this leaves out (people.ts). From here
+  -- on a person id is checked against this table before it is stored.
+  INSERT INTO people (id, added_at)
+    SELECT person_id, min(at) FROM (
+      SELECT person_id, created_at AS at FROM rules WHERE person_id IS NOT NULL
+      UNION ALL
+      SELECT person_id, classified_at FROM classifications WHERE person_id IS NOT NULL
+    )
+    GROUP BY person_id;
+
+  -- A person's salary for a year. A correction is a later record that
+  -- supersedes the earlier, which stays.
+  CREATE TABLE salaries (
+    id INTEGER PRIMARY KEY,
+    person_id TEXT NOT NULL REFERENCES people (id),
+    year INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+    supersedes INTEGER REFERENCES salaries (id),
+    entered_at TEXT NOT NULL,
+    -- The Access identity's configured name (Person.id), never an address.
+    entered_by TEXT NOT NULL
+  );
+
+  -- Each record is corrected at most once, and a person's year has one first
+  -- record: together, one chain per person and year, so exactly one stands.
+  CREATE UNIQUE INDEX salaries_supersedes ON salaries (supersedes) WHERE supersedes IS NOT NULL;
+  CREATE UNIQUE INDEX salaries_first ON salaries (person_id, year) WHERE supersedes IS NULL;
+
+  CREATE VIEW current_salaries AS
+    SELECT * FROM salaries
+    WHERE NOT EXISTS (SELECT 1 FROM salaries newer WHERE newer.supersedes = salaries.id);
+
+  -- A ratio, confirmed, and the day it takes effect. Stored and not only derived,
+  -- so a settlement can be recomputed with the ratio it used after a salary is
+  -- corrected. Confirming another ratio for the same day supersedes this one.
+  CREATE TABLE ratios (
+    id INTEGER PRIMARY KEY,
+    -- yyyy-mm-dd.
+    effective_from TEXT NOT NULL,
+    supersedes INTEGER REFERENCES ratios (id),
+    entered_at TEXT NOT NULL,
+    entered_by TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX ratios_supersedes ON ratios (supersedes) WHERE supersedes IS NOT NULL;
+  CREATE UNIQUE INDEX ratios_first ON ratios (effective_from) WHERE supersedes IS NULL;
+
+  CREATE VIEW current_ratios AS
+    SELECT * FROM ratios
+    WHERE NOT EXISTS (SELECT 1 FROM ratios newer WHERE newer.supersedes = ratios.id);
+
+  -- Each person's part of a ratio, in parts per million, and the salary record
+  -- it was derived from, if any. The parts of one ratio sum to 1 000 000; the
+  -- API derives them, and a test holds it to that.
+  CREATE TABLE ratio_shares (
+    ratio_id INTEGER NOT NULL REFERENCES ratios (id),
+    person_id TEXT NOT NULL REFERENCES people (id),
+    parts_per_million INTEGER NOT NULL CHECK (parts_per_million BETWEEN 0 AND 1000000),
+    salary_id INTEGER REFERENCES salaries (id),
+    PRIMARY KEY (ratio_id, person_id)
+  );
+  `,
 ];
 
-export function migrate(db: Database): void {
+/**
+ * Brings `db` up to `target`, every migration by default. A test passes a lower
+ * `target` to build a database as an earlier release left it, then migrates the
+ * rest of the way, which is what an upgrade does.
+ */
+export function migrate(db: Database, target: number = MIGRATIONS.length): void {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   // Without this, a concurrent writer fails instantly with SQLITE_BUSY rather
@@ -127,7 +211,7 @@ export function migrate(db: Database): void {
   db.pragma("busy_timeout = 5000");
 
   const current = Number((db.pragma("user_version", { simple: true }) as number) ?? 0);
-  for (let version = current; version < MIGRATIONS.length; version++) {
+  for (let version = current; version < Math.min(target, MIGRATIONS.length); version++) {
     const statement = MIGRATIONS[version];
     if (statement === undefined) continue;
     db.exec("BEGIN");
