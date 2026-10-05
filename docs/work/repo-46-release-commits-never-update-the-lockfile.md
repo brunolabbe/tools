@@ -7,6 +7,7 @@ status: done
 difficulty: standard
 milestone: null
 depends_on: []
+awaiting: Done when 1 and 3 — the first release commit after #328 changes package-lock.json with its check job green, and npm install --package-lock-only then leaves the lockfile unchanged
 ---
 
 # repo-46 — Release commits never update `package-lock.json`
@@ -752,3 +753,10 @@ scripts/preflight.mjs --base origin/main --title "fix(repo): stamp the
 lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
     **exit 0**, every check ok, title included, `mergeTree` ok against #294
     and #284 (#325 has merged).
+
+- **2026-10-05 — `awaiting` added, from the review of repo-88's answer (PR
+  #357).** Gate 3 left Done when 1 and 3 waiting on a release, and the ticket
+  landed `done` with nothing recording that. `git log c07f984..origin/main
+--grep='^chore(.*): release'` printed nothing today, so no release has
+  happened since #328 and both lines are still owed. Whoever reads the first
+  release commit deletes the line.
