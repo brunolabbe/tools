@@ -3,7 +3,7 @@ id: dl-75
 tool: downloader
 title: The request log writes a thumbnail token in full, and the contract calls it a capability
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -92,6 +92,29 @@ fix costs one line.
 3. A test fails on the other answer: it reads the raw line for both the served and
    the missed thumbnail request.
 4. `npm run check` and the downloader's suite pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-04 · `3a7d8a9..f1a43cc` · Opus 5.5, depth medium
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. The question has an answer written on this ticket                                                 | **verified** — the ticket's "### The answer" section records **Yes**, the owner, 2026-10-04, and the reason                                                                                                                                                                                                                                                                                                                                                                                |
+| 2. `ROUTES.thumbnail`, `routes/thumbnail.ts` and `request-log.ts` agree with it                      | **verified** — all three, plus the `server.ts` error-handler comment, say the token is a capability and is redacted. The `routes/thumbnail.ts` heading "the log does not write it" is true of every canonical path shape. It is not true of one non-canonical shape (first low below)                                                                                                                                                                                                      |
+| 3. A test fails on the other answer, reading the raw line for both the served and the missed request | `api/test/logging.test.ts` › "a thumbnail token never reaches a log line" › "not when the image is served, and not when the token misses" ✓. The `serialised.filter(includes(token))` and `includes(missed)` assertions carry it, and the `toHaveLength(3)` companion fails on empty output. With `CAPABILITY_PREFIXES` reverted to `[ROUTES.file("")]`: 3 of 49 failed. With the error handler's `redactLoggedUrl` removed: 4 of 49 failed, the missed `request rejected` line among them |
+| 4. `npm run check` and the downloader's suite pass                                                   | **verified** — `npm run check` exit 0. `npx vitest run tools/downloader/api` gave 699 passed, 2 skipped (701), 45 of 46 files. On PR #355 at `f1a43cc`, `check` passes, but `test (ubuntu-latest)` was still **pending** when this gate read it                                                                                                                                                                                                                                            |
+
+- **low** · no live call site · `redactLoggedUrl` in `api/src/request-log.ts` does a prefix match on the raw `request.url`, but the router matches the path after normalising it, so a non-canonical path can reach the handler and still not match the prefix:
+  - `GET /api/%74humbnail/<token>` serves the image (200). Its `request` line reads `url=/api/%74humbnail/ogbfEj9z…`, with the token in full.
+  - These shapes return 404 and also log the token in full: `//api/thumbnail/<t>`, `/api//thumbnail/<t>`, `/api/thumbnail%2F<t>`, `/API/THUMBNAIL/<t>`, and `/api/thumbnail//<t>` (logged as `/api/thumbnail/[redacted]/<t>`).
+  - The file route has done the same since dl-23: `/api/%66iles/<token>` reached the file handler (410) and logged the token in both lines.
+  - Every client in the repo builds `ROUTES.thumbnail(token)`. Whether any proxy re-encodes a path this way was not measured.
+  - One fix would cover both routes: redact on the matched route (`request.routeOptions.url` plus `params.token`) instead of the raw prefix.
+- **low** · no `Done when` line depends on it · "nor when the request is rate limited" in `api/test/logging.test.ts` has no companion that fails on empty output. Planted mutant: `request rejected` and `request` lines are dropped when the status is 429. The test still passed (48 of 49; only the file-token test failed).
+- **dropped** · `registerNotFoundHandler` in `server.ts` echoes `request.url` as `details.path`. That goes into the response body, which reaches the caller who already holds the token, and not into a log. `POST /api/thumbnail/<t>` wrote only a redacted `request` line.
+- **dropped** · a malformed percent-encoding (`/api/thumbnail/<t>%ZZ`) answers 400 and writes no line at all, so no token is logged. This predates the change and is outside this ticket.
+- **findings** · the hunt returned 4; 2 carried, 2 dropped.
+- NFR: security ✓ (both `:token` routes redacted, 2 of 2 per `printRoutes`; `rate limited` key is a sha256 prefix) · performance n/a · reliability n/a · maintainability ✓
 
 ## Log
 
