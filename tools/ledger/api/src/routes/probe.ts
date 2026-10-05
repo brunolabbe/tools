@@ -1,7 +1,8 @@
 /**
- * DO NOT MERGE. repo-91 measurement probe, round 2, variant G1: no plugin
- * registered, and the route carries `config: { rateLimit: ... }` next to core's
- * `onRequest` hook. This tests only what the model matches.
+ * DO NOT MERGE. repo-91 measurement probe, round 2, variant G2: no plugin
+ * registered, and the route carries a bare `rateLimit` option next to core's
+ * `onRequest` hook. This tests only what the model matches; `rateLimit` here is
+ * not a Fastify route option.
  */
 
 import { readFileSync } from "node:fs";
@@ -15,8 +16,8 @@ export function registerProbeRoutes(app: FastifyInstance, context: AppContext): 
   const { read } = rateLimitsFor(context);
 
   app.get(
-    "/api/probe-g1",
-    { onRequest: read, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    "/api/probe-g2",
+    { onRequest: read, rateLimit: { max: 10, timeWindow: "1 minute" } },
     async () => {
       return { text: readFileSync(PROBE_FILE, "utf8") };
     },
