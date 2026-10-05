@@ -231,6 +231,50 @@ into this ticket's Log. Then the option's own work.
 - PR #353 CI on 40f65c7: `check`, `pr-title`, `codeql`, `changes`, `dependency-review`, `CodeQL` all `SUCCESS`, and `test` `SKIPPED` (all-`.md`).
 - NFR: security n/a (docs only) · performance n/a · reliability n/a · maintainability — the three meds above.
 
+### Gate 2
+
+**Gate: FAIL** — 2026-10-05 · `40f65c7..4cc2fbf` · Opus 5.5, depth narrow (re-gate of the round's diff only)
+
+**Earlier findings**
+
+- **med, option 1 contradicted by B**: **fixed**. Option 1 now says call sites "do move" and cites B. I re-ran the evidence it cites at 3a7d8a9. `git grep -l "onRequest" 3a7d8a9 -- 'tools/*/api/src/routes/*.ts' | wc -l` prints `10`. `git grep -n "addHook" 3a7d8a9 -- tools packages` lists 7 calls: request-log `onRequest`/`onResponse`, web `onSend`, identity, and the three servers' hooks. None is a limiter. The per-route attachment it says would be given up is the one the header comment in `tools/ledger/api/src/rate-limit.ts` documents ("It is attached to each route, not to the app").
+- **med, option 2 against adr/005**: **fixed**. The five fields, rule 3 ("No test, no excuse"), the rejected UI alternative and the red check until a push to `main` all match `docs/adr/005-excusing-a-code-scanning-finding.md`. See the low below on how the cost is scoped.
+- **med, Fastify limiter omitted**: **fixed**. The "Why" paragraph and option 4 now describe `FastifyRateLimiter` and `FastifyPerRouteRateLimit` as I read them at `codeql-cli/v2.27.1`, and say the reading came through a summarising fetch.
+- **low, "default setup" undercount**: **fixed**. `grep -n -i default` on the ticket leaves only corrective mentions and option 4's "Registered with defaults".
+- **low, positive-control sentence**: **fixed**. The Log now credits C and F's run log, not A, and says the builder did not read that log.
+
+**The second probe (#356)**
+
+`gh pr view 356 --json commits,statusCheckRollup` gives `CLOSED`, draft, base `3a7d8a9`, commits in the order H `9913cde`, G4 `13074f6`, G1 `3410b9d`, G2 `e54ac72`, G5 `25eed13`, G6 `74cc5e3`. The head's `CodeQL` is `SUCCESS` at run 111598769570.
+
+- **Every row is confirmed, including G1 and G2, which the builder read by conclusion only.** I fetched each run page:
+  - H failed at `9913cde` with 4 alerts at `probe.ts` 22, 27, 32 and 37: two file-system, two database.
+  - G5 failed at `25eed13` with 1 alert at line 20.
+  - G4 `13074f6`, G1 `3410b9d`, G2 `e54ac72` and G6 `74cc5e3` all read "No new alerts in code changed by this pull request".
+  - Each alert line is the closing line of its route in the commit read from `refs/pull/356/head`.
+  - The `security` runs for G1, G2, G4 and G6 each log `Done extracting …ledger/api/src/routes/probe.ts` and `Interpreted problem query "Missing rate limiting"`, so no pass is a skipped file or a skipped query.
+- **Positive control: holds.** H1 (`/api/probe-h1`, core's hook in `{ onRequest }`, file system) alerted in the H run itself. It is the same route shape that G5 alerted on, and the same shape G4, G6, G1 and G2 differ from by one change each.
+- **"Registration is what clears it": supported, as worded.** G4 differs from G5 only by the line `app.register(rateLimit, { max: 10, timeWindow: "1 minute" });`. G6 registers on the root `server` in `createApp`, before every route, awaited, with `routes/probe.ts` never naming the plugin. What was run is "`register` of the default import on the route's own instance, before the route". The Log states that limit itself ("No variant sets whether a registration inside a child plugin scope, after the route, or on another instance clears"). Option 4's "the tools' routes can stay as they are" holds for all three tools' layout: `git grep` shows downloader, planner and ledger all call their `register*Route(s)(server, …)` on the root instance.
+- **"The model matches the key, not whether anything limits": supported for CodeQL, but the sentences built on it are false.** See the high.
+- **"A `request` parameter alone does not explain the lg-5 observation": supported, as worded.** H2 and H4 take `request` and read `request.headers["x-probe"]`, and both alerted. The Log's "untested" list (the real routes, a helper in another module, whether that access is modelled) is the honest remainder. Unverified by me: the quoted lg-5 gate sentence. It is not in #354's tree (`git grep -n -i "not flagged"` over `refs/pull/354/head`) or its comments (`gh pr view 354 --comments`), so it is relayed.
+
+**Findings in this round's lines**
+
+- **high** · shipped text that is false against a measurement · option 4 and the Log's "Read plainly" present G1 and G2 as "a measured hazard": the check "would go green with nothing added that limits", and "Whether anything would stop that is unmeasured, and no test in the repo does". **The probe's own CI measured that something stops both forms**: `npm run check` and `npm run build` rejected each one.
+  - Reproduction:
+    - G1: `gh run view 37257413673 --repo brunolabbe/tools --log-failed | grep "error TS"` prints `tools/ledger/api/src/routes/probe.ts(19,34): error TS2353: Object literal may only specify known properties, and 'rateLimit' does not exist in type 'FastifyContextConfig'.`
+    - G2: `gh run view 37257508695 --repo brunolabbe/tools --log-failed | grep "error TS"` prints `…probe.ts(20,24): error TS2353: … 'rateLimit' does not exist in type 'RouteShorthandOptions<…>'`.
+  - So with no plugin installed, the literal forms that cleared CodeQL do not pass `npm run check`. The hazard that remains is narrower and **unmeasured** on both sides:
+    - a form that dodges TypeScript's excess-property check, such as an options object held in a variable or a cast. The class uses `flowsTo`, so CodeQL may still match it.
+    - under option 4, the plugin's own type augmentation, which (unverified) may make `config.rateLimit` typecheck.
+  - The remedy is a sentence, not a probe: state the TS2353 result and narrow the hazard to the untested forms. No `Done when` line depends on it directly, but option 4's stated cost does, and the owner chooses on it.
+- **low** · option 2's cost says "a red check on every PR that edits that route". adr/005 (Context) says the check reports alerts a diff "introduces or relocates", and `security.yml`'s comment says "a pull request touching an excused file". An edit above the route in the same file moves the alert, so "edits that route" understates the cost.
+- **low** · option 4 says "Registered with defaults it would also apply to every route on its instance, and so stack with core's limiter". That is a claim about `@fastify/rate-limit`'s defaults, made in the same paragraph that says its documentation was not read. It needs the same **unmeasured** mark.
+- **dropped** · out of the reviewed range: "The decision" still says core's limiter is one "which two tools use". Since #345 it is three, and the round-1 correction already records that. Lines this round did not touch.
+- **findings** · the hunt returned 4; 3 carried, 1 dropped. Earlier findings: 5 fixed, 0 not fixed, 0 refuted.
+- Status `needs-decision` confirmed at 4cc2fbf. Options say "No recommendation is set" and none is chosen. Each option's cost is stated, with the unmeasured parts marked, apart from the two lows above.
+- NFR: security n/a (docs only) · performance n/a · reliability n/a · maintainability — the high above.
+
 ## Log
 
 - 2026-10-03: filed by the 2026-10-03 batch's close-out, from the owner's
