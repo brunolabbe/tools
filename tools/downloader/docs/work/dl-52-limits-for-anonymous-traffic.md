@@ -87,10 +87,20 @@ covers about ten jobs at the measured rate.
 | `MAX_FILE_SIZE_MB`            | **4096**   | owner, **against** the 1024 recommendation: about 90 min of 1080p, so a whole film fits       |
 | `RATE_LIMIT_PROBE_PER_MINUTE` | 4          | the table's proposal. Stated to the owner with the questions, not separately asked            |
 | `RATE_LIMIT_JOBS_PER_MINUTE`  | 2          | as above                                                                                      |
-| `MAX_JOBS_PER_CLIENT`         | 1          | as above                                                                                      |
+| `MAX_JOBS_PER_CLIENT`         | **2**      | owner, asked separately, **against** the 1 recommendation (see below)                         |
 
-The three rate limits are policy, not something a host measurement sizes. If the
-owner overrides them later, that changes this table, not the Build.
+The two per-minute rate limits are policy, not something a host measurement
+sizes. If the owner overrides them later, that changes this table, not the Build.
+
+**`MAX_JOBS_PER_CLIENT` = 2 is a trade the owner chose knowingly.** It equals
+`MAX_CONCURRENT_JOBS`, so one address can hold both global slots. While it does,
+every other visitor's download waits in line or is refused. At the measured
+29 Mbps, a 4096 MB file holds a slot for about 20 minutes. The cap is keyed on
+the client address, so a household behind one router shares it. The
+alternative, 1, keeps a slot free for a stranger, and the owner declined it.
+The comment in `compose.downloader.prod.yaml` says so, so that the value does
+not read as an oversight next to dl-51's "one client should not be able to hold
+both of the default two running slots".
 
 **2 — Where the edge rule lives. Answered 2026-09-28 by the owner: A.**
 
@@ -164,3 +174,10 @@ config` renders them, quoted in the Log.
   at the stream's bitrate, and 329 Mbps of upload covers about ten of them. The
   browser is what limits the host. The free-disk measurement was dropped, since
   dl-53 left the volume holding only the job database.
+- 2026-10-05 — `MAX_JOBS_PER_CLIENT` put to the owner on its own, after they
+  asked whether a visitor can download several videos at once. They chose **2**
+  (today's default) over the recommended 1, knowing that one address can then
+  hold both job slots. The table and its note are corrected. The same answer
+  raised a probable UX gap: a download refused by the per-client cap starts
+  from a plain `<a href download>`, so it may surface only as a failed browser
+  download. That is being reproduced for its own ticket, not folded in here.
