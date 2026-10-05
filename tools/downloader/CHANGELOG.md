@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/brunolabbe/tools/compare/downloader-v0.7.0...downloader-v0.8.0) (2026-10-03)
+
+
+### Features
+
+* **downloader:** a human check on probe and job creation, with Turnstile (dl-50) ([#283](https://github.com/brunolabbe/tools/issues/283)) ([6f1f6bf](https://github.com/brunolabbe/tools/commit/6f1f6bf2550f980a809f978369adfb589ee878a5))
+* **downloader:** publish terms and a takedown contact, delete job rows after 14 days (dl-54) ([#348](https://github.com/brunolabbe/tools/issues/348)) ([efadf49](https://github.com/brunolabbe/tools/commit/efadf498e465e4f24f79cdda5ec37ecfd5b3bbe5))
+* **downloader:** stream each file to its visitor and keep no copy (dl-53) ([#298](https://github.com/brunolabbe/tools/issues/298)) ([b2009ba](https://github.com/brunolabbe/tools/commit/b2009ba67dc44bf8c001f3780eb53ef452158ae9))
+
+
+### Fixes
+
+* **core:** redact the message, an Error and the bindings option in the shared logger (repo-85) ([#335](https://github.com/brunolabbe/tools/issues/335)) ([e3febd9](https://github.com/brunolabbe/tools/commit/e3febd974839ccec8858dfeddb9bda9a924d26cb))
+* **downloader:** pierce shadow roots in the scroll, signals and dismiss-modal scripts (dl-69) ([#289](https://github.com/brunolabbe/tools/issues/289)) ([1e3204e](https://github.com/brunolabbe/tools/commit/1e3204ec770ff66c8f405577d6b4de04a73429cd))
+* **downloader:** refuse fe00::/9, reserved by the IETF, in the SSRF guard (dl-70) ([#288](https://github.com/brunolabbe/tools/issues/288)) ([f832b2c](https://github.com/brunolabbe/tools/commit/f832b2cae53514146d82394f0fdfb00457d37018))
+* **downloader:** ship yt-dlp in the released image and keep its pin current (dl-72) ([#285](https://github.com/brunolabbe/tools/issues/285)) ([7156967](https://github.com/brunolabbe/tools/commit/71569677c6b2a5f63f3a9cf27b11cdb5823e6ae0))
+
 ## [0.7.0](https://github.com/brunolabbe/tools/compare/downloader-v0.6.0...downloader-v0.7.0) (2026-09-20)
 
 
