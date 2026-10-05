@@ -275,6 +275,34 @@ into this ticket's Log. Then the option's own work.
 - Status `needs-decision` confirmed at 4cc2fbf. Options say "No recommendation is set" and none is chosen. Each option's cost is stated, with the unmeasured parts marked, apart from the two lows above.
 - NFR: security n/a (docs only) · performance n/a · reliability n/a · maintainability — the high above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-05 · `4cc2fbf..ab68bad` · Opus 5.5, depth narrow (re-gate of the round's diff only). Nothing in this round is a `high`.
+
+**Earlier findings**
+
+- **high, "nothing stops a stray `rateLimit` key"**: **fixed**.
+  - Option 4 now says G1 and G2 satisfied CodeQL. It also says `npm run check` and `npm run build` refused both, with the plugin installed nowhere, and names runs 37257413673 and 37257508695.
+  - The Log's "Read plainly" says the same.
+  - I re-ran both runs: `gh run view <id> --repo brunolabbe/tools --log-failed | grep "error TS" | cut -f1,2 | sort | uniq -c`. Each run prints one TS2353 under `check › Run npm run check`, `test (ubuntu-latest) › Run npm run build` and `test (windows-latest, informational) › Run npm run build`.
+  - The quoted messages match the logs: G1 `probe.ts(19,34)` against `'FastifyContextConfig'`, and G2 `probe.ts(20,24)` against `'RouteShorthandOptions<…>'`.
+  - The remainder is marked **Unmeasured**: an options object in a variable or a cast, and the plugin's type augmentation. Its claims are conditional ("may still match", "could pass", "would reopen G1"). No new over-claim.
+- **low, option 2 understates which edits trip the alert**: **fixed in wording**, attributed to adr/005 › Context. See the new low on how it renders.
+- **low, option 4's defaults claim made without the docs**: **fixed**. It is now headed "Unmeasured, from recollection of the plugin and not from its documentation".
+- **dropped point, "two tools"**: folded in as "three tools (the ledger since #345)". That matches the gate-1 `git grep` over `tools/ledger/api/src`.
+
+**Findings in this round's lines**
+
+- **low** · option 2's new cost line wraps `(adr/005` / `> Context)`. The line begins with `>`, which in CommonMark starts a block quote able to interrupt the list item's paragraph.
+  - The formatter read it that way: oxfmt then prefixed the following three lines with `> `, which the builder did not write.
+  - `grep -n -E "^\s*>" docs/work/repo-91-codeql-cannot-see-the-shared-rate-limiter.md` at ab68bad lists 4 lines. The same grep at 4cc2fbf counts `0`.
+  - If GitHub renders it as a quote, option 2's tail, including its **Unmeasured** sentence, would read as quoted from adr/005. That is unverified: a WebFetch of the rendered page reported no blockquote, but that tool converts HTML to markdown and cannot settle it.
+  - No word is false. Write the reference as "(adr/005, Context)" so that no line starts with `>`. No `Done when` line depends on it.
+- **findings** · the hunt returned 1; 1 carried, 0 dropped. Earlier findings: 3 fixed (+1 dropped point folded in), 0 not fixed, 0 refuted.
+- Status `needs-decision` confirmed at ab68bad. "No recommendation is set" still heads the options, and none is chosen.
+- PR #353 CI at ab68bad, read once: `check` (CI), `pr-title`, `changes` and `dependency-review` `SUCCESS`; `test` `SKIPPED`; `codeql` (security) still `IN_PROGRESS`, unread.
+- NFR: security n/a (docs only) · performance n/a · reliability n/a · maintainability — the low above.
+
 ## Log
 
 - 2026-10-03: filed by the 2026-10-03 batch's close-out, from the owner's
