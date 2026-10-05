@@ -9,6 +9,7 @@
 
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import rateLimit from "@fastify/rate-limit";
 import { AppError } from "@ledger/contract";
 import { RateLimiter } from "@webtools/core/rate-limit";
 import Database from "better-sqlite3";
@@ -112,6 +113,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       logger,
     }),
   );
+  await server.register(rateLimit, { max: 10, timeWindow: "1 minute" });
   registerHealthRoute(server, context);
   registerMeRoute(server, context);
   registerStatementRoutes(server, context);
