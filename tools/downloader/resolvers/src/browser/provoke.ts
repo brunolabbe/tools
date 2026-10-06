@@ -37,9 +37,58 @@ const CONSENT_SELECTORS: readonly string[] = [
   "[id*='cookie'] button[id*='accept' i]",
 ];
 
-/** Text-matched fallback in the languages we see most often. */
-const CONSENT_TEXT =
-  /^\s*(?:accept(?: all| cookies| and continue)?|i accept|agree|i agree|allow all|got it|ok|okay|continue|understood|alles akzeptieren|akzeptieren|zustimmen|einverstanden|tout accepter|accepter|j'accepte|aceptar( todo)?|acepto|aceitar|accetta(?: tutto)?|accetto|akkoord|godkänn|zgadzam się|принять)\s*$/i;
+/**
+ * Text-matched fallback in the languages we see most often, with one or more
+ * entries per language so a gap is one more alternative and the whole stays one
+ * anchored pattern (`AGE_GATE_TEXT`'s rule: an alternative, not a new branch).
+ *
+ * **A label, never a sentence, and never a generic word.** The pattern is
+ * anchored at both ends, so a sentence containing "agree" is not a button. The
+ * only generic bare words are the English "continue" and "ok" that were here first;
+ * nothing new may be that generic, because the revisits skip consent text
+ * precisely since a page repeats such words (see `revisitOverlays`), and the
+ * same words as pagination or a vote button are what an unanchored match would
+ * press (dl-82). No "enter the site" label either: on a gated page that is an
+ * age or terms attestation, which belongs to the age gate, not to consent.
+ *
+ * `&` and "and" both join a verb to its follow-up in English; the other
+ * languages carry their own conjunction in the entry. The apostrophe is
+ * either, since a CMS often emits the typographic one.
+ */
+const APOS = "['’]";
+const CONSENT_PHRASES: readonly string[] = [
+  // English
+  String.raw`(?:accept(?: all)?(?: cookies)?|allow all(?: cookies)?)(?: (?:and|&) (?:continue|close))?`,
+  String.raw`i accept`,
+  String.raw`(?:yes,? )?(?:i )?agree(?: (?:and|&) (?:continue|close))?`,
+  String.raw`got it|ok|okay|continue|understood`,
+  // German
+  String.raw`(?:(?:alles|alle(?: cookies)?) )?akzeptieren(?: und (?:weiter|schließen))?|ich akzeptiere`,
+  String.raw`zustimmen(?: und (?:weiter|schließen))?|ich stimme zu|einverstanden`,
+  // French
+  String.raw`(?:tout accepter|accepter(?: tout| les cookies)?)(?: et (?:continuer|fermer))?`,
+  String.raw`j${APOS}accepte|je suis d${APOS}accord`,
+  // Spanish
+  String.raw`aceptar(?: todo| todas| cookies)?(?: y (?:continuar|cerrar|seguir))?`,
+  String.raw`acepto|estoy de acuerdo`,
+  // Portuguese
+  String.raw`aceitar(?: tudo| todos)?(?: e (?:continuar|fechar|prosseguir))?`,
+  String.raw`aceito|concordo`,
+  // Italian
+  String.raw`accetta(?: tutto| tutti)?(?: e (?:continua|chiudi|prosegui))?`,
+  String.raw`accetto(?: e continua)?|acconsento(?: e continua)?|sono d${APOS}accordo|ho capito`,
+  // Dutch
+  String.raw`(?:accepteer(?: alles)?|(?:alles )?accepteren)(?: en (?:doorgaan|sluiten))?`,
+  String.raw`akkoord|ga akkoord|ik ga akkoord|ik accepteer`,
+  // Swedish
+  String.raw`godkänn(?: alla)?(?: och fortsätt)?|acceptera(?: alla)?|jag godkänner|jag accepterar`,
+  // Polish
+  String.raw`zgadzam się(?: i przechodzę do serwisu)?|akceptuję(?: wszystko)?|zaakceptuj(?: wszystko)?`,
+  // Russian
+  String.raw`принять(?: все| и (?:продолжить|закрыть))?|(?:я )?согласен|(?:я )?согласна|понятно`,
+];
+
+export const CONSENT_TEXT = new RegExp(`^\\s*(?:${CONSENT_PHRASES.join("|")})\\s*[.!]?\\s*$`, "i");
 
 /**
  * A close control's accessible name: a close verb, optionally followed by a

@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { classifyFailure } from "../../src/browser/classify.ts";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import {
+  CONSENT_TEXT,
   dismissModal,
   provokePlayback,
   readMetadata,
@@ -222,5 +223,115 @@ describe("SCROLL_SCRIPT reaches a shadow root, for a player that mounts lazily o
     // `player-shell` class and scrolls to it, which is what triggers the
     // fetch below.
     expect(server.requests).toContain("/media/related/master.m3u8");
+  });
+});
+
+describe("CONSENT_TEXT (dl-82)", () => {
+  // Every phrasing the pattern accepted before dl-82, so a widening cannot
+  // drop one.
+  const KEPT = [
+    "Accept",
+    "Accept all",
+    "Accept cookies",
+    "Accept and continue",
+    "I accept",
+    "Agree",
+    "I agree",
+    "Allow all",
+    "Got it",
+    "OK",
+    "Okay",
+    "Continue",
+    "Understood",
+    "Alles akzeptieren",
+    "Akzeptieren",
+    "Zustimmen",
+    "Einverstanden",
+    "Tout accepter",
+    "Accepter",
+    "J'accepte",
+    "Aceptar",
+    "Aceptar todo",
+    "Acepto",
+    "Aceitar",
+    "Accetta",
+    "Accetta tutto",
+    "Accetto",
+    "Akkoord",
+    "Godkänn",
+    "Zgadzam się",
+    "Принять",
+  ];
+
+  const ADDED = [
+    "Accept & close",
+    "Accept all & continue",
+    "Accept and close",
+    "Agree and continue",
+    "Agree & close",
+    "Yes, I agree",
+    "Yes I agree",
+    "I agree.",
+    "Allow all cookies",
+    "Alle akzeptieren",
+    "Akzeptieren und weiter",
+    "Ich stimme zu",
+    "Tout accepter et fermer",
+    "Accepter et continuer",
+    "J’accepte",
+    "Je suis d'accord",
+    "Aceptar y continuar",
+    "Estoy de acuerdo",
+    "Aceitar tudo",
+    "Aceito",
+    "Concordo",
+    "Accetta tutti",
+    "Accetta e chiudi",
+    "Accetto e continua",
+    "Acconsento",
+    "Sono d'accordo",
+    "Ho capito",
+    "Alles accepteren",
+    "Accepteren en doorgaan",
+    "Ik ga akkoord",
+    "Acceptera alla",
+    "Jag godkänner",
+    "Akceptuję",
+    "Zgadzam się i przechodzę do serwisu",
+    "Принять все",
+    "Принять и закрыть",
+    "Я согласен",
+  ];
+
+  // Sentences, pagination and words that mean "go in" rather than "agree":
+  // none of these is a consent label, and the first group is what a loose
+  // pattern would press on a page that is not a consent wall at all.
+  const REFUSED = [
+    "Continua",
+    "Continue reading",
+    "Accept the terms of the offer",
+    "I agree with this review",
+    "Sono d'accordo con questa recensione",
+    "Accetto le condizioni di spedizione",
+    "Allow",
+    "Yes",
+    "Entra",
+    "Enter",
+    "Accept or decline",
+    "Agree and continue to checkout",
+    "Ho capito tutto",
+    "",
+  ];
+
+  test.each(KEPT)("still matches %j", (label) => {
+    expect(CONSENT_TEXT.test(label)).toBe(true);
+  });
+
+  test.each(ADDED)("matches %j", (label) => {
+    expect(CONSENT_TEXT.test(label)).toBe(true);
+  });
+
+  test.each(REFUSED)("does not match %j", (label) => {
+    expect(CONSENT_TEXT.test(label)).toBe(false);
   });
 });

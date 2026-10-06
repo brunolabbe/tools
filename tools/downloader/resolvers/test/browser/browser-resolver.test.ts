@@ -831,3 +831,54 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
     },
   );
 });
+
+describe("a consent dialog whose button no vendor selector matches (dl-82)", () => {
+  // Phrasings the text fallback did not know on `origin/main`, one per language
+  // the ticket names. The button is pressed by its label alone, so reaching the
+  // stream proves the label matched.
+  const LABELS = [
+    // A control: a phrasing `origin/main` already pressed, so a failure of the
+    // fixture itself cannot pass for a failure of the pattern.
+    "Accept all",
+    "Accetto e continua",
+    "Acconsento",
+    "Sono d'accordo",
+    "Ho capito",
+    "Agree and continue",
+    "Accept & close",
+    "Yes, I agree",
+  ];
+
+  test.each(LABELS)(
+    "presses %j and finds the stream behind it",
+    { timeout: TEST_TIMEOUT_MS },
+    async (label) => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      const result = await probe(
+        `/consent-label.html?label=${encodeURIComponent(label)}`,
+        resolver,
+      );
+
+      expect(server.requests).toContain("/beacon/consent-accepted");
+      expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+    },
+  );
+
+  test(
+    "presses neither a pagination link nor a vote button that merely starts like a consent label",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      server.requests.length = 0;
+      const error = await probeError("/consent-lookalikes.html", resolver);
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      // `Continua` is a bare word and stays unlisted; the vote button's label
+      // is a sentence, which the anchored pattern must keep refusing.
+      expect(server.requests).not.toContain("/beacon/consent-continua");
+      expect(server.requests).not.toContain("/beacon/consent-vote");
+    },
+  );
+});

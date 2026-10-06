@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consent-walled player</title>
+    <style>
+      /* Covers the whole viewport, so nothing beneath it can be pressed until the
+         dialog is gone, as a real consent wall does. */
+      #consent {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #consent .box {
+        width: 360px;
+        padding: 24px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Consent-walled player</h1>
+    <!-- dl-82: a consent dialog with no vendor id or class, so only the
+         text-matched fallback can find its button. The player mounts only after
+         the button is pressed. The button's label comes from ?label=, so one
+         page serves every phrasing under test. -->
+    <div id="player"></div>
+
+    <div id="consent">
+      <div class="box">
+        <p>We use cookies to run this site.</p>
+        <button id="consent-button" type="button">Accept</button>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var MASTER = "/media/mse/master.m3u8";
+        var VARIANT = "/media/mse/v1080.m3u8";
+        var SEGMENTS = [
+          "/media/mse/init.mp4",
+          "/media/mse/seg-00001.m4s",
+          "/media/mse/seg-00002.m4s",
+        ];
+
+        var label = new URLSearchParams(location.search).get("label");
+        var button = document.getElementById("consent-button");
+        if (label !== null) button.textContent = label;
+
+        function mountPlayer() {
+          var video = document.createElement("video");
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          video.width = 640;
+          video.height = 360;
+          // Requested on the press itself rather than from "sourceopen", which
+          // fires late on a loaded runner (the same reason as age-gate.html).
+          fetch(MASTER)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch(VARIANT);
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return Promise.all(
+                SEGMENTS.map(function (url) {
+                  return fetch(url);
+                }),
+              );
+            })
+            .catch(function () {});
+          var mediaSource = new MediaSource();
+          video.src = URL.createObjectURL(mediaSource);
+          document.getElementById("player").replaceChildren(video);
+        }
+
+        button.addEventListener("click", function () {
+          fetch("/beacon/consent-accepted").catch(function () {});
+          document.getElementById("consent").remove();
+          mountPlayer();
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -58,3 +58,42 @@ fixture: building one is the first step.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+### 2026-10-06 — build
+
+- **Reproduced on `origin/main` (056aab7) first.** `consent-label.html?label=…`
+  is a viewport-wide dialog with no vendor id, whose button's label comes from
+  the query and which mounts an MSE player only when pressed. Run against the
+  unchanged `provoke.ts`:
+  `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "dl-82"`
+  gave `Tests 7 failed | 1 passed | 50 skipped (58)`. All seven new phrasings
+  (Accetto e continua, Acconsento, Sono d'accordo, Ho capito, Agree and
+  continue, Accept & close, Yes, I agree) ended in `NO_MEDIA_FOUND`; the
+  control `Accept all` and the negative test passed.
+- **Fix.** `CONSENT_TEXT` is now built from one array of alternatives per
+  language and exported (as `AGE_GATE_TEXT` is) so a table test can run it
+  without a browser. Still one pattern anchored at both ends, with an optional
+  trailing `.` or `!`. Same command after: the eight label tests and the
+  negative pass, and `provoke.test.ts` `-t "CONSENT_TEXT"` runs 82 cases, 31 of
+  them the pre-change phrasings, so a widening cannot drop one.
+- **The negative test can fail.** With the anchors removed from the pattern,
+  "presses neither a pagination link nor a vote button" fails with
+  `expected [...] to not include '/beacon/consent-vote'`; restored, it passes.
+  The fixture has a `Continua` link and a vote button labelled
+  "Sono d'accordo con questa recensione" next to a body sentence starting the
+  same way: a sentence in body text is not a control, so the button is what
+  makes the case able to fail.
+- **Left out on purpose**, per the brief's step 3 and 4: no bare "Continua", no
+  bare "Allow", "Yes", "d'accord", "de acuerdo" or "zgoda" (each as generic as
+  the "continue" and "ok" already here), and no "Entra" or "Enter". Polish
+  "Zgadzam się i przechodzę do serwisu" is kept: it is a consent phrasing whose
+  tail names the site, and its first words are the agreement.
+- **What the brief had wrong:** nothing material. "Sono d'accordo" is both a
+  step-1 label to be pressed and the start of a sentence to be left alone; the
+  two do not conflict, because the pattern is anchored, and the fixtures show it.
+- **Not folded in.** dl-48's Log notes that `CONSENT_TEXT`'s only Russian entry
+  was "accept"; this change widens it, but that is a finished ticket's note and
+  editing it would trip preflight's `## Review` check for a `done` ticket.
+- **Coordination with dl-83.** This change exports `CONSENT_TEXT` and adds
+  `CONSENT_TEXT` to the import list in `provoke.test.ts`, which dl-83 is likely
+  to edit too; no helper is shared.
