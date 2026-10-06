@@ -26,6 +26,11 @@ npm run check                    # lint (oxlint) + format (oxfmt) + typecheck
 npm test -- --project ledger
 ```
 
+Started like that, every API route but health answers 403: the API trusts only
+Cloudflare Access. In development, name a person instead —
+`ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger`
+— and see `.env.example` for the rest.
+
 Settings are environment variables, listed with their defaults in
 [`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
 change in the shell. Requires Node ≥ 22. The UI's dev server proxies `/api` to
