@@ -975,7 +975,11 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     "a probe that saw only segments says so in the error's reason",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const resolver = new BrowserResolver({
+        pool,
+        quietMs: 1200,
+        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+      });
       // The playlist route answers with text that is not a manifest, so the
       // segments the page then fetches are all there is.
       const error = await probeError("/untyped-segments-only.html", resolver);
@@ -990,7 +994,11 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     "a page that requested no segments carries no such reason",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const resolver = new BrowserResolver({
+        pool,
+        quietMs: 1200,
+        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+      });
       const error = await probeError("/untyped-no-segments.html", resolver);
 
       expectCode(error, "NO_MEDIA_FOUND");
@@ -1037,7 +1045,11 @@ describe("a consent dialog whose button no vendor selector matches (dl-82)", () 
     "presses neither a pagination link nor a vote button that merely starts like a consent label",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const resolver = new BrowserResolver({
+        pool,
+        quietMs: 1200,
+        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+      });
       server.requests.length = 0;
       const error = await probeError("/consent-lookalikes.html", resolver);
 
@@ -1081,7 +1093,11 @@ describe("the widened consent labels are pressed only inside a consent container
     ["a comment form's submit button", "/consent-falsepress-comment.html", "comment-yesiagree"],
     ["a review's vote button", "/consent-falsepress-vote.html", "review-vote"],
   ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, pathname, beacon) => {
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     server.requests.length = 0;
     const error = await probeError(pathname, resolver);
 
@@ -1111,7 +1127,12 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     pathname: string,
   ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
     const hls = recordingHlsParser();
-    const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      hlsParser: hls.parser,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     server.requests.length = 0;
     let outcome: ProbeResult | AppError;
     try {
@@ -1267,7 +1288,12 @@ describe("the wording that makes a layer a consent container is read from its vi
     pathname: string,
   ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
     const hls = recordingHlsParser();
-    const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      hlsParser: hls.parser,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     server.requests.length = 0;
     let outcome: ProbeResult | AppError;
     try {
