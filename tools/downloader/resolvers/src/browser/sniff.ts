@@ -24,12 +24,25 @@ export const MAX_SNIFF_BODY_BYTES = 1024 * 1024;
 
 /**
  * The same limit for a compressed response, where the declared length is only
- * what crossed the wire. Chromium hands back the inflated body, so a hostile
- * page could declare a few kilobytes that inflate a thousandfold; 32 KiB bounds
- * that at ~32 MB while still holding a playlist of several hundred kilobytes
- * (text compresses ~10:1).
+ * what crossed the wire. It is a filter and **not a bound**: Chromium inflates
+ * the body before Playwright hands it over, so a few kilobytes can declare
+ * gigabytes (1 GiB fits in ~1.8 KB of `br`). The only ceiling on what one read
+ * moves into Node is Chromium's inspector cache, which evicts bodies above
+ * roughly 12-20 MiB. What this module controls is how many such reads happen:
+ * `MAX_ENCODED_SNIFFS_PER_PROBE`.
  */
 export const MAX_SNIFF_ENCODED_BYTES = 32 * 1024;
+
+/**
+ * Compressed reads per probe, on a budget of their own and also counted against
+ * `MAX_SNIFFS_PER_PROBE`. 2 because a gzip- or br-served untyped playlist is
+ * what CDNs commonly send, so it is worth reading, and one probe needs one
+ * manifest; and because each read can move up to the inspector cache's ceiling
+ * into Node, so two bound that at roughly 30 MiB where 32 reads measured 384 MiB
+ * moved and 598 MB peak RSS (dl-79 gate 1). The decode itself happens in
+ * Chromium and is not bounded here at all.
+ */
+export const MAX_ENCODED_SNIFFS_PER_PROBE = 2;
 
 /**
  * Reads per probe. Each is bounded by the cap above, but a page that polls an
@@ -78,18 +91,46 @@ export function isSniffable(candidate: SniffCandidate): boolean {
 
   const length = candidate.contentLength;
   if (length === undefined || length <= 0) return false;
-  const encoding = candidate.contentEncoding?.trim().toLowerCase();
-  const encoded = encoding !== undefined && encoding !== "" && encoding !== "identity";
-  return length <= (encoded ? MAX_SNIFF_ENCODED_BYTES : MAX_SNIFF_BODY_BYTES);
+  return (
+    length <=
+    (isContentEncoded(candidate.contentEncoding) ? MAX_SNIFF_ENCODED_BYTES : MAX_SNIFF_BODY_BYTES)
+  );
 }
 
-/** An optional prolog, then any comments, then the `MPD` element — a DASH root is nothing else. */
-const DASH_ROOT = /^(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:[\w.-]+:)?MPD[\s>]/;
+/** Whether the declared `Content-Encoding` means the body is inflated on its way in. */
+export function isContentEncoded(contentEncoding: string | undefined): boolean {
+  const encoding = contentEncoding?.trim().toLowerCase();
+  return encoding !== undefined && encoding !== "" && encoding !== "identity";
+}
+
+const MPD_ELEMENT = /^<(?:[\w.-]+:)?MPD[\s>]/;
+
+/**
+ * Steps over an optional XML prolog and any comments with `indexOf`, never a
+ * regex: `(?:<!--[\s\S]*?-->\s*)*` split each `--><!--` boundary two ways and
+ * backtracked exponentially, so 211 bytes of the page's choosing froze the
+ * event loop for a minute (dl-79 gate 1). This is linear in the head it is given.
+ */
+function skipPrologAndComments(head: string): string | undefined {
+  let text = head;
+  if (text.startsWith("<?xml")) {
+    const end = text.indexOf("?>");
+    if (end === -1) return undefined;
+    text = text.slice(end + 2).trimStart();
+  }
+  while (text.startsWith("<!--")) {
+    const end = text.indexOf("-->", 4);
+    if (end === -1) return undefined;
+    text = text.slice(end + 3).trimStart();
+  }
+  return text;
+}
 
 /** `undefined` means the start of the body is not a manifest. */
 export function sniffManifestKind(head: string): "hls" | "dash" | undefined {
   const text = head.replace(/^\uFEFF/, "").trimStart();
   if (text.startsWith("#EXTM3U")) return "hls";
-  if (DASH_ROOT.test(text)) return "dash";
+  const root = skipPrologAndComments(text);
+  if (root !== undefined && MPD_ELEMENT.test(root)) return "dash";
   return undefined;
 }

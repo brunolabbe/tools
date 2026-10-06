@@ -22,6 +22,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".mpd": "application/dash+xml",
   ".mp4": "video/mp4",
   ".m4s": "video/iso.segment",
+  ".js": "text/javascript; charset=utf-8",
   ".png": "image/png",
 };
 

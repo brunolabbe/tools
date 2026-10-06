@@ -9,7 +9,9 @@
 import type { BrowserContext, Request, Response } from "playwright";
 import { classifyMedia, isDeniedUrl, normaliseUrl } from "./media-match.ts";
 import {
+  isContentEncoded,
   isSniffable,
+  MAX_ENCODED_SNIFFS_PER_PROBE,
   MAX_SNIFF_BODY_BYTES,
   MAX_SNIFFS_PER_PROBE,
   SNIFF_HEAD_BYTES,
@@ -29,6 +31,7 @@ export class HitCollector {
   readonly #pending = new Set<Promise<unknown>>();
   /** Urls whose body was already read for a manifest (dl-79), so a poll reads once. */
   readonly #sniffed = new Set<string>();
+  #encodedSniffs = 0;
   #seq = 0;
   #lastActivityAt = Date.now();
   #attached = false;
@@ -55,7 +58,11 @@ export class HitCollector {
     return this.#lastActivityAt;
   }
 
-  /** Insertion-ordered, so `seq` and array order agree. */
+  /**
+   * In the order hits were recorded. `seq` is the order they arrived, which
+   * differs for a sniffed manifest, whose number is taken when its response
+   * arrives and whose hit is recorded once its body has been read (dl-79).
+   */
   get hits(): NetworkHit[] {
     return [...this.#hits.values()];
   }
@@ -157,7 +164,7 @@ export class HitCollector {
       key,
       kind,
       headers: { ...headers },
-      seq: this.#seq++,
+      seq: patch.seq ?? this.#seq++,
       confirmed: patch.confirmed ?? false,
       ...(patch.contentType === undefined ? {} : { contentType: patch.contentType }),
       ...(patch.contentLength === undefined ? {} : { contentLength: patch.contentLength }),
@@ -210,7 +217,16 @@ export class HitCollector {
     if (!sniffable) return;
     const key = normaliseUrl(url);
     if (this.#sniffed.has(key) || this.#sniffed.size >= MAX_SNIFFS_PER_PROBE) return;
+    // A compressed body is inflated by Chromium before it reaches us, so its
+    // declared length bounds nothing; only the number of such reads is ours to cap.
+    const encoded = isContentEncoded(contentEncoding);
+    if (encoded && this.#encodedSniffs >= MAX_ENCODED_SNIFFS_PER_PROBE) return;
     this.#sniffed.add(key);
+    if (encoded) this.#encodedSniffs += 1;
+    // Reserved now, not when the read returns: a master that is read slowly
+    // would otherwise be numbered after the variant playlists it names, and
+    // rank below them.
+    const seq = this.#seq++;
 
     this.#pending.add(
       (async () => {
@@ -226,6 +242,7 @@ export class HitCollector {
             status: response.status(),
             confirmed: true,
             frameUrl: safeFrameUrl(request),
+            seq,
           });
           if (!hit) return;
           this.#enrichHeaders(request, hit);
@@ -262,6 +279,8 @@ interface HitPatch {
   status?: number | undefined;
   confirmed?: boolean | undefined;
   frameUrl?: string | undefined;
+  /** Arrival order already taken by the caller, when recording happens later (dl-79). */
+  seq?: number | undefined;
 }
 
 /** Resolves after `ms`, without holding the event loop open on its own. */

@@ -10,10 +10,17 @@
 import { AppError } from "@downloader/contract";
 import type { BrowserContext, Response } from "playwright";
 import { describe, expect, test } from "vitest";
-import { classifyFailure, SEGMENTS_WITHOUT_MANIFEST } from "../../src/browser/classify.ts";
+import {
+  classifyFailure,
+  countPlayedSegments,
+  SEGMENTS_WITHOUT_MANIFEST,
+} from "../../src/browser/classify.ts";
 import { HitCollector } from "../../src/browser/intercept.ts";
+import { rankHits } from "../../src/browser/rank.ts";
+import type { NetworkHit } from "../../src/browser/types.ts";
 import {
   isSniffable,
+  MAX_ENCODED_SNIFFS_PER_PROBE,
   MAX_SNIFF_BODY_BYTES,
   MAX_SNIFF_ENCODED_BYTES,
   MAX_SNIFFS_PER_PROBE,
@@ -127,6 +134,8 @@ function response(
     declared?: number | null;
     /** A body read that never settles, like a `fetch()` the page abandoned. */
     hangs?: boolean;
+    /** A body read that returns only once this settles, like a slow master. */
+    holdUntil?: Promise<void>;
   } = {},
 ): Probe {
   const url = options.url ?? "https://site.example/api/playlist?id=1";
@@ -153,6 +162,7 @@ function response(
     body: async () => {
       reads += 1;
       if (options.hangs === true) await new Promise<never>(() => {});
+      await options.holdUntil;
       return body;
     },
     text: async () => {
@@ -319,5 +329,172 @@ describe("classifyFailure with segments and no manifest (dl-79)", () => {
       classifyFailure({ ...base, segmentCount: 3, status: 403, title: "Just a moment..." }),
     ).toMatchObject({ code: "BOT_CHALLENGE" });
     expect(classifyFailure({ ...base, segmentCount: 3, quietReached: false }).code).toBe("TIMEOUT");
+  });
+});
+
+describe("sniffManifestKind is linear in what the page sends (dl-79 gate 1)", () => {
+  test("a head of nothing but empty comments returns at once", () => {
+    // `(?:<!--[\s\S]*?-->\s*)*` took ~1.4 s here and doubled with each comment; at
+    // k=30 (211 bytes) it froze the event loop for a minute. The first check is
+    // sized so the old pattern fails it rather than hanging the run.
+    const small = "<!---->".repeat(26) + "x";
+    const startedAt = performance.now();
+    expect(sniffManifestKind(small)).toBeUndefined();
+    expect(performance.now() - startedAt).toBeLessThan(50);
+
+    const full = "<!---->".repeat(290);
+    const fullStartedAt = performance.now();
+    expect(sniffManifestKind(full)).toBeUndefined();
+    expect(performance.now() - fullStartedAt).toBeLessThan(50);
+  });
+
+  test("many comments still lead to an MPD root, and an unclosed one to nothing", () => {
+    expect(sniffManifestKind(`${"<!-- a -->\n".repeat(40)}<MPD type="static">`)).toBe("dash");
+    expect(sniffManifestKind('<?xml version="1.0"?><!-- c --><MPD>')).toBe("dash");
+    expect(sniffManifestKind("<!-- never closed <MPD>")).toBeUndefined();
+    expect(sniffManifestKind('<?xml version="1.0" <MPD>')).toBeUndefined();
+  });
+});
+
+describe("compressed bodies are read on a budget of their own (dl-79 gate 1)", () => {
+  const gzip = { "content-encoding": "gzip" };
+
+  function gzipped(index: number, body = M3U8): Probe {
+    return response({
+      url: `https://site.example/api/packed?n=${index}`,
+      headers: gzip,
+      body,
+    });
+  }
+
+  test("no more than MAX_ENCODED_SNIFFS_PER_PROBE compressed bodies are read, whatever they hold", async () => {
+    // Chromium inflates before Playwright returns, so the declared length bounds
+    // nothing: 32 reads of one 12 MiB inflation moved 384 MiB into Node. The
+    // reads past the budget must never be requested at all.
+    const probes = Array.from({ length: 10 }, (_, index) => gzipped(index, "not a manifest"));
+    await collect(...probes);
+
+    expect(probes.reduce((sum, probe) => sum + probe.reads(), 0)).toBe(
+      MAX_ENCODED_SNIFFS_PER_PROBE,
+    );
+  });
+
+  test("a compressed playlist inside the budget is still found", async () => {
+    const collector = await collect(gzipped(0));
+
+    expect(collector.hits.map((hit) => hit.kind)).toEqual(["hls"]);
+  });
+
+  test("an uncompressed read is not charged to the compressed budget", async () => {
+    const packed = Array.from({ length: MAX_ENCODED_SNIFFS_PER_PROBE + 3 }, (_, index) =>
+      gzipped(index, "not a manifest"),
+    );
+    const plain = response({ url: "https://site.example/api/plain" });
+    await collect(...packed, plain);
+
+    expect(plain.reads()).toBe(1);
+  });
+
+  test("a compressed read that inflates past the cap is dropped after it happens", async () => {
+    // Declares 100 bytes on the wire, as a bomb does.
+    const probe = response({
+      url: "https://site.example/api/packed?n=0",
+      headers: gzip,
+      declared: 100,
+      body: `${M3U8}${"x".repeat(MAX_SNIFF_BODY_BYTES)}`,
+    });
+    const collector = await collect(probe);
+
+    expect(probe.reads()).toBe(1);
+    expect(collector.hits).toEqual([]);
+  });
+});
+
+describe("a sniffed manifest keeps the arrival order it had (dl-79 gate 1)", () => {
+  test("a slowly-read untyped master ranks above the typed variant it names", async () => {
+    // Long enough that the variant, which needs no read, is recorded first.
+    const held = new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    const master = response({
+      url: "https://site.example/master",
+      body: "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2800000\n/v/high/media.m3u8\n",
+      holdUntil: held,
+    });
+    const variant = response({
+      url: "https://site.example/v/high/media.m3u8",
+      headers: { "content-type": "application/vnd.apple.mpegurl" },
+    });
+    const collector = await collect(master, variant);
+
+    const bySeq = collector.hits.toSorted((a, b) => a.seq - b.seq).map((hit) => hit.url);
+    expect(bySeq).toEqual([
+      "https://site.example/master",
+      "https://site.example/v/high/media.m3u8",
+    ]);
+    expect(rankHits(collector.hits, "https://site.example/watch")[0]?.url).toBe(
+      "https://site.example/master",
+    );
+  });
+});
+
+/** An explicit `undefined` in `overrides` removes the field, as a response without it would. */
+function segment(
+  url: string,
+  overrides: { [K in keyof NetworkHit]?: NetworkHit[K] | undefined } = {},
+): NetworkHit {
+  const { contentType, status, ...rest } = {
+    status: 200,
+    contentType: "video/mp2t",
+    ...overrides,
+  };
+  return {
+    url,
+    key: url,
+    kind: "segment",
+    headers: {},
+    seq: 0,
+    confirmed: true,
+    ...(contentType === undefined ? {} : { contentType }),
+    ...(status === undefined ? {} : { status }),
+    ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+  };
+}
+
+describe("countPlayedSegments (dl-79 gate 1)", () => {
+  test("counts answered media segments", () => {
+    expect(
+      countPlayedSegments([
+        segment("https://cdn.example/seg-1.ts"),
+        segment("https://cdn.example/seg-2.m4s", { contentType: "video/iso.segment" }),
+        segment("https://cdn.example/seg-3.ts", { status: 206 }),
+        segment("https://cdn.example/seg-4.ts", { contentType: undefined }),
+      ]),
+    ).toBe(4);
+  });
+
+  test.each([
+    ["a subtitle file", segment("https://cdn.example/en.vtt", { contentType: "text/vtt" })],
+    ["a key file", segment("https://cdn.example/a.key", { contentType: undefined })],
+    [
+      "a request that never got a response",
+      segment("https://cdn.example/s.ts", { confirmed: false }),
+    ],
+    ["a response with no status", segment("https://cdn.example/s.ts", { status: undefined })],
+    ["a 404", segment("https://cdn.example/s.ts", { status: 404 })],
+    [
+      "a TypeScript file served as text",
+      segment("https://cdn.example/app.ts", { contentType: "text/plain" }),
+    ],
+    [
+      "a TypeScript file served as a script",
+      segment("https://cdn.example/app.ts", { contentType: "application/javascript" }),
+    ],
+    [
+      "a hit that is not a segment",
+      { ...segment("https://cdn.example/m.m3u8"), kind: "hls" as const },
+    ],
+  ])("does not count %s", (_label, hit) => {
+    expect(countPlayedSegments([hit])).toBe(0);
   });
 });

@@ -832,13 +832,6 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
   );
 });
 
-/** The page fetches `src`, then every url in `segs`, from the untyped fixture routes (dl-79). */
-function untypedPage(src: string, segs: readonly string[] = []): string {
-  const query = new URLSearchParams({ src, segs: segs.join(",") });
-  return `/untyped-manifest.html?${query.toString()}`;
-}
-const TS_SEGMENTS = ["/media/untyped/seg-00001.ts", "/media/untyped/seg-00002.ts"];
-
 describe("a manifest served with no recognisable type or extension (dl-79)", () => {
   test(
     "an HLS playlist served as text/plain from an extensionless route is an hls outcome",
@@ -846,7 +839,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     async () => {
       const hls = recordingHlsParser();
       const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe(untypedPage("/api/playlist?id=1", TS_SEGMENTS), resolver);
+      const result = await probe("/untyped-hls-text.html", resolver);
 
       expect(result.variants[0]?.protocol).toBe("hls");
       expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=1"));
@@ -860,7 +853,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     async () => {
       const hls = recordingHlsParser();
       const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe(untypedPage("/api/playlist?id=3", TS_SEGMENTS), resolver);
+      const result = await probe("/untyped-hls-octet.html", resolver);
 
       expect(result.variants[0]?.protocol).toBe("hls");
       expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=3"));
@@ -873,10 +866,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     async () => {
       const dash = recordingDashParser();
       const resolver = new BrowserResolver({ pool, dashParser: dash.parser, quietMs: 1200 });
-      const result = await probe(
-        untypedPage("/api/manifest?id=1", ["/media/dash/video-00001.m4s"]),
-        resolver,
-      );
+      const result = await probe("/untyped-dash-text.html", resolver);
 
       expect(result.variants[0]?.protocol).toBe("dash");
       expect(result.variants[0]?.url).toBe(server.url("/api/manifest?id=1"));
@@ -891,7 +881,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
       const resolver = new BrowserResolver({ pool, quietMs: 1200 });
       // The playlist route answers with text that is not a manifest, so the
       // segments the page then fetches are all there is.
-      const error = await probeError(untypedPage("/api/playlist?id=2", TS_SEGMENTS), resolver);
+      const error = await probeError("/untyped-segments-only.html", resolver);
 
       expectCode(error, "NO_MEDIA_FOUND");
       expect(error.details?.["reason"]).toBe("segments-without-manifest");
@@ -904,7 +894,7 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const resolver = new BrowserResolver({ pool, quietMs: 1200 });
-      const error = await probeError(untypedPage("/api/playlist?id=2"), resolver);
+      const error = await probeError("/untyped-no-segments.html", resolver);
 
       expectCode(error, "NO_MEDIA_FOUND");
       expect(error.details?.["reason"]).toBeUndefined();

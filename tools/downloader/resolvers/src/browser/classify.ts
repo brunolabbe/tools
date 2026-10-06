@@ -9,6 +9,7 @@
 
 import { AppError, redactUrl } from "@downloader/contract";
 import { chromiumCertificateError, TIER_TRUST_STORE_HINT } from "../tls-verification.ts";
+import type { NetworkHit } from "./types.ts";
 
 /** Everything the classifier is allowed to look at. Gathered once, in-page. */
 export interface PageSignals {
@@ -31,14 +32,44 @@ export interface PageSignals {
   quietReached: boolean;
   /**
    * Media segments the page fetched, none of which the ranking ever offers
-   * (dl-79). Playback demonstrably started, so "no video" would be the wrong
-   * thing to leave unqualified.
+   * (dl-79), counted by `countPlayedSegments`: answered, below 400, and not an
+   * obvious non-media file. That is evidence a player was fetching media, not
+   * proof it played: a `.ts` file that is really a script, served as
+   * `application/octet-stream`, is indistinguishable from a transport-stream
+   * segment by anything the collector records.
    */
   segmentCount?: number | undefined;
 }
 
 /** `details.reason` on a `NO_MEDIA_FOUND` whose probe saw segments but no manifest. */
 export const SEGMENTS_WITHOUT_MANIFEST = "segments-without-manifest";
+
+/** The segment kind also holds subtitle and key files (`SEGMENT_PATH`); neither is video. */
+const NOT_MEDIA_PATH = /\.(?:vtt|key)$/i;
+const NOT_MEDIA_TYPE =
+  /^(?:text\/|application\/(?:json|javascript|x-javascript|ecmascript|typescript)\b)/i;
+
+/**
+ * Segment hits that are evidence of media being fetched, for
+ * `SEGMENTS_WITHOUT_MANIFEST`. Narrowed here and not in `media-match.ts`, whose
+ * segment rules other work is changing; this only decides what to *report*.
+ */
+export function countPlayedSegments(hits: readonly NetworkHit[]): number {
+  let count = 0;
+  for (const hit of hits) {
+    if (hit.kind !== "segment" || !hit.confirmed) continue;
+    if (hit.status === undefined || hit.status >= 400) continue;
+    if (hit.contentType !== undefined && NOT_MEDIA_TYPE.test(hit.contentType.trim())) continue;
+    let path = hit.url;
+    try {
+      path = new URL(hit.url).pathname;
+    } catch {
+      // A url that does not parse is judged on its raw text.
+    }
+    if (!NOT_MEDIA_PATH.test(path)) count += 1;
+  }
+  return count;
+}
 
 const BOT_MARKERS: readonly string[] = [
   "cf-browser-verification",

@@ -64,8 +64,9 @@ the first step.
 ### 2026-10-06 — built (builder)
 
 **Reproduced on `origin/main` (056aab7) before any source change.** The new
-fixture `test/fixtures/pages/untyped-manifest.html` fetches
-`/api/playlist?id=1` (served `text/plain; charset=utf-8`, body a media playlist
+fixture `test/fixtures/pages/untyped-hls-text.html` (round 1 had one page that
+took its routes from `location.search`; round 2 split it into one page per case)
+fetches `/api/playlist?id=1` (served `text/plain; charset=utf-8`, body a media playlist
 whose segments are `.ts`), then the segments. Against unmodified `src/`:
 
 ```
@@ -111,10 +112,11 @@ read. Three further bounds, none of which the brief named:
   to a cap. **This is a known miss**: an untyped, chunked playlist is still not
   captured. Measuring how common that is needs a real site, not a fixture, so it
   is unmeasured here.
-- **A compressed response is held to 32 KiB** (`MAX_SNIFF_ENCODED_BYTES`),
-  because Chromium hands back the inflated body and a declared length is then
-  not a bound; 32 KiB bounds a hostile page at ~32 MB. A real playlist
-  compresses ~10:1, so this still admits several hundred kilobytes of text.
+- **A compressed response is held to 32 KiB declared** (`MAX_SNIFF_ENCODED_BYTES`)
+  and, since round 2, to 2 reads a probe. _Round 1 said this "bounds a hostile
+  page at ~32 MB"; that was false_ (see round 2): the declared length bounds
+  nothing once Chromium inflates the body. A real playlist compresses ~10:1, so
+  32 KiB still admits several hundred kilobytes of text.
 - **At most 32 reads per probe** (`MAX_SNIFFS_PER_PROBE`), one per url, so a page
   that polls an untyped JSON endpoint does not pay for every poll.
 
@@ -151,18 +153,17 @@ by reading the schema, not only by grep. No contract file is changed.
 
 **Known limits.**
 
-- `segmentCount` counts every `segment`-kind hit, and that kind includes
-  `.vtt` and `.key` (`SEGMENT_PATH`). A page that fetched only subtitles and no
-  media would be reported `segments-without-manifest`. Not fixed here: the set
-  belongs to `media-match.ts`, which dl-78 is editing.
-- A sniffed hit is recorded after its body has been read, so its `seq` is
-  assigned late rather than at response time. Ranking only reads `seq` to prefer
-  an earlier master, and a master's variants are requested after its body is
-  read, so order is preserved for dependent fetches. A page that fires an
-  untyped master and a typed variant in parallel could rank them the other way
-  round; not measured.
-- Not run against a real hls.js player, only the hand-rolled loader the other
-  fixtures use, as the brief allowed.
+- _Round 1: `segmentCount` counted every `segment`-kind hit, `.vtt` and `.key`
+  included. Narrowed in round 2; see below._
+- _Round 1: a sniffed hit's `seq` was assigned after its body was read, and this
+  entry said "order is preserved for dependent fetches". That was false: the
+  gate measured an untyped master ranking below the typed variant it names,
+  because a variant request is made once the master's response has arrived, not
+  once the collector has finished reading it. Fixed in round 2._
+- Not run against a real hls.js player. The fixture pages use a hand-written
+  `fetch` chain with no `MediaSource` (the shape of `hls.html`; `mse.html`, which
+  does use `MediaSource`, is not what it copies), as the brief allowed. The
+  capture path under test is the same, because it sees the requests either way.
 
 **Fold-in.** Nothing else was made free. dl-80 and dl-83 both end in a bare
 "no video" that a `reason` token would explain, and `attemptReason` now carries
