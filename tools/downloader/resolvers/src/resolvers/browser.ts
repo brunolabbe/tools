@@ -386,13 +386,16 @@ export class BrowserResolver implements Resolver {
     const outcome = await this.#buildOutcome(context, collector, ranked, deadline, options);
 
     if (!outcome) {
-      const signals = await readSignals(page);
+      const { ageGatePressable, ...signals } = await readSignals(page);
       throw classifyFailure({
         ...signals,
         // A gate still showing after this tier was allowed to press it is a
         // press that did not start the player. Saying the server "is not set to
         // confirm" would be false, so that probe fails as an absence instead.
-        ageGate: signals.ageGate && !this.#confirmAge,
+        // Unless the press was declined (dl-83): a gate whose choice left no
+        // single control to press was never pressed, and saying so beats a
+        // guess, so it reports as if confirmation were off.
+        ageGate: signals.ageGate && (!this.#confirmAge || !ageGatePressable),
         finalUrl,
         status: navigation?.status(),
         quietReached,

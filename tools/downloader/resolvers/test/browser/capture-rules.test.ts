@@ -12,7 +12,7 @@ import {
   classifyFailure,
   classifyNavigationError,
 } from "../../src/browser/classify.ts";
-import { AGE_GATE_TEXT, CLOSE_TEXT } from "../../src/browser/provoke.ts";
+import { AGE_GATE_TEXT, AGE_NEGATIONS, AGE_NUMBER, CLOSE_TEXT } from "../../src/browser/provoke.ts";
 import { DrmObserver, drmInitScript, toDrmSystem } from "../../src/browser/drm.ts";
 import {
   classifyMedia,
@@ -573,5 +573,94 @@ describe("Semaphore", () => {
     await expect(queued).rejects.toMatchObject({ code: "TIMEOUT" });
     release();
     expect(semaphore.active).toBe(0);
+  });
+});
+
+describe("structural age-gate rules (dl-83)", () => {
+  // The tokeniser `AGE_CHOOSE_FN` runs in-page, restated: a label's words,
+  // lowercased, split on anything that is not a letter or a digit.
+  const negated = (label: string): boolean =>
+    label
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .some((word) => AGE_NEGATIONS.includes(word));
+
+  test.each([
+    "Ho 18 anni o più - Entra",
+    "18+",
+    "+18",
+    "Enter (21+)",
+    "Ich bin 18 Jahre oder älter",
+    "I am 18 or older.",
+    "Мне есть 18",
+  ])("%s names an age", (label) => {
+    expect(AGE_NUMBER.test(label)).toBe(true);
+  });
+
+  test.each([
+    "Get 18% off",
+    "€18 a month",
+    "$21",
+    "Since 2018",
+    "Version 1.18",
+    "Starts at 21:00",
+    "Ends 18h30",
+    "118 videos",
+    "Page 180",
+  ])("%s does not", (label) => {
+    expect(AGE_NUMBER.test(label)).toBe(false);
+  });
+
+  // Every entry label the fixtures and dl-48 use must survive the negation
+  // rule, or the press would drop the very control it exists to choose.
+  test.each([
+    "Ho 18 anni o più - Entra",
+    "I am 18 or older - Enter",
+    "I am 18 or older",
+    "I'm over 18",
+    "Yes, I am 18+",
+    "I am 21 or older",
+    "Мне уже есть 18",
+    "Мне есть 18 лет",
+    "Ich bin über 18",
+    "J'ai plus de 18 ans",
+    "Tengo más de 18 años",
+    "Ho più di 18 anni",
+    "Tenho mais de 18 anos",
+    "Ik ben 18 jaar of ouder",
+    "Jag är över 18",
+    "Mam ukończone 18 lat",
+  ])("%s is an entry", (label) => {
+    expect(negated(label)).toBe(false);
+  });
+
+  test.each([
+    "Ho meno di 18 anni - Esci",
+    "I am under 18",
+    "I'm not 18",
+    "No, I am younger than 18",
+    "Мне нет 18",
+    "Мне меньше 18 лет",
+    "Ich bin unter 18",
+    "Ich bin nicht 18",
+    "J'ai moins de 18 ans",
+    "Je n'ai pas 18 ans",
+    "Tengo menos de 18 años",
+    "Soy menor de 18",
+    "Não tenho 18 anos",
+    "Ik ben jonger dan 18",
+    "Jag är under 18",
+    "Jag är inte 18",
+    "Mam mniej niż 18 lat",
+    "Nie mam 18 lat",
+  ])("%s is an exit", (label) => {
+    expect(negated(label)).toBe(true);
+  });
+
+  test("the negation list is lowercase single words, as the tokeniser compares them", () => {
+    for (const word of AGE_NEGATIONS) {
+      expect(word).toBe(word.toLowerCase());
+      expect(word).toMatch(/^[\p{L}\p{N}]+$/u);
+    }
   });
 });

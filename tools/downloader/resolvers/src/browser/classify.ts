@@ -21,10 +21,13 @@ export interface PageSignals {
   hasPasswordInput: boolean;
   hasPlayerElement: boolean;
   /**
-   * An age self-confirmation is showing that nobody pressed: a control whose
-   * label states the viewer's age, on a page carrying an `AGE_MARKERS` phrase.
-   * The resolver clears it when the operator opted in to pressing it, because
-   * then a gate still showing is a press that did not work, not a refusal.
+   * An age self-confirmation is showing that nobody pressed: a short control
+   * naming 18 or 21 inside a layer that blocks the page, or one whose label
+   * states the viewer's age on a page carrying an `AGE_MARKERS` phrase
+   * (`provoke.ts`, `AGE_CANDIDATES_FN`). The resolver clears it when the
+   * operator opted in to pressing it, because then a gate still showing is a
+   * press that did not work, not a refusal — unless the press was declined for
+   * want of a single control to choose (dl-83).
    */
   ageGate: boolean;
   /** False when the deadline ran out with the page still fetching. */
@@ -89,7 +92,9 @@ const GEO_MARKERS: readonly string[] = [
 /**
  * Page wording that says the content is for adults. `provoke.ts` counts an
  * "I am over 18" control as a gate only on a page carrying one of these, so an
- * age link in a footer is not mistaken for one (dl-48).
+ * age link in a footer is not mistaken for one (dl-48) — or, since dl-83, when
+ * the control sits in a blocking layer whose own text carries one, or names
+ * the age itself.
  *
  * **Never a bare "18+"**, which is a rating badge that listings print beside
  * every thumbnail, and never a phrase an age label itself would contain ("over

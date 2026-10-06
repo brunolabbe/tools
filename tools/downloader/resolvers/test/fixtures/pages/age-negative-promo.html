@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Streaming plans</title>
+  </head>
+  <body>
+    <h1>Streaming plans</h1>
+    <!-- dl-83 negative: a promo modal whose button reads "Get 18% off" and
+         whose text says so again. A percentage is not an age. Not a gate. -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      "
+    >
+      <div style="width: 360px; padding: 24px; background: #fff">
+        <h2>Save 18% this week</h2>
+        <p>Every annual plan is 18% off until Sunday.</p>
+        <button type="button">Get 18% off</button>
+        <button type="button" aria-label="Close popup">×</button>
+      </div>
+    </div>
+  </body>
+</html>

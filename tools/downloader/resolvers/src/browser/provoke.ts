@@ -57,6 +57,11 @@ export const CLOSE_TEXT =
  * `CONSENT_TEXT`, so a sentence in the page body is not a label; and a label
  * alone is not a gate — see `AGE_MARKERS`. Each new phrasing is one more
  * alternative, not a new branch.
+ *
+ * **No longer the only way a gate is recognised** (dl-83): `AGE_CANDIDATES_FN`
+ * recognises one by its structure in any language, and keeps this pattern as
+ * a second, sufficient path so nothing dl-48 recognised is lost. A phrasing
+ * this misses is no longer a reason to extend it.
  */
 export const AGE_GATE_TEXT =
   /^\s*(?:(?:yes|да|ja|oui|sí|si|sì|sim|tak)[,.!]?\s+)?(?:i(?:'|’)?m|i am|мне(?:\s+уже)?(?:\s+есть)?|ich bin|j'ai|tengo|ho|tenho|ik ben|jag är|mam(?:\s+ukończone)?)\s+(?:(?:over|at least|older than|больше|über|mindestens|plus de|más de|più di|mais de|ouder dan|över)\s+)?(?:18|21)\s*\+?(?:\s*(?:years(?: old)?|or (?:older|over)|лет|года?|jahre(?: alt)?|oder älter|ans(?: ou plus)?|años(?: o más)?|anni|anos(?: ou mais)?|jaar(?: of ouder)?|år|lat))?\s*[.!]?\s*$/i;
@@ -331,32 +336,327 @@ const UNMARK_VIDEO_SCRIPT = `(() => {
 })()`;
 
 /**
- * True when a control carries an `AGE_GATE_TEXT` label **and** the page carries
- * an `AGE_MARKERS` phrase. Both, because an "I am 18" link in the footer of a
- * page with nothing age-restricted on it is not a gate.
+ * An age, as a whole number in a label or a layer's text: `18` or `21`,
+ * optionally followed by `+` (dl-83). Whole means not part of a longer number
+ * (`2018`, `1.18`, `21:00`), not a price (`€18`), not a percentage (`18%`, the
+ * promo's "Get 18% off") and not glued to a word (`18h`). Language-independent
+ * on purpose: the label around it is whatever the site wrote.
  */
-const AGE_GATE_SCRIPT = `(() => {
+export const AGE_NUMBER = /(?<![\p{L}\p{N}\p{Sc}]|\p{N}[.,:/-])(?:18|21)\+?(?![\p{L}\p{N}%°]|[.,:/-]\p{N})/u;
+
+/**
+ * Words that turn an age label into its opposite — the "I am under 18, leave"
+ * button beside the entry — per language `AGE_GATE_TEXT` lists (dl-83). A
+ * closed list, matched as whole words of the lowercased label.
+ *
+ * **Negation and under-age words only, never "leave" or "exit".** An exit
+ * control that names no age is not a candidate to begin with, and one that
+ * does nearly always says "under" or "not" as well. A gate in a language with
+ * no entry here still has the origin rule (`AGE_CHOOSE_FN`) and, failing that,
+ * presses nothing.
+ */
+export const AGE_NEGATIONS: readonly string[] = [
+  // English
+  "not",
+  "no",
+  "under",
+  "younger",
+  "below",
+  "less",
+  "minor",
+  // Russian
+  "не",
+  "нет",
+  "младше",
+  "меньше",
+  "менее",
+  "несовершеннолетний",
+  // German
+  "nicht",
+  "nein",
+  "kein",
+  "keine",
+  "unter",
+  "jünger",
+  "minderjährig",
+  // French
+  "non",
+  "ne",
+  "pas",
+  "moins",
+  "mineur",
+  "mineure",
+  // Spanish (and Italian/Spanish "no", above)
+  "menos",
+  "menor",
+  // Italian
+  "meno",
+  "sotto",
+  "minorenne",
+  // Portuguese
+  "não",
+  "nao",
+  // Dutch
+  "niet",
+  "nee",
+  "geen",
+  "jonger",
+  "onder",
+  "minderjarig",
+  // Swedish
+  "inte",
+  "ej",
+  "nej",
+  "yngre",
+  "minderårig",
+  // Polish
+  "nie",
+  "poniżej",
+  "mniej",
+  "niepełnoletni",
+];
+
+/**
+ * The longest label a structural candidate may carry, in words (dl-83). The
+ * longest attestation phrased as a control that the brief and dl-48 collected
+ * runs to ten — "I confirm that I am 18 years of age or older" — and the
+ * Italian "Ho 18 anni o più - Entra" is six. Past ten a label reads as a
+ * sentence, or a card's whole caption, rather than a control. The cap is a weak
+ * filter on purpose: the blocking layer and its own text carry the weight.
+ */
+const AGE_LABEL_MAX_WORDS = 10;
+
+/**
+ * The share of the viewport a positioned layer must cover to count as blocking
+ * the page (dl-83): more than half, which is what "most" means, and well below
+ * the full-viewport backdrop every gate seen so far used. A fixed header or a
+ * cookie strip covers far less. A gate drawn as a small centred card with a
+ * sibling backdrop, rather than a child of one, falls below it — and is
+ * recognised only through dialog semantics or dl-48's label-and-marker path.
+ */
+const AGE_LAYER_MIN_COVER = 0.5;
+
+/** Marks the age-gate control `AGE_CHOOSE_FN` chose, so the click goes through the locator API. */
+const AGE_MARK = "data-downloader-age";
+
+const AGE_CONTROLS = 'button, a, [role="button"], input[type="button"], input[type="submit"]';
+
+/**
+ * Every control that could be an age self-confirmation, as `{ el, name,
+ * layered }` (dl-83). Recognition is broad, because a false one with
+ * confirmation off costs a wrong message and nothing clicked. Two paths, either
+ * sufficient:
+ *
+ * - **Structural, any language.** A visible control whose label has at most
+ *   `AGE_LABEL_MAX_WORDS` words and an `AGE_NUMBER`, inside a blocking layer —
+ *   the nearest ancestor that is a visible `SEMANTIC_DIALOG` or is fixed or
+ *   absolutely positioned and covers `AGE_LAYER_MIN_COVER` of the viewport —
+ *   whose own text, **controls excluded**, mentions the number too or carries
+ *   an `AGE_MARKERS` phrase. Controls are excluded because the label is inside
+ *   the layer: counting it would make the layer vouch for every label in it.
+ * - **dl-48's, kept whole.** A visible control whose label matches
+ *   `AGE_GATE_TEXT`, on a page carrying an `AGE_MARKERS` phrase.
+ *
+ * Controls are found with `ALL_MEDIA_FN`'s shadow-piercing walk, and ancestors
+ * are climbed across shadow boundaries, so a gate in an open shadow root is
+ * found the way a shadow-root player is (dl-61, dl-69). When a candidate and
+ * one of its own descendants both qualify — a `<button>` inside an `<a>` — only
+ * the innermost is kept: they are one control, and two would read as two.
+ */
+const AGE_CANDIDATES_FN = `function () {
   var label = new RegExp(${JSON.stringify(AGE_GATE_TEXT.source)}, ${JSON.stringify(AGE_GATE_TEXT.flags)});
+  var age = new RegExp(${JSON.stringify(AGE_NUMBER.source)}, ${JSON.stringify(AGE_NUMBER.flags)});
   var markers = ${JSON.stringify(AGE_MARKERS)};
-  var body = document.body;
-  var text = body ? (body.innerText || body.textContent || '').toLowerCase() : '';
-  var marked = false;
-  for (var i = 0; i < markers.length; i++) {
-    if (text.indexOf(markers[i]) !== -1) {
-      marked = true;
-      break;
-    }
-  }
-  if (!marked) return false;
-  var controls = document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]');
-  for (var j = 0; j < controls.length; j++) {
-    var el = controls[j];
-    var name = (el.getAttribute('aria-label') || el.innerText || el.value || '').trim();
-    if (!label.test(name)) continue;
+  var semantic = ${JSON.stringify(SEMANTIC_DIALOG)};
+  var controlSelector = ${JSON.stringify(AGE_CONTROLS)};
+  var up = function (node) {
+    if (node.parentElement) return node.parentElement;
+    var parent = node.parentNode;
+    return parent && parent.host ? parent.host : null;
+  };
+  var shown = function (el) {
     var rect = el.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) return true;
+    return rect.width > 0 && rect.height > 0;
+  };
+  var marked = function (text) {
+    for (var i = 0; i < markers.length; i++) {
+      if (text.indexOf(markers[i]) !== -1) return true;
+    }
+    return false;
+  };
+  var words = function (text) {
+    return text.split(/\\s+/).filter(function (w) { return /[\\p{L}\\p{N}]/u.test(w); }).length;
+  };
+  var viewport = window.innerWidth * window.innerHeight;
+  var isLayer = function (node) {
+    if (node.matches(semantic)) return shown(node);
+    var position = getComputedStyle(node).position;
+    if (position !== 'fixed' && position !== 'absolute') return false;
+    var rect = node.getBoundingClientRect();
+    var w = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+    var h = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+    return viewport > 0 && (w * h) / viewport >= ${AGE_LAYER_MIN_COVER};
+  };
+  var layerOf = function (el) {
+    for (var node = up(el); node; node = up(node)) {
+      if (node === document.body || node === document.documentElement) return null;
+      if (isLayer(node)) return node;
+    }
+    return null;
+  };
+  var ownText = function (layer) {
+    var parts = [];
+    var walk = function (node) {
+      for (var child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === 3) {
+          parts.push(child.nodeValue);
+          continue;
+        }
+        if (child.nodeType !== 1) continue;
+        if (/^(?:SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(child.tagName)) continue;
+        if (child.matches(controlSelector) || child.matches('input, select, textarea')) continue;
+        if (getComputedStyle(child).display === 'none') continue;
+        if (child.shadowRoot) walk(child.shadowRoot);
+        walk(child);
+      }
+    };
+    if (layer.shadowRoot) walk(layer.shadowRoot);
+    walk(layer);
+    return parts.join(' ').toLowerCase();
+  };
+  var body = document.body;
+  var pageMarked = marked(body ? (body.innerText || body.textContent || '').toLowerCase() : '');
+  var controls = (${ALL_MEDIA_FN})(controlSelector);
+  var found = [];
+  for (var i = 0; i < controls.length; i++) {
+    var el = controls[i];
+    if (!shown(el)) continue;
+    var name = (el.getAttribute('aria-label') || el.innerText || el.value || '').trim();
+    if (!name) continue;
+    var layer = layerOf(el);
+    var structural = false;
+    if (layer && age.test(name) && words(name) <= ${AGE_LABEL_MAX_WORDS}) {
+      var text = ownText(layer);
+      structural = age.test(text) || marked(text);
+    }
+    var legacy = pageMarked && label.test(name);
+    if (structural || legacy) found.push({ el: el, name: name, layered: !!layer });
   }
-  return false;
+  var inside = function (outer, inner) {
+    for (var node = up(inner); node; node = up(node)) if (node === outer) return true;
+    return false;
+  };
+  return found.filter(function (candidate) {
+    return !found.some(function (other) { return other !== candidate && inside(candidate.el, other.el); });
+  });
+}`;
+
+/**
+ * The one candidate to press, or `null` (dl-83). The press is strict, because
+ * a false one clicks something on the user's behalf. Each rule only drops:
+ *
+ * 1. **When any candidate sits in a blocking layer, those outside every layer
+ *    go.** A layer over the page intercepts the pointer, so a person could not
+ *    press a control under it either, and the control that put the layer up is
+ *    the one inside it. This is what keeps an `AGE_GATE_TEXT` decoy earlier in
+ *    the DOM from being pressed in the overlay's place.
+ * 2. **A label carrying an `AGE_NEGATIONS` word goes** — the under-age exit.
+ * 3. **A link to another http(s) origin goes**, the control itself or its
+ *    nearest `a[href]` ancestor: an entry keeps the viewer on the site, an exit
+ *    sends them elsewhere. A `javascript:` or same-origin href says nothing
+ *    either way and stays.
+ *
+ * Exactly one left is pressed; none or several, nothing is, and the probe says
+ * why (`AGE_CONFIRMATION_REQUIRED`) rather than guessing. The rules apply to a
+ * lone candidate too: a gate whose only age-bearing control is the exit must
+ * not have it pressed for want of a second.
+ */
+const AGE_CHOOSE_FN = `function (candidates) {
+  var negations = ${JSON.stringify(AGE_NEGATIONS)};
+  var up = function (node) {
+    if (node.parentElement) return node.parentElement;
+    var parent = node.parentNode;
+    return parent && parent.host ? parent.host : null;
+  };
+  var negated = function (name) {
+    var tokens = name.toLowerCase().split(/[^\\p{L}\\p{N}]+/u);
+    for (var i = 0; i < tokens.length; i++) {
+      if (negations.indexOf(tokens[i]) !== -1) return true;
+    }
+    return false;
+  };
+  var offsite = function (el) {
+    for (var node = el; node; node = up(node)) {
+      if (node.tagName === 'A' && node.hasAttribute('href')) {
+        try {
+          var target = new URL(node.getAttribute('href'), location.href);
+          return /^https?:$/.test(target.protocol) && target.origin !== location.origin;
+        } catch {
+          return false;
+        }
+      }
+    }
+    return false;
+  };
+  var list = candidates;
+  if (list.some(function (c) { return c.layered; })) {
+    list = list.filter(function (c) { return c.layered; });
+  }
+  list = list.filter(function (c) { return !negated(c.name) && !offsite(c.el); });
+  return list.length === 1 ? list[0].el : null;
+}`;
+
+/**
+ * Set on a document's `window` once a press there has landed (dl-83). **One
+ * press per document**: the attestation is made once, as a person makes it,
+ * and a second press is never of the gate that was recognised — it is of
+ * whatever still matches once that gate is gone. dl-83's decoy reproduction is
+ * the case: an "I am 18 or older" control in a header above the layer, which a
+ * later pass found and pressed after the layer's own entry had worked. A new
+ * document (a navigation) starts without it.
+ */
+const AGE_PRESSED = "__downloaderAgePressed";
+
+/**
+ * `ageGate`: a gate is recognised. `ageGatePressable`: a press was made in this
+ * document, or `AGE_CHOOSE_FN` would make one. Read together at the end of a
+ * probe, they tell a press that was made and did not work from one that was
+ * declined (dl-83).
+ */
+const AGE_GATE_STATE_FN = `(function () {
+  var candidates = (${AGE_CANDIDATES_FN})();
+  return {
+    ageGate: candidates.length > 0,
+    ageGatePressable:
+      candidates.length > 0 && (window[${JSON.stringify(AGE_PRESSED)}] === true || (${AGE_CHOOSE_FN})(candidates) !== null),
+  };
+})`;
+
+/**
+ * Marks the control `AGE_CHOOSE_FN` chose. Returns `marked`, `declined`
+ * (candidates, none chosen), `pressed` (this document already had its press) or
+ * `none`.
+ */
+const MARK_AGE_SCRIPT = `(() => {
+  if (window[${JSON.stringify(AGE_PRESSED)}] === true) return 'pressed';
+  var candidates = (${AGE_CANDIDATES_FN})();
+  if (candidates.length === 0) return 'none';
+  var chosen = (${AGE_CHOOSE_FN})(candidates);
+  if (!chosen) return 'declined';
+  chosen.setAttribute(${JSON.stringify(AGE_MARK)}, '');
+  return 'marked';
+})()`;
+
+const AGE_PRESSED_SCRIPT = `(() => {
+  try {
+    Object.defineProperty(window, ${JSON.stringify(AGE_PRESSED)}, { value: true, configurable: true });
+  } catch {}
+})()`;
+
+// The mark may sit in a shadow root that `document.querySelectorAll` cannot see into.
+const UNMARK_AGE_SCRIPT = `(() => {
+  var marked = (${ALL_MEDIA_FN})('[${AGE_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(AGE_MARK)});
 })()`;
 
 const PLAY_SELECTORS: readonly string[] = [
@@ -479,13 +779,15 @@ const SIGNALS_SCRIPT = `(() => {
   var body = document.body;
   var text = body ? (body.innerText || body.textContent || '') : '';
   var root = document.documentElement;
+  var age = (${AGE_GATE_STATE_FN})();
   return {
     title: document.title || '',
     bodyText: text.slice(0, 4000),
     html: root ? root.outerHTML.slice(0, 8000) : '',
     hasPasswordInput: !!document.querySelector('input[type="password"]'),
     hasPlayerElement: (${ALL_MEDIA_FN})('video, audio, iframe[src], [class*="player"], [id*="player"]').length > 0,
-    ageGate: ${AGE_GATE_SCRIPT},
+    ageGate: age.ageGate,
+    ageGatePressable: age.ageGatePressable,
   };
 })()`;
 
@@ -503,6 +805,11 @@ export interface RawPageSignals {
   hasPasswordInput: boolean;
   hasPlayerElement: boolean;
   ageGate: boolean;
+  /**
+   * The recognised gate has exactly one control the press would choose. False
+   * with `ageGate` true is a press that was declined, not one that failed.
+   */
+  ageGatePressable: boolean;
 }
 
 function originOf(raw: string): string | undefined {
@@ -641,14 +948,40 @@ export async function dismissModal(
 /**
  * Presses a recognised age confirmation. The caller decides whether to call it
  * at all — that is the operator's `confirmAge`, never this function's.
+ *
+ * **The element pressed is the element recognised** (dl-83): `MARK_AGE_SCRIPT`
+ * recognises, chooses and marks in one evaluation, and the click goes to the
+ * mark. A second search by label — what this did before — clicked whichever
+ * match came first in the DOM, recognised or not. A declined choice presses
+ * nothing; `readSignals` reports it, and the probe says why. A document gets
+ * one press (`AGE_PRESSED`), recorded only once the click has landed, so a
+ * press a promo intercepted is still tried on the next pass.
  */
 async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean> {
+  let found = "none";
   try {
-    if (!(await frame.evaluate<boolean>(AGE_GATE_SCRIPT))) return false;
+    found = await frame.evaluate<string>(MARK_AGE_SCRIPT);
   } catch {
     return false;
   }
-  return await clickByText(frame, AGE_GATE_TEXT, timeoutMs);
+  if (found !== "marked") return false;
+  try {
+    await frame.locator(`[${AGE_MARK}]`).first().click({ timeout: timeoutMs });
+    try {
+      await frame.evaluate(AGE_PRESSED_SCRIPT);
+    } catch {
+      // The press navigated the frame: a new document, which starts unpressed.
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      await frame.evaluate(UNMARK_AGE_SCRIPT);
+    } catch {
+      // The press removed the frame's document, or navigated it.
+    }
+  }
 }
 
 /**
@@ -723,8 +1056,8 @@ async function provokeFrame(
   await dismissModal(frame, { timeoutMs: 1500, scriptable });
   await dismissConsent(frame, 2000);
 
-  // Recognising a gate needs the page's wording as well as the control's label,
-  // so it is only tried where script runs. The player mounts after the press,
+  // Recognising a gate needs the layer around a control or the page's wording
+  // as well as the control's label, so it is only tried where script runs. The player mounts after the press,
   // which is why playback provocation still follows it.
   if (confirmAge && scriptable) await confirmAgeGate(frame, 2000);
 
@@ -856,6 +1189,7 @@ export async function readSignals(page: Page): Promise<RawPageSignals> {
       hasPasswordInput: false,
       hasPlayerElement: false,
       ageGate: false,
+      ageGatePressable: false,
     };
   }
 }

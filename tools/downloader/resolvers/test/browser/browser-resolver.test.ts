@@ -608,6 +608,113 @@ describe("BrowserResolver", () => {
         expect(server.requests).not.toContain("/beacon/age-link");
       },
     );
+
+    describe("recognised by its structure, pressed strictly (dl-83)", () => {
+      const GATE = "/age-gate-overlay.html";
+      const MASTER = "/media/mse/master.m3u8";
+
+      function confirming(): BrowserResolver {
+        const hls = recordingHlsParser();
+        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+      }
+
+      test(
+        "an Italian gate in a fixed layer, not told to confirm, fails AGE_CONFIRMATION_REQUIRED",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+          server.requests.length = 0;
+          const error = await probeError(GATE, resolver);
+
+          expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          // No AGE_MARKERS phrase on the page, and the code needs none.
+          expect(error.details?.["marker"]).toBeUndefined();
+          expect(server.requests).not.toContain("/beacon/age-confirmed");
+        },
+      );
+
+      test(
+        "an Italian gate in a fixed layer, told to confirm, yields its stream",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const result = await probe(GATE, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-confirmed");
+        },
+      );
+
+      test.each([
+        ["an exit link to another origin", "exit=link"],
+        ["a same-origin exit button with a script handler", "exit=button"],
+        ["an off-site exit in a language with no negation list", "exit=foreign"],
+      ])(
+        "a two-button gate with %s presses the entry and never the exit",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, query) => {
+          server.requests.length = 0;
+          const result = await probe(`${GATE}?${query}`, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-confirmed");
+          expect(server.requests).not.toContain("/beacon/age-exit");
+        },
+      );
+
+      test(
+        "two candidates still standing after the choice presses nothing and fails AGE_CONFIRMATION_REQUIRED",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const error = await probeError(`${GATE}?second`, confirming());
+
+          // Told to confirm, and still the refusal: saying why beats guessing.
+          expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          expect(server.requests).not.toContain("/beacon/age-confirmed");
+          expect(server.requests).not.toContain("/beacon/age-confirmed-2");
+          expect(server.requests).not.toContain(MASTER);
+        },
+      );
+
+      test(
+        "a gate whose layer lives in an open shadow root is recognised",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+          server.requests.length = 0;
+          const error = await probeError(`${GATE}?shadow`, resolver);
+
+          expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          expect(server.requests).not.toContain("/beacon/age-confirmed");
+        },
+      );
+
+      test(
+        "a gate whose layer lives in an open shadow root, told to confirm, yields its stream",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const result = await probe(`${GATE}?shadow`, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-confirmed");
+        },
+      );
+
+      test(
+        "presses the control it recognised, not an AGE_GATE_TEXT decoy earlier in the DOM",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const result = await probe(`${GATE}?decoy`, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-confirmed");
+          expect(server.requests).not.toContain("/beacon/age-decoy");
+        },
+      );
+    });
   });
 
   test("reports BOT_CHALLENGE on an interstitial", { timeout: TEST_TIMEOUT_MS }, async () => {
