@@ -84,7 +84,12 @@ What the parser has to know:
   had four rows on one day, and only the listed order recovers their sequence.
   **The parser must never sort by date.** Sorting would break the chain below,
   and nothing else can tell those four rows apart.
-- **Each month ends with a `Total` line.**
+- **Each month ends with a `Total` line**, except a month with no rows, which
+  says `Aucune transaction` under its header instead and has no `Total`.
+- **Selecting the whole page also takes its footer**, `3 mois sur 12`: the
+  months shown, out of the twelve AccèsD has. When it is pasted it must be the
+  last line, and the months shown must equal the month headers pasted, empty
+  ones included (lg-14).
 
 **The running balance is the proof.** Each row's balance equals the previous
 row's balance plus its own amount. On the sample this held for all 25 rows with

@@ -11,8 +11,9 @@
  *   taken from that listed order and the parser never sorts by date.
  * - **The minus is U+2212**, which `Number()` reads as `NaN`.
  *
- * The paste carries three proofs of its own completeness — the running balance,
- * the month totals and the echo line — and a paste that fails any one is
+ * The paste carries up to four proofs of its own completeness — the running
+ * balance, the month totals, the echo line and, when the page's footer is
+ * pasted too, its count of months — and a paste that fails any one is
  * refused whole, with the row named. It is never imported "mostly". Nor is
  * anything skipped: a line this parser does not recognise is an error carrying
  * its line number, because a skipped line is a row that is simply absent from
@@ -66,6 +67,13 @@ const TOTAL_LINE = /^Total\s(.+)$/iu;
  */
 const AMOUNT_BALANCE_LINE = /^([^$]*\$)([^$]*\$)$/u;
 const COLUMN_HEADER = ["DATE", "DESCRIPTION", "MONTANT", "SOLDE"];
+/**
+ * What a month with no rows says instead, directly under its header. It closes
+ * the month the way a `Total` would, so nothing may follow it there.
+ */
+const NO_TRANSACTIONS = "AUCUNE TRANSACTION";
+/** `3 mois sur 12`: how many months the page shows, out of how many it has. Folded. */
+const FOOTER_LINE = /^(\d+) MOIS SUR (\d+)$/u;
 
 /** A row as listed, with where it came from, until the chain has been proven. */
 interface Listed {
@@ -78,6 +86,8 @@ interface Month {
   month: number;
   headerLine: number;
   sumCents: number;
+  rows: number;
+  /** Set by its `Total` or by `Aucune transaction`: either closes the month. */
   totalSeen: boolean;
 }
 
@@ -130,6 +140,7 @@ export function parseStatement(text: string): ParsedStatement {
 
   const listed: Listed[] = [];
   let month: Month | null = null;
+  let months = 0;
   let index = 0;
 
   while (index < lines.length) {
@@ -151,8 +162,10 @@ export function parseStatement(text: string): ParsedStatement {
         month: number,
         headerLine: lineNo,
         sumCents: 0,
+        rows: 0,
         totalSeen: false,
       };
+      months += 1;
       index += 1;
       continue;
     }
@@ -178,6 +191,37 @@ export function parseStatement(text: string): ParsedStatement {
       month.totalSeen = true;
       index += 1;
       continue;
+    }
+
+    const folded = fold(squash(line));
+    if (folded === NO_TRANSACTIONS) {
+      if (month === null || month.totalSeen)
+        unrecognised(lineNo, line, "a month with no rows, outside any month");
+      if (month.rows > 0)
+        unrecognised(lineNo, line, "a month with no rows, in a month that has some");
+      month.totalSeen = true;
+      index += 1;
+      continue;
+    }
+
+    // Checked before a row, which also starts with a number.
+    const footer = FOOTER_LINE.exec(folded);
+    if (footer) {
+      const shown = Number(footer[1]);
+      const available = Number(footer[2]);
+      if (lines.slice(index + 1).some((rest) => rest.trim() !== "")) {
+        unrecognised(lineNo, line, "the month count is not the last line");
+      }
+      if (shown > available) unrecognised(lineNo, line, "more months shown than there are");
+      requireTotal(month);
+      if (shown !== months) {
+        fail(
+          "STATEMENT_MONTH_COUNT_MISMATCH",
+          `Line ${lineNo} says the page shows ${shown} months, but the paste has ${months}: paste from the first month header to this line.`,
+          { line: lineNo, shownMonths: shown, pastedMonths: months },
+        );
+      }
+      break;
     }
 
     if (!ROW_START.test(line)) unrecognised(lineNo, line, "not a row, a header or a total");
@@ -239,6 +283,7 @@ export function parseStatement(text: string): ParsedStatement {
     }
 
     month.sumCents += amountCents;
+    month.rows += 1;
     listed.push({
       row: { date: iso, category, description, amountCents, balanceCents },
       line: lineNo,

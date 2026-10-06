@@ -17,7 +17,7 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1); the two after them are the store's (lg-2), the next two
+ * parser's (lg-1) and the fifth arrived with its footer (lg-14); the two after them are the store's (lg-2), the next two
  * are the rules' and the inbox's (lg-4), and the last is the salaries' (lg-5).
  */
 
@@ -56,6 +56,11 @@ export const LEDGER_ERROR_CODES = [
   "STATEMENT_TOTAL_MISMATCH",
   /** A row's echo line does not repeat its own date, description and amount. */
   "STATEMENT_ECHO_MISMATCH",
+  /**
+   * The page's footer, `3 mois sur 12`, counts more or fewer months than the
+   * paste has headers: a whole month was left out of the selection (lg-14).
+   */
+  "STATEMENT_MONTH_COUNT_MISMATCH",
   // --- Chaining a paste onto what is stored (lg-2) ---
   //
   // A gap between a paste and the stored tail is `STATEMENT_CHAIN_BROKEN` again:
@@ -111,6 +116,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "The pasted statement does not add up: a row's balance does not follow from the one before it.",
   STATEMENT_TOTAL_MISMATCH: "A month's total in the pasted statement does not match its rows.",
   STATEMENT_ECHO_MISMATCH: "A row in the pasted statement does not match its own repeated line.",
+  STATEMENT_MONTH_COUNT_MISMATCH:
+    "The pasted statement has a different number of months from the page it was copied from.",
   STATEMENT_ROW_CONFLICT: "A pasted row disagrees with the row already stored in its place.",
   STATEMENT_BEFORE_HISTORY:
     "The pasted statement starts before the oldest stored row, and older history cannot be added.",
