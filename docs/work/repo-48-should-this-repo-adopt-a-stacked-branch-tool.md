@@ -1057,3 +1057,8 @@ Gate 1's findings, each reproduced before anything changed:
   870, and `makeResolver`'s `tracked.includes(file)` from 824 to 851. `node
 scripts/citations-gate.mjs --against origin/main` named both `moved` at
   exactly these new lines before the repoint.
+
+- 2026-10-06 — the owner reversed part of the decision above: the pilot now uses
+  the `gh stack` extension rather than the website, and the extension is adopted
+  if it holds. Option 1 stays the procedure until then. See
+  [repo-95](./repo-95-pilot-gh-stack-then-adopt-it.md).
