@@ -51,7 +51,9 @@ nothing back.
   ticket's one `awaiting:` line, in the form `docs/01-TICKETS.md` gives, naming
   every such row and the event that closes it. `--land` refuses a ticket dirty
   against `HEAD`, so the line is its own commit just before it, in the same
-  push. A ticket whose tables carry no `awaiting` row gets no line.
+  push. A ticket whose tables carry no `awaiting` row gets no line from this
+  step; one its brief already owes (dl-52's, lg-5's) is the builder's, and is
+  in the ticket before the lander arrives.
 - **A gate that runs after the records are committed** — a narrow check on a
   post-PR fix — lands its own file alone with the same command. Do not pass the
   already-committed files again: that adds a second `## Review`.

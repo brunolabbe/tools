@@ -201,7 +201,8 @@ landing, over each gate's own section file, one commit per gate in gate order.
    `HEAD`. It goes in the same push as the records, and it is the only marker
    the obligation has, since the gate never writes frontmatter. It is one line
    for the ticket, naming every line a gate's table marks `awaiting`; a ticket
-   whose tables mark none gets none. First, write the reviewer's
+   whose tables mark none gets none from this step, whatever its brief already
+   owes. First, write the reviewer's
    returned text to a file, `## Review` as its first line (or `### Gate <n>` for
    a later gate), and run
    `node scripts/review-record.mjs <ticket-path> <section-file> [--gate <n>]`. The

@@ -193,8 +193,10 @@ names a model — see [repo-17](./work/repo-17-a-ticket-declares-its-difficulty.
 
 **`awaiting` is what the ticket still owes, written for the reader who no longer
 has a row to read.** It carries the obligation and the observation that closes
-it, in a sentence: `awaiting: Done when 6 — alert 2 reads dismissed on the
-security tab after a push to main`. `npm run status` prints it in its own
+it, in one sentence of a fixed shape, `<what is owed> — <the reading, after the
+event>`; a line copied from a gate row names the `Done when` line it belongs
+to: `awaiting: Done when 6 — alert 2 reads dismissed on the security tab after
+a push to main`. `npm run status` prints it in its own
 `awaiting` section under the tool, `--show` puts it on the closing line so that
 `done — nothing to pick up` cannot be the last thing an agent reads, and `--json`
 carries it on every ticket, `null` where nothing is owed.
