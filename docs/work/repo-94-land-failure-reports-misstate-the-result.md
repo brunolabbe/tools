@@ -157,8 +157,30 @@ push, and says undoing it needs the owner's force-push (repo-94)`. Red with
 /already on origin\/feature/`. Green: whole file `Tests 65 passed (65)`.
 - 2026-10-06 — `.claude/skills/orchestrate-tickets/reference/records.md`,
   _Landing_: "a failure after the commits prints the reset command and rolls
-  nothing back" is no longer true of a preflight failure. Not edited — rule pages
-  change only in the owner's review session.
+  nothing back" is no longer true of a preflight failure (nor, since the verify
+  decision, of a verify failure, which now adds the force-push note). **Routed to
+  the owner's review session, not edited on this branch.** Gate 1 put it to the
+  owner as options: A, route it to the review session; B, correct it here as a
+  one-off exception. **The owner chose A on 2026-10-06.** The sentence to
+  correct is still in `records.md`; the review session owns it.
+- 2026-10-06 — Gate 1 (CONCERNS) round. **F1 (med):** the `gc.auto` test
+  failed on the Windows leg with `expected [ '0', '' ] to deeply equal [ '0' ]`:
+  it told the clone from the real repository by comparing `realpathSync` of
+  `run`'s path with the fixture's, and `land()` passes the real repository as
+  `git rev-parse --show-toplevel` spells it, which on Windows is not what
+  `mkdtemp` returned. The likely cause (an 8.3 short temp path) was not
+  reproduced here; no Windows host. The test now identifies the clone by its
+  name, `review-record-land-*`, and asserts that exactly one clone commit and
+  exactly one other commit were seen, so a misidentification fails on Linux too:
+  renaming the clone's prefix gives `expected [] to deeply equal [ '0' ]`.
+  **F2:** the injected `removeDir` now throws a message with no path; dropping
+  `${scratchDir}` from the warning is red
+  (`expected 'WARNING: could not remove the scratch…' to contain
+'/tmp/review-record-land-0kTDZD'`). **F3:** the failing-validation half now
+  asserts the `Validated against a scratch clone` text, no reset command, and
+  that the real repository's `HEAD` did not move. **F4:** the two `land()`
+  comments that called preflight a reset-advice failure are corrected. Whole
+  file `Tests 65 passed (65)`.
 - 2026-10-06 — Fold-in considered. `scripts/test/review-record.test.ts` carries
   one other assertion of the old preflight advice, the one this change edits; no
   other piece was made free. `scripts/review-record.mjs`'s other `rmSync` sites

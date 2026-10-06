@@ -1335,8 +1335,10 @@ export function land(options) {
   }
   pass("sections", `${plans.length} section file(s), in landing order`);
 
-  // A failure after every section has really landed prints the pre-landing
-  // sha and the reset command — never an automatic reset. See the docblock.
+  // A failure after the commits are real but before they are pushed (the real
+  // splice pass, the push) prints the pre-landing sha and the reset command —
+  // never an automatic reset. Verify and preflight come after the push and
+  // differ below. See the docblock.
   const resetHint = () =>
     `\n\nThe commit(s) already made for this landing are not rolled back. Reset to the ` +
     `pre-landing state with:\n  git reset --hard ${preLandingSha}`;
@@ -1428,8 +1430,9 @@ export function land(options) {
   // Validated — every section splices and commits in this exact sequence
   // without refusal, so this repeats it for real. A failure here (the
   // scratch clone and the real repository disagreeing, a filesystem error)
-  // is reported like push/verify/preflight: the sha and the reset command,
-  // never an automatic reset — some of these commits may already be real.
+  // is reported with the sha and the reset command, like a push or verify
+  // failure — never an automatic reset, since some of these commits may
+  // already be real. (Only a preflight failure differs: it comes after the push.)
   try {
     spliceAndCommitAll(ticketAbsolutePath, ticketRepoRoot, plans, ticketId, tool, status, run);
   } catch (error) {

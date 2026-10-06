@@ -1930,16 +1930,27 @@ test("land() creates its scratch clone with gc.auto=0, so a commit there cannot 
     // Read the scratch clone's own config at the moment of its first commit —
     // the moment git decides whether to spawn `gc --auto`. Asserting on the
     // shared repository's loose-object count instead would not stay true.
+    //
+    // The clone is identified by its name, `review-record-land-*`, never by
+    // comparing paths against the fixture's: `land()` hands `run` the real
+    // repository as `git rev-parse --show-toplevel` spells it, which on Windows
+    // is not the spelling `mkdtemp` returned, so a path comparison counted the
+    // real repository's own commit as a clone's (the Windows leg, repo-94).
     const gcAutoAtCommit: string[] = [];
+    let otherCommits = 0;
     const run = (repo: string, args: string[]): string => {
       const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8", shell: false });
       if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
-      if (args[0] === "commit" && fs.realpathSync(repo) !== fs.realpathSync(dir)) {
-        const read = spawnSync("git", ["-C", repo, "config", "--get", "gc.auto"], {
-          encoding: "utf8",
-          shell: false,
-        });
-        gcAutoAtCommit.push(read.stdout.trim());
+      if (args[0] === "commit") {
+        if (path.basename(repo).startsWith("review-record-land-")) {
+          const read = spawnSync("git", ["-C", repo, "config", "--get", "gc.auto"], {
+            encoding: "utf8",
+            shell: false,
+          });
+          gcAutoAtCommit.push(read.stdout.trim());
+        } else {
+          otherCommits += 1;
+        }
       }
       return result.stdout;
     };
@@ -1955,7 +1966,10 @@ test("land() creates its scratch clone with gc.auto=0, so a commit there cannot 
     });
 
     expect(result.ok).toBe(true);
+    // Exactly one clone commit was seen, and the real pass's one was seen as
+    // something else: the classification above is a partition, not a guess.
     expect(gcAutoAtCommit).toEqual(["0"]);
+    expect(otherCommits).toBe(1);
   } finally {
     cleanup();
   }
@@ -1965,12 +1979,11 @@ test("land() reports a scratch-clone cleanup failure as a warning naming the lef
   const { dir, ticketAbs, base, cleanup } = withLandRepo();
   const leftovers: string[] = [];
   // The injected cleanup fails the way the gc race does — and leaves the
-  // directory, which this test then removes itself.
+  // directory, which this test then removes itself. Its message carries no
+  // path, so a leftover path in the warning can only be one `land()` wrote.
   const removeDir = (target: string) => {
     leftovers.push(target);
-    throw Object.assign(new Error(`ENOTEMPTY: directory not empty, rmdir '${target}/.git'`), {
-      code: "ENOTEMPTY",
-    });
+    throw Object.assign(new Error("ENOTEMPTY: directory not empty"), { code: "ENOTEMPTY" });
   };
   try {
     const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
@@ -1999,6 +2012,7 @@ test("land() reports a scratch-clone cleanup failure as a warning naming the lef
       "bad.md",
       "## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2`.\n",
     );
+    const headBefore = gitIn(dir, "rev-parse", "HEAD");
     const failed = land({
       ticket: ticketAbs,
       sections: [bad],
@@ -2010,6 +2024,11 @@ test("land() reports a scratch-clone cleanup failure as a warning naming the lef
     });
     expect(failed.ok).toBe(false);
     expect(failed.steps.at(-1)?.name).toBe("splice");
+    // The failure came from validation, not from the real pass: it says so, and
+    // the real repository's HEAD never moved.
+    expect(failed.steps.at(-1)?.detail).toMatch(/Validated against a scratch clone/);
+    expect(failed.steps.at(-1)?.detail).not.toMatch(/git reset --hard/);
+    expect(gitIn(dir, "rev-parse", "HEAD")).toBe(headBefore);
     expect(leftovers).toHaveLength(2);
     expect(failed.steps.find((s) => s.name === "cleanup")?.detail).toContain(leftovers[1]);
   } finally {
