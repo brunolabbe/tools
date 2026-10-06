@@ -41,6 +41,18 @@ npm test -- --project ledger
 npm run e2e:ledger          # "No tests found" until the first spec
 ```
 
+**Every API route but health answers 403 until you name a person.** The API
+refuses anything Cloudflare Access has not vouched for, and in development
+nothing has. Start it as someone instead — `.env.example` has the rest:
+
+```bash
+ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger
+```
+
+The API's dev script builds before it watches, because `@ledger/contract`
+resolves to `dist/` and a fresh checkout has none (lg-12); the reason is on the
+`// dev` key in `api/package.json`.
+
 The ports are 8100/5193 so every tool runs at once without reconfiguring any;
 the e2e suite takes 8108. `.github/workflows/ledger.yml` builds the image, starts
 it, and asks it for both `/api/health` and the page.
