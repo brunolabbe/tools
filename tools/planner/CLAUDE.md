@@ -82,7 +82,9 @@ The unit suite runs on every push in the repo-wide CI.
 asked for both `/api/health` and the page.
 
 The API's dev script is `node --watch --import tsx`, not `tsx watch` — see the
-downloader's note; the same Windows failure applies.
+downloader's note; the same Windows failure applies. It builds before it watches,
+because `@planner/contract` resolves to `dist/` and a fresh checkout has none
+(pl-54); the reason is on the `// dev` key in `api/package.json`.
 
 ## Rules
 
