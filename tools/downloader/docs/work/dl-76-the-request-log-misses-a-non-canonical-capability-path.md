@@ -3,7 +3,7 @@ id: dl-76
 tool: downloader
 title: The request log misses a capability token behind a non-canonical path
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-75]
 difficulty: standard
@@ -92,6 +92,96 @@ this ticket.
    `/api/thumbnail%2F<t>`, `/API/THUMBNAIL/<t>`, `/api/thumbnail//<t>`) are each
    either covered by a test or named on this ticket as left open, with the reason.
 3. `npm run check` and the downloader's suite pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-06 · `4907d9a..7072830` · Opus 5.5, depth standard
+
+| Done when                                                                                                          | Proof                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A test fails at the base for `/api/%74humbnail/<t>` and `/api/%66iles/<t>`, reading raw lines, and passes after | `api/test/logging.test.ts` › "a capability token never reaches a log line, however its path is spelled" › "on /api/thumbnail/:token" and "on /api/files/:token" › "an encoded first letter of the route" ✓ — the serialised-line filter carries it; both red with the base `request-log.ts`, green at head |
+| 2. Each 404 shape in the table covered by a test or named as left open                                             | Same describe › "a doubled leading slash", "a doubled slash inside the prefix", "an encoded slash before the token", "an upper-cased route", "a doubled slash before the token", on both routes ✓ — all ten red at the base, so `inject` did not normalise them away                                       |
+| 3. `npm run check` and the downloader's suite pass                                                                 | verified — `npm run check` exit 0; `npm test -- --project downloader` 1634 passed, 2 skipped of 1636; PR #366's CI green on `7072830`, Windows leg included                                                                                                                                                |
+
+- **low** · no `Done when` line depends on it · one mechanism, two misreadings.
+  `capabilityPrefixOf` in `api/src/request-log.ts` matches a prefix anywhere in
+  the path, and with no segment after it. So a request that is not a capability
+  request is logged as one. With `webDir` set, `GET /docs/api/files/readme`
+  (`Accept: text/html`) is served `index.html` 200 and logged
+  `url=/api/files/[redacted] status=200`. That line cannot be told apart from a
+  successful download. `GET /api/files` (404) is logged as `/api/files/[redacted]`,
+  which says a token was presented when none was. The function's comment says the
+  over-redacted `/x/api/files/y` is a path "which no route answers". That is
+  false when the UI is served, because the SPA fallback answers it.
+  Reproduction: `spa.mts` in the gate's scratch directory, run from
+  `tools/downloader/api` with `node --import tsx`. It uses `createHarness` with
+  `config.webDir` pointing at a directory that holds an `index.html`, and
+  `inject` with `accept: text/html`. Output:
+  `/docs/api/files/readme -> 200 text/html | logged: /api/files/[redacted] 200`
+  and `/api/files -> 404 application/json | logged: /api/files/[redacted] 404`.
+  **Open decision:** (a, recommended) correct the comment and accept the
+  conflation, because no credential is at stake and an odd 200 on a capability
+  route is rare. (b) Redact only when something follows the prefix in the raw
+  path, which fixes the bare `/api/files` line but not the SPA one. Matching only
+  at the root would give the SPA case back, but it would also lose the
+  absolute-form coverage.
+- **low** · no `Done when` line depends on it · an absolute-form target with a
+  `?` in its authority, `http://localhost:<port>?/api/files/<t>`, **is served**
+  (200 on both routes). find-my-way's `FULL_PATH_REGEXP` strips through the first
+  `/`. `redactLoggedUrl` cuts at that `?`, finds no prefix and returns the URL
+  unchanged. The token stays out of the line only because `redactUrlsInText` in
+  `logger.ts` drops the query from any `https?://` substring. The line reads
+  `http://localhost:<port>/?[redacted]`: the route is lost, and no test pins this
+  shape's reliance on that second mechanism. Reproduction: `probe.mts`, row
+  "absolute-form ? in authority".
+- **low** · `nfr:maintainability` — the comment on "a traversal attempt is
+  redacted, not resolved" in `api/test/logging.test.ts` still says "the segment
+  after the prefix is replaced". Since this change the whole remainder is
+  replaced, which is what its assertion now pins.
+- **dropped** · four spellings still log the token, each on a 404 that reaches
+  no handler: a raw `?` or `#` straight after the prefix (`/api/files?/<t>`,
+  `/api/files#/<t>`, `/x?/api/files/<t>`), four layers of encoding
+  (`/api/%25252566iles/<t>`), a full-width slash (`/api/files%EF%BC%8F<t>`) and a
+  trailing dot (`/api/files./<t>`). The ticket's Log names each class as left
+  open: a credential in the query string, more than three layers, a confusable,
+  and "a spelling no normaliser would turn into the route". The trailing dot is
+  not named on its own but belongs to the last class. Not a defect against this
+  brief.
+- **dropped** · a malformed escape (`%E0%A4%A`, a lone `%`, `%zz`, an overlong
+  `%C0%AF`) gets a 400 and **no log line at all**. This is the same at the base
+  (`probe-base.out`, `lines=0`): Fastify refuses the URL before `onRequest`, so
+  `redactLoggedUrl` never runs. It is out of the reviewed range. Called
+  directly, `redactLoggedUrl` does not throw on any of these inputs.
+- **dropped** · `registerNotFoundHandler` echoes `request.url` in the 404
+  response body (`details.path`). That is the caller's own input going back to
+  them, not a log line. The Log names it too.
+- **findings** · the hunt returned 6. 3 were kept and 3 dropped.
+- Log sites enumerated in `api/src`, 8 of 8: the `request` line
+  (`registerRequestLogging`) and `request rejected`/`request failed`
+  (`registerErrorHandling`) both go through `redactLoggedUrl`, and their
+  `details` carry no path on either capability route. The not-found handler logs
+  nothing. `rate limited` logs `capabilityBucketKey`, which reads the router's
+  `params`, so the spelling cannot reach it. The `files.ts` refusals log a client
+  key and counts. `web.ts` logs no URL. `egress-proxy.ts` logs outbound
+  subprocess targets, not inbound paths. Fastify's own logger is off.
+- Rewritten assertions: the four that pinned "the rest of the path is kept as it
+  came" came from dl-23. No `Done when` line in dl-23 or dl-75 relies on the
+  suffix being kept. dl-75's thumbnail tests and "leaves identifiers alone" are
+  unchanged, and every new assertion is an exact `toBe`, which fails on empty
+  output. Nothing was weakened.
+- Positive control: removing the case fold from `capabilityPrefixOf` in a
+  scratch copy turned 3 of 94 red (both "an upper-cased route" tests, and
+  "resolves what a normaliser would…"). The base `request-log.ts` under the
+  branch's tests turned 40 of 94 red, which matches the Log. The gate's
+  socket probe leaked on 48 of 64 targets at the base and on 12 of 64 at head.
+- Invariants: redaction checked, as above. The contract is untouched. The tests
+  sit in an existing, registered spec. There is no new dependency and no style
+  breach (`npm run check` passed). Skipped as untouched: SSRF, shell and process
+  trees, progress, Dockerfile, cross-tool imports.
+- NFR: security ✓, with the two lows above · performance ✓ (decoding is bounded
+  at three linear passes; 60,000 `%25` took 15 ms and 100,000 `a/../` took
+  53 ms, both far above Node's header limit) · reliability ✓ (the decoder cannot
+  throw) · maintainability: see the comment lows above.
 
 ## Log
 
