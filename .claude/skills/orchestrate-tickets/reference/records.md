@@ -85,4 +85,6 @@ file that starts `### Gate <n>`.
 
 A skill correction, a close-out, anything the loop produces about itself has no
 ticket to commit a section to. **The pull request thread is the record**, in
-full, and the body says so in a sentence.
+full, and the body says so in a sentence. A gate row `awaiting` has no
+`awaiting:` field to go in here: the body names the event and the reading, and
+nothing else in the repo tracks them after the merge.

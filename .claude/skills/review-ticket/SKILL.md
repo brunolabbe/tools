@@ -38,8 +38,10 @@ supplied line as it would a ticket's; and the section goes on the pull request
 thread rather than into a file, per `orchestrate-tickets`' `records.md`. The
 severity table below then grades the prompt's lines exactly as it would a
 ticket's — an unproven one is still FAIL, and a line only an event after the
-merge could prove is `unproven (gate)` and never `awaiting`, since no ticket's
-`awaiting` field exists to carry it past the merge — and the reviewer says so in
+merge could prove is still `awaiting`, but no ticket's `awaiting` field exists
+to carry it past the merge, so the row says that nothing in the repo tracks it
+and the lander names the event and the reading in the pull request body — and
+the reviewer says so in
 the section, because a prompt's acceptance and a ticket's are the kind of difference
 that otherwise gets argued in a round. Every other step applies unchanged. A gate
 on 2026-09-20 needed all of this patched by hand in its prompt, which is what

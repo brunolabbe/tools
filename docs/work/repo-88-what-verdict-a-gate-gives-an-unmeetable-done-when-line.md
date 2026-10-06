@@ -313,3 +313,28 @@ before editing, and do not settle either here.
   - **Folds considered and not made.** An `awaiting` line on lg-5 (merged as
     #354) waits on the open decision above. repo-89 (merged as #346, `in-flight`
     by the owner's choice) needs none: `in-flight` already says it is open.
+- 2026-10-06 — **The owner answered the three open decisions above**, through
+  `AskUserQuestion`, with the options as the builder wrote them. This entry
+  supersedes the "OPEN DECISION", "Derived, not asked" and "Folds considered"
+  bullets of the entry above.
+  - **lg-5's Done when 4, an adr/005-excused check.** Options: **A**, a
+    recorded owner excusal makes the line `awaiting` (event: the push to `main`
+    running `security.yml`'s dismissal step; reading: the alerts' state
+    afterwards); **B**, it stays `unproven (gate)` and CONCERNS. **Chosen: A**,
+    the builder's recommendation. The bullet in `gate.md` lost its
+    "(provisional)".
+  - **A branch with no ticket, and a line only a post-merge event can prove.**
+    Options: `unproven (gate)` (the builder's derived choice), or `awaiting`
+    with the obligation named only in the pull request body. **Chosen:
+    `awaiting`, named in the PR body. This overrode the builder's
+    recommendation.** The owner was told the cost: nothing in the repo tracks
+    that obligation after the merge. Applied in `gate.md` (the `awaiting`
+    verdict), `review-ticket/SKILL.md` (the no-ticket paragraph) and
+    `reference/records.md` (_When there is no ticket_).
+  - **The row word.** Options: `awaiting` (the builder's) or
+    `proven (post-merge)`. **Chosen: `awaiting`**, no change.
+  - **Fold-in, made.** lg-5 (merged as #354, `done`) now carries an `awaiting`
+    line for Done when 4, with a Log entry on that ticket, since decision 1
+    makes the line `awaiting` and no step had written the field. `status` is
+    untouched. The alerts' state was not read, because it needs the security
+    tab and `gh api` is denied. repo-89 still needs none, as above.
