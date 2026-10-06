@@ -289,6 +289,11 @@ A settled charge needs no special case later. The deposit that settled it
 enters the payer's cumulative contributions, and it cancels there against the
 charge, which also stays in the sums.
 
+**A settlement records its formula version.** The tool's is `v3`: this rule,
+over contributions since the two were last even, each period weighed at the
+ratio it closed with, and rounded once. The workbook's two are `v1` and `v2`,
+imported as they happened (lg-6 defines the three; lg-7 imports the two).
+
 ### Numbers
 
 - **Money is integer cents.**

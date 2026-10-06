@@ -40,6 +40,14 @@ const VERBS = {
   buckets: ["GET", ROUTES.buckets],
   salaries: ["POST", ROUTES.salaries],
   ratios: ["POST", ROUTES.ratios],
+  periods: ["GET", ROUTES.periods],
+  periodOpen: ["GET", ROUTES.periodOpen],
+  periodClose: ["POST", ROUTES.periodClose],
+  periodLines: ["POST", ROUTES.periodLines],
+  periodLine: ["POST", ROUTES.periodLine.replace(":id", "1")],
+  periodLineRetire: ["POST", ROUTES.periodLineRetire.replace(":id", "1")],
+  recurring: ["POST", ROUTES.recurring],
+  recurringItem: ["POST", ROUTES.recurringItem.replace(":id", "1")],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
@@ -194,11 +202,12 @@ describe("the key", () => {
 });
 
 // lg-5: the table above takes one verb per route, and the salaries and the ratios
-// answer a `GET` as well as the `POST` it walks.
+// answer a `GET` as well as the `POST` it walks; so do lg-6's recurring items.
 describe("the routes that answer two verbs", () => {
   test.each([
     ["salaries", ROUTES.salaries],
     ["ratios", ROUTES.ratios],
+    ["recurring", ROUTES.recurring],
   ])("GET %s refuses the second request in a minute too", async (_name, url) => {
     const target = await startTight();
 

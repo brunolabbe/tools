@@ -630,6 +630,8 @@ here is one. Auto-minify no longer exists, so there is nothing else to turn off.
 
 **A Cloudflare WAF rate limiting rule on `/api/`** is worth adding as a second
 layer on any hostname, since it rejects at the edge and costs the host nothing.
+The downloader's is written out under
+[the edge rate limit on `/api/`](#the-edge-rate-limit-on-api).
 The in-process limiter still has to be right: it is per-process and does not
 survive a restart, so two replicas grant two allowances and a redeploy resets
 every bucket. The scope of that, and the shared store that is the fix if this is
@@ -778,6 +780,106 @@ Consider tightening these once it is reachable by more than you. The defaults in
   link is opened, which is when a job takes a slot. Nothing fills the disk any
   more; what a shared instance runs out of is ffmpeg processes and upload
   bandwidth, and `MAX_FILE_SIZE_MB` caps each stream.
+
+**`compose.downloader.prod.yaml` already sets the ones the owner sized** (dl-52),
+from measurements taken on 2026-10-05 on `downloader-v0.8.0` with the hls.js demo
+stream. The comment on each value there names its source; the whole table is in
+[dl-52](../tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md).
+
+| Setting                              | Production | Why                                                                                  |
+| ------------------------------------ | ---------- | ------------------------------------------------------------------------------------ |
+| `MAX_CONCURRENT_BROWSERS`            | 2          | two probes at once peaked at 250% CPU and 800 MiB: the browser is what limits it     |
+| `MAX_CONCURRENT_JOBS`                | 2          | one job took about 40 Mbps of 329 Mbps upload, so upload is not what binds           |
+| `MAX_FILE_SIZE_MB`                   | 4096       | the owner's choice, against a recommended 1024: a whole film fits                    |
+| `RATE_LIMIT_PROBE_PER_MINUTE`        | 4          | policy, not measured                                                                 |
+| `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` | 4          | the owner's choice, 2026-10-06: the probe's number, as the two are used one-for-one  |
+| `RATE_LIMIT_JOBS_PER_MINUTE`         | 2          | policy, not measured                                                                 |
+| `MAX_JOBS_PER_CLIENT`                | 2          | the owner's choice, against a recommended 1: **one address can hold both job slots** |
+
+`MAX_CONCURRENT_FRAME_GRABS` is left to follow `MAX_CONCURRENT_JOBS`. The last row
+is a trade, not an oversight: while one address holds both slots, everyone else's
+download waits or is refused, and a 4096 MB file holds a slot for about 20 minutes
+at the measured 29 Mbps. A household behind one router shares that address.
+
+### The edge rate limit on `/api/`
+
+The in-process limiters above are per process and start empty on every redeploy,
+so the one limit that survives a restart, and costs the host nothing, is a
+Cloudflare WAF rate limiting rule. It lives **on the dashboard, not in
+`scripts/cloudflare-setup.mjs`**: there is one rule and it changes rarely, and
+putting it in the script would need a fourth permission on a token whose header
+argues for three (the owner chose this on 2026-09-28, dl-52).
+
+**This zone is on the Free plan** (the owner, 2026-10-06), which fixes what the
+rule can say. Cloudflare's rate limiting page, read on 2026-10-06, gives Free one
+rule, the fields **Path and Verified Bot** only, a 10 second period, a 10 second
+block and Block as the one action; Pro adds Host, two rules, periods up to a
+minute and blocks up to an hour. So on Free the expression cannot name a
+hostname, and the rule below is one the owner has to choose to create.
+
+Security → WAF → Rate limiting rules → Create rule:
+
+| Field                | On Free (this zone)                  | On Pro, if the zone is ever upgraded                                                      |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Expression           | Path starts with `/api/`             | `(http.host eq "downloader.example.com" and starts_with(http.request.uri.path, "/api/"))` |
+| Counted per          | IP address                           | IP address                                                                                |
+| Threshold and period | **20 requests per 10 seconds**       | **60 requests per 60 seconds**                                                            |
+| Action               | Block, for 10 seconds, default `429` | Block, for **10 seconds** (see below), default `429`                                      |
+
+**On Free the rule covers every hostname in the zone.** A path-only rule cannot
+tell the downloader's `/api/` from the planner's or the ledger's, so it counts
+all of them against one budget per visitor address: 20 requests in 10 seconds,
+shared across every tool this host serves. The figures below are sized from the
+downloader's traffic alone; **the planner's and the ledger's request counts were
+not measured**, so if either trips the rule in ordinary use, raise the threshold
+rather than the period. **Whether to create this rule at all is the owner's
+choice at the dashboard:** accept a limit shared by every tool, or create none and
+rely on the in-process limiters, which a redeploy resets. Do not widen the path
+past `/api/`: the page and its assets are not what this protects, and a first
+visit loads a dozen of them.
+
+**Where 20 and 60 come from.** dl-54 measured a first visit against a live API:
+11 request lines, **7 of them under `/api/`** (config, the probe and its event
+stream, the job and its event stream, its link, a preview). A visitor spending
+every in-process allowance in one minute (four probes and two jobs) makes about
+19 `/api/` requests: the config, then three per probe (the probe, its event
+stream, a preview) and three per job (the job, its event stream, its link). Free's
+20 in 10 seconds is only reached if all of that arrives at once, which is tight
+but not ordinary use. The 60 per minute on Pro is the same budget spread over a
+minute, plus headroom for the job event stream's reconnects. A reconnect that opens costs **two** requests,
+the stream and the page's reconcile fetch of `GET /api/jobs/:id`. **These figures
+are derived, not measured against the dashboard's counter**: if the rule logs
+blocks for ordinary use, raise the threshold.
+
+**Why a 10 second block, and what a longer one does.** The page's job stream
+gives up after 8 consecutive failed reconnects, about 60 seconds of backoff (500
+ms doubling to a 15 s cap, plus or minus 25%). A block shorter than that is
+survived: the stream reconnects after it. A **60 second block outlasts the retry
+budget**, and the stream then closes for good: the job card shows nothing, and the
+result reaches the page only on reload. That is why Pro's row says 10 seconds,
+and why Free's fixed 10 seconds is the safe end.
+
+What else a block looks like to a visitor: a refused `POST /api/probe` or
+`/api/jobs` is an error in the page. A refused probe event stream is not retried:
+narration stops and the analysis carries on. A refused download link
+(`/api/files/*`, which this rule also covers) fails silently in the browser, the
+case [dl-77](../tools/downloader/docs/work/dl-77-a-refused-download-says-nothing-in-the-page.md)
+is open on. **The budget is per address**, so a household or office behind one
+router shares it, as it shares `MAX_JOBS_PER_CLIENT`.
+
+**The dashboard's other allowances: unconfirmed.** The Free plan's figures above
+are Cloudflare's published ones, not read from this zone's dashboard, and no agent
+can read it. The owner fills in this table once, from the rule form:
+
+| Allowance                                              | Published for Free | Read from this zone's dashboard |
+| ------------------------------------------------------ | ------------------ | ------------------------------- |
+| Rate limiting rules allowed                            | 1                  | unconfirmed                     |
+| Fields allowed in the expression                       | Path, Verified Bot | unconfirmed                     |
+| Operators on Path (is the `starts with` form offered?) | not published      | unconfirmed                     |
+| Periods offered                                        | 10 s               | unconfirmed                     |
+| Block durations offered                                | 10 s               | unconfirmed                     |
+| Actions offered                                        | Block              | unconfirmed                     |
+| The rule created, with its threshold and period        | not created yet    | not created yet                 |
 
 ### On the LAN as well
 

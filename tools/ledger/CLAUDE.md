@@ -3,9 +3,10 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
-**Built a ticket at a time.** The seams exist, and three domains: the pasted
-statement (lg-1, lg-2), what files each row (lg-4), and what each bucket holds
-with the salaries and the ratio (lg-5). `docs/02-ROADMAP.md` is what is decided and what comes
+**Built a ticket at a time.** The seams exist, and four domains: the pasted
+statement (lg-1, lg-2), what files each row (lg-4), what each bucket holds
+with the salaries and the ratio (lg-5), and periods closed with their
+settlement (lg-6). `docs/02-ROADMAP.md` is what is decided and what comes
 next; `npm run status -- --tool ledger` is what is open. Treat anything below
 marked _planned_ as design until a ticket says otherwise.
 
@@ -27,7 +28,9 @@ e2e          Playwright specs — none yet; e2e/README.md says what earns the fi
 
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
 `classify`, which files a row under a rule only on an exact match (lg-4), and
-what each bucket holds as of a date and the ratio from two salaries (lg-5). The name is `books` because `ledger` is the tool. _Planned_, arriving
+what each bucket holds as of a date and the ratio from two salaries (lg-5), and
+the settlement: the matching rule, cumulative, with charges, and which closed
+period's deposit a paste has brought in (lg-6). The name is `books` because `ledger` is the tool. _Planned_, arriving
 with the ticket that first needs it rather than as an empty package now:
 **`receipts`**, the one package that talks to a model, reading a receipt photo.
 
@@ -102,7 +105,10 @@ filing a version that supersedes it and retired by filing a retirement; a row is
 reclassified by appending a record, and the latest stands (`current_rules` and
 `current_classifications`, in `api/src/db/schema.ts`). Salaries and ratios are
 corrected the same way (lg-5, `current_salaries` and `current_ratios`), and a
-corrected salary never moves a ratio already confirmed from it.
+corrected salary never moves a ratio already confirmed from it. So are period
+lines and recurring items (lg-6, `current_period_lines` and
+`current_recurring_items`); a period is a row only once closed, and its
+recorded settlement is never recomputed, because the next close is cumulative.
 `api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
 a `DELETE`.
 
