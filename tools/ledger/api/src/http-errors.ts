@@ -42,6 +42,13 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   ROW_NOT_FOUND: 404,
   // lg-5: a salary record named to derive a ratio from, which no longer stands.
   SALARY_NOT_FOUND: 404,
+  // lg-6: a line or a recurring item named that no longer stands; a period
+  // closed by the other person meanwhile, which is a conflict with what is now
+  // stored; and a close the books cannot compute until a ratio is confirmed.
+  PERIOD_LINE_NOT_FOUND: 404,
+  RECURRING_ITEM_NOT_FOUND: 404,
+  PERIOD_NOT_OPEN: 409,
+  RATIO_NOT_IN_EFFECT: 422,
 };
 
 /**

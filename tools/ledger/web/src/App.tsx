@@ -1,11 +1,11 @@
 /**
  * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
- * and the inbox and the rules (lg-4).
+ * the inbox and the rules (lg-4), and the period (lg-6).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
  * thing to unpick, so each one lands with the work that stores what it shows.
- * Five screens do not need a router: a tab is a piece of state, and the inbox
+ * Six screens do not need a router: a tab is a piece of state, and the inbox
  * carries the number of rows waiting so a paste that left some is not missed.
  */
 
@@ -16,11 +16,12 @@ import { fetchHealth } from "./api/health.ts";
 import { fetchInbox } from "./api/inbox.ts";
 import { Home } from "./home/Home.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
+import { Periods } from "./periods/Periods.tsx";
 import { Rules } from "./rules/Rules.tsx";
 import { Salaries } from "./salaries/Salaries.tsx";
 import { StatementPaste } from "./statements/StatementPaste.tsx";
 
-type Tab = "home" | "paste" | "inbox" | "rules" | "salaries";
+type Tab = "home" | "period" | "paste" | "inbox" | "rules" | "salaries";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
@@ -46,6 +47,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "home"} onClick={() => setTab("home")}>
           Home
         </button>
+        <button type="button" aria-pressed={tab === "period"} onClick={() => setTab("period")}>
+          Period
+        </button>
         <button type="button" aria-pressed={tab === "paste"} onClick={() => setTab("paste")}>
           Paste
         </button>
@@ -61,6 +65,7 @@ export function App(): React.ReactElement {
       </nav>
       <main>
         {tab === "home" && <Home />}
+        {tab === "period" && <Periods />}
         {tab === "paste" && <StatementPaste />}
         {tab === "inbox" && <Inbox onCount={setWaiting} />}
         {tab === "rules" && <Rules />}

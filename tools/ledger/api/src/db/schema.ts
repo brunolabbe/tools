@@ -196,6 +196,97 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (ratio_id, person_id)
   );
   `,
+
+  // 4 — periods of personal-card spending, and the settlement closing one records (lg-6).
+  `
+  -- An amount paid on a person's own card toward the household. A period holds
+  -- the lines dated inside it, so a line names no period. Correcting a line
+  -- files one that supersedes it; removing one files a retirement that does.
+  CREATE TABLE period_lines (
+    id INTEGER PRIMARY KEY,
+    -- Who paid.
+    person_id TEXT NOT NULL REFERENCES people (id),
+    -- yyyy-mm-dd.
+    date TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents <> 0),
+    category TEXT,
+    note TEXT,
+    -- 'manual' (lg-6). No CHECK, because the import (lg-7) and receipts (lg-8)
+    -- each add a source, and SQLite cannot change a CHECK without rebuilding
+    -- the table; the API validates it against the contract instead.
+    source TEXT NOT NULL,
+    -- NULL is shared at the ratio. A person is a charge: the thing was entirely
+    -- theirs, and they owe the whole of it to whoever paid.
+    charged_to TEXT REFERENCES people (id),
+    supersedes INTEGER REFERENCES period_lines (id),
+    retired INTEGER NOT NULL DEFAULT 0 CHECK (retired IN (0, 1)),
+    entered_at TEXT NOT NULL,
+    entered_by TEXT NOT NULL,
+    CHECK (charged_to IS NULL OR charged_to <> person_id)
+  );
+
+  CREATE UNIQUE INDEX period_lines_supersedes ON period_lines (supersedes) WHERE supersedes IS NOT NULL;
+  CREATE INDEX period_lines_date ON period_lines (date);
+
+  CREATE VIEW current_period_lines AS
+    SELECT * FROM period_lines
+    WHERE retired = 0
+      AND NOT EXISTS (SELECT 1 FROM period_lines newer WHERE newer.supersedes = period_lines.id);
+
+  -- A fixed monthly item. It is stored, and its monthly lines are generated
+  -- from it on every read, never stored. Correcting or ending one files a
+  -- version that supersedes it, with the end date set.
+  CREATE TABLE recurring_items (
+    id INTEGER PRIMARY KEY,
+    person_id TEXT NOT NULL REFERENCES people (id),
+    monthly_cents INTEGER NOT NULL CHECK (monthly_cents > 0),
+    start_date TEXT NOT NULL,
+    -- NULL while it runs; the last day it can generate a line on.
+    end_date TEXT,
+    label TEXT NOT NULL,
+    supersedes INTEGER REFERENCES recurring_items (id),
+    entered_at TEXT NOT NULL,
+    entered_by TEXT NOT NULL,
+    CHECK (end_date IS NULL OR end_date >= start_date)
+  );
+
+  CREATE UNIQUE INDEX recurring_items_supersedes ON recurring_items (supersedes) WHERE supersedes IS NOT NULL;
+
+  CREATE VIEW current_recurring_items AS
+    SELECT * FROM recurring_items
+    WHERE NOT EXISTS (SELECT 1 FROM recurring_items newer WHERE newer.supersedes = recurring_items.id);
+
+  -- A closed period and the settlement it recorded. Only a closed period is a
+  -- row: the open one starts the day after the last closed, so closing is one
+  -- INSERT and nothing is updated. The first period's start is the point the two
+  -- were last even; NULL is the beginning of the books.
+  CREATE TABLE periods (
+    id INTEGER PRIMARY KEY,
+    start_date TEXT,
+    end_date TEXT NOT NULL,
+    closed_at TEXT NOT NULL,
+    closed_by TEXT NOT NULL,
+    -- The settlement. 'v1' and 'v2' are the workbook's historical formulas
+    -- (lg-7); 'v3' is the tool's (books/src/settlement.ts).
+    formula TEXT NOT NULL CHECK (formula IN ('v1', 'v2', 'v3')),
+    -- The ratio in effect on end_date, which the deposit was divided by.
+    ratio_id INTEGER NOT NULL REFERENCES ratios (id),
+    -- Both NULL when the two stood exactly at the ratio.
+    payer_id TEXT REFERENCES people (id),
+    recipient_id TEXT REFERENCES people (id),
+    -- Into the buffer. NULL only when the recipient's share was zero, so that a
+    -- direct transfer was the only way to settle.
+    deposit_cents INTEGER CHECK (deposit_cents >= 0),
+    -- The same debt, paid directly instead.
+    net_cents INTEGER NOT NULL CHECK (net_cents >= 0),
+    CHECK (start_date IS NULL OR start_date <= end_date),
+    CHECK ((payer_id IS NULL) = (recipient_id IS NULL))
+  );
+
+  -- One period per start, and one from the beginning: two people closing the
+  -- same open period at once cannot both record a settlement.
+  CREATE UNIQUE INDEX periods_start ON periods (coalesce(start_date, ''));
+  `,
 ];
 
 /**
