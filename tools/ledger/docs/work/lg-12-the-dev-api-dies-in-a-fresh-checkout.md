@@ -113,3 +113,6 @@ The ticket was filed on this branch, so its brief was read from the branch's cop
 - 2026-10-06 — Gate 1 PASS at `0085a39`. Its one low finding, the README's
   Getting started meeting a 403 with no word on why, was folded in: one paragraph
   naming the `DEV_IDENTITY` command. Nothing left to decide, so no ticket.
+- 2026-10-06 — After the gate, the `// dev` key's "the server dies on start"
+  became "fails on start … and `node --watch` sits waiting for a file change":
+  pl-54's gate found the watcher stays alive. Wording only.
