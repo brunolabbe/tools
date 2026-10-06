@@ -13,6 +13,9 @@
  *     `410`** (`FILE_EXPIRED`). A link works once.
  *  2. **Admission before the link is spent.** The wait line and dl-51's
  *     per-client cap are checked first, so a refusal leaves the link usable.
+ *     Every refusal from here to step 4 is also published on the job's event
+ *     stream as `refused` (dl-77), because the browser takes the `429` for a
+ *     failed file and the page would otherwise never hear why.
  *  3. **The link is claimed atomically**; of two racing `GET`s one wins.
  *  4. **A bounded wait for a slot** (owner decision 6): short enough that the
  *     wait plus every probe the job may run stays under 100 s, since Cloudflare
@@ -35,6 +38,7 @@ import type { MediaStream } from "@downloader/engine";
 import { clientKey } from "@webtools/core/rate-limit";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
+import { toPublicPayload } from "../http-errors.ts";
 import { cancelError, maxLinkWaitMs, recordCanceled } from "../jobs/links.ts";
 import { isWellFormedToken } from "../jobs/tokens.ts";
 import { capabilityBucketKey, createRateLimitHook } from "../rate-limit.ts";
@@ -114,8 +118,22 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
         recordCanceled(store, events, job.id, cancelError("link-expired").toPayload(), nowIso());
         throw new AppError("FILE_EXPIRED", undefined, { details: { jobId: job.id } });
       }
+
+      // Tells the page what the browser cannot (dl-77): the link is a plain
+      // `<a download>`, so a refusal reaches the browser as a failed file and
+      // the card learns nothing from it. The same payload the response carries,
+      // on the stream the card already follows. Returns the error, so a refusal
+      // is `throw refused(...)` and cannot be written without being published;
+      // the job and its link are untouched.
+      const refused = (error: AppError): AppError => {
+        events.refused(job.id, toPublicPayload(error));
+        return error;
+      };
+
       if (context.isShuttingDown()) {
-        throw new AppError("INTERNAL", "The server is shutting down and is not starting new jobs.");
+        throw refused(
+          new AppError("INTERNAL", "The server is shutting down and is not starting new jobs."),
+        );
       }
 
       // --- admission, before the link is spent -----------------------------
@@ -125,9 +143,11 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
           waiting: queue.waiting,
           limit: context.config.maxQueuedJobs,
         });
-        throw rateLimited(
-          "The server is already working through as many downloads as it can hold. Try again shortly.",
-          "jobs-queue-full",
+        throw refused(
+          rateLimited(
+            "The server is already working through as many downloads as it can hold. Try again shortly.",
+            "jobs-queue-full",
+          ),
         );
       }
       // The key `rateLimits.jobs` buckets on, so `TRUST_PROXY` means the same
@@ -140,9 +160,11 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
           key,
           limit: context.jobClientGate.limit,
         });
-        throw rateLimited(
-          "You already have as many downloads running or waiting as this server allows per client. Try again once one finishes.",
-          "jobs-client-cap",
+        throw refused(
+          rateLimited(
+            "You already have as many downloads running or waiting as this server allows per client. Try again once one finishes.",
+            "jobs-client-cap",
+          ),
         );
       }
 
@@ -208,9 +230,11 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
         if (offered !== null) store.releaseLink(token, offered, nowIso());
         reply.header("Retry-After", String(CAP_RETRY_AFTER_SEC));
         started.reject(
-          rateLimited(
-            "Every download slot is busy. Try the same link again in a moment.",
-            "jobs-wait-timeout",
+          refused(
+            rateLimited(
+              "Every download slot is busy. Try the same link again in a moment.",
+              "jobs-wait-timeout",
+            ),
           ),
         );
       }, waitMs);

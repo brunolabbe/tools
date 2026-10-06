@@ -219,5 +219,18 @@ export type JobEvent =
   | { type: "failed"; jobId: string; error: AppErrorPayload; at: string }
   /** Carries the `JOB_CANCELED` payload; `status` remains the authority. */
   | { type: "canceled"; jobId: string; error: AppErrorPayload; at: string }
+  /**
+   * The server refused to start the job when its link was opened (dl-77): the
+   * client was at its cap, the wait line was full, no slot freed in time, or the
+   * server was shutting down. **Not an outcome.** The job stays `queued` and its
+   * link stays usable, so this is neither terminal nor a `status` change — it
+   * exists because the link is a plain `<a download>`, the browser takes the
+   * refusal as a failed file, and this stream is the only way the page hears why.
+   *
+   * `error.details.retryAfterSec`, when present, is the number the response's
+   * `Retry-After` carried. Best-effort like every frame here: a client that was
+   * not attached when it was sent never sees it.
+   */
+  | { type: "refused"; jobId: string; error: AppErrorPayload; at: string }
   /** Periodic no-op so intermediaries do not close an idle connection. */
   | { type: "heartbeat"; at: string };
