@@ -250,6 +250,7 @@ describe("an age gate is recognised by its structure, and only that (dl-83)", ()
     ["a Top 21 heading in a modal", "/age-negative-top21.html"],
     ["a cookie dialog that mentions 18 partners", "/age-negative-cookie.html"],
     ["a promo modal with a Get 18% off button", "/age-negative-promo.html"],
+    ["a full-screen menu whose only 18 is its own 18+ link", "/age-negative-menu.html"],
   ])("%s is no gate", async (_name, pathname) => {
     expect(await ageGateAt(pathname)).toBe(false);
   });

@@ -5,14 +5,17 @@
     <title>Video listing</title>
   </head>
   <body style="margin: 0">
-    <!-- dl-83 negative: an "18+" category link in a fixed nav bar. The bar is
-         a fixed layer, but a strip across the top is not one that blocks the
-         page, and the page text mentions 18+ more than once. Not a gate. -->
+    <!-- dl-83 negative: an "18+" category link in a fixed nav bar whose own
+         text names the age again. The bar is positioned, its text mentions 18
+         outside any control, and the label is short — only its size keeps it
+         from being a blocking layer: a strip across the top does not block the
+         page. Not a gate. -->
     <nav
       style="position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #fff; z-index: 5"
     >
       <a href="/beacon/nav-home">Home</a>
       <a href="/beacon/nav-new">New</a>
+      <span>Rated 18+:</span>
       <a id="nav-18" href="/beacon/nav-18">18+</a>
     </nav>
     <main style="padding-top: 64px">

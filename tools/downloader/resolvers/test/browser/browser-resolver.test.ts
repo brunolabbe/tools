@@ -615,7 +615,12 @@ describe("BrowserResolver", () => {
 
       function confirming(): BrowserResolver {
         const hls = recordingHlsParser();
-        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+        return new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 1200,
+          confirmAge: true,
+        });
       }
 
       test(

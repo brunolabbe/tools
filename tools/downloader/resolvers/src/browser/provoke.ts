@@ -342,7 +342,8 @@ const UNMARK_VIDEO_SCRIPT = `(() => {
  * promo's "Get 18% off") and not glued to a word (`18h`). Language-independent
  * on purpose: the label around it is whatever the site wrote.
  */
-export const AGE_NUMBER = /(?<![\p{L}\p{N}\p{Sc}]|\p{N}[.,:/-])(?:18|21)\+?(?![\p{L}\p{N}%°]|[.,:/-]\p{N})/u;
+export const AGE_NUMBER =
+  /(?<![\p{L}\p{N}\p{Sc}]|\p{N}[.,:/-])(?:18|21)\+?(?![\p{L}\p{N}%°]|[.,:/-]\p{N})/u;
 
 /**
  * Words that turn an age label into its opposite — the "I am under 18, leave"
