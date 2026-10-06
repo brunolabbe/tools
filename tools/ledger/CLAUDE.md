@@ -49,6 +49,9 @@ nothing has. Start it as someone instead — `.env.example` has the rest:
 ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger
 ```
 
+or put those two in `tools/ledger/.env`, which the API's dev script loads (and
+nothing else does — not the e2e server, not the image).
+
 The API's dev script builds before it watches, because `@ledger/contract`
 resolves to `dist/` and a fresh checkout has none (lg-12); the reason is on the
 `// dev` key in `api/package.json`.

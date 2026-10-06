@@ -111,8 +111,8 @@ npm run e2e:downloader         # whole stack in a real browser (npm run e2e:inst
 ```
 
 Settings are environment variables, listed with their defaults in
-[`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
-change in the shell.
+[`.env.example`](./.env.example). Copy it to `.env` beside it and `npm run dev`
+loads that; a variable set in the shell wins over the file.
 
 Requires Node ≥ 22. `ffmpeg` ships bundled via `ffmpeg-static`; `yt-dlp` is
 not bundled for local runs — without it requests fall through to the browser
