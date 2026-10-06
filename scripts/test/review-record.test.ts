@@ -1189,9 +1189,10 @@ test('land() lands every commit and the push, then names "preflight" when it fai
     expect(failed?.name).toBe("preflight");
     expect(failed?.ok).toBe(false);
     expect(failed?.detail).toContain("FAIL check: no package.json in the fixture");
-    // Gate 1, F3: a post-splice failure prints the pre-landing sha and the
-    // reset command, but does not run it — the commit stays, on purpose.
-    expect(failed?.detail).toContain(`git reset --hard ${base}`);
+    // Gate 1, F3: a post-splice failure does not run a reset — the commit
+    // stays, on purpose. Since repo-94 a failure after the push does not
+    // print one either: the landing is on origin and only preflight is open.
+    expect(failed?.detail).not.toContain("git reset --hard");
 
     // The commit and the push already happened — a report, not a reversal.
     expect(gitIn(dir, "log", "-1", "--format=%s")).toMatch(/record gate 1/);
@@ -1912,5 +1913,141 @@ test("land() pushes a detached HEAD to the branch --branch names", () => {
     expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
   } finally {
     cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// repo-94 — two defects in how `--land` reports a landing's result.
+// ---------------------------------------------------------------------------
+
+const GATE_1 = (base: string) =>
+  `## Review\n\n### Gate 1 — 2026-10-06\n\nProof: \`src/tls.ts@${base}:2 "Defence in depth"\`.\n`;
+
+test("land() creates its scratch clone with gc.auto=0, so a commit there cannot spawn a detached gc (repo-94)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    // Read the scratch clone's own config at the moment of its first commit —
+    // the moment git decides whether to spawn `gc --auto`. Asserting on the
+    // shared repository's loose-object count instead would not stay true.
+    const gcAutoAtCommit: string[] = [];
+    const run = (repo: string, args: string[]): string => {
+      const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8", shell: false });
+      if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+      if (args[0] === "commit" && fs.realpathSync(repo) !== fs.realpathSync(dir)) {
+        const read = spawnSync("git", ["-C", repo, "config", "--get", "gc.auto"], {
+          encoding: "utf8",
+          shell: false,
+        });
+        gcAutoAtCommit.push(read.stdout.trim());
+      }
+      return result.stdout;
+    };
+
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      run,
+      runPreflight: okPreflight,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(gcAutoAtCommit).toEqual(["0"]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("land() reports a scratch-clone cleanup failure as a warning naming the leftover, and keeps the validation's result (repo-94)", () => {
+  const { dir, ticketAbs, base, cleanup } = withLandRepo();
+  const leftovers: string[] = [];
+  // The injected cleanup fails the way the gc race does — and leaves the
+  // directory, which this test then removes itself.
+  const removeDir = (target: string) => {
+    leftovers.push(target);
+    throw Object.assign(new Error(`ENOTEMPTY: directory not empty, rmdir '${target}/.git'`), {
+      code: "ENOTEMPTY",
+    });
+  };
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      removeDir,
+      runPreflight: okPreflight,
+    });
+
+    // A passing validation stays a passing landing.
+    expect(result.ok).toBe(true);
+    expect(leftovers).toHaveLength(1);
+    const warning = result.steps.find((s) => s.name === "cleanup");
+    expect(warning?.ok).toBe(true);
+    expect(warning?.detail).toContain(leftovers[0]);
+    expect(warning?.detail).toContain("ENOTEMPTY");
+    expect(result.steps.at(-1)?.name).toBe("preflight");
+
+    // A failing validation keeps its own failure as the last step, too.
+    const bad = writeSectionFile(
+      dir,
+      "bad.md",
+      "## Review\n\n### Gate 1\n\nProof: `src/tls.ts:2`.\n",
+    );
+    const failed = land({
+      ticket: ticketAbs,
+      sections: [bad],
+      base,
+      status: "done",
+      title: "x",
+      removeDir,
+      runPreflight: okPreflight,
+    });
+    expect(failed.ok).toBe(false);
+    expect(failed.steps.at(-1)?.name).toBe("splice");
+    expect(leftovers).toHaveLength(2);
+    expect(failed.steps.find((s) => s.name === "cleanup")?.detail).toContain(leftovers[1]);
+  } finally {
+    for (const leftover of leftovers) fs.rmSync(leftover, { recursive: true, force: true });
+    cleanup();
+  }
+});
+
+test("land() after a successful push says the landing is pushed and prints no reset command on a preflight failure (repo-94)", () => {
+  for (const preflight of [
+    () => ({ ok: false, output: "FAIL merge-tree: conflicts with PR #371" }),
+    () => {
+      throw new Error("preflight could not start");
+    },
+  ]) {
+    const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+    try {
+      const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+      const result = land({
+        ticket: ticketAbs,
+        sections: [gate1],
+        base,
+        status: "done",
+        title: "x",
+        runPreflight: preflight,
+      });
+
+      const failed = result.steps.at(-1);
+      expect(failed?.name).toBe("preflight");
+      expect(failed?.ok).toBe(false);
+      // Origin holds the landing, so a reset would throw away a good one.
+      expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(
+        gitIn(dir, "rev-parse", "HEAD"),
+      );
+      expect(failed?.detail).not.toMatch(/git reset --hard/);
+      expect(failed?.detail).toMatch(/landed and pushed to origin\/feature/);
+    } finally {
+      cleanup();
+    }
   }
 });

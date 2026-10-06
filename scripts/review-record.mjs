@@ -1177,7 +1177,13 @@ export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
  * re-run preflight) rather than back at the ticket. Each such failure names
  * the pre-landing sha and the `git reset --hard` command instead, so whoever
  * holds the failure can undo it by hand if that turns out to be the right
- * call.
+ * call — **except preflight (repo-94)**: it runs after the push, when the
+ * landing is already on origin and verified, so it says so and prints no
+ * reset command; following one would discard a good landing locally.
+ *
+ * The scratch clone is made with `gc.auto 0` and removed through `removeDir`
+ * (injectable); a failure to remove it is a `cleanup` warning step naming the
+ * leftover directory, never a replacement for the validation's own result.
  *
  * @param {{
  *   ticket: string,
@@ -1189,6 +1195,7 @@ export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
  *   run?: (repo: string, args: string[]) => string,
  *   verify?: (ticketAbsolutePath: string, sectionAbsolutePath: string, gate: number | null, rev: string) => {relative: string, block: {start: number, end: number}},
  *   runPreflight?: (repo: string, base: string, title: string) => {ok: boolean, output: string},
+ *   removeDir?: (dir: string) => void,
  * }} options
  * @returns {{ok: boolean, steps: {name: string, ok: boolean, detail: string}[]}}
  */
@@ -1202,6 +1209,7 @@ export function land(options) {
     run = runGit,
     verify = verifySection,
     runPreflight = runPreflightDefault,
+    removeDir = (dir) => fs.rmSync(dir, { recursive: true, force: true }),
   } = options;
 
   /** @type {{name: string, ok: boolean, detail: string}[]} */
@@ -1331,10 +1339,20 @@ export function land(options) {
     `\n\nThe commit(s) already made for this landing are not rolled back. Reset to the ` +
     `pre-landing state with:\n  git reset --hard ${preLandingSha}`;
 
+  // Once the push has passed the landing is on origin, and a reset would throw
+  // a good one away locally while origin keeps it (repo-94). A preflight
+  // finding is then the only thing left to act on, so say that instead.
+  const pushedHint = () =>
+    `\n\nThe ${plans.length} section(s) are landed and pushed to origin/${branch}, and verify ` +
+    `passed; only the preflight finding above is left. Nothing to undo — fix what it names ` +
+    `and re-run preflight.`;
+
   // Validate every section — spliced and committed, in order — against a
   // disposable scratch clone before any of them touches `ticketRepoRoot`.
   // See the docblock for why a clone rather than a check per section.
   let scratchDir;
+  /** @type {unknown} */
+  let validationError = null;
   try {
     scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "review-record-land-"));
     const clone = spawnSync("git", ["clone", "-q", "--no-hardlinks", ticketRepoRoot, scratchDir], {
@@ -1345,6 +1363,12 @@ export function land(options) {
     if (clone.status !== 0) throw new Error(`git clone failed:\n${clone.stderr}`);
     run(scratchDir, ["config", "user.email", "land-validation@localhost"]);
     run(scratchDir, ["config", "user.name", "review-record --land validation"]);
+    // `--no-hardlinks` copies the shared repository's loose objects, and git
+    // estimates its auto-gc threshold from them — often past the default
+    // `gc.auto`. A commit here would then spawn a detached `gc --auto` that
+    // writes into `.git` while the cleanup below deletes it (ENOTEMPTY,
+    // repo-94). A disposable clone has nothing to gc.
+    run(scratchDir, ["config", "gc.auto", "0"]);
     spliceAndCommitAll(
       path.join(scratchDir, relative),
       scratchDir,
@@ -1355,16 +1379,40 @@ export function land(options) {
       run,
     );
   } catch (error) {
+    validationError = error;
+  }
+
+  // Cleanup runs before the validation's verdict is read, and it cannot
+  // replace it (repo-94): a directory that will not delete is a warning that
+  // names the leftover, never the reason a validation that passed or failed
+  // for its own cause reports something else. The warning step precedes
+  // whatever fails after it, so `steps.at(-1)` still names the failed step.
+  if (scratchDir) {
+    try {
+      removeDir(scratchDir);
+    } catch (error) {
+      steps.push({
+        name: "cleanup",
+        ok: true,
+        detail:
+          `WARNING: could not remove the scratch clone ${scratchDir} ` +
+          `(${/** @type {Error} */ (error).message}). The validation's result below is unaffected; ` +
+          `delete that directory by hand.`,
+      });
+    }
+  }
+
+  if (validationError !== null) {
     const failure =
-      /** @type {Error & {stdout?: string, stderr?: string, sectionPath?: string}} */ (error);
+      /** @type {Error & {stdout?: string, stderr?: string, sectionPath?: string}} */ (
+        validationError
+      );
     const label = failure.sectionPath ? `${path.basename(failure.sectionPath)} — ` : "";
     return fail(
       "splice",
       `${label}${failure.stderr || failure.stdout || failure.message}\n\n` +
         `Validated against a scratch clone before any real commit — ${ticketRepoRoot} is untouched.`,
     );
-  } finally {
-    if (scratchDir) fs.rmSync(scratchDir, { recursive: true, force: true });
   }
 
   // Validated — every section splices and commits in this exact sequence
@@ -1414,9 +1462,9 @@ export function land(options) {
   try {
     preflightResult = runPreflight(ticketRepoRoot, base, title);
   } catch (error) {
-    return fail("preflight", `${/** @type {Error} */ (error).message}${resetHint()}`);
+    return fail("preflight", `${/** @type {Error} */ (error).message}${pushedHint()}`);
   }
-  if (!preflightResult.ok) return fail("preflight", `${preflightResult.output}${resetHint()}`);
+  if (!preflightResult.ok) return fail("preflight", `${preflightResult.output}${pushedHint()}`);
   pass("preflight", "exit 0");
 
   return { ok: true, steps };
