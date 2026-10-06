@@ -4712,3 +4712,30 @@ Total $52.2392, active 3h44m30s (rates read 2026-09-30).
 - Measuring the one fact an option turns on before asking (`docker compose config` for dl-52) settled a dispatch line in one command.
 - Gates sent to a real TCP socket and a real Cloudflare page found what `inject` and the brief could not: dl-76's socket-only spellings, dl-52's Free-plan fields.
 - Peer orchestrators split the `dl-` id range by message (tools-79 dl-90..94, tools-15 dl-95..99, this batch dl-84..89) with no collision.
+
+### Batch 2026-10-06 (tools-15, dl-77) — base 056aab7
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #375 | open, ready, mergeable | Sonnet 5.5 / high | builder-standard | build dl-77 | 28m47s / 19m25s | 0 | $3.2974 |
+| #375 | open, ready, mergeable | Opus 5.5 / high | ticket-reviewer-opus | gate 1 | 17m31s / 17m20s | 0 | $2.9262 |
+| #375 | open, ready, mergeable | Sonnet 5.5 / high | fixer | land (two runs) | 6m14s / 6m12s | 0 | $0.3787 |
+| — | — | Opus 5.5 / high | orchestrator | dispatch, gate, decide | 37m30s / 48m18s (floor) | 0 | $2.3462 |
+
+Total $8.9486, rates read 2026-09-30, from `node scripts/agent-cost.mjs --agent … --agent …` before this entry was written; the orchestrator row is a floor.
+
+**Tickets:** dl-77 → #375, gate 1 PASS (no high, no med; 6 low left recorded by the severity floor, including the false "same payload the response carries" comments on the shutdown frame).
+
+**Defects in the skill:**
+
+1. `reference/records.md`, "Landing" (`scripts/review-record.mjs --land`) — the scratch clone is made with `--no-hardlinks`, which copies the shared repo's loose objects; git's estimate there is above `gc.auto`, so a commit in the clone spawns a detached `gc --auto` that writes `.git/info/refs` while the `finally` runs `rmSync`. The throw replaces the result, so whether validation passed is lost. Intermittent: lg-6 and dl-78 landed through it the same day. Reproduction: `ls .git/objects/17 | wc -l` → `28` (× 256 = 7168 > 6700); `--land` on dl-77 → `ENOTEMPTY: directory not empty, rmdir '/tmp/review-record-land-FdK4T6/.git'`, exit 1, leaving only `.git/info/refs`; `git clone -q --no-hardlinks /workspaces/tools <d>`, one commit, `fs.rmSync(<d>,{recursive:true,force:true})` → `rm failed: ENOTEMPTY`; the same with `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=gc.auto GIT_CONFIG_VALUE_0=0` → removed cleanly, and `--land` with that prefix → `--land: landed.`
+2. `roles/common.md`, "The sandbox refuses some ordinary shell shapes" — lists `NODE_OPTIONS=…` but not an inline env prefix in general, nor that one refused shape takes the whole chained command with it. Reproduction (fixer): `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=gc.auto GIT_CONFIG_VALUE_0=0 node scripts/review-record.mjs --land …` → `this command names git in a form too complex to verify that it stays inside the worktree. Refusing to run it`; the same line in a file run with `bash <file>` → exit 0. (Builder) `node /…/ticket.mjs && cd ../../../.. && npm run format | tail -3; git status --short` → "too complex to verify that it stays inside the worktree"; split into plain commands, each ran.
+3. `roles/fixer.md`, "Landing" — says to post each gate's report with `gh pr comment <n> --body-file <f>` but gives no way to add the heading line a dispatch asks for, and the sandbox refuses the `cat` redirection that would build the file. Reproduction (fixer): built `gate-1-comment.md` with a Write-tool node script instead; `gh pr comment 375 --body-file …/gate-1-comment.md` → posted.
+4. `review-ticket/gate.md`, "Steps", step 4, against `roles/reviewer.md`, "Returning the gate" — "No line numbers anywhere in the section" against "each finding's command and output", where tool output carries `file:line:col`. Reproduction (gate): `npx playwright test -c tools/downloader/playwright.config.ts refused-download` at base → `at .../tools/downloader/e2e/refused-download.spec.ts:67:23` and `> 67 |   await expect(alert).toBeVisible();`.
+5. `roles/common.md`, "Point every run at the narrowest thing that can fail" — a red/green that reverts source across packages needs a full rebuild each side, and `e2e:serve` builds only `@downloader/web`, leaving `contract/dist` stale; no recipe is written for "fail on origin/main with source reverted in place". Reproduction (gate and builder): `git checkout origin/main -- tools/downloader/{api,web,contract}/src`, `npm run build -w @downloader/contract`, `grep -c refused tools/downloader/contract/dist/api.js` → `0` at base, `1` at head; without the contract build the base run measured the head's contract.
+6. `SKILL.md`, "Reporting to the user" — `node scripts/agent-cost.mjs --agent <id> …` reads as several ids after one flag; the script takes one id per flag and treats the rest as paths. Reproduction: `node scripts/agent-cost.mjs --agent a46daa49eb2702314 ad33d91fb23c113f2 ac082962b59c4548b` → `ad33d91fb23c113f2: ENOENT: no such file or directory, open 'ad33d91fb23c113f2'` and the same for the third, exit 0 with only the first agent priced.
+
+**Worked, and worth keeping:**
+
+- Asking both peers at intake before taking the only free ready ticket: tools-79 answered that dl-81 was deliberately held behind #374, which no ticket file, branch or PR showed.
+- Dry-running the rerun before prescribing it: the control reproduced `ENOTEMPTY`, so a plain rerun would have failed again, and the prefix was proven before the fixer was sent back.
