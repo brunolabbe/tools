@@ -89,7 +89,7 @@ A`.
   `PERIOD_NOT_OPEN` (409) and `RATIO_NOT_IN_EFFECT` (422); and in `web` a
   Period tab holding the four parts of Build 6.
   - **The suite passes.** `npm test -- --project ledger` → `Test Files 32 passed
-(32)`, `Tests 463 passed (463)`; `npm run check` exit 0.
+(32)`, `Tests 465 passed (465)`; `npm run check` exit 0.
   - **Done when, and where each is proved.** (1) `books/test/settlement.test.ts`
     › "at r = 0.6, B spends 100 and A nothing, so A deposits 150.00", and the
     analysis's whole table in "the three ways of settling: only the direct
@@ -120,10 +120,10 @@ A`.
 failed`; a wrong year rollover, `2 failed`; no clamp to a short month, `1
 failed`; two cents of tolerance, `1 failed`; the oldest expectation choosing
     first, `1 failed`; the first period's start day left out, `1 failed`. In
-    `api/test/periods.test.ts` (14): no open-period check, `1 failed`; closed
+    `api/test/periods.test.ts` (14 then): no open-period check, `1 failed`; closed
     periods reweighed at today's ratio, `1 failed`; buffer deposits ignored, `2
 failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
-    (9): the direct amount shown as the deposit, the charge box ignored, and
+    (9 then): the direct amount shown as the deposit, the charge box ignored, and
     folded deposits listed as unseen, `1 failed` each.
   - **The five questions the intake read as unsettled, answered from the
     ticket and the analysis.** None has two readings that lead to different
@@ -152,8 +152,8 @@ failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
       For the code-scanning `CodeQL` check, the precedent is `repo-91`'s answer
       (option 2) and lg-5: a `GET` that reads the database is flagged because
       CodeQL does not model core's limiter, and is excused in code under
-      `docs/adr/005` with a measured guard test. What it reported on this
-      branch is in the next entry.
+      `docs/adr/005` with a measured guard test. What it reports on this
+      branch is read after the draft opens.
     - _Tests for the four web parts._ Written though no line asks:
       `web/test/periods.test.tsx`, one or more per part (the open period's lines
       and totals; a line and a charge entered by hand, and a removal; the
@@ -189,6 +189,13 @@ failed`; recurring lines left out, `2 failed`. In `web/test/periods.test.tsx`
       close is cumulative and asks again for an earlier deposit never made. Such
       an earlier one reads `folded`, not `expected`, so the list of deposits not
       seen holds only what is still owed.
+    - **The day a period is closed, the open period is empty**: it starts
+      tomorrow and, as of today, ends the day before it starts. It is shown,
+      with what is still owed, and cannot be closed. Found after the first
+      preflight: `api/test/periods.test.ts` › "the open period after it is
+      empty until tomorrow, and still says what is owed" answered `expected 400
+to be 200` before the change, and the period screen would have shown that
+      400 in place of itself the day of every close.
     - **A recipient whose share is zero** (one salary of zero, which lg-5
       allows) cannot be settled through shared money: the deposit is `null`,
       the status `direct`, and the screen says to pay directly.
