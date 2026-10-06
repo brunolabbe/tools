@@ -27,6 +27,14 @@ import type { FixtureServer } from "./helpers/fixture-server.ts";
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
+/**
+ * The floor the ten no-media tests pass as `emptyMinWaitMs` (dl-80): equal to
+ * the resolver's own `MIN_WAIT_MS`, so the extended floor adds nothing and they
+ * run for what they did before it existed. Their verdicts come from the page,
+ * not from how long the probe waited. A smaller value would not be "off" — it
+ * would shorten the wait below the base rule's.
+ */
+const NO_EMPTY_FLOOR_MS = 1200;
 
 let server: FixtureServer;
 let pool: BrowserPool;
@@ -253,7 +261,11 @@ describe("BrowserResolver", () => {
     "reports NO_MEDIA_FOUND when the page has no video",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const resolver = new BrowserResolver({
+        pool,
+        quietMs: 1200,
+        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+      });
       const error = await probeError("/no-media.html", resolver);
       // The one verdict that lets the registry fall through to another resolver.
       expectCode(error, "NO_MEDIA_FOUND");
@@ -299,7 +311,11 @@ describe("BrowserResolver", () => {
       "makes no click, and never navigates, when the only video is a card",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const resolver = new BrowserResolver({
+          pool,
+          quietMs: 1200,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        });
         server.requests.length = 0;
         const error = await probeError("/related-card-only-linked.html", resolver);
 
@@ -540,7 +556,11 @@ describe("BrowserResolver", () => {
       "not told to confirm ages, fails AGE_CONFIRMATION_REQUIRED without pressing the gate",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const resolver = new BrowserResolver({
+          pool,
+          quietMs: 1200,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        });
         server.requests.length = 0;
         const error = await probeError("/age-gate.html", resolver);
 
@@ -572,7 +592,12 @@ describe("BrowserResolver", () => {
       "a press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge: true });
+        const resolver = new BrowserResolver({
+          pool,
+          quietMs: 1200,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          confirmAge: true,
+        });
         server.requests.length = 0;
         const error = await probeError("/age-gate.html?inert", resolver);
 
@@ -587,7 +612,11 @@ describe("BrowserResolver", () => {
       "a fixed root the whole app lives in is not a modal, and its close control is left alone",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const resolver = new BrowserResolver({
+          pool,
+          quietMs: 1200,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        });
         server.requests.length = 0;
         const error = await probeError("/fixed-shell.html", resolver);
 
@@ -600,7 +629,12 @@ describe("BrowserResolver", () => {
       "an age link on a page with no adult-content wording is left alone",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge: true });
+        const resolver = new BrowserResolver({
+          pool,
+          quietMs: 1200,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          confirmAge: true,
+        });
         server.requests.length = 0;
         const error = await probeError("/age-link.html", resolver);
 
@@ -611,20 +645,32 @@ describe("BrowserResolver", () => {
   });
 
   test("reports BOT_CHALLENGE on an interstitial", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     const error = await probeError("/challenge.html", resolver);
     expectCode(error, "BOT_CHALLENGE");
     expect(error.details?.["status"]).toBe(403);
   });
 
   test("reports AUTH_REQUIRED behind a login wall", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     const error = await probeError("/gated", resolver);
     expectCode(error, "AUTH_REQUIRED");
   });
 
   test("reports GEO_BLOCKED when the region is refused", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    const resolver = new BrowserResolver({
+      pool,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
     const error = await probeError("/geo.html", resolver);
     expectCode(error, "GEO_BLOCKED");
   });
@@ -726,7 +772,11 @@ describe("stage narration", () => {
       // The three phases after `settle-requests` are conditional on there being
       // something to fetch, parse and weigh. A narration that listed them
       // anyway would be back to describing a script rather than a probe.
-      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const resolver = new BrowserResolver({
+        pool,
+        quietMs: 1200,
+        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+      });
       const seen: ProbeStageEvent[] = [];
       await expect(
         probe(
@@ -852,6 +902,10 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       expect(result.variants.length).toBeGreaterThan(0);
       expect(result.variants[0]?.protocol).toBe("hls");
       expect(result.resolver).toBe("browser");
+      // The page's manifest was served and read, not an opaque variant of a
+      // URL that 404'd: any `.m3u8` the page asked for would pass the lines above.
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      expect(hls.calls.length).toBeGreaterThan(0);
 
       // The extended floor did not delay the result unnecessarily —
       // we got the result shortly after the player attached (6 s + ~1-2 s for quiet)
@@ -866,7 +920,12 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
     async () => {
       // Use a manifest-less page with a short timeout to test the floor behavior
       const hls = recordingHlsParser();
-      const shortTimeoutMs = 15_000; // 15 second timeout for testing
+      // Room for the floor: the wait's own deadline is the budget less the
+      // resolver's 4 s teardown reserve (`TEARDOWN_RESERVE_MS`, not exported),
+      // and a budget under floor plus page load ends TIMEOUT instead, which the
+      // test after this one pins.
+      const shortTimeoutMs = 20_000;
+      const teardownReserveMs = 4000;
       const resolver = new BrowserResolver({
         pool,
         hlsParser: hls.parser,
@@ -892,8 +951,11 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
 
       // Should have waited at least the floor (9000 ms)
       expect(elapsedMs).toBeGreaterThanOrEqual(9000);
-      // Should not have exceeded the deadline by much
-      expect(elapsedMs).toBeLessThan(shortTimeoutMs + 2000);
+      // And no later than the wait's real deadline. This bound alone cannot
+      // see a floor that ignores the deadline (the floor ends first here); the
+      // last test in this block and `wait-for-quiet.test.ts`, where the deadline
+      // arrives first, carry that clause.
+      expect(elapsedMs).toBeLessThan(shortTimeoutMs - teardownReserveMs);
     },
   );
 
@@ -955,6 +1017,39 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       // With a 500 ms floor and 1200 ms quiet timeout,
       // should see NO_MEDIA_FOUND in roughly 1.7 seconds
       expect(elapsedMs).toBeLessThan(3000);
+    },
+  );
+
+  test(
+    "a budget shorter than the floor plus page load ends TIMEOUT, at the deadline, not NO_MEDIA_FOUND past it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // The owner's decision for dl-80 (2026-10-06): the deadline wins over the
+      // floor, and the registry's existing meaning of TIMEOUT ("the deadline
+      // arrived before quiet") stands. Pinned here so a floor that ignores the
+      // deadline fails loudly; it ended NO_MEDIA_FOUND at 10.6 s of an 8 s budget.
+      const hls = recordingHlsParser();
+      const timeoutMs = 8000;
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 9000,
+      });
+      const startTime = Date.now();
+
+      let caught: unknown;
+      try {
+        await resolver.resolve(new URL(server.url("/no-media.html")), options({ timeoutMs }));
+      } catch (error) {
+        caught = error;
+      }
+
+      const elapsedMs = Date.now() - startTime;
+      expect(caught).toBeInstanceOf(AppError);
+      expectCode(caught as AppError, "TIMEOUT");
+      // Ended by the deadline, not by waiting out the 9 s floor.
+      expect(elapsedMs).toBeLessThan(timeoutMs);
     },
   );
 });
