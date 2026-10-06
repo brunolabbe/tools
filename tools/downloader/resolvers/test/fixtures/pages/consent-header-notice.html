@@ -22,8 +22,31 @@
     <div id="player"></div>
     <div style="height: 2000px"></div>
     <script>
-      var label = new URLSearchParams(location.search).get("label");
+      var params = new URLSearchParams(location.search);
+      var label = params.get("label");
       if (label !== null) document.getElementById("notice-button").textContent = label;
+
+      // dl-82 gate 3. ?note= replaces the notice's sentence. ?menu=link puts a
+      // "Cookie policy" link in the header's nav, ?menu=hidden puts it in a menu
+      // that is display: none: either way the header's prose still says nothing
+      // of cookies, only a link or a hidden node does.
+      var note = params.get("note");
+      if (note !== null) document.querySelector(".notice").firstChild.nodeValue = note + " ";
+      var menu = params.get("menu");
+      if (menu !== null) {
+        var link = document.createElement("a");
+        link.href = "#c";
+        link.textContent = "Cookie policy";
+        var nav = document.querySelector("nav");
+        if (menu === "hidden") {
+          var list = document.createElement("ul");
+          list.style.display = "none";
+          list.append(link);
+          nav.append(list);
+        } else {
+          nav.append(link);
+        }
+      }
     </script>
   </body>
 </html>

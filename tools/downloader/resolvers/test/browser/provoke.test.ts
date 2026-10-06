@@ -374,6 +374,13 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Мы используем куки.",
     "Нам нужно согласие на обработку данных.",
     "Compliant with GDPR.",
+    // dl-82 gate 3: a word start and a word end, so these still match.
+    "Cookies",
+    "Cookie-Banner",
+    "We store your consents.",
+    "Nous utilisons des fichiers témoins de connexion.",
+    "Kakor",
+    "Использует куки!",
   ];
 
   // What a docked bar, a header notice or a form says instead. These are the
@@ -386,6 +393,14 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Iscriviti alla newsletter per ricevere le offerte.",
     "Home",
     "",
+    // dl-82 gate 3: ordinary words that merely begin like a consent word.
+    "Il pagamento sicuro consente di ordinare.",
+    "Il pagamento è consentito.",
+    "I partner consentono l'ordine.",
+    "Veckans recept: pannkakor.",
+    "Sockerkakor till kaffet.",
+    "Les témoins de l'accident.",
+    "Кукиш",
     // Accepted, not wished for: a bare privacy notice is not recognised, so its
     // new-only label falls through to the old pattern (the decision's cost).
     "We value your privacy.",

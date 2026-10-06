@@ -10,6 +10,7 @@
          before dl-82. The header does not speak of consent, so it is not a
          container, and the bar is reached. -->
     <header style="position: sticky; top: 0; background: #fff">
+      <nav><a href="#h">Home</a></nav>
       <div class="notice">
         Nuove condizioni.
         <button type="button" onclick="fetch('/beacon/header-notice')">Ho capito</button>
@@ -30,6 +31,15 @@
       </button>
     </div>
     <script>
+      // dl-82 gate 3: ?menu=link adds one "Cookie policy" link to the header's
+      // nav. The header's prose is unchanged, so it must still not be a container.
+      if (new URLSearchParams(location.search).get("menu") === "link") {
+        var link = document.createElement("a");
+        link.href = "#c";
+        link.textContent = "Cookie policy";
+        document.querySelector("nav").append(link);
+      }
+
       function mountPlayer() {
         fetch("/media/mse/master.m3u8")
           .then(function (r) {

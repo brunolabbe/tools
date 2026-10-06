@@ -22,9 +22,16 @@
     </form>
     <div style="height: 2000px"></div>
     <script>
-      if (new URLSearchParams(location.search).has("sticky")) {
-        document.getElementById("bar").style.position = "sticky";
-      }
+      var params = new URLSearchParams(location.search);
+      var bar = document.getElementById("bar");
+      if (params.has("sticky")) bar.style.position = "sticky";
+      // dl-82 gate 3: ?text= replaces the bar's sentence and ?label= the
+      // submit button's label, to put a word the wording rule may take for
+      // consent next to a submit.
+      var text = params.get("text");
+      if (text !== null) bar.firstChild.nodeValue = text + " ";
+      var label = params.get("label");
+      if (label !== null) bar.querySelector("button").textContent = label;
     </script>
   </body>
 </html>

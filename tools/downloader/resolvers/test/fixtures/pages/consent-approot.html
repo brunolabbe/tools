@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>A</title>
+  </head>
+  <body>
+    <!-- dl-82 gate 3: an app whose whole root is position: fixed, a common way to
+         lock scrolling, holding a newsletter and a comment form. The footer says
+         "Questo sito usa i cookie tecnici." by default, or with ?footer=link
+         carries only a "Cookie policy" link. -->
+    <div id="app" style="position: fixed; inset: 0; overflow: auto">
+      <h1>A</h1>
+      <div id="player"></div>
+      <div class="newsletter">
+        Iscriviti!
+        <button type="button" onclick="fetch('/beacon/newsletter-hocapito')">Ho capito</button>
+      </div>
+      <form onsubmit="event.preventDefault()">
+        Do you agree to the rules?
+        <button type="submit" onclick="fetch('/beacon/comment-yesiagree')">Yes, I agree</button>
+      </form>
+      <footer id="footer">Questo sito usa i cookie tecnici.</footer>
+      <!-- A script inside the app root that reads document.cookie: its text says
+           "cookie" to textContent and nothing to a reader, so it must not make the
+           footer-link variant a container (gate 3's unmeasured case). -->
+      <script>
+        void document.cookie;
+      </script>
+    </div>
+    <script>
+      if (new URLSearchParams(location.search).get("footer") === "link") {
+        document.getElementById("footer").innerHTML = '<a href="#c">Cookie policy</a>';
+      }
+    </script>
+  </body>
+</html>

@@ -231,3 +231,80 @@ that the newsletter is never pressed. That follows from "a semantic dialog count
 unconditionally".
 
 **Free with this change:** nothing further; the other two lows of round 1 stand.
+
+### 2026-10-06 — gate round 3
+
+**`privacy` stays off `CONSENT_WORDING`, confirmed by the owner, with the gate's
+measurement as the reason.** The gate rebuilt `dist` at head (`ab92dcd`), at head
+with privacy words added (`privacy|confidentialité|privacidad|privacidade|datenschutz|prywatność|конфиденциальн`)
+and at base (`056aab7`), and ran the same pages. "×2" is a press in both passes.
+
+| Page                                                                    | head                      | + privacy                       | base                      |
+| ----------------------------------------------------------------------- | ------------------------- | ------------------------------- | ------------------------- |
+| p1 fixed bar "We value your privacy", "Ho capito"                       | nothing, `NO_MEDIA_FOUND` | pressed, stream                 | nothing, `NO_MEDIA_FOUND` |
+| p1 same, "Accetto e continua"                                           | nothing, `NO_MEDIA_FOUND` | pressed, stream                 | nothing, `NO_MEDIA_FOUND` |
+| p2 fixed checkout "… terms and privacy policy", "Agree and continue"    | nothing                   | **submit ×2**                   | nothing                   |
+| p3 sticky header, "Privacy" nav link, notice "Ho capito"                | nothing                   | **notice ×2**                   | nothing                   |
+| p3b p3's header ahead of a fixed "We value your privacy" bar, "Accetta" | consent, stream           | **notice ×2, `NO_MEDIA_FOUND`** | consent, stream           |
+| p4 fixed bar "Datenschutz …", "Einverstanden"                           | consent, stream           | consent, stream                 | consent, stream           |
+| p4b same bar, "Ich stimme zu"                                           | nothing, `NO_MEDIA_FOUND` | pressed, stream                 | nothing, `NO_MEDIA_FOUND` |
+
+Adding privacy resolves three pages that neither head nor base resolves (p1
+twice, p4b). It also presses two non-consent controls that neither presses (p2,
+p3) and regresses one page that both resolve (p3b). Without it, head equals base
+on every row. (p4 measures nothing: "Einverstanden" is a pre-dl-82 label,
+pressed anywhere.) The gate's figure is not mine; I did not rerun it.
+
+**Gate 3's two meds, and the mechanism.**
+
+1. **Wording is read from the layer's visible prose.** `MARK_CONSENT_ZONES_SCRIPT`
+   walks the layer's text nodes and keeps one only if its parent is not inside an
+   `a` or `[role=link]` (up to the layer) and `parent.checkVisibility(...)` is
+   true. I chose that over `innerText` minus links because `innerText` has no
+   per-link subtraction (it would mean removing each link's text by string
+   search), and over a detached clone because `innerText` of a clone is
+   `textContent` (nothing is rendered). `checkVisibility` is false for
+   `display:none` ancestors, `<script>` and `<style>`, which is what the gate
+   left unmeasured: a script reading `document.cookie` inside a fixed app root
+   would have counted as speaking of cookies. `consent-approot.html` carries
+   exactly that script, and with the visibility check removed the
+   footer-link variant fails (`Tests 1 failed | 7 passed | 79 skipped (87)`).
+2. **Latin word start, and a word end for the ambiguous roots.**
+   `(?<!\p{L})` under the `u` flag, which also works for Cyrillic, where `\b`
+   does not. `consent` takes only its written-out inflections
+   (`consentement`, `consentimiento`, `consentimento`, plural `s`) followed by a
+   non-letter, so "consente", "consentito" and "consentono" no longer match;
+   `kakor`, `куки`, `gdpr` and `rodo` end at a non-letter, so "pannkakor",
+   "sockerkakor" and "Кукиш" no longer match (Кукиш was free); `témoins` counts
+   only as "témoins de connexion/navigation/suivi" or "fichiers témoins", so
+   "les témoins de l'accident" no longer matches. `cookie`, `ciasteczk`,
+   `consenso`, `einwilligung`, `toestemming` and `samtycke` stay open at the end.
+
+**Red at `ab92dcd`:** `-t "gate 3|CONSENT_WORDING"` gave
+`Tests 13 failed | 33 passed | 241 skipped (287)`: the seven new `SILENT` rows
+(consente, consentito, consentono, pannkakor, sockerkakor, témoins, Кукиш), the
+two sticky-header cookie-link pages (visible and `display:none`), the bar
+behind the linking header (a3c), the checkout "consente" (a4), the header
+"pannkakor" (a5) and the app root with only a cookie link (a1b). After:
+`-t "dl-82"` over both files gave `Tests 230 passed | 57 skipped (287)`, 2 of 2
+files.
+
+**Every row of the gate's second table is a test** (describe "…read from its
+visible prose, by word (dl-82 gate 3)"): a3 and a3b (not pressed, equal to base),
+a3c (bar reached, stream, equal to base), a3d (the existing
+`consent-header-then-bar.html` test), a4 and a5 (not pressed, equal to base), a1b
+(not pressed, equal to base). **a1 and a2 still differ from base**, as the gate
+said visible text would leave them. They are pinned as what the code does:
+
+- a1, a fixed app root whose footer says "Questo sito usa i cookie tecnici.":
+  the root is a container, and its first widened label, the newsletter's "Ho
+  capito", is pressed. Base pressed nothing there.
+- a2, a docked checkout bar that says "Your cart is kept in a cookie.": its
+  submit "Agree and continue" is pressed. Base pressed nothing.
+
+Neither is closed by this round; closing them needs the wording to be near the
+control rather than anywhere in the layer, which the owner has not chosen.
+
+**The low** (the docstring's "are not containers at all"): rewritten. It now says
+a header or bar whose prose says nothing of consent is not a container even when
+it links a cookie policy, and that one whose prose does is, naming a1 and a2.

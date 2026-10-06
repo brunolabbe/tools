@@ -660,16 +660,28 @@ const ZONE_DIALOG = "dialog";
  * as a consent bar does, and a missed consent layer costs nothing (the old
  * pattern still reaches it, as it did before dl-82) where a pressed submit does.
  *
- * Substrings, not words, so "cookies", "Cookie-Einstellungen" and
- * "consentement" match; `\b` is not used because it does not see Cyrillic.
+ * **A word start, and for the short or ambiguous roots a word end** (dl-82's
+ * gate 3). A bare substring matched ordinary prose: Italian "consente" and
+ * "consentito" ("allows", "allowed"), Swedish "pannkakor" and "sockerkakor",
+ * French "les témoins de l'accident", Russian "Кукиш". So every alternative must
+ * start where no letter precedes it (`(?<!\p{L})`, which, unlike `\b`, sees
+ * Cyrillic: that needs the `u` flag), and where a root is also the start of
+ * unrelated words its end is fixed too: "consent" takes only the inflections
+ * written out ("consentement", "consentimiento", "consentimento", a plural
+ * "s") and then a non-letter; "kakor", "куки", "gdpr" and "rodo" end at a
+ * non-letter; "témoins" counts only as "témoins de connexion/navigation/suivi"
+ * or "fichiers témoins". "cookie", "ciasteczk" and the other roots with no
+ * unrelated continuation stay open at the end, so "cookies" and
+ * "Cookie-Einstellungen" match.
  */
 export const CONSENT_WORDING =
-  /cookie|ciasteczk|ciasteczek|kakor|куки|témoins|consent|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|согласи[ея] на|\bgdpr\b|\brodo\b/i;
+  /(?<!\p{L})(?:cookie|ciasteczk|ciasteczek|kakor(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
 
 /**
  * Marks the nearest consent container of every link and button: an ancestor
- * that is a semantic dialog, or is `fixed` or `sticky` **and** speaks of consent
- * (`CONSENT_WORDING`). Each mark's value says which, so a layer that speaks of
+ * that is a semantic dialog, or is `fixed` or `sticky` **and** whose visible prose
+ * (not its links, not its hidden nodes) speaks of consent (`CONSENT_WORDING`).
+ * Each mark's value says which, so a layer that speaks of
  * consent is tried before a bare dialog. A cookie wall is far more often a layer
  * than a block in the page's flow, and a newsletter, a checkout form and a review
  * list are in the flow. One walk per control, memoised per ancestor, so a page
@@ -682,9 +694,36 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   var wording = new RegExp(${JSON.stringify(CONSENT_WORDING.source)}, ${JSON.stringify(CONSENT_WORDING.flags)});
   var zoneOf = new Map();
   var tierOf = new Map();
+  // What a person reading the layer would read: its text nodes, minus anything
+  // inside a link (a "Cookie policy" nav link is not a sentence about cookies)
+  // and anything not rendered, such as a hidden menu, a script or a style.
+  // textContent keeps all of those, and innerText drops the unrendered ones but
+  // keeps the links.
+  var prose = function (layer) {
+    var seen = new Map();
+    var parts = [];
+    var walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    for (var t = walker.nextNode(); t; t = walker.nextNode()) {
+      var p = t.parentElement;
+      if (!p) continue;
+      if (!seen.has(p)) {
+        var inLink = false;
+        for (var a = p; a; a = a.parentElement) {
+          if (a.matches('a, [role="link"]')) {
+            inLink = true;
+            break;
+          }
+          if (a === layer) break;
+        }
+        seen.set(p, !inLink && p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }));
+      }
+      if (seen.get(p)) parts.push(t.nodeValue);
+    }
+    return parts.join(' ');
+  };
   // The mark a layer earns, or null when it is not a consent container.
   var tier = function (n) {
-    if (wording.test(n.textContent || '')) return ${JSON.stringify(ZONE_CONSENT)};
+    if (wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
     return n.matches(semantic) ? ${JSON.stringify(ZONE_DIALOG)} : null;
   };
   var find = function (el) {
@@ -748,13 +787,19 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * The text-matched consent step, in two reaches (dl-82).
  *
  * **Inside a consent container, the full `CONSENT_TEXT`**: a semantic dialog,
- * or a fixed or sticky layer **whose text speaks of consent**
- * (`CONSENT_WORDING`), found by script in a frame that allows it and by dialog
- * semantics alone in one that does not. A layer that speaks of consent is tried
- * before a dialog that does not, so a consent layer wins over an earlier
- * newsletter dialog; and a sticky header or a docked checkout bar, which do not
- * speak of consent, are not containers at all, so their "Ho capito" and "Agree
- * and continue" are not pressed.
+ * or a fixed or sticky layer **whose visible prose speaks of consent**
+ * (`CONSENT_WORDING`; a link's text and a hidden node do not count), found by
+ * script in a frame that allows it and by dialog semantics alone in one that
+ * does not. A layer that speaks of consent is tried before a dialog that does
+ * not, so a consent layer wins over an earlier newsletter dialog.
+ *
+ * A sticky header or a docked checkout bar whose prose says nothing of consent
+ * is not a container, so its "Ho capito" and "Agree and continue" are not
+ * pressed, even when it links a cookie policy. One whose prose does speak of it
+ * is a container, and is believed: a checkout bar that says "Your cart is kept
+ * in a cookie" has its submit pressed, and so does the first widened label in a
+ * fixed app root whose footer says it uses cookies. Both differ from before
+ * dl-82 and are pinned in the tests as accepted.
  *
  * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
  * searched for before this change. A widened phrasing outside a container is

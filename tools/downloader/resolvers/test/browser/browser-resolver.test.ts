@@ -1092,3 +1092,110 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     },
   );
 });
+
+describe("the wording that makes a layer a consent container is read from its visible prose, by word (dl-82 gate 3)", () => {
+  const MASTER = "/media/mse/master.m3u8";
+
+  async function visit(
+    pathname: string,
+  ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
+    const hls = recordingHlsParser();
+    const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+    server.requests.length = 0;
+    let outcome: ProbeResult | AppError;
+    try {
+      outcome = await probe(pathname, resolver);
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppError);
+      outcome = error as AppError;
+    }
+    return { outcome, requests: [...server.requests] };
+  }
+
+  // A cookie link, shown or in a hidden menu, is not prose. Both pages equal
+  // base here: the header's "Ho capito" is not pressed.
+  test.each([
+    ["a visible", "link"],
+    ["a display:none", "hidden"],
+  ])(
+    "a sticky header with %s cookie link in its nav is not a container",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, menu) => {
+      const { requests } = await visit(`/consent-header-notice.html?menu=${menu}`);
+
+      expect(requests).not.toContain("/beacon/header-notice");
+    },
+  );
+
+  // Gate 3's a3c: the same header ahead of a bottom consent bar. Base found the
+  // stream; so must this.
+  test(
+    "reaches a bottom consent bar past a sticky header that links a cookie policy",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { outcome, requests } = await visit("/consent-header-then-bar.html?menu=link");
+
+      expect(requests).toContain("/beacon/consent-accepted");
+      expect(requests).not.toContain("/beacon/header-notice");
+      expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
+    },
+  );
+
+  // Gate 3's a4 and a5: a word that merely begins like a consent word.
+  test(
+    "does not press a checkout submit in a bar whose prose says Italian 'consente' (allows)",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const text = encodeURIComponent("Il pagamento sicuro consente di ordinare in un clic.");
+      const label = encodeURIComponent("Accetto e continua");
+      const { requests } = await visit(`/consent-checkout-docked.html?text=${text}&label=${label}`);
+
+      expect(requests).not.toContain("/beacon/checkout-submit");
+    },
+  );
+
+  test(
+    "does not press a sticky header's notice whose prose says Swedish 'pannkakor' (pancakes)",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const note = encodeURIComponent("Veckans recept: pannkakor.");
+      const label = encodeURIComponent("Acceptera alla");
+      const { requests } = await visit(`/consent-header-notice.html?note=${note}&label=${label}`);
+
+      expect(requests).not.toContain("/beacon/header-notice");
+    },
+  );
+
+  // What visible prose does not close, pinned as accepted. Both differ from base,
+  // which pressed neither widened label.
+  test(
+    "a fixed app root whose footer says 'cookie' is a container, so its first widened label is pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { requests } = await visit("/consent-approot.html");
+
+      expect(requests).toContain("/beacon/newsletter-hocapito");
+    },
+  );
+
+  test(
+    "a fixed app root whose footer only links a cookie policy is not a container",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { requests } = await visit("/consent-approot.html?footer=link");
+
+      expect(requests).not.toContain("/beacon/newsletter-hocapito");
+    },
+  );
+
+  test(
+    "a docked checkout bar whose prose says 'cookie' is a container, so its submit is pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const text = encodeURIComponent("Your cart is kept in a cookie.");
+      const { requests } = await visit(`/consent-checkout-docked.html?text=${text}`);
+
+      expect(requests).toContain("/beacon/checkout-submit");
+    },
+  );
+});
