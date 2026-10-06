@@ -181,3 +181,53 @@ config` renders them, quoted in the Log.
   raised a probable UX gap: a download refused by the per-client cap starts
   from a plain `<a href download>`, so it may surface only as a failed browser
   download. That is being reproduced for its own ticket, not folded in here.
+
+- 2026-10-06 — **Built on `4907d9a`** (branch `dl-52-production-limits`).
+  `compose.downloader.prod.yaml` now sets the values below, each with a comment
+  naming its measurement or "the owner's choice"; `MAX_CONCURRENT_FRAME_GRABS` is
+  left unset with a comment saying it follows jobs. Its header now says "six
+  things" and lists the limits and the Turnstile keys, which the old "four" had
+  not counted. `docs/02-DEPLOYMENT.md` gains a production-values table under
+  "Tightening it past one user" and a section, "The edge rate limit on `/api/`",
+  with the rule's expression, threshold, period and action. Rendered with the
+  command in Done-when 1, the placeholders set **in that command's environment
+  only, never in a committed `.env`**: `GHCR_OWNER=placeholder-owner`,
+  `DOWNLOADER_TAG=0.0.0-placeholder` (also a required variable) and
+  `TUNNEL_TOKEN=placeholder`. Exit 0, and the lines that matter:
+
+  ```
+  MAX_CONCURRENT_BROWSERS: "2"
+  MAX_CONCURRENT_JOBS: "2"
+  MAX_FILE_SIZE_MB: "4096"
+  MAX_JOBS_PER_CLIENT: "2"
+  RATE_LIMIT_JOBS_PER_MINUTE: "2"
+  RATE_LIMIT_PROBE_EVENTS_PER_MINUTE: "4"
+  RATE_LIMIT_PROBE_PER_MINUTE: "4"
+  TRUST_PROXY: 172.30.42.0/24
+  ```
+
+- 2026-10-06 — **The brief counted six values; the build sets seven, and that is a
+  fold-in.** `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` does not follow
+  `RATE_LIMIT_PROBE_PER_MINUTE`: it is its own default of 10
+  (`API_DEFAULTS.rateLimitProbeEventsPerMinute`), pinned equal to the probe's by
+  `rate-limit.test.ts` ("`shipped.rateLimitProbeEventsPerMinute` `toBe`
+  `shipped.rateLimitProbePerMinute`") and by the comment on the field ("Deliberately
+  the same number"). Setting the probe limit to 4 and leaving events at 10 would
+  have broken dl-46's stated invariant in production while the test, which reads
+  defaults, stayed green. It is set to 4. Not a new decision: it is the probe's
+  number, by dl-46's rule. If the owner would rather it stay at 10, delete that
+  line; the invariant still holds from the safe side (events at least the probe's).
+- 2026-10-06 — **The edge rule's numbers are derived, and the plan's allowances
+  are unconfirmed.** Threshold 60 requests per 60 s per IP, with a 20 per 10 s
+  fallback if the plan offers only a 10 s period, action Block. Derived from
+  dl-54's 7 `/api/` requests per first visit (11 request lines with the page), not
+  from any dashboard counter. No agent can read the dashboard, so the
+  allowances table in `02-DEPLOYMENT.md` says `unconfirmed` in every row and the
+  rule is "not created yet". Those are the owner's two steps after merge:
+  redeploy, and create the rule and fill that table in.
+- 2026-10-06 — **Not folded in: dl-77** (a refused download fails silently). It is
+  `needs-decision` and the answer chooses between a change in `web`, in `api`, and
+  possibly `contract`; none of that is free here. The deployment doc names it
+  where the edge rule would trigger it. **Found while reading the brief:** the
+  header's "four things" was already stale before this ticket (it omitted the
+  Turnstile keys, dl-50); corrected in the same edit.

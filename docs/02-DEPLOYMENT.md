@@ -630,6 +630,8 @@ here is one. Auto-minify no longer exists, so there is nothing else to turn off.
 
 **A Cloudflare WAF rate limiting rule on `/api/`** is worth adding as a second
 layer on any hostname, since it rejects at the edge and costs the host nothing.
+The downloader's is written out under
+[the edge rate limit on `/api/`](#the-edge-rate-limit-on-api).
 The in-process limiter still has to be right: it is per-process and does not
 survive a restart, so two replicas grant two allowances and a redeploy resets
 every bucket. The scope of that, and the shared store that is the fix if this is
@@ -778,6 +780,83 @@ Consider tightening these once it is reachable by more than you. The defaults in
   link is opened, which is when a job takes a slot. Nothing fills the disk any
   more; what a shared instance runs out of is ffmpeg processes and upload
   bandwidth, and `MAX_FILE_SIZE_MB` caps each stream.
+
+**`compose.downloader.prod.yaml` already sets the ones the owner sized** (dl-52),
+from measurements taken on 2026-10-05 on `downloader-v0.8.0` with the hls.js demo
+stream. The comment on each value there names its source; the whole table is in
+[dl-52](../tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md).
+
+| Setting                              | Production | Why                                                                                  |
+| ------------------------------------ | ---------- | ------------------------------------------------------------------------------------ |
+| `MAX_CONCURRENT_BROWSERS`            | 2          | two probes at once peaked at 250% CPU and 800 MiB: the browser is what limits it     |
+| `MAX_CONCURRENT_JOBS`                | 2          | one job took about 40 Mbps of 329 Mbps upload, so upload is not what binds           |
+| `MAX_FILE_SIZE_MB`                   | 4096       | the owner's choice, against a recommended 1024: a whole film fits                    |
+| `RATE_LIMIT_PROBE_PER_MINUTE`        | 4          | policy, not measured                                                                 |
+| `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` | 4          | set with the probe limit, since the two are used one-for-one                         |
+| `RATE_LIMIT_JOBS_PER_MINUTE`         | 2          | policy, not measured                                                                 |
+| `MAX_JOBS_PER_CLIENT`                | 2          | the owner's choice, against a recommended 1: **one address can hold both job slots** |
+
+`MAX_CONCURRENT_FRAME_GRABS` is left to follow `MAX_CONCURRENT_JOBS`. The last row
+is a trade, not an oversight: while one address holds both slots, everyone else's
+download waits or is refused, and a 4096 MB file holds a slot for about 20 minutes
+at the measured 29 Mbps. A household behind one router shares that address.
+
+### The edge rate limit on `/api/`
+
+The in-process limiters above are per process and start empty on every redeploy,
+so the one limit that survives a restart, and costs the host nothing, is a
+Cloudflare WAF rate limiting rule. It lives **on the dashboard, not in
+`scripts/cloudflare-setup.mjs`**: there is one rule and it changes rarely, and
+putting it in the script would need a fourth permission on a token whose header
+argues for three (the owner chose this on 2026-09-28, dl-52).
+
+Security → WAF → Rate limiting rules → Create rule, on the zone the downloader's
+hostname is in:
+
+| Field                | Value                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| Expression           | `(http.host eq "downloader.example.com" and starts_with(http.request.uri.path, "/api/"))`            |
+| Counted per          | IP address                                                                                           |
+| Threshold and period | **60 requests per 60 seconds**; if the plan allows only 10 seconds, **20 requests per 10 seconds**   |
+| Action               | Block, for the plan's shortest duration (60 seconds if it is free to choose), with the default `429` |
+
+Use your own hostname in the expression. **Do not widen the path to the whole
+hostname:** the page and its assets are not what this protects, and a first visit
+loads a dozen of them.
+
+**Where 60 comes from.** dl-54 measured a first visit against a live API: 7
+`/api/` requests with no page (config, the probe and its event stream, the job, its
+link and its event stream, a preview), 11 request lines with it. So 60 a minute
+admits more than eight complete visits from one address, which is more than the
+in-process limits let it start (four probes and two jobs a minute). The rest is
+headroom for the event streams: the job stream reconnects with backoff, a flapping
+connection adds one request per attempt, and a rule that blocks a visitor mid-job
+costs more than one that lets a flood through for a minute. The 10-second
+fallback keeps the same burst room (a visit is 7 of 20) and is looser per minute,
+because the shorter period cannot express a lower rate. **These figures are
+derived, not measured against the dashboard's counter**: if the rule logs blocks
+for ordinary use, raise the threshold rather than the period.
+
+What a block looks like to a visitor: a refused `POST /api/probe` or `/api/jobs`
+is an error in the page. A refused probe event stream is not retried: narration
+stops and the analysis carries on, as with any stream error. A refused job event
+stream goes to the page's reconnect backoff. A refused download link
+(`/api/files/*`, which this rule also covers) fails silently in the browser, the
+case [dl-77](../tools/downloader/docs/work/dl-77-a-refused-download-says-nothing-in-the-page.md)
+is open on.
+
+**What this zone's plan allows: unconfirmed.** No agent can read the dashboard,
+and the repo has no record of it. The owner fills in this table once, from the
+rule form, and then removes this paragraph's warning:
+
+| Allowance                                      | This zone's plan |
+| ---------------------------------------------- | ---------------- |
+| Rate limiting rules allowed                    | unconfirmed      |
+| Periods offered                                | unconfirmed      |
+| Actions offered (Block, challenge, log)        | unconfirmed      |
+| Block durations offered                        | unconfirmed      |
+| Counted per (IP only, or more)                 | unconfirmed      |
+| The rule created, and its threshold and period | not created yet  |
 
 ### On the LAN as well
 
