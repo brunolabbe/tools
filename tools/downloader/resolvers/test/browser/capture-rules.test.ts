@@ -576,15 +576,16 @@ describe("Semaphore", () => {
   });
 });
 
-describe("structural age-gate rules (dl-83)", () => {
-  // The tokeniser `AGE_CHOOSE_FN` runs in-page, restated: a label's words,
-  // lowercased, split on anything that is not a letter or a digit.
-  const negated = (label: string): boolean =>
-    label
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .some((word) => AGE_NEGATIONS.includes(word));
+// The tokeniser `AGE_CHOOSE_FN` runs in-page, restated: a label's words,
+// lowercased, split on anything that is not a letter or a digit.
+function negated(label: string): boolean {
+  return label
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .some((word) => AGE_NEGATIONS.includes(word));
+}
 
+describe("structural age-gate rules (dl-83)", () => {
   test.each([
     "Ho 18 anni o più - Entra",
     "18+",
