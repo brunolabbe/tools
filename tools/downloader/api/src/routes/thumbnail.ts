@@ -37,7 +37,8 @@
  * owner check behind it, which is what makes a file token a capability. The
  * request log therefore replaces it with `[redacted]` on the `request` line and
  * on the `request rejected` line a miss or a 429 writes, as it does for
- * `/api/files/:token` (`CAPABILITY_PREFIXES` in `request-log.ts`).
+ * `/api/files/:token` (`CAPABILITY_ROUTES` in `request-log.ts`), and does so
+ * however the path is spelled (dl-76).
  */
 
 import { AppError, ROUTES } from "@downloader/contract";

@@ -7,7 +7,7 @@
  */
 
 import type { BrowserContext, Request, Response } from "playwright";
-import { classifyMedia, isDeniedUrl, normaliseUrl } from "./media-match.ts";
+import { classifyMedia, isDeniedUrl, normaliseUrl, responseFileSize } from "./media-match.ts";
 import {
   isContentEncoded,
   isSniffable,
@@ -116,9 +116,8 @@ export class HitCollector {
     this.#touch(url);
     const headers = response.headers();
     const contentType = headers["content-type"];
-    const parsedLength = Number(headers["content-length"]);
-    const contentLength =
-      Number.isFinite(parsedLength) && parsedLength >= 0 ? parsedLength : undefined;
+    // The file's size, not the response's: a 206 is one chunk of it (dl-78).
+    const contentLength = responseFileSize(headers, response.status());
     const kind = classifyMedia({ url, contentType, contentLength });
     if (!kind) {
       this.#sniffBody(response, contentType, contentLength, headers["content-encoding"]);
@@ -149,8 +148,11 @@ export class HitCollector {
     if (existing) {
       // A response refines what the request could only guess at.
       if (patch.confirmed) {
+        // A file already confirmed whole stays whole (dl-78): a later response
+        // for the same URL that reads small is a chunk of it, not a verdict.
+        const keep = existing.confirmed && existing.kind === "progressive" && kind === "segment";
         existing.confirmed = true;
-        existing.kind = kind;
+        if (!keep) existing.kind = kind;
       }
       if (patch.contentType !== undefined) existing.contentType = patch.contentType;
       if (patch.contentLength !== undefined) existing.contentLength = patch.contentLength;

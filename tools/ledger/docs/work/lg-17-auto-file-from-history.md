@@ -1,0 +1,85 @@
+---
+id: lg-17
+tool: ledger
+title: File a row without a tap when its description has been answered the same way three times
+kind: work-package
+status: ready
+milestone: P2
+depends_on: [lg-16]
+difficulty: hard
+---
+
+# lg-17 — File a row without a tap when its description has been answered the same way three times
+
+## Why
+
+Most rows no rule takes are the same merchants and bills, answered the same way
+every month. The owner chose on 2026-10-06 to let history file them, within
+limits that keep §3's reason for asking: a transfer that is not its usual amount
+is a mistake to catch, as the workbook's misfiled mortgage transfer was
+([00-ANALYSIS.md §3](../00-ANALYSIS.md), amendment). This is the first thing in
+the tool that files a row with nobody tapping, so it is a ticket of its own,
+after lg-16 has shown its history answers working.
+
+## Build
+
+1. **When history files a row.** Only a row the rules leave as `no-rule` (no
+   pattern matches). A `differs` or `ambiguous` row always stays in the inbox,
+   and a rule that matches always beats history.
+   - The **latest three** person-given answers for its description (lg-16's
+     `fromHistory`, same folding) name the same person and bucket.
+   - **Its amount fits:**
+     - a credit, or a row whose Desjardins category folds to `virements`: its
+       amount equals, to the cent, the amount of one of those three rows;
+     - any other debit: it is within ±20 % of the latest of those three rows'
+       amounts, with the same sign. Compare in integer cents,
+       `5 × |a − b| ≤ |b|`, never in floating point.
+   - Anything else goes to the inbox, with lg-16's history answer offered.
+2. **`books`, pure: `autoFile(row, answers)`**, returning the answer and the ids
+   of the three classifications it rests on, or why not.
+3. **Only a person's answers count.** An automatic filing is never an answer for
+   a later one, so history cannot reinforce itself. Confirming an automatic
+   filing from the review list stores a `manual` classification, which is.
+4. **Storage, and its trap.** `classifications.source` is
+   `CHECK (source IN ('rule', 'accepted', 'manual'))`, with
+   `CHECK ((source = 'manual') = (rule_id IS NULL))` and `classified_by NOT
+NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
+   these rows are append-only history. Choose between a table rebuild in a
+   migration that copies every row and proves the count, and a sibling record
+   that the latest-classification read takes into account; write down which,
+   and why, in the Log. Either way the record says it was automatic, names the
+   three classifications it rests on, and names no person as having made it.
+5. **Undo is reclassifying**, as lg-4 already does: a person's answer appended
+   after an automatic one wins.
+6. `web`: a list of rows filed automatically and not yet confirmed or changed,
+   reachable from the inbox, each showing the three answers it rests on, with
+   one tap to confirm and the usual controls to change it. The inbox count does
+   not include them.
+7. **Amend [00-ANALYSIS.md §3](../00-ANALYSIS.md)'s amendment** if the build
+   finds the limits above unworkable — never quietly loosen them in code.
+
+## Done when
+
+1. A debit with three matching answers, 15 % above the latest one's amount, is
+   filed automatically; at 25 % it goes to the inbox. `books` tests at both
+   sides of the 20 % line, in cents, prove it.
+2. A transfer with three matching answers at a different amount goes to the
+   inbox; at an amount equal to one of them, it is filed.
+3. Two automatic filings and one answer do not make three: the next row goes to
+   the inbox. Three answers where one disagrees do not file either.
+4. A row a rule matches with a different amount (`differs`) goes to the inbox
+   whatever its history says.
+5. The automatic filing is stored with its three classifications, a person's
+   later answer wins over it, and every classification stored before the
+   migration is still there. An API test proves each.
+6. A web test covers confirming and changing an automatic filing.
+7. Gates green.
+
+## Log
+
+- 2026-10-06 — Filed from a conversation with the owner, who chose: three
+  person-given answers, transfers at an exact amount, other rows within ±20 %,
+  marked automatic and reviewable, a separate ticket after lg-16. The filer's
+  reading, not put to the owner: "transfers" is every credit plus every row in
+  Desjardins' `Virements`, which errs towards asking; history applies only to
+  `no-rule` rows; the ±20 % is measured against the latest of the three.

@@ -37,8 +37,12 @@ the prompt and names the commit message as the brief; the reviewer traces each
 supplied line as it would a ticket's; and the section goes on the pull request
 thread rather than into a file, per `orchestrate-tickets`' `records.md`. The
 severity table below then grades the prompt's lines exactly as it would a
-ticket's — an unproven one is still FAIL — and the reviewer says so in the
-section, because a prompt's acceptance and a ticket's are the kind of difference
+ticket's — an unproven one is still FAIL, and a line only an event after the
+merge could prove is still `awaiting`, but no ticket's `awaiting` field exists
+to carry it past the merge, so the row says that nothing in the repo tracks it
+and the lander names the event and the reading in the pull request body — and
+the reviewer says so in
+the section, because a prompt's acceptance and a ticket's are the kind of difference
 that otherwise gets argued in a round. Every other step applies unchanged. A gate
 on 2026-09-20 needed all of this patched by hand in its prompt, which is what
 this paragraph replaces.
@@ -189,7 +193,16 @@ last round. Under `orchestrate-tickets` it runs once per ticket, at the
 landing, over each gate's own section file, one commit per gate in gate order.
 
 8. **Commit the section, post the report, then say what would clear it.** This
-   step is the builder's, and it has three acts. First, write the reviewer's
+   step is the builder's, and it has three acts. **Before them, if any gate's
+   table has an `awaiting` row, write the ticket's `awaiting:` line**, in the
+   form `docs/01-TICKETS.md` gives (`Done when <n> — <the reading, after the
+   event>`, from the row's own sentence), and commit it on its own first,
+   because the splice and `--land` both refuse a ticket that is dirty against
+   `HEAD`. It goes in the same push as the records, and it is the only marker
+   the obligation has, since the gate never writes frontmatter. It is one line
+   for the ticket, naming every line a gate's table marks `awaiting`; a ticket
+   whose tables mark none gets none from this step, whatever its brief already
+   owes. First, write the reviewer's
    returned text to a file, `## Review` as its first line (or `### Gate <n>` for
    a later gate), and run
    `node scripts/review-record.mjs <ticket-path> <section-file> [--gate <n>]`. The

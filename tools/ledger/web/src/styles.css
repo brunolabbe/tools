@@ -329,6 +329,56 @@ select {
   font-weight: 600;
 }
 
+/*
+ * The period screen (lg-6). A line's Remove sits beside its amount, smaller
+ * than a form's button but still a thumb's height; the checkbox that makes a
+ * line a charge reads as one target with its words.
+ */
+.period-person {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.figures .amount {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+button.small {
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.rule-form h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+label.check input {
+  width: 1.25rem;
+  min-height: 1.25rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (min-width: 48rem) {
   .shell {
     padding: calc(var(--gap) * 2);

@@ -219,7 +219,8 @@ lives in memory for ten minutes and nowhere else — the owner's choice of
 
 All via environment, parsed and validated once at boot with zod. Fail fast on a
 bad value rather than discovering it mid-job. See
-[`.env.example`](../.env.example), which nothing loads: it lists the variables
+[`.env.example`](../.env.example); a `.env` copied beside it is loaded by the
+API's `dev` script and nothing else. It lists the variables
 and their defaults.
 
 | Variable                      | Default      | Why it matters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

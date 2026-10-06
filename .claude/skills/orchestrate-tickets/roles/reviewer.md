@@ -49,7 +49,10 @@ confirm it. So read in this order:
   `gh pr view <n> --json headRefOid,statusCheckRollup`. A failing or
   still-running check on the head you are gating goes in the section, named with
   its sha. An acceptance line only a CI leg can prove is `unproven (gate)` until
-  that leg has run green on this head.
+  that leg has run green on this head. A line only an event after the merge can
+  prove is `awaiting`, and its row names the event and the reading in one
+  sentence, because the lander copies it into the ticket's `awaiting:` line;
+  `gate.md` has the test and says what is not `awaiting`.
 - **Check the ticket's premise, not only its code.** If the ticket rests on a
   workflow, a cron, a hook or an external service, read its run logs and say
   whether the machinery has ever run.
@@ -68,7 +71,12 @@ confirm it. So read in this order:
   output, and the premises as premises, so whoever fixes it can run it rather
   than implement your reading of it.
 - **A finding with two possible remedies is a decision, not a verdict.** Give
-  both with a recommendation and label it open.
+  both with a recommendation and label it open. When the open decision is an
+  acceptance line the build cannot meet (the build does what the brief's
+  Decision says, and the line asks for something that Decision cannot deliver),
+  `gate.md` grades it by whether a test on the branch asserts the opposite of
+  the line: none is CONCERNS, one is a `high` and FAIL. A build that left its
+  Decision is outside that entry: its line is `unproven`, and FAIL.
 - Flag anything you did not verify as unverified in the sentence that states it.
 
 ## When you are woken to re-gate
