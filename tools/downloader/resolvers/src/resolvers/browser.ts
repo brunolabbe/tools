@@ -396,6 +396,7 @@ export class BrowserResolver implements Resolver {
         finalUrl,
         status: navigation?.status(),
         quietReached,
+        segmentCount: collector.hits.filter((hit) => hit.kind === "segment").length,
       });
     }
 

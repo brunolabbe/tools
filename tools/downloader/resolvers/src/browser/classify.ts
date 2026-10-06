@@ -29,7 +29,16 @@ export interface PageSignals {
   ageGate: boolean;
   /** False when the deadline ran out with the page still fetching. */
   quietReached: boolean;
+  /**
+   * Media segments the page fetched, none of which the ranking ever offers
+   * (dl-79). Playback demonstrably started, so "no video" would be the wrong
+   * thing to leave unqualified.
+   */
+  segmentCount?: number | undefined;
 }
+
+/** `details.reason` on a `NO_MEDIA_FOUND` whose probe saw segments but no manifest. */
+export const SEGMENTS_WITHOUT_MANIFEST = "segments-without-manifest";
 
 const BOT_MARKERS: readonly string[] = [
   "cf-browser-verification",
@@ -200,8 +209,14 @@ export function classifyFailure(signals: PageSignals): AppError {
   }
 
   // The page loaded, settled, and asked for no media. This is the one verdict
-  // that lets the registry try another resolver.
-  return new AppError("NO_MEDIA_FOUND", undefined, { details });
+  // that lets the registry try another resolver. Unless it did ask for media:
+  // segments with no playlist is a player whose manifest we failed to recognise,
+  // which is a different thing to diagnose than a page with no player (dl-79).
+  const segmentCount = signals.segmentCount ?? 0;
+  return new AppError("NO_MEDIA_FOUND", undefined, {
+    details:
+      segmentCount > 0 ? { ...details, reason: SEGMENTS_WITHOUT_MANIFEST, segmentCount } : details,
+  });
 }
 
 /** Navigation never completed: DNS, TLS, connection or protocol level. */

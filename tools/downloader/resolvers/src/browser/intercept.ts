@@ -8,6 +8,13 @@
 
 import type { BrowserContext, Request, Response } from "playwright";
 import { classifyMedia, isDeniedUrl, normaliseUrl } from "./media-match.ts";
+import {
+  isSniffable,
+  MAX_SNIFF_BODY_BYTES,
+  MAX_SNIFFS_PER_PROBE,
+  SNIFF_HEAD_BYTES,
+  sniffManifestKind,
+} from "./sniff.ts";
 import type { NetworkHit } from "./types.ts";
 
 /** Manifests are small; anything larger than this is not a playlist worth keeping. */
@@ -20,6 +27,8 @@ export class HitCollector {
   readonly #hits = new Map<string, NetworkHit>();
   readonly #bodies = new Map<string, string>();
   readonly #pending = new Set<Promise<unknown>>();
+  /** Urls whose body was already read for a manifest (dl-79), so a poll reads once. */
+  readonly #sniffed = new Set<string>();
   #seq = 0;
   #lastActivityAt = Date.now();
   #attached = false;
@@ -104,7 +113,10 @@ export class HitCollector {
     const contentLength =
       Number.isFinite(parsedLength) && parsedLength >= 0 ? parsedLength : undefined;
     const kind = classifyMedia({ url, contentType, contentLength });
-    if (!kind) return;
+    if (!kind) {
+      this.#sniffBody(response, contentType, contentLength, headers["content-encoding"]);
+      return;
+    }
 
     const request = response.request();
     const hit = this.#record(url, kind, request.headers(), {
@@ -168,6 +180,58 @@ export class HitCollector {
           hit.headers = { ...hit.headers, ...all };
         } catch {
           // Context torn down mid-read: the sync headers we already have stand.
+        }
+      })(),
+    );
+  }
+
+  /**
+   * dl-79: a response the type and the path could not place may still be a
+   * manifest, if it is small and says nothing about itself. The read joins
+   * `#pending`, so `settle()` bounds it exactly as it bounds a typed manifest's
+   * body — it never holds up network quiet, which `#touch` alone drives.
+   */
+  #sniffBody(
+    response: Response,
+    contentType: string | undefined,
+    contentLength: number | undefined,
+    contentEncoding: string | undefined,
+  ): void {
+    const url = response.url();
+    const request = response.request();
+    const sniffable = isSniffable({
+      url,
+      status: response.status(),
+      resourceType: request.resourceType(),
+      contentType,
+      contentLength,
+      contentEncoding,
+    });
+    if (!sniffable) return;
+    const key = normaliseUrl(url);
+    if (this.#sniffed.has(key) || this.#sniffed.size >= MAX_SNIFFS_PER_PROBE) return;
+    this.#sniffed.add(key);
+
+    this.#pending.add(
+      (async () => {
+        try {
+          const body = await response.body();
+          // The declared length was a promise, not a measurement.
+          if (body.byteLength > MAX_SNIFF_BODY_BYTES) return;
+          const sniffed = sniffManifestKind(body.subarray(0, SNIFF_HEAD_BYTES).toString("utf8"));
+          if (!sniffed) return;
+          const hit = this.#record(url, sniffed, request.headers(), {
+            ...(contentType === undefined ? {} : { contentType }),
+            ...(contentLength === undefined ? {} : { contentLength }),
+            status: response.status(),
+            confirmed: true,
+            frameUrl: safeFrameUrl(request),
+          });
+          if (!hit) return;
+          this.#enrichHeaders(request, hit);
+          this.#bodies.set(hit.key, body.toString("utf8"));
+        } catch {
+          // Body discarded, or the context went away mid-read: not a manifest we can use.
         }
       })(),
     );
