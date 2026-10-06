@@ -157,6 +157,131 @@ Fix: add a`REFUSED` entry that ends in a phrasing (e.g. "Read and
   reliability: the first med · maintainability ✓ (one phrase array per
   language, exported for a table test).
 
+### Gate 2
+
+**Gate: FAIL** — 2026-10-06 · `2557198..cabd299` · Opus 5.5, depth standard (re-gate)
+
+**Gate-1 findings:**
+
+- **med, false presses anywhere in the frame: fixed for in-flow controls,
+  not fixed inside a fixed or sticky layer** (see the high below). I re-ran
+  gate 1's `falsepress.mjs` unchanged at `cabd299`. The newsletter, terms
+  button, comment and review-vote pages now have `beacons: []`, and
+  `/order-overlay.html` and `/order-bar.html` now find the stream with
+  `["/beacon/consent-accepted"]`.
+- **med, start anchor untested: fixed.** Dropping the `^` from `CONSENT_TEXT`
+  gives `provoke.test.ts -t "dl-82"` → `Tests 5 failed | 150 passed | 7
+skipped (162)`. The failures are the five new refused rows that end in a
+  phrasing.
+- **low, Log base count: fixed.** I put `provoke.ts` at `056aab7` into the
+  head tree and ran `browser-resolver.test.ts -t "no vendor selector
+matches"` → `Tests 7 failed | 2 passed | 57 skipped (66)`, as the Log now
+  says.
+- **low, trailing `[.!]?`: fixed, as a side effect of the scoping.**
+  `CONSENT_TEXT_ANYWHERE` refuses `"ok."`, `"OK!"` and `"Continue."`.
+  `CONSENT_TEXT` still accepts them, but only inside a container, where the
+  bare `"OK"` and `"Continue"` already match.
+- **low, generic-word denylist is a sample:** not in this round's lines,
+  stands as written.
+
+**The builder's claim that `CONSENT_TEXT_ANYWHERE` is the pre-dl-82 pattern
+byte for byte: verified.** I extracted the regex literal from `056aab7`'s
+`CONSENT_TEXT` and from head's `CONSENT_TEXT_ANYWHERE`, and `cmp` reports them
+`IDENTICAL` (314 bytes).
+
+**The open decision, measured.** Script: `node <scratch>/gate-2/cases.mjs`,
+which runs the real `BrowserResolver` from built `dist`. I rebuilt
+`resolvers` at each sha and grepped `dist` for `CONSENT_TEXT_ANYWHERE`: 4 hits
+at head, 0 at base. "Pressed" is the beacon list, and a control pressed in
+both passes shows twice.
+
+| Page                                                                            | `cabd299`                                | `056aab7`                    |
+| ------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------- |
+| (i) in-flow strip, "Ho capito"                                                  | nothing pressed · `NO_MEDIA_FOUND`       | same                         |
+| (i) in-flow strip, "Accetto e continua"                                         | nothing pressed · `NO_MEDIA_FOUND`       | same                         |
+| (i) control: in-flow strip, "Accetta"                                           | strip pressed · stream                   | same                         |
+| (ii) `position: fixed` checkout bar, submit "Agree and continue", no consent    | **submit pressed ×2** · `NO_MEDIA_FOUND` | nothing pressed              |
+| (ii) `position: sticky` checkout form, same button                              | **submit pressed ×2** · `NO_MEDIA_FOUND` | nothing pressed              |
+| (iii) sticky header holding a notice, "Ho capito", no consent                   | **notice pressed ×2**                    | nothing pressed              |
+| (iii) sticky header holding a notice, "OK", no consent                          | notice pressed ×2                        | notice pressed ×2            |
+| (iii-b) sticky header "Ho capito" ahead of a fixed bottom consent bar "Accetta" | **notice pressed ×2 · `NO_MEDIA_FOUND`** | consent pressed · **stream** |
+| (iv) cross-origin iframe, `role=dialog` overlay, "Ho capito"                    | consent pressed · stream                 | nothing · `NO_MEDIA_FOUND`   |
+| (iv) cross-origin iframe, fixed overlay without `role`, "Ho capito"             | nothing · `NO_MEDIA_FOUND`               | same                         |
+| (iv) cross-origin iframe, `role=dialog`, "Accetta"                              | consent pressed · stream                 | same                         |
+| (iv) cross-origin iframe, fixed overlay without `role`, "Accetta"               | consent pressed · stream                 | same                         |
+
+**Findings on the lines this round touched:**
+
+- **high** · shipped text false against the code, and a regression on a page
+  `origin/main` resolves (row iii-b; one mechanism). `clickConsentText`'s
+  docstring in `resolvers/src/browser/provoke.ts` says the container pass is
+  "Tried first, so a real consent layer wins over an earlier control in the
+  document that happens to carry a label from the same list". The Log says
+  "A real consent layer therefore wins over an earlier control with a
+  colliding label". Neither holds when the earlier control sits in a fixed or
+  sticky ancestor. The script marks every such ancestor as a zone, and
+  `frame.locator('[data-downloader-consent-zone]').getByRole(...).first()`
+  takes zones in DOM order, so a sticky header's "Ho capito" is pressed in
+  both passes and the bottom consent bar's "Accetta" is never reached. Base
+  pressed "Accetta", because "Ho capito" was not a label there. The Log's
+  stated costs list in-flow strips and docked checkout forms, but not this.
+  Reproduction:
+  `node <scratch>/gate-2/cases.mjs /iii-sticky-header-hocapito-then-consent.html`
+  → head `error NO_MEDIA_FOUND | beacons: ["/beacon/header-notice","/beacon/header-notice"]`,
+  base `stream /media/mse/v1080.m3u8 | beacons: ["/beacon/consent-accepted"]`.
+  With a full-viewport overlay instead of a bar, the header press would time
+  out and fall through to the old pattern. I did not measure that variant.
+  **Open decision:** (A) **recommended**: change the code so the claim is
+  true. For example, treat a fixed or sticky ancestor as a zone only when its
+  text carries consent wording (cookie, consent, privacy and their
+  equivalents), keeping semantic dialogs unconditional. That would also close
+  rows (ii) and (iii). It is unmeasured, and it would miss a consent bar with
+  no such word. (B) Keep the code, rewrite the docstring and the Log to name
+  this case as a third accepted cost, and record the regression as a med.
+  The builder's option (2), a visual-position test, is unmeasured here, and
+  it would not obviously separate a top sticky header from a top consent bar.
+- **med** · no `Done when` line depends on it · rows (ii) and (iii): a
+  non-consent control in a fixed or sticky layer whose label is a dl-82
+  phrasing is pressed in both passes. Two of these are a form's submit. Base
+  pressed none of them. The Log names the docked checkout bar but not the
+  sticky-header notice. No test covers either. This is the measured content of
+  the builder's open decision, so it goes with the high above.
+- **low** · the cross-origin branch of `clickConsentText` (dialog semantics
+  only) has no test. With its press replaced by `void dialogs;`,
+  `npx vitest run tools/downloader/resolvers/test/browser` →
+  `Test Files 7 passed (7)`, `Tests 322 passed (322)`. It works on a real
+  page (row iv, `role=dialog` "Ho capito" → stream at head only), so this is
+  a missing test, not a defect.
+- **dropped** · a double press inside one `dismissConsent` call: there is
+  none. A container press returns before the whole-frame fallback runs.
+  Across the two provocation passes one probe can press two different
+  controls (`/double-press.html`, head: `["/beacon/consent-accepted","/beacon/poll-ok"]`
+  and the stream). Base pressed that page's in-flow "OK" twice
+  (`["/beacon/poll-ok","/beacon/poll-ok"]`, `NO_MEDIA_FOUND`). Pressing in both
+  passes is older than dl-82, so this is not a new class.
+- **dropped** · the container script's cost on a large DOM. `node
+<scratch>/gate-2/bench.mjs` times `dismissConsent` alone, 7 calls, on a page
+  with no consent layer:
+
+  | Page                                                    | Base median | Head median |
+  | ------------------------------------------------------- | ----------- | ----------- |
+  | 5,605 elements, about 2,000 links and buttons           | 73 ms       | 89 ms       |
+  | 9,605 elements, each control under its own 12-div chain | 124 ms      | 183 ms      |
+
+  One full probe of the 5,605-element page took 3,740 ms at base and
+  3,437 ms at head, a single sample each. That is within noise. The cost is
+  paid per frame per pass.
+
+- **dropped** · `CONSENT_TEXT_ANYWHERE` drifting from the base pattern: it
+  matches byte for byte (above), and `provoke.test.ts` pins KEPT ✓ / ADDED ✗
+  against it.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- Gates at `cabd299`: `npm run check` exit 0. `npm test -- --project
+downloader` exit 0, with 1760 passed and 2 skipped of 1762 tests (gate 1:
+  1680, +80 = 5 refused rows + 31 + 37 pinning rows + 7 integration). PR #370
+  on `cabd299`: 10 checks pass, and `test (windows-latest, informational)` was
+  still **pending** when read.
+
 ## Log
 
 ### 2026-10-06 — build
