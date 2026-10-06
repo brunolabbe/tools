@@ -120,7 +120,7 @@ The rule to build, as the owner left it:
 
 ## Reproductions
 
-Three gate records on `main`, each graded by hand. All three are under
+Four gate records on `main`, each graded by hand. All four are under
 `## Review` in the ticket named.
 
 - **repo-49's gate 1, FAIL "by the letter".** In
@@ -144,9 +144,19 @@ Three gate records on `main`, each graded by hand. All three are under
   adr/005. Whether that is an event after the merge by the `awaiting` test, or
   a line nothing will run, is not settled by the answer above.
 
-There is no record yet of the case the narrowed rule grades CONCERNS: a build
-that matches the Decision, a Done-when line it cannot meet, and no test that
-contradicts the line. Finding one is the Build's first step.
+No gate section has, as its sole cause, the case the narrowed rule grades
+CONCERNS: a build that matches the Decision, a Done-when line it cannot meet,
+and no test that contradicts the line. Three carry it as one finding inside a
+FAIL for something else, each in its ticket's `### Gate 1`:
+
+- `tools/downloader/docs/work/dl-73-prove-the-shipped-yt-dlp-trusts-the-terminating-proxy.md`,
+  finding F2: a `med` open decision, Done when 2 asked for a red check "before
+  it can merge" where nothing blocks the merge. The owner reworded the line.
+- `docs/work/repo-60-a-double-backtick-quotation-reads-as-a-shorthand-citation.md`,
+  the bullet headed "Open decision": no fix could meet Done when 1's
+  parenthetical.
+- `tools/downloader/docs/work/dl-74-retire-mux-failed.md`, finding 6: graded
+  `low`, Done when 1 could not be met by a build that documents the retirement.
 
 ## Build
 
@@ -221,3 +231,85 @@ before editing, and do not settle either here.
   `Done when` line, from item 7 of the 2026-10-04 batch's history entry. The
   owner's answer is unchanged; how the rule grades an excused check is left to
   the Build.
+- 2026-10-06 — Built on `origin/main` at `4907d9a`, on `repo-88-gate-verdict-rule`;
+  the PR is held as a draft by the owner until lg-6, dl-76 and dl-52 merge.
+  - **History items 17 and 19 of the 2026-10-03 batch, checked first.** #361
+    (`4907d9a`) did not touch `gate.md`:
+    `git show --stat 4907d9a` lists `dispatching.md`, `history.md`,
+    `roles/builder.md`, `docs/01-TICKETS.md` and this ticket. The last change to
+    `gate.md` is #350 (`3a7d8a9`, `git log -1 -- gate.md`), which already carries
+    step 1's "no `Done when` section is a finding and an open decision" (item 19) and `dispatching.md`'s "Never a severity rule of your own" (item 17).
+    Neither is settled here: the new rule does not touch step 1's no-`Done when`
+    case, and the severity table's `high` and `med` are unchanged.
+  - **The Build's step 1 search.** A script over every `## Review` (to `## Log`)
+    in `docs/work/` and `tools/*/docs/work/` matched "open decision",
+    "unmeetable", "cannot be met", "cannot satisfy", "unsatisf" and "cannot
+    clear": 127 lines in 57 of the 164 tickets that carry a `## Review`. Read
+    for the shape (a faithful build, a line it cannot meet, no contradicting
+    test) it found no gate whose sole cause that is, and three that carry it as
+    one finding inside a FAIL for another reason: dl-73 gate 1 F2 (`med`),
+    repo-60 gate 1 (no severity) and dl-74 gate 1 finding 6 (`low`). They are
+    in the Reproductions now, and `gate.md` carries them as a worked case. The
+    search is a phrase match: a record that words the shape otherwise is not
+    ruled out.
+  - **The Build's step 4 inventory: four pages, as written, but more places on
+    them.** `grep -rniE "unproven|keeps every later|still FAIL|CONCERNS"` over
+    the repo outside `work/`, `.git`, `node_modules` and `dist`, read for what
+    states a verdict rule. On the four pages: `docs/01-TICKETS.md` states it in
+    five places (the paragraph on `done`, the verdict table, "The four row
+    verdicts", "deliberately neither PASS nor FAIL" and "the skill's four");
+    `roles/reviewer.md` once, the CI-leg bullet; `orchestrate-tickets`'
+    `SKILL.md` once, step 6; `review-ticket`'s `SKILL.md` once, the no-ticket
+    paragraph. Everything else the grep returned is history or a comment that
+    is still true (`history.md`, `adr/006`, `scripts/status.mjs`,
+    `planner.yml`, `planner/e2e/pin.spec.ts`, `dispatching.md`'s `unproven
+(scope)` and Windows lines), and no script parses a row verdict:
+    `grep -rln "gate.md\|unproven (gate)\|Four verdicts" scripts packages` printed
+    nothing. **The landing step is on two more pages than the Build named**,
+    because the procedure lives there: `reference/records.md` (the full step, in
+    _Landing_) and `SKILL.md` step 9 of `orchestrate-tickets`, beside the three
+    pages the Build named.
+  - **What the Build had wrong.** (1) "In the landing commit": `--land` refuses
+    a ticket dirty against `HEAD` and makes its own commits, so the `awaiting:`
+    line is its own commit just before it, in the same push. Read from
+    `scripts/review-record.mjs` (the dirty-tree refusal); **not run**, as
+    `--land` pushes. (2) "Three records" over four listed: fixed in the
+    Reproductions. (3) "The four row verdicts" are now five: **`awaiting`** is
+    the new row word, named after the field, and **`unproven (open decision)`**
+    is a severity-section entry beside `unproven (scope)` rather than a sixth
+    row word, because a line that is `unproven` forces FAIL by the old rule and
+    this one must not.
+  - **repo-89, which row.** Its two `unproven (gate)` rows are "the slow step
+    is named" and "three consecutive `windows-latest` runs". The rule moves the
+    second: the ticket's own Log (2026-10-03, "How this lands") counts "this
+    pull request's, then main's after the merge" towards the three, so part of
+    the reading does not exist before the merge. The first stays
+    `unproven (gate)`: the pull request's own `windows-latest` run supplies it.
+  - **The three reproductions against the rule**, each read from the committed
+    record: repo-49 gate 1 FAIL (first row says the branch's test asserts the
+    opposite, and F1 is `high`); repo-46 gate 3 PASS (its verdict line says
+    CONCERNS "only because Done when 1 and 3 are still unproven (gate) until a
+    release", and every finding is `low`); dl-73 gate 2 PASS (its verdict line
+    says the one thing between it and PASS is a clause only a real bump pull
+    request can prove, and F4 to F6 are `low`).
+  - **OPEN DECISION, not settled by the owner: lg-5's Done when 4.** Two
+    readings give different rules, and the paragraph in `gate.md` is the
+    recommended one, written provisionally and removable alone (the last bullet
+    of _Worked cases_). **A** (recommended): an excusal the owner recorded makes
+    "Gates green" `awaiting`, because the push to `main` runs
+    `security.yml`'s dismissal and the alerts' state afterwards is a reading
+    somebody can take, which meets the `awaiting` test as the owner left it;
+    lg-5's gate 2 becomes PASS. **B**: the excusal is the owner's act, not an
+    event that proves the line, and the PR's check never goes green; the row
+    stays `unproven (gate)` and CONCERNS, with the excusal named. A costs a
+    reading that proves "the alerts cleared" and not "the PR's check was
+    green"; B costs a permanent CONCERNS on every adr/005 excusal, with no
+    marker after the merge, since the gate would not be `awaiting`.
+  - **Derived, not asked:** a branch with no ticket cannot carry an `awaiting`
+    line, so a line only a post-merge event can prove is `unproven (gate)`
+    there (`review-ticket` `SKILL.md`, the no-ticket paragraph; `gate.md`, the
+    `awaiting` verdict). `docs/01-TICKETS.md` already says an obligation that
+    belongs to no ticket is a ticket worth filing.
+  - **Folds considered and not made.** An `awaiting` line on lg-5 (merged as
+    #354) waits on the open decision above. repo-89 (merged as #346, `in-flight`
+    by the owner's choice) needs none: `in-flight` already says it is open.

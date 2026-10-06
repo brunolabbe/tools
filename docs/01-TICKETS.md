@@ -226,6 +226,13 @@ case of. What _is_ a parse error is the field carrying nothing: `awaiting:` and
 optional field this one **is** its text, and a ticket says it owes nothing by
 having no such line.
 
+**Whoever lands a gate record that carries an `awaiting` row writes the line.**
+The gate cannot: a review never edits frontmatter, so the lander copies the
+row's event into this field in the same push as the record
+([`review-ticket`](../.claude/skills/review-ticket/SKILL.md), step 8). Without
+that step a PASS on a line proven only after the merge leaves the board nothing
+to show.
+
 **Whoever observes the obligation closed deletes the line, in the commit that
 records the observation** — beside striking the acceptance line it belongs to.
 That sentence is the field's whole defence: a projection nobody clears is the
@@ -299,18 +306,18 @@ It is one table — a row per acceptance line, naming the test that proves it,
 the spec file and the test's name rather than "covered" — a list of findings by severity, and a
 single word:
 
-| Gate         | When                                                              |
-| ------------ | ----------------------------------------------------------------- |
-| **PASS**     | Every acceptance line proven or `verified`, nothing above `low`   |
-| **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run |
-| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran** |
-| **WAIVED**   | A human overrode a gate, named themself, and said why             |
+| Gate         | When                                                                        |
+| ------------ | --------------------------------------------------------------------------- |
+| **PASS**     | Every acceptance line proven, `verified` or `awaiting`, nothing above `low` |
+| **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run           |
+| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran**           |
+| **WAIVED**   | A human overrode a gate, named themself, and said why                       |
 
 `verified` is the row for an acceptance line nothing asserts and the reviewer
 **re-ran** — the gates-are-green bullet almost every ticket ends with, and a
 criterion whose only proof is a command rather than a test. It counts as proven,
 and it is not a softer `unproven`: the difference is whether someone got a number
-back. The four row verdicts are the review skill's, and it defines them.
+back. The five row verdicts are the review skill's, and it defines them.
 
 The vocabulary is fixed so that the gate is a decision rather than a mood. Prose
 verdicts drift towards the reviewer's appetite for argument that afternoon; four
@@ -325,6 +332,25 @@ example: `npm run check` green, 1,020 tests green, and the image would not boot.
 That row is `unproven (gate)`, which is deliberately neither PASS nor FAIL — the
 work may be perfectly correct and simply unproven, and saying so is the whole
 job.
+
+**A line only an event after the merge can prove is not that row, and it is not
+a CONCERNS.** It is `awaiting`, the same test as the field of that name below:
+the event is nameable, it will happen, and somebody can take the reading
+afterwards. A release commit and the first bump pull request are such events.
+The gate names the event in the row, and the session that lands the record
+writes the ticket's `awaiting` line from it, because a gate never edits
+frontmatter — the row is PASS only because the line survives the merge. A line
+nothing will ever run, and any line the pull request's own CI could prove
+before the merge, is not `awaiting`: the first stays `unproven`, the second
+`unproven (gate)`.
+
+**An acceptance line the build cannot meet is graded by whether a test says the
+opposite.** Where the build does what the brief's Decision says, the line asks
+for something that Decision cannot deliver, and no test on the branch asserts
+the opposite of the line, the gate raises one `med` open decision the line
+depends on: CONCERNS, and the owner is asked before any fix. A test that
+asserts the opposite of an acceptance line is a `high`, and FAIL. The review
+skill's `gate.md` has the rule and the worked cases.
 
 **A review appends; it never edits the brief and never moves `status`.** A FAIL
 is a report, and whether the work stops is the author's call. The reviewer's job
@@ -364,7 +390,7 @@ writes it or why:
 - **The acceptance table** — one row per `Done when` line, each naming the test
   that proves it (the spec file and the test's name, not "covered"; no line
   numbers, [adr/006](./adr/006-gate-records-carry-no-citations.md)), with the verdict from the
-  skill's four: `proven`, `unproven`, `unproven (gate)`, `verified`. This is the
+  skill's five: `proven`, `unproven`, `unproven (gate)`, `awaiting`, `verified`. This is the
   half that records the acceptance-to-test link, and it is the half a finding
   table will silently replace if only one is asked for.
 - **A bullet per finding, with its disposition — including the ones that needed

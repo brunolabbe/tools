@@ -47,7 +47,7 @@ ticket's, and say in the section that the acceptance came from the prompt.
      output.** A test that a string never appears passes on a function that
      returns nothing.
 
-   Four verdicts:
+   Five verdicts:
 
    - **proven** — a test asserts it, and it runs in `npm test`.
    - **unproven** — nothing asserts it.
@@ -55,6 +55,18 @@ ticket's, and say in the section that the acceptance came from the prompt.
      run: a tool's `e2e` suite, its container build, the Windows leg. When the
      pull request's CI has run that leg green on the head you are gating, say so
      and count it proven, naming the check and the sha.
+   - **awaiting** — nothing that can run before the merge proves it, and an
+     event after the merge will. The test is the one `docs/01-TICKETS.md` gives
+     the `awaiting` field: the event is nameable (a release commit, the first
+     bump pull request, a push to `main` and what it runs), it will happen, and
+     somebody can take the reading afterwards. **The row names the event and the
+     reading in one sentence**, because the lander copies it into the ticket's
+     `awaiting` line and you cannot (see _Severity and the gate_). Three things
+     are not `awaiting`: a line the pull request's own CI can prove (that is
+     `unproven (gate)` until the leg has run on this head), a line nothing will
+     ever run (that stays `unproven`), and any line on a branch with no ticket,
+     which has no `awaiting` field to hold the obligation after the merge
+     (`unproven (gate)`, with the row saying so).
    - **verified** — nothing asserts it, but you re-ran it: the gates pass, the
      suite count went up, no existing test changed meaning. **Give the numbers
      you got, not the ones the Log claims** — run the suite at the base too, and
@@ -123,11 +135,69 @@ hypothetical with no caller as `low`, and say "no live call site" in the bullet.
 - **unproven (scope)** — a line the dispatch removed from the branch's scope,
   with the row naming who scoped it and where the work lands instead. It does
   not force FAIL.
-- **PASS** — every acceptance line proven or verified, nothing above low.
+- **unproven (open decision)** — a line the build cannot meet because the brief
+  contradicts itself: the build does what the brief's Decision says, the line
+  asks for something that Decision cannot deliver, and **no test on the branch
+  asserts the opposite of the line**. The row names the two facts that
+  contradict. It is one finding, a `med` that the line depends on, so the
+  decision goes to the owner before any round (`orchestrate-tickets`, step 6),
+  and it does not force FAIL: the verdict is CONCERNS unless something else is
+  higher. **A test that asserts the opposite of an acceptance line is a
+  `high`, and the gate is FAIL**: the build is then wrong about the line, not
+  faithful to a brief that was.
+- **PASS** — every acceptance line proven, verified or **awaiting**, nothing
+  above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
 
 **A review never edits the ticket's `status` frontmatter or its brief.** FAIL is
-a report; whether work stops is the author's call.
+a report; whether work stops is the author's call. **It never writes the
+ticket's `awaiting` line either**, so the `awaiting` row is the only thing that
+carries the obligation across the merge: the lander copies each one into the
+ticket's `awaiting:` line when it lands the record (`review-ticket` step 8). An
+`awaiting` row is not a reason for CONCERNS, and it does not choose the
+ticket's `status`, which stays the author's call.
+
+### Worked cases
+
+Each is a gate record already on `main`, read against the rules above. Look the
+record up by ticket and gate; none is cited by line.
+
+- **repo-49, gate 1: FAIL, unchanged.** Its first row says the branch's own test
+  asserts the opposite of the Done-when line, and F1 is a `high`. That is
+  FAIL twice over, and not an open decision: the line was meetable (the owner
+  took the builder's option and gate 2 met it as written).
+- **repo-46, gate 3: PASS, was CONCERNS.** Done when 1 and 3 can only be proven
+  by the first release commit after the merge: **awaiting**, with the commit and
+  the lockfile change as the reading. Nothing else in the round was above low.
+- **dl-73, gate 2: PASS, was CONCERNS.** Done when 2 has one clause only the
+  first real bump pull request can prove, and the rest was proven by the pull
+  request's own run: **awaiting**, for that clause.
+- **repo-89, two `unproven (gate)` rows: the rule moves the second, not the
+  first.** "The slow step is named" is read from the pull request's own
+  `windows-latest` run before the merge, so it stays `unproven (gate)` until
+  that leg has run on the head. "Three consecutive `windows-latest` runs" is
+  **awaiting**, because the ticket's own Log counts runs on `main` after the
+  merge towards the three. A line that asked for three runs of the pull request
+  itself would not move: it is the leg's to run.
+- **A faithful build of a line it cannot meet, with no contradicting test: the
+  open-decision row, CONCERNS.** A search of every `## Review` on 2026-10-06
+  found no gate section with this as its sole cause; three carry it as one
+  finding inside a FAIL for something else:
+  dl-73 gate 1 F2 (a `med`: Done when 2 asked for a red check "before it can
+  merge" where nothing blocks the merge, and the owner reworded the line),
+  repo-60 gate 1 (an open decision on a parenthetical no fix could meet) and
+  dl-74 gate 1 finding 6 (a `low`: Done when 1 could not be met by a build that
+  documents the retirement). Under this rule each is a `med` the line depends
+  on; dl-74's was graded `low` and would be regraded.
+- **An excused check: lg-5's Done when 4, "Gates green" (provisional).** Both of
+  its gates recorded `unproven (gate)`: every check passed but code-scanning
+  `CodeQL`, which the owner had excused until merge under adr/005. When the
+  Log records that decision, its options and who gave it, and every other check
+  is green on this head, the row is **awaiting**: the event is the push to
+  `main` that runs the dismissal step in `security.yml`, and the reading is the
+  alerts' state on `main` afterwards. The gate does not grant an excusal and
+  does not count a red check as green: with no recorded decision the row stays
+  `unproven (gate)`, and a red leg nobody excused is a finding.
 
 ## The section
 
@@ -143,6 +213,7 @@ is posted to the pull request thread.
 | ----------------------------------------- | ---------------------------------------------------------------- |
 | Run over HTTP leaves a `PlanDetail`       | `api/test/runs.test.ts` › "a run over HTTP leaves a PlanDetail" ✓ |
 | Image ships every workspace `api` imports | **unproven (gate)** — planner.yml's container job, not yet run   |
+| A release changes the lockfile            | **awaiting** — the first release commit after the merge; its diff touches `package-lock.json` |
 
 - **med** · no `Done when` line depends on it · `Dockerfile` lists workspaces by
   hand in two places and nothing typechecks the list.

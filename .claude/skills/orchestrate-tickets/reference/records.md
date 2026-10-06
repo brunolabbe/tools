@@ -45,6 +45,13 @@ nothing back.
   what landed goes back to the gate, never into the record.
 - **`done`, or `in-flight` for work that lands partial.** No commit carries a
   record on a `ready` ticket: `status.mjs` fails one.
+- **An `awaiting` row means an `awaiting:` line, committed before `--land`.**
+  `gate.md` grades a line whose only proof is an event after the merge
+  `awaiting`, and a gate never edits frontmatter, so the lander writes the
+  ticket's one `awaiting:` line, in the form `docs/01-TICKETS.md` gives, naming
+  every such row and the event that closes it. `--land` refuses a ticket dirty
+  against `HEAD`, so the line is its own commit just before it, in the same
+  push. A ticket whose tables carry no `awaiting` row gets no line.
 - **A gate that runs after the records are committed** — a narrow check on a
   post-PR fix — lands its own file alone with the same command. Do not pass the
   already-committed files again: that adds a second `## Review`.
