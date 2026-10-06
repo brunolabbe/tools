@@ -9,6 +9,8 @@
  * fails minutes later on a queue worker, so that line is asserted directly.
  */
 
+import { connect } from "node:net";
+import type { AddressInfo } from "node:net";
 import { AppError, REDACTED, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, RequestContext } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
@@ -732,14 +734,16 @@ describe("a thumbnail token never reaches a log line", () => {
 });
 
 describe("redactLoggedUrl", () => {
-  test("replaces the capability segment and nothing else", () => {
+  test("replaces the capability path and nothing else", () => {
     expect(redactLoggedUrl(ROUTES.file("abc"))).toBe(`/api/files/${REDACTED}`);
     expect(redactLoggedUrl(ROUTES.thumbnail("abc"))).toBe(`/api/thumbnail/${REDACTED}`);
     expect(redactLoggedUrl(`${ROUTES.thumbnail("abc")}?x=1`)).toBe(
       `/api/thumbnail/${REDACTED}?x=1`,
     );
     expect(redactLoggedUrl(`${ROUTES.file("abc")}?x=1`)).toBe(`/api/files/${REDACTED}?x=1`);
-    expect(redactLoggedUrl(`${ROUTES.file("abc")}/extra`)).toBe(`/api/files/${REDACTED}/extra`);
+    // dl-76: the whole path after the prefix goes, not its first segment. It was
+    // `…/[redacted]/extra`, which is what let `/api/files//<t>` keep its token.
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}/extra`)).toBe(`/api/files/${REDACTED}`);
   });
 
   test("leaves identifiers alone", () => {
@@ -754,16 +758,18 @@ describe("redactLoggedUrl", () => {
     // credential-handling code "someone checked once" is not a guarantee.
     const prefix = ROUTES.file("");
 
-    // A trailing slash: the segment ends, the slash survives.
-    expect(redactLoggedUrl(`${ROUTES.file("abc")}/`)).toBe(`${prefix}${REDACTED}/`);
+    // A trailing slash is part of the path after the prefix, so it goes with it (dl-76).
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}/`)).toBe(`${prefix}${REDACTED}`);
     // Percent-encoded: still one segment, and still replaced whole.
     expect(redactLoggedUrl(ROUTES.file("a%2Fb"))).toBe(`${prefix}${REDACTED}`);
     // Empty token. Fastify will not route it, but the hooks log what arrived.
     expect(redactLoggedUrl(prefix)).toBe(`${prefix}${REDACTED}`);
-    // A double slash — the token is empty and the rest is kept as it came.
-    expect(redactLoggedUrl(`${prefix}/abc`)).toBe(`${prefix}${REDACTED}/abc`);
-    // Regex metacharacters in the token. `startsWith` and `slice` are used
-    // rather than a constructed pattern precisely so this cannot matter.
+    // A double slash. The first segment is empty and the token is the second,
+    // so what follows goes too: it was `…/[redacted]/abc` until dl-76, which
+    // is the shape that leaked.
+    expect(redactLoggedUrl(`${prefix}/abc`)).toBe(`${prefix}${REDACTED}`);
+    // Regex metacharacters in the token. Prefixes are compared as segments,
+    // not built into a pattern, precisely so this cannot matter.
     expect(redactLoggedUrl(ROUTES.file(".*+^${}()|[]\\"))).toBe(`${prefix}${REDACTED}`);
     // With a `?` among them the cut lands at the query delimiter, which is
     // right: a real token is base64url, so `?` `#` and `/` are never part of
@@ -780,12 +786,12 @@ describe("redactLoggedUrl", () => {
     // `assertRealPathInside` is what answers traversal; this only has to not
     // leak while it happens.
     expect(redactLoggedUrl(`${ROUTES.file("..")}/etc/passwd`)).toBe(
-      `${ROUTES.file("")}${REDACTED}/etc/passwd`,
+      `${ROUTES.file("")}${REDACTED}`,
     );
   });
 
   test("a path that merely looks like the route is not treated as one", () => {
-    // `startsWith` on a prefix ending in `/` cannot match `/api/filesomething`.
+    // Segments are compared whole, so `/api/filesomething` is not `/api/files`.
     expect(redactLoggedUrl("/api/filesomething")).toBe("/api/filesomething");
   });
 });
@@ -1098,5 +1104,195 @@ describe("safeFields redacts every reference to a shared object, not only the fi
     expect(lines).toHaveLength(1);
     expect(JSON.stringify(lines[0])).not.toContain("PARENT");
     expect(JSON.stringify(lines[0])).toContain("h.example");
+  });
+});
+
+/**
+ * dl-76. A capability token must stay out of the log however its path is spelled.
+ *
+ * `redactLoggedUrl` used to prefix-match the raw `request.url`, but Fastify's
+ * router matches after normalising, and a client (or a proxy) can spell the same
+ * route in ways the raw prefix never matches: `/api/%74humbnail/<t>` served the
+ * image and logged the token in full. Every shape here was measured against the
+ * running app, on both routes, before the fix: some reach a handler, the rest
+ * are 404s with the token still in the line. They read the raw serialised lines,
+ * as the tests above do.
+ */
+describe("a capability token never reaches a log line, however its path is spelled", () => {
+  const GIF = Buffer.from("R0lGODlhAgACAIAAAP///wAAACH5BAAAAAAALAAAAAACAAIAAAIDRAJZADs=", "base64");
+
+  /** `name` is the route's own segment, `files` or `thumbnail`. */
+  type Spelling = (name: string, token: string) => string;
+
+  const hex = (text: string): string => (text.codePointAt(0) ?? 0).toString(16);
+
+  const SPELLINGS: Array<[string, Spelling]> = [
+    ["canonical (control)", (n, t) => `/api/${n}/${t}`],
+    ["an encoded first letter of the route", (n, t) => `/api/%${hex(n)}${n.slice(1)}/${t}`],
+    ["an encoded first character of the token", (n, t) => `/api/${n}/%${hex(t)}${t.slice(1)}`],
+    ["a doubled leading slash", (n, t) => `//api/${n}/${t}`],
+    ["a doubled slash inside the prefix", (n, t) => `/api//${n}/${t}`],
+    ["an encoded slash before the token", (n, t) => `/api/${n}%2F${t}`],
+    ["an upper-cased route", (n, t) => `/API/${n.toUpperCase()}/${t}`],
+    ["a doubled slash before the token", (n, t) => `/api/${n}//${t}`],
+    ["an encoded query delimiter", (n, t) => `/api/${n}%3F${t}`],
+    ["an encoded fragment delimiter", (n, t) => `/api/${n}%23${t}`],
+    ["a twice-encoded route", (n, t) => `/api/%25${hex(n)}${n.slice(1)}/${t}`],
+    ["a path parameter on the route segment", (n, t) => `/api/${n};x=1/${t}`],
+    ["a trailing slash", (n, t) => `/api/${n}/${t}/`],
+  ];
+
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  async function tokens(current: Harness): Promise<{ files: string; thumbnail: string }> {
+    return {
+      files: (await issuedToken(current)).token,
+      thumbnail: current.app.context.thumbnails.put({ contentType: "image/gif", bytes: GIF }),
+    };
+  }
+
+  describe.each(["files", "thumbnail"] as const)("on /api/%s/:token", (name) => {
+    test.each(SPELLINGS)("%s", async (_label, spell) => {
+      const { logger, lines } = capturing();
+      harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+      const token = (await tokens(harness))[name];
+      lines.length = 0;
+
+      await harness.app.server.inject({ method: "GET", url: spell(name, token) });
+
+      const serialised = lines.map((line) => JSON.stringify(line));
+      // Genuinely logged, or this passes by writing nothing.
+      expect(lines.filter((line) => line.msg === "request")).toHaveLength(1);
+      // `slice(1)`: the encoded-first-character spelling never carries the whole token.
+      expect(serialised.filter((line) => line.includes(token.slice(1)))).toEqual([]);
+      // Redaction, not deletion: the line still says which route it was.
+      for (const line of lines.filter((l) => l.url !== undefined)) {
+        expect(line.url).toBe(`/api/${name}/${REDACTED}`);
+      }
+    });
+  });
+
+  test("the encoded spellings do reach a handler, which is what makes them an exposure", async () => {
+    // Guards the premise: if Fastify stopped decoding the route, the cases above
+    // would still pass by 404ing, and the exposure they stand for would be gone
+    // without anyone noticing the tests had stopped meaning anything.
+    const { logger } = capturing();
+    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+    const issued = await tokens(harness);
+
+    const image = await harness.app.server.inject({
+      method: "GET",
+      url: `/api/%74humbnail/${issued.thumbnail}`,
+    });
+    expect(image.statusCode).toBe(200);
+    const file = await harness.app.server.inject({
+      method: "GET",
+      url: `/api/%66iles/${issued.files}`,
+    });
+    expect(file.statusCode).not.toBe(404);
+  });
+
+  /** Request targets `light-my-request` normalises before Fastify sees them, so they need a socket. */
+  describe.each(["files", "thumbnail"] as const)("on a real socket, /api/%s/:token", (name) => {
+    const WIRE: Array<[string, Spelling]> = [
+      ["a dot segment", (n, t) => `/api/./${n}/${t}`],
+      ["a dot-dot segment", (n, t) => `/api/x/../${n}/${t}`],
+      ["an encoded dot segment", (n, t) => `/api/%2e/${n}/${t}`],
+      ["a backslash for the slash", (n, t) => `/api\\${n}/${t}`],
+      ["an absolute-form request target", (n, t) => `http://localhost/api/${n}/${t}`],
+      ["a token followed by dot-dot segments", (n, t) => `/api/${n}/${t}/../..`],
+    ];
+
+    test.each(WIRE)("%s", async (_label, spell) => {
+      const { logger, lines } = capturing();
+      harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+      const token = (await tokens(harness))[name];
+      await harness.app.server.listen({ port: 0, host: "127.0.0.1" });
+      const { port } = harness.app.server.server.address() as AddressInfo;
+      lines.length = 0;
+
+      await rawGet(port, spell(name, token));
+      await waitFor(
+        () => lines.some((line) => line.msg === "request"),
+        (logged) => logged,
+        { label: "the request line" },
+      );
+
+      expect(lines.map((line) => JSON.stringify(line)).filter((l) => l.includes(token))).toEqual(
+        [],
+      );
+      for (const line of lines.filter((l) => l.url !== undefined)) {
+        expect(line.url).toBe(`/api/${name}/${REDACTED}`);
+      }
+    });
+  });
+});
+
+/** One GET with the request target written verbatim, which `inject` will not do. */
+function rawGet(port: number, target: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(port, "127.0.0.1", () => {
+      socket.write(`GET ${target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+    });
+    socket.on("data", () => undefined);
+    socket.on("error", reject);
+    socket.on("close", () => resolve());
+  });
+}
+
+describe("redactLoggedUrl, on spellings the router would not match", () => {
+  const expected = `/api/files/${REDACTED}`;
+
+  test("redacts the whole path after the prefix, not only its first segment", () => {
+    // `/api/files//<t>` has an empty first segment and the token in the second.
+    expect(redactLoggedUrl("/api/files//abc")).toBe(expected);
+    expect(redactLoggedUrl("/api/files/abc/extra")).toBe(expected);
+    expect(redactLoggedUrl("/api/files/abc/")).toBe(expected);
+  });
+
+  test("keeps the query string and the fragment, which are not the credential", () => {
+    expect(redactLoggedUrl("/api/%66iles/abc?x=1")).toBe(`${expected}?x=1`);
+    expect(redactLoggedUrl("//api//files//abc#frag")).toBe(`${expected}#frag`);
+  });
+
+  test("resolves what a normaliser would, without trusting it to hide a token", () => {
+    expect(redactLoggedUrl("/api/x/../files/abc")).toBe(expected);
+    // The token comes first and the dot-dots after it: resolving to the end
+    // would land on `/api` and find nothing, which is why it is checked as it goes.
+    expect(redactLoggedUrl("/api/files/abc/../../..")).toBe(expected);
+    expect(redactLoggedUrl("/API/FILES/abc")).toBe(expected);
+    expect(redactLoggedUrl("/api/files%2Fabc")).toBe(expected);
+    expect(redactLoggedUrl("/api/files%3Fabc")).toBe(expected);
+    expect(redactLoggedUrl("/api%5Cfiles%5Cabc")).toBe(expected);
+  });
+
+  test("leaves a malformed percent escape alone rather than throwing", () => {
+    expect(redactLoggedUrl("/api/files/ab%zzc")).toBe(expected);
+    expect(redactLoggedUrl("/api/jobs/%zz")).toBe("/api/jobs/%zz");
+  });
+
+  test("still leaves every other URL exactly as it arrived", () => {
+    for (const url of [
+      "/api/jobs",
+      "/api/jobs?limit=5",
+      "/api/jobs/job-1/events",
+      "/api/health",
+      "/api/filesomething",
+      "/api/thumbnails/x",
+      "/files/api/x",
+      "/",
+    ]) {
+      expect(redactLoggedUrl(url)).toBe(url);
+    }
+  });
+
+  test("a long run of escapes costs a bounded number of passes", () => {
+    const url = `/api/jobs/${"%25".repeat(5000)}`;
+    expect(redactLoggedUrl(url)).toBe(url);
   });
 });

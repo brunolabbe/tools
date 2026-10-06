@@ -99,3 +99,71 @@ this ticket.
   choice over folding it into dl-75 or recording it only; the gate recommended
   filing. The table and the proposed direction are the gate's, not measured again
   here. Not built.
+- 2026-10-06 — Built (branch `dl-76-noncanonical-path`, base `4907d9a`).
+
+  **The table, re-measured at the base.** Every row held: `server.inject` against
+  the real app (`createHarness`, logger at debug, raw lines read), both routes.
+  `/api/%74humbnail/<t>` 200 and `/api/%66iles/<t>` 410, token in the `request`
+  line (and in both lines for the file route); `//api/…`, `/api//thumbnail/…`,
+  `/api/thumbnail%2F<t>`, `/API/THUMBNAIL/<t>` 404 with the token in full;
+  `/api/thumbnail//<t>` logged `/api/thumbnail/[redacted]/<t>`; the query-string,
+  fragment, trailing-slash, semicolon-suffix, `HEAD`, `POST` and
+  percent-encoded-token-character rows did not leak; a malformed escape (`%zz`)
+  was a 400 with no line. **The table was short**, because `inject` normalises
+  the target before Fastify sees it: over a real socket (`net.connect`, Node's
+  server on 127.0.0.1) these also logged the token in full, on both routes, and
+  were not in the table: `/api/./thumbnail/<t>` and `/api/x/../thumbnail/<t>`
+  (404), `/api/%2e/…` (404), `/api\thumbnail/<t>` (404), the absolute-form target
+  `http://localhost/api/thumbnail/<t>` (**200, served**, and 410 on the file
+  route), plus, over `inject`, `/api/thumbnail%3F<t>` and `%23<t>` (404) and the
+  twice-encoded `/api/%2574humbnail/<t>` (404).
+
+  **The design, and the one the ticket proposed.** Not "redact on the matched
+  route": the five 404 shapes match no route, so that needs a second mechanism for
+  them anyway, and the route-matched one would leave the absolute-form, dot-segment
+  and backslash targets that 404 or are served just the same. So one mechanism
+  that does not consult the router: `redactLoggedUrl` splits off the raw query
+  string and fragment, then reads the path as a normaliser would and asks "does it
+  end in a capability prefix" **after every segment** (percent escapes undone up to
+  three passes, `\` as `/`, empty and `.` segments dropped, `..` popping, case
+  folded, a `;…` path parameter and a decoded `?`/`#` cut off a segment). The first
+  hit logs the route's canonical prefix plus `[redacted]` and **drops the rest of
+  the path** (the old code kept everything after the first segment, which is the
+  `/api/thumbnail//<t>` leak). It looks for the prefix anywhere in the path, not
+  only at the root, which is what catches the absolute-form target. `ROUTES` and
+  the contract are unchanged, so there was no decision to put to the owner.
+
+  **Which 404 shapes are covered: all five**, on both routes, by
+  `logging.test.ts > a capability token never reaches a log line, however its path is
+spelled` (`a doubled leading slash`, `a doubled slash inside the prefix`, `an
+encoded slash before the token`, `an upper-cased route`, `a doubled slash before
+the token`), plus every other shape above, the wire-only ones under `on a real
+socket`. **Left open, named:** a spelling no normaliser would turn into the route
+  (a NUL or a Unicode confusable inside the route name, more than three layers of
+  encoding), which reaches no handler and so can only land a token the caller chose
+  to mangle in a 404 line; and a credential carried in the query string, which is
+  not what this ticket redacts. **Unmeasured:** whether a proxy in front of the
+  service re-encodes a path (the ticket's own gap); all measurements are Node's
+  server on loopback.
+
+  **Costs, recorded.** A non-canonical spelling now reads
+  `/api/files/[redacted]` with its status beside it, so the line no longer says
+  which odd shape the caller chose. A path like `/x/api/files/y` is redacted
+  though no route answers it. Four assertions in the existing `redactLoggedUrl`
+  tests pinned "the rest of the path is kept as it came" (`…/[redacted]/extra`,
+  `…/[redacted]/`, `…/[redacted]/abc`, `…/[redacted]/etc/passwd`) and were changed
+  to the whole-remainder form, with a comment saying why.
+
+  **Red before green.** 40 of 94 in `logging.test.ts` fail against the base
+  `request-log.ts` (restored from `origin/main`, test file as written), 0 of 94
+  after. The two the ticket names, `on /api/thumbnail/:token > an encoded first
+letter of the route` and the `files` twin, fail on `expected [ Array(1) ] to deeply
+equal []` with the `request` line's `url":"/api/%74humbnail/<t>"` in it. A first
+  red run of the socket cases failed for the wrong reason (a misused `waitFor`) and
+  was not counted; the 40 is the second run, after that was fixed.
+
+  **Fold-in.** `routes/thumbnail.ts` named `CAPABILITY_PREFIXES` in a comment; the
+  constant is now `CAPABILITY_ROUTES`, so that comment was updated in the same
+  commit. Not folded: `registerNotFoundHandler` echoes the raw path in the 404
+  _response_ body (`details.path`), which is the requester's own input going back
+  to them and not a log line, and nothing specifies changing it.

@@ -45,7 +45,7 @@ export function requestIdFrom(request: { headers: Record<string, unknown> }): st
 }
 
 /**
- * Path prefixes whose next segment is a **credential rather than an identifier**.
+ * Routes whose path after the prefix is a **credential rather than an identifier**.
  *
  * Two qualify: the file token and the thumbnail token (dl-75). It was one until
  * dl-75, which asked whether the thumbnail token counts and was answered yes on
@@ -60,7 +60,79 @@ export function requestIdFrom(request: { headers: Record<string, unknown> }): st
  * Taken from `ROUTES` rather than written out, so a route that moves takes its
  * redaction with it.
  */
-const CAPABILITY_PREFIXES: readonly string[] = [ROUTES.file(""), ROUTES.thumbnail("")];
+const CAPABILITY_ROUTES: ReadonlyArray<{ prefix: string; segments: readonly string[] }> = [
+  ROUTES.file(""),
+  ROUTES.thumbnail(""),
+].map((prefix) => ({ prefix, segments: prefix.split("/").filter((s) => s !== "") }));
+
+/**
+ * How many times a percent escape is undone before a path is read.
+ *
+ * Fastify decodes once, so a second layer is what a proxy that re-encodes would
+ * add, and a third is margin. Each pass is a linear scan, and a request line is
+ * capped by Node's header limit, so a larger bound would only be an amplifier
+ * for whoever sends `%25%25%25…`. A spelling needing more passes than this is
+ * one no router in front of this service would resolve to a route either.
+ */
+const MAX_DECODE_PASSES = 3;
+
+/**
+ * Undoes percent escapes without ever throwing, which `decodeURIComponent`
+ * does on a malformed one — and a log line must not cost the request.
+ * Byte-wise, because only ASCII (`/`, `\`, letters, `.`) decides a match.
+ */
+function decodeEscapes(path: string): string {
+  let current = path;
+  for (let pass = 0; pass < MAX_DECODE_PASSES; pass += 1) {
+    const next = current.replace(/%([0-9a-f]{2})/giu, (_escape, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * The canonical prefix of the capability route this path *could* be spelling,
+ * or `undefined` when it is not one.
+ *
+ * Fastify's router matches after normalising, so the raw `request.url` of a
+ * request that reached a handler need not start with the route: `/api/%74humbnail/<t>`
+ * served the image, and `/api/%66iles/<t>` reached the file handler (dl-76).
+ * Other spellings miss every route and 404 with the token still in the line.
+ * So this reads the path the way a normaliser would, and **asks the question at
+ * every step rather than at the end**: percent escapes undone, `\` as `/`, empty
+ * and `.` segments dropped, `..` popping, case folded, and anything from a `;`
+ * (a path parameter) or a decoded `?` / `#` on a segment ignored. The first time
+ * the segments so far end in a capability prefix, that is the answer — checked as
+ * it goes, because `/api/files/<t>/../..` resolves to `/api` and a check at the end
+ * would find nothing while the token sat in the line.
+ *
+ * It looks for the prefix **anywhere**, not only at the root, because an
+ * absolute-form request target (`http://host/api/files/<t>`) is logged whole
+ * and is served. That over-redacts a path like `/x/api/files/y`, which no route
+ * answers and which nothing needs to read; the other direction costs a credential.
+ */
+function capabilityPrefixOf(path: string): string | undefined {
+  const stack: string[] = [];
+  for (const raw of decodeEscapes(path).split(/[/\\]/u)) {
+    const name = (raw.split(/[;?#]/u, 1)[0] ?? "").toLowerCase();
+    if (name === "" || name === ".") continue;
+    if (name === "..") {
+      stack.pop();
+      continue;
+    }
+    stack.push(name);
+    for (const route of CAPABILITY_ROUTES) {
+      const start = stack.length - route.segments.length;
+      if (start >= 0 && route.segments.every((segment, i) => stack[start + i] === segment)) {
+        return route.prefix;
+      }
+    }
+  }
+  return undefined;
+}
 
 /**
  * The form of a request URL that is safe to log.
@@ -74,18 +146,24 @@ const CAPABILITY_PREFIXES: readonly string[] = [ROUTES.file(""), ROUTES.thumbnai
  * preserves verbatim. Reaching for it would have replaced a leak with a blind
  * request log and still leaked.
  *
- * So: one segment, named by the contract, replaced. Everything else — query
- * strings, job ids, the health path — is left exactly as it arrived, because
- * that is the diagnostic value the request log exists for.
+ * So: a path that is, however spelled, a capability route's is logged as that
+ * route's canonical prefix plus `[redacted]`, **the whole of its path after the
+ * prefix** (not one segment: `/api/files//<t>` holds the token in its second) —
+ * and its query string, which is not the credential, as it arrived. Everything
+ * else — job ids, the health path, any other URL — is left exactly as it
+ * arrived, because that is the diagnostic value the request log exists for.
+ *
+ * What a non-canonical spelling costs the reader is the spelling itself: the
+ * line says `/api/files/[redacted]` with a 404 beside it, not which odd shape
+ * the caller chose. That is the price of not having to enumerate them.
  */
 export function redactLoggedUrl(url: string): string {
-  for (const prefix of CAPABILITY_PREFIXES) {
-    if (!url.startsWith(prefix)) continue;
-    const rest = url.slice(prefix.length);
-    const boundary = rest.search(/[/?#]/u);
-    return `${prefix}${REDACTED}${boundary === -1 ? "" : rest.slice(boundary)}`;
-  }
-  return url;
+  // Split on the raw delimiters, as the router does, so a `%3F` stays in the path.
+  const boundary = url.search(/[?#]/u);
+  const path = boundary === -1 ? url : url.slice(0, boundary);
+  const prefix = capabilityPrefixOf(path);
+  if (prefix === undefined) return url;
+  return `${prefix}${REDACTED}${boundary === -1 ? "" : url.slice(boundary)}`;
 }
 
 /**
