@@ -15,7 +15,7 @@
  * with no DOM lib. Values interpolated into a script are JSON-encoded.
  */
 
-import type { Frame, Page } from "playwright";
+import type { Frame, Locator, Page } from "playwright";
 import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
 import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
@@ -37,8 +37,76 @@ const CONSENT_SELECTORS: readonly string[] = [
   "[id*='cookie'] button[id*='accept' i]",
 ];
 
-/** Text-matched fallback in the languages we see most often. */
-const CONSENT_TEXT =
+/**
+ * Text-matched fallback in the languages we see most often, with one or more
+ * entries per language so a gap is one more alternative and the whole stays one
+ * anchored pattern (`AGE_GATE_TEXT`'s rule: an alternative, not a new branch).
+ *
+ * **A label, never a sentence, and never a generic word.** The pattern is
+ * anchored at both ends, so a sentence containing "agree" is not a button. The
+ * only generic bare words are the English "continue" and "ok" that were here first;
+ * nothing new may be that generic, because the revisits skip consent text
+ * precisely since a page repeats such words (see `revisitOverlays`), and the
+ * same words as pagination or a vote button are what an unanchored match would
+ * press (dl-82). No "enter the site" label either: on a gated page that is an
+ * age or terms attestation, which belongs to the age gate, not to consent.
+ *
+ * **This pattern is matched only inside a consent container** (a dialog, or a
+ * fixed or sticky layer — `dismissConsent`), never across the whole frame. The
+ * acknowledgement phrasings it added ("Ho capito", "Yes, I agree", "Agree and
+ * continue", "Sono d'accordo") are also the labels of a newsletter's dismiss
+ * button, a comment form's submit and a review vote, and a whole-frame match
+ * pressed those, in DOM order, ahead of the real consent dialog (dl-82's gate).
+ * What `CONSENT_TEXT_ANYWHERE` held before keeps its old reach.
+ *
+ * `&` and "and" both join a verb to its follow-up in English; the other
+ * languages carry their own conjunction in the entry. The apostrophe is
+ * either, since a CMS often emits the typographic one.
+ */
+const APOS = "['’]";
+const CONSENT_PHRASES: readonly string[] = [
+  // English
+  String.raw`(?:accept(?: all)?(?: cookies)?|allow all(?: cookies)?)(?: (?:and|&) (?:continue|close))?`,
+  String.raw`i accept`,
+  String.raw`(?:yes,? )?(?:i )?agree(?: (?:and|&) (?:continue|close))?`,
+  String.raw`got it|ok|okay|continue|understood`,
+  // German
+  String.raw`(?:(?:alles|alle(?: cookies)?) )?akzeptieren(?: und (?:weiter|schließen))?|ich akzeptiere`,
+  String.raw`zustimmen(?: und (?:weiter|schließen))?|ich stimme zu|einverstanden`,
+  // French
+  String.raw`(?:tout accepter|accepter(?: tout| les cookies)?)(?: et (?:continuer|fermer))?`,
+  String.raw`j${APOS}accepte|je suis d${APOS}accord`,
+  // Spanish
+  String.raw`aceptar(?: todo| todas| cookies)?(?: y (?:continuar|cerrar|seguir))?`,
+  String.raw`acepto|estoy de acuerdo`,
+  // Portuguese
+  String.raw`aceitar(?: tudo| todos)?(?: e (?:continuar|fechar|prosseguir))?`,
+  String.raw`aceito|concordo`,
+  // Italian
+  String.raw`accetta(?: tutto| tutti)?(?: e (?:continua|chiudi|prosegui))?`,
+  String.raw`accetto(?: e continua)?|acconsento(?: e continua)?|sono d${APOS}accordo|ho capito`,
+  // Dutch
+  String.raw`(?:accepteer(?: alles)?|(?:alles )?accepteren)(?: en (?:doorgaan|sluiten))?`,
+  String.raw`akkoord|ga akkoord|ik ga akkoord|ik accepteer`,
+  // Swedish
+  String.raw`godkänn(?: alla)?(?: och fortsätt)?|acceptera(?: alla)?|jag godkänner|jag accepterar`,
+  // Polish
+  String.raw`zgadzam się(?: i przechodzę do serwisu)?|akceptuję(?: wszystko)?|zaakceptuj(?: wszystko)?`,
+  // Russian
+  String.raw`принять(?: все| и (?:продолжить|закрыть))?|(?:я )?согласен|(?:я )?согласна|понятно`,
+];
+
+export const CONSENT_TEXT = new RegExp(`^\\s*(?:${CONSENT_PHRASES.join("|")})\\s*[.!]?\\s*$`, "i");
+
+/**
+ * The exact pattern the whole frame was searched with before dl-82, kept
+ * verbatim and kept at its old reach: a cookie strip that is neither a dialog
+ * nor a fixed layer still gets its "Accept" pressed, as it always did. Nothing
+ * is added here; a new phrasing goes in `CONSENT_PHRASES` and so is pressed only
+ * inside a consent container. Every phrasing here is also in `CONSENT_TEXT`
+ * (pinned by a test), so the container pass can never press less than this.
+ */
+export const CONSENT_TEXT_ANYWHERE =
   /^\s*(?:accept(?: all| cookies| and continue)?|i accept|agree|i agree|allow all|got it|ok|okay|continue|understood|alles akzeptieren|akzeptieren|zustimmen|einverstanden|tout accepter|accepter|j'accepte|aceptar( todo)?|acepto|aceitar|accetta(?: tutto)?|accetto|akkoord|godkänn|zgadzam się|принять)\s*$/i;
 
 /**
@@ -570,11 +638,226 @@ async function clickByText(frame: Frame, pattern: RegExp, timeoutMs: number): Pr
   return false;
 }
 
-export async function dismissConsent(frame: Frame, timeoutMs: number): Promise<number> {
+/** Marks a consent container, so the text match is scoped to it through the locator API (dl-82). */
+const CONSENT_ZONE_MARK = "data-downloader-consent-zone";
+
+/** The two values `CONSENT_ZONE_MARK` takes: a layer that speaks of consent, and a bare dialog. */
+const ZONE_CONSENT = "consent";
+const ZONE_DIALOG = "dialog";
+
+/**
+ * What a consent layer says about itself, by language: the cookie or the
+ * consent it asks for. A fixed or sticky layer is a consent container only when
+ * its text carries one of these (dl-82's gate 2); a semantic dialog is one
+ * regardless.
+ *
+ * Why the wording: "fixed or sticky" alone takes in a sticky site header with a
+ * "Ho capito" notice in it and a docked checkout bar with a submit button,
+ * neither of which is consent, and the header sits ahead of a bottom consent bar
+ * in the document. "Accept", "agree" and "continue" are not on the list on
+ * purpose: they are the labels being matched, and a checkout bar says "accept our
+ * terms". Nor is "privacy": a checkout bar links its privacy policy as readily
+ * as a consent bar does, and a missed consent layer costs nothing (the old
+ * pattern still reaches it, as it did before dl-82) where a pressed submit does.
+ *
+ * **A word start, and for the short or ambiguous roots a word end** (dl-82's
+ * gate 3). A bare substring matched ordinary prose: Italian "consente" and
+ * "consentito" ("allows", "allowed"), Swedish "pannkakor" and "sockerkakor",
+ * French "les témoins de l'accident", Russian "Кукиш". So every alternative must
+ * start where no letter precedes it (`(?<!\p{L})`, which, unlike `\b`, sees
+ * Cyrillic: that needs the `u` flag), and where a root is also the start of
+ * unrelated words its end is fixed too: "consent" takes only the inflections
+ * written out ("consentement", "consentimiento", "consentimento", a plural
+ * "s") and then a non-letter; "kakor", "куки", "gdpr" and "rodo" end at a
+ * non-letter; "témoins" counts only as "témoins de connexion/navigation/suivi"
+ * or "fichiers témoins". "cookie", "ciasteczk" and the other roots with no
+ * unrelated continuation stay open at the end, so "cookies" and
+ * "Cookie-Einstellungen" match.
+ */
+export const CONSENT_WORDING =
+  /(?<!\p{L})(?:cookie|ciasteczk|ciasteczek|kakor(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+
+/**
+ * Marks the nearest consent container of every link and button: an ancestor
+ * that is a semantic dialog, or is `fixed` or `sticky` **and** whose visible prose
+ * (not its links, not its hidden nodes) speaks of consent (`CONSENT_WORDING`).
+ * Each mark's value says which, so a layer that speaks of
+ * consent is tried before a bare dialog. A cookie wall is far more often a layer
+ * than a block in the page's flow, and a newsletter, a checkout form and a review
+ * list are in the flow. One walk per control, memoised per ancestor, so a page
+ * with thousands of links costs one style read per distinct ancestor. Open shadow
+ * roots are not entered: a control inside one is outside every zone, and the
+ * old whole-frame match still reaches it.
+ */
+const MARK_CONSENT_ZONES_SCRIPT = `(() => {
+  var semantic = ${JSON.stringify(SEMANTIC_DIALOG)};
+  var wording = new RegExp(${JSON.stringify(CONSENT_WORDING.source)}, ${JSON.stringify(CONSENT_WORDING.flags)});
+  var zoneOf = new Map();
+  var tierOf = new Map();
+  // What a person reading the layer would read: its text nodes, minus anything
+  // inside a link (a "Cookie policy" nav link is not a sentence about cookies)
+  // and anything not rendered, such as a hidden menu, a script or a style.
+  // textContent keeps all of those, and innerText drops the unrendered ones but
+  // keeps the links.
+  var prose = function (layer) {
+    var seen = new Map();
+    var parts = [];
+    var walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    for (var t = walker.nextNode(); t; t = walker.nextNode()) {
+      var p = t.parentElement;
+      if (!p) continue;
+      if (!seen.has(p)) {
+        var inLink = false;
+        for (var a = p; a; a = a.parentElement) {
+          if (a.matches('a, [role="link"]')) {
+            inLink = true;
+            break;
+          }
+          if (a === layer) break;
+        }
+        seen.set(p, !inLink && p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }));
+      }
+      if (seen.get(p)) parts.push(t.nodeValue);
+    }
+    return parts.join(' ');
+  };
+  // The mark a layer earns, or null when it is not a consent container.
+  var tier = function (n) {
+    if (wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
+    return n.matches(semantic) ? ${JSON.stringify(ZONE_DIALOG)} : null;
+  };
+  var find = function (el) {
+    var chain = [];
+    var found = null;
+    for (var n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      if (zoneOf.has(n)) {
+        found = zoneOf.get(n);
+        break;
+      }
+      chain.push(n);
+      var position = getComputedStyle(n).position;
+      if (n.matches(semantic) || position === 'fixed' || position === 'sticky') {
+        var earned = tier(n);
+        if (earned !== null) {
+          tierOf.set(n, earned);
+          found = n;
+          break;
+        }
+      }
+    }
+    for (var i = 0; i < chain.length; i++) zoneOf.set(chain[i], found);
+    return found;
+  };
+  var marked = 0;
+  var controls = document.querySelectorAll('button, a, [role="button"], [role="link"], input[type="button"], input[type="submit"]');
+  for (var j = 0; j < controls.length; j++) {
+    var zone = find(controls[j]);
+    if (zone && !zone.hasAttribute(${JSON.stringify(CONSENT_ZONE_MARK)})) {
+      zone.setAttribute(${JSON.stringify(CONSENT_ZONE_MARK)}, tierOf.get(zone));
+      marked += 1;
+    }
+  }
+  return marked;
+})()`;
+
+const UNMARK_CONSENT_ZONES_SCRIPT = `(() => {
+  var marked = document.querySelectorAll('[${CONSENT_ZONE_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(CONSENT_ZONE_MARK)});
+})()`;
+
+/**
+ * Presses a button or link whose whole label is a `pattern` match, among the
+ * descendants of `scope`.
+ */
+async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number): Promise<boolean> {
+  for (const role of ["button", "link"] as const) {
+    try {
+      const locator = scope.getByRole(role, { name: pattern }).first();
+      if (!(await locator.isVisible({ timeout: 150 }))) continue;
+      await locator.click({ timeout: timeoutMs });
+      return true;
+    } catch {
+      // No such control in this scope.
+    }
+  }
+  return false;
+}
+
+/**
+ * The text-matched consent step, in two reaches (dl-82).
+ *
+ * **Inside a consent container, the full `CONSENT_TEXT`**: a semantic dialog,
+ * or a fixed or sticky layer **whose visible prose speaks of consent**
+ * (`CONSENT_WORDING`; a link's text and a hidden node do not count), found by
+ * script in a frame that allows it and by dialog semantics alone in one that
+ * does not. A layer that speaks of consent is tried before a dialog that does
+ * not, so a consent layer wins over an earlier newsletter dialog.
+ *
+ * A sticky header or a docked checkout bar whose prose says nothing of consent
+ * is not a container, so its "Ho capito" and "Agree and continue" are not
+ * pressed, even when it links a cookie policy. One whose prose does speak of it
+ * is a container, and is believed: a checkout bar that says "Your cart is kept
+ * in a cookie" has its submit pressed, and so does the first widened label in a
+ * fixed app root whose footer says it uses cookies. Both differ from before
+ * dl-82 and are pinned in the tests as accepted.
+ *
+ * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
+ * searched for before this change. A widened phrasing outside a container is
+ * not a consent button: a newsletter's "Ho capito", a checkout form's "Agree
+ * and continue", a comment form's "Yes, I agree" and a review vote's "Sono
+ * d'accordo" are all pressed by a whole-frame match, and the checkout and the
+ * comment are submit buttons.
+ *
+ * **What this gives up, on purpose:** a consent strip that is not a dialog and
+ * whose text has no `CONSENT_WORDING` (it says "We value your privacy" and
+ * nothing of cookies), labelled with a phrasing newer than this change, is not
+ * pressed; it falls through to the old pattern, which is where it stood before.
+ * Likewise a layer that does speak of consent is believed: a docked checkout bar
+ * that mentions cookies would have its "Agree and continue" pressed. Another
+ * language's wording is one more `CONSENT_WORDING` alternative; a label the old
+ * pattern never knew is one more `CONSENT_PHRASES` entry, not a wider reach.
+ */
+async function clickConsentText(
+  frame: Frame,
+  scriptable: boolean,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (scriptable) {
+    let marked = 0;
+    try {
+      marked = await frame.evaluate<number>(MARK_CONSENT_ZONES_SCRIPT);
+      for (const tier of [ZONE_CONSENT, ZONE_DIALOG]) {
+        if (marked === 0) break;
+        const zones = frame.locator(`[${CONSENT_ZONE_MARK}="${tier}"]`);
+        if (await clickByTextIn(zones, CONSENT_TEXT, timeoutMs)) return true;
+      }
+    } catch {
+      // Frame navigated away mid-probe.
+    } finally {
+      if (marked > 0) {
+        try {
+          await frame.evaluate(UNMARK_CONSENT_ZONES_SCRIPT);
+        } catch {
+          // The press removed the frame's document, or navigated it.
+        }
+      }
+    }
+  } else {
+    const dialogs = frame.locator(visibleQuery(SEMANTIC_DIALOG.split(", ")));
+    if (await clickByTextIn(dialogs, CONSENT_TEXT, timeoutMs)) return true;
+  }
+  return await clickByText(frame, CONSENT_TEXT_ANYWHERE, timeoutMs);
+}
+
+export async function dismissConsent(
+  frame: Frame,
+  timeoutMs: number,
+  scriptable: boolean,
+): Promise<number> {
   // One banner per page: clicking a second "accept" is as likely to re-open the
   // preferences dialog as to close anything.
   const clicked = await clickVisible(frame, CONSENT_SELECTORS, { timeoutMs, max: 1 });
-  if (clicked === 0 && (await clickByText(frame, CONSENT_TEXT, timeoutMs))) return 1;
+  if (clicked === 0 && (await clickConsentText(frame, scriptable, timeoutMs))) return 1;
   return clicked;
 }
 
@@ -721,7 +1004,7 @@ async function provokeFrame(
 ): Promise<void> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
   await dismissModal(frame, { timeoutMs: 1500, scriptable });
-  await dismissConsent(frame, 2000);
+  await dismissConsent(frame, 2000, scriptable);
 
   // Recognising a gate needs the page's wording as well as the control's label,
   // so it is only tried where script runs. The player mounts after the press,

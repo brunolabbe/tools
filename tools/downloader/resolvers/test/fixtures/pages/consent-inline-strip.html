@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inline cookie strip</title>
+  </head>
+  <body>
+    <!-- dl-82: a cookie strip in the page's own flow, neither a dialog nor a fixed
+         layer, with a label the tier pressed before dl-82. Scoping the new
+         phrasings to a consent container must not take this away. -->
+    <div id="strip">
+      We use cookies.
+      <button
+        type="button"
+        onclick="fetch('/beacon/strip-accepted');document.getElementById('strip').remove();mountPlayer()"
+      >
+        Accept
+      </button>
+    </div>
+    <h1>Inline cookie strip</h1>
+    <div id="player"></div>
+    <script>
+      function mountPlayer() {
+        fetch("/media/mse/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/mse/v1080.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return Promise.all(
+              ["/media/mse/init.mp4", "/media/mse/seg-00001.m4s", "/media/mse/seg-00002.m4s"].map(
+                function (u) {
+                  return fetch(u);
+                },
+              ),
+            );
+          })
+          .catch(function () {});
+        var v = document.createElement("video");
+        v.muted = true;
+        v.width = 640;
+        v.height = 360;
+        v.src = URL.createObjectURL(new MediaSource());
+        document.getElementById("player").replaceChildren(v);
+      }
+    </script>
+  </body>
+</html>

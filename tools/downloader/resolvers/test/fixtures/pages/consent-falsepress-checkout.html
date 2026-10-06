@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout</title>
+  </head>
+  <body>
+    <h1>Checkout</h1>
+    <div id="player"></div>
+    <!-- dl-82's gate: a checkout form's submit button labelled with an accepted
+         phrasing. Pressing it places an order on the page's behalf. -->
+    <form onsubmit="event.preventDefault()">
+      <p>By ordering you accept our terms.</p>
+      <button type="submit" onclick="fetch('/beacon/terms-submit')">Agree and continue</button>
+    </form>
+  </body>
+</html>

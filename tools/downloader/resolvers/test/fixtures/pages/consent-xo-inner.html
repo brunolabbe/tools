@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embed</title>
+  </head>
+  <body>
+    <h1>Embed</h1>
+    <div id="player"></div>
+    <!-- dl-82 gate 2, row (iv): the inner page of a cross-origin embed, where no
+         script runs and only dialog semantics can scope the text match. With
+         ?dialog the overlay is a role=dialog and "Ho capito" is pressed; without
+         it the overlay is a fixed layer with no role, which the tier cannot tell
+         from a newsletter, and "Ho capito" is left alone. -->
+    <div
+      id="cw"
+      style="position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.6)"
+    >
+      <div style="background: #fff; width: 300px; margin: 60px auto; padding: 20px">
+        Cookie?
+        <button
+          type="button"
+          onclick="fetch('/beacon/xo-accepted');document.getElementById('cw').remove();mountPlayer()"
+        >
+          Ho capito
+        </button>
+      </div>
+    </div>
+    <script>
+      if (new URLSearchParams(location.search).has("dialog")) {
+        var layer = document.getElementById("cw");
+        layer.setAttribute("role", "dialog");
+        layer.setAttribute("aria-modal", "true");
+      }
+
+      function mountPlayer() {
+        fetch("/media/mse/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/mse/v1080.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return Promise.all(
+              ["/media/mse/init.mp4", "/media/mse/seg-00001.m4s", "/media/mse/seg-00002.m4s"].map(
+                function (u) {
+                  return fetch(u);
+                },
+              ),
+            );
+          })
+          .catch(function () {});
+        var v = document.createElement("video");
+        v.muted = true;
+        v.width = 640;
+        v.height = 360;
+        v.src = URL.createObjectURL(new MediaSource());
+        document.getElementById("player").replaceChildren(v);
+      }
+    </script>
+  </body>
+</html>

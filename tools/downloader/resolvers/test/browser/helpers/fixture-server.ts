@@ -118,6 +118,16 @@ const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> 
     innerPath: "/shadow-player-order.html",
     title: "Cross-origin shadow order",
   },
+  // dl-82 gate 2: a consent overlay in a frame where no script runs, with and
+  // without dialog semantics.
+  "/consent-xo-dialog.html": {
+    innerPath: "/consent-xo-inner.html?dialog",
+    title: "Cross-origin consent dialog",
+  },
+  "/consent-xo-nodialog.html": {
+    innerPath: "/consent-xo-inner.html",
+    title: "Cross-origin consent layer",
+  },
 };
 
 /** Shared by both origins: same static root, same redirect/beacon rules. */
