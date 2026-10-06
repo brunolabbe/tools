@@ -198,6 +198,97 @@ list --project downloader`); no `any` or `console` in the diff.
   reliability, the seq **med** · maintainability, the `segmentCount` docblock and
   the `MAX_SNIFF_ENCODED_BYTES` comment, both false as written.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-06 · `3a72069..69d13aa` · Opus 5.5, re-gate of the round's diff
+
+| Done when                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The step-1 fixture yields an `hls` outcome                                                                      | `browser-resolver.test.ts` › "an HLS playlist served as text/plain from an extensionless route is an hls outcome" ✓. It now runs on `untyped-hls-text.html`, with the same assertions.                                                                                                                                                                                                                                |
+| An untyped, extensionless `<MPD` body is classified `dash`; a large or non-`fetch`/`xhr` response is never read | `sniff.test.ts` › "an untyped, extensionless body beginning <MPD is a dash hit" and "a %s response is not read" ✓. Large: "a response over the cap is not read" covers a declared length. "no more than MAX_ENCODED_SNIFFS_PER_PROBE compressed bodies are read, whatever they hold" covers a compressed one, held to 2 reads by the owner's decision (a). Measured: 2 reads, peak Node RSS 227.4 MB (gate 1: 598) ✓. |
+| A probe that saw only segments reports the new reason                                                           | `browser-resolver.test.ts` › "a probe that saw only segments says so in the error's reason" ✓, plus `sniff.test.ts` › "countPlayedSegments" ✓.                                                                                                                                                                                                                                                                        |
+| `npm run check` and `npm test -- --project downloader` pass                                                     | verified: `npm run check` exit 0. `npm test -- --project downloader` exit 0, 98 files passed and 1 skipped, 1648 tests passed and 2 skipped. Gate 1 had 1632 passed, and no test was deleted. CI on `69d13aa`: every check passes, `CodeQL` included.                                                                                                                                                                 |
+
+Gate 1's findings:
+
+- **high, ReDoS in `DASH_ROOT`: fixed.**
+  - `redos30` through `BrowserResolver` gives `hls n=1 /good` in 2,883 ms, with
+    a 2 ms longest event-loop block. Gate 1 measured 60,995 ms and 60,789 ms.
+  - `redos.mjs`: k=24 takes 0.0 ms.
+  - The test pins the property. With the old regex planted beside the new
+    code, `sniff.test.ts` › "a head of nothing but empty comments returns at
+    once" fails in 736 ms (`expected 730.21 to be less than 50`) instead of
+    hanging, and 1 of 49 tests is red.
+  - Using `repeat(26)` is the right call. The 50 ms bound has a margin of more
+    than ten times on this machine, and the second, `repeat(290)` assertion is
+    never reached against the old pattern.
+- **med, compressed reads: fixed per the owner's option (a).**
+  - `par-32x12` (collector) read 2 bodies of 12,582,912 bytes. Peak Node RSS was
+    227.4 MB and peak external memory 52.8 MB; typed segments arrived at
+    1,635 ms. Gate 1 measured 598 MB, 796 MB and 8,119 ms.
+  - Removing the budget check turns "no more than MAX_ENCODED_SNIFFS_PER_PROBE
+    compressed bodies are read" red (1 of 49).
+  - The `MAX_SNIFF_ENCODED_BYTES` comment is now true.
+  - Chromium's own decode is unbounded (970.4 MB), which the Log states.
+- **med, a sniffed master's `seq`: fixed for the case measured.**
+  - `untyped-master-neutral` gives `hls n=2`.
+  - Removing `seq` from the patch turns "a slowly-read untyped master ranks
+    above the typed variant it names" red (1 of 49).
+  - The fix has a new limit, in the bullet below.
+- **med, `segmentCount`: fixed, and the `.ts` script sub-case is refuted.**
+  - Through `BrowserResolver`, `vtt` and `key` now end `NO_MEDIA_FOUND`
+    without a reason.
+  - A `.ts` served `text/javascript` (new case `ts-js`) is excluded.
+  - A `.ts` served `application/octet-stream` still gives `segments=1`. Its
+    url, status and type match a real MPEG-TS segment, and a hit records
+    nothing else, so the builder's refutation holds.
+  - Planting count-everything inside `countPlayedSegments` turns 7 of 49 red.
+    Planting it at the call site in `resolvers/browser.ts` turns **none** red,
+    104 of 104 across `sniff.test.ts` and `browser-resolver.test.ts`. That gap
+    is in the low below.
+- **low, CodeQL fixture: fixed.** `CodeQL` passes on `69d13aa`
+  (`gh pr checks 373`). Each page passes literal routes to
+  `untyped-player.js`.
+- **low, the Log's "hand-rolled loader" sentence: fixed**, and it now names
+  `hls.html` as the shape it copies.
+- **low, `rank.ts`: filed as dl-92.** The other gate-1 lows stand as written.
+
+New findings, in the lines this round touched:
+
+- **med** · no Done-when line depends on it · Reserving `seq` when the response
+  arrives is defeated by 10 earlier untyped responses. Every sniffable
+  response, manifest or not, now takes a number.
+  - `rank.ts`'s `max(0, 100 - seq * 10)` reaches 0 by seq 10. Equal scores are
+    then broken by position in `hits`, which `HitCollector.hits` returns in
+    recording order. The sniffed master is recorded last, after its body read.
+  - Measured through `BrowserResolver`: 5 junk `text/plain` fetches, then
+    `/master` and `/v/high/media.m3u8`, give `hls n=2`. The same page with 10
+    junk fetches gives `hls n=1 /v/high/media.m3u8`. Collector order at 10:
+    `hls:/v/high/media.m3u8`, `segment`, `segment`, `hls:/master`.
+  - The Log's "Relative order is unchanged" holds for `seq`, but the outcome
+    still flips.
+  - Remedy: `get hits()` sorts by `seq`, so equal scores fall back to arrival
+    order. Alternatively, `rankHits` breaks ties on `seq`. Either fits dl-92's
+    `rank.ts` scope if it is not fixed here.
+  - Not a regression: `3a72069` gave `n=1` for this shape too.
+- **low** · Only the unit tests pin `countPlayedSegments`. Its one call site in
+  `BrowserResolver` can revert to `hits.filter(kind === "segment").length` with
+  every test green, because no end-to-end page fetches only a `.vtt`, a `.key`
+  or a script-typed `.ts`.
+- **low** · Spending the compressed budget hides a later compressed manifest:
+  two gzip `text/plain` JSON responses, then a gzip playlist, give
+  `NO_MEDIA_FOUND reason=segments-without-manifest segments=2`. This is the
+  measured cost of option (a), recorded rather than reopened.
+- **low** · dl-91's "Expect ~736 MB at 32" came from gate 1's collector run (a
+  bare `HitCollector` on raw Chromium), not from the `BrowserResolver` run its
+  step 1 prescribes. Its builder should expect a different baseline.
+- dl-91 and dl-92 each stand alone. Each carries a step-1 reproduction recipe
+  and its numbers, its Done-when lines have a red/green shape, and neither
+  depends on gate 1's scratch files.
+- **findings** · this round's hunt returned 4: 4 carried and 0 dropped. The `.ts`
+  script sub-case is refuted, not dropped.
+- **No high.**
+
 ## Log
 
 ### 2026-10-06 — built (builder)
