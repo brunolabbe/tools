@@ -3,7 +3,7 @@ id: repo-94
 tool: repo
 title: review-record --land reports a failed cleanup, and a pushed landing, as something they are not
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -126,6 +126,77 @@ questions, with the options as they were put:
    `git reset --hard` command and says the landing is already on origin and that
    undoing it needs a force-push.
 6. `npm run check` and `npm test -- --project repo` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-06 · `eb161b4..7d40d8c` · Opus 5.5, depth medium
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The scratch clone has `gc.auto=0`                                                    | `scripts/test/review-record.test.ts` › "land() creates its scratch clone with gc.auto=0, so a commit there cannot spawn a detached gc (repo-94)" ✓ (ubuntu). Its assertion `gcAutoAtCommit` equals `["0"]` is red on the pull request's `test (windows-latest, informational)` leg: F1                           |
+| 2. A cleanup failure keeps the validation's result and names the leftover               | same file › "land() reports a scratch-clone cleanup failure as a warning naming the leftover, and keeps the validation's result (repo-94)" ✓. `result.ok`, the last step still `preflight` or `splice`, and the warning's detail. The path clause holds only through the fixture's own error text: F2            |
+| 3. A preflight failure after the push prints no reset command and says it is pushed     | same file › "land() after a successful push says the landing is pushed and prints no reset command on a preflight failure (repo-94)" ✓. Both the non-ok result and the throw, each asserting `not.toMatch(/git reset --hard/)` with `toMatch(/landed and pushed to origin\/feature/)` as its non-empty companion |
+| 4. Each new test fails with its fix reverted; red and green in the Log                  | **verified**. Five mutations of a scratch copy, each red in the test it targets: gc line dropped, bare rethrow in cleanup, `resetHint()` back in either preflight path, `resetHint()` back in verify. The Log carries a red and a green for all four tests                                                       |
+| 5. A verify failure after the push keeps the reset command and adds the force-push note | same file › "land() keeps the reset command on a verify failure after the push, and says undoing it needs the owner's force-push (repo-94)" ✓. It asserts `git reset --hard <pre-landing sha>`, `already on origin/feature` and `force-push`, with origin's branch equal to `HEAD`                               |
+| 6. `npm run check` and `npm test -- --project repo` pass                                | **verified**: preflight exits 0 at this head and both lines are ok. The suite has 65 tests here and 61 at the base                                                                                                                                                                                               |
+
+- **med** · Done when 1 depends on it · **F1 — the new gc.auto test fails on Windows.**
+  The pull request's `test (windows-latest, informational)` leg on this head fails
+  `AssertionError: expected [ '0', '' ] to deeply equal [ '0' ]`. That is the only
+  failure in 3990 tests. The windows legs of #370 and #369 passed in the same
+  hour, so this branch is what turned it red. The test decides which `run` call is
+  the scratch clone with `fs.realpathSync(repo) !== fs.realpathSync(dir)`. Here
+  `dir` is the realpath of an `os.tmpdir()` mkdtemp, but `land()` passes
+  `git rev-parse --show-toplevel`'s output for the real repository. On Windows
+  the real repository's own commit is then counted too, and that repository has
+  no `gc.auto` set. The likely cause is the runner's 8.3 short temp path, which
+  `realpathSync` does not expand. That cause is not reproduced here, because no
+  Windows host was available. Recommended fix: identify the clone positively, with
+  `path.basename(repo).startsWith("review-record-land-")`. The alternative is
+  `fs.realpathSync.native`.
+- **low** · **F2 — the leftover-path assertion cannot fail.** The injected
+  `removeDir` throws `ENOTEMPTY: … rmdir '${target}/.git'`, so the warning
+  contains the path even when `land()` does not write it. A mutation that drops
+  `${scratchDir}` from the warning stays green (5 of 5 targeted tests passed).
+  The behaviour is right: the real CLI, with `fs.rmSync` patched to throw a
+  message that has no path, prints the full scratch path. To fix it, throw an
+  error with no path in it.
+- **low** · **F3 — the same test's failing-validation half does not show that the
+  failure came from validation.** It asserts `steps.at(-1).name === "splice"`,
+  which the real pass's failure also produces. It does not assert the
+  `Validated against a scratch clone` text, and it does not assert that local
+  `HEAD` stayed where it was.
+- **low** · **F4 — two comments in `land()` are now false for preflight.** The
+  comment above the real pass says its failure "is reported like
+  push/verify/preflight: the sha and the reset command". The comment above
+  `resetHint` says every post-landing failure "prints the pre-landing sha and the
+  reset command". The docblock is correct.
+- **routed, not graded** · **F5 — `orchestrate-tickets/reference/records.md`,
+  _Landing_, says "a failure after the commits prints the reset command and
+  rolls nothing back".** After this merge that is false for preflight, which
+  prints no reset command. It is also incomplete for verify, which adds the
+  force-push note, and it does not mention the `cleanup` warning. The dispatch
+  routed this to the owner's review session, and the branch's Log records it.
+  If that routing is not accepted, this is "shipped text that is false against
+  the code" and a `high`.
+- **dropped** · on git 2.47 and later, the clone's commit runs a detached
+  `maintenance run --auto` that removes `objects/maintenance.lock` after
+  `commit` returns. In git's source the lock is taken before `daemonize()`, and
+  with `gc.auto 0` the child creates nothing after that point, so there is no
+  ENOTEMPTY path. Not a defect. Not measured on 2.47 or later (this container
+  runs 2.43).
+- **dropped** · "Nothing to undo" in the preflight hint is wrong when preflight's
+  finding is the landed section itself, such as `oxfmt --check` on the ticket.
+  The remedy is still to fix forward, and the owner chose to print no reset
+  command. This is wording, not a defect.
+- **dropped** · the first preflight run exited 16 at `mergeTree`, because three
+  release-please heads were pushed after this gate's fetch. After a second fetch
+  it exited 0. This came from the environment.
+- **findings** · the hunt returned 8: 4 graded (1 med, 3 low), 1 routed, 3 dropped.
+- NFR: security n/a (argument arrays and `shell: false` throughout) ·
+  performance ✓ (one extra `git config`) · reliability ✓ (the race went from
+  70 of 200 failures at the base to 0 of 300 at this head) · maintainability:
+  F2, F3 and F4.
 
 ## Log
 
