@@ -73,8 +73,10 @@ the batch cannot proceed, put it to the user at once.
 
 6. **Answer open decisions, then route the findings — pasted, never retyped.**
    A decision a gate or builder raised goes to the user before anything else
-   moves: a `Done when` line left "unproven" by an open question keeps every
-   later verdict at FAIL with nothing to fix. Then the whole round goes to one
+   moves: a `Done when` line left unmet by an open question leaves nothing to
+   fix until it is answered. `gate.md` grades it CONCERNS when the build does
+   what the brief's Decision says and no test contradicts the line, and FAIL
+   when a test asserts the opposite. Then the whole round goes to one
    agent, each finding as the reviewer wrote it:
 
    | The round's findings | Go to |
@@ -112,8 +114,9 @@ the batch cannot proceed, put it to the user at once.
 
 9. **Land it.** Whoever holds the last round lands it — the builder if it was
    resumed for it, otherwise a `fixer` — on ship authority in its own dispatch
-   or a direct message from you. One command per ticket
-   ([reference/records.md](reference/records.md)):
+   or a direct message from you. If a gate's table has an `awaiting` row, the
+   lander first commits the ticket's `awaiting:` line. Then one command per
+   ticket ([reference/records.md](reference/records.md)):
    `node scripts/review-record.mjs --land <ticket> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
    Then it posts each gate's full report to the PR thread, names every model in
    the PR body, and marks the PR ready — unless you are holding it as a draft

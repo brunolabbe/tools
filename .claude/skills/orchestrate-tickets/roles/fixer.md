@@ -39,6 +39,9 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
 ```
 
 - **Fixes first, then the records**, when your dispatch hands you both.
+- **If any gate's table has an `awaiting` row, commit the ticket's `awaiting:`
+  line before you run `--land`**, as records.md says; the gate cannot write
+  frontmatter, so the line is the only marker the obligation has.
 - **Never change a gate section's words.** You commit each file as you were
   handed it. If `--land` refuses one, stop and report its output.
 - `--status in-flight` when the work lands partial, as your dispatch says.

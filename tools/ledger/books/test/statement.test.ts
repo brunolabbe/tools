@@ -410,3 +410,89 @@ describe("parseStatement on a line built to make a regex backtrack", () => {
     expect(ms).toBeLessThan(500);
   });
 });
+
+// lg-14: the whole page, as selecting it all copies it — a month with no rows
+// on top, and the footer counting the months shown. THREE_MONTHS has three.
+describe("parseStatement on a month with no rows and the page's footer", () => {
+  const EMPTY_OCTOBER = "Octobre 2026\nAucune transaction\n\n";
+  const WHOLE_PAGE = `${EMPTY_OCTOBER}${THREE_MONTHS}4 mois sur 12\n`;
+
+  test("reads the whole page to the same rows as its three months alone", () => {
+    expect(parseStatement(WHOLE_PAGE).rows).toEqual(parseStatement(THREE_MONTHS).rows);
+  });
+
+  test("reads the footer on its own, and an empty month on its own", () => {
+    expect(parseStatement(`${THREE_MONTHS}3 mois sur 12\n`).rows).toHaveLength(12);
+    expect(parseStatement(`${EMPTY_OCTOBER}${THREE_MONTHS}`).rows).toHaveLength(12);
+    expect(parseStatement("Octobre 2026\nAucune transaction\n1 mois sur 12\n").rows).toEqual([]);
+  });
+
+  test("a footer that counts another number of months fails, naming both counts", () => {
+    const text = `${THREE_MONTHS}4 mois sur 12\n`;
+    const error = failure(text);
+    expect(error.code).toBe("STATEMENT_MONTH_COUNT_MISMATCH");
+    expect(error.retryable).toBe(false);
+    expect(error.details).toMatchObject({
+      line: lineOf(text, "4 mois sur 12"),
+      shownMonths: 4,
+      pastedMonths: 3,
+    });
+  });
+
+  test("a footer that is not the last line fails at the footer", () => {
+    const text = `${EMPTY_OCTOBER}3 mois sur 12\n${THREE_MONTHS}`;
+    const error = failure(text);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: lineOf(text, "mois sur") });
+  });
+
+  test("a footer showing more months than there are fails", () => {
+    const error = failure(`${THREE_MONTHS}3 mois sur 2\n`);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+  });
+
+  test("a footer after a month with no Total fails on the month, before its count", () => {
+    const text = edit(`${THREE_MONTHS}4 mois sur 12\n`, "Total\t1 200,00 $\n", "");
+    expect(failure(text).code).toBe("STATEMENT_TOTAL_MISMATCH");
+  });
+
+  test("no rows, in a month that has some, fails at that line", () => {
+    const text = edit(THREE_MONTHS, "Total\t1 200,00 $", "Aucune transaction");
+    const error = failure(text);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: lineOf(text, "Aucune transaction") });
+  });
+
+  test("no rows, outside any month, fails at that line", () => {
+    expect(failure(`Aucune transaction\n${THREE_MONTHS}`).details).toMatchObject({ line: 1 });
+    const text = `${THREE_MONTHS}Aucune transaction\n`;
+    expect(failure(text).details).toMatchObject({ line: lineOf(text, "Aucune transaction") });
+  });
+
+  test("a row under a month that says it has none fails as outside any month", () => {
+    const text = edit(THREE_MONTHS, "Septembre 2026\n", "Septembre 2026\nAucune transaction\n");
+    const error = failure(text);
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.message).toContain("a row outside any month");
+  });
+
+  test("no rows, said twice under one month, fails at the second", () => {
+    const error = failure("Octobre 2026\nAucune transaction\nAucune transaction\n");
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: 3 });
+    expect(error.message).toContain("said twice");
+  });
+
+  test("reads both lines with their case, accents and spacing folded", () => {
+    const text = `Octobre 2026\naucune\u00a0\u00a0TRANSACTION\n${THREE_MONTHS}4\u00a0MOIS\u202fsur 12\n`;
+    expect(parseStatement(text).rows).toHaveLength(12);
+  });
+
+  test("reads a month with no rows between two that have some, and counts it", () => {
+    const text = edit(THREE_MONTHS, "Août 2026\n", "Juin 2026\nAucune transaction\nAoût 2026\n");
+    expect(parseStatement(`${text}4 mois sur 12\n`).rows).toEqual(
+      parseStatement(THREE_MONTHS).rows,
+    );
+    expect(failure(`${text}3 mois sur 12\n`).code).toBe("STATEMENT_MONTH_COUNT_MISMATCH");
+  });
+});

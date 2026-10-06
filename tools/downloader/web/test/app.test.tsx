@@ -794,3 +794,83 @@ test("a cancel the server accepted before the job stopped keeps following it to 
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   expect(screen.getAllByText("Canceled").length).toBeGreaterThan(0);
 });
+
+// ---------------------------------------------------------------------------
+// A refused link (dl-77)
+// ---------------------------------------------------------------------------
+
+const REFUSED: JobEvent = {
+  type: "refused",
+  jobId: "job-1",
+  error: {
+    code: "RATE_LIMITED",
+    message: "You already have as many downloads running or waiting as this server allows.",
+    retryable: true,
+    details: { retryAfterSec: 30 },
+  },
+  at: "2026-08-20T11:59:30.000Z",
+};
+
+test("a refused frame reaches the card, stays until the link is followed, and goes when the job leaves the queue", async () => {
+  // Through the real `useJobs` for the reason the pipeline mark is: the frame
+  // has to be folded in the hook and read three components down, and neither end
+  // can see whether it makes the trip.
+  const queued = job("queued", { id: "job-1" });
+  const { listeners } = await watchOneJob(queued, [queued]);
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  act(() => {
+    listeners[0]?.onOpen();
+    listeners[0]?.onEvent(REFUSED);
+  });
+  const notice = screen.getByRole("alert");
+  expect(within(notice).getByText(/as many downloads running or waiting/u)).toBeDefined();
+  expect(within(notice).getByText("Wait 30 s before trying again.")).toBeDefined();
+  // Still a queued job with a link it can use.
+  expect(screen.getByRole("link", { name: "Download" })).toBeDefined();
+  expect(screen.getAllByText("Queued").length).toBeGreaterThan(0);
+
+  // Following the link starts a new attempt, and the answer to the last one is
+  // no longer what the card should say. jsdom does not navigate an anchor, so
+  // this is the click handler and nothing else.
+  fireEvent.click(screen.getByRole("link", { name: "Download" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  // A second refusal shows again.
+  act(() => {
+    listeners[0]?.onEvent({ ...REFUSED, at: "2026-08-20T11:59:45.000Z" });
+  });
+  expect(screen.getByRole("alert")).toBeDefined();
+
+  // The attempt that followed is accepted: the job leaves the queue, and the
+  // card stops offering a link or a refusal.
+  act(() => {
+    listeners[0]?.onEvent({
+      type: "status",
+      jobId: "job-1",
+      status: "probing",
+      at: "2026-08-20T11:59:50.000Z",
+    });
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Download" })).toBeNull();
+});
+
+test("a refusal that arrives after the job has moved on is not shown", async () => {
+  const queued = job("queued", { id: "job-1" });
+  const { listeners } = await watchOneJob(queued, [queued]);
+
+  act(() => {
+    listeners[0]?.onOpen();
+    // The accepted attempt's frame first, then the earlier attempt's refusal
+    // arriving behind it.
+    listeners[0]?.onEvent({
+      type: "status",
+      jobId: "job-1",
+      status: "probing",
+      at: "2026-08-20T11:59:50.000Z",
+    });
+    listeners[0]?.onEvent(REFUSED);
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+});

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Untyped DASH manifest, text/plain</title>
+  </head>
+  <body>
+    <h1>Untyped DASH manifest, text/plain</h1>
+    <!-- dl-79: the manifest route has no extension and answers text/plain. -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+    <script src="/untyped-player.js"></script>
+    <script>
+      window.playUntyped("/api/manifest?id=1", ["/media/dash/video-00001.m4s"]);
+    </script>
+  </body>
+</html>

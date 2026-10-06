@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * The shell's screens (lg-4, lg-5): the inbox tab carries the number of rows
+ * The shell's screens (lg-4, lg-5, lg-6): the inbox tab carries the number of rows
  * waiting, so a paste that left some is not missed, each tab shows its own
  * screen, and the home screen is the first. The fakes are the API client modules.
  */
@@ -109,4 +109,28 @@ test("the salaries tab shows the salaries screen", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Salaries" }));
 
   expect(await screen.findByRole("heading", { name: "Salaries" })).toBeTruthy();
+});
+
+// lg-6: the period tab. Its client is faked here like every other screen's.
+vi.mock("../src/api/periods.ts", () => ({
+  fetchMe: vi.fn().mockResolvedValue("alex"),
+  fetchOpenPeriod: vi.fn().mockResolvedValue({
+    start: null,
+    end: "2026-10-03",
+    first: true,
+    lines: [],
+    settlement: null,
+  }),
+  fetchPeriods: vi.fn().mockResolvedValue([]),
+  fetchRecurring: vi.fn().mockResolvedValue([]),
+}));
+
+test("the period tab shows the period screen", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Period" }));
+
+  expect(await screen.findByRole("heading", { name: "Open period" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
 });

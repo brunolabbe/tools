@@ -17,8 +17,10 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1); the two after them are the store's (lg-2), the next two
- * are the rules' and the inbox's (lg-4), and the last is the salaries' (lg-5).
+ * parser's (lg-1) and the fifth arrived with the page's footer (lg-14); the two
+ * after them are the store's (lg-2), the next two are the rules' and the
+ * inbox's (lg-4), the next is the salaries' (lg-5), and the last four are the
+ * periods' (lg-6).
  */
 
 import {
@@ -56,6 +58,11 @@ export const LEDGER_ERROR_CODES = [
   "STATEMENT_TOTAL_MISMATCH",
   /** A row's echo line does not repeat its own date, description and amount. */
   "STATEMENT_ECHO_MISMATCH",
+  /**
+   * The page's footer, `3 mois sur 12`, counts more or fewer months than the
+   * paste has headers: a whole month was left out of the selection (lg-14).
+   */
+  "STATEMENT_MONTH_COUNT_MISMATCH",
   // --- Chaining a paste onto what is stored (lg-2) ---
   //
   // A gap between a paste and the stored tail is `STATEMENT_CHAIN_BROKEN` again:
@@ -96,6 +103,25 @@ export const LEDGER_ERROR_CODES = [
    * reloads, rather than retries.
    */
   "SALARY_NOT_FOUND",
+  // --- Periods and their settlement (lg-6) ---
+  /**
+   * The period line named does not stand: it never existed, or it has since
+   * been corrected or retired. The caller reloads the period rather than retries.
+   */
+  "PERIOD_LINE_NOT_FOUND",
+  /** The recurring item named does not stand: it never existed, or it has since been changed. */
+  "RECURRING_ITEM_NOT_FOUND",
+  /**
+   * The period named is not the open one: the other person closed it since it
+   * was loaded. Closing it again would settle the same money twice, so the
+   * caller reloads and sees the settlement already recorded.
+   */
+  "PERIOD_NOT_OPEN",
+  /**
+   * No ratio is in effect on the period's last day, so there is nothing to
+   * settle the period at. A ratio is confirmed on the salaries screen first.
+   */
+  "RATIO_NOT_IN_EFFECT",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -111,6 +137,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "The pasted statement does not add up: a row's balance does not follow from the one before it.",
   STATEMENT_TOTAL_MISMATCH: "A month's total in the pasted statement does not match its rows.",
   STATEMENT_ECHO_MISMATCH: "A row in the pasted statement does not match its own repeated line.",
+  STATEMENT_MONTH_COUNT_MISMATCH:
+    "The pasted statement has a different number of months from the page it was copied from.",
   STATEMENT_ROW_CONFLICT: "A pasted row disagrees with the row already stored in its place.",
   STATEMENT_BEFORE_HISTORY:
     "The pasted statement starts before the oldest stored row, and older history cannot be added.",
@@ -119,6 +147,13 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   ROW_NOT_FOUND: "There is no such statement row.",
   SALARY_NOT_FOUND:
     "That salary is not the one on record. It may have been corrected since it was loaded.",
+  PERIOD_LINE_NOT_FOUND:
+    "There is no such line in the period. It may have been corrected or removed since it was loaded.",
+  RECURRING_ITEM_NOT_FOUND:
+    "There is no such recurring item. It may have been changed since it was loaded.",
+  PERIOD_NOT_OPEN: "That period is already closed. It may have been closed since it was loaded.",
+  RATIO_NOT_IN_EFFECT:
+    "No ratio is in effect on the period's last day. Confirm one on the salaries screen first.",
 };
 
 /**

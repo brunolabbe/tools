@@ -308,6 +308,68 @@ async function generate(dir: string): Promise<void> {
   );
 }
 
+export interface DelayingProxy {
+  /** `http://127.0.0.1:<port>` — what the page under test is pointed at. */
+  origin: string;
+  masterUrl: string;
+  close(): Promise<void>;
+}
+
+/**
+ * A pass-through in front of an `HlsOrigin` that holds every `.ts` segment back
+ * for `delayMs` (dl-77).
+ *
+ * The fixture's six-second clip downloads in well under a second, so a spec
+ * that needs one download to still be open when the next link is followed has
+ * nothing to follow it against. Delaying the segments keeps the first download
+ * running for `delayMs` per segment without touching the playlists, so the
+ * probe is as fast as ever and only the stream is slow.
+ */
+export async function startDelayingProxy(
+  target: HlsOrigin,
+  delayMs: number,
+): Promise<DelayingProxy> {
+  const upstream = new URL(target.origin);
+  const server = http.createServer((request, response) => {
+    const url = request.url ?? "/";
+    const forward = (): void => {
+      const outgoing = http.request(
+        {
+          host: upstream.hostname,
+          port: upstream.port,
+          path: url,
+          method: request.method ?? "GET",
+        },
+        (incoming) => {
+          response.writeHead(incoming.statusCode ?? 502, incoming.headers);
+          incoming.pipe(response);
+        },
+      );
+      outgoing.once("error", () => {
+        response.writeHead(502).end();
+      });
+      outgoing.end();
+    };
+    if (new URL(url, "http://x").pathname.endsWith(".ts")) setTimeout(forward, delayMs);
+    else forward();
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+  const origin = `http://127.0.0.1:${String(port)}`;
+  return {
+    origin,
+    masterUrl: `${origin}/master.m3u8`,
+    async close(): Promise<void> {
+      await new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      });
+    },
+  };
+}
+
 export async function startHlsOrigin(): Promise<HlsOrigin> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-e2e-hls-"));
   await generate(dir);

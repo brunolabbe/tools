@@ -4666,3 +4666,86 @@ An entry is this and nothing more:
 
 No narrative, no proposed rule text, and no item without a reproduction: a
 defect nobody can re-run is an opinion, and the review will drop it.
+
+### Batch 2026-10-06 — base 4907d9a
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | claude-sonnet-5-5 / medium | seam-mapper | intake seam map, 4 tickets | 48s / 47s | 0 | $0.1655 |
+| #368 | ready, mergeable, CI pending at writing | claude-opus-5-5 / high | builder-hard | lg-6 build, rounds 1–2, landing | 35m50s / 1h22m37s | 0 | $16.8031 |
+| #368 | ready, mergeable, CI pending at writing | claude-sonnet-5-5 / xhigh | ticket-reviewer-sonnet | lg-6 gates 1–2 | 35m31s / 48m50s | 0 | $9.8298 |
+| #366 | ready, mergeable, all checks green | claude-sonnet-5-5 / high | builder-standard | dl-76 build | 12m58s / 12m49s | 0 | $1.8189 |
+| #366 | ready, mergeable, all checks green | claude-opus-5-5 / high | ticket-reviewer-opus | dl-76 gate 1 | 11m45s / 11m17s | 0 | $2.4858 |
+| #366 | ready, mergeable, all checks green | claude-sonnet-5-5 / high | fixer | dl-76 landing, filed dl-84 | 6m18s / 6m11s | 0 | $0.6802 |
+| #362 | ready, mergeable, all checks green | claude-sonnet-5-5 / high | builder-standard | dl-52 build, round 1, landing | 28m31s / 31m43s | 0 | $1.6772 |
+| #362 | ready, mergeable, all checks green | claude-opus-5-5 / high | ticket-reviewer-opus | dl-52 gates 1–2 | 11m00s / 18m50s | 0 | $3.1547 |
+| #364 | draft (held by owner, merge last), mergeable, checks green | claude-sonnet-5-5 / high | builder-standard | repo-88 build, owner answers | 13m52s / 13m08s | 0 | $3.7209 |
+| #364 | draft (held by owner, merge last), mergeable, checks green | claude-opus-5-5 / high | ticket-reviewer-opus | repo-88 gate 1 | 11m51s / 11m44s | 0 | $4.7647 |
+| #364 | draft (held by owner, merge last), mergeable, checks green | claude-sonnet-5-5 / high | fixer | repo-88 F1–F4, landing | 3m30s / 2m38s | 0 | $0.5386 |
+| — | — | claude-fable-5-1 + claude-opus-5-5 / high | orchestrator | this batch (floor; read before this entry) | 52m35s / 1h24m59s | 0 | $6.5998 |
+
+Total $52.2392, active 3h44m30s (rates read 2026-09-30).
+
+**Tickets:**
+
+- dl-52 → #362: gate 1 CONCERNS (M1 med, Free plan has no Host field), gate 2 PASS; N1–N3 low recorded; `awaiting` owner redeploy and dashboard rule.
+- dl-76 → #366: gate 1 PASS; three lows, one comment fixed by owner choice (a); dl-84 filed.
+- repo-88 → #364: gate 1 PASS; F1–F4 low fixed at landing by owner choice; held as draft to merge last.
+- lg-6 → #368: gate 1 CONCERNS (4 med), gate 2 CONCERNS (med 5 fixed at landing by owner choice, no gate 3); lows 8–11, 13, 14 recorded; lg-13 filed; `awaiting` CodeQL dismissal on push to main.
+
+**Defects in the skill:**
+
+1. orchestrate-tickets `SKILL.md`, preamble — "you dispatch no agent to" edit a role page collides with a `repo-` ticket whose Build edits role pages; repo-88 was dispatched because the owner selected it. Reproduction: `grep -n "dispatch no agent to" .claude/skills/orchestrate-tickets/SKILL.md` → `19:... and you dispatch no agent to.**`, against repo-88's Build listing `roles/{fixer,builder,reviewer}.md`.
+2. `reference/dispatching.md`, "A gate prompt carries" — names no heading for the gate's file, and my four gate prompts asked for "a `### Gate 1` section" while `roles/reviewer.md` says `## Review` for gate 1; all four gates flagged the conflict, and repo-88's gate showed `--land` refuses the literal reading. Reproduction: `grep -n "## Review\|### Gate" .claude/skills/orchestrate-tickets/reference/dispatching.md` → nothing; repo-88 gate's `landsim.mjs` with a `### Gate 1`-only file → `--gate 1 was given but the ticket has no "## Review" section yet`.
+3. orchestrate-tickets `SKILL.md` step 9 — writes `--land <ticket>`, while `reference/records.md` writes `<ticket-path>`; the dl-52 builder switched to the path on its own. Reproduction: `grep -n -- "--land <" .claude/skills/orchestrate-tickets/SKILL.md .claude/skills/orchestrate-tickets/reference/records.md` → `SKILL.md:117: --land <ticket>` and `records.md:31: --land <ticket-path>`.
+4. orchestrate-tickets `SKILL.md` step 8 and `roles/reviewer.md`, "When you are woken to re-gate" — the range `<gated sha>..<new sha>` includes merged-in `main` when the builder merges instead of rebasing. Reproduction (lg-6): `git diff --stat 0862fd3..86b1c7c | tail -1` → 29 files, 1 500 insertions, against `git diff --stat d725943..86b1c7c | tail -1` → 15 files, 796 insertions for the round alone.
+5. `review-ticket/gate.md`, step 4 and "Severity and the gate" — never mention CodeQL, so a "Gates green" line on a PR carrying an adr/005 register comment can never be proven (lg-6, both gates). Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -c -i codeql` → `0`. repo-88's `awaiting` rule covers it once #364 merges.
+6. `review-ticket/SKILL.md`, the no-ticket paragraph — says "the severity table below", which is in `gate.md`. Reproduction: `grep -n "severity table below" .claude/skills/review-ticket/SKILL.md` → `39:severity table below then grades …`, and the file has no `| **high** |` row.
+7. `roles/fixer.md`, "Landing" — silent on `origin/main` moving past the build base; main moved twice during the batch (4907d9a → b0abed0 → 056aab7) and the fixers relied on preflight's merge-tree instead. Reproduction: `grep -n -i "moved\|rebase" .claude/skills/orchestrate-tickets/roles/fixer.md` → only `29: … means someone else moved the branch: stop and report, never force`.
+8. `roles/common.md`, "The sandbox refuses some ordinary shell shapes" — the list misses refused shapes the agents hit: `sed -i '288r triggers.sql' <file>` → "runs sed with the program 288r triggers.sql … cannot be shown not to be git"; a chain `cp …; sed -i …; cd …; node scripts/status.mjs …` → "feeds node a program assembled at runtime"; `bash worktree-farm.sh > f 2>&1; echo $? >> f; tail …` → "too complex to verify"; and a `.ts` scratch script under `node --import tsx` → `Top-level await is currently not supported with the "cjs" output format` (`.mts` works).
+9. orchestrate-tickets `SKILL.md` step 6, the severity floor — twice in one batch the owner overrode it to fix a finding the floor leaves: repo-88's F3, a contradiction between rule pages that the branch itself introduced, and lg-6's med 5, a wrong figure on screen with no `Done when` line. Reproduction: repo-88 gate 1 F3 and lg-6 gate 2 med 5 in those tickets' `## Review`; `grep -n "severity floor" .claude/skills/orchestrate-tickets/SKILL.md` → `85:`.
+10. orchestrate-tickets `SKILL.md`, _Decisions_ — no line on re-asking when a gate measures a consequence the owner was not shown: lg-6's buffer answer ("keep §5") was given on the builder's example, where both closes settled at 0; the gate's measurement (a matched exact payment followed by "sam deposits 30.00") changed the answer to "keep, and file lg-13". Reproduction: lg-6's Log, both answers of 2026-10-06.
+11. `scripts/preflight.mjs` (not a page) — the merge-tree probe counts the branch's own PR among the "other open pull request head(s)". Reproduction: preflight on `lg-6-personal-periods` → `ok    #368 lg-6-personal-periods merges cleanly with HEAD`.
+
+**Worked, and worth keeping:**
+
+- Measuring the one fact an option turns on before asking (`docker compose config` for dl-52) settled a dispatch line in one command.
+- Gates sent to a real TCP socket and a real Cloudflare page found what `inject` and the brief could not: dl-76's socket-only spellings, dl-52's Free-plan fields.
+- Peer orchestrators split the `dl-` id range by message (tools-79 dl-90..94, tools-15 dl-95..99, this batch dl-84..89) with no collision.
+
+### Batch 2026-10-06 (tools-15, dl-77 and repo-94) — base 056aab7
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #375 | open, ready | Sonnet 5.5 / high | builder-standard | build dl-77 | 28m47s / 19m25s | 0 | $3.2974 |
+| #375 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-77 gate 1 | 17m31s / 17m20s | 0 | $2.9262 |
+| #375, #379 | open, ready; draft | Sonnet 5.5 / high | fixer | land dl-77 (two runs), append this log | 8m17s / 8m15s | 0 | $0.5278 |
+| #381 | open, ready | Sonnet 5.5 / high | builder-standard | file and build repo-94, option A, round 1, land | 26m02s / 1h05m43s | 0 | $2.4684 |
+| #381 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | repo-94 gates 1 and 2 | 24m58s / 47m40s | 0 | $4.1503 |
+| — | — | Opus 5.5 / high | orchestrator | dispatch, gate, decide | 1h07m38s / 2h06m51s (floor) | 0 | $5.3468 |
+
+Total $18.7169, rates read 2026-09-30, from `node scripts/agent-cost.mjs --agent … --agent …` before this entry was written; the orchestrator row is a floor, and the fixer that appends this entry is not in it.
+
+**Tickets:**
+
+- dl-77 → #375, gate 1 PASS (no high, no med; 6 low left recorded by the severity floor, including the false "same payload the response carries" comments on the shutdown frame).
+- repo-94 (filed this batch, at the owner's direction, from defect 1 below and a peer's report) → #381, gate 1 CONCERNS (1 med: the new test red on Windows; 3 low), gate 2 CONCERNS pending the Windows leg, which passed on the landing head a340ac4 (same source as the gated a9bce7c).
+
+**Defects in the skill:**
+
+1. `reference/records.md`, "Landing" (`scripts/review-record.mjs --land`) — the scratch clone is made with `--no-hardlinks`, which copies the shared repo's loose objects; git's estimate there is above `gc.auto`, so a commit in the clone spawns a detached `gc --auto` that writes `.git/info/refs` while the `finally` runs `rmSync`. The throw replaces the result, so whether validation passed is lost. Intermittent: lg-6 and dl-78 landed through it the same day. Fixed by repo-94 (#381), unmerged at this writing. Reproduction: `ls .git/objects/17 | wc -l` → `28` (× 256 = 7168 > 6700); `--land` on dl-77 → `ENOTEMPTY: directory not empty, rmdir '/tmp/review-record-land-FdK4T6/.git'`, exit 1; repo-94's gate 1 on a 16000-blob fixture: base `land()` threw in 70 of 200 runs, the fixed head in 0 of 300.
+2. `reference/records.md`, "Landing" — once #381 merges, "a failure after the commits prints the reset command and rolls nothing back" is false for preflight (no reset command after the push), incomplete for verify (adds that undoing needs the owner's force-push), and silent on the new `cleanup` warning. Routed here by the owner's choice on 2026-10-06 rather than edited on the branch. Reproduction: `grep -n "prints the reset command" .claude/skills/orchestrate-tickets/reference/records.md` against `pushedHint` and `resetHintAfterPush` in `scripts/review-record.mjs` at a340ac4.
+3. `SKILL.md`, step 9 "Land it" — a landing pushes to the branch, and the workflow cancels the in-progress run, so a gate verdict conditional on a CI leg at the gated sha cannot be read once the landing has pushed. Reproduction: repo-94 gate 2 was "PASS if `test (windows-latest, informational)` is green on a9bce7c"; the landing push at 03:21Z cancelled run `37408150462` on a9bce7c with that leg unfinished, and the reading had to come from the landing head's run `37408573776` (`git diff --name-only a9bce7c a340ac4` → only the ticket file).
+4. `roles/common.md`, "The sandbox refuses some ordinary shell shapes" — the list omits an inline env prefix in general (it names only `NODE_OPTIONS=…`), process substitution, and a path held in a shell variable used as a command argument; and one refused shape takes the whole chained command with it. Reproductions: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=gc.auto GIT_CONFIG_VALUE_0=0 node scripts/review-record.mjs --land …` → `names git in a form too complex to verify that it stays inside the worktree. Refusing to run it` (the same line in a file run with `bash <file>` → exit 0); `diff <(git -C <worktree> show 7d40d8c:scripts/review-record.mjs) <file>` → the same refusal; `S=…; node $S/…` → refused as a computed argument; `node /…/ticket.mjs && cd ../../../.. && npm run format | tail -3; git status --short` → "too complex to verify"; split into plain commands, each ran.
+5. `roles/common.md`, "Preflight runs longer than a foreground call allows" — preflight's `mergeTree` reads heads fetched earlier, and a release-please force-push between the fetch and the run gives a spurious exit 16; the page does not say to fetch again before reading a mergeTree failure. Reproduction (repo-94 gate 1): first preflight → exit 16 at `mergeTree`, three release-please heads visible in `git ls-remote` but absent from `git cat-file`; after `git fetch origin` → exit 0.
+6. `roles/reviewer.md`, "What makes a gate worth its cost" ("Reproduce, do not assess") — asks for "revert the fix and watch the test go red" but gives no way to mutate without touching the tree under review, and a scratch copy does not run as is. Reproduction (repo-94 gates 1 and 2): a `git archive` copy → `TSConfckParseError: failed to resolve "extends":"../../tsconfig.tests.json"` until both tsconfig files are copied, then `Cannot find module 'oxfmt/package.json'` until `node_modules` is symlinked, then `Test timed out in 5000ms` under load until `--testTimeout` is passed.
+7. `roles/fixer.md`, "Landing" — says to post each gate's report with `gh pr comment <n> --body-file <f>` but gives no way to add the heading line a dispatch asks for, and the sandbox refuses the `cat` redirection that would build the file. Reproduction (fixer): built `gate-1-comment.md` with a Write-tool node script instead; `gh pr comment 375 --body-file …/gate-1-comment.md` → posted.
+8. `review-ticket/gate.md`, "Steps", step 4, against `roles/reviewer.md`, "Returning the gate" — "No line numbers anywhere in the section" against "each finding's command and output", where tool output carries `file:line:col`. Reproduction (dl-77 gate): `npx playwright test -c tools/downloader/playwright.config.ts refused-download` at base → `at .../tools/downloader/e2e/refused-download.spec.ts:67:23` and `> 67 |   await expect(alert).toBeVisible();`.
+9. `roles/common.md`, "Point every run at the narrowest thing that can fail" — a red/green that reverts source across packages needs a full rebuild each side, and `e2e:serve` builds only `@downloader/web`, leaving `contract/dist` stale; no recipe is written for "fail on origin/main with source reverted in place". Reproduction (dl-77 gate and builder): `git checkout origin/main -- tools/downloader/{api,web,contract}/src`, `npm run build -w @downloader/contract`, `grep -c refused tools/downloader/contract/dist/api.js` → `0` at base, `1` at head; without the contract build the base run measured the head's contract.
+10. `SKILL.md`, "Reporting to the user" — `node scripts/agent-cost.mjs --agent <id> …` reads as several ids after one flag; the script takes one id per flag and treats the rest as paths. Reproduction: `node scripts/agent-cost.mjs --agent a46daa49eb2702314 ad33d91fb23c113f2 ac082962b59c4548b` → `ad33d91fb23c113f2: ENOENT: no such file or directory, open 'ad33d91fb23c113f2'` and the same for the third, exit 0 with only the first agent priced.
+
+**Worked, and worth keeping:**
+
+- Asking both peers at intake before taking the only free ready ticket: tools-79 answered that dl-81 was deliberately held behind #374, which no ticket file, branch or PR showed.
+- Dry-running the rerun before prescribing it: the control reproduced `ENOTEMPTY`, so a plain rerun would have failed again, and the prefix was proven before the fixer was sent back. Passing the measurement to both peers let tools-79 land its remaining tickets through it.
+- A peer's report folded into an open ticket the same hour: tools-79's post-push reset advice became part of repo-94 by owner decision instead of a second ticket.

@@ -22,7 +22,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { Job, JobEvent } from "@downloader/contract";
+import type { AppErrorPayload, Job, JobEvent } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import { UNKNOWN } from "../src/lib/format.ts";
@@ -44,6 +44,7 @@ interface Handlers {
   onCancel: ReturnType<typeof vi.fn<(id: string) => void>>;
   onRemove: ReturnType<typeof vi.fn<(id: string) => void>>;
   onRetry: ReturnType<typeof vi.fn<(job: Job) => void>>;
+  onFollowLink: ReturnType<typeof vi.fn<(id: string) => void>>;
 }
 
 function handlers(): Handlers {
@@ -51,6 +52,7 @@ function handlers(): Handlers {
     onCancel: vi.fn<(id: string) => void>(),
     onRemove: vi.fn<(id: string) => void>(),
     onRetry: vi.fn<(job: Job) => void>(),
+    onFollowLink: vi.fn<(id: string) => void>(),
   };
 }
 
@@ -58,7 +60,12 @@ function handlers(): Handlers {
 // props, not optional — so they are passed every time rather than spread in
 // conditionally, which under `exactOptionalPropertyTypes` would make them
 // optional properties the component does not declare.
-function mount(value: Job, streamState?: StreamState, watchedStep?: number): Handlers {
+function mount(
+  value: Job,
+  streamState?: StreamState,
+  watchedStep?: number,
+  refusal?: AppErrorPayload,
+): Handlers {
   const spies = handlers();
   render(
     <ul>
@@ -66,6 +73,8 @@ function mount(value: Job, streamState?: StreamState, watchedStep?: number): Han
         job={value}
         streamState={streamState}
         watchedStep={watchedStep}
+        refusal={refusal}
+        onFollowLink={spies.onFollowLink}
         onCancel={spies.onCancel}
         onRemove={spies.onRemove}
         onRetry={spies.onRetry}
@@ -629,6 +638,8 @@ test("an empty job list renders nothing at all", () => {
       jobs={[]}
       streamStates={{}}
       watchedSteps={{}}
+      refusals={{}}
+      onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -649,6 +660,8 @@ test("the list counts what has finished and offers to clear only those", () => {
       ]}
       streamStates={{ "job-1": "reconnecting" }}
       watchedSteps={{}}
+      refusals={{}}
+      onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -677,6 +690,8 @@ test("each card is handed its own stream state, looked up by job id", () => {
       ]}
       streamStates={{ "job-2": "reconnecting" }}
       watchedSteps={{}}
+      refusals={{}}
+      onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -710,6 +725,8 @@ test("each card is handed its own pipeline mark, looked up by job id", () => {
       ]}
       streamStates={{}}
       watchedSteps={{ "job-2": 2 }}
+      refusals={{}}
+      onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -741,6 +758,8 @@ function renderCard(value: Job): { container: HTMLElement; unmount: () => void }
         job={value}
         streamState={undefined}
         watchedStep={undefined}
+        refusal={undefined}
+        onFollowLink={vi.fn()}
         onCancel={vi.fn()}
         onRemove={vi.fn()}
         onRetry={vi.fn()}
@@ -852,6 +871,8 @@ test("a list with nothing finished offers no clear button", () => {
       jobs={[job("downloading")]}
       streamStates={{}}
       watchedSteps={{}}
+      refusals={{}}
+      onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -890,4 +911,60 @@ test("a job whose link nobody opened says the link expired", () => {
   const notice = screen.getByRole("status");
   expect(within(notice).getByRole("heading", { name: "Link expired" })).toBeDefined();
   expect(within(notice).getByText(/was not opened within fifteen minutes/u)).toBeDefined();
+});
+
+// --- dl-77: a refused link says why, and stays on offer -----------------------
+
+const capRefusal: AppErrorPayload = errorPayload("RATE_LIMITED", {
+  message:
+    "You already have as many downloads running or waiting as this server allows per client. Try again once one finishes.",
+  details: { retryAfterSec: 30 },
+});
+
+test("a refused link says why and when to try again, and Download stays offered", () => {
+  mount(job("queued"), undefined, undefined, capRefusal);
+
+  const notice = screen.getByRole("alert");
+  expect(within(notice).getByText(/as many downloads running or waiting/u)).toBeDefined();
+  expect(within(notice).getByText("Wait 30 s before trying again.")).toBeDefined();
+  expect(within(notice).getByText("RATE_LIMITED")).toBeDefined();
+  // Not spent, so still a link, and it still says so.
+  expect(screen.getByRole("link", { name: "Download" }).getAttribute("href")).toBe(
+    "/api/files/opaque-token",
+  );
+  expect(screen.getByText("works once · expires in 14 min")).toBeDefined();
+});
+
+test("a refusal with no wait says why and does not invent one", () => {
+  mount(
+    job("queued"),
+    undefined,
+    undefined,
+    errorPayload("INTERNAL", {
+      message: "The server is shutting down and is not starting new jobs.",
+    }),
+  );
+
+  expect(within(screen.getByRole("alert")).getByText(/shutting down/u)).toBeDefined();
+  expect(screen.queryByText(/before trying again/u)).toBeNull();
+});
+
+test("no refusal, no alert: a queued card is as it was", () => {
+  mount(job("queued"));
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("a refusal is not shown once the job has left the queue", () => {
+  mount(job("probing"), undefined, undefined, capRefusal);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("following the link tells the list, and does not stop the browser following it", () => {
+  const spies = mount(job("queued", { id: "job-9" }), undefined, undefined, capRefusal);
+  const link = screen.getByRole("link", { name: "Download" });
+
+  // `fireEvent` returns false when a handler called `preventDefault`: the
+  // download must still happen, so the click handler must not.
+  expect(fireEvent.click(link)).toBe(true);
+  expect(spies.onFollowLink).toHaveBeenCalledExactlyOnceWith("job-9");
 });

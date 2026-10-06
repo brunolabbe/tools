@@ -56,6 +56,8 @@ export interface ProbeAttempt {
   resolver: string;
   code: string | null;
   durationMs: number;
+  /** A short token naming the cause when the resolver gave one (dl-79). */
+  reason?: string;
 }
 
 /** What `POST /api/probe` records on every way out. See dl-57. */

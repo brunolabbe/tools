@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An untyped route that is not a playlist, and no segments</title>
+  </head>
+  <body>
+    <h1>An untyped route that is not a playlist, and no segments</h1>
+    <!-- dl-79: the negative control for `segments-without-manifest`. -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+    <script src="/untyped-player.js"></script>
+    <script>
+      window.playUntyped("/api/playlist?id=2", []);
+    </script>
+  </body>
+</html>

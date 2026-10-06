@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Articolo</title>
+  </head>
+  <body>
+    <!-- dl-82 gate 2, row (iii-b): a sticky header's notice ("Ho capito") ahead of
+         a fixed bottom consent bar labelled "Accetta", a label the tier pressed
+         before dl-82. The header does not speak of consent, so it is not a
+         container, and the bar is reached. -->
+    <header style="position: sticky; top: 0; background: #fff">
+      <nav><a href="#h">Home</a></nav>
+      <div class="notice">
+        Nuove condizioni.
+        <button type="button" onclick="fetch('/beacon/header-notice')">Ho capito</button>
+      </div>
+    </header>
+    <h1>Articolo</h1>
+    <div id="player"></div>
+    <div
+      id="consent"
+      style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 12px; background: #eee"
+    >
+      Usiamo i cookie.
+      <button
+        type="button"
+        onclick="fetch('/beacon/consent-accepted');document.getElementById('consent').remove();mountPlayer()"
+      >
+        Accetta
+      </button>
+    </div>
+    <script>
+      // dl-82 gate 3: ?menu=link adds one "Cookie policy" link to the header's
+      // nav. The header's prose is unchanged, so it must still not be a container.
+      if (new URLSearchParams(location.search).get("menu") === "link") {
+        var link = document.createElement("a");
+        link.href = "#c";
+        link.textContent = "Cookie policy";
+        document.querySelector("nav").append(link);
+      }
+
+      function mountPlayer() {
+        fetch("/media/mse/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/mse/v1080.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return Promise.all(
+              ["/media/mse/init.mp4", "/media/mse/seg-00001.m4s", "/media/mse/seg-00002.m4s"].map(
+                function (u) {
+                  return fetch(u);
+                },
+              ),
+            );
+          })
+          .catch(function () {});
+        var v = document.createElement("video");
+        v.muted = true;
+        v.width = 640;
+        v.height = 360;
+        v.src = URL.createObjectURL(new MediaSource());
+        document.getElementById("player").replaceChildren(v);
+      }
+    </script>
+  </body>
+</html>

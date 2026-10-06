@@ -34,6 +34,29 @@ export interface ResolverAttempt {
   resolver: string;
   code: string | null;
   durationMs: number;
+  /**
+   * The `details.reason` the resolver's error carried, when it is one of the
+   * short tokens a resolver names a cause with (dl-79). Without it, the only
+   * thing that survives a fall-through is `code`: the chain's own
+   * `NO_MEDIA_FOUND` is built here and does not carry the browser tier's
+   * details, so `segments-without-manifest` and `navigated-away` would be
+   * thrown away at the one place a record is made.
+   */
+  reason?: string;
+}
+
+/**
+ * **A token, never prose**: these rows are stored by host with "never a path, a
+ * query string or an address" (`probe-outcomes.ts`), and some resolvers put a
+ * browser's own message in `reason`, which can carry a URL.
+ */
+const REASON_TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+function attemptReason(error: AppError): string | undefined {
+  const reason = error.details?.["reason"];
+  return typeof reason === "string" && reason.length <= 40 && REASON_TOKEN.test(reason)
+    ? reason
+    : undefined;
 }
 
 export class ResolverRegistry {
@@ -126,7 +149,13 @@ export class ResolverRegistry {
           throw abortError;
         }
         const error = AppError.from(cause);
-        attempts.push({ resolver: resolver.name, code: error.code, durationMs });
+        const reason = attemptReason(error);
+        attempts.push({
+          resolver: resolver.name,
+          code: error.code,
+          durationMs,
+          ...(reason === undefined ? {} : { reason }),
+        });
         if (error.code !== "NO_MEDIA_FOUND") throw error;
       }
     }

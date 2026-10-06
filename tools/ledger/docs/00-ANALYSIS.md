@@ -84,7 +84,12 @@ What the parser has to know:
   had four rows on one day, and only the listed order recovers their sequence.
   **The parser must never sort by date.** Sorting would break the chain below,
   and nothing else can tell those four rows apart.
-- **Each month ends with a `Total` line.**
+- **Each month ends with a `Total` line**, except a month with no rows, which
+  says `Aucune transaction` under its header instead and has no `Total`.
+- **Selecting the whole page also takes its footer**, `3 mois sur 12`: the
+  months shown, out of the twelve AccèsD has. When it is pasted it must be the
+  last line, and the months shown must equal the month headers pasted, empty
+  ones included (lg-14).
 
 **The running balance is the proof.** Each row's balance equals the previous
 row's balance plus its own amount. On the sample this held for all 25 rows with
@@ -138,6 +143,27 @@ expenses by mistake, and the owner caught it only when this analysis asked.
 
 Rules belong in the database, edited by both people, and never in the
 repository. Caisse names identify a household.
+
+_Amended on 2026-10-06, by the owner:_ exact matching stays, and three things
+change around it.
+
+- **The most specific rule takes a row.** Among exact matches, the rule naming
+  more criteria wins, then the longer literal pattern. Only rules level at the
+  top with different answers leave a row ambiguous. A broad rule built on the
+  caisse suffix can then sit beside a fixed-amount rule for the same person. A
+  row off a narrower rule's fixed amount still goes to the inbox, even when the
+  broad rule matches it ([lg-16](./work/lg-16-most-specific-rule-and-suggestions-from-history.md)).
+- **The inbox offers the answer given before** to the same description, beside
+  the nearest rule (lg-16).
+- **History files a row nobody's rule matches**, once its description has been
+  answered the same way three times by a person
+  ([lg-17](./work/lg-17-auto-file-from-history.md)):
+  - a transfer only at an amount already answered, so the paragraph above still
+    holds for transfers;
+  - any other debit within ±20 % of the latest answer.
+
+  Each such filing is marked automatic and listed for review, and an automatic
+  filing never counts as an answer.
 
 ## 4. The mortgage bucket
 
@@ -284,6 +310,11 @@ A settled charge needs no special case later. The deposit that settled it
 enters the payer's cumulative contributions, and it cancels there against the
 charge, which also stays in the sums.
 
+**A settlement records its formula version.** The tool's is `v3`: this rule,
+over contributions since the two were last even, each period weighed at the
+ratio it closed with, and rounded once. The workbook's two are `v1` and `v2`,
+imported as they happened (lg-6 defines the three; lg-7 imports the two).
+
 ### Numbers
 
 - **Money is integer cents.**
@@ -360,6 +391,15 @@ pharmacy, restaurants. The model **proposes** a category per item from a fixed,
 editable list, and the person confirms or changes it. A merchant the person has
 categorised before gets that category proposed first. Categories feed the stats
 (§9) and nothing else. They never change who owes what.
+
+_Amended on 2026-10-06, by the owner:_ the list is not the receipts' alone. Bank
+rows and period lines take a spending category from it too
+([lg-15](./work/lg-15-spending-categories-on-bank-rows.md)).
+
+- A row gets its category from a map of Desjardins' own category to ours, and a
+  rule can override the map for its rows.
+- A row with no category is never held for it.
+- lg-15 creates the list, and lg-10 reads it.
 
 ### Who reads the receipt: local OCR first, a model when needed
 

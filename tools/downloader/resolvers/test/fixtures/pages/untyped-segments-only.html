@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Segments with no manifest</title>
+  </head>
+  <body>
+    <h1>Segments with no manifest</h1>
+    <!-- dl-79: the playlist route answers text that is not a playlist, so the
+         segments the page then fetches are all a probe gets to see. -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+    <script src="/untyped-player.js"></script>
+    <script>
+      window.playUntyped("/api/playlist?id=2", [
+        "/media/untyped/seg-00001.ts",
+        "/media/untyped/seg-00002.ts",
+      ]);
+    </script>
+  </body>
+</html>
