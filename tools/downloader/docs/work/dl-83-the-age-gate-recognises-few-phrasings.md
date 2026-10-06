@@ -48,7 +48,15 @@ step.
    18", on pages whose text carries "contenuti per adulti" or "conferma la tua
    età". With `confirmAge` off, expect `AGE_CONFIRMATION_REQUIRED` and record
    what `origin/main` returns. With it on, expect the stream.
-2. Extend `AGE_GATE_TEXT` per listed language: a confirm verb ("I confirm",
+   Include `Ho 18 anni o più - Entra`, a label the owner saw on a real gate
+   (2026-10-06). Today it doesn't match, and neither does `Ho 18 anni o più`,
+   while `Ho 18 anni` and `I'm 18 or older` do: measured against `AGE_GATE_TEXT`
+   at `4907d9a`.
+2. Extend `AGE_GATE_TEXT` per listed language: the "or more / or older" suffix
+   in every listed language ("o più", "ou plus", "o más", "oder älter", … where
+   missing), an optional trailing action after a dash, colon or pipe ("- Entra",
+   "– Enter", "| Entrer", "Continua", each from a short closed list, never any
+   word), a confirm verb ("I confirm",
    "confermo di avere", "je confirme avoir", "ich bestätige", …), "at least" /
    "almeno" forms, and the single-word adult forms ("maggiorenne", "majeur(e)",
    "volljährig", "mayor de edad", "maior de idade", "meerderjarig",
