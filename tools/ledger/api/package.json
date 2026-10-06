@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "dev": "node --watch --import tsx src/main.ts",
+    "// dev": "Builds first. This package imports @ledger/contract through its package exports, which resolve to dist/ and not src/, so in a fresh checkout or worktree, where no dist exists yet, the server fails on start with ERR_MODULE_NOT_FOUND and node --watch sits waiting for a file change (lg-12); a dist left behind by an older branch is worse, starting the server against a stale contract. tsc --build walks this package's project references, so one command covers core, contract and books. Two boundaries worth knowing: it runs once, so node --watch restarting this process does not rebuild a contract edited mid-session; and it cannot restore a dist deleted by hand, because tsc --build reads its own tsconfig.tsbuildinfo and the source hashes, never the emitted .js. Run npm run clean first for that. The downloader's api carries the same script, from #151.",
+    "dev": "npm run build && node --watch --import tsx src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {

@@ -15,7 +15,12 @@ the ones that fail silently if skipped.
    `@webtools/core` (copy `tools/downloader/contract/src/errors.ts`, which is the
    worked example).
 2. Its packages, scoped `@<name>/*`, each with a `tsconfig.json` referencing the
-   ones it depends on.
+   ones it depends on. The `api`'s `dev` script builds before it watches —
+   `npm run build && node --watch --import tsx src/main.ts`, with the `// dev`
+   key from `tools/planner/api/package.json` saying why. Without it the API fails on start
+   in any checkout that has never built, because `@<name>/contract` resolves to
+   `dist/`; every tool so far shipped without it and was fixed by hand
+   (#151, lg-12, pl-54).
 3. Register each package's `src` project in the root `tsconfig.json`, and add a
    vitest project in `vitest.config.ts`. Its tests are already inside
    `tsconfig.tests.json`'s glob, so they need only a `references` entry there.
