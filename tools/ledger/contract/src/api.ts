@@ -539,9 +539,9 @@ export interface OpenPeriodLine {
   /** The recurring item that generated it, or `null` for a stored one. */
   recurringItemId: number | null;
   /**
-   * Dated inside a period already closed, and first entered after that close:
-   * its period's settlement did not count it, so this one does. A correction of
-   * a line or an item that was on time is not late.
+   * Dated inside a period already closed, and first entered after the last
+   * close: no settlement has counted it yet, so the next close does. A
+   * correction of a line or an item that was on time is not late.
    */
   late: boolean;
 }

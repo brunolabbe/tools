@@ -386,3 +386,18 @@ describe("after the asked deposit is paid", () => {
     }
   });
 });
+
+// Gate 2, low 12: what names nobody is a deposit of 0, not a net of 0.
+describe("a deposit of one cent", () => {
+  test("is asked for, though the direct amount rounds to nothing", () => {
+    // r = 0.2: sam paid 2 cents, so alex owes 0.4 of a cent directly, or 0.5
+    // into a buffer sam owns 0.8 of, which rounds half-up to 1.
+    expect(settlement([spent("sam", 2)], [], ratio(200_000))).toEqual({
+      formula: "v3",
+      payerId: "alex",
+      recipientId: "sam",
+      depositCents: 1,
+      netCents: 0,
+    });
+  });
+});

@@ -197,9 +197,14 @@ describe("enteredLate", () => {
     { start: "2026-07-01", end: "2026-09-30", closedAt: "2026-10-01T09:00:00.000Z" },
   ];
 
-  test("dated in a closed period and first entered after it closed", () => {
+  test("dated in a closed period and first entered after the last close", () => {
     expect(enteredLate(closed, "2026-09-15", "2026-10-02T08:00:00.000Z")).toBe(true);
-    expect(enteredLate(closed, "2026-03-01", "2026-07-02T08:00:00.000Z")).toBe(true);
+    expect(enteredLate(closed, "2026-03-01", "2026-10-02T08:00:00.000Z")).toBe(true);
+  });
+
+  // Gate 2, med 5: a later close counted it, so it is late no longer.
+  test("not once a later close has counted it, though its own period closed before it", () => {
+    expect(enteredLate(closed, "2026-03-01", "2026-07-02T08:00:00.000Z")).toBe(false);
   });
 
   test("not when it was entered before its period closed, even after an earlier one did", () => {

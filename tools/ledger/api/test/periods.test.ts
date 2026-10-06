@@ -633,3 +633,24 @@ describe("the open period's last day", () => {
     expect(view.lines.map((line) => line.date)).toEqual(["2026-09-10"]);
   });
 });
+
+// Gate 2, med 5: a late line leaves the list once a close has counted it.
+describe("a late line, after the next close", () => {
+  test("is no longer listed: that close counted it", async () => {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-09-30");
+    await addLine(target, draft("sam", "2026-09-15", 5_000));
+
+    const before = await open(target);
+    expect(before.lines.map((line) => [line.date, line.late])).toEqual([["2026-09-15", true]]);
+    expect(before.settlement?.depositCents).toBe(22_500);
+
+    const second = await close(target, "2026-10-01", "2026-10-03");
+    expect(second.settlement.depositCents).toBe(22_500);
+
+    expect((await open(target)).lines).toEqual([]);
+    expect((await open(target, "?end=2026-10-20")).lines).toEqual([]);
+  });
+});

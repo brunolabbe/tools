@@ -7,6 +7,7 @@ status: ready
 milestone: P3
 depends_on: [lg-5]
 difficulty: hard
+awaiting: Done when 6 — the CodeQL alert on GET /api/recurring in routes/periods.ts reads dismissed or suppressed on the security tab after the push to main that runs security.yml's dismissal step
 ---
 
 # lg-6 — Periods of personal-card spending, closed with the matching rule
@@ -260,7 +261,7 @@ to be 200` before the change, and the period screen would have shown that
     comment. The first entry's "read after the draft opens" is this.
   - **Med 2, fixed in `books`.** `settleStretches` returns nobody owing
     when the deposit rounds to 0 (the deposit is never smaller than the net, so
-    the net is 0 too), or the net does where the recipient's share is zero.
+    the net is 0 too).
     Red first: `books/test/settlement.test.ts` › "a figure that did not
     divide evenly still settles the next close at nothing" (100.01, asked
     150.02, paid 150.02) and › "over many odd amounts and ratios, the next close
@@ -318,3 +319,35 @@ passed (16)`.
   - **The suite.** `npm test -- --project ledger` → `Test Files 33 passed
 (33)`, `Tests 491 passed (491)` (465 at `0862fd3`, and this round's 26: 7 in `books`, 18 in
     `api`, 1 in `web`).
+
+- 2026-10-06 — Round 2 after gate 2 (CONCERNS at `86b1c7c`, no high).
+  - **The owner's decision.** Med 5, a late line listed for good: fix it at
+    landing, leave it recorded, or file an lg- ticket. **Fix at landing**, with
+    no third gate, since gate 2 raised no high — the orchestrator's
+    recommendation.
+  - **Med 5, fixed as gate 2 prototyped.** A record is late when its date falls
+    in a closed period and its first entry is after the **last** close, so once
+    a close has counted it, it leaves the list. `enteredLate` in `books`, and
+    the contract's words for `late`. Red first: `api/test/periods.test.ts` ›
+    "a late line, after the next close › is no longer listed: that close
+    counted it" (the gate's two-close reproduction) and
+    `books/test/periods.test.ts` › "enteredLate › not once a later close has
+    counted it, though its own period closed before it" answered `2 failed |
+199 passed (201)` across `books/test` and `api/test/periods.test.ts`,
+    and pass after (`books` `dist` rebuilt; `grep -c lastClose` in
+    `books/dist/periods.js` → 2). The holding-period test now reads "dated in
+    a closed period and first entered after the last close".
+  - **Low 12, fixed.** (a) `books/test/settlement.test.ts` › "a deposit of
+    one cent › is asked for, though the direct amount rounds to nothing" (r =
+    0.2, sam paid 2 cents: alex deposits 1, net 0). With the rule keyed on
+    `netCents === 0`: `1 failed | 21 passed (22)`. (b) The zero-share clause
+    is removed, with a comment saying why it cannot be reached, and the round-1
+    entry's sentence describing it is struck from that entry.
+  - **Lows 13 and 14 left in the record.** 13: a correction or removal of
+    something on time is counted by the next close and listed nowhere; listing a
+    signed difference would be a further decision. 14: `firstEntered` scans
+    both tables per call; unmeasured, at a household's size.
+  - **`awaiting` set** for Done when 6, by the owner's answer of 2026-10-06 to
+    repo-88's first decision: a recorded adr/005 excusal makes the line
+    awaiting the push to `main` that runs `security.yml`'s dismissal step,
+    and the alert's state read after it.

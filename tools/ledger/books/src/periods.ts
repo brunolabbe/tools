@@ -111,9 +111,10 @@ export interface ClosedSpan extends PeriodSpan {
 }
 
 /**
- * Whether an amount dated `date`, first entered at `firstEnteredAt`, arrived
- * after the period holding its date had closed. That period's settlement did
- * not count it, so the next close does, and the open period lists it as late.
+ * Whether an amount dated `date` inside a closed period was first entered
+ * after the **last** close: no settlement has counted it yet, so the next close
+ * does, and the open period lists it as late. Once a later close has counted
+ * it, it is late no longer, though it arrived after its own period closed.
  * "First entered" is the start of its chain of corrections: a correction of
  * something that was on time is not late, though it is entered later.
  */
@@ -122,8 +123,12 @@ export function enteredLate(
   date: string,
   firstEnteredAt: string,
 ): boolean {
-  const period = closed[periodIndexOf(closed, date)];
-  return period !== undefined && firstEnteredAt > period.closedAt;
+  if (closed[periodIndexOf(closed, date)] === undefined) return false;
+  const lastClose = closed.reduce(
+    (latest, period) => (period.closedAt > latest ? period.closedAt : latest),
+    "",
+  );
+  return firstEnteredAt > lastClose;
 }
 
 /**

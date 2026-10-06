@@ -167,8 +167,10 @@ export function settleStretches(
   // Less than half a cent owed is what paying a rounded figure leaves behind,
   // and it rounds to nothing. It names nobody: a payer at 0.00 would be asked to
   // deposit nothing, and the next close would expect that nothing. The deposit
-  // is never smaller than the net, so a deposit of 0 means a net of 0 too.
-  if (depositCents === 0 || (depositCents === null && netCents === 0)) return nobody;
+  // is never smaller than the net, so a deposit of 0 means a net of 0 too. A
+  // recipient with a share of zero leaves the other share whole, so what is
+  // owed is whole cents and never rounds away.
+  if (depositCents === 0) return nobody;
   return {
     formula: CURRENT_FORMULA,
     payerId: payer.personId,
