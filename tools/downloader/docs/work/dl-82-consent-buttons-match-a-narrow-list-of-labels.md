@@ -282,6 +282,133 @@ downloader` exit 0, with 1760 passed and 2 skipped of 1762 tests (gate 1:
   on `cabd299`: 10 checks pass, and `test (windows-latest, informational)` was
   still **pending** when read.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-10-06 · `cabd299..ab92dcd` · Opus 5.5, depth standard (re-gate)
+
+**Gate-2 findings:**
+
+- **high, iii-b and the false "wins over" docstring: fixed as raised.** Gate
+  2's page with no link in the header (`a3d` below) now finds the stream. The
+  docstring sentence is gone. With `provoke.ts` at `cabd299`,
+  `browser-resolver.test.ts -t "gate 2"` → `Tests 6 failed | 7 passed | 66
+skipped (79)`, as the Log says. The same regression returns once the sticky
+  header carries one cookie word: see the first med below.
+- **med, rows ii and iii pressed: fixed for layers that do not mention cookies
+  or consent.** It returns when they do (same med below).
+- **low, cross-origin branch untested: fixed.** With the press replaced by
+  `void dialogs;`, `-t "gate 2"` → `1 failed | 12 passed`, the failure being
+  "presses a widened label inside a role=dialog in a cross-origin frame".
+  Reversing the tier order fails only "presses a consent bar before a
+  newsletter dialog …" (`1 failed | 12 passed`).
+- **Builder refutation, newsletter dialog pressed in the second pass:
+  confirmed.** `node <scratch>/gate-3/run-fixture.mjs /consent-order-dialog.html`
+  run twice gives `["/beacon/consent-accepted","/beacon/newsletter-hocapito"]`
+  and the stream both times.
+
+**The privacy decision, measured.** `node <scratch>/gate-3/cases.mjs`, built
+`dist` at each state:
+
+- **head:** `ab92dcd`.
+- **+privacy:** head with `privacy|confidentialité|privacidad|privacidade|datenschutz|prywatność|конфиденциальн`
+  added to `CONSENT_WORDING`; `dist` grep `prywatno` 1.
+- **base:** `056aab7`; `dist` grep 0.
+
+"×2" is a press in both passes.
+
+| Page                                                                        | head                       | +privacy                         | base                       |
+| --------------------------------------------------------------------------- | -------------------------- | -------------------------------- | -------------------------- |
+| p1 fixed bar "We value your privacy", "Ho capito"                           | nothing · `NO_MEDIA_FOUND` | pressed · stream                 | nothing · `NO_MEDIA_FOUND` |
+| p1 same, "Accetto e continua"                                               | nothing · `NO_MEDIA_FOUND` | pressed · stream                 | nothing · `NO_MEDIA_FOUND` |
+| p2 fixed checkout "… terms and privacy policy", submit "Agree and continue" | nothing                    | **submit ×2**                    | nothing                    |
+| p3 sticky header, "Privacy" nav link, notice "Ho capito"                    | nothing                    | **notice ×2**                    | nothing                    |
+| p3b p3's header ahead of a fixed "We value your privacy" bar, "Accetta"     | consent · stream           | **notice ×2 · `NO_MEDIA_FOUND`** | consent · stream           |
+| p4 fixed bar "Datenschutz …", "Einverstanden"                               | consent · stream           | consent · stream                 | consent · stream           |
+| p4b same bar, "Ich stimme zu"                                               | nothing · `NO_MEDIA_FOUND` | pressed · stream                 | nothing · `NO_MEDIA_FOUND` |
+
+Adding privacy resolves three pages that neither head nor base resolves (p1
+twice, p4b). It also presses two non-consent controls that neither presses (p2,
+p3), and it regresses one page both resolve (p3b). Without privacy, head equals
+base on every row. Adding it also fails 3 of the branch's tests (`-t "dl-82"`
+→ `3 failed | 206 passed | 57 skipped (266)`): the two privacy `SILENT` rows
+and the no-wording bar. p4, as specified, measures nothing, because
+"Einverstanden" is a pre-dl-82 label pressed anywhere; p4b is the informative
+variant.
+
+**The builder's "not measured" claims, and substring hits** (same script):
+
+| Page                                                                                                                       | head                                 | base                 |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------- |
+| a1 fixed app root (`inset: 0`) with footer text "usa i cookie", plus a newsletter "Ho capito" and a comment "Yes, I agree" | **newsletter ×2** · `NO_MEDIA_FOUND` | nothing              |
+| a1b same app root, footer only a "Cookie policy" link                                                                      | **newsletter ×2**                    | nothing              |
+| a2 fixed checkout "Your cart is kept in a cookie.", submit "Agree and continue"                                            | **submit ×2**                        | nothing              |
+| a3 sticky header with a "Cookie policy" nav link, notice "Ho capito"                                                       | **notice ×2**                        | nothing              |
+| a3b same, the link only in a `display:none` menu                                                                           | **notice ×2**                        | nothing              |
+| a3c a3's header ahead of a fixed "Usiamo i cookie" bar, "Accetta"                                                          | **notice ×2 · `NO_MEDIA_FOUND`**     | consent · **stream** |
+| a3d control: gate 2's iii-b, no link                                                                                       | consent · stream                     | consent · stream     |
+| a4 fixed checkout "… consente di ordinare …", submit "Accetto e continua"                                                  | **submit ×2**                        | nothing              |
+| a5 sticky header "Veckans recept: pannkakor", "Acceptera alla"                                                             | **pressed ×2**                       | nothing              |
+
+**Findings on the lines this round touched:**
+
+- **med** · no `Done when` line depends on it · open decision · **the iii-b
+  regression narrowed, not closed, and the whole page can become a
+  container.** One mechanism. `MARK_CONSENT_ZONES_SCRIPT` tests
+  `CONSENT_WORDING` against the nearest fixed or sticky ancestor's whole
+  `textContent`: link text, hidden menus and every descendant count. So:
+  - one "Cookie policy" link in a sticky header makes it a consent-tier zone.
+    It comes first in the document, and a3c regresses exactly as iii-b did:
+    head `NO_MEDIA_FOUND` with `header-notice` ×2, base the stream;
+  - a fixed app root that mentions cookies anywhere makes every widened label
+    on the page pressable (a1, a1b);
+  - a docked bar that mentions cookies has its submit pressed (a2). The
+    docstring names this case. The Log calls the app root "unmeasured"; it is
+    now measured.
+
+  Reproduction: `node <scratch>/gate-3/cases.mjs /a3c-header-cookie-link-then-bar.html`.
+  **Options:**
+  - **(a) Recommended, unmeasured:** test the wording against the layer's
+    visible prose, its `innerText` without `a` elements. This would close a1b,
+    a3, a3b and a3c, but not a1 or a2.
+  - **(b)** Also require the wording within a few ancestors of the control
+    rather than anywhere in the layer. Unmeasured; it would narrow a1.
+  - **(c)** Record it as an accepted cost and name a3c in the docstring and
+    the Log.
+
+- **med** · no `Done when` line depends on it · **substring wording matches
+  ordinary prose.** `consent` matches Italian "consente", "consentito" and
+  "consentono" ("allows", "allowed"). `kakor` matches "pannkakor" and
+  "sockerkakor". `témoins` matches "les témoins de l'accident". `куки` matches
+  "Кукиш". (`node -e` over `CONSENT_WORDING` at head: all true.) On real
+  pages, a4 presses a fixed checkout's "Accetto e continua" submit and a5
+  presses a sticky header's "Acceptera alla"; base presses neither. The `\b`
+  objection holds only for Cyrillic. A Latin-only word start, such as a
+  `(?<!\p{L})` lookbehind under the `u` flag, or explicit inflections
+  (`consent(?:s|ing|ement|imiento|imento)?`), would keep "consentement" and
+  drop "consente". Unmeasured.
+- **low** · the `clickConsentText` docstring says a sticky header or a docked
+  checkout bar "do not speak of consent, are not containers at all". a3, a3b
+  and a3c are sticky headers that are containers. The sentence is true only
+  of headers with no cookie word anywhere in them, hidden menus included.
+- **dropped** · the newsletter dialog's "Ho capito" pressed in pass 2 (base
+  never pressed it). Dialogs counting unconditionally is option (A) as the
+  owner chose it, and the builder pinned the order.
+- **dropped** · `fixture-server.ts` as a merge seam with dl-83: it is not one.
+  `git merge-tree --write-tree --name-only ab92dcd origin/dl-83-age-gate-phrasings`
+  (`25e97db`) conflicts only in
+  `tools/downloader/resolvers/test/browser/provoke.test.ts`, which is the
+  known sibling conflict. dl-83 does not touch `fixture-server.ts`
+  (`git diff --stat 056aab7...origin/dl-83-age-gate-phrasings`).
+- **findings** · the hunt returned 5; 3 carried, 2 dropped. No high.
+- **Unmeasured:** `textContent` also includes `<script>` and `<style>` text.
+  A fixed app root whose subtree holds a script reading `document.cookie`
+  would count as speaking of cookies by the same mechanism as the first med.
+- **Gates at `ab92dcd`:**
+  - `npm run check`: exit 0.
+  - `npm test -- --project downloader`: exit 0, 1798 passed and 2 skipped of
+    1800 (gate 2: 1760; +38 = 25 wording rows + 13 integration).
+  - PR #370 on `ab92dcd`: all 11 checks pass, the Windows leg included.
+
 ## Log
 
 ### 2026-10-06 — build
