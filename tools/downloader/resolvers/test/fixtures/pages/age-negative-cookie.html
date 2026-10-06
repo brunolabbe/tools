@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Notizie</title>
+  </head>
+  <body>
+    <h1>Notizie</h1>
+    <!-- dl-83 negative: a consent dialog whose text mentions "18 partner". The
+         number is in a blocking layer, but no control's label carries it. Not
+         a gate. -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      "
+    >
+      <div style="width: 420px; padding: 24px; background: #fff">
+        <p>
+          Noi e i nostri 18 partner utilizziamo cookie per misurare il pubblico e personalizzare
+          i contenuti.
+        </p>
+        <button type="button">Accetta tutto</button>
+        <button type="button">Rifiuta</button>
+        <button type="button">Personalizza</button>
+      </div>
+    </div>
+  </body>
+</html>

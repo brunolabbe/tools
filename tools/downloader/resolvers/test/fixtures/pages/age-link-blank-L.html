@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- dl-83 gate round 2, page "ln-blank-L", generated from the gate's harness. A full-viewport gate whose entry is an <a href="/dest/enter.html" target="_blank"> whose click handler shows the player; dl-48's label "I am 18 or older" on a page saying "adults only" (a legacy candidate). Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>Link gate</title></head>
+<body style="margin:0;font-family:sans-serif"><h1>Channel</h1><div id="player" class="player" style="width:640px;height:360px;background:#222"></div>
+<div id="gate" style="position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);color:#fff"><div style="width:420px;padding:24px;background:#333;color:#fff"><p>This channel is for adults only.</p>
+<a id="enter" href="/dest/enter.html" target="_blank">I am 18 or older</a></div></div><script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+function reveal(name){beacon(name||'age-confirmed');var g=document.getElementById('gate');if(g)g.remove();startStream();}
+function alreadyEntered(){return /(?:^|; )age=1/.test(document.cookie);}
+
+document.getElementById('enter').addEventListener('click',function(e){reveal();});</script></body></html>

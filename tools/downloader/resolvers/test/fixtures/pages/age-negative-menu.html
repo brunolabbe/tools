@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Video listing</title>
+  </head>
+  <body>
+    <h1>Video listing</h1>
+    <p>Pick a category.</p>
+    <!-- dl-83 negative: a full-screen menu, open, whose only mention of 18 is
+         its own "18+" category link. The layer blocks the page and the label
+         names an age, but the layer's own text, controls excluded, says
+         nothing about one. Counting the label as the layer's text would make
+         every such layer vouch for itself. Not a gate. -->
+    <div
+      id="menu"
+      style="position: fixed; inset: 0; z-index: 10; background: #fff; padding: 24px"
+    >
+      <h2>Menu</h2>
+      <a href="/beacon/menu-home">Home</a>
+      <a href="/beacon/menu-new">New</a>
+      <a id="menu-18" href="/beacon/menu-18">18+</a>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- dl-83 gate round 2, page "tb-sheet-leaving-decoy", generated from the gate's harness. The English sheet, its footer decoy a same-origin link to another page. Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>Sheet leaving</title></head>
+<body style="margin:0;font-family:sans-serif"><h1>Channel</h1><div id="player" class="player" style="width:640px;height:360px;background:#222"></div>
+<div id="gate" role="dialog" aria-label="Age" style="position:fixed;bottom:0;left:0;right:0;height:120px;z-index:10;background:#fff;color:#000;padding:12px"><p>This channel is for adults only.</p>
+<button type="button" id="enter">I am 18 or older - Enter</button></div>
+<footer><a href="/dest/age-info.html" id="footer18">I am 18 or older</a></footer><script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+function reveal(name){beacon(name||'age-confirmed');var g=document.getElementById('gate');if(g)g.remove();startStream();}
+function alreadyEntered(){return /(?:^|; )age=1/.test(document.cookie);}
+document.getElementById('enter').addEventListener('click',function(){reveal();});
+document.getElementById('footer18').addEventListener('click',function(){beacon('footer-decoy');});</script></body></html>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Lettore video</title>
+    <style>
+      #player {
+        width: 100%;
+        height: 70vh;
+        background: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Lettore video</h1>
+    <!-- dl-83's page shape: an age confirmation in a full-viewport fixed layer,
+         labelled "Ho 18 anni o più - Entra" (a label the owner saw on a real
+         gate), on a page that carries no AGE_MARKERS phrase. The player exists
+         only after the entry is pressed. Every control reports itself to a
+         /beacon/ path so a test can assert from outside what was clicked.
+
+         Query flags add the variants the ticket names, and compose:
+           exit=link     an exit link to another origin, "Ho meno di 18 anni - Esci"
+           exit=button   the same exit as a same-origin <button> with a script handler
+           exit=foreign  an exit link to another origin in a language with no
+                         negation list ("Je mi méně než 18 let - Odejít"), so only
+                         the origin rule can tell it from the entry
+           second        a second entry control, "I am 18 or older - Enter", so two
+                         candidates survive every rule
+           shadow        the whole layer lives in an open shadow root
+           decoy         a header above the layer carries an "I am 18 or older"
+                         button earlier in the DOM, and the page carries an
+                         AGE_MARKERS phrase, so dl-48's text search finds the decoy
+
+         Styles are inline because the shadow variant moves the layer out of
+         reach of this document's stylesheet. -->
+    <div id="player"></div>
+
+    <div
+      id="gate"
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+      "
+    >
+      <div id="gate-box" style="width: 420px; padding: 24px; background: #333">
+        <p id="gate-text">
+          Contenuti riservati a un pubblico maggiorenne. Per entrare devi avere almeno 18 anni.
+        </p>
+        <button id="age-enter" type="button">Ho 18 anni o più - Entra</button>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var MASTER = "/media/mse/master.m3u8";
+        var VARIANT = "/media/mse/v1080.m3u8";
+        var SEGMENTS = [
+          "/media/mse/init.mp4",
+          "/media/mse/seg-00001.m4s",
+          "/media/mse/seg-00002.m4s",
+        ];
+        var params = new URLSearchParams(location.search);
+        var gate = document.getElementById("gate");
+        var box = document.getElementById("gate-box");
+        var host = null;
+
+        function beacon(name) {
+          fetch("/beacon/" + name).catch(function () {});
+        }
+
+        function mountPlayer() {
+          var video = document.createElement("video");
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          video.width = 640;
+          video.height = 360;
+          // Requested on the press itself, as age-gate.html does, so a loaded
+          // runner cannot reach network quiet before the playlist is asked for.
+          fetch(MASTER)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch(VARIANT);
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return Promise.all(
+                SEGMENTS.map(function (url) {
+                  return fetch(url);
+                }),
+              );
+            })
+            .catch(function () {});
+          var mediaSource = new MediaSource();
+          video.src = URL.createObjectURL(mediaSource);
+          document.getElementById("player").replaceChildren(video);
+        }
+
+        function removeGate() {
+          (host || gate).remove();
+        }
+
+        function control(tag, id, label, href) {
+          var el = document.createElement(tag);
+          el.id = id;
+          el.textContent = label;
+          if (tag === "button") el.type = "button";
+          if (href) el.href = href;
+          el.style.marginLeft = "8px";
+          box.appendChild(el);
+          return el;
+        }
+
+        document.getElementById("age-enter").addEventListener("click", function () {
+          beacon("age-confirmed");
+          removeGate();
+          mountPlayer();
+        });
+
+        var exit = params.get("exit");
+        var exitEl = null;
+        if (exit === "link") {
+          exitEl = control("a", "age-exit", "Ho meno di 18 anni - Esci", "https://example.com/");
+        } else if (exit === "button") {
+          exitEl = control("button", "age-exit", "Ho meno di 18 anni - Esci");
+        } else if (exit === "foreign") {
+          exitEl = control("a", "age-exit", "Je mi méně než 18 let - Odejít", "https://example.com/");
+        }
+        if (exitEl) {
+          exitEl.addEventListener("click", function (event) {
+            // Never leave the loopback server: the beacon is the evidence, and
+            // the href is all a chooser may judge the link by.
+            event.preventDefault();
+            beacon("age-exit");
+            document.getElementById("gate-text").textContent = "Arrivederci.";
+          });
+        }
+
+        if (params.has("second")) {
+          control("button", "age-enter-2", "I am 18 or older - Enter").addEventListener(
+            "click",
+            function () {
+              beacon("age-confirmed-2");
+              removeGate();
+              mountPlayer();
+            },
+          );
+        }
+
+        if (params.has("decoy")) {
+          // Above the layer and outside it, so the decoy is really clickable and
+          // a first-match text search really would press it.
+          var bar = document.createElement("header");
+          bar.style.cssText =
+            "position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 20; background: #fff";
+          var note = document.createElement("span");
+          // Split, so the phrase is in the page's text only when this variant
+          // is: classifyFailure reads the served HTML too, inline script included.
+          note.textContent = "This channel is for " + "adults" + " only.";
+          var decoy = document.createElement("button");
+          decoy.id = "age-decoy";
+          decoy.type = "button";
+          decoy.textContent = "I am 18 or older";
+          decoy.addEventListener("click", function () {
+            beacon("age-decoy");
+          });
+          bar.appendChild(note);
+          bar.appendChild(decoy);
+          document.body.insertBefore(bar, document.body.firstChild);
+          gate.style.top = "56px";
+        }
+
+        if (params.has("shadow")) {
+          host = document.createElement("age-gate");
+          document.body.appendChild(host);
+          host.attachShadow({ mode: "open" }).appendChild(gate);
+        }
+      })();
+    </script>
+  </body>
+</html>

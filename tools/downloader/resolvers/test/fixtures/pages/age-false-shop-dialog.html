@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- dl-83 gate round 1, page "shop-c-dialog" (mode stream), generated from the gate's harness: a role=dialog card with the same text and link. The stream starts on load. Recognised; the link must never be pressed. Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>Shop c</title></head>
+<body style="margin:0;font-family:sans-serif">
+<div id="player" class="player" style="width:640px;height:360px;background:#222"></div><div role="dialog" aria-label="Offer" style="position:fixed;top:20%;left:30%;width:300px;padding:16px;background:#ffd;z-index:10">
+<p>Free delivery on orders over 18 euros.</p>
+<a href="/dest/checkout.html" id="buy">Over 18? Buy now</a></div>
+<script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+
+startStream();
+
+document.getElementById('buy').addEventListener('click',function(){beacon('buy');});
+</script></body></html>

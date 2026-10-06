@@ -415,3 +415,34 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     expect(CONSENT_WORDING.test(text)).toBe(false);
   });
 });
+
+describe("an age gate is recognised by its structure, and only that (dl-83)", () => {
+  async function ageGateAt(pathname: string): Promise<boolean> {
+    return await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext();
+      try {
+        const page = await context.newPage();
+        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+        return (await readSignals(page)).ageGate;
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  // The positive control: without it, a `readSignals` that always answered
+  // false would pass every negative below.
+  test("recognises the Italian gate in a fixed layer", async () => {
+    expect(await ageGateAt("/age-gate-overlay.html")).toBe(true);
+  });
+
+  test.each([
+    ["an 18+ category link in a fixed nav bar", "/age-negative-nav.html"],
+    ["a Top 21 heading in a modal", "/age-negative-top21.html"],
+    ["a cookie dialog that mentions 18 partners", "/age-negative-cookie.html"],
+    ["a promo modal with a Get 18% off button", "/age-negative-promo.html"],
+    ["a full-screen menu whose only 18 is its own 18+ link", "/age-negative-menu.html"],
+  ])("%s is no gate", async (_name, pathname) => {
+    expect(await ageGateAt(pathname)).toBe(false);
+  });
+});

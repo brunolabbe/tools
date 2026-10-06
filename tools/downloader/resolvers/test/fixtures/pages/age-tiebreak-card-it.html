@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- dl-83 gate round 2, page "tb-card-it", generated from the gate's harness. An Italian gate as a small fixed role=dialog card with no backdrop, below the coverage threshold, and a header "Ho 18 anni" link. Every press reports to a /beacon/ path. -->
+<html lang="it"><head><meta charset="utf-8"><title>Card it</title></head>
+<body style="margin:0;font-family:sans-serif"><header><a href="#top" id="head18">Ho 18 anni</a></header><h1>Canale</h1><div id="player" class="player" style="width:640px;height:360px;background:#222"></div>
+<div id="gate" role="dialog" aria-label="Età" style="position:fixed;top:30%;left:35%;width:420px;padding:24px;background:#333;color:#fff;z-index:10"><p>Vietato ai minori. Per entrare devi avere almeno 18 anni.</p>
+<button type="button" id="enter">Ho 18 anni o più - Entra</button></div><script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+function reveal(name){beacon(name||'age-confirmed');var g=document.getElementById('gate');if(g)g.remove();startStream();}
+function alreadyEntered(){return /(?:^|; )age=1/.test(document.cookie);}
+document.getElementById('enter').addEventListener('click',function(){reveal();});
+document.getElementById('head18').addEventListener('click',function(){beacon('footer-decoy');});</script></body></html>

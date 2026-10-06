@@ -33,6 +33,7 @@ import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
 import {
+  PLAY_TIME_QUERY_KEYS,
   provokePlayback,
   readMetadata,
   readSignals,
@@ -408,13 +409,16 @@ export class BrowserResolver implements Resolver {
     const outcome = await this.#buildOutcome(context, collector, ranked, deadline, options);
 
     if (!outcome) {
-      const signals = await readSignals(page);
+      const { ageGatePressable, ...signals } = await readSignals(page);
       throw classifyFailure({
         ...signals,
         // A gate still showing after this tier was allowed to press it is a
         // press that did not start the player. Saying the server "is not set to
         // confirm" would be false, so that probe fails as an absence instead.
-        ageGate: signals.ageGate && !this.#confirmAge,
+        // Unless the press was declined (dl-83): a gate whose choice left no
+        // single control to press was never pressed, and saying so beats a
+        // guess, so it reports as if confirmation were off.
+        ageGate: signals.ageGate && (!this.#confirmAge || !ageGatePressable),
         finalUrl,
         status: navigation?.status(),
         quietReached,
@@ -632,8 +636,11 @@ async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal
  * origin and the path — an SPA that rewrites its own *path* for the same clip
  * is not covered by this exception and still counts as a departure; that cost
  * is recorded in the Log rather than answered here.
+ *
+ * The three keys themselves are `PLAY_TIME_QUERY_KEYS` in `provoke.ts`, which
+ * the age-gate press reads too, so the two never disagree about leaving (dl-83).
  */
-const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(["t", "start", "autoplay"]);
+const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(PLAY_TIME_QUERY_KEYS);
 
 /**
  * Same URL, ignoring the fragment (a page that only changes its hash on play —

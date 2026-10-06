@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Charts</title>
+  </head>
+  <body>
+    <h1>Charts</h1>
+    <!-- dl-83 negative: a modal whose heading is "Top 21". The number is in
+         the layer, but no control's label carries it. Not a gate. -->
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="top-title"
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      "
+    >
+      <div style="width: 360px; padding: 24px; background: #fff">
+        <h2 id="top-title">Top 21</h2>
+        <p>The 21 most watched clips of the week.</p>
+        <a href="/beacon/top-see-all">See all</a>
+        <button type="button">Close</button>
+      </div>
+    </div>
+  </body>
+</html>
