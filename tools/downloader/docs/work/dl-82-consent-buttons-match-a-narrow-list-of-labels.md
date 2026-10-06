@@ -409,6 +409,141 @@ variant.
     1800 (gate 2: 1760; +38 = 25 wording rows + 13 integration).
   - PR #370 on `ab92dcd`: all 11 checks pass, the Windows leg included.
 
+### Gate 4
+
+**Gate: CONCERNS** — 2026-10-06 · `ab92dcd..199dd5f` · Opus 5.5, depth narrow (owner-authorised re-check)
+
+**Gate-3 findings:**
+
+- **med, link, hidden and app-root wording: fixed for the link and hidden
+  cases, not for wording in prose.** a1b, a3, a3b and a3c now match base. a1
+  (an app root's footer prose says "cookie") and a2 (a checkout bar's prose says
+  "cookie") still press a widened label; the branch pins both as accepted,
+  pending the open decision below.
+- **med, substring hits: fixed.** a4 and a5 now match base.
+- **low, docstring: made true.** a sticky header that only links a cookie
+  policy is not a container (a3, a3c), as `clickConsentText` now says.
+- **Builder's red count: confirmed.** With `provoke.ts` at `ab92dcd`, `-t
+"dl-82"` over both files → `Tests 13 failed | 217 passed | 57 skipped (287)`.
+  The failures are 6 integration rows and 7 `CONSENT_WORDING` rows.
+
+**Gate 3's `cases.mjs`, re-run unchanged at `199dd5f`.** Base is gate 3's run
+of the same script at `056aab7`. "×2" is a press in both passes.
+
+| Row                                                  | `199dd5f`                            | base                       |
+| ---------------------------------------------------- | ------------------------------------ | -------------------------- |
+| p1 privacy bar, "Ho capito"                          | nothing · `NO_MEDIA_FOUND`           | same                       |
+| p1 privacy bar, "Accetto e continua"                 | nothing · `NO_MEDIA_FOUND`           | same                       |
+| p2 checkout "… privacy policy"                       | nothing · `NO_MEDIA_FOUND`           | same                       |
+| p3 sticky header "Privacy" link + "Ho capito"        | nothing · `NO_MEDIA_FOUND`           | same                       |
+| p3b p3 then privacy bar "Accetta"                    | consent · stream                     | same                       |
+| p4 "Datenschutz" bar, "Einverstanden"                | consent · stream                     | same                       |
+| p4b "Datenschutz" bar, "Ich stimme zu"               | nothing · `NO_MEDIA_FOUND`           | same                       |
+| a1 fixed app root, footer prose "cookie"             | **newsletter ×2** · `NO_MEDIA_FOUND` | nothing · `NO_MEDIA_FOUND` |
+| a1b fixed app root, footer link only                 | nothing · `NO_MEDIA_FOUND`           | same                       |
+| a2 checkout "Your cart is kept in a cookie."         | **submit ×2** · `NO_MEDIA_FOUND`     | nothing · `NO_MEDIA_FOUND` |
+| a3 sticky header, "Cookie policy" link + "Ho capito" | nothing · `NO_MEDIA_FOUND`           | same                       |
+| a3b same, link in a hidden menu                      | nothing · `NO_MEDIA_FOUND`           | same                       |
+| a3c a3 then cookie bar "Accetta"                     | consent · stream                     | same                       |
+| a3d control, no link                                 | consent · stream                     | same                       |
+| a4 checkout "consente"                               | nothing · `NO_MEDIA_FOUND`           | same                       |
+| a5 sticky header "pannkakor"                         | nothing · `NO_MEDIA_FOUND`           | same                       |
+
+Head now matches base on 14 of 16 rows; the two that differ are a1 and a2.
+
+**Recall loss.** `node <scratch>/gate-4/recall.mjs` at each sha after a
+rebuild (`dist` grep `checkVisibility`: 1 at `199dd5f`, 0 at `ab92dcd`). Every
+bar is fixed and labelled only with a dl-82 phrasing, and pressing it mounts
+the player.
+
+| Row                                                          | `199dd5f`                  | `ab92dcd`        | base             |
+| ------------------------------------------------------------ | -------------------------- | ---------------- | ---------------- |
+| r1 "Read our `<a>`cookie policy`</a>`." + "Ho capito"        | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r1b "We use `<a>`cookies`</a>` to …" + "Accetto e continua"  | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r2 wording only in `aria-label="Cookie consent"`             | `NO_MEDIA_FOUND`           | `NO_MEDIA_FOUND` | `NO_MEDIA_FOUND` |
+| r2b wording only in `<span role=link>`                       | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r3 "Cookie-Einstellungen" + "Ich stimme zu"                  | stream                     | stream           | `NO_MEDIA_FOUND` |
+| r3b "We use cookies." + "Ho capito"                          | stream                     | stream           | `NO_MEDIA_FOUND` |
+| r4 "… plików cookie." + "Akceptuję"                          | stream                     | stream           | `NO_MEDIA_FOUND` |
+| r5 whole bar `visibility:hidden` until 1.2 s                 | stream                     | stream           | `NO_MEDIA_FOUND` |
+| r5b text `visibility:hidden` until 6 s, button visible       | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r6 "Wir verwenden Cookies." + "Ich stimme zu"                | stream                     | stream           | `NO_MEDIA_FOUND` |
+| r7 "Statistikcookies und Marketingcookies" + "Ich stimme zu" | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r8 Swedish "kakorna" + "Jag godkänner"                       | nothing · `NO_MEDIA_FOUND` | stream           | `NO_MEDIA_FOUND` |
+| r9 CMP shape: text block and button block separate           | stream                     | stream           | `NO_MEDIA_FOUND` |
+
+Six rows are **lost gains, not regressions**: r1, r1b, r2b, r5b, r7 and r8.
+`ab92dcd` resolved them, and neither `199dd5f` nor base does.
+
+**The open decision, (1) accept a1/a2 vs (2) require the wording near the
+control, measured.** `node <scratch>/gate-4/proto.mjs <K>` rewrites the
+script in place:
+
+- **For a fixed or sticky layer** (not a dialog): the wording must be in the
+  visible prose of the control's ancestor K levels up, or of the layer if
+  that is nearer. The mark goes on that ancestor.
+- **Dialogs** keep the built rule.
+- **The per-ancestor memo** is turned off.
+- **Restored with `git checkout --` after each run.**
+
+| Row                           | built            | K = 1 (the control's parent, its sibling text) | K = 3         |
+| ----------------------------- | ---------------- | ---------------------------------------------- | ------------- |
+| a1 app root, footer prose     | newsletter ×2    | **nothing**                                    | newsletter ×2 |
+| a2 checkout, prose "cookie"   | submit ×2        | submit ×2                                      | submit ×2     |
+| r9 CMP shape                  | stream           | **`NO_MEDIA_FOUND`**                           | stream        |
+| r1, r1b, r2, r2b, r5b, r7, r8 | `NO_MEDIA_FOUND` | same                                           | same          |
+| r3, r3b, r4, r5, r6           | stream           | same                                           | same          |
+
+So (2) does not separate them. Distance alone cannot tell a1 apart from r9: a
+reach that excludes the app root's footer also excludes a CMP's separate text
+block. a2 cannot be reached by (2) at any K, because its wording is the
+submit's own sibling text. A working version needs more than a few lines (for
+example, structural knowledge of CMP markup), so it is not cheap.
+
+**Findings on the lines this round touched:**
+
+- **med** · no `Done when` line depends on it · open decision · a1 and a2 still
+  press a widened label where base pressed none. The branch pins both as
+  accepted (`browser-resolver.test.ts` › "a fixed app root whose footer says
+  'cookie' is a container, so its first widened label is pressed", and "a
+  docked checkout bar whose prose says 'cookie' is a container, so its submit
+  is pressed"). The measurement above shows option (2) does not close them
+  cheaply. Accepting them is option (1), the builder's recommendation, and is
+  the owner's call.
+- **low** · lost gains from the stricter rule:
+  - r7: `(?<!\p{L})` before `cookie` refuses the German compounds
+    "Statistikcookies" and "Marketingcookies". Unlike "consent" or "kakor",
+    "cookie" has no ordinary word containing it, so it needs no word start.
+  - r8: `kakor(?!\p{L})` refuses the Swedish definite forms "kakorna" and
+    "kakorn".
+  - r1, r1b and r2b: wording only inside a link is the price of a3's fix.
+  - r5b: text still hidden while its button shows.
+
+  None is a regression from base. Both regex tweaks are one alternative each:
+  `cookie` outside the lookbehind, and `kakor(?:na|n)?(?!\p{L})`.
+  Unmeasured.
+
+- **dropped** · the prose walk's cost. `node <scratch>/gate-4/bench.mjs 21`
+  times `dismissConsent` alone, 21 calls, medians in ms:
+
+  | Page                                         | `199dd5f` | `ab92dcd` |
+  | -------------------------------------------- | --------- | --------- |
+  | flat, 5,605 elements                         | 183       | 290       |
+  | deep, 9,605 elements                         | 302       | 216       |
+  | flat inside a fixed app root, 5,607 elements | 138       | 197       |
+  | deep inside a fixed app root, 9,607 elements | 281       | 263       |
+
+  The differences run in both directions and sit within run-to-run noise on a
+  host at load average 24.9. Memoisation means the walk runs once per fixed or
+  sticky layer, so no cost is measurable.
+
+- **findings** · the hunt returned 3; 2 carried, 1 dropped. No high.
+- **Gates at `199dd5f`:**
+  - `npm run check`: exit 0.
+  - `npm test -- --project downloader`: exit 0, 1819 passed and 2 skipped of
+    1821 (gate 3: 1798, +21).
+  - PR #370 on `199dd5f`: all 11 checks pass, the Windows leg included.
+
 ## Log
 
 ### 2026-10-06 — build
