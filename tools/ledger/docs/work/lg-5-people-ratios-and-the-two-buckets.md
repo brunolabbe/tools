@@ -7,6 +7,7 @@ status: done
 milestone: P2
 depends_on: [lg-4]
 difficulty: hard
+awaiting: Done when 4 — the two CodeQL alerts on routes/rules.ts and routes/salaries.ts read dismissed or suppressed on the security tab after the push to main that runs security.yml's dismissal step
 ---
 
 # lg-5 — People, salaries and ratios over time, and what each bucket owes whom
@@ -308,3 +309,10 @@ vitest run tools/ledger/api/test/route-limits.test.ts` answer `1 failed |
     `rules` and `classifications` are enrolled, and nothing else. `npx vitest run
 tools/ledger/api/test/schema.test.ts tools/ledger/api/test/people.test.ts` →
     `Test Files 2 passed (2)`, `Tests 13 passed (13)`.
+- 2026-10-06 — An `awaiting` line added, from repo-88's rule: Done when 4,
+  "Gates green", was `unproven (gate)` in both gates only because the `CodeQL`
+  check was red under the owner's adr/005 excusal, and the owner decided on
+  2026-10-06 (repo-88, option A) that such a line is `awaiting` on the push to
+  `main` that runs the dismissal step. The reading has not been taken: the
+  alerts' state needs the security tab, and `gh api` is denied here. Whoever
+  reads it deletes the line, beside `repo-16`'s own.

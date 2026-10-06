@@ -143,19 +143,25 @@ export default defineConfig({
   webServer: {
     ...apiServer,
     url: `${BASE_URL}/api/health`,
-    env: serverEnv({
-      port: PORT,
-      storageDir: path.join(root, "e2e/.artifacts/storage"),
-      // The direct tier alone. The browser sniffer and yt-dlp have their own
-      // tests against their own fixtures; dragging Chromium and a network
-      // extractor into every UI test would make this suite slow and flaky
-      // without telling us anything the resolver suites do not. The one
-      // journey that genuinely needs the sniffer is the other config's.
-      tiers: {
-        ENABLE_BROWSER_RESOLVER: "false",
-        ENABLE_YTDLP_RESOLVER: "false",
-        ENABLE_DIRECT_RESOLVER: "true",
-      },
-    }),
+    env: {
+      ...serverEnv({
+        port: PORT,
+        storageDir: path.join(root, "e2e/.artifacts/storage"),
+        // The direct tier alone. The browser sniffer and yt-dlp have their own
+        // tests against their own fixtures; dragging Chromium and a network
+        // extractor into every UI test would make this suite slow and flaky
+        // without telling us anything the resolver suites do not. The one
+        // journey that genuinely needs the sniffer is the other config's.
+        tiers: {
+          ENABLE_BROWSER_RESOLVER: "false",
+          ENABLE_YTDLP_RESOLVER: "false",
+          ENABLE_DIRECT_RESOLVER: "true",
+        },
+      }),
+      // dl-77: one open download per client, so a spec can reach the refusal
+      // with two links instead of needing the production cap's worth. Every
+      // other spec here opens one link at a time and is unaffected.
+      MAX_JOBS_PER_CLIENT: "1",
+    },
   },
 });

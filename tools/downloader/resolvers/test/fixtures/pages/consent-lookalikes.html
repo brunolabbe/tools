@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Recensioni</title>
+  </head>
+  <body>
+    <h1>Recensioni</h1>
+    <p>Nothing here plays, and nothing here is a consent dialog.</p>
+    <!-- dl-82: controls and text that a loose consent pattern would press. Each
+         reports itself to a /beacon/ path, so a test asserts from outside that
+         none was clicked. -->
+    <p>
+      Sono d'accordo con la recensione precedente: il film è lento, ma ne vale la
+      pena.
+    </p>
+    <!-- A vote button whose label starts with a consent phrasing: only an
+         unanchored pattern would press it. -->
+    <button id="vote" type="button" onclick="fetch('/beacon/consent-vote')">
+      Sono d'accordo con questa recensione
+    </button>
+    <!-- Pagination. A bare "continue" is already a consent label in English, and
+         the Italian word must not become one: pages repeat it everywhere. -->
+    <nav>
+      <a id="next" href="/beacon/consent-continua">Continua</a>
+    </nav>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import type { Job } from "@downloader/contract";
+import type { AppErrorPayload, Job } from "@downloader/contract";
 import type { StreamState } from "../lib/job-stream.ts";
 import { JobCard } from "./JobCard.tsx";
 
@@ -7,6 +7,9 @@ interface JobListProps {
   streamStates: Record<string, StreamState>;
   /** Client-side pipeline marks by job id — see `useJobs`. */
   watchedSteps: Record<string, number>;
+  /** Why each job's link was last refused, by job id — see `useJobs`. */
+  refusals: Record<string, AppErrorPayload>;
+  onFollowLink: (id: string) => void;
   onCancel: (id: string) => void;
   onRemove: (id: string) => void;
   onRetry: (job: Job) => void;
@@ -17,6 +20,8 @@ export function JobList({
   jobs,
   streamStates,
   watchedSteps,
+  refusals,
+  onFollowLink,
   onCancel,
   onRemove,
   onRetry,
@@ -47,6 +52,8 @@ export function JobList({
             job={job}
             streamState={streamStates[job.id]}
             watchedStep={watchedSteps[job.id]}
+            refusal={refusals[job.id]}
+            onFollowLink={onFollowLink}
             onCancel={onCancel}
             onRemove={onRemove}
             onRetry={onRetry}

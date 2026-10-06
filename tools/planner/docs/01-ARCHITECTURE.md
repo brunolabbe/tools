@@ -210,7 +210,8 @@ against faking progress applies (§7).
 
 All via environment, parsed and validated once at boot with zod, `api` only.
 Every variable and its default is listed in [`.env.example`](../.env.example),
-which nothing loads.
+and a `.env` copied beside it is loaded by the API's `dev` script and nothing
+else.
 
 | Variable                      | Default         | Why it matters                                                                         |
 | ----------------------------- | --------------- | -------------------------------------------------------------------------------------- |

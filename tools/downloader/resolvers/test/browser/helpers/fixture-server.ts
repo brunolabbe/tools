@@ -22,7 +22,32 @@ const CONTENT_TYPES: Record<string, string> = {
   ".mpd": "application/dash+xml",
   ".mp4": "video/mp4",
   ".m4s": "video/iso.segment",
+  ".js": "text/javascript; charset=utf-8",
   ".png": "image/png",
+};
+
+/**
+ * dl-79: playlist endpoints that name nothing about what they carry. The path
+ * has no extension and the type is `text/plain` or `application/octet-stream`,
+ * so only the body says it is a manifest. Keyed by `pathname?id`.
+ */
+const UNTYPED_ENDPOINTS: Record<string, { file: string; contentType: string }> = {
+  "/api/playlist?1": {
+    file: path.join("media", "untyped", "media.m3u8"),
+    contentType: "text/plain; charset=utf-8",
+  },
+  "/api/playlist?2": {
+    file: path.join("media", "untyped", "not-a-playlist.txt"),
+    contentType: "text/plain; charset=utf-8",
+  },
+  "/api/playlist?3": {
+    file: path.join("media", "untyped", "media.m3u8"),
+    contentType: "application/octet-stream",
+  },
+  "/api/manifest?1": {
+    file: path.join("media", "dash", "manifest.mpd"),
+    contentType: "text/plain; charset=utf-8",
+  },
 };
 
 /** Pages served with a deliberate non-2xx, so classification has something to read. */
@@ -93,6 +118,16 @@ const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> 
     innerPath: "/shadow-player-order.html",
     title: "Cross-origin shadow order",
   },
+  // dl-82 gate 2: a consent overlay in a frame where no script runs, with and
+  // without dialog semantics.
+  "/consent-xo-dialog.html": {
+    innerPath: "/consent-xo-inner.html?dialog",
+    title: "Cross-origin consent dialog",
+  },
+  "/consent-xo-nodialog.html": {
+    innerPath: "/consent-xo-inner.html",
+    title: "Cross-origin consent layer",
+  },
 };
 
 /** Shared by both origins: same static root, same redirect/beacon rules. */
@@ -108,6 +143,19 @@ function makeHandler(
 
       if (pathname.startsWith("/beacon/")) {
         response.writeHead(204).end();
+        return;
+      }
+
+      // dl-79: ordinary `.ts` segments, answered from memory because a `.ts`
+      // file under the fixtures is a TypeScript file to the linter.
+      if (/^\/media\/untyped\/seg-\d+\.ts$/.test(pathname)) {
+        const body = Buffer.from(`fixture mpeg-ts segment ${pathname}\n`);
+        response.writeHead(200, {
+          "content-type": "video/mp2t",
+          "content-length": String(body.byteLength),
+          "cache-control": "no-store",
+        });
+        response.end(body);
         return;
       }
 
@@ -156,10 +204,13 @@ function makeHandler(
       }
 
       // Extensionless, signed manifest: only Content-Type identifies it.
+      const untyped = UNTYPED_ENDPOINTS[`${pathname}?${requestUrl.searchParams.get("id") ?? ""}`];
       const filePath =
-        pathname === "/media/dash/stream"
-          ? path.join(ROOT, "media", "dash", "manifest.mpd")
-          : resolveWithin(pathname);
+        untyped !== undefined
+          ? path.join(ROOT, untyped.file)
+          : pathname === "/media/dash/stream"
+            ? path.join(ROOT, "media", "dash", "manifest.mpd")
+            : resolveWithin(pathname);
 
       if (filePath === undefined) {
         response.writeHead(400).end("bad path");
@@ -170,7 +221,8 @@ function makeHandler(
         const body = await readFile(filePath);
         const extension = path.extname(filePath).toLowerCase();
         response.writeHead(STATUS_OVERRIDES[pathname] ?? 200, {
-          "content-type": CONTENT_TYPES[extension] ?? "application/octet-stream",
+          "content-type":
+            untyped?.contentType ?? CONTENT_TYPES[extension] ?? "application/octet-stream",
           "content-length": String(body.byteLength),
           "cache-control": "no-store",
         });

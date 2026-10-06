@@ -1,10 +1,11 @@
 import { describe, expect, test } from "vitest";
-import type { Job, JobEvent, JobProgress } from "@downloader/contract";
+import type { AppErrorPayload, Job, JobEvent, JobProgress } from "@downloader/contract";
 import {
   applyJobEvent,
   applyJobEvents,
   markWatched,
   reconcileJob,
+  refusalAfter,
   upsertJob,
 } from "../src/lib/job-reducer.ts";
 import { statusIndex } from "../src/lib/status.ts";
@@ -322,5 +323,61 @@ describe("upsertJob", () => {
     const list = upsertJob([a, b], updated);
     expect(list).toHaveLength(2);
     expect(list[0]?.status).toBe("probing");
+  });
+});
+
+describe("a refused link (dl-77)", () => {
+  const error: AppErrorPayload = {
+    code: "RATE_LIMITED",
+    message: "You already have as many downloads running as this server allows.",
+    retryable: true,
+    details: { retryAfterSec: 30 },
+  };
+  const refused = (at: string): JobEvent => ({ type: "refused", jobId: "job-1", error, at });
+
+  test("changes nothing on the job: it stays queued, with its link", () => {
+    const queued = job({
+      updatedAt: T1,
+      link: { url: "/api/files/abc", expiresAt: "2026-08-05T10:15:00.000Z" },
+    });
+    expect(applyJobEvent(queued, refused(T2))).toBe(queued);
+  });
+
+  test("does not stop a later status frame from taking effect", () => {
+    const queued = job({ updatedAt: T1 });
+    const after = applyJobEvents(queued, [
+      refused(T2),
+      { type: "status", jobId: "job-1", status: "probing", at: T3 },
+    ]);
+    expect(after.status).toBe("probing");
+    expect(after.link).toBeNull();
+  });
+
+  test("is kept for a queued job, and a newer one replaces it", () => {
+    const queued = job({ updatedAt: T1 });
+    expect(refusalAfter(undefined, queued, refused(T2))).toBe(error);
+    const newer: AppErrorPayload = { ...error, message: "again" };
+    expect(
+      refusalAfter(error, queued, { type: "refused", jobId: "job-1", error: newer, at: T3 }),
+    ).toBe(newer);
+  });
+
+  test("is dropped when the job has moved on, whichever frame got here first", () => {
+    // The page cannot see the browser's failed download, so the only race is
+    // between frames: a refusal for an attempt that has since been overtaken.
+    const probing = job({ status: "probing", updatedAt: T3 });
+    expect(refusalAfter(undefined, probing, refused(T2))).toBeUndefined();
+    const queuedLater = job({ updatedAt: T3 });
+    expect(refusalAfter(undefined, queuedLater, refused(T2))).toBeUndefined();
+    expect(refusalAfter(error, queuedLater, refused(T2))).toBe(error);
+  });
+
+  test("is not touched by any other frame, and needs a job to attach to", () => {
+    const queued = job({ updatedAt: T1 });
+    expect(
+      refusalAfter(error, queued, { type: "status", jobId: "job-1", status: "queued", at: T2 }),
+    ).toBe(error);
+    expect(refusalAfter(error, queued, { type: "heartbeat", at: T2 })).toBe(error);
+    expect(refusalAfter(undefined, undefined, refused(T2))).toBeUndefined();
   });
 });

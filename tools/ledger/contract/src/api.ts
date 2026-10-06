@@ -34,6 +34,16 @@ export const ROUTES = {
   buckets: `${API_PREFIX}/buckets`,
   salaries: `${API_PREFIX}/salaries`,
   ratios: `${API_PREFIX}/ratios`,
+  // lg-6: periods of personal-card spending, their lines, the recurring items,
+  // and closing a period with the settlement it computes.
+  periods: `${API_PREFIX}/periods`,
+  periodOpen: `${API_PREFIX}/periods/open`,
+  periodClose: `${API_PREFIX}/periods/close`,
+  periodLines: `${API_PREFIX}/period-lines`,
+  periodLine: `${API_PREFIX}/period-lines/:id`,
+  periodLineRetire: `${API_PREFIX}/period-lines/:id/retire`,
+  recurring: `${API_PREFIX}/recurring`,
+  recurringItem: `${API_PREFIX}/recurring/:id`,
 } as const;
 
 /**
@@ -370,4 +380,226 @@ export interface RatiosResponse {
   asOf: string;
   ratios: Ratio[];
   inEffect: Ratio | null;
+}
+
+/**
+ * Where a period line came from. `manual` is a person's own entry (lg-6); the
+ * workbook's import (lg-7) and receipts (lg-8) add their own.
+ */
+export const PERIOD_LINE_SOURCES = ["manual"] as const;
+export type PeriodLineSource = (typeof PERIOD_LINE_SOURCES)[number];
+
+/**
+ * One amount paid on a person's own card toward the household (lg-6). Never
+ * edited: a correction is a later line that supersedes it, and a mistaken one is
+ * retired the same way. A period holds the lines dated inside it.
+ *
+ * `chargedTo: null` is **shared**, at the ratio. A person is a **charge**: the
+ * thing was entirely theirs, and they owe its full price to whoever paid
+ * (`docs/00-ANALYSIS.md` §5, _Charges between the two_).
+ */
+export interface PeriodLine {
+  id: number;
+  /** Who paid. */
+  personId: string;
+  /** `yyyy-mm-dd`. */
+  date: string;
+  /** Positive for a purchase; a refund on a shared purchase is negative. */
+  amountCents: number;
+  category: string | null;
+  note: string | null;
+  source: PeriodLineSource;
+  chargedTo: string | null;
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+/** What a person fills in to add a line, or to correct one. */
+export interface PeriodLineDraft {
+  personId: string;
+  date: string;
+  amountCents: number;
+  category: string | null;
+  note: string | null;
+  chargedTo: string | null;
+}
+
+/** A billion dollars: far past any household amount, and well inside a safe integer. */
+const MAX_CENTS = 100_000_000_000;
+
+export const periodLineDraftSchema = z.strictObject({
+  personId: z.string().min(1).max(100),
+  date: z.iso.date(),
+  amountCents: z
+    .number()
+    .int()
+    .min(-MAX_CENTS)
+    .max(MAX_CENTS)
+    .refine((cents) => cents !== 0),
+  category: z.string().trim().min(1).max(100).nullable(),
+  note: z.string().trim().min(1).max(500).nullable(),
+  chargedTo: z.string().min(1).max(100).nullable(),
+}) satisfies z.ZodType<PeriodLineDraft>;
+
+/**
+ * A fixed monthly item paid on a person's own card: insurance, Internet, a
+ * subscription (lg-6). It generates one shared line a month, on its start's day
+ * of the month, from its start date through its end date if it has one.
+ * Correcting or ending one files a version that supersedes it; the earlier
+ * version stays.
+ */
+export interface RecurringItem {
+  id: number;
+  personId: string;
+  monthlyCents: number;
+  /** `yyyy-mm-dd`. */
+  startDate: string;
+  /** `yyyy-mm-dd`, the last day it can generate a line on; `null` while it runs. */
+  endDate: string | null;
+  label: string;
+  supersedes: number | null;
+  enteredAt: string;
+  enteredBy: string;
+}
+
+export interface RecurringItemDraft {
+  personId: string;
+  monthlyCents: number;
+  startDate: string;
+  endDate: string | null;
+  label: string;
+}
+
+export const recurringItemDraftSchema = z
+  .strictObject({
+    personId: z.string().min(1).max(100),
+    monthlyCents: z.number().int().min(1).max(MAX_CENTS),
+    startDate: z.iso.date(),
+    endDate: z.iso.date().nullable(),
+    label: z.string().trim().min(1).max(100),
+  })
+  .refine(
+    (draft) => draft.endDate === null || draft.endDate >= draft.startDate,
+  ) satisfies z.ZodType<RecurringItemDraft>;
+
+/** `GET /api/recurring`: the recurring items that stand, oldest first. */
+export interface RecurringResponse {
+  items: RecurringItem[];
+}
+
+/**
+ * The formula a settlement was computed with. `v1` and `v2` are the workbook's
+ * two historical formulas, imported as they happened (lg-7); `v3` is the
+ * tool's: the matching rule over cumulative contributions, with charges, each
+ * period at its own ratio, divided by the recipient's share and rounded half-up
+ * once (`docs/00-ANALYSIS.md` §5).
+ */
+export const SETTLEMENT_FORMULAS = ["v1", "v2", "v3"] as const;
+export type SettlementFormula = (typeof SETTLEMENT_FORMULAS)[number];
+
+/** What closing a period computes, or would compute if it closed now. */
+export interface SettlementFigures {
+  formula: SettlementFormula;
+  /** The ratio in effect on the period's last day, which the deposit is divided by. */
+  ratioId: number;
+  shares: RatioShare[];
+  /** Who owes, and to whom; both `null` when the two stand at the ratio to within half a cent. */
+  payerId: string | null;
+  recipientId: string | null;
+  /**
+   * Into the buffer. `null` when the recipient's share is zero, so that only a
+   * direct transfer can settle it.
+   */
+  depositCents: number | null;
+  /** The same debt paid directly to the recipient instead. */
+  netCents: number;
+}
+
+/**
+ * What became of a closed period's deposit. `matched`: a paste brought it in.
+ * `expected`: not seen yet. `folded`: not seen, and a later close, being
+ * cumulative, asked for it again. `none`: nothing was owed. `direct`: only a
+ * direct transfer could settle it.
+ */
+export const DEPOSIT_STATUSES = ["matched", "expected", "folded", "none", "direct"] as const;
+export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
+
+/** A line the open period holds: one stored, or one a recurring item generates. */
+export interface OpenPeriodLine {
+  date: string;
+  personId: string;
+  amountCents: number;
+  chargedTo: string | null;
+  /** The category, or the recurring item's label. */
+  category: string | null;
+  note: string | null;
+  /** The stored line, or `null` for a generated one. */
+  lineId: number | null;
+  /** The recurring item that generated it, or `null` for a stored one. */
+  recurringItemId: number | null;
+  /**
+   * Dated inside a period already closed, and first entered after the last
+   * close: no settlement has counted it yet, so the next close does. A
+   * correction of a line or an item that was on time is not late.
+   */
+  late: boolean;
+}
+
+/**
+ * `GET /api/periods/open?end=yyyy-mm-dd`: the period not yet closed, as if it
+ * ended on `end` (today by default).
+ */
+export interface OpenPeriodResponse {
+  /** The day after the last closed period, or the start asked for the first; `null` is from the beginning. */
+  start: string | null;
+  end: string;
+  /** No period has closed yet, so this one's start is the closer's to choose. */
+  first: boolean;
+  /** Oldest first. */
+  lines: OpenPeriodLine[];
+  /** What closing it on `end` would settle; `null` when no ratio is in effect on `end`. */
+  settlement: SettlementFigures | null;
+}
+
+export const openPeriodQuerySchema = z.strictObject({
+  start: z.iso.date().optional(),
+  end: z.iso.date().optional(),
+});
+
+/**
+ * `POST /api/periods/close`. `start` is the open period's start as the closer
+ * saw it, so a period closed meanwhile by the other person is not closed twice;
+ * for the first period it is the closer's choice, `null` being from the
+ * beginning.
+ */
+export interface ClosePeriodRequest {
+  start: string | null;
+  end: string;
+}
+
+export const closePeriodRequestSchema = z
+  .strictObject({ start: z.iso.date().nullable(), end: z.iso.date() })
+  .refine(
+    (request) => request.start === null || request.start <= request.end,
+  ) satisfies z.ZodType<ClosePeriodRequest>;
+
+/** A closed period, the settlement it recorded, and whether its deposit has been seen. */
+export interface ClosedPeriod {
+  id: number;
+  start: string | null;
+  end: string;
+  closedAt: string;
+  closedBy: string;
+  settlement: SettlementFigures;
+  deposit: {
+    status: DepositStatus;
+    /** The statement row that brought it in, when `matched`. */
+    rowId: number | null;
+  };
+}
+
+/** `GET /api/periods`: the closed periods, newest first. */
+export interface PeriodsResponse {
+  periods: ClosedPeriod[];
 }

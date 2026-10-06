@@ -1,4 +1,4 @@
-import type { Job } from "@downloader/contract";
+import type { AppErrorPayload, Job } from "@downloader/contract";
 import { useNow } from "../hooks/useNow.ts";
 import { localErrorPayload } from "../lib/error-presentation.ts";
 import {
@@ -31,6 +31,14 @@ interface JobCardProps {
    * `statusHighWaterMark`; `undefined` means nothing has been watched yet.
    */
   watchedStep: number | undefined;
+  /**
+   * Why the server last refused to start this job when its link was opened
+   * (dl-77), or `undefined`. The browser reports that as a failed file and the
+   * page cannot see it, so this comes from the job's event stream.
+   */
+  refusal: AppErrorPayload | undefined;
+  /** The visitor followed the link, which makes any earlier refusal old news. */
+  onFollowLink: (id: string) => void;
   onCancel: (id: string) => void;
   onRemove: (id: string) => void;
   onRetry: (job: Job) => void;
@@ -40,6 +48,8 @@ export function JobCard({
   job,
   streamState,
   watchedStep,
+  refusal,
+  onFollowLink,
   onCancel,
   onRemove,
   onRetry,
@@ -80,7 +90,13 @@ export function JobCard({
         </div>
       </div>
 
-      {job.status === "queued" && job.link && <LinkOffer link={job.link} now={now} />}
+      {job.status === "queued" && job.link && (
+        <LinkOffer link={job.link} now={now} onFollow={() => onFollowLink(job.id)} />
+      )}
+      {/* Above nothing and beside the offer: the link is still good, and this is
+          why the last attempt at it did not start. Only while the job is still
+          queued, which is the only state a refusal leaves it in. */}
+      {job.status === "queued" && refusal && <ErrorPanel error={refusal} />}
 
       {active && (
         <>
@@ -193,15 +209,17 @@ export function JobCard({
 function LinkOffer({
   link,
   now,
+  onFollow,
 }: {
   link: NonNullable<Job["link"]>;
   now: number;
+  onFollow: () => void;
 }): React.JSX.Element {
   const expiry = formatExpiry(link.expiresAt, now);
   if (expiry.expired) return <ErrorPanel error={localErrorPayload("FILE_EXPIRED")} />;
   return (
     <div className="result__actions">
-      <a className="button button--primary" href={link.url} download>
+      <a className="button button--primary" href={link.url} download onClick={onFollow}>
         Download
       </a>
       <span className="muted result__expiry">works once · {expiry.label}</span>

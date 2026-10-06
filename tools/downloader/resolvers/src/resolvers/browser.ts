@@ -23,7 +23,11 @@ import type {
 } from "@downloader/contract";
 import type { Browser, BrowserContext, Frame, Page, Response } from "playwright";
 import { budget, remaining, sleep, throwIfAborted, withTimeout } from "../browser/abort.ts";
-import { classifyFailure, classifyNavigationError } from "../browser/classify.ts";
+import {
+  classifyFailure,
+  classifyNavigationError,
+  countPlayedSegments,
+} from "../browser/classify.ts";
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
 import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
@@ -414,6 +418,7 @@ export class BrowserResolver implements Resolver {
         finalUrl,
         status: navigation?.status(),
         quietReached,
+        segmentCount: countPlayedSegments(collector.hits),
       });
     }
 
