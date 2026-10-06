@@ -178,6 +178,9 @@ export function Periods(): React.ReactElement {
   };
 
   const expected = closed.filter((period) => period.deposit.status === "expected");
+  const chosenEnd = end ?? open.end;
+  // The period after one closed today starts tomorrow: nothing to close yet.
+  const empty = open.start !== null && chosenEnd < open.start;
   const sentence = open.settlement === null ? null : settlementSentence(open.settlement);
 
   return (
@@ -257,6 +260,7 @@ export function Periods(): React.ReactElement {
           value={end ?? open.end}
           onChange={(event) => chooseRange({ end: event.target.value })}
         />
+        {empty && <p className="muted hint">This period starts on {open.start}.</p>}
         {sentence === null ? (
           <p className="bad">
             No ratio is in effect on that day. Confirm one on the salaries screen.
@@ -268,7 +272,7 @@ export function Periods(): React.ReactElement {
           </>
         )}
         <div className="actions">
-          <button type="button" onClick={close} disabled={busy || sentence === null}>
+          <button type="button" onClick={close} disabled={busy || sentence === null || empty}>
             Close the period
           </button>
         </div>

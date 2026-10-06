@@ -399,7 +399,8 @@ function openStart(closed: readonly PeriodColumns[]): string | null {
 }
 
 /**
- * The open period, as if it ended on `end`. `start` is honoured only for the
+ * The open period, as if it ended on `end`, which may be the day before it
+ * starts: the period after one closed today is empty. `start` is honoured only for the
  * first period, whose start is the point the two were last even and is the
  * closer's to choose; after that the open period starts where the last closed
  * one ended.
@@ -412,7 +413,9 @@ export function openPeriod(
     const closed = closedRows(db);
     const first = closed.length === 0;
     const start = first ? (request.start ?? null) : openStart(closed);
-    if (start !== null && request.end < start) {
+    // On the day a period is closed the next one starts tomorrow, so as of today
+    // it is empty: shown, with what is still owed, but not closable.
+    if (start !== null && dayAfter(request.end) < start) {
       throw new AppError("BAD_REQUEST", "A period cannot end before it starts.");
     }
     return {

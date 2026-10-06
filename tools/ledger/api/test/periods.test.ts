@@ -433,3 +433,25 @@ describe("lines", () => {
     });
   });
 });
+
+describe("the day a period is closed", () => {
+  test("the open period after it is empty until tomorrow, and still says what is owed", async () => {
+    const target = await start();
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    // Closed on today's date, by the API's clock: the next period starts tomorrow.
+    await close(target, null, "2026-10-03");
+
+    const view = await open(target);
+
+    expect(view).toMatchObject({ start: "2026-10-04", end: "2026-10-03", lines: [] });
+    // The deposit is not in yet, and the books say so.
+    expect(view.settlement).toMatchObject({ payerId: "alex", depositCents: 15_000 });
+    const empty = await target.server.inject({
+      method: "POST",
+      url: ROUTES.periodClose,
+      payload: { start: "2026-10-04", end: "2026-10-03" },
+    });
+    expect(empty.statusCode).toBe(400);
+  });
+});

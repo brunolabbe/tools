@@ -324,3 +324,20 @@ test("the deposits not seen yet are the expected ones, and not those matched or 
     "alex, for the period ending 2026-06-3030.00 $",
   ]);
 });
+
+test("the day a period is closed, the next one cannot be closed before it starts", async () => {
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({
+    ...OPEN,
+    start: "2026-10-04",
+    end: "2026-10-03",
+    lines: [],
+  });
+  render(<Periods />);
+  await screen.findByRole("heading", { name: "Close the period" });
+
+  const card = section("Close the period");
+  expect(within(card).getByText("This period starts on 2026-10-04.")).toBeTruthy();
+  expect(
+    (within(card).getByRole("button", { name: "Close the period" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+});
