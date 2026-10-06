@@ -119,6 +119,15 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
     return line;
   });
 
+  // CodeQL's `js/missing-rate-limiting` models express-rate-limit and its kin,
+  // not `@webtools/core`'s `RateLimiter`, so it reads the `read` hook on this
+  // route as no limit at all; the route is limited per person like every other
+  // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
+  // `api/src/routes/periods.ts`. Guarded by `api/test/route-limits.test.ts`:
+  // taking `{ onRequest: read }` off this route fails 1 of its 31 tests, "GET
+  // recurring refuses the second request in a minute too" — that test, not this
+  // comment, is what holds it. Measured 2026-10-06 at 0862fd3.
+  // codeql[js/missing-rate-limiting]
   app.get(ROUTES.recurring, { onRequest: read }, async () => {
     const body: RecurringResponse = { items: currentRecurring(context.db) };
     return body;

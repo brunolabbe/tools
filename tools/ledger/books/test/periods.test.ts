@@ -5,7 +5,13 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { dayAfter, matchDeposits, periodIndexOf, recurringDates } from "../src/index.ts";
+import {
+  dayAfter,
+  enteredLate,
+  matchDeposits,
+  periodIndexOf,
+  recurringDates,
+} from "../src/index.ts";
 import type { CandidateRow, Expectation } from "../src/index.ts";
 
 describe("recurringDates", () => {
@@ -169,5 +175,42 @@ describe("matchDeposits", () => {
       { periodId: 1, status: "none", rowId: null },
       { periodId: 2, status: "direct", rowId: null },
     ]);
+  });
+});
+
+// Gate 1, low 6: the period's last day itself.
+describe("matchDeposits, on the boundary", () => {
+  test("a deposit dated on the period's last day is its deposit", () => {
+    const matches = matchDeposits(
+      [expecting(1, "2026-03-31", 15_000)],
+      [row(5, "2026-03-31", 15_000)],
+    );
+
+    expect(matches).toEqual([{ periodId: 1, status: "matched", rowId: 5 }]);
+  });
+});
+
+// Gate 1, med 3: what the open period lists as late.
+describe("enteredLate", () => {
+  const closed = [
+    { start: null, end: "2026-06-30", closedAt: "2026-07-01T20:00:00.000Z" },
+    { start: "2026-07-01", end: "2026-09-30", closedAt: "2026-10-01T09:00:00.000Z" },
+  ];
+
+  test("dated in a closed period and first entered after it closed", () => {
+    expect(enteredLate(closed, "2026-09-15", "2026-10-02T08:00:00.000Z")).toBe(true);
+    expect(enteredLate(closed, "2026-03-01", "2026-07-02T08:00:00.000Z")).toBe(true);
+  });
+
+  test("not when it was entered before its period closed, even after an earlier one did", () => {
+    expect(enteredLate(closed, "2026-09-15", "2026-09-16T08:00:00.000Z")).toBe(false);
+  });
+
+  test("not when it is dated after every closed period", () => {
+    expect(enteredLate(closed, "2026-10-01", "2026-10-02T08:00:00.000Z")).toBe(false);
+  });
+
+  test("never while nothing has closed", () => {
+    expect(enteredLate([], "2026-09-15", "2026-10-02T08:00:00.000Z")).toBe(false);
   });
 });

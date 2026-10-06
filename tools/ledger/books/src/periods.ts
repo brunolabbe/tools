@@ -104,6 +104,28 @@ export function periodIndexOf(periods: readonly PeriodSpan[], date: string): num
   return periods.findIndex((period) => date <= period.end);
 }
 
+/** A closed period, and the instant it was closed. */
+export interface ClosedSpan extends PeriodSpan {
+  /** ISO instant. */
+  closedAt: string;
+}
+
+/**
+ * Whether an amount dated `date`, first entered at `firstEnteredAt`, arrived
+ * after the period holding its date had closed. That period's settlement did
+ * not count it, so the next close does, and the open period lists it as late.
+ * "First entered" is the start of its chain of corrections: a correction of
+ * something that was on time is not late, though it is entered later.
+ */
+export function enteredLate(
+  closed: readonly ClosedSpan[],
+  date: string,
+  firstEnteredAt: string,
+): boolean {
+  const period = closed[periodIndexOf(closed, date)];
+  return period !== undefined && firstEnteredAt > period.closedAt;
+}
+
 /**
  * The settlement closing the last of `periods` (oldest first, the first one
  * being where the two were last even) computes: every line and deposit dated in

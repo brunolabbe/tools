@@ -67,9 +67,14 @@ export function settlementSentence(settlement: SettlementFigures): {
 function lineLabel(line: OpenPeriodLine): string {
   const what = [line.category, line.note].filter((part) => part !== null).join(" · ");
   const words = what === "" ? "Line" : what;
-  if (line.recurringItemId !== null) return `${words} (monthly)`;
-  if (line.chargedTo !== null) return `${words}, ${line.chargedTo}'s`;
-  return words;
+  const kind =
+    line.recurringItemId !== null
+      ? `${words} (monthly)`
+      : line.chargedTo !== null
+        ? `${words}, ${line.chargedTo}'s`
+        : words;
+  // Dated in a period already closed, and counted by the next close instead.
+  return line.late ? `${kind}, entered after its period closed` : kind;
 }
 
 export function Periods(): React.ReactElement {

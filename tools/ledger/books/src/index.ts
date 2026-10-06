@@ -14,12 +14,14 @@ export type { SalaryInput, Share } from "./ratio.ts";
 export {
   cumulativeSettlement,
   dayAfter,
+  enteredLate,
   matchDeposits,
   periodIndexOf,
   recurringDates,
 } from "./periods.ts";
 export type {
   CandidateRow,
+  ClosedSpan,
   DepositInput,
   DepositMatch,
   Expectation,

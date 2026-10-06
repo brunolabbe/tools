@@ -71,6 +71,7 @@ const OPEN: OpenPeriodResponse = {
       note: null,
       lineId: null,
       recurringItemId: 4,
+      late: false,
     },
     {
       date: "2026-08-02",
@@ -81,6 +82,7 @@ const OPEN: OpenPeriodResponse = {
       note: null,
       lineId: 7,
       recurringItemId: null,
+      late: false,
     },
     {
       date: "2026-08-03",
@@ -91,6 +93,7 @@ const OPEN: OpenPeriodResponse = {
       note: "A book",
       lineId: 8,
       recurringItemId: null,
+      late: false,
     },
   ],
   settlement: OWED,
@@ -340,4 +343,33 @@ test("the day a period is closed, the next one cannot be closed before it starts
   expect(
     (within(card).getByRole("button", { name: "Close the period" }) as HTMLButtonElement).disabled,
   ).toBe(true);
+});
+
+// Gate 1, med 3: a line entered after its period closed is listed, marked, and
+// counted in its payer's figure, since the next close counts it.
+test("a line entered after its period closed is listed as late, and in its payer's figure", async () => {
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({
+    ...OPEN,
+    lines: [
+      {
+        date: "2026-06-20",
+        personId: "alex",
+        amountCents: 4_000,
+        chargedTo: null,
+        category: "Épicerie",
+        note: null,
+        lineId: 12,
+        recurringItemId: null,
+        late: true,
+      },
+    ],
+  });
+  render(<Periods />);
+
+  const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
+  const card = open.closest("section") as HTMLElement;
+  expect(
+    within(card).getByText("2026-06-20 · Épicerie, entered after its period closed"),
+  ).toBeTruthy();
+  expect(within(card).getByText("Paid by alex").nextSibling?.textContent).toBe("40.00 $");
 });

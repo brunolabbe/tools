@@ -455,3 +455,181 @@ describe("the day a period is closed", () => {
     expect(empty.statusCode).toBe(400);
   });
 });
+
+// Gate 1, med 2, through the API.
+describe("a deposit of exactly what was asked", () => {
+  test("settles the next close at nothing, though the figure did not divide evenly", async () => {
+    const target = await start();
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await withBufferRule(target);
+    await addLine(target, draft("sam", "2026-09-10", 10_001));
+    const asked = await close(target, null, "2026-09-30");
+    expect(asked.settlement.depositCents).toBe(15_002);
+
+    await account().paste({ date: "2026-09-30", description: ALEX_BUFFER, amountCents: 15_002 });
+
+    expect((await open(target)).settlement).toMatchObject({
+      payerId: null,
+      depositCents: 0,
+      netCents: 0,
+    });
+    const next = await close(target, "2026-10-01", "2026-10-03");
+    expect(next.settlement).toMatchObject({ payerId: null, depositCents: 0 });
+    expect(next.deposit.status).toBe("none");
+  });
+});
+
+// Gate 1, med 3, the owner's choice (b): a line entered after its period closed
+// is listed in the open period as late, so what the next close counts is shown.
+/**
+ * A clock that moves a second each time it is read, still on 2026-10-03: what
+ * is entered after a close is entered later than it, as it is in use.
+ */
+function ticking(): () => Date {
+  let at = Date.parse("2026-10-03T09:30:00.000Z");
+  return () => new Date((at += 1_000));
+}
+
+describe("a line entered after its period closed", () => {
+  test("dated the day of the close, it is listed in the open period as late", async () => {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-10-03");
+
+    await addLine(target, draft("sam", "2026-10-03", 4_000, { category: "Épicerie" }));
+
+    const view = await open(target);
+    expect(view.lines.map((line) => [line.date, line.amountCents, line.late])).toEqual([
+      ["2026-10-03", 4_000, true],
+    ]);
+    expect(view.settlement?.depositCents).toBe(21_000);
+  });
+
+  test("dated well inside the closed period, it is listed too, and counted once", async () => {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-09-30");
+
+    await addLine(target, draft("sam", "2026-09-15", 5_000));
+    await addLine(target, draft("alex", "2026-10-02", 1_000));
+
+    const view = await open(target);
+    expect(view.lines.map((line) => [line.date, line.personId, line.late])).toEqual([
+      ["2026-09-15", "sam", true],
+      ["2026-10-02", "alex", false],
+    ]);
+    // 150 + 75 for sam's two, less alex's 10: counted once each.
+    expect(view.settlement?.depositCents).toBe(21_500);
+  });
+
+  test("a line on time, corrected after the close, is not listed as late", async () => {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    const first = await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-09-30");
+
+    await post(
+      target,
+      ROUTES.periodLine.replace(":id", String(first.id)),
+      draft("sam", "2026-09-10", 12_000),
+    );
+
+    expect((await open(target)).lines).toEqual([]);
+  });
+
+  test("a recurring item added after a close lists its months in that period as late", async () => {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    const onTime = await post<RecurringItem>(target, ROUTES.recurring, {
+      personId: "alex",
+      monthlyCents: 2_000,
+      startDate: "2026-08-05",
+      endDate: null,
+      label: "Assurance",
+    });
+    await close(target, null, "2026-09-30");
+
+    await post(target, ROUTES.recurring, {
+      personId: "sam",
+      monthlyCents: 8_000,
+      startDate: "2026-09-10",
+      endDate: null,
+      label: "Internet",
+    });
+    // Ending the item that was on time files a new version: its months stay on time.
+    await post(target, ROUTES.recurringItem.replace(":id", String(onTime.id)), {
+      personId: "alex",
+      monthlyCents: 2_000,
+      startDate: "2026-08-05",
+      endDate: "2026-10-31",
+      label: "Assurance",
+    });
+
+    const view = await open(target, "?end=2026-10-31");
+    expect(view.lines.map((line) => [line.date, line.category, line.late])).toEqual([
+      ["2026-09-10", "Internet", true],
+      ["2026-10-05", "Assurance", false],
+      ["2026-10-10", "Internet", false],
+    ]);
+  });
+});
+
+// Gate 1, med 4: only a row filed to a person in the buffer is a contribution,
+// or a settlement's deposit (Build 3, Build 5's "same bucket").
+describe("what is not a deposit into the buffer", () => {
+  test("the same amount into the mortgage bucket, and a joint payment out of the buffer", async () => {
+    const target = await start();
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await addRule(target, {
+      descriptionPattern: "Virement entre folios /Caisse du Mont",
+      category: null,
+      amountCents: null,
+      personId: "alex",
+      bucket: "mortgage",
+    });
+    await addRule(target, {
+      descriptionPattern: "Taxes /Ville Exemple",
+      category: null,
+      amountCents: null,
+      personId: null,
+      bucket: "current-expenses",
+    });
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-09-30");
+
+    const history = account();
+    await history.paste({
+      date: "2026-10-01",
+      description: "Virement entre folios /Caisse du Mont",
+      amountCents: 15_000,
+    });
+    await history.paste({
+      date: "2026-10-02",
+      description: "Taxes /Ville Exemple",
+      amountCents: -8_000,
+    });
+
+    const [closed] = await periods(target);
+    expect(closed?.deposit).toEqual({ status: "expected", rowId: null });
+    // Still the 150.00 asked: neither row moved the settlement.
+    expect((await open(target)).settlement).toMatchObject({
+      payerId: "alex",
+      depositCents: 15_000,
+    });
+  });
+});
+
+// Gate 1, low 7: the open period lists nothing dated after its chosen last day.
+describe("the open period's last day", () => {
+  test("a line dated after it is not listed", async () => {
+    const target = await start();
+    await addLine(target, draft("sam", "2026-09-10", 1_000));
+    await addLine(target, draft("sam", "2026-09-21", 2_000));
+
+    const view = await open(target, "?end=2026-09-20");
+
+    expect(view.lines.map((line) => line.date)).toEqual(["2026-09-10"]);
+  });
+});

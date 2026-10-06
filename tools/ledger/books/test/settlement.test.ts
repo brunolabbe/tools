@@ -347,3 +347,42 @@ describe("the settlement's promise, simulated", () => {
     expect(missed).toBeGreaterThan(450);
   });
 });
+
+// Gate 1, med 2: paying exactly what was asked leaves less than half a cent,
+// which must not name a payer at 0.00.
+describe("after the asked deposit is paid", () => {
+  test("a figure that did not divide evenly still settles the next close at nothing", () => {
+    const first = period(null, "2026-09-30");
+    const next = period("2026-10-01", "2026-12-31");
+    const lines = [line("sam", "2026-09-10", 10_001)];
+
+    const asked = cumulativeSettlement([first], lines, []);
+    // 100.01 × 1.5 = 150.015, asked as 150.02.
+    expect(asked.depositCents).toBe(15_002);
+    const paid = [{ personId: "alex", date: "2026-10-02", amountCents: 15_002 }];
+
+    expect(cumulativeSettlement([first, next], lines, paid)).toEqual({
+      formula: "v3",
+      payerId: null,
+      recipientId: null,
+      depositCents: 0,
+      netCents: 0,
+    });
+  });
+
+  test("over many odd amounts and ratios, the next close never names a payer at 0.00", () => {
+    const next = generator(11);
+    for (let trial = 0; trial < 2_000; trial++) {
+      const share = 1 + next(999_999);
+      const ratioNow = ratio(share);
+      const who = next(2) === 0 ? "alex" : "sam";
+      const lines = [spent(who, 1 + next(500_000))];
+      const asked = settlement(lines, [], ratioNow);
+      if (asked.payerId === null || asked.depositCents === null) continue;
+      const after = settlement([...lines, spent(asked.payerId, asked.depositCents)], [], ratioNow);
+      if (after.payerId !== null) {
+        expect(after.depositCents, `trial ${String(trial)}`).toBeGreaterThan(0);
+      }
+    }
+  });
+});

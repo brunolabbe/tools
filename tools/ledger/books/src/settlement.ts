@@ -67,7 +67,7 @@ export interface Stretch {
 
 export interface Settlement {
   formula: typeof CURRENT_FORMULA;
-  /** Who owes, or `null` when the two stand exactly at the ratio. */
+  /** Who owes, or `null` when the two stand at the ratio to within half a cent. */
   payerId: string | null;
   recipientId: string | null;
   /**
@@ -150,25 +150,31 @@ export function settleStretches(
     (sum, stretch) => sum + owedMicro(stretch, first.personId, second.personId),
     0n,
   );
-  if (owed === 0n) {
-    return {
-      formula: CURRENT_FORMULA,
-      payerId: null,
-      recipientId: null,
-      depositCents: 0,
-      netCents: 0,
-    };
-  }
+  const nobody: Settlement = {
+    formula: CURRENT_FORMULA,
+    payerId: null,
+    recipientId: null,
+    depositCents: 0,
+    netCents: 0,
+  };
+  if (owed === 0n) return nobody;
   const [payer, recipient] = owed > 0n ? [first, second] : [second, first];
   const magnitude = owed > 0n ? owed : -owed;
   const recipientShare = BigInt(recipient.partsPerMillion);
+  // net / share = (micro / 1e6) / (ppm / 1e6) = micro / ppm.
+  const depositCents = recipientShare === 0n ? null : roundHalfUp(magnitude, recipientShare);
+  const netCents = roundHalfUp(magnitude, MILLION);
+  // Less than half a cent owed is what paying a rounded figure leaves behind,
+  // and it rounds to nothing. It names nobody: a payer at 0.00 would be asked to
+  // deposit nothing, and the next close would expect that nothing. The deposit
+  // is never smaller than the net, so a deposit of 0 means a net of 0 too.
+  if (depositCents === 0 || (depositCents === null && netCents === 0)) return nobody;
   return {
     formula: CURRENT_FORMULA,
     payerId: payer.personId,
     recipientId: recipient.personId,
-    // net / share = (micro / 1e6) / (ppm / 1e6) = micro / ppm.
-    depositCents: recipientShare === 0n ? null : roundHalfUp(magnitude, recipientShare),
-    netCents: roundHalfUp(magnitude, MILLION),
+    depositCents,
+    netCents,
   };
 }
 

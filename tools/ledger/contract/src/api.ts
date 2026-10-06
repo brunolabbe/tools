@@ -504,7 +504,7 @@ export interface SettlementFigures {
   /** The ratio in effect on the period's last day, which the deposit is divided by. */
   ratioId: number;
   shares: RatioShare[];
-  /** Who owes, and to whom; both `null` when the two stand exactly at the ratio. */
+  /** Who owes, and to whom; both `null` when the two stand at the ratio to within half a cent. */
   payerId: string | null;
   recipientId: string | null;
   /**
@@ -538,6 +538,12 @@ export interface OpenPeriodLine {
   lineId: number | null;
   /** The recurring item that generated it, or `null` for a stored one. */
   recurringItemId: number | null;
+  /**
+   * Dated inside a period already closed, and first entered after that close:
+   * its period's settlement did not count it, so this one does. A correction of
+   * a line or an item that was on time is not late.
+   */
+  late: boolean;
 }
 
 /**

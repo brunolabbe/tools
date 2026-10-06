@@ -226,3 +226,95 @@ to be 200` before the change, and the period screen would have shown that
     shows only its own days. lg-7 will need the first imported period to start
     where the two were last even, and the workbook's 53-day overlap repaired or
     accepted, since an overlap's days count in the earlier period.
+
+- 2026-10-06 — Round 1 after gate 1 (CONCERNS at `0862fd3`), with the owner's
+  answers, and `origin/main` at `056aab7` merged in (#363, lg-12; no
+  conflict).
+  - **The owner's decisions, each as question, answer and whose recommendation
+    it followed.**
+    - **The buffer's balance at a ratio change** (the builder's open decision):
+      keep §5 as built, keep it and file a ticket for exactness, or add a
+      boundary adjustment here. **Keep §5 as built** — the builder's
+      recommendation.
+    - **Re-asked with gate 1's sharper case** (a settlement's deposit paid
+      exactly and matched, then weighed at the next period's ratio: sam
+      deposits 30.00 at 0.5, alex 50.00 at 0.7): keep §5 as built, weigh a
+      matched deposit at its period's ratio in this round, or keep now and file
+      a ticket. **Keep now, and file it**: `lg-13`, filed in this branch, not
+      built; its Log holds the reproduction as re-run here.
+    - **Med 3, a line dated inside a closed period**: refuse it, list it in the
+      open period as late, or leave it and say so. **List it as late** — gate
+      1's recommendation.
+    - **Med 2, where a sub-cent residue becomes "nobody owes"**: in `books` or
+      only in `api`. **In `books`** — gate 1's recommendation.
+  - **Med 1, fixed.** `// codeql[js/missing-rate-limiting]` above
+    `GET /api/recurring` in `api/src/routes/periods.ts`, with adr/005's five
+    fields, as lg-5's two are. The guard, measured again on this round's tree:
+    without `{ onRequest: read }` on that route,
+    `api/test/route-limits.test.ts` answers `1 failed | 30 passed (31)`,
+    "GET recurring refuses the second request in a minute too". The check stays
+    red on this pull request until `security.yml` dismisses on a push to
+    `main`, as adr/005 says. By gate 1's reading of the check's page, only
+    `GET /api/recurring` was flagged, not
+    `GET /api/periods` or `GET /api/periods/open`, so only it carries the
+    comment. The first entry's "read after the draft opens" is this.
+  - **Med 2, fixed in `books`.** `settleStretches` returns nobody owing
+    when the deposit rounds to 0 (the deposit is never smaller than the net, so
+    the net is 0 too), or the net does where the recipient's share is zero.
+    Red first: `books/test/settlement.test.ts` › "a figure that did not
+    divide evenly still settles the next close at nothing" (100.01, asked
+    150.02, paid 150.02) and › "over many odd amounts and ratios, the next close
+    never names a payer at 0.00" (2 000 seeded trials) failed, `2 failed | 20
+passed (22)`, and pass after. Through the API,
+    `api/test/periods.test.ts` › "settles the next close at nothing, though
+    the figure did not divide evenly" failed against the old `books` `dist`
+    (`expected { … } to match object { payerId: null, … }`) and passes after
+    rebuilding it (`grep -c "depositCents === 0"` in
+    `books/dist/settlement.js` → 1). The next close then records `payer
+null`, status `none`, and is never listed as a deposit not seen.
+  - **Med 3, fixed as the owner chose.** A line or a recurring item's month
+    dated inside a closed period and **first entered** after that period
+    closed is listed in the open period with `late: true`, and the screen
+    says "entered after its period closed" and counts it in its payer's
+    figure. "First entered" is the start of its chain of corrections
+    (`enteredLate` in `books`, `firstEntered` in `api/src/periods.ts`):
+    the gate's "compare the line's `entered_at`" would list the correction
+    of an on-time line in full, though the next close counts only its
+    difference, and ending an on-time recurring item would list every month it
+    ever made. Red first: `api/test/periods.test.ts` › "dated the day of the
+    close, it is listed in the open period as late" (the gate's reproduction:
+    40.00 listed, deposit 210.00), "dated well inside the closed period, it is
+    listed too, and counted once" and "a recurring item added after a close
+    lists its months in that period as late" answered `3 failed` before the
+    change; `web/test/periods.test.tsx` › "a line entered after its period
+    closed is listed as late, and in its payer's figure" failed before
+    `lineLabel` changed. These tests run on a clock that moves a second a
+    read; on the suite's fixed clock a close and a later entry share an
+    instant, and nothing entered at the instant of a close is late. **Still
+    not listed**: a line on time that is corrected or removed after its period
+    closed. The next close counts the difference, as it counts everything since
+    the two were last even; the list does not show it.
+  - **Med 4, tested.** `api/test/periods.test.ts` › "the same amount into
+    the mortgage bucket, and a joint payment out of the buffer": neither moves
+    the 150.00 asked nor matches it. Red against each mutant: the bucket
+    predicate in `bufferRows` made `1 = 1`, `1 failed | 21 passed (22)`;
+    the person predicate, the same.
+  - **Lows fixed: 5, 6 and 7**, each red against the mutant the gate named.
+    - Low 5: `api/test/period-schema.test.ts`, 11 tests, each refusal beside
+      a row the database accepts. Each of migration 4's twelve constraints
+      removed in turn: `1 failed | 10 passed (11)` every time. The first draft
+      let four survive (the formula, deposit, net and pairing checks), because
+      its "later" fixture ended before it started and was refused by another
+      check; the fixture now is accepted on its own, and asserts so.
+    - Low 6: `books/test/periods.test.ts` › "a deposit dated on the period's
+      last day is its deposit"; with `>= end` made `> end`, `1 failed | 15
+passed (16)`.
+    - Low 7: `api/test/periods.test.ts` › "a line dated after it is not
+      listed"; without `linesThrough`'s `date <= through`, `1 failed`.
+  - **Lows left in the record: 8, 9, 10 and 11.** Each states a defect and not
+    its remedy, and none has a live call site in a household of two (8: an item
+    is ended, not removed; 9: a year typed as 9999; 10: a share of 11 ppm or
+    less; 11: a third person, lg-5's open low).
+  - **The suite.** `npm test -- --project ledger` → `Test Files 33 passed
+(33)`, `Tests 491 passed (491)` (465 at `0862fd3`, and this round's 26: 7 in `books`, 18 in
+    `api`, 1 in `web`).

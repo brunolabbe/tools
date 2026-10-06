@@ -271,7 +271,7 @@ const MIGRATIONS: readonly string[] = [
     formula TEXT NOT NULL CHECK (formula IN ('v1', 'v2', 'v3')),
     -- The ratio in effect on end_date, which the deposit was divided by.
     ratio_id INTEGER NOT NULL REFERENCES ratios (id),
-    -- Both NULL when the two stood exactly at the ratio.
+    -- Both NULL when the two stood at the ratio, to within half a cent.
     payer_id TEXT REFERENCES people (id),
     recipient_id TEXT REFERENCES people (id),
     -- Into the buffer. NULL only when the recipient's share was zero, so that a
