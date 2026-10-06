@@ -45,6 +45,15 @@ nothing back.
   what landed goes back to the gate, never into the record.
 - **`done`, or `in-flight` for work that lands partial.** No commit carries a
   record on a `ready` ticket: `status.mjs` fails one.
+- **An `awaiting` row means an `awaiting:` line, committed before `--land`.**
+  `gate.md` grades a line whose only proof is an event after the merge
+  `awaiting`, and a gate never edits frontmatter, so the lander writes the
+  ticket's one `awaiting:` line, in the form `docs/01-TICKETS.md` gives, naming
+  every such row and the event that closes it. `--land` refuses a ticket dirty
+  against `HEAD`, so the line is its own commit just before it, in the same
+  push. A ticket whose tables carry no `awaiting` row gets no line from this
+  step; one its brief already owes (dl-52's, lg-5's) is the builder's, and is
+  in the ticket before the lander arrives.
 - **A gate that runs after the records are committed** — a narrow check on a
   post-PR fix — lands its own file alone with the same command. Do not pass the
   already-committed files again: that adds a second `## Review`.
@@ -78,4 +87,6 @@ file that starts `### Gate <n>`.
 
 A skill correction, a close-out, anything the loop produces about itself has no
 ticket to commit a section to. **The pull request thread is the record**, in
-full, and the body says so in a sentence.
+full, and the body says so in a sentence. A gate row `awaiting` has no
+`awaiting:` field to go in here: the body names the event and the reading, and
+nothing else in the repo tracks them after the merge.
