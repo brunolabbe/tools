@@ -656,6 +656,7 @@ describe("BrowserResolver", () => {
           hlsParser: hls.parser,
           quietMs: 1200,
           confirmAge: true,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
         });
       }
 
@@ -663,7 +664,11 @@ describe("BrowserResolver", () => {
         "an Italian gate in a fixed layer, not told to confirm, fails AGE_CONFIRMATION_REQUIRED",
         { timeout: TEST_TIMEOUT_MS },
         async () => {
-          const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+          const resolver = new BrowserResolver({
+            pool,
+            quietMs: 1200,
+            emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          });
           server.requests.length = 0;
           const error = await probeError(GATE, resolver);
 
@@ -722,7 +727,11 @@ describe("BrowserResolver", () => {
         "a gate whose layer lives in an open shadow root is recognised",
         { timeout: TEST_TIMEOUT_MS },
         async () => {
-          const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+          const resolver = new BrowserResolver({
+            pool,
+            quietMs: 1200,
+            emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          });
           server.requests.length = 0;
           const error = await probeError(`${GATE}?shadow`, resolver);
 
@@ -770,6 +779,7 @@ describe("BrowserResolver", () => {
           hlsParser: hls.parser,
           quietMs: 1200,
           confirmAge: true,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
         });
       }
 
@@ -820,7 +830,12 @@ describe("BrowserResolver", () => {
         "sign-up chips whose one age candidate is negated press nothing and report AGE_CONFIRMATION_REQUIRED (confirmation %s)",
         { timeout: TEST_TIMEOUT_MS },
         async (confirmAge) => {
-          const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge });
+          const resolver = new BrowserResolver({
+            pool,
+            quietMs: 1200,
+            confirmAge,
+            emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          });
           server.requests.length = 0;
           const error = await probeError("/age-false-signup-chips.html", resolver);
 
@@ -907,6 +922,7 @@ describe("BrowserResolver", () => {
           hlsParser: hls.parser,
           quietMs: 1200,
           confirmAge: true,
+          emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
         });
       }
 
