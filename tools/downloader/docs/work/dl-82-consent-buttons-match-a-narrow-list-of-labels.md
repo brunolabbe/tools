@@ -3,7 +3,7 @@ id: dl-82
 tool: downloader
 title: A consent button is pressed only when its label is one of a narrow list of exact phrasings
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -56,6 +56,106 @@ fixture: building one is the first step.
 - Each step-1 fixture yields its stream.
 - The negative test from step 3 passes: neither control is clicked.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-06 · `056aab7..2557198` · Opus 5.5, depth standard (full gate)
+
+| Done when                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each step-1 fixture yields its stream                       | `resolvers/test/browser/browser-resolver.test.ts` › "presses %j and finds the stream behind it" for "Accetto e continua", "Acconsento", "Agree and continue", "Accept & close" (plus three more and an "Accept all" control) ✓ — asserts the `/beacon/consent-accepted` request and `variants[0].url` is the master; red at base: 7 of 9 fail with `provoke.ts` at `056aab7`, green at head |
+| Negative test from step 3: neither control is clicked       | `browser-resolver.test.ts` › "presses neither a pagination link nor a vote button that merely starts like a consent label" ✓ — asserts neither `/beacon/consent-continua` nor `/beacon/consent-vote` was requested; goes red when a bare `continua` is planted                                                                                                                              |
+| `npm run check` and `npm test -- --project downloader` pass | **verified** — check exit 0; downloader project 1680 passed, 2 skipped of 1682, 97 files passed, 1 skipped; no test line deleted (`git diff --numstat`: 0 deletions under `test/`); all 11 PR checks green on `2557198`                                                                                                                                                                     |
+
+- **med** · open decision · no `Done when` line depends on it · **The widened
+  labels are pressed anywhere in any frame, and a false press also steals the
+  single consent press, so pages `origin/main` resolved now fail.**
+  `clickByText` in `resolvers/src/browser/provoke.ts` runs
+  `frame.getByRole(role, { name: CONSENT_TEXT }).first()` over the whole frame:
+  no dialog or overlay scope, and `.first()` is DOM order, where a consent
+  dialog usually comes last. Premise: a real `BrowserResolver` (built `dist`,
+  `quietMs: 1200`) against pages served from loopback, each control reporting
+  its click to a `/beacon/` path. Script:
+  `node <scratch>/falsepress.mjs`. Head `2557198`:
+  ```
+  /newsletter-hocapito.html -> error NO_MEDIA_FOUND | beacons: ["/beacon/newsletter-hocapito","/beacon/newsletter-hocapito"]
+  /terms-checkbox.html -> error NO_MEDIA_FOUND | beacons: []
+  /terms-button.html -> error NO_MEDIA_FOUND | beacons: ["/beacon/terms-submit","/beacon/terms-submit"]
+  /comment-yesiagree.html -> error NO_MEDIA_FOUND | beacons: ["/beacon/comment-yesiagree","/beacon/comment-yesiagree"]
+  /review-vote.html -> error NO_MEDIA_FOUND | beacons: ["/beacon/review-vote","/beacon/review-vote"]
+  /order-overlay.html -> error NO_MEDIA_FOUND | beacons: []
+  /order-bar.html -> error NO_MEDIA_FOUND | beacons: ["/beacon/newsletter-hocapito","/beacon/newsletter-hocapito"]
+  /control-accetta.html -> stream /media/mse/v1080.m3u8 | beacons: ["/beacon/consent-accepted"]
+  ```
+  Same script, `provoke.ts` at `056aab7` rebuilt (dist grep: `acconsento` 0):
+  every false-press page `beacons: []`, and
+  `/order-overlay.html -> stream` and `/order-bar.html -> stream`, each with
+  `["/beacon/consent-accepted"]`. So: a newsletter "Ho capito", a checkout
+  `<button type=submit>` "Agree and continue", a comment form's "Yes, I agree"
+  and a review vote "Sono d'accordo" are each pressed in both passes. Worse,
+  with a newsletter "Ho capito" ahead of a consent dialog labelled "Accetta" —
+  a label `origin/main` already pressed — head returns `NO_MEDIA_FOUND`,
+  where base returned the stream. With a full-viewport overlay the press on
+  the covered newsletter button times out, and with a bottom bar it lands on
+  the newsletter instead, so the consent button is never reached. A terms
+  checkbox is not pressed (role `checkbox`). The class is older than this
+  branch (an English "Got it" or "OK" was already pressed anywhere), but the
+  branch extends it to acknowledgement phrasings in eight languages. The Log's
+  "What the brief had wrong: nothing material" misses this, and so does the
+  brief, which weighs the widening only against the revisits. Graded med
+  under the table: a defect behind a condition that will occur, with no
+  acceptance line wrong. **Options:** (a) **recommended**: scope the text
+  fallback to a consent container (`[role=dialog]`, `[aria-modal=true]`, or a
+  fixed-position ancestor), or at least try dialog-scoped matches before the
+  whole frame; add `order-bar`/`order-overlay`-style fixtures as the proof.
+  (b) Drop the acknowledgement phrasings that collide with ordinary controls
+  ("Ho capito", "Понятно", "Yes, I agree", bare "Sono d'accordo", "agree and
+  continue"). That is cheaper, but it refuses labels the brief asked for, and
+  it leaves the old "Got it"/"OK" exposure as it was. (c) Land as is and file
+  the scoping as a ticket.
+- **med** · no `Done when` line depends on it · **The start anchor has no
+  test.** Mutation: `new RegExp(\`^\\s*(?:`→`new RegExp(\`\\s*(?:`in`provoke.ts`, then
+`npx vitest run …/provoke.test.ts …/browser-resolver.test.ts -t "dl-82"`→`Tests 91 passed | 57 skipped (148)`. Every `REFUSED`entry and the
+look-alike fixture start with a consent phrasing, so none ends with one.
+"Read and continue" or "Click OK" would pass unnoticed. Dropping the end
+anchor fails 9, and an ungrouped alternation fails 8, so those are guarded.
+The Log's "With the anchors removed … fails" holds only for the end anchor.
+Fix: add a`REFUSED` entry that ends in a phrasing (e.g. "Read and
+  continue", "Premi OK").
+- **low** · the generic-word guard is a denylist sample. Planting
+  `|yes|next|avanti` in the English entry fails only `does not match "Yes"`
+  (`Tests 1 failed | 90 passed`), and "next"/"avanti" go through. Planting
+  `|continua` fails both the unit row and the integration negative
+  (`expected [...] to not include '/beacon/consent-continua'`). So the
+  positive control the dispatch asked for works, and the test protects exactly
+  the words it names.
+- **low** · the trailing `[.!]?` widens the generic words the docstring says
+  stay as they were: `"ok."`, `"OK!"` and `"Continue."` match at head and not
+  at base (`node <scratch>/regex.mjs`).
+- **low** · the Log's base-run count is wrong. It records
+  `Tests 7 failed | 1 passed | 50 skipped (58)` and in the same bullet says
+  that both the "Accept all" control and the negative passed. Measured with
+  `provoke.ts` at `056aab7`: `Tests 7 failed | 2 passed | 50 skipped (59)`.
+- **dropped** · regex construction: no phrasing lost. 651 probes (the 31-entry
+  base language × 3 case forms × 7 whitespace wrappings including tab, newline
+  and NBSP) were all accepted by the old pattern and all by the new one. The
+  anchors wrap one `(?:…)` group around the whole join, the flags are `i` as
+  before, no phrase carries an unescaped `.`, `&` is literal, and the
+  apostrophe is `['’]`.
+- **dropped** · a terms checkbox labelled "Agree and continue" is not pressed
+  (`/terms-checkbox.html` beacons `[]`): `clickByText` asks only for `button`
+  and `link`.
+- **findings** · the hunt returned 8; 6 carried in 5 bullets (the false press
+  and the order regression are one mechanism and share the first), 2 dropped.
+- Invariants: no tool crossing, no `AppError`/code change, no spawn, no
+  URL/header logging, no SSRF surface, no progress, no contract edit, no new
+  test package or workspace dependency; style ✓ (no `any`, no `console`).
+  Skipped: route enumeration and the Dockerfile, which the diff cannot touch.
+- NFR: security: the first med (submit buttons pressed on the page's behalf,
+  in an anonymous context) · performance: a press on a covered false match
+  burns the 2000 ms click timeout per pass per frame (unmeasured) ·
+  reliability: the first med · maintainability ✓ (one phrase array per
+  language, exported for a table test).
 
 ## Log
 
