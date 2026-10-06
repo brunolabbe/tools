@@ -729,7 +729,12 @@ describe("BrowserResolver", () => {
 
       function confirming(): BrowserResolver {
         const hls = recordingHlsParser();
-        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+        return new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 1200,
+          confirmAge: true,
+        });
       }
 
       function beacons(): string[] {
@@ -739,7 +744,11 @@ describe("BrowserResolver", () => {
       test.each([
         ["a fixed app shell's 18+ nav link", "/age-false-shell-link.html", "/beacon/nav-18"],
         ["a fixed app shell's 21 Savage link", "/age-false-shell-21-savage.html", "/beacon/artist"],
-        ["a full-viewport promo's Over 18? link", "/age-false-shop-interstitial.html", "/beacon/buy"],
+        [
+          "a full-viewport promo's Over 18? link",
+          "/age-false-shop-interstitial.html",
+          "/beacon/buy",
+        ],
         ["a promo dialog's Over 18? link", "/age-false-shop-dialog.html", "/beacon/buy"],
         ["a pricing dialog's 21-day trial link", "/age-false-pricing-21-day.html", "/beacon/trial"],
       ])(
@@ -825,8 +834,16 @@ describe("BrowserResolver", () => {
       );
 
       test.each([
-        ["a cookie sheet's View our 18 partners, closable panel", "/age-false-cookie-sheet-closable.html", "/beacon/view-partners"],
-        ["a cookie sheet's View our 18 partners, sticky panel", "/age-false-cookie-sheet-sticky.html", "/beacon/view-partners"],
+        [
+          "a cookie sheet's View our 18 partners, closable panel",
+          "/age-false-cookie-sheet-closable.html",
+          "/beacon/view-partners",
+        ],
+        [
+          "a cookie sheet's View our 18 partners, sticky panel",
+          "/age-false-cookie-sheet-sticky.html",
+          "/beacon/view-partners",
+        ],
         ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
       ])(
         "accepted residue: %s is pressed where play is a click, and nothing plays",

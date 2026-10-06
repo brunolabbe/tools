@@ -223,3 +223,75 @@ brief's negatives and neither is handled.
 **Nothing folded in.** dl-81 touches the same passes and is held behind this
 branch by the orchestrator; dl-82 owns `CONSENT_TEXT`. No other open ticket
 names the age gate.
+
+**2026-10-06 — gate round 1 repaired** (gate FAIL at `25e97db`: two highs, one
+med, five lows). The owner decided both highs on 2026-10-06, choosing the
+first of three options the orchestrator put: the gate's remedy A, plus, for
+the second high, counting a layer as blocking only at `AGE_LAYER_MIN_COVER` and
+preferring a dl-48 candidate over a structural one. The other two options were
+A plus a closed per-language attestation list for structural presses, and
+accepting the branch as built. What changed, all in `AGE_CANDIDATES_FN` and
+`AGE_CHOOSE_FN`:
+
+- **A link that would leave the document is never pressed.** That means
+  another http(s) origin, as before, or, in the top frame, another path or
+  query on this origin. The departure guard already turned such a press into
+  `NO_MEDIA_FOUND`, so no press that could have worked is lost. A link in a
+  same-origin frame still navigates only the frame and is still pressed.
+- **The layered-over-unlayered rule counts only a blocking layer**, one
+  covering `AGE_LAYER_MIN_COVER`. A small dialog is still a layer for
+  _recognition_.
+- **Otherwise a dl-48 candidate beats a structural one.** When no candidate is
+  blocking and any is dl-48's (label plus page marker), the structural ones
+  go. I ran the tie-break on all 119 rows of the gate's matrix (below). It
+  changed only the row it was meant for, and none of its rows came out as a
+  choice between materially different behaviours.
+- **The labels are tested before the ancestor walk** (the low's stated
+  remedy). The gate's perf harness, `readSignals` median: 10, 10 and 28 ms for
+  3000 links nested 10 deep, 3000 nested 40 deep and 10000 nested 40 deep.
+  `25e97db` measured 35, 108 and 502 ms, and base 10, 8 and 23 ms.
+
+**The gate's matrix, all 119 rows**, rerun with a copy of its harness pointed
+at this worktree. Base was rerun too and matched the gate's own base run on
+every row. 16 rows differ from `25e97db`, and every one is the decision's
+intended effect:
+
+| row (confirmation on)                     | base                    | `25e97db`                         | now                         |
+| ----------------------------------------- | ----------------------- | --------------------------------- | --------------------------- |
+| shell, `<a>18+` nav link, stream          | stream                  | `NO_MEDIA_FOUND` (navigated-away) | stream                      |
+| shell, `<a>21 Savage`, stream             | stream                  | `NO_MEDIA_FOUND` (navigated-away) | stream                      |
+| full-viewport promo `<a>Over 18?`, stream | stream                  | `NO_MEDIA_FOUND` (navigated-away) | stream                      |
+| dialog card `<a>Over 18?`, stream         | stream                  | `NO_MEDIA_FOUND` (navigated-away) | stream                      |
+| pricing `<a>Start 21-day trial`, stream   | stream                  | `NO_MEDIA_FOUND` (navigated-away) | stream                      |
+| the same five pages, nothing playing      | `NO_MEDIA_FOUND`        | `NO_MEDIA_FOUND` (navigated-away) | `AGE_CONFIRMATION_REQUIRED` |
+| dl-48 inline gate + cookie sheet          | stream, `age-confirmed` | `NO_MEDIA_FOUND`, `view-partners` | stream, `age-confirmed`     |
+
+The "nothing playing" row is the declined press: those pages are still
+recognised, and their only candidate is now a link that would leave. That gives
+the same code that confirmation off already gave them at `25e97db`.
+The other 103 rows are as `25e97db` had them. That includes the accepted
+residue: the `pushState` "18+" button, the menu button, "View our 18 partners"
+where play is a click, and `Age: 18`. Each is pressed as before. The owner
+accepted these on 2026-10-06 as known, not fixed.
+
+**Tests.** Each row of both highs is now a test in `browser-resolver.test.ts`,
+in the "false candidates and the press, as gate round 1 measured them (dl-83)"
+block. The fixtures are static copies of the gate's harness pages
+(`age-false-*.html`, `age-inline-gate-plus-cookie.html`). There are 17 tests:
+five leaving links that are never pressed, four pages with nothing recognised,
+the negated chips with confirmation off and on, the inline gate beside the
+cookie sheet, and four residue pins. Against `25e97db`'s `src/`, 6 of the 17
+fail: the five links and the inline gate, which are the rows the decision
+fixes. The 11 others pin behaviour `25e97db` already had.
+
+**Left as recorded, not fixed.**
+
+- The med: one press per document is never retried, and a hash or `pushState`
+  route is not a new document. This change does not make it free. The hydrate
+  and SPA rows are unchanged.
+- The `about:srcdoc` ad frame low: its link is in a frame, not the top
+  document, so the new rule leaves it pressable, and it is still pressed.
+- The other lows (a lost mark, the tokeniser restated in `capture-rules.test.ts`,
+  and the classification order) are untouched.
+- dl-94 is filed on this branch for the `AGE_CONFIRMATION_REQUIRED` copy, on the
+  owner's choice of (b), 2026-10-06. The copy is unchanged here.
