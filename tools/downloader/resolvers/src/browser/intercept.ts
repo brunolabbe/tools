@@ -67,6 +67,17 @@ export class HitCollector {
     return [...this.#hits.values()];
   }
 
+  /**
+   * Whether the collector has captured any playable (non-segment) media.
+   * Used by dl-80 to extend the quiet floor when a page has nothing yet.
+   */
+  hasPlayableHit(): boolean {
+    for (const hit of this.#hits.values()) {
+      if (hit.kind !== "segment") return true;
+    }
+    return false;
+  }
+
   /** Response body captured at interception time, if it was small enough to keep. */
   bodyFor(key: string): string | undefined {
     return this.#bodies.get(key);
