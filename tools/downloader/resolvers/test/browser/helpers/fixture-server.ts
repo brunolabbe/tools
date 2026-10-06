@@ -136,6 +136,17 @@ function makeHandler(
         return;
       }
 
+      // dl-83 gate round 2: a server-side age gate. The entry link sets a
+      // cookie here and is sent straight back to the page it came from, so the
+      // press never leaves although the link names another path.
+      if (pathname === "/enter-redirect") {
+        const next = requestUrl.searchParams.get("next") ?? "/";
+        const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+        response.writeHead(302, { "set-cookie": "age=1; Path=/", location: safe });
+        response.end();
+        return;
+      }
+
       // dl-55, decision 3: a genuinely cross-origin frame, not same-origin by
       // convention — the port is injected at request time.
       // dl-61 reuses the same shape for a player inside an open shadow root.

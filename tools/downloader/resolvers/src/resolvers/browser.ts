@@ -29,6 +29,7 @@ import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
 import {
+  PLAY_TIME_QUERY_KEYS,
   provokePlayback,
   readMetadata,
   readSignals,
@@ -612,8 +613,11 @@ async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal
  * origin and the path — an SPA that rewrites its own *path* for the same clip
  * is not covered by this exception and still counts as a departure; that cost
  * is recorded in the Log rather than answered here.
+ *
+ * The three keys themselves are `PLAY_TIME_QUERY_KEYS` in `provoke.ts`, which
+ * the age-gate press reads too, so the two never disagree about leaving (dl-83).
  */
-const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(["t", "start", "autoplay"]);
+const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(PLAY_TIME_QUERY_KEYS);
 
 /**
  * Same URL, ignoring the fragment (a page that only changes its hash on play —

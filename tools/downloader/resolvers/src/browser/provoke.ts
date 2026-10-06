@@ -443,6 +443,16 @@ const AGE_MARK = "data-downloader-age";
 const AGE_CONTROLS = 'button, a, [role="button"], input[type="button"], input[type="submit"]';
 
 /**
+ * The query keys a play-time rewrite may add, change or remove without leaving
+ * the page: the departure guard's exception (`PLAY_TIME_QUERY_EXCEPTIONS` in
+ * `resolvers/browser.ts`, dl-55 decision 1, where the reasoning lives). Kept
+ * here, and read from here by the guard, because `AGE_CHOOSE_FN` asks the same
+ * question of a link before it is pressed (dl-83, gate round 2), and the two
+ * must not disagree about what leaving is.
+ */
+export const PLAY_TIME_QUERY_KEYS: readonly string[] = ["t", "start", "autoplay"];
+
+/**
  * Every control that could be an age self-confirmation, as `{ el, name,
  * legacy, blocking }` (dl-83). Recognition is broad, because a false one with
  * confirmation off costs a wrong message and nothing clicked. Two paths, either
@@ -569,35 +579,50 @@ const AGE_CANDIDATES_FN = `function () {
 
 /**
  * The one candidate to press, or `null` (dl-83). The press is strict, because
- * a false one clicks something on the user's behalf. Each rule only drops:
+ * a false one clicks something on the user's behalf. Two filters drop the
+ * candidates that must never be pressed, and only then do two preferences
+ * choose among the rest (gate round 2: a preference applied first could drop
+ * the real gate in favour of a candidate a filter then removed, leaving
+ * nothing):
  *
- * 1. **When any candidate sits in a blocking layer, every other goes.** A
+ * 1. **A label carrying an `AGE_NEGATIONS` word goes** — the under-age exit.
+ * 2. **A link that would leave goes**, the control itself or its nearest
+ *    `a[href]` ancestor. For every candidate, a link to another http(s) origin,
+ *    as at base. For a structural candidate in the top frame, also a link to
+ *    another path, or to a query differing in more than `PLAY_TIME_QUERY_KEYS`,
+ *    on this origin — what the departure guard counts as leaving, so a press
+ *    it would turn into `NO_MEDIA_FOUND` is not made (gate round 1). **dl-48's
+ *    candidates are exempt from that same-origin half** (gate round 2, the
+ *    owner's decision, 2026-10-06): a real gate is often a link whose script
+ *    cancels it, a link to a route that sets a cookie and redirects back, or a
+ *    `target="_blank"` link, and none of those leaves the page although its
+ *    href names another path. dl-48 pressed them and they worked. The cost,
+ *    accepted: a structural-only gate built that way is not pressed; base never
+ *    recognised one. A `javascript:` or fragment href stays. So does a link in
+ *    a same-origin frame, which usually navigates only the frame — but not
+ *    always: one with `target="_top"` or `_parent` navigates the page, the
+ *    guard reports the departure, and that is unchanged from base (gate round
+ *    2, low).
+ * 3. **When any candidate left sits in a blocking layer, every other goes.** A
  *    layer over most of the page intercepts the pointer, so a person could not
  *    press a control under it either, and the control that put the layer up is
  *    the one inside it. This is what keeps an `AGE_GATE_TEXT` decoy earlier in
  *    the DOM from being pressed in the overlay's place. Only a layer that
  *    covers `AGE_LAYER_MIN_COVER` counts: a cookie sheet along the bottom
  *    intercepts nothing (gate round 1).
- * 2. **Otherwise, when any candidate is dl-48's (`legacy`), the structural
- *    ones go** — they sit in no layer or in one that blocks nothing, and the
- *    label-and-marker rule is the one dl-48 already pressed. This is what keeps
+ * 4. **Otherwise, when any candidate left is dl-48's (`legacy`), the
+ *    structural ones go** — they sit in no layer or in one that blocks nothing,
+ *    and the label-and-marker rule is the one dl-48 already pressed. This keeps
  *    a cookie sheet's "View our 18 partners" from being pressed in place of an
- *    inline "I am 18 or older" gate (gate round 1, the owner's decision).
- * 3. **A label carrying an `AGE_NEGATIONS` word goes** — the under-age exit.
- * 4. **A link that would leave the document goes**, the control itself or its
- *    nearest `a[href]` ancestor: another http(s) origin anywhere, and in the
- *    top frame also another path or query on this origin. The resolver's
- *    departure guard turns such a press into `NO_MEDIA_FOUND` whether or not a
- *    stream was found, so no press that could have worked is lost (gate round
- *    1, the owner's decision). A button whose script routes away is not caught
- *    here, and is a known residue. A `javascript:` or same-document href says nothing
- *    either way and stays, and so does a link in a same-origin frame, which
- *    navigates only the frame.
+ *    inline "I am 18 or older" gate (gate round 1, the owner's decision). Its
+ *    reach, accepted with it: a dl-48 label elsewhere on the page also beats a
+ *    real structural gate in a sheet or a small card (gate round 2, low).
  *
  * Exactly one left is pressed; none or several, nothing is, and the probe says
  * why (`AGE_CONFIRMATION_REQUIRED`) rather than guessing. The rules apply to a
  * lone candidate too: a gate whose only age-bearing control is the exit must
- * not have it pressed for want of a second.
+ * not have it pressed for want of a second. A button whose script routes away
+ * is not caught by any of them, and is a known residue.
  */
 const AGE_CHOOSE_FN = `function (candidates) {
   var negations = ${JSON.stringify(AGE_NEGATIONS)};
@@ -613,7 +638,14 @@ const AGE_CHOOSE_FN = `function (candidates) {
     }
     return false;
   };
-  var leaves = function (el) {
+  var playTime = ${JSON.stringify(PLAY_TIME_QUERY_KEYS)};
+  var query = function (search) {
+    var params = new URLSearchParams(search);
+    for (var i = 0; i < playTime.length; i++) params.delete(playTime[i]);
+    params.sort();
+    return params.toString();
+  };
+  var leaves = function (el, legacy) {
     for (var node = el; node; node = up(node)) {
       if (node.tagName === 'A' && node.hasAttribute('href')) {
         var target;
@@ -624,18 +656,18 @@ const AGE_CHOOSE_FN = `function (candidates) {
         }
         if (!/^https?:$/.test(target.protocol)) return false;
         if (target.origin !== location.origin) return true;
-        return window === window.top && target.pathname + target.search !== location.pathname + location.search;
+        if (legacy || window !== window.top) return false;
+        return target.pathname !== location.pathname || query(target.search) !== query(location.search);
       }
     }
     return false;
   };
-  var list = candidates;
+  var list = candidates.filter(function (c) { return !negated(c.name) && !leaves(c.el, c.legacy); });
   if (list.some(function (c) { return c.blocking; })) {
     list = list.filter(function (c) { return c.blocking; });
   } else if (list.some(function (c) { return c.legacy; })) {
     list = list.filter(function (c) { return c.legacy; });
   }
-  list = list.filter(function (c) { return !negated(c.name) && !leaves(c.el); });
   return list.length === 1 ? list[0].el : null;
 }`;
 

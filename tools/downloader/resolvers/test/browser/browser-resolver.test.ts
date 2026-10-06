@@ -858,6 +858,106 @@ describe("BrowserResolver", () => {
         },
       );
     });
+
+    // Gate round 2's pages, each a static copy of its harness page: real gates
+    // built as links, and the reach of the dl-48 preference.
+    describe("gates built as links, and the dl-48 preference, as gate round 2 measured them (dl-83)", () => {
+      const MASTER = "/media/mse/master.m3u8";
+
+      function confirming(): BrowserResolver {
+        const hls = recordingHlsParser();
+        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+      }
+
+      function beacons(): string[] {
+        return server.requests.filter((pathname) => pathname.startsWith("/beacon/"));
+      }
+
+      // dl-48's label: exempt from the same-origin half of the leaving rule, so
+      // each is pressed as at base, and each stays on the page.
+      test.each([
+        ["whose script cancels it", "/age-link-prevent-L.html", "/beacon/age-confirmed"],
+        ["to a route that sets a cookie and redirects back", "/age-link-redirect-L.html", "/beacon/player-after-cookie"],
+        ["that opens a new tab", "/age-link-blank-L.html", "/beacon/age-confirmed"],
+        ["to a play-time query key", "/age-link-ptk-L.html", "/beacon/player-after-cookie"],
+      ])(
+        "a dl-48 gate built as a link %s is pressed, and yields its stream",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname, shown) => {
+          server.requests.length = 0;
+          const result = await probe(pathname, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain(shown);
+        },
+      );
+
+      // The structural twins: their hrefs name another path, so the press
+      // declines them — the accepted cost of the owner's decision. Base never
+      // recognised them.
+      test.each([
+        ["whose script cancels it", "/age-link-prevent-S.html"],
+        ["to a route that sets a cookie and redirects back", "/age-link-redirect-S.html"],
+        ["that opens a new tab", "/age-link-blank-S.html"],
+      ])(
+        "accepted cost: a structural-only gate built as a link %s is declined",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname) => {
+          server.requests.length = 0;
+          const error = await probeError(pathname, confirming());
+
+          expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          expect(beacons()).toEqual([]);
+        },
+      );
+
+      test.each([
+        ["to a play-time query key", "/age-link-ptk-S.html", "/beacon/player-after-cookie"],
+        ["to a fragment", "/age-link-hash-S.html", "/beacon/age-confirmed"],
+      ])(
+        "a structural gate built as a link %s, which the guard calls the same page, is pressed",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname, shown) => {
+          server.requests.length = 0;
+          const result = await probe(pathname, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain(shown);
+        },
+      );
+
+      // The preference's reach (gate round 2, low): a dl-48 label elsewhere on
+      // the page beats a real structural gate that blocks nothing. Pinned as
+      // it stands; base pressed the decoy six times on each.
+      test.each([
+        ["an English sheet", "/age-tiebreak-sheet-en.html"],
+        ["an Italian sheet", "/age-tiebreak-sheet-it.html"],
+        ["an Italian card below the coverage threshold", "/age-tiebreak-card-it.html"],
+      ])(
+        "accepted reach: beside %s, a dl-48 decoy link is pressed once and nothing plays",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname) => {
+          server.requests.length = 0;
+          const error = await probeError(pathname, confirming());
+
+          expectCode(error, "NO_MEDIA_FOUND");
+          expect(beacons()).toEqual(["/beacon/footer-decoy"]);
+        },
+      );
+
+      test(
+        "accepted reach: a dl-48 decoy that is a link to another page is pressed, and the probe reports the departure",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const error = await probeError("/age-tiebreak-sheet-leaving-decoy.html", confirming());
+
+          expectCode(error, "NO_MEDIA_FOUND");
+          expect(error.details?.["reason"]).toBe("navigated-away");
+          expect(server.requests).toContain("/beacon/footer-decoy");
+        },
+      );
+    });
   });
 
   test("reports BOT_CHALLENGE on an interstitial", { timeout: TEST_TIMEOUT_MS }, async () => {
