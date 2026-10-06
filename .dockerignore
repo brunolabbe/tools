@@ -23,10 +23,15 @@ logs
 *.sqlite*
 
 # Secrets must never enter the build context: every layer is readable by
-# anyone who can pull the image.
+# anyone who can pull the image. `**/` as well: each tool keeps its own
+# `tools/<tool>/.env` for its dev script, and every build stage copies its whole
+# tool directory.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 
 .git
 .github

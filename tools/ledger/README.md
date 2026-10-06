@@ -31,11 +31,12 @@ npm test -- --project ledger
 Started like that, every API route but health answers 403: the API trusts only
 Cloudflare Access. In development, name a person instead —
 `ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger`
-— and see `.env.example` for the rest.
+— or put those two lines in `.env` — and see `.env.example` for the rest.
 
 Settings are environment variables, listed with their defaults in
-[`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
-change in the shell. Requires Node ≥ 22. The UI's dev server proxies `/api` to
+[`.env.example`](./.env.example). Copy it to `.env` beside it and
+`npm run dev:ledger` loads that; a variable set in the shell wins over the file.
+Requires Node ≥ 22. The UI's dev server proxies `/api` to
 the API on 8100, which keeps the two same-origin;
 [`web/.env.example`](./web/.env.example) changes where it points.
 
