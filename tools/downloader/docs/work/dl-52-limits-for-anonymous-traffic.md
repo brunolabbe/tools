@@ -79,15 +79,16 @@ covers about ten jobs at the measured rate.
 
 **The owner's choices**, made via `AskUserQuestion` with these numbers attached:
 
-| Setting                       | Production | Source                                                                                        |
-| ----------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
-| `MAX_CONCURRENT_BROWSERS`     | 2          | owner, recommended: 800 MiB and 2.5 cores at full probe load                                  |
-| `MAX_CONCURRENT_JOBS`         | 2          | owner, recommended. The table's "no more than 2" holds, and upload is not what binds          |
-| `MAX_CONCURRENT_FRAME_GRABS`  | unset      | follows `MAX_CONCURRENT_JOBS`. Nothing measured says otherwise; a frame grab was not isolated |
-| `MAX_FILE_SIZE_MB`            | **4096**   | owner, **against** the 1024 recommendation: about 90 min of 1080p, so a whole film fits       |
-| `RATE_LIMIT_PROBE_PER_MINUTE` | 4          | the table's proposal. Stated to the owner with the questions, not separately asked            |
-| `RATE_LIMIT_JOBS_PER_MINUTE`  | 2          | as above                                                                                      |
-| `MAX_JOBS_PER_CLIENT`         | **2**      | owner, asked separately, **against** the 1 recommendation (see below)                         |
+| Setting                              | Production | Source                                                                                               |
+| ------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `MAX_CONCURRENT_BROWSERS`            | 2          | owner, recommended: 800 MiB and 2.5 cores at full probe load                                         |
+| `MAX_CONCURRENT_JOBS`                | 2          | owner, recommended. The table's "no more than 2" holds, and upload is not what binds                 |
+| `MAX_CONCURRENT_FRAME_GRABS`         | unset      | follows `MAX_CONCURRENT_JOBS`. Nothing measured says otherwise; a frame grab was not isolated        |
+| `MAX_FILE_SIZE_MB`                   | **4096**   | owner, **against** the 1024 recommendation: about 90 min of 1080p, so a whole film fits              |
+| `RATE_LIMIT_PROBE_PER_MINUTE`        | 4          | the table's proposal. Stated to the owner with the questions, not separately asked                   |
+| `RATE_LIMIT_JOBS_PER_MINUTE`         | 2          | as above                                                                                             |
+| `MAX_JOBS_PER_CLIENT`                | **2**      | owner, asked separately, **against** the 1 recommendation (see below)                                |
+| `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` | 4          | owner, 2026-10-06, asked separately: the probe's number (added by the build, not in the first brief) |
 
 The two per-minute rate limits are policy, not something a host measurement
 sizes. If the owner overrides them later, that changes this table, not the Build.
@@ -113,7 +114,10 @@ both of the default two running slots".
 
 For either option, confirm what this zone's plan allows (how many
 rate-limiting rules, which periods, which actions) before writing the rule. The
-repo has no record of it.
+repo has no record of it. **The zone is on the Free plan** (the owner,
+2026-10-06), whose published allowances are one rule, the fields Path and
+Verified Bot only, a 10 s period and block, and Block as the action: no Host, so
+the rule cannot be scoped to the downloader (see the Log).
 
 ## Build
 
@@ -231,3 +235,51 @@ config` renders them, quoted in the Log.
   where the edge rule would trigger it. **Found while reading the brief:** the
   header's "four things" was already stale before this ticket (it omitted the
   Turnstile keys, dl-50); corrected in the same edit.
+
+- 2026-10-06 — **Gate 1 (CONCERNS) answered; the owner's answers via
+  `AskUserQuestion`, 2026-10-06.** (1) The rule section is rewritten for a
+  fields-limited plan, with a fields row in the allowances table: option **A**, the
+  gate's recommendation. (2) **The zone is on the Free plan**, chosen from Free /
+  Pro or higher / not sure. (3) `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` stays **4**,
+  chosen over deleting the line, so the compose comment now traces to that answer
+  and the ticket's table has a row for it.
+  - **M1 reproduced, and it changes the rule.** Cloudflare's rate limiting page,
+    fetched 2026-10-06, gives Free: 1 rule, fields "Path, Verified Bot", period
+    10 s, mitigation 10 s, action Block; Pro: 2 rules, "Host, URI, Path, Full URI,
+    Query, Verified Bot", periods to 1 min, blocks to 1 h. So on Free the Host
+    clause cannot be written, and the rule is `Path starts with /api/` at 20 per
+    10 s per IP, **spanning every hostname in the zone** (the planner's and the
+    ledger's `/api/` too). The doc now leads with that and keeps the Pro form as a
+    column, says whether to create it at all is the owner's choice at the
+    dashboard, and says the planner's and ledger's request counts were not
+    measured. Whether Free offers a `starts with` operator on Path is **not
+    published** on that page, and is a row in the table the owner fills in.
+  - **L1** — the compose comment now names the owner's answer, not "the ticket's
+    table".
+  - **L2 reproduced** — no core count is recorded anywhere (`grep -rn "cores"` on
+    the ticket finds only the 2.5 cores used by two probes). The comment now says
+    "the owner's choice, recommended with those numbers attached".
+  - **L3 reproduced.** Rendered without the downloader overlay
+    (`docker compose -f compose.downloader.yaml -f compose.prod.yaml config`,
+    placeholders in the environment) it already has `MAX_CONCURRENT_BROWSERS "2"`,
+    `MAX_CONCURRENT_JOBS "2"` and `MAX_FILE_SIZE_MB "4096"`; the three-file render
+    adds exactly `MAX_JOBS_PER_CLIENT` and the three rate limits. So the render
+    cannot prove the overlay sets those three; this was verified by reading the
+    overlay. The header and the comment now say what each guards, and count three
+    rate limits plus the cap. The Done-when 1 render therefore proves four values,
+    not seven.
+  - **L4 reproduced by reading `createJobStream`.** `maxAttempts` is 8 and
+    `DEFAULT_BACKOFF` is 500 ms, factor 2, cap 15,000 ms, jitter 0.25, so the
+    delays are 500 + 1,000 + 2,000 + 4,000 + 8,000 + 15,000 + 15,000 + 15,000 =
+    60,500 ms without jitter, and the ninth failure calls `stop()`. A 60 s block
+    outlasts that; Free's 10 s does not. The doc now says so, sets the Pro block to
+    10 s, and counts a reconnect that opens as two requests (the stream and the
+    reconcile `GET /api/jobs/:id`).
+  - **L5 accepted.** "7 lines" in dl-54's "the API alone" counts log lines from
+    three requests. The 7 holds by a second count: seven of dl-54's eleven request
+    lines are under `/api/`. The doc says that. **This ticket's own Build text
+    carries the old wording ("7 API requests with no page, 11 lines with it") and is
+    left as written**, since the Build records what was asked.
+  - Not changed: the 60 per 60 s and 20 per 10 s thresholds. The gate found them
+    sound for the downloader (about 19 `/api/` requests a minute at the in-process
+    ceiling).

@@ -26,10 +26,11 @@
 #  - its log is capped by size, which is what the terms page's retention rests on
 #    (dl-54); the comment on `logging` below says what that does and does not do.
 #  - the human check's keys come from the host's `.env` (dl-50), empty by default.
-#  - the limits are **set, not inherited**: concurrency, file size and the two
-#    creation rate limits are written out here from the owner's measurements, so a
-#    later change to a default in `API_DEFAULTS` does not silently move production
-#    (dl-52). The comment on each says where its value came from.
+#  - the limits are **set here, with their sources** (dl-52): the per-client job
+#    cap and the three probe and job rate limits are new to this file, and the
+#    browser, job and file-size values that `compose.downloader.yaml` already sets
+#    are written again so that an edit to that file, or to `API_DEFAULTS`, does not
+#    silently move production. The comment on each says where its value came from.
 #
 # The loopback port inherited from `compose.downloader.yaml` stays, but it is for
 # debugging from the host — it is not how anything is served.
@@ -104,17 +105,18 @@ services:
 
       # --- Limits for traffic that is not just you (dl-52) -----------------
       # Every value below is set even where it equals `API_DEFAULTS`
-      # (`tools/downloader/api/src/config.ts`), so that a later change to a
-      # default does not silently move production. The measurements are the
+      # (`tools/downloader/api/src/config.ts`) or what `compose.downloader.yaml`
+      # already sets (browsers, jobs and file size), so that a later change to
+      # either does not silently move production. The measurements are the
       # owner's, taken on 2026-10-05 on the host running `downloader-v0.8.0`
       # against the hls.js demo stream (10:35, five renditions); the full table
       # is in tools/downloader/docs/work/dl-52-limits-for-anonymous-traffic.md.
 
       # What limits this host is the browser, not the line. Measured: two probes
       # at once peaked at 250% CPU and 800 MiB of the container's 4 GiB, about
-      # 125% and 400 MiB each, and both fell when analysis ended. Two probes
-      # already use 2.5 cores, so two is the size of the host, not a default
-      # that happens to match.
+      # 125% and 400 MiB each, and both fell when analysis ended: two probes at
+      # full load already use 2.5 cores. Two is the owner's choice, recommended
+      # with those numbers attached; the host's core count is not recorded.
       MAX_CONCURRENT_BROWSERS: "2"
 
       # Measured: one 1080p job ran at 3.6 MB/s (about 29 Mbps, 5x real time)
@@ -137,14 +139,17 @@ services:
 
       # Policy, not something a host measurement sizes: the proposal in the
       # ticket's table, stated to the owner with the questions and not asked
-      # separately. Per client address. The events limit is set with the probe
-      # limit because the two are used one-for-one (the web client subscribes,
-      # then POSTs the probe it names): its default of 10 is looser than the
-      # probe's 4, so leaving it would break the "same number" that
-      # `rate-limit.test.ts` pins for the defaults.
+      # separately. Per client address.
       RATE_LIMIT_PROBE_PER_MINUTE: "4"
-      RATE_LIMIT_PROBE_EVENTS_PER_MINUTE: "4"
       RATE_LIMIT_JOBS_PER_MINUTE: "2"
+
+      # The owner's choice, 2026-10-06, asked on its own: the probe's number. The
+      # two endpoints are used one-for-one (the web client subscribes, then POSTs
+      # the probe it names), and `ApiConfig.rateLimitProbeEventsPerMinute` says
+      # they are deliberately the same, so a client inside its probe allowance is
+      # never refused here. Its default of 10 would also be safe, from the loose
+      # side; 4 keeps the channels one address can hold at 16 of 64 rather than 40.
+      RATE_LIMIT_PROBE_EVENTS_PER_MINUTE: "4"
 
       # **The owner's choice, against the 1 that was recommended, and a trade
       # made knowingly.** It equals MAX_CONCURRENT_JOBS, so one address can hold

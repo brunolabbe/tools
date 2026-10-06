@@ -792,7 +792,7 @@ stream. The comment on each value there names its source; the whole table is in
 | `MAX_CONCURRENT_JOBS`                | 2          | one job took about 40 Mbps of 329 Mbps upload, so upload is not what binds           |
 | `MAX_FILE_SIZE_MB`                   | 4096       | the owner's choice, against a recommended 1024: a whole film fits                    |
 | `RATE_LIMIT_PROBE_PER_MINUTE`        | 4          | policy, not measured                                                                 |
-| `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` | 4          | set with the probe limit, since the two are used one-for-one                         |
+| `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` | 4          | the owner's choice, 2026-10-06: the probe's number, as the two are used one-for-one  |
 | `RATE_LIMIT_JOBS_PER_MINUTE`         | 2          | policy, not measured                                                                 |
 | `MAX_JOBS_PER_CLIENT`                | 2          | the owner's choice, against a recommended 1: **one address can hold both job slots** |
 
@@ -810,53 +810,76 @@ Cloudflare WAF rate limiting rule. It lives **on the dashboard, not in
 putting it in the script would need a fourth permission on a token whose header
 argues for three (the owner chose this on 2026-09-28, dl-52).
 
-Security → WAF → Rate limiting rules → Create rule, on the zone the downloader's
-hostname is in:
+**This zone is on the Free plan** (the owner, 2026-10-06), which fixes what the
+rule can say. Cloudflare's rate limiting page, read on 2026-10-06, gives Free one
+rule, the fields **Path and Verified Bot** only, a 10 second period, a 10 second
+block and Block as the one action; Pro adds Host, two rules, periods up to a
+minute and blocks up to an hour. So on Free the expression cannot name a
+hostname, and the rule below is one the owner has to choose to create.
 
-| Field                | Value                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------- |
-| Expression           | `(http.host eq "downloader.example.com" and starts_with(http.request.uri.path, "/api/"))`            |
-| Counted per          | IP address                                                                                           |
-| Threshold and period | **60 requests per 60 seconds**; if the plan allows only 10 seconds, **20 requests per 10 seconds**   |
-| Action               | Block, for the plan's shortest duration (60 seconds if it is free to choose), with the default `429` |
+Security → WAF → Rate limiting rules → Create rule:
 
-Use your own hostname in the expression. **Do not widen the path to the whole
-hostname:** the page and its assets are not what this protects, and a first visit
-loads a dozen of them.
+| Field                | On Free (this zone)                  | On Pro, if the zone is ever upgraded                                                      |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Expression           | Path starts with `/api/`             | `(http.host eq "downloader.example.com" and starts_with(http.request.uri.path, "/api/"))` |
+| Counted per          | IP address                           | IP address                                                                                |
+| Threshold and period | **20 requests per 10 seconds**       | **60 requests per 60 seconds**                                                            |
+| Action               | Block, for 10 seconds, default `429` | Block, for **10 seconds** (see below), default `429`                                      |
 
-**Where 60 comes from.** dl-54 measured a first visit against a live API: 7
-`/api/` requests with no page (config, the probe and its event stream, the job, its
-link and its event stream, a preview), 11 request lines with it. So 60 a minute
-admits more than eight complete visits from one address, which is more than the
-in-process limits let it start (four probes and two jobs a minute). The rest is
-headroom for the event streams: the job stream reconnects with backoff, a flapping
-connection adds one request per attempt, and a rule that blocks a visitor mid-job
-costs more than one that lets a flood through for a minute. The 10-second
-fallback keeps the same burst room (a visit is 7 of 20) and is looser per minute,
-because the shorter period cannot express a lower rate. **These figures are
-derived, not measured against the dashboard's counter**: if the rule logs blocks
-for ordinary use, raise the threshold rather than the period.
+**On Free the rule covers every hostname in the zone.** A path-only rule cannot
+tell the downloader's `/api/` from the planner's or the ledger's, so it counts
+all of them against one budget per visitor address: 20 requests in 10 seconds,
+shared across every tool this host serves. The figures below are sized from the
+downloader's traffic alone; **the planner's and the ledger's request counts were
+not measured**, so if either trips the rule in ordinary use, raise the threshold
+rather than the period. **Whether to create this rule at all is the owner's
+choice at the dashboard:** accept a limit shared by every tool, or create none and
+rely on the in-process limiters, which a redeploy resets. Do not widen the path
+past `/api/`: the page and its assets are not what this protects, and a first
+visit loads a dozen of them.
 
-What a block looks like to a visitor: a refused `POST /api/probe` or `/api/jobs`
-is an error in the page. A refused probe event stream is not retried: narration
-stops and the analysis carries on, as with any stream error. A refused job event
-stream goes to the page's reconnect backoff. A refused download link
+**Where 20 and 60 come from.** dl-54 measured a first visit against a live API:
+11 request lines, **7 of them under `/api/`** (config, the probe and its event
+stream, the job and its event stream, its link, a preview). A visitor spending
+every in-process allowance in one minute (four probes and two jobs) makes about
+19 `/api/` requests: the config, then three per probe (the probe, its event
+stream, a preview) and three per job (the job, its event stream, its link). Free's
+20 in 10 seconds is only reached if all of that arrives at once, which is tight
+but not ordinary use. The 60 per minute on Pro is the same budget spread over a
+minute, plus headroom for the job event stream's reconnects. A reconnect that opens costs **two** requests,
+the stream and the page's reconcile fetch of `GET /api/jobs/:id`. **These figures
+are derived, not measured against the dashboard's counter**: if the rule logs
+blocks for ordinary use, raise the threshold.
+
+**Why a 10 second block, and what a longer one does.** The page's job stream
+gives up after 8 consecutive failed reconnects, about 60 seconds of backoff (500
+ms doubling to a 15 s cap, plus or minus 25%). A block shorter than that is
+survived: the stream reconnects after it. A **60 second block outlasts the retry
+budget**, and the stream then closes for good: the job card shows nothing, and the
+result reaches the page only on reload. That is why Pro's row says 10 seconds,
+and why Free's fixed 10 seconds is the safe end.
+
+What else a block looks like to a visitor: a refused `POST /api/probe` or
+`/api/jobs` is an error in the page. A refused probe event stream is not retried:
+narration stops and the analysis carries on. A refused download link
 (`/api/files/*`, which this rule also covers) fails silently in the browser, the
 case [dl-77](../tools/downloader/docs/work/dl-77-a-refused-download-says-nothing-in-the-page.md)
-is open on.
+is open on. **The budget is per address**, so a household or office behind one
+router shares it, as it shares `MAX_JOBS_PER_CLIENT`.
 
-**What this zone's plan allows: unconfirmed.** No agent can read the dashboard,
-and the repo has no record of it. The owner fills in this table once, from the
-rule form, and then removes this paragraph's warning:
+**The dashboard's other allowances: unconfirmed.** The Free plan's figures above
+are Cloudflare's published ones, not read from this zone's dashboard, and no agent
+can read it. The owner fills in this table once, from the rule form:
 
-| Allowance                                      | This zone's plan |
-| ---------------------------------------------- | ---------------- |
-| Rate limiting rules allowed                    | unconfirmed      |
-| Periods offered                                | unconfirmed      |
-| Actions offered (Block, challenge, log)        | unconfirmed      |
-| Block durations offered                        | unconfirmed      |
-| Counted per (IP only, or more)                 | unconfirmed      |
-| The rule created, and its threshold and period | not created yet  |
+| Allowance                                              | Published for Free | Read from this zone's dashboard |
+| ------------------------------------------------------ | ------------------ | ------------------------------- |
+| Rate limiting rules allowed                            | 1                  | unconfirmed                     |
+| Fields allowed in the expression                       | Path, Verified Bot | unconfirmed                     |
+| Operators on Path (is the `starts with` form offered?) | not published      | unconfirmed                     |
+| Periods offered                                        | 10 s               | unconfirmed                     |
+| Block durations offered                                | 10 s               | unconfirmed                     |
+| Actions offered                                        | Block              | unconfirmed                     |
+| The rule created, with its threshold and period        | not created yet    | not created yet                 |
 
 ### On the LAN as well
 
