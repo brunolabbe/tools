@@ -641,19 +641,52 @@ async function clickByText(frame: Frame, pattern: RegExp, timeoutMs: number): Pr
 /** Marks a consent container, so the text match is scoped to it through the locator API (dl-82). */
 const CONSENT_ZONE_MARK = "data-downloader-consent-zone";
 
+/** The two values `CONSENT_ZONE_MARK` takes: a layer that speaks of consent, and a bare dialog. */
+const ZONE_CONSENT = "consent";
+const ZONE_DIALOG = "dialog";
+
+/**
+ * What a consent layer says about itself, by language: the cookie or the
+ * consent it asks for. A fixed or sticky layer is a consent container only when
+ * its text carries one of these (dl-82's gate 2); a semantic dialog is one
+ * regardless.
+ *
+ * Why the wording: "fixed or sticky" alone takes in a sticky site header with a
+ * "Ho capito" notice in it and a docked checkout bar with a submit button,
+ * neither of which is consent, and the header sits ahead of a bottom consent bar
+ * in the document. "Accept", "agree" and "continue" are not on the list on
+ * purpose: they are the labels being matched, and a checkout bar says "accept our
+ * terms". Nor is "privacy": a checkout bar links its privacy policy as readily
+ * as a consent bar does, and a missed consent layer costs nothing (the old
+ * pattern still reaches it, as it did before dl-82) where a pressed submit does.
+ *
+ * Substrings, not words, so "cookies", "Cookie-Einstellungen" and
+ * "consentement" match; `\b` is not used because it does not see Cyrillic.
+ */
+export const CONSENT_WORDING =
+  /cookie|ciasteczk|ciasteczek|kakor|куки|témoins|consent|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|согласи[ея] на|\bgdpr\b|\brodo\b/i;
+
 /**
  * Marks the nearest consent container of every link and button: an ancestor
- * that is a semantic dialog, or whose computed `position` is `fixed` or
- * `sticky`. A cookie wall is one or the other far more often than it is a
- * block in the page's flow, and a newsletter, a checkout form and a review list
- * are in the flow. One walk per control, memoised per ancestor, so a page with
- * thousands of links costs one style read per distinct ancestor. Open shadow
+ * that is a semantic dialog, or is `fixed` or `sticky` **and** speaks of consent
+ * (`CONSENT_WORDING`). Each mark's value says which, so a layer that speaks of
+ * consent is tried before a bare dialog. A cookie wall is far more often a layer
+ * than a block in the page's flow, and a newsletter, a checkout form and a review
+ * list are in the flow. One walk per control, memoised per ancestor, so a page
+ * with thousands of links costs one style read per distinct ancestor. Open shadow
  * roots are not entered: a control inside one is outside every zone, and the
  * old whole-frame match still reaches it.
  */
 const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   var semantic = ${JSON.stringify(SEMANTIC_DIALOG)};
+  var wording = new RegExp(${JSON.stringify(CONSENT_WORDING.source)}, ${JSON.stringify(CONSENT_WORDING.flags)});
   var zoneOf = new Map();
+  var tierOf = new Map();
+  // The mark a layer earns, or null when it is not a consent container.
+  var tier = function (n) {
+    if (wording.test(n.textContent || '')) return ${JSON.stringify(ZONE_CONSENT)};
+    return n.matches(semantic) ? ${JSON.stringify(ZONE_DIALOG)} : null;
+  };
   var find = function (el) {
     var chain = [];
     var found = null;
@@ -665,8 +698,12 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
       chain.push(n);
       var position = getComputedStyle(n).position;
       if (n.matches(semantic) || position === 'fixed' || position === 'sticky') {
-        found = n;
-        break;
+        var earned = tier(n);
+        if (earned !== null) {
+          tierOf.set(n, earned);
+          found = n;
+          break;
+        }
       }
     }
     for (var i = 0; i < chain.length; i++) zoneOf.set(chain[i], found);
@@ -677,7 +714,7 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   for (var j = 0; j < controls.length; j++) {
     var zone = find(controls[j]);
     if (zone && !zone.hasAttribute(${JSON.stringify(CONSENT_ZONE_MARK)})) {
-      zone.setAttribute(${JSON.stringify(CONSENT_ZONE_MARK)}, '');
+      zone.setAttribute(${JSON.stringify(CONSENT_ZONE_MARK)}, tierOf.get(zone));
       marked += 1;
     }
   }
@@ -710,11 +747,14 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
 /**
  * The text-matched consent step, in two reaches (dl-82).
  *
- * **Inside a consent container, the full `CONSENT_TEXT`**: a dialog, or a fixed
- * or sticky layer, found by script in a frame that allows it and by dialog
- * semantics alone in one that does not. Tried first, so a real consent layer
- * wins over an earlier control in the document that happens to carry a label
- * from the same list.
+ * **Inside a consent container, the full `CONSENT_TEXT`**: a semantic dialog,
+ * or a fixed or sticky layer **whose text speaks of consent**
+ * (`CONSENT_WORDING`), found by script in a frame that allows it and by dialog
+ * semantics alone in one that does not. A layer that speaks of consent is tried
+ * before a dialog that does not, so a consent layer wins over an earlier
+ * newsletter dialog; and a sticky header or a docked checkout bar, which do not
+ * speak of consent, are not containers at all, so their "Ho capito" and "Agree
+ * and continue" are not pressed.
  *
  * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
  * searched for before this change. A widened phrasing outside a container is
@@ -723,9 +763,14 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * d'accordo" are all pressed by a whole-frame match, and the checkout and the
  * comment are submit buttons.
  *
- * A consent strip that is neither a dialog nor a fixed layer, labelled with a
- * phrasing newer than this change, is therefore not pressed. That is the price
- * of the scope; its cure is a label added to the old list, not a wider reach.
+ * **What this gives up, on purpose:** a consent strip that is not a dialog and
+ * whose text has no `CONSENT_WORDING` (it says "We value your privacy" and
+ * nothing of cookies), labelled with a phrasing newer than this change, is not
+ * pressed; it falls through to the old pattern, which is where it stood before.
+ * Likewise a layer that does speak of consent is believed: a docked checkout bar
+ * that mentions cookies would have its "Agree and continue" pressed. Another
+ * language's wording is one more `CONSENT_WORDING` alternative; a label the old
+ * pattern never knew is one more `CONSENT_PHRASES` entry, not a wider reach.
  */
 async function clickConsentText(
   frame: Frame,
@@ -736,8 +781,9 @@ async function clickConsentText(
     let marked = 0;
     try {
       marked = await frame.evaluate<number>(MARK_CONSENT_ZONES_SCRIPT);
-      if (marked > 0) {
-        const zones = frame.locator(`[${CONSENT_ZONE_MARK}]`);
+      for (const tier of [ZONE_CONSENT, ZONE_DIALOG]) {
+        if (marked === 0) break;
+        const zones = frame.locator(`[${CONSENT_ZONE_MARK}="${tier}"]`);
         if (await clickByTextIn(zones, CONSENT_TEXT, timeoutMs)) return true;
       }
     } catch {

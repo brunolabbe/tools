@@ -936,3 +936,159 @@ describe("the widened consent labels are pressed only inside a consent container
     },
   );
 });
+
+describe("a fixed or sticky layer is a consent container only when it speaks of consent (dl-82 gate 2)", () => {
+  const MASTER = "/media/mse/master.m3u8";
+
+  async function press(
+    pathname: string,
+  ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
+    const hls = recordingHlsParser();
+    const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+    server.requests.length = 0;
+    let outcome: ProbeResult | AppError;
+    try {
+      outcome = await probe(pathname, resolver);
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppError);
+      outcome = error as AppError;
+    }
+    return { outcome, requests: [...server.requests] };
+  }
+
+  // Row (i): a strip in the page's own flow. Unchanged from base, which pressed
+  // "Accetta" there and never pressed the other two.
+  test.each([
+    ["Ho capito", false],
+    ["Accetto e continua", false],
+    ["Accetta", true],
+  ])(
+    "an in-flow strip labelled %j is pressed: %j",
+    { timeout: TEST_TIMEOUT_MS },
+    async (label, pressed) => {
+      const { outcome, requests } = await press(
+        `/consent-flow-strip.html?label=${encodeURIComponent(label)}`,
+      );
+      if (pressed) {
+        expect(requests).toContain("/beacon/strip-accepted");
+        expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
+      } else {
+        expect(requests).not.toContain("/beacon/strip-accepted");
+        expectCode(outcome as AppError, "NO_MEDIA_FOUND");
+      }
+    },
+  );
+
+  // Row (ii): a checkout bar docked to the viewport, with a submit button.
+  test.each([
+    ["fixed", "/consent-checkout-docked.html"],
+    ["sticky", "/consent-checkout-docked.html?sticky"],
+  ])(
+    "does not press the submit button of a %s checkout bar that says nothing of consent",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, pathname) => {
+      const { outcome, requests } = await press(pathname);
+
+      expect(requests).not.toContain("/beacon/checkout-submit");
+      expectCode(outcome as AppError, "NO_MEDIA_FOUND");
+    },
+  );
+
+  // Row (iii): a sticky header's notice. "Ho capito" is new and is left alone;
+  // "OK" is a label the old pattern pressed anywhere, and still is.
+  test(
+    "does not press a sticky header's notice labelled with a dl-82 phrasing",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { requests } = await press("/consent-header-notice.html");
+
+      expect(requests).not.toContain("/beacon/header-notice");
+    },
+  );
+
+  test(
+    "still presses a sticky header's notice labelled with an old phrasing, as before dl-82",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { requests } = await press("/consent-header-notice.html?label=OK");
+
+      expect(requests).toContain("/beacon/header-notice");
+    },
+  );
+
+  // Row (iii-b): the header's notice sits ahead of a bottom consent bar.
+  test(
+    "reaches a bottom consent bar past a sticky header's notice",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { outcome, requests } = await press("/consent-header-then-bar.html");
+
+      expect(requests).toContain("/beacon/consent-accepted");
+      expect(requests).not.toContain("/beacon/header-notice");
+      expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
+    },
+  );
+
+  // A layer that speaks of consent is tried before a bare dialog.
+  test(
+    "presses a consent bar before a newsletter dialog that comes first in the document",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { outcome, requests } = await press("/consent-order-dialog.html");
+
+      const consentAt = requests.indexOf("/beacon/consent-accepted");
+      const newsletterAt = requests.indexOf("/beacon/newsletter-hocapito");
+      expect(consentAt).toBeGreaterThanOrEqual(0);
+      // A dialog is a container whatever it says, so once the consent bar is
+      // gone the second pass may still press the newsletter's "Ho capito"; what
+      // is pinned is the order, which document order alone would reverse.
+      if (newsletterAt >= 0) expect(newsletterAt).toBeGreaterThan(consentAt);
+      expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
+    },
+  );
+
+  // Row (iv): a frame where no script runs, so only dialog semantics scope it.
+  test(
+    "presses a widened label inside a role=dialog in a cross-origin frame",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { outcome, requests } = await press("/consent-xo-dialog.html");
+
+      expect(requests).toContain("/beacon/xo-accepted");
+      expect((outcome as ProbeResult).variants[0]?.url).toBe(server.secondaryUrl(MASTER));
+    },
+  );
+
+  test(
+    "leaves a widened label alone in a cross-origin fixed layer with no dialog role",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const { outcome, requests } = await press("/consent-xo-nodialog.html");
+
+      expect(requests).not.toContain("/beacon/xo-accepted");
+      expectCode(outcome as AppError, "NO_MEDIA_FOUND");
+    },
+  );
+
+  // What the consent-wording rule gives up, pinned as accepted behaviour: a
+  // fixed consent bar whose text names neither cookies nor consent.
+  test.each([
+    ["Ho capito", false],
+    ["Accetta", true],
+  ])(
+    "a fixed bar that never says cookie or consent, labelled %j, is pressed: %j",
+    { timeout: TEST_TIMEOUT_MS },
+    async (label, pressed) => {
+      const { outcome, requests } = await press(
+        `/consent-bar-nowording.html?label=${encodeURIComponent(label)}`,
+      );
+      if (pressed) {
+        expect(requests).toContain("/beacon/bar-accepted");
+        expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
+      } else {
+        expect(requests).not.toContain("/beacon/bar-accepted");
+        expectCode(outcome as AppError, "NO_MEDIA_FOUND");
+      }
+    },
+  );
+});

@@ -14,6 +14,7 @@ import { BrowserPool } from "../../src/browser/pool.ts";
 import {
   CONSENT_TEXT,
   CONSENT_TEXT_ANYWHERE,
+  CONSENT_WORDING,
   dismissModal,
   provokePlayback,
   readMetadata,
@@ -351,5 +352,51 @@ describe("CONSENT_TEXT (dl-82)", () => {
 
   test.each(ADDED)("CONSENT_TEXT_ANYWHERE does not match %j", (label) => {
     expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
+  });
+});
+
+describe("CONSENT_WORDING (dl-82 gate 2)", () => {
+  // What a consent layer says, one line per language the labels cover.
+  const SPEAKS = [
+    "We use cookies to improve your experience.",
+    "By continuing you give your consent.",
+    "Diese Website verwendet Cookie-Einstellungen.",
+    "Bitte geben Sie Ihre Einwilligung.",
+    "Ce site utilise des témoins de connexion.",
+    "Nous avons besoin de votre consentement.",
+    "Usamos cookies. Necesitamos su consentimiento.",
+    "Usamos cookies e pedimos o seu consentimento.",
+    "Usiamo i cookie. Serve il tuo consenso.",
+    "We gebruiken cookies. Geef toestemming.",
+    "Vi använder kakor och behöver ditt samtycke.",
+    "Ta strona używa ciasteczek.",
+    "Prosimy o zgodę na przetwarzanie danych.",
+    "Мы используем куки.",
+    "Нам нужно согласие на обработку данных.",
+    "Compliant with GDPR.",
+  ];
+
+  // What a docked bar, a header notice or a form says instead. These are the
+  // pages dl-82's gate pressed a submit or a notice on.
+  const SILENT = [
+    "By ordering you accept our terms.",
+    "Nuove condizioni di spedizione.",
+    "Shipping changed.",
+    "Do you agree to the community rules?",
+    "Iscriviti alla newsletter per ricevere le offerte.",
+    "Home",
+    "",
+    // Accepted, not wished for: a bare privacy notice is not recognised, so its
+    // new-only label falls through to the old pattern (the decision's cost).
+    "We value your privacy.",
+    "By ordering you accept our terms and privacy policy.",
+  ];
+
+  test.each(SPEAKS)("speaks of consent: %j", (text) => {
+    expect(CONSENT_WORDING.test(text)).toBe(true);
+  });
+
+  test.each(SILENT)("does not speak of consent: %j", (text) => {
+    expect(CONSENT_WORDING.test(text)).toBe(false);
   });
 });

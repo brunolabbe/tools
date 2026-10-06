@@ -161,3 +161,73 @@ were everywhere a page can repeat them.
 argument, so the call line in `provokeFrame` changed, and `CONSENT_TEXT_ANYWHERE`
 joins the import list in `provoke.test.ts`; both sit next to lines dl-83 is likely
 to edit. No helper is shared.
+
+### 2026-10-06 — gate round 2
+
+The gate measured the round-1 hybrid and found its open decision was not a
+cost but a regression. **The sentence above, "A real consent layer therefore wins
+over an earlier control with a colliding label", was false** for a colliding
+control inside a fixed or sticky layer. Every such ancestor was a container, and
+`first()` took containers in document order, so a sticky header's "Ho capito"
+was pressed ahead of a bottom consent bar's "Accetta" and a page `origin/main`
+resolved ended in `NO_MEDIA_FOUND` (row iii-b). A docked checkout bar's submit
+and a sticky header's notice were pressed too (rows ii, iii), where base pressed
+neither. Round 1's recommendation, "accept both gaps", was wrong; the owner
+chose option (A) on 2026-10-06.
+
+**What is built (A).** A `fixed` or `sticky` layer is a consent container only
+when its text carries consent wording, `CONSENT_WORDING`; a semantic dialog is one
+unconditionally. A layer that speaks of consent is tried before a bare dialog
+(two marks, `consent` then `dialog`), so a consent layer wins over an earlier
+newsletter dialog. A layer that does not speak of consent is not a container, and
+a label the old pattern knew is still pressed there through the whole-frame
+reach, as before dl-82.
+
+**The word list, and why.** `cookie` (which also covers "cookies" and
+"Cookie-Einstellungen"), `ciasteczk`/`ciasteczek` (Polish), `kakor` (Swedish),
+`куки`, `témoins` (Québec French for cookies); `consent` (covers
+`consentement`, `consentimiento`, `consentimento`), `consenso`, `einwilligung`,
+`toestemming`, `samtycke`, `zgodę/zgody na`, `согласие/согласия на`; `GDPR` and
+`RODO`. Substrings, not words, so the inflected forms match, and no `\b`, which
+does not see Cyrillic. Left off on purpose: `accept`, `agree`, `continue` (the
+labels being matched; a checkout bar says "accept our terms"), and **`privacy`**.
+The owner's brief for this round listed privacy as an example; I left it out because
+a docked checkout bar links its privacy policy as readily as a consent bar does,
+and the two errors are not the same size: a consent layer that is missed falls
+through to the old pattern, where it stood before dl-82, while a checkout submit
+that is pressed is a regression from base. Both choices are pinned: a bare privacy
+notice and "By ordering you accept our terms and privacy policy." are test rows that do not
+speak of consent, so the first falls back to the old pattern and the second is safe.
+
+**What the rule still gives up.** A fixed or sticky consent bar that never says
+cookie or consent, labelled with a phrasing only dl-82 added, is not pressed
+(`consent-bar-nowording.html`, "Ho capito": nothing pressed, `NO_MEDIA_FOUND`; with
+"Accetta" it is pressed, as on base). The opposite risk is real too: a docked
+bar that does mention cookies, with a widened-label submit, is believed. The
+text is the nearest fixed or sticky ancestor's, so a fixed app root that holds the
+whole page, cookie notice in its footer included, may make itself a container
+(unmeasured; reasoning from the script, not a run). None is covered by a test beyond
+the no-wording bar.
+
+**Proof.** Every row of the gate's table is a fixture and a test in
+`browser-resolver.test.ts`, "…speaks of consent (dl-82 gate 2)": (i) the in-flow
+strip with "Ho capito", "Accetto e continua" (nothing pressed) and "Accetta"
+(pressed); (ii) fixed and sticky checkout bars (submit not pressed); (iii) the
+sticky header's "Ho capito" (not pressed) and "OK" (still pressed, as on base);
+(iii-b) the stream past the header's notice; (iv) the cross-origin `role=dialog`
+(pressed, stream) and fixed layer without a role (not pressed). Against
+`provoke.ts` at cabd299, `-t "gate 2"` gave `Tests 6 failed | 7 passed | 66
+skipped (79)`: (ii) both, (iii), (iii-b), the dialog-order test and the no-wording
+bar. After: `-t "dl-82"` over both files gave `Tests 209 passed | 57 skipped
+(266)`, 2 of 2 files. Mutations: tier order reversed fails the dialog-order test;
+the cross-origin press replaced by `void dialogs;` fails
+`presses a widened label inside a role=dialog in a cross-origin frame` (the gate's
+low, cross-origin branch untested, now has a test).
+
+**Correction to the dialog-order test.** The fixture's newsletter dialog is pressed
+in the _second_ pass, once the consent bar is gone, because a dialog is a container
+whatever it says; the test therefore pins the order (consent first), not
+that the newsletter is never pressed. That follows from "a semantic dialog counts
+unconditionally".
+
+**Free with this change:** nothing further; the other two lows of round 1 stand.

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout</title>
+  </head>
+  <body>
+    <h1>Checkout</h1>
+    <div id="player"></div>
+    <!-- dl-82 gate 2, row (ii): a checkout bar docked to the viewport, fixed by
+         default or sticky with ?sticky, with a submit button labelled with a
+         phrasing dl-82 added. Its text says nothing of cookies or consent, so it
+         is not a consent container and the submit must not be pressed. -->
+    <div style="height: 400px"></div>
+    <form
+      id="bar"
+      onsubmit="event.preventDefault()"
+      style="position: fixed; left: 0; right: 0; bottom: 0; background: #ddd; padding: 8px"
+    >
+      By ordering you accept our terms.
+      <button type="submit" onclick="fetch('/beacon/checkout-submit')">Agree and continue</button>
+    </form>
+    <div style="height: 2000px"></div>
+    <script>
+      if (new URLSearchParams(location.search).has("sticky")) {
+        document.getElementById("bar").style.position = "sticky";
+      }
+    </script>
+  </body>
+</html>
