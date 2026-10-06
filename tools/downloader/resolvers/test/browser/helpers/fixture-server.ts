@@ -15,6 +15,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../../fixtures/pages", import.meta.url)));
 
+/** dl-83: the only pages `/enter-redirect` sends a press back to. */
+const ENTER_REDIRECT_TARGETS: readonly string[] = [
+  "/age-link-redirect-L.html",
+  "/age-link-redirect-S.html",
+];
+
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".json": "application/json; charset=utf-8",
@@ -186,10 +192,13 @@ function makeHandler(
 
       // dl-83 gate round 2: a server-side age gate. The entry link sets a
       // cookie here and is sent straight back to the page it came from, so the
-      // press never leaves although the link names another path.
+      // press never leaves although the link names another path. `next` is
+      // matched against the pages that use it rather than checked for shape: a
+      // `startsWith("/")` guard lets `/\host` through, which browsers read as
+      // `//host`.
       if (pathname === "/enter-redirect") {
         const next = requestUrl.searchParams.get("next") ?? "/";
-        const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+        const safe = ENTER_REDIRECT_TARGETS.includes(next) ? next : "/";
         response.writeHead(302, { "set-cookie": "age=1; Path=/", location: safe });
         response.end();
         return;

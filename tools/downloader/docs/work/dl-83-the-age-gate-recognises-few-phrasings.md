@@ -545,3 +545,16 @@ had.
 **Still recorded, not fixed**: the round-1 med (one press per document), the
 srcdoc ad frame, the lost mark, the restated tokeniser and the classification
 order.
+
+**2026-10-06 — CodeQL redirect alert fixed on the PR.** Code scanning flagged
+`/enter-redirect` in the fixture server, which round 2 added, as an incomplete
+redirect check. The flag is correct: `next=/\evil.example` passed
+`startsWith("/") && !startsWith("//")`, and a browser resolves it to
+`http://evil.example/`. The fixture binds to loopback and never ships, so
+nothing was exposed. The route now redirects only to the two pages that use it,
+`/age-link-redirect-L.html` and `-S.html`, and sends anything else to `/`. This
+was fixed rather than dismissed or excused, because
+[adr/005](../../../../docs/adr/005-excusing-a-code-scanning-finding.md) keeps
+excuses for findings that no version of the code could clear. `-t dl-83`
+passes 96 of 96. Emptying the list fails one test, the dl-48 cookie-and-redirect
+link gate, so that test is what exercises the route.
