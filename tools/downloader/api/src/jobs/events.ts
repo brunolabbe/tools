@@ -98,6 +98,11 @@ export class JobEventHub {
     this.emit({ type: "canceled", jobId, error, at: this.#now() });
   }
 
+  /** A refused link (dl-77). Not terminal: the job and its link are untouched. */
+  refused(jobId: string, error: AppErrorPayload): void {
+    this.emit({ type: "refused", jobId, error, at: this.#now() });
+  }
+
   #now(): string {
     return this.#clock().toISOString();
   }

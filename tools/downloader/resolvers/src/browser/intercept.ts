@@ -7,7 +7,16 @@
  */
 
 import type { BrowserContext, Request, Response } from "playwright";
-import { classifyMedia, isDeniedUrl, normaliseUrl } from "./media-match.ts";
+import { classifyMedia, isDeniedUrl, normaliseUrl, responseFileSize } from "./media-match.ts";
+import {
+  isContentEncoded,
+  isSniffable,
+  MAX_ENCODED_SNIFFS_PER_PROBE,
+  MAX_SNIFF_BODY_BYTES,
+  MAX_SNIFFS_PER_PROBE,
+  SNIFF_HEAD_BYTES,
+  sniffManifestKind,
+} from "./sniff.ts";
 import type { NetworkHit } from "./types.ts";
 
 /** Manifests are small; anything larger than this is not a playlist worth keeping. */
@@ -20,6 +29,9 @@ export class HitCollector {
   readonly #hits = new Map<string, NetworkHit>();
   readonly #bodies = new Map<string, string>();
   readonly #pending = new Set<Promise<unknown>>();
+  /** Urls whose body was already read for a manifest (dl-79), so a poll reads once. */
+  readonly #sniffed = new Set<string>();
+  #encodedSniffs = 0;
   #seq = 0;
   #lastActivityAt = Date.now();
   #attached = false;
@@ -46,7 +58,11 @@ export class HitCollector {
     return this.#lastActivityAt;
   }
 
-  /** Insertion-ordered, so `seq` and array order agree. */
+  /**
+   * In the order hits were recorded. `seq` is the order they arrived, which
+   * differs for a sniffed manifest, whose number is taken when its response
+   * arrives and whose hit is recorded once its body has been read (dl-79).
+   */
   get hits(): NetworkHit[] {
     return [...this.#hits.values()];
   }
@@ -100,11 +116,13 @@ export class HitCollector {
     this.#touch(url);
     const headers = response.headers();
     const contentType = headers["content-type"];
-    const parsedLength = Number(headers["content-length"]);
-    const contentLength =
-      Number.isFinite(parsedLength) && parsedLength >= 0 ? parsedLength : undefined;
+    // The file's size, not the response's: a 206 is one chunk of it (dl-78).
+    const contentLength = responseFileSize(headers, response.status());
     const kind = classifyMedia({ url, contentType, contentLength });
-    if (!kind) return;
+    if (!kind) {
+      this.#sniffBody(response, contentType, contentLength, headers["content-encoding"]);
+      return;
+    }
 
     const request = response.request();
     const hit = this.#record(url, kind, request.headers(), {
@@ -130,8 +148,11 @@ export class HitCollector {
     if (existing) {
       // A response refines what the request could only guess at.
       if (patch.confirmed) {
+        // A file already confirmed whole stays whole (dl-78): a later response
+        // for the same URL that reads small is a chunk of it, not a verdict.
+        const keep = existing.confirmed && existing.kind === "progressive" && kind === "segment";
         existing.confirmed = true;
-        existing.kind = kind;
+        if (!keep) existing.kind = kind;
       }
       if (patch.contentType !== undefined) existing.contentType = patch.contentType;
       if (patch.contentLength !== undefined) existing.contentLength = patch.contentLength;
@@ -145,7 +166,7 @@ export class HitCollector {
       key,
       kind,
       headers: { ...headers },
-      seq: this.#seq++,
+      seq: patch.seq ?? this.#seq++,
       confirmed: patch.confirmed ?? false,
       ...(patch.contentType === undefined ? {} : { contentType: patch.contentType }),
       ...(patch.contentLength === undefined ? {} : { contentLength: patch.contentLength }),
@@ -168,6 +189,68 @@ export class HitCollector {
           hit.headers = { ...hit.headers, ...all };
         } catch {
           // Context torn down mid-read: the sync headers we already have stand.
+        }
+      })(),
+    );
+  }
+
+  /**
+   * dl-79: a response the type and the path could not place may still be a
+   * manifest, if it is small and says nothing about itself. The read joins
+   * `#pending`, so `settle()` bounds it exactly as it bounds a typed manifest's
+   * body — it never holds up network quiet, which `#touch` alone drives.
+   */
+  #sniffBody(
+    response: Response,
+    contentType: string | undefined,
+    contentLength: number | undefined,
+    contentEncoding: string | undefined,
+  ): void {
+    const url = response.url();
+    const request = response.request();
+    const sniffable = isSniffable({
+      url,
+      status: response.status(),
+      resourceType: request.resourceType(),
+      contentType,
+      contentLength,
+      contentEncoding,
+    });
+    if (!sniffable) return;
+    const key = normaliseUrl(url);
+    if (this.#sniffed.has(key) || this.#sniffed.size >= MAX_SNIFFS_PER_PROBE) return;
+    // A compressed body is inflated by Chromium before it reaches us, so its
+    // declared length bounds nothing; only the number of such reads is ours to cap.
+    const encoded = isContentEncoded(contentEncoding);
+    if (encoded && this.#encodedSniffs >= MAX_ENCODED_SNIFFS_PER_PROBE) return;
+    this.#sniffed.add(key);
+    if (encoded) this.#encodedSniffs += 1;
+    // Reserved now, not when the read returns: a master that is read slowly
+    // would otherwise be numbered after the variant playlists it names, and
+    // rank below them.
+    const seq = this.#seq++;
+
+    this.#pending.add(
+      (async () => {
+        try {
+          const body = await response.body();
+          // The declared length was a promise, not a measurement.
+          if (body.byteLength > MAX_SNIFF_BODY_BYTES) return;
+          const sniffed = sniffManifestKind(body.subarray(0, SNIFF_HEAD_BYTES).toString("utf8"));
+          if (!sniffed) return;
+          const hit = this.#record(url, sniffed, request.headers(), {
+            ...(contentType === undefined ? {} : { contentType }),
+            ...(contentLength === undefined ? {} : { contentLength }),
+            status: response.status(),
+            confirmed: true,
+            frameUrl: safeFrameUrl(request),
+            seq,
+          });
+          if (!hit) return;
+          this.#enrichHeaders(request, hit);
+          this.#bodies.set(hit.key, body.toString("utf8"));
+        } catch {
+          // Body discarded, or the context went away mid-read: not a manifest we can use.
         }
       })(),
     );
@@ -198,6 +281,8 @@ interface HitPatch {
   status?: number | undefined;
   confirmed?: boolean | undefined;
   frameUrl?: string | undefined;
+  /** Arrival order already taken by the caller, when recording happens later (dl-79). */
+  seq?: number | undefined;
 }
 
 /** Resolves after `ms`, without holding the event loop open on its own. */

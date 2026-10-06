@@ -831,6 +831,123 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
     },
   );
 });
+  );
+});
+
+describe("a progressive file is not demoted to a segment (dl-78)", () => {
+  let files: ProgressiveServer;
+
+  beforeAll(async () => {
+    files = await startProgressiveServer();
+  });
+
+  afterAll(async () => {
+    await files.close();
+  });
+
+  async function probeFile(pathname: string): Promise<ProbeResult> {
+    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    return await resolver.resolve(new URL(files.url(pathname)), options());
+  }
+
+  test(
+    "a whole file with a resolution suffix in its name is offered",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const result = await probeFile("/named.html");
+
+      expect(result.variants[0]?.protocol).toBe("progressive");
+      expect(result.variants[0]?.url).toBe(files.url("/media/clip-720.mp4"));
+      expect(result.variants[0]?.filesizeBytes).toBe(PROGRESSIVE_FILE_BYTES);
+    },
+  );
+
+  test(
+    "a file whose server answers every Range request with a short 206 is offered at its real size",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      files.requests.length = 0;
+      const result = await probeFile("/ranged.html");
+
+      // The browser really was given chunks, or this proves nothing.
+      expect(files.requests.some((entry) => entry.range !== undefined)).toBe(true);
+      expect(result.variants[0]?.protocol).toBe("progressive");
+      expect(result.variants[0]?.url).toBe(files.url("/media/lecture.mp4"));
+      // The total from Content-Range, not the 256 KB the 206 carried.
+      expect(result.variants[0]?.filesizeBytes).toBe(PROGRESSIVE_FILE_BYTES);
+    },
+  );
+});
+
+describe("a manifest served with no recognisable type or extension (dl-79)", () => {
+  test(
+    "an HLS playlist served as text/plain from an extensionless route is an hls outcome",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/untyped-hls-text.html", resolver);
+
+      expect(result.variants[0]?.protocol).toBe("hls");
+      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=1"));
+      expect(hls.calls[0]?.text.startsWith("#EXTM3U")).toBe(true);
+    },
+  );
+
+  test(
+    "an HLS playlist served as application/octet-stream is an hls outcome",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/untyped-hls-octet.html", resolver);
+
+      expect(result.variants[0]?.protocol).toBe("hls");
+      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=3"));
+    },
+  );
+
+  test(
+    "a DASH manifest served as text/plain is a dash outcome",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const dash = recordingDashParser();
+      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, quietMs: 1200 });
+      const result = await probe("/untyped-dash-text.html", resolver);
+
+      expect(result.variants[0]?.protocol).toBe("dash");
+      expect(result.variants[0]?.url).toBe(server.url("/api/manifest?id=1"));
+      expect(dash.calls[0]?.text).toContain("<MPD");
+    },
+  );
+
+  test(
+    "a probe that saw only segments says so in the error's reason",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      // The playlist route answers with text that is not a manifest, so the
+      // segments the page then fetches are all there is.
+      const error = await probeError("/untyped-segments-only.html", resolver);
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(error.details?.["reason"]).toBe("segments-without-manifest");
+      expect(error.details?.["segmentCount"]).toBe(2);
+    },
+  );
+
+  test(
+    "a page that requested no segments carries no such reason",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const error = await probeError("/untyped-no-segments.html", resolver);
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(error.details?.["reason"]).toBeUndefined();
+    },
+  );
+});
 
 describe("a consent dialog whose button no vendor selector matches (dl-82)", () => {
   // Phrasings the text fallback did not know on `origin/main`, one per language

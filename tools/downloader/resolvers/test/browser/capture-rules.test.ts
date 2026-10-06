@@ -6,6 +6,7 @@
  */
 
 import { AppError, REDACTED, redactHeaders, redactUrl } from "@downloader/contract";
+import type { BrowserContext } from "playwright";
 import { describe, expect, test } from "vitest";
 import {
   AGE_MARKERS,
@@ -19,7 +20,9 @@ import {
   expiresAtFromUrl,
   isDeniedUrl,
   normaliseUrl,
+  responseFileSize,
 } from "../../src/browser/media-match.ts";
+import { HitCollector } from "../../src/browser/intercept.ts";
 import { Semaphore } from "../../src/browser/pool.ts";
 import { rankHits } from "../../src/browser/rank.ts";
 import { buildRequestContext } from "../../src/browser/request-context.ts";
@@ -73,7 +76,9 @@ describe("classifyMedia", () => {
     expect(classifyMedia({ url: "https://cdn.example/v/init.mp4" })).toBe("segment");
     expect(classifyMedia({ url: "https://cdn.example/v/seg-00042.m4s" })).toBe("segment");
     expect(classifyMedia({ url: "https://cdn.example/v/chunk-9.mp4" })).toBe("segment");
-    expect(classifyMedia({ url: "https://cdn.example/v/00003.mp4" })).toBe("segment");
+    // `00003.mp4` used to be asserted a segment here. A name alone cannot say so
+    // (dl-78): it is `progressive` per request, and `rankHits` demotes it when the
+    // capture holds evidence of segmented playback — see its describe at the end.
     expect(classifyMedia({ url: "https://cdn.example/v/talk.mp4", contentLength: 900 })).toBe(
       "segment",
     );
@@ -573,5 +578,206 @@ describe("Semaphore", () => {
     await expect(queued).rejects.toMatchObject({ code: "TIMEOUT" });
     release();
     expect(semaphore.active).toBe(0);
+  });
+});
+
+describe("a progressive file is not a segment by its name or a ranged answer (dl-78)", () => {
+  test("a numeric id or a resolution suffix does not classify a request as a segment", () => {
+    for (const url of [
+      "https://cdn.example/v/839201.mp4",
+      "https://cdn.example/media/clip-720.mp4",
+      "https://cdn.example/media/movie_1080.mp4",
+      "https://cdn.example/v/00003.mp4",
+    ]) {
+      expect(classifyMedia({ url, contentType: "video/mp4", contentLength: 5_000_000 })).toBe(
+        "progressive",
+      );
+    }
+  });
+
+  test("a name that says chunk still does, without any neighbour", () => {
+    expect(classifyMedia({ url: "https://cdn.example/v/init.mp4", contentLength: 5_000_000 })).toBe(
+      "segment",
+    );
+    expect(
+      classifyMedia({ url: "https://cdn.example/v/seg-1.mp4", contentLength: 5_000_000 }),
+    ).toBe("segment");
+  });
+
+  test("responseFileSize reads the total from Content-Range on a 206, not the chunk", () => {
+    expect(
+      responseFileSize(
+        { "content-length": "262144", "content-range": "bytes 0-262143/5242880" },
+        206,
+      ),
+    ).toBe(5_242_880);
+    // The same chunk length with no total is unknown, not 256 KB.
+    expect(
+      responseFileSize({ "content-length": "262144", "content-range": "bytes 0-262143/*" }, 206),
+    ).toBeUndefined();
+    expect(responseFileSize({ "content-length": "262144" }, 206)).toBeUndefined();
+  });
+
+  test("responseFileSize still takes Content-Length from a plain 200", () => {
+    expect(responseFileSize({ "content-length": "5242880" }, 200)).toBe(5_242_880);
+    expect(responseFileSize({}, 200)).toBeUndefined();
+    expect(responseFileSize({ "content-length": "nonsense" }, 200)).toBeUndefined();
+  });
+
+  test("a 206's chunk length does not decide the size demotion; its Content-Range total does", () => {
+    const url = "https://cdn.example/media/lecture.mp4";
+    const chunk = { "content-length": "262144", "content-range": "bytes 0-262143/5242880" };
+    const whole = classifyMedia({
+      url,
+      contentType: "video/mp4",
+      contentLength: responseFileSize(chunk, 206),
+    });
+    expect(whole).toBe("progressive");
+    // The old reading of the same response, so the test can fail.
+    expect(classifyMedia({ url, contentType: "video/mp4", contentLength: 262_144 })).toBe(
+      "segment",
+    );
+    // A file that really is tiny is still demoted, by its total.
+    const tiny = { "content-length": "1024", "content-range": "bytes 0-1023/1024" };
+    expect(
+      classifyMedia({ url, contentType: "video/mp4", contentLength: responseFileSize(tiny, 206) }),
+    ).toBe("segment");
+  });
+
+  describe("rankHits with a numbered name", () => {
+    const page = "https://site.example/watch";
+
+    test("keeps a lone numbered file", () => {
+      const ranked = rankHits(
+        [
+          hit({
+            url: "https://cdn.example/media/clip-720.mp4",
+            kind: "progressive",
+            contentLength: 5_000_000,
+          }),
+        ],
+        page,
+      );
+      expect(ranked.map((entry) => entry.url)).toEqual(["https://cdn.example/media/clip-720.mp4"]);
+    });
+
+    test("keeps two numbered files side by side, which are two qualities of one video", () => {
+      const ranked = rankHits(
+        [
+          hit({ url: "https://cdn.example/media/clip-720.mp4", kind: "progressive", seq: 0 }),
+          hit({ url: "https://cdn.example/media/clip-1080.mp4", kind: "progressive", seq: 1 }),
+        ],
+        page,
+      );
+      expect(ranked).toHaveLength(2);
+    });
+
+    test("drops a numbered chunk when a manifest is in the capture", () => {
+      // The reason the rule exists: fMP4 segments served as `.mp4`.
+      const ranked = rankHits(
+        [
+          hit({ url: "https://cdn.example/v/index.m3u8", kind: "hls", seq: 0 }),
+          hit({ url: "https://cdn.example/v/00003.mp4", kind: "progressive", seq: 1 }),
+        ],
+        page,
+      );
+      expect(ranked.map((entry) => entry.kind)).toEqual(["hls"]);
+    });
+
+    test("drops a numbered chunk beside a chunk-named neighbour in its directory", () => {
+      const ranked = rankHits(
+        [
+          hit({ url: "https://cdn.example/v/init.mp4", kind: "segment", seq: 0 }),
+          hit({ url: "https://cdn.example/v/00003.mp4", kind: "progressive", seq: 1 }),
+        ],
+        page,
+      );
+      expect(ranked).toHaveLength(0);
+    });
+
+    test("keeps a numbered file whose chunk-named neighbour is in another directory", () => {
+      const ranked = rankHits(
+        [
+          hit({ url: "https://cdn.example/ads/init.mp4", kind: "segment", seq: 0 }),
+          hit({ url: "https://cdn.example/v/clip-720.mp4", kind: "progressive", seq: 1 }),
+        ],
+        page,
+      );
+      expect(ranked.map((entry) => entry.url)).toEqual(["https://cdn.example/v/clip-720.mp4"]);
+    });
+  });
+
+  describe("HitCollector", () => {
+    const FILE = "https://cdn.example/media/lecture.mp4";
+
+    /** What `attach` subscribes to, and the two response shapes a ranged player produces. */
+    function harness(): {
+      collector: HitCollector;
+      respond: (headers: Record<string, string>, status: number) => void;
+    } {
+      const handlers = new Map<string, (arg: unknown) => void>();
+      // The collector reads four members of a context and a handful of a request
+      // and a response; a structural stand-in is the whole of what it touches.
+      const context = {
+        on: (event: string, handler: (arg: unknown) => void) => {
+          handlers.set(event, handler);
+        },
+      } as unknown as BrowserContext;
+      const collector = new HitCollector();
+      collector.attach(context);
+
+      const request = {
+        url: () => FILE,
+        headers: () => ({ range: "bytes=0-" }),
+        allHeaders: async () => ({ range: "bytes=0-" }),
+        frame: () => ({ url: () => "https://site.example/watch" }),
+      };
+      return {
+        collector,
+        respond: (headers, status) => {
+          handlers.get("response")?.({
+            url: () => FILE,
+            headers: () => headers,
+            status: () => status,
+            request: () => request,
+            text: async () => "",
+          });
+        },
+      };
+    }
+
+    test("a small response after a confirmed large one does not turn the file into a segment", () => {
+      const { collector, respond } = harness();
+      respond({ "content-type": "video/mp4", "content-length": "5242880" }, 200);
+      expect(collector.hits[0]?.kind).toBe("progressive");
+
+      // The same URL answered again, this time as a 200 with a tiny body: the
+      // shape that reaches `#record` as `segment` whatever the header parsing says.
+      respond({ "content-type": "video/mp4", "content-length": "1024" }, 200);
+
+      expect(collector.hits).toHaveLength(1);
+      expect(collector.hits[0]?.kind).toBe("progressive");
+      expect(collector.hits[0]?.confirmed).toBe(true);
+    });
+
+    test("a first response that is small still demotes an unconfirmed request", () => {
+      const { collector, respond } = harness();
+      respond({ "content-type": "video/mp4", "content-length": "1024" }, 200);
+      expect(collector.hits[0]?.kind).toBe("segment");
+    });
+
+    test("a 206 records the file's total from Content-Range as the hit's size", () => {
+      const { collector, respond } = harness();
+      respond(
+        {
+          "content-type": "video/mp4",
+          "content-length": "262144",
+          "content-range": "bytes 0-262143/5242880",
+        },
+        206,
+      );
+      expect(collector.hits[0]?.kind).toBe("progressive");
+      expect(collector.hits[0]?.contentLength).toBe(5_242_880);
+    });
   });
 });

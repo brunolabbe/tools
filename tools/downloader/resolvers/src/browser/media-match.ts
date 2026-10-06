@@ -24,10 +24,32 @@ const SEGMENT_PATH = /\.(?:ts|m4s|cmfv|cmfa|cmft|aac|dash|vtt|key)$/i;
  * fMP4 segments are served as `.mp4` too. Treating `init.mp4` as a downloadable
  * rendition would hand the engine two seconds of video, so a `.mp4` whose name
  * or size says "chunk" is demoted.
+ *
+ * A *numbered* name is not that kind of evidence on its own (dl-78): `/839201.mp4`
+ * and `clip-720.mp4` are whole files. It only means "chunk" next to proof of
+ * segmented playback, which a single request cannot see — see `isNumberedName`
+ * and `rankHits`, which weigh it against the other hits.
  */
 const SEGMENT_NAME = /(?:^|[/_-])(?:init|seg|segment|chunk|frag|fragment)[^/]*$/i;
-const NUMBERED_SEGMENT = /[-_/]\d{1,7}\.(?:mp4|m4v|webm|m4a)$/i;
+const CHUNK_EXTENSION = /\.(?:ts|m4s|cmfv|cmfa|cmft|dash)$/i;
+const NUMBERED_NAME = /[-_/]\d{1,7}\.(?:mp4|m4v|webm|m4a)$/i;
 const SMALL_FILE_BYTES = 512 * 1024;
+
+/** The name alone is a numeric id or a resolution suffix; ambiguous on its own. */
+export function isNumberedName(raw: string): boolean {
+  return NUMBERED_NAME.test(pathOf(raw));
+}
+
+/**
+ * A name that says "chunk" outright, with no help from a neighbour: `init.mp4`,
+ * `seg-1.mp4`, or a segment extension. `.vtt`, `.key` and `.aac` are in
+ * `SEGMENT_PATH` but are not evidence — a whole file ships beside a subtitle or
+ * a standalone `.aac` — so they are left out.
+ */
+export function isChunkName(raw: string): boolean {
+  const path = pathOf(raw);
+  return SEGMENT_NAME.test(path) || CHUNK_EXTENSION.test(path);
+}
 
 /** Ad networks, analytics and beacon hosts. Their `.mp4`s are pre-roll, not content. */
 const DENIED_HOST_SUFFIXES: readonly string[] = [
@@ -126,11 +148,35 @@ function pathOf(raw: string): string {
 }
 
 function demoteChunks(path: string, contentLength: number | undefined): MediaKind {
-  if (SEGMENT_NAME.test(path) || NUMBERED_SEGMENT.test(path)) return "segment";
+  if (SEGMENT_NAME.test(path)) return "segment";
   if (contentLength !== undefined && contentLength > 0 && contentLength < SMALL_FILE_BYTES) {
     return "segment";
   }
   return "progressive";
+}
+
+/**
+ * The size of the *file* a response belongs to, which is not always its
+ * `Content-Length`: a `206` carries the length of the chunk, and the file's
+ * total is the number after the slash in `Content-Range` (`bytes 0-262143/5242880`).
+ * `*` there means the server does not know, and so do we — `undefined`, never the
+ * chunk's length standing in for it.
+ *
+ * `headers` is Playwright's lower-cased map.
+ */
+export function responseFileSize(
+  headers: Readonly<Record<string, string>>,
+  status: number,
+): number | undefined {
+  const range = headers["content-range"];
+  if (range !== undefined || status === 206) {
+    const total = range === undefined ? undefined : /\/(\d+)\s*$/.exec(range)?.[1];
+    return total === undefined ? undefined : Number(total);
+  }
+  const raw = headers["content-length"];
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 export interface MediaCandidate {

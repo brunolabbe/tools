@@ -521,3 +521,51 @@ describe("stage narration", () => {
     expect(resolver.calls).toEqual([URL_UNDER_TEST.href]);
   });
 });
+
+function noMediaBecause(reason: unknown): AppError {
+  return new AppError("NO_MEDIA_FOUND", undefined, { details: { reason } });
+}
+
+describe("a resolver's reason survives the fall-through (dl-79)", () => {
+  test("a token reason is carried on the attempt and on the chain's own error", async () => {
+    const registry = new ResolverRegistry([
+      new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "no-media" }),
+      new StubResolver({
+        name: "browser",
+        priority: 50,
+        behaviour: noMediaBecause("segments-without-manifest"),
+      }),
+    ]);
+    const attempts: ResolverAttempt[] = [];
+    const error = await registry
+      .resolve(URL_UNDER_TEST, options(), attempts)
+      .catch((cause: unknown) => cause);
+
+    expect(attempts).toEqual([
+      { resolver: "yt-dlp", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      {
+        resolver: "browser",
+        code: "NO_MEDIA_FOUND",
+        durationMs: expect.any(Number),
+        reason: "segments-without-manifest",
+      },
+    ]);
+    expect((error as AppError).details?.["attempts"]).toEqual(attempts);
+  });
+
+  test.each([
+    ["prose that could carry an address", "net::ERR_CERT_AUTHORITY_INVALID at https://x.example/a"],
+    ["a token over the length cap", "a".repeat(41)],
+    ["upper case", "Navigated-Away"],
+    ["a non-string", 42],
+  ])("%s is not recorded", async (_label, reason) => {
+    const registry = new ResolverRegistry([
+      new StubResolver({ name: "browser", priority: 50, behaviour: noMediaBecause(reason) }),
+    ]);
+    const attempts: ResolverAttempt[] = [];
+    await registry.resolve(URL_UNDER_TEST, options(), attempts).catch(() => undefined);
+
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).not.toHaveProperty("reason");
+  });
+});

@@ -15,6 +15,7 @@ import {
   isTerminal,
   markWatched,
   reconcileJob,
+  refusalAfter,
   upsertJob,
 } from "../lib/job-reducer.ts";
 import { createJobStream } from "../lib/job-stream.ts";
@@ -35,6 +36,16 @@ export interface UseJobs {
    * them is code with nothing observable to assert against.
    */
   watchedSteps: Record<string, number>;
+  /**
+   * Why the server refused to start a job when its link was opened (dl-77), by
+   * job id, while that is still the latest thing that happened to it. Kept beside
+   * the jobs because it is a moment and `Job` is persisted; it is not saved, so
+   * a reload forgets it, which is right: the job is still queued and the link
+   * still works.
+   */
+  refusals: Record<string, AppErrorPayload>;
+  /** The visitor followed the link again: whatever it was refused for before is old news. */
+  clearRefusal(id: string): void;
   start(url: string, options: JobOptions): Promise<Job>;
   cancel(id: string): Promise<void>;
   remove(id: string): void;
@@ -46,6 +57,7 @@ export function useJobs(api: ApiClient): UseJobs {
   const [jobs, setJobs] = useState<Job[]>(() => loadJobs(storage));
   const [streamStates, setStreamStates] = useState<Record<string, StreamState>>({});
   const [watchedSteps, setWatchedSteps] = useState<Record<string, number>>({});
+  const [refusals, setRefusals] = useState<Record<string, AppErrorPayload>>({});
   const streams = useRef(new Map<string, JobStream>());
   const jobsRef = useRef(jobs);
 
@@ -96,6 +108,14 @@ export function useJobs(api: ApiClient): UseJobs {
       // it here rather than inside the updater keeps that updater pure.
       const before = jobsRef.current.find((job) => job.id === jobId);
       if (before) watch(jobId, before, applyJobEvent(before, event));
+      if (event.type === "refused") {
+        setRefusals((previous) => {
+          const next = refusalAfter(previous[jobId], before, event);
+          return next === undefined || next === previous[jobId]
+            ? previous
+            : { ...previous, [jobId]: next };
+        });
+      }
       setJobs((previous) =>
         previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
       );
@@ -190,6 +210,14 @@ export function useJobs(api: ApiClient): UseJobs {
     [api, detach, failLocally, mergeJob],
   );
 
+  const clearRefusal = useCallback((id: string) => {
+    setRefusals((previous) => {
+      if (!(id in previous)) return previous;
+      const { [id]: _gone, ...rest } = previous;
+      return rest;
+    });
+  }, []);
+
   const remove = useCallback(
     (id: string) => {
       detach(id);
@@ -210,5 +238,15 @@ export function useJobs(api: ApiClient): UseJobs {
     });
   }, []);
 
-  return { jobs, streamStates, watchedSteps, start, cancel, remove, clearFinished };
+  return {
+    jobs,
+    streamStates,
+    watchedSteps,
+    refusals,
+    clearRefusal,
+    start,
+    cancel,
+    remove,
+    clearFinished,
+  };
 }

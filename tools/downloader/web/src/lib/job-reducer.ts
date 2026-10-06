@@ -9,7 +9,7 @@
  */
 
 import { TERMINAL_STATUSES } from "@downloader/contract";
-import type { Job, JobEvent, JobStatus, ProbeResult } from "@downloader/contract";
+import type { AppErrorPayload, Job, JobEvent, JobStatus, ProbeResult } from "@downloader/contract";
 import { reachedStep } from "./status.ts";
 
 function timestamp(value: string): number {
@@ -126,6 +126,11 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
         updatedAt: event.at,
         finishedAt: event.at,
       };
+    case "refused":
+      // Not a change to the job: it stays queued with its link, and `Job` has no
+      // field for a refusal. The card's copy lives beside the job — see
+      // `refusalAfter`.
+      return job;
     case "canceled":
       // `error` is populated for the copy, but `status` is what the rest of the
       // UI reads — see the note on `Job` in `shared/job.ts`.
@@ -138,6 +143,30 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
         finishedAt: event.at,
       };
   }
+}
+
+/**
+ * What the card should say about a refused link (dl-77), given what it said
+ * before, the job as it stood and the event just received.
+ *
+ * Kept beside the job rather than on it, as the watched mark is: `Job` is a
+ * contract type persisted in browsers, and a refusal is a moment, not a fact
+ * about the job. Only a `refused` frame changes it, and only when it is news: a
+ * job that has left `queued` has had its link taken, so a refusal arriving after
+ * that is from an attempt that has since been overtaken; one older than the job's
+ * last frame is the same, arriving out of order. Both keep what was there.
+ *
+ * It does not depend on the browser's own failed download, which the page cannot
+ * observe, so the order those two happen in does not matter.
+ */
+export function refusalAfter(
+  current: AppErrorPayload | undefined,
+  job: Job | undefined,
+  event: JobEvent,
+): AppErrorPayload | undefined {
+  if (event.type !== "refused") return current;
+  if (job === undefined || job.status !== "queued" || isStale(job, event.at)) return current;
+  return event.error;
 }
 
 export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {

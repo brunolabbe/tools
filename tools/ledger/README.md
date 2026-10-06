@@ -8,7 +8,9 @@ spreadsheet.
 > image — and the books arrive a ticket at a time: so far a pasted statement,
 > stored and chained onto what is stored, its rows filed by rule, with an
 > inbox for the rest, and what each bucket holds and whose it is, with the
-> salaries and the ratio. The periods and the settlement are not built. What is decided
+> salaries and the ratio, and periods of personal-card spending closed with
+> the settlement they compute. The workbook's import, receipts and the charts
+> are not built. What is decided
 > and what comes next is in
 > [docs/02-ROADMAP.md](./docs/02-ROADMAP.md); where it stands is
 > `npm run status -- --tool ledger`.
@@ -29,11 +31,12 @@ npm test -- --project ledger
 Started like that, every API route but health answers 403: the API trusts only
 Cloudflare Access. In development, name a person instead —
 `ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger`
-— and see `.env.example` for the rest.
+— or put those two lines in `.env` — and see `.env.example` for the rest.
 
 Settings are environment variables, listed with their defaults in
-[`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
-change in the shell. Requires Node ≥ 22. The UI's dev server proxies `/api` to
+[`.env.example`](./.env.example). Copy it to `.env` beside it and
+`npm run dev:ledger` loads that; a variable set in the shell wins over the file.
+Requires Node ≥ 22. The UI's dev server proxies `/api` to
 the API on 8100, which keeps the two same-origin;
 [`web/.env.example`](./web/.env.example) changes where it points.
 

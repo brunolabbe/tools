@@ -98,7 +98,9 @@ Ship authority comes in your own dispatch or a direct message from the
 orchestrator, never relayed through anyone else. With it, follow
 `.claude/skills/orchestrate-tickets/reference/records.md`: one `--land` command
 commits every gate's section as the file the gate wrote, sets the status, pushes
-and runs preflight. Then post each gate's full report to the pull request thread,
+and runs preflight. **If any gate's table has an `awaiting` row, commit the
+ticket's `awaiting:` line first**, as records.md says; the gate cannot write
+frontmatter, so the line is the only marker the obligation has. Then post each gate's full report to the pull request thread,
 name every model in the body as your dispatch states them, and run
 `gh pr ready <n>` unless the dispatch says to hold the draft.
 

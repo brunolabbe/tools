@@ -207,6 +207,17 @@ describe("jobEventSchema", () => {
       error: { code: "JOB_CANCELED", message: "stopped", retryable: false },
       at: AT,
     },
+    {
+      type: "refused",
+      jobId: "j",
+      error: {
+        code: "RATE_LIMITED",
+        message: "busy",
+        retryable: true,
+        details: { retryAfterSec: 30 },
+      },
+      at: AT,
+    },
     { type: "heartbeat", at: AT },
   ];
 
@@ -227,6 +238,7 @@ describe("jobEventSchema", () => {
       "heartbeat",
       "probed",
       "progress",
+      "refused",
       "status",
     ]);
   });
@@ -370,5 +382,41 @@ describe("dl-53: the link, and the state that went", () => {
     expect(jobStatusSchema.safeParse("muxing").success).toBe(false);
     expect(Object.keys(JOB_TRANSITIONS)).not.toContain("muxing");
     expect(JOB_TRANSITIONS.downloading).toEqual(["probing", "completed", "failed", "canceled"]);
+  });
+});
+
+describe("the refused frame (dl-77)", () => {
+  const refused = {
+    type: "refused",
+    jobId: "j",
+    error: {
+      code: "RATE_LIMITED",
+      message: "You already have as many downloads running as this server allows.",
+      retryable: true,
+      details: { retryAfterSec: 30 },
+    },
+    at: AT,
+  };
+
+  test("carries the code and the wait, and parses back from the wire", () => {
+    const parsed = parseJobEvent(JSON.stringify(refused));
+    expect(parsed).toEqual(refused);
+    if (parsed?.type === "refused") {
+      expect(parsed.error.code).toBe("RATE_LIMITED");
+      expect(parsed.error.details?.["retryAfterSec"]).toBe(30);
+    }
+  });
+
+  test("is rejected without an error, or with a code outside the taxonomy", () => {
+    const { error: _missing, ...bare } = refused;
+    expect(jobEventSchema.safeParse(bare).success).toBe(false);
+    expect(
+      jobEventSchema.safeParse({ ...refused, error: { ...refused.error, code: "NOT_A_CODE" } })
+        .success,
+    ).toBe(false);
+  });
+
+  test("names its job, unlike a heartbeat", () => {
+    expect(jobEventSchema.safeParse({ ...refused, jobId: "" }).success).toBe(false);
   });
 });
