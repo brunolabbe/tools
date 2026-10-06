@@ -238,8 +238,11 @@ records the observation** — beside striking the acceptance line it belongs to.
 That sentence is the field's whole defence: a projection nobody clears is the
 second store adr/003 refused to bring back, and this one would rot in the same
 way. Prefer the ticket that owes the thing over the ticket whose merge supplies
-it; where an obligation belongs to no ticket at all, it is a ticket worth filing
-rather than a line worth hanging somewhere convenient.
+it; where the branch has no ticket at all there is no field to hold the line, so
+the gate's row names the event and the reading, the lander puts them in the pull
+request body, and nothing in the repo tracks the obligation after the merge
+([`records.md`](../.claude/skills/orchestrate-tickets/reference/records.md),
+_When there is no ticket_).
 
 **These fields are parsed, and strictly** — the six required ones and all three
 optional ones. `scripts/status.mjs` fails by file and line on a key nobody has
@@ -306,12 +309,12 @@ It is one table — a row per acceptance line, naming the test that proves it,
 the spec file and the test's name rather than "covered" — a list of findings by severity, and a
 single word:
 
-| Gate         | When                                                                        |
-| ------------ | --------------------------------------------------------------------------- |
-| **PASS**     | Every acceptance line proven, `verified` or `awaiting`, nothing above `low` |
-| **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run           |
-| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran**           |
-| **WAIVED**   | A human overrode a gate, named themself, and said why                       |
+| Gate         | When                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| **PASS**     | Every acceptance line proven, `verified` or `awaiting`, nothing above `low`                                  |
+| **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run                                            |
+| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran**, bar an open decision or a scoped-out line |
+| **WAIVED**   | A human overrode a gate, named themself, and said why                                                        |
 
 `verified` is the row for an acceptance line nothing asserts and the reviewer
 **re-ran** — the gates-are-green bullet almost every ticket ends with, and a

@@ -63,8 +63,9 @@ ticket's, and say in the section that the acceptance came from the prompt.
      reading in one sentence**, because the lander copies it into the ticket's
      `awaiting` line and you cannot (see _Severity and the gate_). Three things
      are not `awaiting`: a line the pull request's own CI can prove (that is
-     `unproven (gate)` until the leg has run on this head) and a line nothing
-     will ever run (that stays `unproven`). **On a branch with no ticket** a
+     `unproven (gate)` until the leg has run on this head), a line a test or
+     command on the branch could prove (that is `unproven` when nobody did) and
+     a line nothing will ever run (that stays `unproven`). **On a branch with no ticket** a
      post-merge line is still `awaiting`, but there is no `awaiting` field to
      hold it: the row names the event and the reading, and the lander puts them
      in the pull request body. Nothing in the repo tracks that obligation after

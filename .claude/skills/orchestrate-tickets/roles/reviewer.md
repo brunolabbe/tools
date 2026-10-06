@@ -72,9 +72,11 @@ confirm it. So read in this order:
   than implement your reading of it.
 - **A finding with two possible remedies is a decision, not a verdict.** Give
   both with a recommendation and label it open. When the open decision is an
-  acceptance line the build cannot meet, `gate.md` grades it by whether a test
-  on the branch asserts the opposite of the line: none is CONCERNS, one is a
-  `high` and FAIL.
+  acceptance line the build cannot meet (the build does what the brief's
+  Decision says, and the line asks for something that Decision cannot deliver),
+  `gate.md` grades it by whether a test on the branch asserts the opposite of
+  the line: none is CONCERNS, one is a `high` and FAIL. A build that left its
+  Decision is outside that entry: its line is `unproven`, and FAIL.
 - Flag anything you did not verify as unverified in the sentence that states it.
 
 ## When you are woken to re-gate
