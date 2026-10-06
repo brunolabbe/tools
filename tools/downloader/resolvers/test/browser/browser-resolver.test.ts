@@ -24,6 +24,8 @@ import {
 } from "./helpers/fake-parsers.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
+import { PROGRESSIVE_FILE_BYTES, startProgressiveServer } from "./helpers/progressive-server.ts";
+import type { ProgressiveServer } from "./helpers/progressive-server.ts";
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
@@ -829,8 +831,6 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
       expect(server.requests).toContain("/media/related/master.m3u8");
     },
-  );
-});
   );
 });
 
