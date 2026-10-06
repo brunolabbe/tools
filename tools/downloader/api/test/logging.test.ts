@@ -1107,6 +1107,11 @@ describe("safeFields redacts every reference to a shared object, not only the fi
   });
 });
 
+/** The percent-escape digits of a string's first character. */
+function hex(text: string): string {
+  return (text.codePointAt(0) ?? 0).toString(16);
+}
+
 /**
  * dl-76. A capability token must stay out of the log however its path is spelled.
  *
@@ -1123,8 +1128,6 @@ describe("a capability token never reaches a log line, however its path is spell
 
   /** `name` is the route's own segment, `files` or `thumbnail`. */
   type Spelling = (name: string, token: string) => string;
-
-  const hex = (text: string): string => (text.codePointAt(0) ?? 0).toString(16);
 
   const SPELLINGS: Array<[string, Spelling]> = [
     ["canonical (control)", (n, t) => `/api/${n}/${t}`],
