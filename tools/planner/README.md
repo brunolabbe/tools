@@ -67,8 +67,9 @@ npm run e2e:planner              # the intake and pinning in a real browser (npm
 ```
 
 Settings are environment variables, listed with their defaults in
-[`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
-change in the shell — a real model, for instance:
+[`.env.example`](./.env.example). Copy it to `.env` beside it and
+`npm run dev:planner` loads that; a variable set in the shell wins over the
+file — a real model for one run, for instance:
 
 ```bash
 MODEL_PROVIDER=anthropic ANTHROPIC_API_KEY=… npm run dev:planner:api

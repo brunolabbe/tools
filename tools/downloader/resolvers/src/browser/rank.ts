@@ -9,6 +9,7 @@
  *      trailer, the bumper or an ad slate.
  */
 
+import { isChunkName, isNumberedName } from "./media-match.ts";
 import type { NetworkHit } from "./types.ts";
 
 const MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/]*\.(?:m3u8?|mpd)$/i;
@@ -68,10 +69,34 @@ export function scoreHit(hit: NetworkHit, pageUrl: string): number {
   return score;
 }
 
+function directoryOf(raw: string): string {
+  const path = pathOf(raw);
+  return path.slice(0, path.lastIndexOf("/") + 1);
+}
+
+/**
+ * A numbered `.mp4` (`00003.mp4`) is a chunk only next to proof that playback is
+ * segmented: a manifest anywhere in the capture, or a chunk-named neighbour in
+ * its own directory (`init.mp4`, `seg-1.m4s`). Alone it is a numeric id or a
+ * resolution suffix — `839201.mp4`, `clip-720.mp4` — and a whole file (dl-78).
+ *
+ * Two numbered names side by side are deliberately not evidence: `clip-720.mp4`
+ * and `clip-1080.mp4` are two whole files, and calling both chunks would offer
+ * neither.
+ */
+function isChunkOfSegmentedPlayback(hit: NetworkHit, hits: readonly NetworkHit[]): boolean {
+  if (hit.kind !== "progressive" || !isNumberedName(hit.url)) return false;
+  if (hits.some((other) => other.kind === "hls" || other.kind === "dash")) return true;
+  const directory = directoryOf(hit.url);
+  return hits.some(
+    (other) => other !== hit && isChunkName(other.url) && directoryOf(other.url) === directory,
+  );
+}
+
 /** Playable candidates, best first. Segments are dropped, never offered. */
 export function rankHits(hits: readonly NetworkHit[], pageUrl: string): NetworkHit[] {
   return hits
-    .filter((hit) => hit.kind !== "segment")
+    .filter((hit) => hit.kind !== "segment" && !isChunkOfSegmentedPlayback(hit, hits))
     .map((hit, index) => ({ hit, index, score: scoreHit(hit, pageUrl) }))
     .filter((entry) => Number.isFinite(entry.score))
     .toSorted((a, b) => b.score - a.score || a.index - b.index)

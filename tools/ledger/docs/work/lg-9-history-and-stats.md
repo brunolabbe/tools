@@ -5,7 +5,7 @@ title: History and stats — the charts the owner asked for
 kind: work-package
 status: ready
 milestone: P5
-depends_on: [lg-5, lg-6]
+depends_on: [lg-5, lg-6, lg-15]
 difficulty: standard
 ---
 
@@ -25,10 +25,15 @@ append-only records, so this ticket computes and draws. It stores nothing new.
    - each person's cumulative contributions per bucket, and each person's own
      money in the mortgage bucket;
    - the buffer's balance, with the rows behind its large drops;
-   - spending per period and per category, and the fixed items month by
-     month. Receipt items carry categories once
-     [lg-10](./lg-10-receipt-items-exclusions-and-categories.md) lands; until
-     then a period line's own category is used;
+   - spending per period and per spending category, and the fixed items month
+     by month. Categories come from
+     [lg-15](./lg-15-spending-categories-on-bank-rows.md)'s one list, on bank
+     rows and on period lines. A joint-account row with a receipt attached
+     (lg-8) is split by its receipt items' categories once
+     [lg-10](./lg-10-receipt-items-exclusions-and-categories.md) lands, and its
+     own category is then not counted. A row or line with no category charts
+     as uncategorised; a period line stored before lg-15, or imported by lg-7,
+     shows its free text in the detail;
    - settlements, with their formula version.
 2. `api`: one route per series, each with a date range.
 3. `web`: a stats screen. Before choosing chart colours or marks, load the
