@@ -173,3 +173,100 @@ since neither is specified to.
 **Process note.** A `.ts` file under `test/fixtures/` is linted as TypeScript
 (`oxlint` read the placeholder segments as code and failed `npm run check`), so
 the `.ts` segments are generated in `fixture-server.ts` instead of checked in.
+
+### 2026-10-06 — round 2, after gate 1 (builder)
+
+Gate 1 failed `056aab7..3a72069`. Each item below was reproduced before it was
+changed, against the gate's own scripts (`redos.mjs`, `server.mjs`,
+`harness.mjs`, repointed at this worktree's `dist`).
+
+**1. High, `DASH_ROOT` backtracked exponentially: fixed.** Reproduced: the
+gate's `harness.mjs resolver redos30` (a 211-byte `text/plain` body, k=30)
+blocked the event loop for 60,789 ms. After the fix, same case, same server:
+`{"outcome":"hls n=1 /good","totalMs":2916,"maxEventLoopBlockMs":3}`, and
+`redos.mjs` gives `k=24 chars=169 ms=0.0` (the gate measured 345 ms). The prolog
+and comments are now skipped with an `indexOf("-->")` loop and only
+`^<(?:[\w.-]+:)?MPD[\s>]` is a regex. Test: `sniff.test.ts` "a head of nothing
+but empty comments returns at once" asserts under 50 ms on `"<!---->".repeat(26)`
+and on `.repeat(290)`. With the old regex put back it fails:
+`AssertionError: expected 3966.224733 to be less than 50`. (The sized-down first
+input is deliberate: at 290 the old pattern never returns, which would hang the
+run instead of failing it.)
+
+**2. Med, compressed body read in full: fixed as the owner decided (a),
+2026-10-06.** Compressed (`Content-Encoding` other than identity) untyped
+bodies are read on a separate budget of **2 per probe**
+(`MAX_ENCODED_SNIFFS_PER_PROBE`), also counted against the 32. Why 2: one probe
+needs one manifest, so a second is only slack for a url that turns out not to be
+one; and each read can move up to Chromium's inspector-cache ceiling (the gate
+saw 12 MiB read and 20 MiB refused) into Node, so two bound it at about 24-30 MiB
+where 32 reads measured 384 MiB. Measured after the fix on the gate's
+`harness.mjs collector par-32x12` (32 gzip bodies of 12 MiB, untyped):
+`"bodies":[…2 entries of 12582912 bytes…]`, `peakNodeMB 228.3` (gate: 598),
+`peakNodeExternalMB 52.4` (gate: 796), typed `.ts` segments reached the
+collector at 2,532 ms (gate: 8,119). Test: `sniff.test.ts` "no more than
+MAX_ENCODED_SNIFFS_PER_PROBE compressed bodies are read, whatever they hold"
+(10 compressed responses, 2 reads; with the cap raised to 100 it fails, 10 reads
+against 100 asserted, plus the "not charged to the compressed budget" test). The
+`MAX_SNIFF_ENCODED_BYTES` comment is rewritten: the 32 KiB is a filter, **not a
+bound**, and the old "~32 MB" was false. **What this does not bound:** Chromium's
+own decode. The same run showed `peakChromeMB 985.6`, and the gate measured
+2.36 GB for a 1 GiB `br` body; nothing in the collector can limit that. The
+typed `#captureBody` path has the same exposure with no budget at all, filed as
+**dl-91** (`tools/downloader/docs/work/dl-91-a-compressed-typed-manifest-body-is-read-in-full.md`).
+
+**3. Med, `seq` after the read: fixed.** Reproduced: `harness.mjs resolver
+untyped-master-neutral` (an untyped master, then a typed `media.m3u8` variant)
+gave the gate `hls n=1`; after the fix it gives
+`{"outcome":"hls n=2 /v/high/index.m3u8 /v/low/index.m3u8"}`, the master's
+variants. `#sniffBody` now reserves `this.#seq++` when the response arrives and
+passes it through `HitPatch.seq`; `#record` uses it in place of its own counter.
+Test: `sniff.test.ts` "a slowly-read untyped master ranks above the typed variant
+it names" (with `seq,` removed from the patch it fails:
+`expected [ …(2) ] to deeply equal [ 'https://site.example/master', … ]`). The
+round-1 sentence "order is preserved for dependent fetches" was wrong and is
+corrected above. A cost of reserving at arrival: a sniffed response that turns
+out not to be a manifest still uses a number, so a page that polls many untyped
+JSON endpoints pushes every later hit's `seq` up. Relative order is unchanged and
+`rank.ts` only reads `seq` through `max(0, 100 - seq * 10)`, which a busy page
+already exhausts.
+**The gate's separate, pre-existing cause** (an extensionless master never earns
+`MASTER_NAME`'s +120) is filed as **dl-92**, not fixed. Re-measured:
+`harness.mjs resolver untyped-master` (variant named `index.m3u8`) still gives
+`hls n=1 /v/high/index.m3u8` after this round, scores 1150 against 1260.
+
+**4. Med, `segments-without-manifest` on a page that played nothing:
+narrowed, with one case refuted.** `countPlayedSegments` in `classify.ts`
+(called from `resolvers/browser.ts`; `media-match.ts` untouched) counts a segment
+hit only if it was confirmed, has a status below 400, is not a `.vtt` or `.key`,
+and has no `text/*`, JSON, JavaScript or TypeScript content type. The
+`PageSignals.segmentCount` docblock no longer says "playback demonstrably
+started"; it says evidence of fetching, not proof of playing. Measured on the
+gate's server through `BrowserResolver`: the `vtt` and `key` pages now end
+`NO_MEDIA_FOUND reason=undefined`. **Refuted: the `.ts` _script_ page.** The
+gate's `ts-script` case serves `/sub/app.ts` as `application/octet-stream`, and
+still ends `reason=segments-without-manifest segments=1`. By URL, status and
+type it is byte-for-byte what an MPEG-TS segment looks like, and the collector
+records no other signal (no `resourceType` is kept on a hit), so no rule over what
+it holds can separate them. A real script served as a script type is excluded.
+Test: `sniff.test.ts` "countPlayedSegments", with a row per exclusion.
+
+**5. Low, CodeQL `js/client-side-request-forgery`: fixed.** The fixture no
+longer reads `location.search`. One shared `untyped-player.js` takes the routes as
+call arguments, and five pages (`untyped-hls-text`, `untyped-hls-octet`,
+`untyped-dash-text`, `untyped-segments-only`, `untyped-no-segments`) call it with
+literals. Whether the alert closes is for PR #373's `CodeQL` check to say; I have
+not seen it run on this head.
+
+**6. Low, the Log's "hand-rolled loader the other fixtures use": corrected**
+above. `untyped-*.html` has no `MediaSource`; it copies `hls.html`'s `fetch`
+chain, not `mse.html`'s.
+
+**7. Low, `rank.ts`:** filed as dl-92, per the owner, with the measurement.
+
+**Unchanged, as asked.** `attemptReason` dropping `ERR_CERT_*` and three of
+yt-dlp's four markers, and the two documented misses (chunked untyped playlist;
+a manifest after 32 junk responses), stay as the Log wrote them in round 1.
+Neither became free.
+
+**Fold-in.** None. dl-91 and dl-92 are filed because the owner decided to file.
