@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Comments</title>
+  </head>
+  <body>
+    <h1>Comments</h1>
+    <div id="player"></div>
+    <!-- dl-82's gate: a comment form's agreement button, which posts a comment. -->
+    <form onsubmit="event.preventDefault()">
+      <textarea>Nice</textarea>
+      <p>Do you agree to the community rules?</p>
+      <button type="submit" onclick="fetch('/beacon/comment-yesiagree')">Yes, I agree</button>
+    </form>
+  </body>
+</html>

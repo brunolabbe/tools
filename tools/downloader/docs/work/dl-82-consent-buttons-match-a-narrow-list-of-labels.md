@@ -97,3 +97,67 @@ fixture: building one is the first step.
 - **Coordination with dl-83.** This change exports `CONSENT_TEXT` and adds
   `CONSENT_TEXT` to the import list in `provoke.test.ts`, which dl-83 is likely
   to edit too; no helper is shared.
+
+### 2026-10-06 — gate round 1
+
+Corrections to the entry above:
+
+- **The base-run count was wrong.** `7 failed | 1 passed | 50 skipped (58)` was
+  measured before the `Accept all` control was added to the label list, so the
+  sentence saying the control passed described a run that did not contain it.
+  Re-measured with `provoke.ts` at `origin/main` and the fixtures in place:
+  `npx vitest run …/browser-resolver.test.ts -t "no vendor selector matches"`
+  gave `Tests 7 failed | 2 passed | 57 skipped (66)`; the seven new labels fail
+  and the control and the negative pass.
+- **"What the brief had wrong: nothing material" was wrong.** The brief weighed
+  the widening only against the late revisits. The wider hazard is the
+  whole-frame reach: `getByRole(...).first()` over the frame pressed a
+  newsletter's "Ho capito", a checkout's "Agree and continue", a comment form's
+  "Yes, I agree" and a review vote's "Sono d'accordo", and, in DOM order ahead of
+  a consent dialog, made a page that resolved on `origin/main` fail. The gate's
+  pages are now fixtures; against the round-0 head,
+  `-t "gate 1"` gave `Tests 6 failed | 1 passed | 59 skipped (66)`.
+- **"With the anchors removed … fails" held for the end anchor only.** Dropping
+  the `^` passed every test, because each refused row began with a phrasing.
+  Rows that end in one ("Read and continue", "Click OK", "Premi OK", "Please
+  accept", "Non accetto") now fail it: without the `^`, `-t "CONSENT_TEXT"` gave
+  `Tests 5 failed | 150 passed | 7 skipped (162)`.
+
+**Decision (owner chose scoping, option (a)); how it is scoped is mine.** The
+text fallback now has two reaches, in `dismissConsent`:
+
+1. **Inside a consent container, the full `CONSENT_TEXT`**, tried first. A
+   container is a semantic dialog (`SEMANTIC_DIALOG`) or any ancestor whose
+   computed `position` is `fixed` or `sticky`, marked by script in a frame that
+   allows it and found by dialog semantics alone in a cross-origin one. A real
+   consent layer therefore wins over an earlier control with a colliding label.
+2. **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**: the pre-dl-82
+   pattern, byte for byte, so nothing a page was pressed for before is lost.
+
+Why not container-only: a cookie strip in the page's own flow is common, and
+`origin/main` pressed its "Accept"; container-only would have taken that away
+to protect against labels it had never pressed. Why not the full pattern as the
+whole-frame fallback: it is the very reach that pressed the gate's four false
+pages, which have no container at all. The hybrid has one cost, stated rather
+than hidden: **a consent strip that is neither a dialog nor a fixed or sticky
+layer, labelled with a phrasing only dl-82 added ("Ho capito", "Accetto e
+continua" and the rest), is not pressed.** Likewise a sticky or fixed _form_
+(a docked checkout bar) is a container, and its "Agree and continue" would be
+pressed. Neither is covered by a test.
+
+Proof, all in `browser-resolver.test.ts` "…only inside a consent container
+(dl-82 gate 1)": the order-overlay and order-bar pages yield the stream and leave
+the newsletter alone; the newsletter, checkout, comment and vote pages press
+nothing and end `NO_MEDIA_FOUND`; `consent-inline-strip.html` (an in-flow strip
+with "Accept") is still pressed. `provoke.test.ts` pins that every pre-change
+phrasing still matches `CONSENT_TEXT_ANYWHERE` and no added one does.
+
+**Free with this change:** the low that `ok.`, `OK!` and `Continue.` now match
+where they did not before. With the whole-frame reach back on the old pattern
+they match only inside a container, so the generic words stay as bare as they
+were everywhere a page can repeat them.
+
+**Coordination with dl-83.** `dismissConsent` gained a required `scriptable`
+argument, so the call line in `provokeFrame` changed, and `CONSENT_TEXT_ANYWHERE`
+joins the import list in `provoke.test.ts`; both sit next to lines dl-83 is likely
+to edit. No helper is shared.

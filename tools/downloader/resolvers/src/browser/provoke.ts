@@ -15,7 +15,7 @@
  * with no DOM lib. Values interpolated into a script are JSON-encoded.
  */
 
-import type { Frame, Page } from "playwright";
+import type { Frame, Locator, Page } from "playwright";
 import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
 import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
@@ -50,6 +50,14 @@ const CONSENT_SELECTORS: readonly string[] = [
  * same words as pagination or a vote button are what an unanchored match would
  * press (dl-82). No "enter the site" label either: on a gated page that is an
  * age or terms attestation, which belongs to the age gate, not to consent.
+ *
+ * **This pattern is matched only inside a consent container** (a dialog, or a
+ * fixed or sticky layer — `dismissConsent`), never across the whole frame. The
+ * acknowledgement phrasings it added ("Ho capito", "Yes, I agree", "Agree and
+ * continue", "Sono d'accordo") are also the labels of a newsletter's dismiss
+ * button, a comment form's submit and a review vote, and a whole-frame match
+ * pressed those, in DOM order, ahead of the real consent dialog (dl-82's gate).
+ * What `CONSENT_TEXT_ANYWHERE` held before keeps its old reach.
  *
  * `&` and "and" both join a verb to its follow-up in English; the other
  * languages carry their own conjunction in the entry. The apostrophe is
@@ -89,6 +97,17 @@ const CONSENT_PHRASES: readonly string[] = [
 ];
 
 export const CONSENT_TEXT = new RegExp(`^\\s*(?:${CONSENT_PHRASES.join("|")})\\s*[.!]?\\s*$`, "i");
+
+/**
+ * The exact pattern the whole frame was searched with before dl-82, kept
+ * verbatim and kept at its old reach: a cookie strip that is neither a dialog
+ * nor a fixed layer still gets its "Accept" pressed, as it always did. Nothing
+ * is added here; a new phrasing goes in `CONSENT_PHRASES` and so is pressed only
+ * inside a consent container. Every phrasing here is also in `CONSENT_TEXT`
+ * (pinned by a test), so the container pass can never press less than this.
+ */
+export const CONSENT_TEXT_ANYWHERE =
+  /^\s*(?:accept(?: all| cookies| and continue)?|i accept|agree|i agree|allow all|got it|ok|okay|continue|understood|alles akzeptieren|akzeptieren|zustimmen|einverstanden|tout accepter|accepter|j'accepte|aceptar( todo)?|acepto|aceitar|accetta(?: tutto)?|accetto|akkoord|godkänn|zgadzam się|принять)\s*$/i;
 
 /**
  * A close control's accessible name: a close verb, optionally followed by a
@@ -619,11 +638,135 @@ async function clickByText(frame: Frame, pattern: RegExp, timeoutMs: number): Pr
   return false;
 }
 
-export async function dismissConsent(frame: Frame, timeoutMs: number): Promise<number> {
+/** Marks a consent container, so the text match is scoped to it through the locator API (dl-82). */
+const CONSENT_ZONE_MARK = "data-downloader-consent-zone";
+
+/**
+ * Marks the nearest consent container of every link and button: an ancestor
+ * that is a semantic dialog, or whose computed `position` is `fixed` or
+ * `sticky`. A cookie wall is one or the other far more often than it is a
+ * block in the page's flow, and a newsletter, a checkout form and a review list
+ * are in the flow. One walk per control, memoised per ancestor, so a page with
+ * thousands of links costs one style read per distinct ancestor. Open shadow
+ * roots are not entered: a control inside one is outside every zone, and the
+ * old whole-frame match still reaches it.
+ */
+const MARK_CONSENT_ZONES_SCRIPT = `(() => {
+  var semantic = ${JSON.stringify(SEMANTIC_DIALOG)};
+  var zoneOf = new Map();
+  var find = function (el) {
+    var chain = [];
+    var found = null;
+    for (var n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      if (zoneOf.has(n)) {
+        found = zoneOf.get(n);
+        break;
+      }
+      chain.push(n);
+      var position = getComputedStyle(n).position;
+      if (n.matches(semantic) || position === 'fixed' || position === 'sticky') {
+        found = n;
+        break;
+      }
+    }
+    for (var i = 0; i < chain.length; i++) zoneOf.set(chain[i], found);
+    return found;
+  };
+  var marked = 0;
+  var controls = document.querySelectorAll('button, a, [role="button"], [role="link"], input[type="button"], input[type="submit"]');
+  for (var j = 0; j < controls.length; j++) {
+    var zone = find(controls[j]);
+    if (zone && !zone.hasAttribute(${JSON.stringify(CONSENT_ZONE_MARK)})) {
+      zone.setAttribute(${JSON.stringify(CONSENT_ZONE_MARK)}, '');
+      marked += 1;
+    }
+  }
+  return marked;
+})()`;
+
+const UNMARK_CONSENT_ZONES_SCRIPT = `(() => {
+  var marked = document.querySelectorAll('[${CONSENT_ZONE_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(CONSENT_ZONE_MARK)});
+})()`;
+
+/**
+ * Presses a button or link whose whole label is a `pattern` match, among the
+ * descendants of `scope`.
+ */
+async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number): Promise<boolean> {
+  for (const role of ["button", "link"] as const) {
+    try {
+      const locator = scope.getByRole(role, { name: pattern }).first();
+      if (!(await locator.isVisible({ timeout: 150 }))) continue;
+      await locator.click({ timeout: timeoutMs });
+      return true;
+    } catch {
+      // No such control in this scope.
+    }
+  }
+  return false;
+}
+
+/**
+ * The text-matched consent step, in two reaches (dl-82).
+ *
+ * **Inside a consent container, the full `CONSENT_TEXT`**: a dialog, or a fixed
+ * or sticky layer, found by script in a frame that allows it and by dialog
+ * semantics alone in one that does not. Tried first, so a real consent layer
+ * wins over an earlier control in the document that happens to carry a label
+ * from the same list.
+ *
+ * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
+ * searched for before this change. A widened phrasing outside a container is
+ * not a consent button: a newsletter's "Ho capito", a checkout form's "Agree
+ * and continue", a comment form's "Yes, I agree" and a review vote's "Sono
+ * d'accordo" are all pressed by a whole-frame match, and the checkout and the
+ * comment are submit buttons.
+ *
+ * A consent strip that is neither a dialog nor a fixed layer, labelled with a
+ * phrasing newer than this change, is therefore not pressed. That is the price
+ * of the scope; its cure is a label added to the old list, not a wider reach.
+ */
+async function clickConsentText(
+  frame: Frame,
+  scriptable: boolean,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (scriptable) {
+    let marked = 0;
+    try {
+      marked = await frame.evaluate<number>(MARK_CONSENT_ZONES_SCRIPT);
+      if (marked > 0) {
+        const zones = frame.locator(`[${CONSENT_ZONE_MARK}]`);
+        if (await clickByTextIn(zones, CONSENT_TEXT, timeoutMs)) return true;
+      }
+    } catch {
+      // Frame navigated away mid-probe.
+    } finally {
+      if (marked > 0) {
+        try {
+          await frame.evaluate(UNMARK_CONSENT_ZONES_SCRIPT);
+        } catch {
+          // The press removed the frame's document, or navigated it.
+        }
+      }
+    }
+  } else {
+    const dialogs = frame.locator(visibleQuery(SEMANTIC_DIALOG.split(", ")));
+    if (await clickByTextIn(dialogs, CONSENT_TEXT, timeoutMs)) return true;
+  }
+  return await clickByText(frame, CONSENT_TEXT_ANYWHERE, timeoutMs);
+}
+
+export async function dismissConsent(
+  frame: Frame,
+  timeoutMs: number,
+  scriptable: boolean,
+): Promise<number> {
   // One banner per page: clicking a second "accept" is as likely to re-open the
   // preferences dialog as to close anything.
   const clicked = await clickVisible(frame, CONSENT_SELECTORS, { timeoutMs, max: 1 });
-  if (clicked === 0 && (await clickByText(frame, CONSENT_TEXT, timeoutMs))) return 1;
+  if (clicked === 0 && (await clickConsentText(frame, scriptable, timeoutMs))) return 1;
   return clicked;
 }
 
@@ -770,7 +913,7 @@ async function provokeFrame(
 ): Promise<void> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
   await dismissModal(frame, { timeoutMs: 1500, scriptable });
-  await dismissConsent(frame, 2000);
+  await dismissConsent(frame, 2000, scriptable);
 
   // Recognising a gate needs the page's wording as well as the control's label,
   // so it is only tried where script runs. The player mounts after the press,

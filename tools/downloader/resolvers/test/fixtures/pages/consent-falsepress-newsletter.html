@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Articolo</title>
+  </head>
+  <body>
+    <h1>Articolo</h1>
+    <div id="player"></div>
+    <!-- dl-82's gate: a newsletter's dismiss button with no consent dialog on the
+         page. "Ho capito" is a label the consent pattern knows, and the button is
+         not in a dialog or a fixed layer, so it must not be pressed. -->
+    <div class="newsletter">
+      <p>Iscriviti alla newsletter per ricevere le offerte.</p>
+      <button type="button" onclick="fetch('/beacon/newsletter-hocapito')">Ho capito</button>
+    </div>
+  </body>
+</html>

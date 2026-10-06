@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Articolo</title>
+  </head>
+  <body>
+    <h1>Articolo</h1>
+    <div id="player"></div>
+    <!-- dl-82's gate: a newsletter's dismiss button ahead of the consent dialog in
+         document order. "Ho capito" is a label the consent pattern now knows, so a
+         whole-frame match presses it first; the covering overlay then swallows
+         the press and the consent button is never reached. The consent label is
+         "Accetta", one the tier pressed before dl-82, so only the order is new. -->
+    <div class="newsletter">
+      <button type="button" onclick="fetch('/beacon/newsletter-hocapito')">Ho capito</button>
+    </div>
+    <div
+      id="consent"
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      "
+    >
+      <div style="width: 360px; padding: 24px; background: #fff">
+        <p>Usiamo i cookie.</p>
+        <button
+          type="button"
+          onclick="fetch('/beacon/consent-accepted');document.getElementById('consent').remove();mountPlayer()"
+        >
+          Accetta
+        </button>
+      </div>
+    </div>
+    <script>
+      function mountPlayer() {
+        fetch("/media/mse/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/mse/v1080.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return Promise.all(
+              ["/media/mse/init.mp4", "/media/mse/seg-00001.m4s", "/media/mse/seg-00002.m4s"].map(
+                function (u) {
+                  return fetch(u);
+                },
+              ),
+            );
+          })
+          .catch(function () {});
+        var v = document.createElement("video");
+        v.muted = true;
+        v.width = 640;
+        v.height = 360;
+        v.src = URL.createObjectURL(new MediaSource());
+        document.getElementById("player").replaceChildren(v);
+      }
+    </script>
+  </body>
+</html>

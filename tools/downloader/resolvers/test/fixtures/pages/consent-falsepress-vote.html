@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Recensioni</title>
+  </head>
+  <body>
+    <h1>Recensioni</h1>
+    <div id="player"></div>
+    <!-- dl-82's gate: a review vote whose whole label is "Sono d'accordo". Unlike
+         consent-lookalikes.html, the label here is not a sentence, so only where
+         the button sits can keep it unpressed. -->
+    <p>Il film è lento ma ne vale la pena.</p>
+    <button type="button" onclick="fetch('/beacon/review-vote')">Sono d'accordo</button>
+  </body>
+</html>

@@ -13,6 +13,7 @@ import { classifyFailure } from "../../src/browser/classify.ts";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import {
   CONSENT_TEXT,
+  CONSENT_TEXT_ANYWHERE,
   dismissModal,
   provokePlayback,
   readMetadata,
@@ -320,6 +321,13 @@ describe("CONSENT_TEXT (dl-82)", () => {
     "Accept or decline",
     "Agree and continue to checkout",
     "Ho capito tutto",
+    // Each ENDS in a phrasing the pattern knows, so only the start anchor
+    // refuses it (dl-82's gate: dropping the `^` passed every other row).
+    "Read and continue",
+    "Click OK",
+    "Premi OK",
+    "Please accept",
+    "Non accetto",
     "",
   ];
 
@@ -333,5 +341,15 @@ describe("CONSENT_TEXT (dl-82)", () => {
 
   test.each(REFUSED)("does not match %j", (label) => {
     expect(CONSENT_TEXT.test(label)).toBe(false);
+  });
+
+  // The whole-frame reach is the old pattern and only it: a phrasing added by
+  // dl-82 is pressed inside a consent container, never anywhere on the page.
+  test.each(KEPT)("CONSENT_TEXT_ANYWHERE still matches %j", (label) => {
+    expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(true);
+  });
+
+  test.each(ADDED)("CONSENT_TEXT_ANYWHERE does not match %j", (label) => {
+    expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
   });
 });

@@ -882,3 +882,57 @@ describe("a consent dialog whose button no vendor selector matches (dl-82)", () 
     },
   );
 });
+
+describe("the widened consent labels are pressed only inside a consent container (dl-82 gate 1)", () => {
+  // A newsletter's "Ho capito" ahead of a consent dialog labelled "Accetta", a
+  // label the tier pressed before dl-82. A whole-frame match took the newsletter
+  // first: behind the overlay the press timed out, beside the bar it landed, and
+  // either way the consent button was never reached.
+  test.each([
+    ["a full-viewport overlay", "/consent-order-overlay.html"],
+    ["a bottom bar", "/consent-order-bar.html"],
+  ])(
+    "finds the stream behind %s and leaves the newsletter alone",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, pathname) => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      const result = await probe(pathname, resolver);
+
+      expect(server.requests).toContain("/beacon/consent-accepted");
+      expect(server.requests).not.toContain("/beacon/newsletter-hocapito");
+      expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+    },
+  );
+
+  // Controls in the page's own flow whose whole label is a phrasing dl-82 added.
+  // Two are submit buttons, which act on the page when pressed.
+  test.each([
+    ["a newsletter's dismiss button", "/consent-falsepress-newsletter.html", "newsletter-hocapito"],
+    ["a checkout form's submit button", "/consent-falsepress-checkout.html", "terms-submit"],
+    ["a comment form's submit button", "/consent-falsepress-comment.html", "comment-yesiagree"],
+    ["a review's vote button", "/consent-falsepress-vote.html", "review-vote"],
+  ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, pathname, beacon) => {
+    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    server.requests.length = 0;
+    const error = await probeError(pathname, resolver);
+
+    expectCode(error, "NO_MEDIA_FOUND");
+    expect(server.requests).not.toContain(`/beacon/${beacon}`);
+  });
+
+  test(
+    "still presses an old label on a cookie strip that is neither a dialog nor a fixed layer",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      const result = await probe("/consent-inline-strip.html", resolver);
+
+      expect(server.requests).toContain("/beacon/strip-accepted");
+      expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+    },
+  );
+});
