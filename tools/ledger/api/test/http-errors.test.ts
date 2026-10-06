@@ -10,6 +10,7 @@ const STATEMENT_CODES = [
   "STATEMENT_CHAIN_BROKEN",
   "STATEMENT_TOTAL_MISMATCH",
   "STATEMENT_ECHO_MISMATCH",
+  "STATEMENT_MONTH_COUNT_MISMATCH",
 ] as const;
 
 describe("the ledger's statement error codes", () => {
