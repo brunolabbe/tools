@@ -2051,3 +2051,33 @@ test("land() after a successful push says the landing is pushed and prints no re
     }
   }
 });
+
+test("land() keeps the reset command on a verify failure after the push, and says undoing it needs the owner's force-push (repo-94)", () => {
+  const { dir, bareDir, ticketAbs, base, cleanup } = withLandRepo();
+  try {
+    const gate1 = writeSectionFile(dir, "gate1.md", GATE_1(base));
+    const preLandingSha = gitIn(dir, "rev-parse", "HEAD");
+    const result = land({
+      ticket: ticketAbs,
+      sections: [gate1],
+      base,
+      status: "done",
+      title: "x",
+      verify: () => {
+        throw new Error("the landed block is not the section file");
+      },
+      runPreflight: okPreflight,
+    });
+
+    const failed = result.steps.at(-1);
+    expect(failed?.name).toBe("verify");
+    expect(failed?.ok).toBe(false);
+    // The push passed, so origin holds the landing.
+    expect(gitIn(bareDir, "rev-parse", "refs/heads/feature")).toBe(gitIn(dir, "rev-parse", "HEAD"));
+    expect(failed?.detail).toContain(`git reset --hard ${preLandingSha}`);
+    expect(failed?.detail).toMatch(/already on origin\/feature/);
+    expect(failed?.detail).toMatch(/force-push/);
+  } finally {
+    cleanup();
+  }
+});

@@ -87,6 +87,11 @@ questions, with the options as they were put:
   recommendation) · leave it for the review session · prune the shared repo.
 - **Defect 2.** Fold it into repo-94 (**chosen**, the orchestrator's
   recommendation) · file it separately as repo-95 · only log it.
+- **A verify failure after the push** (raised by the builder while fixing
+  defect 2). What should the message say? **A — keep the reset command and add
+  that the landing is already on origin, so undoing it also needs a force-push by
+  the owner (chosen, 2026-10-06, the builder's recommendation)** · B — drop the
+  reset advice and say to re-record through the gate · C — leave it as is.
 
 ## Build
 
@@ -101,7 +106,10 @@ questions, with the options as they were put:
 3. After a successful push, a preflight failure (a non-ok result or a throw)
    says the sections are landed and pushed to `origin/<branch>`, that verify
    passed, that only preflight's finding is left, and prints no reset command.
-   Splice (real pass), push and verify failures keep `resetHint()`.
+   Splice (real pass) and push failures keep `resetHint()`. A verify failure
+   keeps it too, followed by a sentence that the landing is already on
+   `origin/<branch>`, so undoing it also needs a force-push, which this tool never
+   does and which is the owner's to make.
 4. Update `land()`'s docblock for both, and the existing test that asserted the
    reset advice on a preflight failure.
 
@@ -114,7 +122,10 @@ questions, with the options as they were put:
    `git reset --hard` advice, and says the landing is pushed.
 4. Each new test fails with its fix reverted; the red and green outputs are in
    the Log.
-5. `npm run check` and `npm test -- --project repo` pass.
+5. A test proves that a verify failure after the push keeps the
+   `git reset --hard` command and says the landing is already on origin and that
+   undoing it needs a force-push.
+6. `npm run check` and `npm test -- --project repo` pass.
 
 ## Log
 
@@ -131,11 +142,19 @@ questions, with the options as they were put:
   `Error: ENOTEMPTY: directory not empty, rmdir '/tmp/review-record-land-IuVYJJ/.git'`
   thrown out of `land()`. With the fixes: `Tests 3 passed | 61 skipped (64)`;
   the whole file, `Tests 64 passed (64)`.
-- 2026-10-06 — **Decision left open: should a verify failure after the push keep
-  the reset advice?** It was left as it was. A verify failure means origin holds a
-  record that is not the gate's text; the advice is not obviously wrong there, but
-  a local reset leaves origin ahead and the tool never force-pushes, so it is
-  incomplete. The options are in the builder's report to the orchestrator.
+- 2026-10-06 — Open question, answered the same day: should a verify failure
+  after the push keep the reset advice? A verify failure means origin holds a
+  record that is not the gate's text; a local reset leaves origin ahead and the
+  tool never force-pushes, so the bare advice is incomplete. **The owner chose A**
+  (options in Why, _The owner's decision_), relayed by the orchestrator. Built:
+  the verify failure now ends with `resetHintAfterPush()`, the reset command plus
+  "The landing is already on origin/<branch>, so undoing it also needs a
+  force-push of that branch, which this tool never does and which is the owner's
+  to make." Test `land() keeps the reset command on a verify failure after the
+push, and says undoing it needs the owner's force-push (repo-94)`. Red with
+  `resetHintAfterPush()` swapped back to `resetHint()`:
+  `AssertionError: expected 'gate1.md: the landed block is not the…' to match
+/already on origin\/feature/`. Green: whole file `Tests 65 passed (65)`.
 - 2026-10-06 — `.claude/skills/orchestrate-tickets/reference/records.md`,
   _Landing_: "a failure after the commits prints the reset command and rolls
   nothing back" is no longer true of a preflight failure. Not edited — rule pages

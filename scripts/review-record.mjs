@@ -1179,7 +1179,9 @@ export function runPreflightDefault(repo, base, title, spawn = spawnSync) {
  * holds the failure can undo it by hand if that turns out to be the right
  * call — **except preflight (repo-94)**: it runs after the push, when the
  * landing is already on origin and verified, so it says so and prints no
- * reset command; following one would discard a good landing locally.
+ * reset command; following one would discard a good landing locally. A
+ * **verify** failure keeps the command but adds that the landing is already on
+ * origin, so undoing it also needs the owner's force-push.
  *
  * The scratch clone is made with `gc.auto 0` and removed through `removeDir`
  * (injectable); a failure to remove it is a `cleanup` warning step naming the
@@ -1347,6 +1349,14 @@ export function land(options) {
     `passed; only the preflight finding above is left. Nothing to undo — fix what it names ` +
     `and re-run preflight.`;
 
+  // A verify failure also comes after the push, but there the record on origin
+  // is not the gate's text, so the reset command stays — with the fact that
+  // undoing it is not local only (the owner's answer, 2026-10-06, repo-94):
+  // origin holds the commits, and this tool never force-pushes.
+  const resetHintAfterPush = () =>
+    `${resetHint()}\n\nThe landing is already on origin/${branch}, so undoing it also needs a ` +
+    `force-push of that branch, which this tool never does and which is the owner's to make.`;
+
   // Validate every section — spliced and committed, in order — against a
   // disposable scratch clone before any of them touches `ticketRepoRoot`.
   // See the docblock for why a clone rather than a check per section.
@@ -1451,7 +1461,7 @@ export function land(options) {
       const failure = /** @type {Error & {stderr?: string}} */ (error);
       return fail(
         "verify",
-        `${path.basename(plan.path)}: ${failure.stderr || failure.message}${resetHint()}`,
+        `${path.basename(plan.path)}: ${failure.stderr || failure.message}${resetHintAfterPush()}`,
       );
     }
   }
