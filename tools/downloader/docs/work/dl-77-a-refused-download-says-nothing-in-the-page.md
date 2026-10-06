@@ -135,3 +135,64 @@ overrides nobody's.
   admission route; a card timeout). Asked by the orchestrator (tools-15) and
   answered by the owner the same day. Status moved to `ready`; Build and Done
   when written from it.
+- 2026-10-06 — Built, option 1. Branch `dl-77-refused-download-event` off
+  `origin/main` at `056aab7`. Gate pending.
+  - **What changed.** `JobEvent` gained `refused` (`contract/src/job.ts`,
+    `api.ts`); `JobEventHub.refused`; `routes/files.ts` publishes it through one
+    local `refused(error)` that returns the error, so each refusal is
+    `throw refused(...)` and cannot be written without being published; the web
+    keeps the payload beside the job (`useJobs`'s `refusals`, folded by
+    `refusalAfter` in `job-reducer.ts`) and `JobCard` renders it through
+    `ErrorPanel` above the still-offered link. `applyJobEvent` returns the job
+    untouched for it. The one switch over `JobEvent.type` is the reducer's (`grep -rn 'case "canceled"'`
+    over api, web and contract src); `isTerminalEvent` in the API route and in
+    `job-stream.ts` are positive lists and rightly do not name it, and the hub's
+    `emit` keys on `jobId`, which the new frame has.
+  - **The frame carries `error`, not a second `retryAfterSec` field.**
+    `error.details.retryAfterSec` is the same number as the response's
+    `Retry-After`, via the same `toPublicPayload`, so the card's existing "Wait 30 s
+    before trying again." line works unchanged and the two cannot disagree. A test
+    pins that the frame's number equals the header's.
+  - **The brief had one refusal short.** `jobs-wait-timeout` (no slot in the
+    bounded wait, the link given back, `429`) is the same silent failure and sits
+    in the same handler, so it publishes too; it is `throw`-less (it rejects a
+    deferred), and the frame goes out after `releaseLink`, so "Download still
+    offered" is already true when the card reads it.
+  - **Shutdown publishes too.** The route's shutdown branch is reachable only by a
+    request already inside the server as it closes (a new connection is refused by
+    Fastify before the route), so the frame is best-effort at best; it costs one
+    line through the same helper and means the card says "The server is shutting
+    down" instead of nothing. It carries `INTERNAL` and no `retryAfterSec`; the
+    card shows no wait for it rather than inventing one.
+  - **How the card handles either order of the browser's failed download and the
+    event.** It never sees the browser's side: the failed download is invisible to
+    the page, so the card reacts only to the event and there is no second input
+    to race. What can race is the event against _other frames_, and
+    `refusalAfter` covers that: a refusal is kept only for a job still `queued`
+    and not older than the job's last frame, so a refusal that lands behind the
+    next attempt's `status: probing` is dropped (tests: `job-reducer.test.ts`
+    "is dropped when the job has moved on", `app.test.tsx` "a refusal that
+    arrives after the job has moved on is not shown"). Following the link clears
+    the old refusal (`onFollowLink`), so a stale "wait 30 s" does not stand over
+    a second attempt, and a second refusal shows again.
+  - **Not covered, and why.** The hub is not a replay log: a refusal sent while the
+    card's stream is reconnecting, or before a reloaded page re-attaches, is
+    lost, and the card then reads as it did before this change. The link is
+    still good, so nothing is wrong, only silent. Not fixed here: replaying would
+    mean the hub keeping history, which its header rules out.
+  - **Reproduction, against `origin/main`.** The final spec with the source files
+    restored to `origin/main` (`git checkout origin/main -- tools/downloader/{api,web,contract}/src`,
+    contract rebuilt and `dist` grepped for `refused`: none):
+    `npx playwright test -c tools/downloader/playwright.config.ts refused-download` →
+    `✘ 1 ... a download refused at the per-client cap says why and stays usable (40.6s)`,
+    `Locator: ...getByRole('alert')  Expected: visible ... element(s) not found`, and the
+    server's own `download refused: per-client cap reached` in its log. On the
+    branch: `✓ 1 ... (39.6s)  1 passed`.
+  - **Checks on the branch.** `npm run check` clean. `npm test -- --project downloader`:
+    98 files passed, 1 skipped; 1610 tests passed, 2 skipped. `npm run e2e:downloader`:
+    10 passed.
+  - **Config change worth knowing.** `playwright.config.ts` now sets
+    `MAX_JOBS_PER_CLIENT=1` for the fast e2e server (the sniffer config is
+    unchanged). The other specs open one link at a time, and all ten pass with it.
+  - **Fold-in.** None beyond `jobs-wait-timeout` above; nothing else the
+    change made free was already specified.
