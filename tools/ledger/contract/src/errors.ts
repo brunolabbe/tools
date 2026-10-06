@@ -17,8 +17,9 @@
  * that raises it is a guess at a sentence nobody has had to say, so each one
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
- * parser's (lg-1) and the fifth arrived with its footer (lg-14); the two after them are the store's (lg-2), the next two
- * are the rules' and the inbox's (lg-4), and the last is the salaries' (lg-5).
+ * parser's (lg-1) and the fifth arrived with the page's footer (lg-14); the two
+ * after them are the store's (lg-2), the next two are the rules' and the
+ * inbox's (lg-4), and the last is the salaries' (lg-5).
  */
 
 import {

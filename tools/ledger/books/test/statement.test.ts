@@ -451,8 +451,8 @@ describe("parseStatement on a month with no rows and the page's footer", () => {
     expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
   });
 
-  test("a footer after a month with no Total fails on the month", () => {
-    const text = edit(`${THREE_MONTHS}3 mois sur 12\n`, "Total\t1 200,00 $\n", "");
+  test("a footer after a month with no Total fails on the month, before its count", () => {
+    const text = edit(`${THREE_MONTHS}4 mois sur 12\n`, "Total\t1 200,00 $\n", "");
     expect(failure(text).code).toBe("STATEMENT_TOTAL_MISMATCH");
   });
 
@@ -474,5 +474,25 @@ describe("parseStatement on a month with no rows and the page's footer", () => {
     const error = failure(text);
     expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
     expect(error.message).toContain("a row outside any month");
+  });
+
+  test("no rows, said twice under one month, fails at the second", () => {
+    const error = failure("Octobre 2026\nAucune transaction\nAucune transaction\n");
+    expect(error.code).toBe("STATEMENT_UNRECOGNIZED_LINE");
+    expect(error.details).toMatchObject({ line: 3 });
+    expect(error.message).toContain("said twice");
+  });
+
+  test("reads both lines with their case, accents and spacing folded", () => {
+    const text = `Octobre 2026\naucune\u00a0\u00a0TRANSACTION\n${THREE_MONTHS}4\u00a0MOIS\u202fsur 12\n`;
+    expect(parseStatement(text).rows).toHaveLength(12);
+  });
+
+  test("reads a month with no rows between two that have some, and counts it", () => {
+    const text = edit(THREE_MONTHS, "Août 2026\n", "Juin 2026\nAucune transaction\nAoût 2026\n");
+    expect(parseStatement(`${text}4 mois sur 12\n`).rows).toEqual(
+      parseStatement(THREE_MONTHS).rows,
+    );
+    expect(failure(`${text}3 mois sur 12\n`).code).toBe("STATEMENT_MONTH_COUNT_MISMATCH");
   });
 });

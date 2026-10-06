@@ -123,7 +123,10 @@ function monthKey(month: Month): string {
   return `${month.year}-${String(month.month).padStart(2, "0")}`;
 }
 
-/** A month must end in a `Total` line; one that does not is a truncated paste. */
+/**
+ * A month must end in a `Total` line, or say `Aucune transaction` in place of
+ * its rows; one that does neither is a truncated paste.
+ */
 function requireTotal(month: Month | null): void {
   if (month === null || month.totalSeen) return;
   fail(
@@ -195,10 +198,11 @@ export function parseStatement(text: string): ParsedStatement {
 
     const folded = fold(squash(line));
     if (folded === NO_TRANSACTIONS) {
-      if (month === null || month.totalSeen)
-        unrecognised(lineNo, line, "a month with no rows, outside any month");
-      if (month.rows > 0)
+      if (month === null) unrecognised(lineNo, line, "a month with no rows, outside any month");
+      if (month.rows > 0) {
         unrecognised(lineNo, line, "a month with no rows, in a month that has some");
+      }
+      if (month.totalSeen) unrecognised(lineNo, line, "a month with no rows, said twice");
       month.totalSeen = true;
       index += 1;
       continue;
