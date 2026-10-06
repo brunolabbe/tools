@@ -56,6 +56,15 @@ const FALLBACK_CHROME_MAJOR = "141";
 const DEFAULT_QUIET_MS = 2500;
 /** Never conclude "no media" before the page has had a fair chance to ask. */
 const MIN_WAIT_MS = 1200;
+/**
+ * dl-80: extended minimum wait when the collector holds no playable (non-segment)
+ * media. Pages with pre-roll ads from blocked hosts, countdown timers, or delayed
+ * player attachment need this floor to avoid a premature `NO_MEDIA_FOUND`. Once
+ * any playable hit (hls, dash, progressive) is captured, the standard `MIN_WAIT_MS`
+ * applies. This value (9000 ms) was chosen as the middle of the owner's 8–10 s range,
+ * balancing tolerance for delayed players against the 45 s probe budget.
+ */
+const EMPTY_MIN_WAIT_MS = 9000;
 /** Kept back from the deadline for the manifest fetch, metadata read and teardown. */
 const TEARDOWN_RESERVE_MS = 4000;
 /** Manifests to try parsing before falling back to an opaque variant. */
@@ -121,6 +130,12 @@ export interface BrowserResolverOptions {
   dashParser?: DashParser;
   quietMs?: number;
   /**
+   * dl-80: minimum wait time when the collector holds no playable media.
+   * Defaults to `EMPTY_MIN_WAIT_MS`. Overridable so tests expecting
+   * `NO_MEDIA_FOUND` quickly do not pay the full floor.
+   */
+  emptyMinWaitMs?: number;
+  /**
    * Passed to the pool this resolver builds for itself — see
    * `BrowserPoolOptions.proxyRootSpkiSha256`, which carries the reasoning.
    *
@@ -157,6 +172,7 @@ export class BrowserResolver implements Resolver {
   readonly #hlsParser: HlsParser;
   readonly #dashParser: DashParser;
   readonly #quietMs: number;
+  readonly #emptyMinWaitMs: number;
   readonly #confirmAge: boolean;
   readonly #logger: BrowserResolverLogger;
 
@@ -176,6 +192,7 @@ export class BrowserResolver implements Resolver {
     this.#hlsParser = options.hlsParser ?? parseHls;
     this.#dashParser = options.dashParser ?? parseDash;
     this.#quietMs = options.quietMs ?? DEFAULT_QUIET_MS;
+    this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
     this.#confirmAge = options.confirmAge ?? false;
     this.#logger = options.logger ?? NOOP_LOGGER;
   }
@@ -340,6 +357,7 @@ export class BrowserResolver implements Resolver {
       deadline: deadline - TEARDOWN_RESERVE_MS,
       quietMs: this.#quietMs,
       minWaitMs: MIN_WAIT_MS,
+      emptyMinWaitMs: this.#emptyMinWaitMs,
       signal: options.signal,
       // Nothing after a departure is worth waiting for (dl-55).
       stop: () => drm.detected || guard.departure() !== undefined,

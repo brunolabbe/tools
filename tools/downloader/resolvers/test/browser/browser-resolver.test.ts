@@ -831,3 +831,127 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
     },
   );
 });
+
+describe("Empty media floor: pages with delayed players wait longer before NO_MEDIA_FOUND (dl-80)", () => {
+  test(
+    "captures an HLS player that attaches after 6 seconds with extended floor",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 9000,
+      });
+      const startTime = Date.now();
+      const result = await probe("/delayed-player.html", resolver);
+      const elapsedMs = Date.now() - startTime;
+
+      // The fixture's player starts at 6 seconds, so we expect to see it
+      expect(result.variants.length).toBeGreaterThan(0);
+      expect(result.variants[0]?.protocol).toBe("hls");
+      expect(result.resolver).toBe("browser");
+
+      // The extended floor did not delay the result unnecessarily —
+      // we got the result shortly after the player attached (6 s + ~1-2 s for quiet)
+      // rather than waiting the full 9 seconds.
+      expect(elapsedMs).toBeLessThan(9500);
+    },
+  );
+
+  test(
+    "a page with no media respects the empty floor and the deadline",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // Use a manifest-less page with a short timeout to test the floor behavior
+      const hls = recordingHlsParser();
+      const shortTimeoutMs = 15_000; // 15 second timeout for testing
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 9000,
+      });
+      const startTime = Date.now();
+
+      let caught: unknown;
+      try {
+        await resolver.resolve(
+          new URL(server.url("/no-media.html")),
+          options({ timeoutMs: shortTimeoutMs }),
+        );
+      } catch (error) {
+        caught = error;
+      }
+
+      const elapsedMs = Date.now() - startTime;
+      expect(caught).toBeInstanceOf(AppError);
+      const error = caught as AppError;
+      expectCode(error, "NO_MEDIA_FOUND");
+
+      // Should have waited at least the floor (9000 ms)
+      expect(elapsedMs).toBeGreaterThanOrEqual(9000);
+      // Should not have exceeded the deadline by much
+      expect(elapsedMs).toBeLessThan(shortTimeoutMs + 2000);
+    },
+  );
+
+  test(
+    "a page whose media arrives early still uses the standard quiet timeout",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // The mse.html page loads media immediately, so it should not wait
+      // the full empty floor — just the standard quiet timeout
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 9000,
+      });
+      const startTime = Date.now();
+      const result = await probe("/mse.html", resolver);
+      const elapsedMs = Date.now() - startTime;
+
+      // Should have found media
+      expect(result.variants.length).toBeGreaterThan(0);
+
+      // Should have finished well before the 9 second floor,
+      // since it captures media immediately
+      expect(elapsedMs).toBeLessThan(5000);
+    },
+  );
+
+  test(
+    "the empty floor is overridable to allow tests to run quickly",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // For tests expecting NO_MEDIA_FOUND, set emptyMinWaitMs to a short value
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 500, // Override to a short value for testing
+      });
+      const startTime = Date.now();
+
+      let caught: unknown;
+      try {
+        await resolver.resolve(new URL(server.url("/no-media.html")), options({ timeoutMs: 5000 }));
+      } catch (error) {
+        caught = error;
+      }
+
+      const elapsedMs = Date.now() - startTime;
+      expect(caught).toBeInstanceOf(AppError);
+      const error = caught as AppError;
+      expectCode(error, "NO_MEDIA_FOUND");
+
+      // With a 500 ms floor and 1200 ms quiet timeout,
+      // should see NO_MEDIA_FOUND in roughly 1.7 seconds
+      expect(elapsedMs).toBeLessThan(3000);
+    },
+  );
+});

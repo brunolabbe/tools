@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Delayed player</title>
+  </head>
+  <body>
+    <h1>Delayed player</h1>
+    <p id="status">Player will start in 6 seconds</p>
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+
+    <script>
+      (async function () {
+        const MANIFEST = "/manifests/hls-master-multibitrate.m3u8";
+        const video = document.getElementById("v");
+        const status = document.getElementById("status");
+
+        function announcePlayer() {
+          status.textContent = "Player attached and ready";
+        }
+
+        function attachPlayer() {
+          try {
+            video.src = MANIFEST;
+            video.load();
+            announcePlayer();
+          } catch (error) {
+            status.textContent = "Error attaching player: " + String(error);
+          }
+        }
+
+        // Wait 6 seconds before attaching the player
+        // This simulates a page that has no media requests initially
+        // but attaches a player after a delay
+        setTimeout(function () {
+          attachPlayer();
+        }, 6000);
+      })();
+    </script>
+  </body>
+</html>

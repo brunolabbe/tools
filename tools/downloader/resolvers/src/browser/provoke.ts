@@ -819,6 +819,12 @@ export async function waitForQuiet(options: {
   signal: AbortSignal;
   stop?: () => boolean;
   /**
+   * dl-80: extended minimum wait when no playable media has been captured.
+   * Once the first playable (non-segment) hit arrives, this floor is abandoned
+   * and only `minWaitMs` applies. If not set, defaults to `minWaitMs`.
+   */
+  emptyMinWaitMs?: number;
+  /**
    * Run on every tick before quiet is judged. The caller owns its cadence and
    * its cap; whatever it provokes counts as activity, as it should.
    */
@@ -831,7 +837,11 @@ export async function waitForQuiet(options: {
     await options.revisit?.();
     const idleFor = Date.now() - options.collector.lastActivityAt;
     const waitedFor = Date.now() - startedAt;
-    if (waitedFor >= options.minWaitMs && idleFor >= options.quietMs) return true;
+    // dl-80: use extended floor if no playable hits yet, otherwise use standard floor
+    const effectiveMinWaitMs = options.collector.hasPlayableHit()
+      ? options.minWaitMs
+      : (options.emptyMinWaitMs ?? options.minWaitMs);
+    if (waitedFor >= effectiveMinWaitMs && idleFor >= options.quietMs) return true;
     if (remaining(options.deadline) <= 0) return false;
     await sleep(Math.min(200, remaining(options.deadline)), options.signal);
   }

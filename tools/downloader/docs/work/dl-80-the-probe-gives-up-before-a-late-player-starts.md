@@ -61,3 +61,19 @@ the first step.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+**2026-10-06**: Built and tested. Chose `EMPTY_MIN_WAIT_MS = 9000` (9 seconds) as the middle of the owner's 8–10 s range. Justification: 9 seconds gives reasonable time for pages with delayed pre-roll ads, countdown timers, or timed player attachment, while staying well within the 45 s probe budget. It balances tolerance against false negatives.
+
+Implemented:
+
+- Added `hasPlayableHit()` method to `HitCollector` to distinguish segment-only traffic from real media
+- Added `EMPTY_MIN_WAIT_MS` constant to `browser.ts` with full reasoning in comments
+- Extended `waitForQuiet()` signature to accept optional `emptyMinWaitMs` parameter
+- Modified `waitForQuiet()` logic: uses extended floor when collector has no playable hits, switches to standard floor once any playable hit (hls, dash, progressive) arrives
+- Added `emptyMinWaitMs` to `BrowserResolverOptions` interface, configurable for tests
+- Updated `BrowserResolver` to pass floor through to `waitForQuiet()`
+- Created fixture `delayed-player.html` that attaches HLS stream after 6 seconds
+- Added four tests covering: delayed player capture, empty page respecting floor and deadline, early media using standard timeout, floor overridability for fast tests
+- Corrected Analysis §7 description from "no media requests in 20 s" to "no playable media after 9 s, or 1.2 s of quiet when playable media exists"
+
+Brief was accurate. All Done When conditions met by tests: delayed fixture yields HLS outcome, no-media page respects floor and deadline, immediate-media page finishes before floor, floor is overridable.
