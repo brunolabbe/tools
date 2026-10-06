@@ -18,7 +18,8 @@
  * arrives with the ticket that first throws it — the same way `ITEM_NOT_FOUND`
  * arrived with pl-10 in the planner's catalog. The first four are the statement
  * parser's (lg-1); the two after them are the store's (lg-2), the next two
- * are the rules' and the inbox's (lg-4), and the last is the salaries' (lg-5).
+ * are the rules' and the inbox's (lg-4), the next is the salaries' (lg-5), and
+ * the last four are the periods' (lg-6).
  */
 
 import {
@@ -96,6 +97,25 @@ export const LEDGER_ERROR_CODES = [
    * reloads, rather than retries.
    */
   "SALARY_NOT_FOUND",
+  // --- Periods and their settlement (lg-6) ---
+  /**
+   * The period line named does not stand: it never existed, or it has since
+   * been corrected or retired. The caller reloads the period rather than retries.
+   */
+  "PERIOD_LINE_NOT_FOUND",
+  /** The recurring item named does not stand: it never existed, or it has since been changed. */
+  "RECURRING_ITEM_NOT_FOUND",
+  /**
+   * The period named is not the open one: the other person closed it since it
+   * was loaded. Closing it again would settle the same money twice, so the
+   * caller reloads and sees the settlement already recorded.
+   */
+  "PERIOD_NOT_OPEN",
+  /**
+   * No ratio is in effect on the period's last day, so there is nothing to
+   * settle the period at. A ratio is confirmed on the salaries screen first.
+   */
+  "RATIO_NOT_IN_EFFECT",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -119,6 +139,13 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   ROW_NOT_FOUND: "There is no such statement row.",
   SALARY_NOT_FOUND:
     "That salary is not the one on record. It may have been corrected since it was loaded.",
+  PERIOD_LINE_NOT_FOUND:
+    "There is no such line in the period. It may have been corrected or removed since it was loaded.",
+  RECURRING_ITEM_NOT_FOUND:
+    "There is no such recurring item. It may have been changed since it was loaded.",
+  PERIOD_NOT_OPEN: "That period is already closed. It may have been closed since it was loaded.",
+  RATIO_NOT_IN_EFFECT:
+    "No ratio is in effect on the period's last day. Confirm one on the salaries screen first.",
 };
 
 /**
