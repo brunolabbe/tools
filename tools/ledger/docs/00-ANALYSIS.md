@@ -144,6 +144,27 @@ expenses by mistake, and the owner caught it only when this analysis asked.
 Rules belong in the database, edited by both people, and never in the
 repository. Caisse names identify a household.
 
+_Amended on 2026-10-06, by the owner:_ exact matching stays, and three things
+change around it.
+
+- **The most specific rule takes a row.** Among exact matches, the rule naming
+  more criteria wins, then the longer literal pattern. Only rules level at the
+  top with different answers leave a row ambiguous. A broad rule built on the
+  caisse suffix can then sit beside a fixed-amount rule for the same person. A
+  row off a narrower rule's fixed amount still goes to the inbox, even when the
+  broad rule matches it ([lg-16](./work/lg-16-most-specific-rule-and-suggestions-from-history.md)).
+- **The inbox offers the answer given before** to the same description, beside
+  the nearest rule (lg-16).
+- **History files a row nobody's rule matches**, once its description has been
+  answered the same way three times by a person
+  ([lg-17](./work/lg-17-auto-file-from-history.md)):
+  - a transfer only at an amount already answered, so the paragraph above still
+    holds for transfers;
+  - any other debit within ±20 % of the latest answer.
+
+  Each such filing is marked automatic and listed for review, and an automatic
+  filing never counts as an answer.
+
 ## 4. The mortgage bucket
 
 The mortgage is split 50/50. The workbook compares **cumulative deposits since
@@ -370,6 +391,15 @@ pharmacy, restaurants. The model **proposes** a category per item from a fixed,
 editable list, and the person confirms or changes it. A merchant the person has
 categorised before gets that category proposed first. Categories feed the stats
 (§9) and nothing else. They never change who owes what.
+
+_Amended on 2026-10-06, by the owner:_ the list is not the receipts' alone. Bank
+rows and period lines take a spending category from it too
+([lg-15](./work/lg-15-spending-categories-on-bank-rows.md)).
+
+- A row gets its category from a map of Desjardins' own category to ours, and a
+  rule can override the map for its rows.
+- A row with no category is never held for it.
+- lg-15 creates the list, and lg-10 reads it.
 
 ### Who reads the receipt: local OCR first, a model when needed
 

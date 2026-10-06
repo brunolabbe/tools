@@ -5,7 +5,7 @@ title: Read a receipt's items, split out what is not shared or is the other's, a
 kind: work-package
 status: ready
 milestone: P4
-depends_on: [lg-8]
+depends_on: [lg-8, lg-15]
 difficulty: hard
 ---
 
@@ -38,9 +38,11 @@ _Categories_).
    cent. If they don't, the receipt is shown for correction and cannot be filed
    until they do.
 4. **Categories:**
-   - a fixed starting list (groceries, alcohol, household, pharmacy,
-     restaurant, other), editable in the database;
-   - the model proposes, and the person confirms;
+   - the list is [lg-15](./lg-15-spending-categories-on-bank-rows.md)'s
+     spending categories, which bank rows and period lines already use; this
+     ticket reads it and never creates a second one (filed 2026-10-06, when
+     lg-15 took the list over from this step);
+   - the model proposes from that list, and the person confirms;
    - a merchant categorised before gets its last category proposed first.
      Categories never change who owes what.
 5. **Storage:** the confirmed lines, with excluded flags and categories, are

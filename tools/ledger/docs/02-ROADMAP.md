@@ -57,6 +57,13 @@ detail and the numbers behind each.
   together with their taxes and deposits, and the code computes that part, not
   the model. An item can also be marked as the _other_ person's, which makes it
   a charge they owe in full. Items are categorised for the stats.
+- **Rows are categorised and filed from history too.** Decided on 2026-10-06.
+  - Bank rows and period lines take a spending category from one list, shared
+    with receipt items.
+  - The most specific matching rule takes a row.
+  - A description answered the same way three times files itself: transfers
+    only at an amount already answered, other rows within ±20 %. Each such
+    filing is marked and can be reviewed.
 - **Both people use it, identified by Cloudflare Access** — two addresses on one
   policy, and no login of the tool's own.
 
@@ -92,20 +99,23 @@ need, and the page arrives when two tickets would otherwise repeat it.
 The paste, the rules and the two bucket views. At the end, a paste replaces
 transcribing by hand.
 
-| Ticket                                                   | What                                     |
-| -------------------------------------------------------- | ---------------------------------------- |
-| [lg-1](./work/lg-1-parse-an-accesd-paste.md)             | parse a paste, proved by its own balance |
-| [lg-2](./work/lg-2-store-a-pasted-statement.md)          | store it, chained onto what is stored    |
-| [lg-3](./work/lg-3-verify-the-access-identity.md)        | verify the Access token                  |
-| [lg-4](./work/lg-4-rules-and-the-inbox.md)               | rules, and the inbox                     |
-| [lg-5](./work/lg-5-people-ratios-and-the-two-buckets.md) | salaries, ratios, and the two buckets    |
+| Ticket                                                                   | What                                              |
+| ------------------------------------------------------------------------ | ------------------------------------------------- |
+| [lg-1](./work/lg-1-parse-an-accesd-paste.md)                             | parse a paste, proved by its own balance          |
+| [lg-2](./work/lg-2-store-a-pasted-statement.md)                          | store it, chained onto what is stored             |
+| [lg-3](./work/lg-3-verify-the-access-identity.md)                        | verify the Access token                           |
+| [lg-4](./work/lg-4-rules-and-the-inbox.md)                               | rules, and the inbox                              |
+| [lg-5](./work/lg-5-people-ratios-and-the-two-buckets.md)                 | salaries, ratios, and the two buckets             |
+| [lg-16](./work/lg-16-most-specific-rule-and-suggestions-from-history.md) | the most specific rule wins; answers from history |
+| [lg-17](./work/lg-17-auto-file-from-history.md)                          | file from history without a tap                   |
 
 ## Phase 3 — Replace the period sheets, and retire the workbook
 
-| Ticket                                                     | What                                   |
-| ---------------------------------------------------------- | -------------------------------------- |
-| [lg-6](./work/lg-6-periods-and-the-matching-settlement.md) | periods, closed with the matching rule |
-| [lg-7](./work/lg-7-import-the-workbook.md)                 | import the history since 2022          |
+| Ticket                                                     | What                                         |
+| ---------------------------------------------------------- | -------------------------------------------- |
+| [lg-6](./work/lg-6-periods-and-the-matching-settlement.md) | periods, closed with the matching rule       |
+| [lg-7](./work/lg-7-import-the-workbook.md)                 | import the history since 2022                |
+| [lg-15](./work/lg-15-spending-categories-on-bank-rows.md)  | spending categories on rows and period lines |
 
 ## Phase 4 — Receipts
 
