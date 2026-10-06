@@ -8,7 +8,9 @@
  * by construction rather than by a check here.
  *
  * Never a path, a query string or an address: `host` is a hostname, and
- * `ProbeAttempt` carries only a resolver name, a code and a duration.
+ * `ProbeAttempt` carries only a resolver name, a code, a duration and, when the
+ * resolver named one, a `reason` that the registry has already held to a short
+ * lowercase token (dl-79).
  *
  * **Recording must never fail a probe.** The same stance `JobOrchestrator`
  * takes on persisting a preview image — wrap the write, log a warning, carry

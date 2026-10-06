@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Untyped HLS playlist, application/octet-stream</title>
+  </head>
+  <body>
+    <h1>Untyped HLS playlist, application/octet-stream</h1>
+    <!-- dl-79: the playlist route has no extension and answers octet-stream. -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+    <script src="/untyped-player.js"></script>
+    <script>
+      window.playUntyped("/api/playlist?id=3", [
+        "/media/untyped/seg-00001.ts",
+        "/media/untyped/seg-00002.ts",
+      ]);
+    </script>
+  </body>
+</html>
