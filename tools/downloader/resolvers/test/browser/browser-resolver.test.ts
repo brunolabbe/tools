@@ -866,7 +866,12 @@ describe("BrowserResolver", () => {
 
       function confirming(): BrowserResolver {
         const hls = recordingHlsParser();
-        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+        return new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 1200,
+          confirmAge: true,
+        });
       }
 
       function beacons(): string[] {
@@ -877,7 +882,11 @@ describe("BrowserResolver", () => {
       // each is pressed as at base, and each stays on the page.
       test.each([
         ["whose script cancels it", "/age-link-prevent-L.html", "/beacon/age-confirmed"],
-        ["to a route that sets a cookie and redirects back", "/age-link-redirect-L.html", "/beacon/player-after-cookie"],
+        [
+          "to a route that sets a cookie and redirects back",
+          "/age-link-redirect-L.html",
+          "/beacon/player-after-cookie",
+        ],
         ["that opens a new tab", "/age-link-blank-L.html", "/beacon/age-confirmed"],
         ["to a play-time query key", "/age-link-ptk-L.html", "/beacon/player-after-cookie"],
       ])(

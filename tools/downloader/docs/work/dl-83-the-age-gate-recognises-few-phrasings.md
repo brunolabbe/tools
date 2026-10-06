@@ -295,3 +295,83 @@ fixes. The 11 others pin behaviour `25e97db` already had.
   and the classification order) are untouched.
 - dl-94 is filed on this branch for the `AGE_CONFIRMATION_REQUIRED` copy, on the
   owner's choice of (b), 2026-10-06. The copy is unchanged here.
+
+**2026-10-06 — gate round 2 repaired** (gate FAIL at `22bc21e`: one high, two
+lows). The high: gate round 1's remedy assumed that "a press the guard would
+call a departure could never have worked". That is false for a real gate built
+as a link. Such a link can be cancelled by script, can go through a route that
+sets a cookie and redirects back, can open in a new tab, or can point at a
+play-time query key. None of those leaves the page, and dl-48 pressed all four.
+**The owner chose the gate's option (A), 2026-10-06.** The options were (A)
+exempt dl-48's candidates from the same-origin half of the leaving rule, keep
+the cross-origin half for every candidate, and honour the guard's play-time keys
+for the rest; (B) revert the same-origin half; (C) keep it as built. What
+changed, in `AGE_CHOOSE_FN`:
+
+- **dl-48's candidates are exempt from the same-origin half** of the leaving
+  rule. The cross-origin half still applies to every candidate, as at base.
+- **The same-origin half now honours the play-time keys**: a link differing
+  only in `t`, `start` or `autoplay` is not leaving. The three keys moved from
+  `resolvers/browser.ts` to `PLAY_TIME_QUERY_KEYS` in `provoke.ts`, and the
+  guard reads them from there, so the guard and the press cannot disagree.
+  The gate's dry run of (A) left this half out, which is why one more row
+  changes here than it claimed: `ln-ptk-S` streams.
+- **The filters run before the preferences.** Negation and leaving drop
+  candidates first; the blocking and dl-48 preferences then choose among what
+  is left. Applied the other way round, a preference could drop the real gate
+  in favour of a candidate that a filter then removed (the first low).
+- **The comment no longer says a same-origin frame's link "navigates only the
+  frame"** (the second low). A link with `target="_top"` or `_parent`
+  navigates the page. Behaviour is unchanged, and equal to base.
+
+**The accepted cost, as the owner was told**: a structural-only gate (the
+Italian label, no marker) built as a link that is cancelled by script, goes
+through a redirect, or opens a new tab is declined (`AGE_CONFIRMATION_REQUIRED`).
+`25e97db` pressed it. Base never recognised it.
+
+**The first low's three decoy pages, after the reordering**: unchanged from
+`22bc21e`. The English sheet, the Italian sheet and the Italian card below the
+coverage threshold each press their dl-48 footer or header link once, and
+nothing plays (`NO_MEDIA_FOUND`). The decoy is a `#top` link, which no filter
+drops, so the dl-48 preference still picks it over the structural gate. The
+reordering changes only the leaving-decoy page: there the decoy is now pressed
+and departs, as at base, where `22bc21e` declined.
+
+**Matrix**: 225 rows. These are gate round 1's 119 plus gate round 2's
+`jobs5.json`, `jobs6.json` and `jobs7.json`, which repeat each other. I ran
+the gate's own harness in place, read-only, at base, `22bc21e` and this head.
+18 rows differ from `22bc21e`, which is 9 distinct rows, each listed twice. No
+row of round 1's 119 differs.
+
+| row (confirmation on)                       | base                                             | `22bc21e`                   | now            |
+| ------------------------------------------- | ------------------------------------------------ | --------------------------- | -------------- |
+| `ln-prevent-L` (script cancels the link)    | stream                                           | `AGE_CONFIRMATION_REQUIRED` | stream         |
+| `ln-redirect-L` (cookie, redirect back)     | stream                                           | `AGE_CONFIRMATION_REQUIRED` | stream         |
+| `ln-blank-L` (`target="_blank"`)            | stream                                           | `AGE_CONFIRMATION_REQUIRED` | stream         |
+| `ln-ptk-L` (`?t=5`)                         | stream                                           | `AGE_CONFIRMATION_REQUIRED` | stream         |
+| `ln-ptk-S` (`?t=5`, structural only)        | `NO_MEDIA_FOUND`                                 | `AGE_CONFIRMATION_REQUIRED` | stream         |
+| `ln-leave-L` (an uncancelled link out)      | `NO_MEDIA_FOUND` (navigated-away)                | `AGE_CONFIRMATION_REQUIRED` | as base        |
+| `ln-qmark-L?v=1` (`href="?"` under a query) | `NO_MEDIA_FOUND` (navigated-away)                | `AGE_CONFIRMATION_REQUIRED` | as base        |
+| `tb-sheet-leaving-decoy`, resolve           | `NO_MEDIA_FOUND` (navigated-away), decoy pressed | `AGE_CONFIRMATION_REQUIRED` | as base        |
+| `tb-sheet-leaving-decoy`, signals           | gate=true                                        | pressable=false             | pressable=true |
+
+**Tests**: 13 new tests in "gates built as links, and the dl-48 preference, as
+gate round 2 measured them (dl-83)", over static copies of the gate's
+`pages5.mjs` pages (`age-link-*.html`, `age-tiebreak-*.html`). The fixture
+server gained `/enter-redirect`.
+
+- The four dl-48 link gates are pressed and stream.
+- Their structural twins: three are declined (the accepted cost), and `?t=5`
+  streams.
+- `href="#enter"` is pressed and streams. A pressable link is pressed, which
+  none of round 1's 17 tests showed.
+- The three decoy pages are pinned as they stand.
+- The leaving decoy departs.
+
+Against `22bc21e`'s `src/`, 6 of the 13 fail: the four dl-48 link gates,
+`ln-ptk-S` and the leaving decoy. The 7 others pin behaviour `22bc21e` already
+had.
+
+**Still recorded, not fixed**: the round-1 med (one press per document), the
+srcdoc ad frame, the lost mark, the restated tokeniser and the classification
+order.
