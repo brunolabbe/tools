@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- dl-83 gate round 1, page "shop-b-interstitial" (mode stream), generated from the gate's harness: a full-viewport promo, "orders over 18 euros" and an <a href> "Over 18? Buy now". The stream starts on load. Recognised; the link must never be pressed. Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>Shop b</title></head>
+<body style="margin:0;font-family:sans-serif">
+<div id="player" class="player" style="width:640px;height:360px;background:#222"></div><div id="promo" style="position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)"><div style="width:420px;padding:24px;background:#fff;color:#000">
+<p>Free delivery on orders over 18 euros.</p>
+<a href="/dest/checkout.html" id="buy">Over 18? Buy now</a>
+<button type="button" id="later">Maybe later</button></div></div>
+<script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+
+startStream();
+
+document.getElementById('buy').addEventListener('click',function(){beacon('buy');});document.getElementById('later').addEventListener('click',function(){document.getElementById('promo').remove();});
+</script></body></html>

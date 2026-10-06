@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- dl-83 gate round 1, page "savage-a-plain" (mode stream), generated from the gate's harness: a plain page with a "21 Savage" link, in no layer. The stream starts on load. Not recognised. Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>21 Savage</title></head>
+<body style="margin:0;font-family:sans-serif">
+<h1>21 Savage</h1><p>21 Savage - discography</p>
+<a href="/dest/artist-21-savage.html" id="artist">21 Savage</a><div id="player" class="player" style="width:640px;height:360px;background:#222"></div>
+<script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+
+startStream();
+
+document.getElementById('artist').addEventListener('click',function(){beacon('artist');});
+</script></body></html>

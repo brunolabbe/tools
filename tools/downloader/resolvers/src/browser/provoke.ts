@@ -444,19 +444,25 @@ const AGE_CONTROLS = 'button, a, [role="button"], input[type="button"], input[ty
 
 /**
  * Every control that could be an age self-confirmation, as `{ el, name,
- * layered }` (dl-83). Recognition is broad, because a false one with
+ * legacy, blocking }` (dl-83). Recognition is broad, because a false one with
  * confirmation off costs a wrong message and nothing clicked. Two paths, either
  * sufficient:
  *
  * - **Structural, any language.** A visible control whose label has at most
- *   `AGE_LABEL_MAX_WORDS` words and an `AGE_NUMBER`, inside a blocking layer —
- *   the nearest ancestor that is a visible `SEMANTIC_DIALOG` or is fixed or
- *   absolutely positioned and covers `AGE_LAYER_MIN_COVER` of the viewport —
- *   whose own text, **controls excluded**, mentions the number too or carries
- *   an `AGE_MARKERS` phrase. Controls are excluded because the label is inside
- *   the layer: counting it would make the layer vouch for every label in it.
- * - **dl-48's, kept whole.** A visible control whose label matches
+ *   `AGE_LABEL_MAX_WORDS` words and an `AGE_NUMBER`, inside a layer — the
+ *   nearest ancestor that is a visible `SEMANTIC_DIALOG` of any size, or is
+ *   fixed or absolutely positioned and covers `AGE_LAYER_MIN_COVER` of the
+ *   viewport — whose own text, **controls excluded**, mentions the number too
+ *   or carries an `AGE_MARKERS` phrase. Controls are excluded because the label
+ *   is inside the layer: counting it would make the layer vouch for every label
+ *   in it.
+ * - **dl-48's, kept whole** (`legacy`). A visible control whose label matches
  *   `AGE_GATE_TEXT`, on a page carrying an `AGE_MARKERS` phrase.
+ *
+ * `blocking` says the control's layer covers `AGE_LAYER_MIN_COVER` of the
+ * viewport — a small dialog is a layer for recognition, but blocks nothing
+ * (gate round 1: a 120 px cookie sheet). The labels are tested before the
+ * ancestor walk, which only the few controls that pass them pay for.
  *
  * Controls are found with `ALL_MEDIA_FN`'s shadow-piercing walk, and ancestors
  * are climbed across shadow boundaries, so a gate in an open shadow root is
@@ -489,14 +495,17 @@ const AGE_CANDIDATES_FN = `function () {
     return text.split(/\\s+/).filter(function (w) { return /[\\p{L}\\p{N}]/u.test(w); }).length;
   };
   var viewport = window.innerWidth * window.innerHeight;
-  var isLayer = function (node) {
-    if (node.matches(semantic)) return shown(node);
-    var position = getComputedStyle(node).position;
-    if (position !== 'fixed' && position !== 'absolute') return false;
+  var covers = function (node) {
     var rect = node.getBoundingClientRect();
     var w = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
     var h = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
     return viewport > 0 && (w * h) / viewport >= ${AGE_LAYER_MIN_COVER};
+  };
+  var isLayer = function (node) {
+    if (node.matches(semantic)) return shown(node);
+    var position = getComputedStyle(node).position;
+    if (position !== 'fixed' && position !== 'absolute') return false;
+    return covers(node);
   };
   var layerOf = function (el) {
     for (var node = up(el); node; node = up(node)) {
@@ -531,17 +540,23 @@ const AGE_CANDIDATES_FN = `function () {
   var found = [];
   for (var i = 0; i < controls.length; i++) {
     var el = controls[i];
-    if (!shown(el)) continue;
     var name = (el.getAttribute('aria-label') || el.innerText || el.value || '').trim();
     if (!name) continue;
+    // The label first: it rules out nearly every control on a page, and the
+    // ancestor walk below is the expensive part (gate round 1, low).
+    var legacy = pageMarked && label.test(name);
+    var ageLabel = age.test(name) && words(name) <= ${AGE_LABEL_MAX_WORDS};
+    if (!legacy && !ageLabel) continue;
+    if (!shown(el)) continue;
     var layer = layerOf(el);
     var structural = false;
-    if (layer && age.test(name) && words(name) <= ${AGE_LABEL_MAX_WORDS}) {
+    if (layer && ageLabel) {
       var text = ownText(layer);
       structural = age.test(text) || marked(text);
     }
-    var legacy = pageMarked && label.test(name);
-    if (structural || legacy) found.push({ el: el, name: name, layered: !!layer });
+    if (structural || legacy) {
+      found.push({ el: el, name: name, legacy: legacy, blocking: !!layer && covers(layer) });
+    }
   }
   var inside = function (outer, inner) {
     for (var node = up(inner); node; node = up(node)) if (node === outer) return true;
@@ -556,16 +571,28 @@ const AGE_CANDIDATES_FN = `function () {
  * The one candidate to press, or `null` (dl-83). The press is strict, because
  * a false one clicks something on the user's behalf. Each rule only drops:
  *
- * 1. **When any candidate sits in a blocking layer, those outside every layer
- *    go.** A layer over the page intercepts the pointer, so a person could not
+ * 1. **When any candidate sits in a blocking layer, every other goes.** A
+ *    layer over most of the page intercepts the pointer, so a person could not
  *    press a control under it either, and the control that put the layer up is
  *    the one inside it. This is what keeps an `AGE_GATE_TEXT` decoy earlier in
- *    the DOM from being pressed in the overlay's place.
- * 2. **A label carrying an `AGE_NEGATIONS` word goes** — the under-age exit.
- * 3. **A link to another http(s) origin goes**, the control itself or its
- *    nearest `a[href]` ancestor: an entry keeps the viewer on the site, an exit
- *    sends them elsewhere. A `javascript:` or same-origin href says nothing
- *    either way and stays.
+ *    the DOM from being pressed in the overlay's place. Only a layer that
+ *    covers `AGE_LAYER_MIN_COVER` counts: a cookie sheet along the bottom
+ *    intercepts nothing (gate round 1).
+ * 2. **Otherwise, when any candidate is dl-48's (`legacy`), the structural
+ *    ones go** — they sit in no layer or in one that blocks nothing, and the
+ *    label-and-marker rule is the one dl-48 already pressed. This is what keeps
+ *    a cookie sheet's "View our 18 partners" from being pressed in place of an
+ *    inline "I am 18 or older" gate (gate round 1, the owner's decision).
+ * 3. **A label carrying an `AGE_NEGATIONS` word goes** — the under-age exit.
+ * 4. **A link that would leave the document goes**, the control itself or its
+ *    nearest `a[href]` ancestor: another http(s) origin anywhere, and in the
+ *    top frame also another path or query on this origin. The resolver's
+ *    departure guard turns such a press into `NO_MEDIA_FOUND` whether or not a
+ *    stream was found, so no press that could have worked is lost (gate round
+ *    1, the owner's decision). A button whose script routes away is not caught
+ *    here, and is a known residue. A `javascript:` or same-document href says nothing
+ *    either way and stays, and so does a link in a same-origin frame, which
+ *    navigates only the frame.
  *
  * Exactly one left is pressed; none or several, nothing is, and the probe says
  * why (`AGE_CONFIRMATION_REQUIRED`) rather than guessing. The rules apply to a
@@ -586,24 +613,29 @@ const AGE_CHOOSE_FN = `function (candidates) {
     }
     return false;
   };
-  var offsite = function (el) {
+  var leaves = function (el) {
     for (var node = el; node; node = up(node)) {
       if (node.tagName === 'A' && node.hasAttribute('href')) {
+        var target;
         try {
-          var target = new URL(node.getAttribute('href'), location.href);
-          return /^https?:$/.test(target.protocol) && target.origin !== location.origin;
+          target = new URL(node.getAttribute('href'), location.href);
         } catch {
           return false;
         }
+        if (!/^https?:$/.test(target.protocol)) return false;
+        if (target.origin !== location.origin) return true;
+        return window === window.top && target.pathname + target.search !== location.pathname + location.search;
       }
     }
     return false;
   };
   var list = candidates;
-  if (list.some(function (c) { return c.layered; })) {
-    list = list.filter(function (c) { return c.layered; });
+  if (list.some(function (c) { return c.blocking; })) {
+    list = list.filter(function (c) { return c.blocking; });
+  } else if (list.some(function (c) { return c.legacy; })) {
+    list = list.filter(function (c) { return c.legacy; });
   }
-  list = list.filter(function (c) { return !negated(c.name) && !offsite(c.el); });
+  list = list.filter(function (c) { return !negated(c.name) && !leaves(c.el); });
   return list.length === 1 ? list[0].el : null;
 }`;
 

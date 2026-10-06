@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- dl-83 gate round 1, page "shell-c-nonav-btn" (mode click), generated from the gate's harness: a position: fixed app shell whose "18+" <button> opens a full-screen menu, and whose player starts only on a click. Accepted residue: the button is pressed and the menu stops the play click. Every press reports to a /beacon/ path. -->
+<html lang="en"><head><meta charset="utf-8"><title>Shell c</title></head>
+<body style="margin:0;font-family:sans-serif">
+<div id="app" style="position:fixed;inset:0;overflow:auto;background:#fafafa">
+  <header style="padding:8px;background:#fff"><button type="button" id="n18">18+</button></header>
+  <main style="padding:16px">
+    <h1>Watch</h1>
+    <p><span>Updated 18 minutes ago</span> &middot; <span>21 comments</span></p>
+    
+    <div id="player" class="player" style="width:640px;height:360px;background:#222"></div>
+  </main></div>
+<script>
+function beacon(n){fetch('/beacon/'+n).catch(function(){});}
+function startStream(){
+  var v=document.createElement('video'); v.muted=true; v.width=640; v.height=360;
+  fetch('/media/mse/master.m3u8').then(function(r){return r.text();})
+    .then(function(){return fetch('/media/mse/v1080.m3u8');})
+    .then(function(r){return r.text();})
+    .then(function(){return Promise.all(['/media/mse/init.mp4','/media/mse/seg-00001.m4s','/media/mse/seg-00002.m4s'].map(function(u){return fetch(u);}));})
+    .catch(function(){});
+  var ms=new MediaSource(); v.src=URL.createObjectURL(ms);
+  document.getElementById('player').replaceChildren(v);
+}
+
+
+var b=document.createElement('button');b.className='vjs-big-play-button';b.type='button';b.textContent='Start';b.onclick=function(){beacon('play');startStream();};document.getElementById('player').appendChild(b);
+document.getElementById('n18').addEventListener('click',function(){beacon('nav-18');var o=document.createElement('div');o.id='menu';o.style.cssText='position:fixed;inset:0;z-index:30;background:#fff';o.innerHTML='<p>Category menu</p><button type="button" id="mback">Back</button>';document.body.appendChild(o);document.getElementById('mback').addEventListener('click',function(){o.remove();});});
+</script></body></html>

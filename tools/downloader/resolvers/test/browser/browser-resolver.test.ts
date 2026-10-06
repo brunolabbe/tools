@@ -720,6 +720,127 @@ describe("BrowserResolver", () => {
         },
       );
     });
+
+    // Gate round 1's pages, each a static copy of its harness page. With
+    // confirmation on, a false candidate is a false press; these pin which ones
+    // the owner's decision removed and which it accepted.
+    describe("false candidates and the press, as gate round 1 measured them (dl-83)", () => {
+      const MASTER = "/media/mse/master.m3u8";
+
+      function confirming(): BrowserResolver {
+        const hls = recordingHlsParser();
+        return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, confirmAge: true });
+      }
+
+      function beacons(): string[] {
+        return server.requests.filter((pathname) => pathname.startsWith("/beacon/"));
+      }
+
+      test.each([
+        ["a fixed app shell's 18+ nav link", "/age-false-shell-link.html", "/beacon/nav-18"],
+        ["a fixed app shell's 21 Savage link", "/age-false-shell-21-savage.html", "/beacon/artist"],
+        ["a full-viewport promo's Over 18? link", "/age-false-shop-interstitial.html", "/beacon/buy"],
+        ["a promo dialog's Over 18? link", "/age-false-shop-dialog.html", "/beacon/buy"],
+        ["a pricing dialog's 21-day trial link", "/age-false-pricing-21-day.html", "/beacon/trial"],
+      ])(
+        "never presses %s, which would leave the document, and finds the stream",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname, pressed) => {
+          server.requests.length = 0;
+          const result = await probe(pathname, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).not.toContain(pressed);
+        },
+      );
+
+      test.each([
+        ["a bottom shop banner", "/age-false-shop-bottom-banner.html"],
+        ["a plain 21 Savage page", "/age-false-21-savage-plain.html"],
+        ["a Save 18% pricing modal", "/age-false-pricing-save-18.html"],
+        ["a sign-up form with an age select", "/age-false-signup-select.html"],
+      ])(
+        "presses nothing on %s, and finds the stream",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname) => {
+          server.requests.length = 0;
+          const result = await probe(pathname, confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(beacons()).toEqual([]);
+        },
+      );
+
+      test.each([false, true])(
+        "sign-up chips whose one age candidate is negated press nothing and report AGE_CONFIRMATION_REQUIRED (confirmation %s)",
+        { timeout: TEST_TIMEOUT_MS },
+        async (confirmAge) => {
+          const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge });
+          server.requests.length = 0;
+          const error = await probeError("/age-false-signup-chips.html", resolver);
+
+          expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          expect(beacons()).toEqual([]);
+        },
+      );
+
+      test(
+        "dl-48's inline gate beside a cookie sheet presses the gate, never the sheet's 18 partners button",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const result = await probe("/age-inline-gate-plus-cookie.html", confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-confirmed");
+          expect(server.requests).not.toContain("/beacon/view-partners");
+        },
+      );
+
+      // Accepted residue (the owner, 2026-10-06): a lone false candidate that is
+      // a button, not a link, is still pressed. Pinned so a change to it is seen.
+      test(
+        "accepted residue: a sign-up layer's Age: 18 button is pressed, and the stream is still found",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const result = await probe("/age-false-signup-age-button.html", confirming());
+
+          expect(result.variants[0]?.url).toBe(server.url(MASTER));
+          expect(server.requests).toContain("/beacon/age-dropdown");
+        },
+      );
+
+      test(
+        "accepted residue: a shell's 18+ button that pushes a route is pressed, and the probe reports the departure",
+        { timeout: TEST_TIMEOUT_MS },
+        async () => {
+          server.requests.length = 0;
+          const error = await probeError("/age-false-shell-pushstate.html", confirming());
+
+          expectCode(error, "NO_MEDIA_FOUND");
+          expect(error.details?.["reason"]).toBe("navigated-away");
+          expect(server.requests).toContain("/beacon/nav-18");
+        },
+      );
+
+      test.each([
+        ["a cookie sheet's View our 18 partners, closable panel", "/age-false-cookie-sheet-closable.html", "/beacon/view-partners"],
+        ["a cookie sheet's View our 18 partners, sticky panel", "/age-false-cookie-sheet-sticky.html", "/beacon/view-partners"],
+        ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
+      ])(
+        "accepted residue: %s is pressed where play is a click, and nothing plays",
+        { timeout: TEST_TIMEOUT_MS },
+        async (_name, pathname, pressed) => {
+          server.requests.length = 0;
+          const error = await probeError(pathname, confirming());
+
+          expectCode(error, "NO_MEDIA_FOUND");
+          expect(server.requests).toContain(pressed);
+          expect(server.requests).not.toContain("/beacon/play");
+        },
+      );
+    });
   });
 
   test("reports BOT_CHALLENGE on an interstitial", { timeout: TEST_TIMEOUT_MS }, async () => {
