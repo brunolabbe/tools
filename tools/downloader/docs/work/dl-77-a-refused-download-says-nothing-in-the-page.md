@@ -3,7 +3,7 @@ id: dl-77
 tool: downloader
 title: A download the server refuses fails silently in the browser, and its card still says it will start
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -124,6 +124,64 @@ overrides nobody's.
 - The contract schema, the web reducer and `JobCard` have tests for the variant.
 - `npm run check`, `npm test -- --project downloader` and
   `npm run e2e:downloader` pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-06 · `056aab7..2af5858` · Opus 5.5, depth medium
+
+| Done when                                                                                                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Playwright spec reproduces the run, asserts an alert naming the reason and a wait with **Download** still offered, fails on `origin/main` and passes on the branch, both outputs in the PR | `e2e/refused-download.spec.ts` › "a download refused at the per-client cap says why and stays usable". CI `e2e (direct)` passed on `2af5858`. Gate re-ran it: passes on head (1 of 1, 55.5 s). With head's spec and config over base's `contract`, `api` and `web` source (rebuilt, `contract/dist/api.js` has 0 `refused`), it fails at `expect(alert).toBeVisible()`: "element(s) not found", after the server logged `download refused: per-client cap reached`. That is the page assertion, failing for the right reason. Positive control: with only `events.refused(...)` removed from `routes/files.ts`, it fails at the same assertion. The outputs are in the ticket's Log, which is in the PR diff, but not in the PR body. See the low finding below ✓ |
+| API tests show a `refused` frame for `jobs-client-cap` and `jobs-queue-full` carrying the code and `retryAfterSec`, and for shutdown and `jobs-wait-timeout` too                           | `api/test/refused-link.test.ts`: "the per-client cap: …", "a full wait line: …", "a wait for a slot that runs out: …" and "shutdown: …". Each asserts `error.code`. The three `429`s assert `details.retryAfterSec` equals the response's `Retry-After`. Shutdown asserts `INTERNAL` and no `retryAfterSec`. "a client attached to the job's events receives it…" proves the frame crosses the SSE route. Mutation: removing the publish turns 5 of 6 red ✓                                                                                                                                                                                                                                                                                                       |
+| The link is still usable after a refusal                                                                                                                                                   | `api/test/refused-link.test.ts` › "the per-client cap: …" asserts `usedAt` is `null`, then a `200` on the same link and the job `completed`. Wait-timeout asserts `usedAt` is `null` after the frame. The e2e downloads on the refused link afterwards ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| The contract schema, the web reducer and `JobCard` have tests for the variant                                                                                                              | `contract/test/contract-schemas.test.ts` › "the refused frame (dl-77)" (3 tests). `web/test/job-reducer.test.ts` › "a refused link (dl-77)" (5). `web/test/job-card.test.tsx` "a refused link says why and when to try again, and Download stays offered" and 4 others. Mutations: removing `refusalAfter`'s guard turns 2 red, and removing the hook's `refused` branch turns 1 red ✓                                                                                                                                                                                                                                                                                                                                                                            |
+| `npm run check`, `npm test -- --project downloader` and `npm run e2e:downloader` pass                                                                                                      | **verified**: `check` exit 0. Unit suite 1610 passed and 2 skipped of 1612 in 98 files, against 1589 of 1591 in 97 at base (+21 tests, +1 file, no assertion deleted). `e2e:downloader` 10 of 10 ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+- **low** · no `Done when` line depends on it · the Log and the PR body say a refusal that lands behind the next attempt's `status: probing` is dropped by `refusalAfter`, and cite `app.test.tsx` › "a refusal that arrives after the job has moved on is not shown". The hook does not drop it. `applyEvent` in `useJobs.ts` reads `before` from `jobsRef.current`, which is assigned during render. A refusal delivered before the `status` frame has rendered is therefore judged against the still-`queued` job and stored. Only `JobCard`'s `job.status === "queued"` gate hides it.
+  - Reproduction 1: replace `refusalAfter`'s guard with `void isStale;` and run `npx vitest run tools/downloader/web`. Result: 2 failed of 279, both in `job-reducer.test.ts`. The cited `app.test.tsx` test stays green.
+  - Reproduction 2: restore the guard and render `refusal` without the `queued` gate in `JobCard.tsx`. Result: 3 failed, the cited test included.
+  - Harmless today: `JOB_TRANSITIONS` has no edge back to `queued`.
+  - Same mechanism: `refusals` is never pruned by `remove` or `clearFinished`.
+  - Remedy: correct the Log sentence, or prune the refusal when a non-`queued` status is folded.
+- **low** · comments that mislead · the `refused` helper in `routes/files.ts` and the header of `api/test/refused-link.test.ts` say the frame is "the same payload the response carries". At shutdown it is not.
+  - The error handler sends `safeMessage` for `INTERNAL`. The frame uses `toPublicPayload` without it.
+  - Reproduction: in "shutdown: …", replace the `/shutting down/` match with `toBe(response.json().error.message)`. The test fails: `Expected: "Something went wrong on our end."`, `Received: "The server is shutting down and is not starting new jobs."`.
+  - No leak today: the message is a constant. The helper would bypass the `INTERNAL` safe-message policy for any future raw `INTERNAL` routed through it, but no live call site does.
+  - Recommended: fix the two comments and the test name. The alternative is passing `safeMessage`, which costs the card its "shutting down" reason.
+- **low** · `playwright.config.ts` sets `MAX_JOBS_PER_CLIENT=1` for the whole fast e2e server. The production default is `2`, which this server used before.
+  - Enumerated: the 9 other tests in `csp.spec.ts` and `download.spec.ts`. None opens two links at once, and all 10 pass. No open downloader ticket names an e2e spec with concurrent downloads.
+  - A future spec that downloads two videos at once would meet the cap. It would fail loudly, as a `429` and an alert.
+  - Scoping the cap to this spec needs its own config, `webServer`, npm script and CI leg (the sniffer's pattern). Recommended: keep it and leave the config comment as the record.
+- **low** · `e2e/refused-download.spec.ts` waits a fixed `waitForTimeout(1500)` between the holder's click and the refused click. The slot is taken when the holder's request reaches the route, and the spec could wait for that directly. The 7.5 s segment delay leaves wide margin. The refusal was reached in all 4 local runs (2 on head, 1 at base, 1 mutated) and in CI.
+- **low** · `Done when` 1's "both outputs in the pull request" clause: PR #375's body states the result in prose. The `✘`/`✓` outputs are in the ticket's Log, which is in the PR diff.
+- **low** · **unverified** (reasoned, not reproduced) · suppose the card's stream reconnects while an admitted link waits for a slot. Its refetch returns `link: null`, because `claimLink` patched the row. After `jobs-wait-timeout`, `releaseLink` restores the link without a frame. The card would then show "Try the same link again" with no **Download** until the next refetch. The missing frame comes from dl-53. dl-77 adds the alert over it.
+- **dropped** · the files limiter (`onRequest`) refuses before the handler and publishes nothing. Its default is 600 per minute per token, so a person cannot reach it.
+- **dropped** · the `queue.enqueue` throw in the `catch` path is not published. It is unreachable from this route: `shutdown()` sets the flag before `queue.close()`.
+- **dropped** · two refusals arriving out of order (older replaces newer, since `refused` does not advance `updatedAt`). One SSE connection is ordered, and the hub emits in order.
+- **dropped** · a refusal sent while the stream is reconnecting is lost. That is the hub's documented design: no replay. The contract comment and the Log both state it.
+- **findings** · the hunt returned 10; 6 carried, 4 dropped.
+- Contract seam: every `JobEvent` consumer in `tools/downloader` was enumerated (none outside it).
+  - `applyJobEvent`'s exhaustive switch has an explicit no-op.
+  - Both `isTerminalEvent`s (`api/src/routes/events.ts`, `web/src/lib/job-stream.ts`) are positive lists and exclude it.
+  - The hub's `emit` routes on `jobId`, and the SSE route writes it verbatim.
+  - `parseJobEvent`/`http.ts` validate it.
+  - `mock.ts` never emits it, which is deliberate: the mock replays timelines.
+  - The contract test's type list is updated.
+- Frame contents: `details` passes `CLIENT_SAFE_DETAIL_KEYS`, so `scope` is dropped (asserted) and only `retryAfterSec` survives. No client key, IP, token or URL is in it, and the messages are constants.
+- Frame shape: `error: AppErrorPayload` with `details.retryAfterSec` matches Build step 1. Step 1 was written in the decision commit, before the build. It says the frame carries `error` "rather than a second top-level field".
+- Invariants:
+  - No cross-tool import.
+  - Existing codes only (`RATE_LIMITED`, `INTERNAL`).
+  - No shell.
+  - No new log line carrying a URL or header.
+  - SSRF: the delaying proxy is e2e-only, on loopback.
+  - Contract edit decided by the owner (Build, 2026-10-06).
+  - The new tests sit in already-registered projects.
+  - No new workspace dependency.
+  - No new route.
+  - Style via `npm run check`.
+  - Skipped: process trees and progress (untouched).
+- NFR: security ✓ (no credential in the frame) · performance n/a (one emit per refusal) · reliability ✓ (the wait-timeout frame follows `releaseLink` synchronously, guarded by `isWaiting`, so it can neither leave the link spent nor fire for a claimed run) · maintainability: the Log claim and comments above.
 
 ## Log
 
