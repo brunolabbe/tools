@@ -24,6 +24,8 @@ import {
 } from "./helpers/fake-parsers.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
+import { PROGRESSIVE_FILE_BYTES, startProgressiveServer } from "./helpers/progressive-server.ts";
+import type { ProgressiveServer } from "./helpers/progressive-server.ts";
 
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
@@ -828,6 +830,51 @@ describe("PLAY_SCRIPT reaches a shadow-root player that only starts on play() (d
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
       expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+});
+
+describe("a progressive file is not demoted to a segment (dl-78)", () => {
+  let files: ProgressiveServer;
+
+  beforeAll(async () => {
+    files = await startProgressiveServer();
+  });
+
+  afterAll(async () => {
+    await files.close();
+  });
+
+  async function probeFile(pathname: string): Promise<ProbeResult> {
+    const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+    return await resolver.resolve(new URL(files.url(pathname)), options());
+  }
+
+  test(
+    "a whole file with a resolution suffix in its name is offered",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const result = await probeFile("/named.html");
+
+      expect(result.variants[0]?.protocol).toBe("progressive");
+      expect(result.variants[0]?.url).toBe(files.url("/media/clip-720.mp4"));
+      expect(result.variants[0]?.filesizeBytes).toBe(PROGRESSIVE_FILE_BYTES);
+    },
+  );
+
+  test(
+    "a file whose server answers every Range request with a short 206 is offered at its real size",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      files.requests.length = 0;
+      const result = await probeFile("/ranged.html");
+
+      // The browser really was given chunks, or this proves nothing.
+      expect(files.requests.some((entry) => entry.range !== undefined)).toBe(true);
+      expect(result.variants[0]?.protocol).toBe("progressive");
+      expect(result.variants[0]?.url).toBe(files.url("/media/lecture.mp4"));
+      // The total from Content-Range, not the 256 KB the 206 carried.
+      expect(result.variants[0]?.filesizeBytes).toBe(PROGRESSIVE_FILE_BYTES);
     },
   );
 });
