@@ -7,6 +7,7 @@ status: ready
 milestone: M5
 depends_on: [dl-51]
 difficulty: standard
+awaiting: the owner's two steps after merge — redeploy the host, then either create the dashboard rate limiting rule (Free plan, path starts with /api/, 20 per 10 s) or decide to create none, and fill in the allowances table in docs/02-DEPLOYMENT.md from the rule form
 ---
 
 # dl-52 — Limits for anonymous traffic
