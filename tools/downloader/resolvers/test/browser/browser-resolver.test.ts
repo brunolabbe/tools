@@ -939,7 +939,10 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
 
       let caught: unknown;
       try {
-        await resolver.resolve(new URL(server.url("/no-media.html")), options({ timeoutMs: 5000 }));
+        await resolver.resolve(
+          new URL(server.url("/no-media.html")),
+          options({ timeoutMs: 15000 }),
+        );
       } catch (error) {
         caught = error;
       }
