@@ -111,8 +111,13 @@ function decodeEscapes(path: string): string {
  *
  * It looks for the prefix **anywhere**, not only at the root, because an
  * absolute-form request target (`http://host/api/files/<t>`) is logged whole
- * and is served. That over-redacts a path like `/x/api/files/y`, which no route
- * answers and which nothing needs to read; the other direction costs a credential.
+ * and is served. That over-redacts a path like `/x/api/files/y`. With the UI
+ * served (`webDir` set) the SPA fallback answers that path with `index.html`
+ * and a 200, so `GET /docs/api/files/readme` is logged as
+ * `/api/files/[redacted]` 200 and cannot be told apart from a download; and
+ * `GET /api/files` with nothing after the prefix is logged as redacted though no
+ * token was presented. That conflation is accepted: no credential is at stake,
+ * and the other direction costs one.
  */
 function capabilityPrefixOf(path: string): string | undefined {
   const stack: string[] = [];

@@ -781,8 +781,8 @@ describe("redactLoggedUrl", () => {
   });
 
   test("a traversal attempt is redacted, not resolved", () => {
-    // Whatever this means to the router, the segment after the prefix is
-    // replaced and nothing downstream sees a token. The route's own
+    // Whatever this means to the router, the whole remainder after the prefix
+    // is replaced and nothing downstream sees a token. The route's own
     // `assertRealPathInside` is what answers traversal; this only has to not
     // leak while it happens.
     expect(redactLoggedUrl(`${ROUTES.file("..")}/etc/passwd`)).toBe(

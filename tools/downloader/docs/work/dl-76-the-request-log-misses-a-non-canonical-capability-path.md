@@ -167,3 +167,21 @@ equal []` with the `request` line's `url":"/api/%74humbnail/<t>"` in it. A first
   commit. Not folded: `registerNotFoundHandler` echoes the raw path in the 404
   _response_ body (`details.path`), which is the requester's own input going back
   to them and not a log line, and nothing specifies changing it.
+
+- 2026-10-06 — Gate 1 (Opus 5.5, `7072830`) PASS. **Question put to the owner,
+  from its first low:** `capabilityPrefixOf` matches a prefix anywhere in the path
+  and with nothing after it, so a request that is not a capability request is
+  logged as one. With `webDir` set, `GET /docs/api/files/readme`
+  (`Accept: text/html`) is served `index.html` 200 and logged
+  `url=/api/files/[redacted] status=200`, which cannot be told apart from a
+  download; `GET /api/files` (404) is logged as `/api/files/[redacted]`, saying a
+  token was presented when none was. The comment said the over-redacted
+  `/x/api/files/y` is a path "which no route answers", which is false when the UI
+  is served. **Options:** (a) correct the comment and accept the conflation,
+  because no credential is at stake and an odd 200 on a capability route is rare
+  (the gate's recommendation); (b) redact only when something follows the prefix
+  in the raw path; or leave it recorded only. **Answer, 2026-10-06, owner via
+  AskUserQuestion: (a).** The comment in `request-log.ts` now states the SPA case;
+  no behaviour changed. The gate's other low (a stale comment in
+  `logging.test.ts`) is fixed. The malformed-escape 400 with no log line, which
+  the gate measured at the base too, is filed as dl-84.
