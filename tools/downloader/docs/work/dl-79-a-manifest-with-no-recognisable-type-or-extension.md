@@ -3,7 +3,7 @@ id: dl-79
 tool: downloader
 title: A manifest served with no recognisable type or extension is never captured
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -58,6 +58,145 @@ the first step.
   `dash`, and that a large or non-`fetch`/`xhr` response is never read.
 - A test proves a probe that saw only segments reports the new reason.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: FAIL** — 2026-10-06 · `056aab7..3a72069` · Opus 5.5, depth full
+
+| Done when                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The step-1 fixture yields an `hls` outcome                                                                      | `resolvers/test/browser/browser-resolver.test.ts` › "an HLS playlist served as text/plain from an extensionless route is an hls outcome" ✓. It asserts `variants[0].protocol === "hls"` and the `/api/playlist?id=1` url. Reproduced red on base `src/` (4 failed, 1 passed of the 5 dl-79 tests) and green at head (5 of 5).                                                                                                                                                                                                                                                                                                                                        |
+| An untyped, extensionless `<MPD` body is classified `dash`; a large or non-`fetch`/`xhr` response is never read | **unproven** for the "large" clause. `dash`: `sniff.test.ts` › "an untyped, extensionless body beginning <MPD is a dash hit", and `browser-resolver.test.ts` › "a DASH manifest served as text/plain is a dash outcome" ✓. Non-`fetch`/`xhr`: `sniff.test.ts` › "a %s response is not read" (`reads() === 0`, with "an untyped HLS playlist becomes an hls hit" as the companion that fails on an empty result) ✓. Large: `sniff.test.ts` › "a response over the cap is not read" proves only a large _declared_ length. A gzip body of a few KB that inflates to 12 MiB is read in full (see the first **med** below). The `dash` clause also carries the **high**. |
+| A probe that saw only segments reports the new reason                                                           | `browser-resolver.test.ts` › "a probe that saw only segments says so in the error's reason" (`reason` and `segmentCount === 2`), plus `sniff.test.ts` › "names the reason and the count on the NO_MEDIA_FOUND" ✓. The reason reaches the record through `registry.test.ts` › "a token reason is carried on the attempt and on the chain's own error" ✓.                                                                                                                                                                                                                                                                                                              |
+| `npm run check` and `npm test -- --project downloader` pass                                                     | verified: `npm run check` exit 0. `npm test -- --project downloader` exit 0, 98 files passed and 1 skipped, 1632 tests passed and 2 skipped. The test diff adds 43 tests and deletes none. CI on `3a72069`: `check` and `test (ubuntu-latest)` pass. **`CodeQL` fails**, and the first bullet below is the reason.                                                                                                                                                                                                                                                                                                                                                   |
+
+- **high** · Done-when line 2 depends on it (the `dash` sniff) · `DASH_ROOT` in
+  `resolvers/src/browser/sniff.ts` backtracks exponentially:
+  `(?:<!--[\s\S]*?-->\s*)*` can split each `--><!--` boundary two ways. The
+  input is any untyped `fetch`/`xhr` body of 200 bytes or more, cut to 2 KiB.
+  The match runs synchronously on the API's event loop.
+  - Microbenchmark of `sniffManifestKind("<!---->".repeat(k) + "x")` from
+    `dist`: k=20 took 10.5 ms, k=22 37 ms and k=24 158 ms, doubling with each
+    added comment. 2048 plain characters took 0.01 ms.
+  - End to end: a page `fetch()`es a 211-byte `text/plain` body (k=30). Run
+    through the real `BrowserResolver` with `timeoutMs: 20000`, the **event loop
+    blocked for 60,789 ms** and the probe ended `TIMEOUT` after **60,995 ms**,
+    three times its deadline. The control page blocked for 4 ms and resolved
+    `hls` in 2.9 s.
+  - k=34 is 239 bytes, which by the same doubling is roughly 16 minutes of a
+    frozen API, every other job included.
+  - CodeQL's `CodeQL` check on `3a72069` fails with this exact alert, reported
+    as "may cause exponential backtracking on strings starting with '<!--'".
+  - Remedy: skip the prolog and comments with an `indexOf("-->")` loop, then
+    test `^<(?:[\w.-]+:)?MPD[\s>]`. Add a test that `sniffManifestKind` returns
+    within a fixed budget on `"<!---->".repeat(290)`.
+  - Reproduction: `redos.mjs` and `harness.mjs resolver redos30` against
+    `server.mjs` (route `/redos?k=N`), in this gate's scratch directory.
+- **med** · Done-when line 2 depends on it ("a large … response is never read")
+  · For a compressed response, the bound is Chromium's, not the code's.
+  `MAX_SNIFF_BODY_BYTES` is checked _after_ `response.body()` has moved the
+  whole inflated body into Node. A per-read limit exists only because
+  Chromium's inspector cache evicts large bodies: 12 MiB was read, while 20 MiB
+  failed with "Request content was evicted from inspector cache". Measured
+  through the real collector:
+  - 32 untyped gzip responses of about 12 KB each, at 12 MiB inflated, moved
+    **384 MiB into Node**. Peak RSS went from 156 MB to **598 MB**, and the peak
+    external and array-buffer memory was 796 MB.
+  - Typed `.ts` segment events reached the collector at **8,119 ms**, against
+    824 ms when the same bodies were served `application/json` and not sniffed.
+  - A typed manifest beside them still won, but the probe took 10.5 s against
+    3.5 s.
+  - The comment on `MAX_SNIFF_ENCODED_BYTES` ("32 KiB bounds that at ~32 MB")
+    is false against the measurement. 1 GiB fits in 1,761 bytes of `br` and in
+    1,949 bytes of `gzip, gzip`, and Chromium decoded both over plain http, its
+    RSS reaching 2.36 GB.
+  - Pre-existing in kind: the typed `#captureBody` path has no encoding check
+    and is bounded by `MAX_HITS` (400), not 32. 32 typed `.m3u8` bombs measured
+    736 MB peak.
+  - **Open decision**:
+    - (a) Keep encoded sniffing on a separate, small read budget (for example
+      2 per probe, about 30 MiB worst case), correct the comment, and file a
+      ticket for the typed path. **Recommended.**
+    - (b) Never sniff a content-encoded response. Cheaper and fully bounded,
+      but it misses gzip-served untyped playlists, which CDNs commonly serve.
+- **med** · no Done-when line depends on it · A sniffed hit gets its `seq` only
+  after the body read returns, so an untyped master ranks below its own typed
+  variant.
+  - Page: `fetch("/master")`, where the master is untyped with two
+    `STREAM-INF`s, awaited, then a typed `/v/high/media.m3u8`.
+  - Collector hit order: `hls:/v/high/media.m3u8`, `segment`, `segment`,
+    `hls:/master`, so the master has seq 3.
+  - Outcome: `hls n=1 /v/high/media.m3u8`, against `n=2` for the master alone.
+    Scores from `rank.ts`: variant 1150, master 1120. With the master at its
+    true order, the master scores 1150 against the variant's 1140 and wins.
+  - This contradicts the Log's "order is preserved for dependent fetches".
+  - Remedy: reserve the `seq` when the response arrives and pass it to
+    `#record`.
+  - A separate, pre-existing cause: an extensionless master can never earn
+    `MASTER_NAME`'s +120, so a variant named `index.m3u8` wins either way
+    (measured `n=1`). That belongs to `rank.ts` and is worth a ticket.
+- **med** · no Done-when line depends on it · `segments-without-manifest` fires
+  on a page that played nothing. A page fetching only one `.vtt`, only one
+  `.key`, or only one `.ts` _script_ each ended `NO_MEDIA_FOUND
+reason=segments-without-manifest segments=1` (measured through
+  `BrowserResolver`). `segmentCount` also counts unconfirmed request-only hits
+  and hits with a status of 400 or more. The `PageSignals.segmentCount`
+  docblock ("Playback demonstrably started") is false for these cases. The
+  builder deferred this to dl-78 because the segment set lives in
+  `media-match.ts`. The count could instead be narrowed where it is taken, in
+  `resolvers/browser.ts`, to confirmed hits with a status below 400 and a media
+  segment type or extension, without touching `media-match.ts`.
+- **low** · `attemptReason` leaks nothing, but it drops legitimate causes. All 7
+  `reason` producers in `resolvers/src` were run through the real registry into
+  a real `JobStore`, and each `attempts_json` row was read back:
+  - Kept: `login-route`, `login-form`, `segments-without-manifest`,
+    `navigated-away`.
+  - Dropped: every Chromium `ERR_CERT_*` token, and 3 of yt-dlp's 4 markers,
+    including `certificate_verify_failed`, the one urllib output matches first.
+    Only `certificateverifyerror` is kept.
+  - Dropped, correctly: the `UNREACHABLE` first line (`page.goto: net::… at
+https://…`).
+  - A bare single-label host such as `intranet-db` passes the filter, but no
+    live producer emits one.
+- **low** · Two documented misses, measured. A chunked (no `Content-Length`)
+  untyped playlist ends `NO_MEDIA_FOUND segments-without-manifest`. After 32
+  junk `text/plain` responses the manifest is never read: 31 junk responses
+  still gave `hls`, while 32 gave `NO_MEDIA_FOUND`. The Log names both as known
+  limits.
+- **low** · CodeQL also reports `js/client-side-request-forgery` twice in
+  `test/fixtures/pages/untyped-manifest.html`, for `fetch(src)` and `fetch(url)`
+  built from `location.search`. It is a fixture served on 127.0.0.1 only, and
+  the alerts keep the check red until they are dismissed with a reason or the
+  fixture takes its routes from a fixed table.
+- **low** · The Log says the fixture is "the hand-rolled loader the other
+  fixtures use". `untyped-manifest.html` has no `MediaSource`, unlike
+  `mse.html`. Its `fetch` shape matches the MSE fixture, so the capture path
+  under test is the same.
+- **dropped** · A lying `Content-Length` (100 declared, 50 MB sent) is not a
+  defect. Chromium frames by the declared length: 100 bytes were read in 31 ms,
+  and Node grew by 5 MB.
+- **dropped** · A declared 4096 bytes that never arrive (socket held open) are
+  bounded by `settle()`: the probe ended in 5.9 s.
+- **findings** · the hunt returned 10: 8 carried (1 high, 3 med, 4 low) and 2
+  dropped.
+- Positive controls:
+  - With `isSniffable`'s length cap removed, 3 of 33 `sniff.test.ts` tests went
+    red.
+  - With the post-read `byteLength` check removed from `intercept.ts`, 1 of 33
+    went red ("a body longer than it declared is read once and then dropped").
+  - With `attemptReason` passing any string, 3 of 32 `registry.test.ts` tests
+    went red.
+- Invariants:
+  - Checked: no cross-tool import; no new throw, so `AppError` is untouched; no
+    new log line, so redaction is not affected; the sniff issues no request of
+    its own, and sniffed urls still pass `assertAllAllowed` in
+    `routes/probe.ts`; contract unchanged; `sniff.test.ts` registered (`vitest
+list --project downloader`); no `any` or `console` in the diff.
+  - Skipped as untouched: shell and kill-tree, progress, Dockerfile closure, and
+    routes.
+- NFR: security, the **high** above · performance, the first **med** ·
+  reliability, the seq **med** · maintainability, the `segmentCount` docblock and
+  the `MAX_SNIFF_ENCODED_BYTES` comment, both false as written.
 
 ## Log
 
