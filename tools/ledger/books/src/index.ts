@@ -32,7 +32,9 @@ export type {
 } from "./periods.ts";
 export { CURRENT_FORMULA, settleStretches, settlement } from "./settlement.ts";
 export type { Charge, PersonCents, Settlement, Stretch } from "./settlement.ts";
-export { classify, matchesPattern } from "./classify.ts";
+export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
+export { fromHistory } from "./history.ts";
+export type { HistoryAnswer, HistorySuggestion } from "./history.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";

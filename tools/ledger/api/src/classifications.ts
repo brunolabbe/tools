@@ -7,9 +7,9 @@
  * stands, by `id`, which is the `current_classifications` view.
  *
  * - **On paste**, each row the paste added is run through `classify` against the
- *   rules in force, in the same transaction that stored it. A row with exactly
- *   one matching rule is classified by it; every other row has no record, and
- *   *no record is what the inbox is*.
+ *   rules in force, in the same transaction that stored it. A row the most
+ *   specific matching rules agree on is classified by them; every other row has
+ *   no record, and *no record is what the inbox is*.
  * - **A person** accepts a suggested rule or answers with a person and a bucket.
  *   Either is a new record, for any row, classified or not.
  *
@@ -17,7 +17,8 @@
  * is offered as a suggestion on the rows it now matches, and a person takes it.
  */
 
-import { classify } from "@ledger/books";
+import { classify, fromHistory, normalizeDescription } from "@ledger/books";
+import type { HistoryAnswer } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
   Bucket,
@@ -128,9 +129,45 @@ export function classifyAdded(
   return classified;
 }
 
-/** Every stored row with no classification, newest first, each with its nearest rule. */
+/**
+ * What people have answered, by description. Only the classification that stands
+ * for each row, and only a person's — `manual` or `accepted`, never `rule`: a
+ * rule's own answer is already the rule's suggestion. Grouped by the folded
+ * description so the inbox looks each one up rather than folding them all again
+ * for every waiting row.
+ */
+function answersByDescription(db: Database): Map<string, HistoryAnswer<Bucket>[]> {
+  const answered = db
+    .prepare(
+      `SELECT c.id, r.description, c.bucket, c.person_id
+       FROM current_classifications c
+       JOIN statement_rows r ON r.id = c.row_id
+       WHERE c.source IN ('manual', 'accepted')`,
+    )
+    .all() as { id: number; description: string; bucket: Bucket; person_id: string | null }[];
+  const grouped = new Map<string, HistoryAnswer<Bucket>[]>();
+  for (const found of answered) {
+    const key = normalizeDescription(found.description);
+    const answer = {
+      id: found.id,
+      description: found.description,
+      bucket: found.bucket,
+      personId: found.person_id,
+    };
+    const list = grouped.get(key);
+    if (list === undefined) grouped.set(key, [answer]);
+    else list.push(answer);
+  }
+  return grouped;
+}
+
+/**
+ * Every stored row with no classification, newest first, each with its nearest
+ * rule and what a person last answered for the same description.
+ */
 export function inbox(db: Database): InboxRow[] {
   const rules = currentRules(db);
+  const answers = answersByDescription(db);
   const rows = db
     .prepare(
       `SELECT id, date, category, description, amount_cents, balance_cents
@@ -152,11 +189,18 @@ export function inbox(db: Database): InboxRow[] {
       amountCents: row.amount_cents,
       balanceCents: row.balance_cents,
     };
-    // A row can be here while one rule matches it exactly only if the rule came
+    const history = fromHistory(row, answers.get(normalizeDescription(row.description)) ?? []);
+    // A row can be here while a rule takes it exactly only if the rule came
     // after the paste, which is its own reason: the suggestion is a sure one.
     return match.kind === "classified"
-      ? { ...shown, reason: "matches", suggestion: match.rule, matching: [match.rule] }
-      : { ...shown, reason: match.reason, suggestion: match.suggestion, matching: match.matching };
+      ? { ...shown, reason: "matches", suggestion: match.rule, history, matching: [match.rule] }
+      : {
+          ...shown,
+          reason: match.reason,
+          suggestion: match.suggestion,
+          history,
+          matching: match.matching,
+        };
   });
 }
 

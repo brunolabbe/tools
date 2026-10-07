@@ -50,6 +50,7 @@ const ODD: InboxRow = {
   balanceCents: 123456,
   reason: "differs",
   suggestion: RULE,
+  history: null,
   matching: [],
 };
 
@@ -63,6 +64,7 @@ const GROCERIES: InboxRow = {
   balanceCents: 111111,
   reason: "no-rule",
   suggestion: null,
+  history: null,
   matching: [],
 };
 
@@ -250,7 +252,11 @@ test("names every rule that matched, when more than one did", async () => {
 
   const list = within(await screen.findByRole("list", { name: "Rules that match" }));
   expect(list.getAllByRole("listitem")).toHaveLength(2);
-  expect(screen.getByText(/More than one rule matches this, so none was applied/u)).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Equally specific rules match this with different answers, so none was applied/u,
+    ),
+  ).toBeTruthy();
 });
 
 test("an empty inbox says so", async () => {
@@ -267,4 +273,65 @@ test("an inbox that cannot be loaded says what the server said", async () => {
   render(<Inbox />);
 
   expect((await screen.findByRole("alert")).textContent).toBe("The ledger API is not answering.");
+});
+
+// lg-16: what a person answered before, beside the rule's suggestion.
+
+test("shows what was answered before, and taking it stores that person and bucket", async () => {
+  inbox.mockResolvedValue([
+    { ...GROCERIES, history: { personId: "alex", bucket: "mortgage", times: 3 } },
+  ]);
+  classified.mockResolvedValue({
+    id: 4,
+    rowId: GROCERIES.id,
+    bucket: "mortgage",
+    personId: "alex",
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-10-03T09:30:00.000Z",
+    classifiedBy: "sam",
+  });
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+  const row = within(rowOf(GROCERIES.description));
+  expect(row.getByText(/alex · Mortgage, the last 3 times/u)).toBeTruthy();
+
+  fireEvent.click(row.getByRole("button", { name: "Use this answer" }));
+
+  // A manual answer, not a rule accepted: no rule id goes with it.
+  await waitFor(() =>
+    expect(classified).toHaveBeenCalledWith({
+      rowId: GROCERIES.id,
+      personId: "alex",
+      bucket: "mortgage",
+    }),
+  );
+  // The row left the list; the rule offer shows its description once, inside the form.
+  await screen.findByRole("group", { name: "Make a rule from this answer" });
+  expect(screen.queryByRole("list", { name: "Rows to classify" })?.textContent).toBe("");
+});
+
+test("a history answer that agrees with the rule's suggestion is one control, not two", async () => {
+  inbox.mockResolvedValue([{ ...ODD, history: { personId: "sam", bucket: "mortgage", times: 2 } }]);
+  render(<Inbox />);
+  await waitFor(() => rowOf(ODD.description));
+  const row = within(rowOf(ODD.description));
+
+  expect(row.getByText(/Answered sam · Mortgage, the last 2 times/u)).toBeTruthy();
+  expect(row.getAllByRole("button", { name: /Accept|Use this answer/u })).toHaveLength(1);
+  expect(row.getByRole("button", { name: "Accept" })).toBeTruthy();
+});
+
+test("a history answer that differs from the suggestion is offered beside it", async () => {
+  inbox.mockResolvedValue([
+    { ...ODD, history: { personId: "alex", bucket: "current-expenses", times: 1 } },
+  ]);
+  render(<Inbox />);
+  await waitFor(() => rowOf(ODD.description));
+  const row = within(rowOf(ODD.description));
+
+  expect(row.getByText("sam · Mortgage")).toBeTruthy();
+  expect(row.getByText(/alex · Current expenses, last time/u)).toBeTruthy();
+  expect(row.getByRole("button", { name: "Accept" })).toBeTruthy();
+  expect(row.getByRole("button", { name: "Use this answer" })).toBeTruthy();
 });
