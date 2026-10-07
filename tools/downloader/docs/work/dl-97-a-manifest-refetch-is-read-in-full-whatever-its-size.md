@@ -115,3 +115,152 @@ Log). `difficulty` is set to `hard` rather than `standard`: the shape is a clien
 swap whose cookie, redirect and SSRF handling each have a way to get wrong that
 passes a happy-path test. The gate's reproduction (`loadmanifest.mts`) is the same
 two calls as the table's, repointed at the branch.
+
+### 2026-10-07 — built (builder, Opus 5.5)
+
+**Step 1, the reproduction, at base `9dcf0f6f`.** `baseline.mjs`: one
+`context.request.get(url, { timeout })` and `text()` against a local server
+answering `Content-Encoding: gzip` with `#EXTM3U\n` plus N MiB of spaces, gzipped
+a block at a time before the timer. The number is `process.resourceUsage().maxRSS`
+after the call minus before it, one process per run, headless Chromium from
+`chromium.launch`, one context:
+
+| inflated size | wire     | timeout | result         | peak RSS delta            |
+| ------------- | -------- | ------- | -------------- | ------------------------- |
+| 12 MiB        | 12,267 B | 8 s     | ok in 0.16 s   | +35 MB                    |
+| 256 MiB       | 260,949  | 8 s     | ok in 2.1-4.6s | +772, +771, +763, +772 MB |
+| 1 GiB         | 1.04 MB  | 8 s     | timed out, 8 s | +1,023 MB                 |
+
+**Step 1 also answered the trust question, and the brief's premise was wrong.**
+The brief assumed `context.request` trusts the egress proxy's generated root and
+asked how, so the new client could copy it. It does not trust it. Playwright
+1.62.1's `BrowserContextAPIRequestContext._defaultOptions()` takes the proxy from
+the launch options (`this._context._browser.options.proxy`) and
+`ignoreHTTPSErrors` from the context, which nothing here sets; the SPKI pin is a
+Chromium launch flag and never reaches Node's TLS. So behind the terminating
+proxy, the default since dl-37, every HTTPS re-fetch failed its handshake and
+fell back to the captured body. Measured: `api/test/manifest-refetch.test.ts`'s
+"trusts the proxy's root by its pin, so the re-fetch is answered", run with
+base's `browser.ts` rebuilt into `dist`, fails with `expected [ { method: 'GET',
+…(2) } ] to have a length of 2 but got 1` — the origin heard from the page and
+never from the re-fetch. **This is a behaviour change beyond the cap**: with
+this branch, a default deployment re-fetches HTTPS manifests again, as every
+non-terminating one always did.
+
+**Step 2, the shape: a client of our own, through the same proxy.**
+`resolvers/src/browser/manifest-fetch.ts`, on `node:http`, `node:tls` and
+`node:zlib`. Through the proxy rather than re-running the guard, because the
+resolvers package has no guard (it lives in `api`), the proxy is the path the
+browser's own fetches take, and `GuardedFetch` — the other precedent — follows
+redirects itself and re-sends the same headers on every hop, `Cookie` included,
+so a redirect to another host would be handed the first host's session.
+
+- **The cap is `MAX_CAPTURED_BODY_BYTES` (4 MiB), reused, now exported from
+  `intercept.ts`.** The re-fetch's answer stands in for a captured body, and a
+  body the collector refuses to keep should not be accepted here. dl-91's other
+  bound, `MAX_ENCODED_INFLATED_BYTES_PER_PROBE` (8 MiB per probe), does not fit:
+  it is a budget shared by concurrent captures, and the re-fetches are
+  sequential, at most `MAX_MANIFEST_ATTEMPTS` (2), each held to 4 MiB, and run
+  after `settle`. dl-79's 590 KB three-hour playlist is inside it seven times
+  over. It counts **inflated bytes** coming out of the decoder (gzip, x-gzip,
+  deflate, br; anything else is refused, not parsed raw), and an identity body
+  whose declared length passes it is refused before reading.
+- **Proxy.** `http:` targets go to the proxy in absolute form; `https:` ones
+  through `CONNECT`, which the proxy vets, then TLS over the tunnel. A refused
+  `CONNECT` is a status like any other. A proxy URL that is not `http:` is a
+  refusal, never a direct dial. With no proxy (tests, a standalone resolver),
+  the client dials the origin, as the browser itself then does.
+- **Redirects.** Followed by hand, every hop a fresh request through the proxy,
+  `MAX_MANIFEST_REDIRECTS` = 20, Playwright's default and so what the re-fetch
+  followed before. `authorization` is dropped on a cross-origin hop, as
+  Playwright did.
+- **Cookies.** As `context.request` did them: the first hop sends the `cookie`
+  the browser sent (it is in `replayHeaders(hit)`, via `allHeaders()`), and only
+  if there is none asks the jar; every later hop drops it and asks
+  `context.cookies(hopUrl)`. `Set-Cookie` goes back to the context with
+  `addCookies({ name, value, url })`, scoped to the URL that set it; a cookie
+  that deletes or expires itself is skipped rather than stored. That narrowing
+  is mine; Playwright parsed the attributes.
+- **Trust.** `rejectUnauthorized: false`, then: accepted if Node's own
+  verification passed (`socket.authorized`, hostname included — the verdict
+  `context.request` reached), or if a pin is set and the leaf names the host
+  (`tls.checkServerIdentity`) and was signed by a certificate in the chain whose
+  SPKI hashes to the pin (`checkIssued` and `verify`). Narrower than Chromium's
+  flag, which accepts any chain carrying the key. `proxyRootSpkiSha256` is now
+  kept on the resolver and used by the re-fetch even when a pool is supplied;
+  its doc comment says so.
+- **Deadline.** One timer over every hop, racing the whole call, so a wait no
+  socket owns (the jar, a handshake) cannot outlive it; every socket and stream
+  the call opened is destroyed when it ends.
+
+**Step 4, the fallback is kept.** Anything but an `ok` with a non-blank body
+falls back to `collector.bodyFor(hit.key)`. A `too-large` answer is logged once
+through the resolver's logger at `warn`, "manifest re-fetch refused: its body
+passed the cap", with `url: redactUrl(hit.url)` and `limitBytes`; other failures
+stay silent, as before.
+
+**Step 5, the timeout stays 8 s.** The cap no longer depends on it — the client
+refuses a 1 GiB bomb in 0.06 s — so it now bounds only a slow server, and nothing
+measured says a slow legitimate CDN should get less.
+
+**After.** `after.mjs`, the same server and the same arithmetic against
+`fetchManifest` from the built `dist`, cap 4 MiB. It launches no Chromium, so its
+"before" is lower (74-79 MB against 125-135); the delta is what compares:
+
+| inflated size | result                                | time   | peak RSS delta    |
+| ------------- | ------------------------------------- | ------ | ----------------- |
+| 3 MiB         | ok, 3,145,736 chars                   | 0.04 s | +9 MB             |
+| 12 MiB        | too-large                             | 0.04 s | +4 MB             |
+| 256 MiB       | too-large, `readBytes` 4,210,688 (x3) | 0.05 s | +5, +5, +4, +5 MB |
+| 1 GiB         | too-large                             | 0.06 s | +5 MB             |
+
+4,210,688 is the cap plus one 16 KiB zlib chunk: the decoder stops between
+chunks when it is destroyed. The 256 MiB case is +4 to +5 MB against +763 to +772.
+
+**Tests.**
+
+- `resolvers/test/browser/manifest-fetch.test.ts` (new, no browser), 15 tests:
+  the cap (64 MiB gzip from under 100 KB refused with `readBytes` at most the cap
+  plus 64 KiB; gzip, deflate and br inside it read; a declared identity length
+  refused unread; an undeclared one refused; an unknown encoding refused; a
+  non-2xx status; the deadline), redirects (limit; replayed cookie on hop one and
+  the jar's on hop two, asked for that hop's URL; `Set-Cookie` stored;
+  `authorization` dropped cross-origin), and the proxy (every hop in absolute
+  form; a refused `CONNECT` is a status and nothing is dialled; a `socks5:` proxy
+  is refused, not bypassed). 15 of 15.
+- `api/test/manifest-refetch.test.ts` (new, real `BrowserResolver`, real egress
+  proxy and guard), 7 tests: a redirect to `127.0.0.1`, which the guard refuses,
+  is not followed and the captured manifest is used; the session cookie reaches
+  the re-fetch and the hop it redirects to; a hop to another host gets no
+  cookie; a 256 MiB gzip re-fetch is refused, logged, and falls back; a gzip
+  manifest inside the cap is parsed from the re-fetch; behind the terminating
+  proxy the pinned root is trusted and the re-fetch answered; and a pin that is
+  not the proxy's root is refused (nothing reaches the origin). 7 of 7. At base,
+  the terminating-proxy test is the one that fails (above); the other six pass
+  there too, because Playwright did those things, and are regression guards.
+- **Mutation-checked**, each against `manifest-fetch.ts`, rebuilt, both files run
+  (22 tests): redirect hops dialled directly instead of through the proxy fails
+  4, the guard test with `expected [ { url: '/latest/meta-data', …(1) } ] to
+deeply equal []`; the replayed cookie sent on every hop fails 2; any chain
+  accepted once a pin is set fails the mis-pinned test (`expected 1 to be +0`);
+  the cap multiplied by 1024 fails 3, both bomb tests among them.
+- **Not tested:** the half of the pin rule that requires the leaf to be _signed_
+  by the pinned key rather than merely chained beside it. `resolvers` has no way
+  to mint a certificate (Node writes none; `node-forge` is `api`'s), and in
+  `api` the only leaves on offer are the proxy's own. It is code, not a
+  measurement.
+
+**Also changed.** `tiers-behind-the-proxy.test.ts`'s "the manifest re-fetch is
+proxied too" pinned Playwright's `context.request` on the grounds that
+`#loadManifest` used it; renamed to "the size probe's context.request is proxied
+too", which is the caller it still pins. `size-probe.ts`'s header comment said
+the same thing and now points at dl-101.
+
+**Fold-in: not done, filed as dl-101.** `createRequestSizeProbe` reads with the
+same `context.request.get` and `text()`, so it has both defects: no cap, and
+behind the terminating proxy it never reaches an HTTPS origin. Measured with a
+temporary assertion in the new `api` test: over plain HTTP the origin is asked
+for `/refetched.m3u8`, the media playlist the size probe reads; behind the
+terminating proxy it is not. Fixing it needs this client to grow `HEAD`, a
+ranged read and a body-less answer, plus its own `api` test, which is not the
+small, already-specified work the exception covers.

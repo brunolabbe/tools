@@ -570,7 +570,7 @@ export class BrowserResolver implements Resolver {
       try {
         const result = await fetchManifest(hit.url, {
           headers: replayHeaders(hit),
-          cookieFor: async (url) => cookieHeader(await context.cookies(url.href)),
+          cookieFor: async (url) => jarCookieHeader(await context.cookies(url.href)),
           storeCookies: async (url, setCookie) => await storeSetCookies(context, url, setCookie),
           proxyUrl,
           proxyRootSpkiSha256: this.#proxyRootSpkiSha256,
@@ -776,7 +776,7 @@ async function applyCookieHeader(
 }
 
 /** The jar's cookies for one URL, as the `Cookie` header a browser would send. */
-function cookieHeader(cookies: readonly { name: string; value: string }[]): string | undefined {
+function jarCookieHeader(cookies: readonly { name: string; value: string }[]): string | undefined {
   if (cookies.length === 0) return undefined;
   return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }

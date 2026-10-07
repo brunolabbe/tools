@@ -232,11 +232,11 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
 
       const result = await probe();
 
-      const refetch = fixture.requests.filter((request) => request.url === "/master.m3u8").at(-1);
+      const refetch = fixture.requests.findLast((request) => request.url === "/master.m3u8");
       expect(refetch?.cookie).toContain("session=s3cr3t");
       // The second hop carries no replayed cookie header; this one is the jar's.
-      const gated = fixture.requests.filter((request) => request.url === "/gated/master.m3u8");
-      expect(gated.at(-1)?.cookie).toContain("session=s3cr3t");
+      const gated = fixture.requests.findLast((request) => request.url === "/gated/master.m3u8");
+      expect(gated?.cookie).toContain("session=s3cr3t");
       expect(variantUrls(result)).toContain("refetched.m3u8");
     },
     TEST_TIMEOUT_MS,
@@ -403,7 +403,11 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
       try {
         const result = await mispinned.resolve(
           new URL(`http://127.0.0.1:${String(page.port)}/page.html`),
-          { timeoutMs: PROBE_TIMEOUT_MS, signal: new AbortController().signal, proxyUrl: proxy.url },
+          {
+            timeoutMs: PROBE_TIMEOUT_MS,
+            signal: new AbortController().signal,
+            proxyUrl: proxy.url,
+          },
         );
 
         // Nothing reached the origin: not the page's fetch, not the re-fetch.

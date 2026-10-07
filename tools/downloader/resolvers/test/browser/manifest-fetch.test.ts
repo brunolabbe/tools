@@ -7,7 +7,7 @@
  */
 
 import http from "node:http";
-import type { AddressInfo } from "node:net";
+import type { AddressInfo, Socket } from "node:net";
 import zlib from "node:zlib";
 import { AppError } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
@@ -238,14 +238,20 @@ describe("the manifest re-fetch follows redirects itself (dl-97)", () => {
     ]);
   });
 
-  test("drops authorization on a hop to another origin", async () => {
+  test("drops authorization on a hop to another origin, and does not restore it on the way back", async () => {
+    let originUrl = "";
     const target = await serve((_request, response) => {
-      response.writeHead(200).end(MANIFEST);
+      response.writeHead(302, { location: `${originUrl}/back` }).end();
     });
-    const origin = await serve((_request, response) => {
+    const origin = await serve((request, response) => {
+      if (request.url === "/back") {
+        response.writeHead(200).end(MANIFEST);
+        return;
+      }
       // `localhost` and `127.0.0.1` are the same socket and different origins.
       response.writeHead(302, { location: `http://localhost:${String(target.port)}/m` }).end();
     });
+    originUrl = origin.origin;
 
     const result = await fetchManifest(
       `${origin.origin}/a`,
@@ -253,7 +259,10 @@ describe("the manifest re-fetch follows redirects itself (dl-97)", () => {
     );
 
     expect(result.outcome).toBe("ok");
-    expect(origin.seen[0]?.headers.authorization).toBe("Bearer t");
+    expect(origin.seen.map((seen) => [seen.url, seen.headers.authorization])).toEqual([
+      ["/a", "Bearer t"],
+      ["/back", undefined],
+    ]);
     expect(target.seen[0]?.headers.authorization).toBeUndefined();
   });
 });
@@ -265,7 +274,12 @@ describe("the manifest re-fetch goes through the proxy (dl-97)", () => {
       (request, response) => {
         const target = new URL(request.url ?? "");
         const forward = http.request(
-          { host: target.hostname, port: target.port, path: target.pathname, headers: request.headers },
+          {
+            host: target.hostname,
+            port: target.port,
+            path: target.pathname,
+            headers: request.headers,
+          },
           (answer) => {
             response.writeHead(answer.statusCode ?? 502, answer.headers);
             answer.pipe(response);
@@ -275,7 +289,7 @@ describe("the manifest re-fetch goes through the proxy (dl-97)", () => {
         forward.end();
       },
       (server, seen) => {
-        server.on("connect", (request: http.IncomingMessage, socket: import("node:net").Socket) => {
+        server.on("connect", (request: http.IncomingMessage, socket: Socket) => {
           seen.push({ url: `CONNECT ${request.url ?? ""}`, headers: request.headers });
           socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
         });
@@ -296,7 +310,10 @@ describe("the manifest re-fetch goes through the proxy (dl-97)", () => {
     const result = await fetchManifest(`${origin.origin}/a`, options({ proxyUrl: proxy.origin }));
 
     expect(result).toEqual({ outcome: "ok", text: MANIFEST });
-    expect(proxy.seen.map((seen) => seen.url)).toEqual([`${origin.origin}/a`, `${origin.origin}/b`]);
+    expect(proxy.seen.map((seen) => seen.url)).toEqual([
+      `${origin.origin}/a`,
+      `${origin.origin}/b`,
+    ]);
   });
 
   test("answers a refused CONNECT with its status and dials nothing itself", async () => {
@@ -311,7 +328,9 @@ describe("the manifest re-fetch goes through the proxy (dl-97)", () => {
     );
 
     expect(result).toEqual({ outcome: "status", status: 403 });
-    expect(proxy.seen.map((seen) => seen.url)).toEqual([`CONNECT 127.0.0.1:${String(origin.port)}`]);
+    expect(proxy.seen.map((seen) => seen.url)).toEqual([
+      `CONNECT 127.0.0.1:${String(origin.port)}`,
+    ]);
     expect(origin.seen).toEqual([]);
   });
 

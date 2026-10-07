@@ -102,16 +102,15 @@ export async function fetchManifest(
   options: ManifestFetchOptions,
 ): Promise<ManifestFetchResult> {
   const open = new Set<Closable>();
-  let expire: (error: AppError) => void = () => {};
-  const deadline = new Promise<never>((_resolve, reject) => {
-    expire = reject;
-  });
+  let timer: NodeJS.Timeout | undefined;
   // The race, not a destroy-with-error, is what ends the call on time: a wait the
   // deadline has no socket to close (the jar, a handshake that never answers)
   // must not be able to outlive it.
-  const timer = setTimeout(() => {
-    expire(new AppError("TIMEOUT", "The manifest re-fetch exceeded its time budget."));
-  }, options.timeoutMs);
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new AppError("TIMEOUT", "The manifest re-fetch exceeded its time budget."));
+    }, options.timeoutMs);
+  });
   try {
     return await Promise.race([follow(new URL(url), options, open), deadline]);
   } finally {
@@ -138,17 +137,21 @@ async function follow(
   delete replayed["cookie"];
 
   let current = start;
+  let previous = start;
   for (let hop = 0; ; hop++) {
     if (current.protocol !== "http:" && current.protocol !== "https:") {
       return { outcome: "refused", reason: "unsupported-scheme" };
     }
 
+    // Once a hop changes origin it is gone for the rest of the chain, as
+    // Playwright had it: coming back does not earn the credential back.
+    if (current.origin !== previous.origin) delete replayed["authorization"];
     const headers: Record<string, string> = { ...DEFAULT_HEADERS, ...replayed };
-    if (hop > 0 && current.origin !== start.origin) delete headers["authorization"];
     // The first hop sends what the browser sent, as `context.request` did; every
     // later one asks the jar about its own URL.
+    const fromJar = hop === 0 && firstCookie !== undefined ? undefined : options.cookieFor(current);
     // oxlint-disable-next-line no-await-in-loop
-    const cookie = hop === 0 && firstCookie !== undefined ? firstCookie : await options.cookieFor(current);
+    const cookie = fromJar === undefined ? firstCookie : await fromJar;
     if (cookie !== undefined && cookie !== "") headers["cookie"] = cookie;
     headers["host"] = current.host;
     headers["connection"] = "close";
@@ -169,6 +172,7 @@ async function follow(
     if (REDIRECT_STATUSES.has(status) && location !== undefined) {
       response.destroy();
       if (hop >= options.maxRedirects) return { outcome: "refused", reason: "too-many-redirects" };
+      previous = current;
       try {
         current = new URL(Buffer.from(location, "latin1").toString("utf8"), current);
       } catch {
@@ -209,7 +213,8 @@ async function request(
       raw = track(net.connect({ host: bare(target.hostname), port: portOf(target) }), open);
     } else {
       const tunnel = await connectTunnel(proxy, target, open);
-      if (typeof tunnel === "number") return { kind: "result", result: { outcome: "status", status: tunnel } };
+      if (typeof tunnel === "number")
+        return { kind: "result", result: { outcome: "status", status: tunnel } };
       raw = tunnel;
     }
     const secured = await startTls(raw, target, options.proxyRootSpkiSha256, open);
@@ -237,7 +242,11 @@ async function request(
 }
 
 /** `CONNECT` through the proxy. A refusal comes back as its status code. */
-async function connectTunnel(proxy: URL, target: URL, open: Set<Closable>): Promise<Duplex | number> {
+async function connectTunnel(
+  proxy: URL,
+  target: URL,
+  open: Set<Closable>,
+): Promise<Duplex | number> {
   const authority = `${target.hostname}:${String(portOf(target))}`;
   return await new Promise<Duplex | number>((resolve, reject) => {
     const connect = http.request({

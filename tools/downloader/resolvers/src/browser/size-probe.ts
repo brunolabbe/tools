@@ -1,9 +1,11 @@
 /**
  * A `SizeProbe` over the browser's own request context.
  *
- * Separate from the `fetch`-backed one in `../size-probe.ts` for the reason
- * `#loadManifest` uses `context.request` in the first place: the session cookies
- * that gate a segment live in that context and not in this process.
+ * Separate from the `fetch`-backed one in `../size-probe.ts` because the session
+ * cookies that gate a segment live in the browser context and not in this
+ * process. `#loadManifest` used `context.request` for the same reason until dl-97
+ * gave it a streaming client of its own, which reads that context's cookies by
+ * hand; this file still reads whole bodies through `context.request` (dl-101).
  *
  * It is typed against `ApiRequestLike` rather than Playwright's
  * `APIRequestContext` on purpose. The two are structurally identical for the
