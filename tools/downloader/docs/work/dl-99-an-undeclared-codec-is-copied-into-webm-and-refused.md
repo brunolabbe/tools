@@ -62,6 +62,26 @@ undeclared and whose output container is WebM. MP4 and MKV are unchanged.
 Considered and not taken: transcoding every undeclared source (slow VP9 on the
 host, and a WebM source re-encoded for nothing).
 
+### Additions, 2026-10-07
+
+Taken by the owner after the first build, on the builder's two open decisions.
+
+4. **The refusal keeps its own code.** Question: decision 3 says "a typed error
+   that says why"; the builder added `CONTAINER_UNSUPPORTED` (non-retryable,
+   HTTP 422, its own UI copy). Keep it? Options: keep it (recommended), or
+   reuse `DOWNLOAD_FAILED` as not retryable. Chosen: **keep
+   `CONTAINER_UNSUPPORTED`**. No code change.
+5. **Manifests are judged too.** Question: the first build judged progressive
+   variants only, so an HLS or DASH variant with undeclared codecs chosen as
+   WebM still failed inside ffmpeg after starting. What should happen? Options:
+   refuse and hide WebM for them too; leave it and note it in the Log
+   (recommended); leave it and file a ticket. Chosen: **refuse and hide WebM
+   for them too**, overriding the recommendation. The same `canMakeWebm` rule
+   applies to every protocol: refused with `CONTAINER_UNSUPPORTED` before any
+   origin request, and not offered in the picker. A manifest stream whose
+   undeclared codecs happen to be VP9/Opus loses WebM; a manifest variant with
+   declared codecs is unchanged.
+
 ## Build
 
 Reproduce first, as a stream test in `engine/test/stream.test.ts`, appended at
@@ -129,4 +149,25 @@ then refusing and hiding WebM for everything else over transcoding it.
   again on the re-probe of a job, for the browser and direct tiers.
 - **Fold-in considered, not done:** the same refusal for HLS/DASH variants. No
   container field says what a manifest holds, so there is no decided rule to
-  apply; left as an open question for the owner.
+  apply; left as an open question for the owner. **Superseded below.**
+
+**2026-10-07 (second round)** — the owner answered both open decisions
+(Decisions, additions 4 and 5): the new code stays, and manifests are judged.
+
+- `canMakeWebm` lost its `protocol !== "progressive"` early return, so HLS and
+  DASH go through the one rule the engine refuses by and the picker hides by.
+  The header read is unchanged and still applies to progressive MP4 only.
+- Tests, each shown to fail with its branch removed (contract `dist` rebuilt
+  before the engine and web runs, since both read it):
+  - the progressive-only guard put back: 4 failed, 73 passed of 77 —
+    `can-make-webm.test.ts` "a manifest variant is judged by the same rule",
+    `probe-panel.test.tsx` "a manifest variant is judged by the same rule …",
+    `stream.test.ts` "HLS is refused …" and "DASH is refused …" (zero origin
+    requests asserted);
+  - the `ProbePanel` filter removed: 3 failed of 23 (the three WebM-offer
+    tests); the fall-back to MP4 alone removed: 1 failed of 23.
+- A declared H.264/AAC HLS variant still transcodes to VP9/Opus (real stream,
+  `stream.test.ts`), and a manifest variant declared VP9/Opus is not refused and
+  is copied (arguments asserted: no `-c:v`, no `-c:a`). The copied case is
+  asserted from the arguments, not by streaming, because no fixture here is a
+  VP9/Opus manifest.

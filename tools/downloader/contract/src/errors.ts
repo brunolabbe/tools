@@ -63,7 +63,7 @@ export const DOWNLOADER_ERROR_CODES = [
   /**
    * The container the visitor chose cannot hold this source as it is, and
    * nothing known about the source says a conversion would fit (dl-99): today
-   * WebM for a file whose codecs are undeclared and whose container is not
+   * WebM for a source whose codecs are undeclared and whose container is not
    * WebM. Raised before any byte is fetched, and not retryable — the same
    * source and the same choice fail the same way; picking MP4 or MKV works.
    * Not `DOWNLOAD_FAILED`: that code's copy tells the visitor to try again.

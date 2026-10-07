@@ -424,3 +424,28 @@ test("a WebM chosen for one file does not follow the visitor onto a file that ca
   download();
   expect(spies.onDownload).toHaveBeenCalledWith(expect.objectContaining({ container: "mp4" }));
 });
+
+test("a manifest variant is judged by the same rule: undeclared hides WebM, declared VP9/Opus offers it", async () => {
+  const user = userEvent.setup();
+  mount(
+    probe({
+      variants: [
+        file("hls-bare", { protocol: "hls", container: undefined }),
+        file("dash-bare", { protocol: "dash", container: undefined }),
+        file("hls-vp9", {
+          protocol: "hls",
+          container: undefined,
+          videoCodec: "vp09.00.10.08",
+          audioCodec: "opus",
+        }),
+      ],
+    }),
+  );
+
+  await pickRendition(user, "hls-bare");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "source"]);
+  await pickRendition(user, "dash-bare");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "source"]);
+  await pickRendition(user, "hls-vp9");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
+});

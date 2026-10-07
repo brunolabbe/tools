@@ -62,9 +62,15 @@ describe("canMakeWebm (dl-99)", () => {
     expect(canMakeWebm({ ...split, audioCodec: "mp4a" })).toBe(true);
   });
 
-  test("a manifest is not judged by this rule", () => {
-    expect(canMakeWebm(file({ protocol: "hls" }))).toBe(true);
-    expect(canMakeWebm(file({ protocol: "dash" }))).toBe(true);
+  test("a manifest variant is judged by the same rule, whichever protocol", () => {
+    for (const protocol of ["hls", "dash"] as const) {
+      const manifest = file({ protocol, container: undefined });
+      expect(canMakeWebm(manifest)).toBe(false);
+      expect(canMakeWebm({ ...manifest, videoCodec: "vp09.00.10.08", audioCodec: "opus" })).toBe(
+        true,
+      );
+      expect(canMakeWebm({ ...manifest, videoCodec: "avc1.640028" })).toBe(false);
+    }
   });
 
   test("the refusal has a code and copy of its own", () => {

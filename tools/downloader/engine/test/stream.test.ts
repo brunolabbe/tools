@@ -33,6 +33,7 @@ import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
 import type { Logger } from "../src/logger.ts";
 import { NOOP_LOGGER } from "../src/logger.ts";
+import { assertContainerCanHold } from "../src/mux.ts";
 import { buildStreamArgs, expectedOutputBytes } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
@@ -1334,4 +1335,84 @@ describe("dl-99: an undeclared codec is not copied into WebM", () => {
     expect(probed.formatName).toContain("webm");
     expect(probed.streams.map((stream) => stream.codec).toSorted()).toEqual(["opus", "vp9"]);
   }, 60_000);
+});
+
+/**
+ * dl-99, the owner's addition of 2026-10-07: a manifest variant is judged by
+ * the same rule as a file. Undeclared, it is refused before an origin request;
+ * declared, it is as before.
+ */
+describe("dl-99: a manifest variant with undeclared codecs is not copied into WebM", () => {
+  // Functions, because the origin's address exists only once the suite has started it.
+  const manifests: [string, () => MediaVariant][] = [
+    ["HLS", () => ({ ...hlsVariant("hls6", 6), videoCodec: undefined, audioCodec: undefined })],
+    [
+      "DASH",
+      () => ({
+        id: "dash8",
+        protocol: "dash",
+        url: `${origin.origin}/dash8/manifest.mpd`,
+        hasVideo: true,
+        hasAudio: true,
+        label: "dash8",
+      }),
+    ],
+  ];
+
+  for (const [name, build] of manifests) {
+    test(`${name} is refused with CONTAINER_UNSUPPORTED before any origin request`, async () => {
+      const variant = build();
+      const before = origin.requests.length;
+      const error = await engineWith()
+        .stream({
+          jobId: `dl-99-${name}`,
+          variant,
+          requestContext: CONTEXT,
+          options: { container: "webm" },
+        })
+        .then(
+          () => null,
+          (cause: unknown) => AppError.from(cause),
+        );
+      expect(error?.code).toBe("CONTAINER_UNSUPPORTED");
+      expect(error?.retryable).toBe(false);
+      expect(origin.requests.length).toBe(before);
+    });
+  }
+
+  test("an HLS variant whose codecs are declared as H.264/AAC still transcodes to VP9 and Opus", async () => {
+    const received = await exchange("dl-99-hls-declared", () =>
+      engineWith().stream({
+        jobId: "dl-99-hls-declared",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+        options: { container: "webm" },
+      }),
+    );
+    expect(received.status).toBe(200);
+    const probed = await probeMedia(received.file);
+    expect(probed.streams.map((stream) => stream.codec).toSorted()).toEqual(["opus", "vp9"]);
+  }, 60_000);
+
+  test("a manifest variant declared as VP9 and Opus is not refused and is copied", () => {
+    const variant = {
+      ...hlsVariant("hls6", 6),
+      videoCodec: "vp09.00.10.08",
+      audioCodec: "opus",
+    };
+    expect(() =>
+      assertContainerCanHold("webm", variant, { audioOnly: false, jobId: "dl-99-vp9" }),
+    ).not.toThrow();
+    const built = buildStreamArgs({
+      url: variant.url,
+      variant,
+      requestContext: CONTEXT,
+      container: "webm",
+      audioOnly: false,
+      subtitles: [],
+    });
+    expect(built.transcodes).toEqual([]);
+    expect(built.args).not.toContain("-c:v");
+    expect(built.args).not.toContain("-c:a");
+  });
 });
