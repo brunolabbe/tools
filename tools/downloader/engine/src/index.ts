@@ -31,7 +31,8 @@
  * Notes for the caller:
  *  - `stream()` throws `AppError` and nothing else, before the first byte:
  *    `JOB_CANCELED`, `DOWNLOAD_FAILED` (re-probe and retry), `SIZE_LIMIT_EXCEEDED`,
- *    `TIMEOUT`, `TLS_VERIFICATION_FAILED`, `LIVE_STREAM_UNSUPPORTED`. After it,
+ *    `TIMEOUT`, `TLS_VERIFICATION_FAILED`, `LIVE_STREAM_UNSUPPORTED`,
+ *    `CONTAINER_UNSUPPORTED` (not retryable; dl-99). After it,
  *    the same codes arrive on `done`, and a retry is no longer possible.
  *  - The engine does not re-probe. Signed URLs expire in 30–300 s (analysis §5),
  *    so the caller must hand in a *fresh* variant.

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { canMakeWebm } from "@downloader/contract";
+import type { MediaVariant } from "@downloader/contract";
 import {
   buildOutputArgs,
   containerSupports,
@@ -157,5 +159,32 @@ describe("fragment cadence (dl-96)", () => {
   test("Matroska and WebM are left to their own clusters", () => {
     expect(streamingContainerArgs("mkv", true)).not.toContain("-frag_duration");
     expect(streamingContainerArgs("webm", true)).not.toContain("-frag_duration");
+  });
+});
+
+describe("a header-read codec is not mistaken for an unsupported one (dl-99)", () => {
+  test("sample-entry fourccs MP4 holds are copied into MP4, not transcoded", () => {
+    for (const fourcc of ["avc1", "hvc1", "av01", "mp4v"]) {
+      expect(containerSupports("mp4", "video", fourcc)).toBe(true);
+    }
+    for (const fourcc of ["mp4a", "ac-3", "ec-3", "Opus", "fLaC", "alac"]) {
+      expect(containerSupports("mp4", "audio", fourcc)).toBe(true);
+    }
+  });
+
+  test("the contract's idea of a declared codec is the engine's", () => {
+    for (const codec of [undefined, "", " ", "none", "unknown", "avc1.640028", "vp09", "Opus"]) {
+      const declaredByEngine = normalizeCodecName(codec) !== null;
+      const asVariant: MediaVariant = {
+        id: "p",
+        protocol: "progressive",
+        url: "https://cdn.example/a.mp4",
+        hasVideo: true,
+        hasAudio: false,
+        videoCodec: codec,
+        label: "p",
+      };
+      expect(canMakeWebm(asVariant)).toBe(declaredByEngine);
+    }
   });
 });

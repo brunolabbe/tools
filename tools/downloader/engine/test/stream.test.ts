@@ -33,7 +33,7 @@ import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
 import type { Logger } from "../src/logger.ts";
 import { NOOP_LOGGER } from "../src/logger.ts";
-import { expectedOutputBytes } from "../src/stream.ts";
+import { buildStreamArgs, expectedOutputBytes } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
 import { startFixtureServer } from "./helpers/http.ts";
@@ -42,6 +42,7 @@ import {
   generateHls,
   generateLongGop,
   generateProgressive,
+  generateWebm,
   listTree,
   probeMedia,
   SUBTITLE_VTT,
@@ -1206,4 +1207,131 @@ describe("dl-96: no expected total where the output is not the source copied", (
     expect(totals.length).toBeGreaterThan(0);
     expect(totals.every((total) => total === null)).toBe(true);
   });
+});
+
+/**
+ * dl-99: a progressive file whose codecs nobody declared used to be copied
+ * into WebM, which holds none of what such a file nearly always carries
+ * (H.264, AAC), and ffmpeg refused it before writing a byte — a job that
+ * failed as "the download failed partway through". Copying an undeclared codec
+ * is still right for MP4 and MKV.
+ */
+describe("dl-99: an undeclared codec is not copied into WebM", () => {
+  beforeAll(async () => {
+    await generateWebm(path.join(fixtureRoot, "webm4"), 4);
+  }, 60_000);
+
+  function undeclared(overrides: Partial<MediaVariant> = {}): MediaVariant {
+    return {
+      id: "dl-99",
+      protocol: "progressive",
+      url: `${origin.origin}/prog4/faststart.mp4`,
+      hasVideo: true,
+      hasAudio: true,
+      label: "dl-99",
+      ...overrides,
+    };
+  }
+
+  async function refusal(variant: MediaVariant, options: JobOptions): Promise<AppError> {
+    const before = origin.requests.length;
+    const outcome = await engineWith()
+      .stream({ jobId: "dl-99-refused", variant, requestContext: CONTEXT, options })
+      .then(
+        () => null,
+        (error: unknown) => AppError.from(error),
+      );
+    expect(outcome).not.toBeNull();
+    // Refused before ffmpeg started: nothing was asked of the origin.
+    expect(origin.requests.length).toBe(before);
+    return outcome as AppError;
+  }
+
+  test("the reproduction: an undeclared MP4 chosen as WebM is refused with its reason", async () => {
+    const error = await refusal(undeclared({ container: "mp4" }), { container: "webm" });
+    expect(error.code).toBe("CONTAINER_UNSUPPORTED");
+    expect(error.retryable).toBe(false);
+    expect(error.message).toMatch(/WebM/u);
+    expect(error.details).toMatchObject({ container: "webm", variantId: "dl-99" });
+  });
+
+  test("so is a source whose container nobody named, and any other", async () => {
+    for (const container of [undefined, "mkv", "flv"]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const error = await refusal(undeclared({ container }), { container: "webm" });
+      expect(error.code).toBe("CONTAINER_UNSUPPORTED");
+    }
+  });
+
+  test("one undeclared track is enough", async () => {
+    const error = await refusal(undeclared({ container: "mp4", videoCodec: "avc1.42c01e" }), {
+      container: "webm",
+    });
+    expect(error.code).toBe("CONTAINER_UNSUPPORTED");
+  });
+
+  test("MP4 and MKV still copy an undeclared codec", async () => {
+    for (const container of ["mp4", "mkv"] as const) {
+      const variant = undeclared({ container: "mp4" });
+      const { args, transcodes } = buildStreamArgs({
+        url: variant.url,
+        variant,
+        requestContext: CONTEXT,
+        container,
+        audioOnly: false,
+        subtitles: [],
+      });
+      expect(transcodes).toEqual([]);
+      expect(args).not.toContain("-c:v");
+      expect(args).not.toContain("-c:a");
+    }
+  });
+
+  test("an undeclared WebM source is copied into WebM, by its arguments and by its result", async () => {
+    const variant = undeclared({
+      id: "dl-99-webm",
+      url: `${origin.origin}/webm4/source.webm`,
+      container: "webm",
+    });
+    const built = buildStreamArgs({
+      url: variant.url,
+      variant,
+      requestContext: CONTEXT,
+      container: "webm",
+      audioOnly: false,
+      subtitles: [],
+    });
+    expect(built.transcodes).toEqual([]);
+    expect(built.args.join(" ")).toContain("-c copy");
+    expect(built.args).not.toContain("-c:v");
+    expect(built.args).not.toContain("-c:a");
+
+    const received = await exchange("dl-99-webm-copy", () =>
+      engineWith().stream({
+        jobId: "dl-99-webm-copy",
+        variant,
+        requestContext: CONTEXT,
+        options: { container: "webm" },
+      }),
+    );
+    expect(received.status).toBe(200);
+    const probed = await probeMedia(received.file);
+    expect(probed.formatName).toContain("webm");
+    expect(probed.streams.map((stream) => stream.codec).toSorted()).toEqual(["opus", "vp9"]);
+  }, 60_000);
+
+  test("a source whose codecs are declared (as a header read declares them) transcodes to VP9 and Opus", async () => {
+    const received = await exchange("dl-99-declared", () =>
+      engineWith().stream({
+        jobId: "dl-99-declared",
+        variant: undeclared({ container: "mp4", videoCodec: "avc1", audioCodec: "mp4a" }),
+        requestContext: CONTEXT,
+        options: { container: "webm" },
+      }),
+    );
+    expect(received.status).toBe(200);
+    const probed = await probeMedia(received.file);
+    expect(probed.formatName).toContain("webm");
+    expect(probed.streams.map((stream) => stream.codec).toSorted()).toEqual(["opus", "vp9"]);
+  }, 60_000);
 });

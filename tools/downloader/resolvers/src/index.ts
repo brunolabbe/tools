@@ -15,6 +15,8 @@ export type { MediaSegment } from "./manifest/hls.ts";
 export { parseDash } from "./manifest/dash.ts";
 export type { DashParser, HlsParser, ParsedManifest } from "./manifest/types.ts";
 
+export { describeProgressiveTracks } from "./mp4-header.ts";
+export { createFetchSizeProbe } from "./size-probe.ts";
 export { measureVariantSizes } from "./size-sample.ts";
 export type { SampleOptions, SizeProbe } from "./size-sample.ts";
 

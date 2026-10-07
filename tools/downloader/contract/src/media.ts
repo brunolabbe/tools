@@ -167,6 +167,46 @@ export interface MediaVariant {
   label: string;
 }
 
+/** True when a codec string actually names a codec (`none` and `unknown` do not). */
+function isDeclaredCodec(codec: string | undefined): boolean {
+  const base = codec?.trim().toLowerCase().split(".")[0]?.split(",")[0] ?? "";
+  return base.length > 0 && base !== "none" && base !== "unknown";
+}
+
+/**
+ * Whether WebM can be made from this variant (dl-99). The engine refuses a
+ * request that fails this, and the picker does not offer WebM for one — one
+ * rule in one place, because two copies drift into a UI that offers what the
+ * server refuses.
+ *
+ * WebM holds VP8, VP9 or AV1 video and Vorbis or Opus audio and almost nothing
+ * else. A progressive file's streams are either declared (then the engine
+ * copies what fits and transcodes what does not), or it says its container is
+ * WebM (then it is copied whole), or nothing says what it holds — and then it
+ * is nearly always H.264/AAC, which ffmpeg refuses to write into WebM before
+ * the first byte. Only a progressive file is judged: a manifest's renditions
+ * are described by the manifest, and this rule was measured on files.
+ *
+ * `audioOnly` drops the video from what must be known. A separate audio file
+ * is judged on its own codec whatever the video's container says.
+ */
+export function canMakeWebm(variant: MediaVariant, options: { audioOnly?: boolean } = {}): boolean {
+  if (variant.protocol !== "progressive") return true;
+  const container = variant.container?.trim().toLowerCase().replace(/^\./u, "");
+  const separateAudio = variant.audioUrl !== undefined && variant.audioUrl !== "";
+  const wholeFileIsWebm = container === "webm";
+  const videoKnown =
+    !variant.hasVideo ||
+    options.audioOnly === true ||
+    wholeFileIsWebm ||
+    isDeclaredCodec(variant.videoCodec);
+  const audioKnown =
+    variant.hasAudio === false ||
+    (wholeFileIsWebm && !separateAudio) ||
+    isDeclaredCodec(variant.audioCodec);
+  return videoKnown && audioKnown;
+}
+
 /**
  * Everything needed to re-issue a request for the media outside the browser.
  *

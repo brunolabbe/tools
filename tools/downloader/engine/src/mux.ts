@@ -20,6 +20,8 @@
  *    and irreversible; the user asked for a download, not a re-render.
  */
 
+import { AppError, canMakeWebm } from "@downloader/contract";
+import type { MediaVariant } from "@downloader/contract";
 import { buildDurationLimitArgs } from "./ffmpeg/args.ts";
 
 export type OutputContainer = "mp4" | "mkv" | "webm";
@@ -64,6 +66,11 @@ export function normalizeCodecName(codec: string | undefined): string | null {
     mp3: "mp3",
     "mp4a-40-34": "mp3",
     ac3: "ac3",
+    // Sample-entry fourccs, which a header read (dl-99) hands over as they are
+    // written: `ac-3` is AC-3, `mp4v` is MPEG-4 part 2. Unaliased, MP4 would
+    // transcode both for being unrecognised.
+    "ac-3": "ac3",
+    mp4v: "mpeg4",
     "ec-3": "eac3",
     eac3: "eac3",
     flac: "flac",
@@ -118,6 +125,31 @@ export function containerSupports(
   const normalized = normalizeCodecName(codec);
   if (normalized === null) return true;
   return CONTAINER_CAPABILITIES[container][kind].has(normalized);
+}
+
+/**
+ * Refuses, before ffmpeg starts, a WebM that ffmpeg would refuse after it did
+ * (dl-99). An undeclared codec is copied (`containerSupports`), which is right
+ * for MP4 and MKV and wrong for WebM: a source nothing describes is nearly
+ * always H.264/AAC, and ffmpeg fails the mux with "Only VP8 or VP9 or AV1 video
+ * ..." after the container's first bytes are already on the wire — a job that
+ * reads as a flaky CDN. What the picker withholds (`canMakeWebm`) is what this
+ * refuses, so the two agree.
+ */
+export function assertContainerCanHold(
+  container: OutputContainer,
+  variant: MediaVariant,
+  options: { audioOnly: boolean; jobId: string },
+): void {
+  if (container !== "webm" || canMakeWebm(variant, { audioOnly: options.audioOnly })) return;
+  throw new AppError("CONTAINER_UNSUPPORTED", undefined, {
+    details: {
+      jobId: options.jobId,
+      variantId: variant.id,
+      container,
+      sourceContainer: variant.container ?? null,
+    },
+  });
 }
 
 export interface StreamMap {

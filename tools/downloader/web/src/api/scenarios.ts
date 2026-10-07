@@ -451,6 +451,14 @@ export const SCENARIOS: readonly Scenario[] = [
     job: { failWith: "DOWNLOAD_FAILED", failAt: "downloading" },
   },
   {
+    keyword: "nowebm",
+    title: "WebM refused",
+    description:
+      "The chosen container cannot hold a file nothing describes (dl-99), refused before any bytes move. Not retryable.",
+    probeDelayMs: 1_000,
+    job: { failWith: "CONTAINER_UNSUPPORTED", failAt: "probing" },
+  },
+  {
     keyword: "toobig",
     title: "Cut at the size cap",
     description:

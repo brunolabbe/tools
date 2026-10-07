@@ -25,6 +25,8 @@
 import { AppError, redactUrl } from "@downloader/contract";
 import {
   BrowserResolver,
+  createFetchSizeProbe,
+  describeProgressiveTracks,
   DirectUrlResolver,
   ResolverRegistry,
   YtDlpResolver,
@@ -174,6 +176,48 @@ export function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectio
   };
 }
 
+/**
+ * Reads the codecs a progressive MP4 declares for itself, for the tiers that
+ * leave them blank (dl-99).
+ *
+ * The browser sniffer and the direct tier describe a plain file by its size and
+ * its Content-Type, which says nothing about what is inside — and WebM can be
+ * made only from what is known (`canMakeWebm`). The yt-dlp tier already runs
+ * this itself (dl-64), so it is not wrapped. Done here, over the guarded fetch
+ * and the probe's own replayed headers, because the browser tier's request
+ * context cannot ask for a range and its files are not this wrapper's to edit.
+ *
+ * Two ranged reads per undeclared MP4. A file that is not an MP4, a read that
+ * fails and an abort all leave the variant as the tier reported it: this only
+ * ever adds what the file says, and the engine refuses WebM for what stays
+ * undeclared.
+ */
+export function describingProgressiveTracks(resolver: Resolver, fetchImpl: GuardedFetch): Resolver {
+  return {
+    name: resolver.name,
+    priority: resolver.priority,
+    canHandle: (url: URL) => resolver.canHandle(url),
+    ...(resolver.dispose === undefined
+      ? {}
+      : { dispose: async (): Promise<void> => await resolver.dispose?.() }),
+    async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      const probe = await resolver.resolve(url, options);
+      if (probe.drm.protected || !probe.variants.some((v) => v.protocol === "progressive")) {
+        return probe;
+      }
+      const sizeProbe = createFetchSizeProbe({
+        fetch: fetchImpl,
+        headers: probe.requestContext.headers,
+        signal: options.signal,
+      });
+      const variants = await describeProgressiveTracks(probe.variants, sizeProbe, {
+        signal: options.signal,
+      });
+      return { ...probe, variants };
+    },
+  };
+}
+
 export interface RegistryBuild {
   registry: ResolverRegistry;
   /** What actually got registered, for `/api/health` and for the boot log. */
@@ -225,11 +269,16 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
       logger,
       ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
     });
-    resolvers.push(named(browser));
+    resolvers.push(describingProgressiveTracks(named(browser), options.fetchImpl));
   }
 
   if (config.enableDirectResolver) {
-    resolvers.push(new DirectUrlResolver({ fetch: options.fetchImpl }));
+    resolvers.push(
+      describingProgressiveTracks(
+        new DirectUrlResolver({ fetch: options.fetchImpl }),
+        options.fetchImpl,
+      ),
+    );
   }
 
   const registry = new ResolverRegistry(resolvers);

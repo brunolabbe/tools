@@ -89,3 +89,44 @@ _non_-WebM source, and the variant's existing `container` field tells the two
 apart. The options for a non-WebM source were refusing WebM and hiding it,
 transcoding, or reading the MP4 header. They chose the header read for MP4, and
 then refusing and hiding WebM for everything else over transcoding it.
+
+**2026-10-07** — built on `9dcf0f6f` (branch `dl-99-webm-undeclared-codecs`).
+
+- **Reproduced again on the base**, with the engine alone (a 4 s H.264/AAC
+  faststart MP4 from a loopback origin, `options: { container: "webm" }`):
+  `stream()` resolved at its first byte and `done` rejected `DOWNLOAD_FAILED`,
+  exit 234, `Only VP8 or VP9 or AV1 video and Vorbis or Opus audio …`. One
+  correction to the Why: the visitor is not refused before a byte — the WebM
+  header's 253 bytes reach the response first, then the body errors. Red test:
+  `engine/test/stream.test.ts`, "dl-99: … the reproduction", 3 of 3 refusal
+  cases failed (`expected null not to be null`, i.e. the stream opened).
+- **Where each decision lives.**
+  1. A WebM source and the picker's rule: `canMakeWebm` in
+     `contract/src/media.ts`, one pure function that both the engine
+     (`assertContainerCanHold`, `engine/src/mux.ts`, one call in `openStream`)
+     and `ProbePanel` ask, so what is offered is what the server accepts.
+  2. The header read runs in `api/src/resolvers.ts`
+     (`describingProgressiveTracks`), a wrapper over the **browser and direct**
+     tiers, using `describeProgressiveTracks` over the guarded fetch and the
+     probe's own replayed headers. Not in `resolvers/src/browser/`: that tier's
+     request probe cannot ask for a range, and dl-81 is open on it. The yt-dlp
+     tier already ran it (dl-64) and is not wrapped. The engine cannot import
+     the resolvers, so it never reads a header itself.
+  3. Refusal: a new code `CONTAINER_UNSUPPORTED` (contract, 422 in
+     `http-errors.ts`, copy in `error-presentation.ts`), not retryable.
+- **Judgement calls the brief did not settle**, for the owner to overrule:
+  a new error code rather than `DOWNLOAD_FAILED` with `retryable: false`
+  (that code's UI copy says "flaky CDN, try again", which is the wrong advice);
+  the rule judges **progressive** variants only, so an HLS or DASH variant with
+  undeclared codecs is still copied into WebM and still fails in ffmpeg;
+  `audioOnly` ignores the video's codec.
+- **A side effect that needed fixing.** Declaring codecs from a header changes
+  MP4 output too: `containerSupports` treats a recognised-but-unlisted codec as
+  unsupported, so an `ac-3` or `mp4v` sample entry would now be transcoded for
+  MP4 where it used to be copied. `normalizeCodecName` gains `ac-3` and `mp4v`
+  aliases; `mux-args.test.ts` pins the fourccs MP4 holds.
+- **Cost.** Two ranged reads per undeclared MP4 variant on every probe, and
+  again on the re-probe of a job, for the browser and direct tiers.
+- **Fold-in considered, not done:** the same refusal for HLS/DASH variants. No
+  container field says what a manifest holds, so there is no decided rule to
+  apply; left as an open question for the owner.

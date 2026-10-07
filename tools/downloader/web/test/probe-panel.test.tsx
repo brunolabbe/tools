@@ -16,10 +16,10 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { JobOptions, ProbeResult } from "@downloader/contract";
+import type { JobOptions, MediaVariant, ProbeResult } from "@downloader/contract";
 import { ProbePanel } from "../src/components/ProbePanel.tsx";
 import { pickDefaultVariantId } from "../src/lib/variants.ts";
-import { parsedVariants, probe, variants } from "./fixtures.ts";
+import { parsedVariants, probe, variant, variants } from "./fixtures.ts";
 
 afterEach(cleanup);
 
@@ -356,4 +356,71 @@ test("an image that fails to load takes itself off the page", () => {
   fireEvent.error(image as Element);
   expect(container.querySelectorAll("img")).toHaveLength(0);
   expect(screen.getByRole("heading", { name: "A sample recording" })).toBeDefined();
+});
+
+/**
+ * dl-99: the picker withholds WebM for a file the engine would refuse it for.
+ * Both ask `canMakeWebm`, so what is offered is what works.
+ */
+function file(id: string, overrides: Parameters<typeof variant>[0] = {}): MediaVariant {
+  return variant({
+    id,
+    protocol: "progressive",
+    url: `https://cdn.example.com/${id}.mp4`,
+    container: "mp4",
+    videoCodec: undefined,
+    audioCodec: undefined,
+    label: id,
+    ...overrides,
+  });
+}
+
+function containerOptions(): string[] {
+  return within(screen.getByLabelText("Container"))
+    .getAllByRole("option")
+    .map((option) => (option as HTMLOptionElement).value);
+}
+
+async function pickRendition(user: ReturnType<typeof userEvent.setup>, id: string): Promise<void> {
+  await user.click(
+    (within(screen.getByRole("table")).getAllByRole("radio") as HTMLInputElement[]).find(
+      (input) => input.value === id,
+    ) as HTMLInputElement,
+  );
+}
+
+test("WebM is not offered for a file nothing describes, and is for one that is declared", async () => {
+  const user = userEvent.setup();
+  mount(
+    probe({
+      variants: [
+        file("bare"),
+        file("declared", { videoCodec: "avc1", audioCodec: "mp4a" }),
+        file("webm", { container: "webm" }),
+      ],
+    }),
+  );
+
+  await pickRendition(user, "bare");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "source"]);
+  await pickRendition(user, "declared");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
+  await pickRendition(user, "webm");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
+});
+
+test("a WebM chosen for one file does not follow the visitor onto a file that cannot", async () => {
+  const user = userEvent.setup();
+  const spies = mount(
+    probe({
+      variants: [file("declared", { videoCodec: "avc1", audioCodec: "mp4a" }), file("bare")],
+    }),
+  );
+  await pickRendition(user, "declared");
+  await user.selectOptions(screen.getByLabelText("Container"), "webm");
+  await pickRendition(user, "bare");
+
+  expect((screen.getByLabelText("Container") as HTMLSelectElement).value).toBe("mp4");
+  download();
+  expect(spies.onDownload).toHaveBeenCalledWith(expect.objectContaining({ container: "mp4" }));
 });

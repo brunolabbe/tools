@@ -55,7 +55,7 @@ import type { FfmpegStream } from "./ffmpeg/runner.ts";
 import { isTlsVerificationFailure, streamFfmpeg } from "./ffmpeg/runner.ts";
 import type { Logger } from "./logger.ts";
 import type { OutputContainer, StreamMap, TranscodeNotice } from "./mux.ts";
-import { buildOutputArgs, CONTAINER_EXTENSIONS } from "./mux.ts";
+import { assertContainerCanHold, buildOutputArgs, CONTAINER_EXTENSIONS } from "./mux.ts";
 import { sanitizeFilename } from "./filename.ts";
 
 export interface StreamRequest {
@@ -390,6 +390,8 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
   const extension = outputExtension(container, audioOnly);
   const durationSec = request.durationSec ?? variant.durationSec ?? null;
   const liveDurationSec = options.liveDurationSec ?? null;
+
+  assertContainerCanHold(container, variant, { audioOnly, jobId });
 
   if (request.isLive === true && (liveDurationSec ?? 0) <= 0) {
     throw new AppError("LIVE_STREAM_UNSUPPORTED", undefined, {
