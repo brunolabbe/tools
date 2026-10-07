@@ -520,6 +520,9 @@ describe("countPlayedSegments (dl-79 gate 1)", () => {
 
 const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + probe.reads(), 0);
 
+const bodyOf = (collector: HitCollector, name: string): string | undefined =>
+  collector.bodyFor(`https://site.example/media/${name}.m3u8`);
+
 describe("a compressed typed manifest is read under three limits (dl-91)", () => {
   // `MAX_CAPTURED_BODY_BYTES` in intercept.ts, which is not exported.
   const FOUR_MIB = 4 * 1024 * 1024;
@@ -542,9 +545,6 @@ describe("a compressed typed manifest is read under three limits (dl-91)", () =>
   /** Declares what a bomb does: a few bytes on the wire, a large body once inflated. */
   const bombed = (name: string, body = bomb): Probe =>
     manifest(name, gzip, { declared: 100, body });
-
-  const bodyOf = (collector: HitCollector, name: string): string | undefined =>
-    collector.bodyFor(`https://site.example/media/${name}.m3u8`);
 
   test("an ordinary compressed manifest is never charged: every one is read and kept", async () => {
     // The first version of this budget counted reads, so two compressed ads that
