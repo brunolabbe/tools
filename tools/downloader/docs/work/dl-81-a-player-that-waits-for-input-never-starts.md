@@ -134,6 +134,73 @@ Every base/head comparison below was run with the real `BrowserResolver` (`quiet
 - **findings** · the hunt returned 11; 7 carried (3 high, 3 med, 1 low), 4 dropped.
 - NFR: security — clicking ads and submitting a third party's form is a side effect on other people's servers (first high) · performance ✓ (+556 ms with 20 frames) · reliability — the meds · maintainability — the low.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-07 · `a280941b..092fc118` · Opus 5.5, depth standard
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Each step-1 fixture yields its stream                             | `resolvers/test/browser/browser-resolver.test.ts` › "a player injected on the first wheel is reached from a bare poster", › "scrolls to the largest candidate, so a nav bar and an ad iframe above the fold do not take the slot", › "in a frame from another site" › "a scroll run there starts a player…" and › "a scripted play() run there starts a player…" ✓. The brief's first step-1 page is one page injected "on the first `pointermove`/`wheel`/`keydown`". A wheel reaches it. Done when 2 forbids every key but `Escape`, so reading that page as three pages, keydown included, would set line 1 against line 2: the brief's own conflict, which no build can meet. `?on=pointermove` still yields its stream at head (3 of 3 through the harness), but from Chromium's own load-time event, so no test can fail on it. Met as the brief can consistently be read; no owner question is needed |
+| `check`, the downloader project and `e2e:downloader:sniffer` pass | **verified** — after `npm run build`, `npm run check` exit 0. `npm test -- --project downloader`: 2081 passed and 2 skipped of 2083, against 2075 of 2077 at gate 1 (one test dropped, seven added). PR #390 `e2e (sniffer)` passed on `092fc118`. Code scanning's `CodeQL` check **failed** on the same head (third med)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+Lines 2–4 are unchanged from gate 1, and each still dies under its mutation: Enter pressed, the scroll back to the first match, and the Log's step 4.
+
+**Gate 1's findings.** Re-run with gate 1's `harness.mts`, the real `BrowserResolver`, and `localhost` as the cross-site origin, at `092fc118`:
+
+- **high, the box click — fixed.** Each page now matches base or does better:
+  - the related grid, both form pages, `billboard` top and blank, `ad-vs-hls` and `detach` return the real HLS;
+  - `billboard-poster` top and blank return the real HLS, where base gave `NO_MEDIA_FOUND`;
+  - `interstitial` gives `NO_MEDIA_FOUND`, and the advertiser page is never requested;
+  - no `POST /beacon/form-submitted` is sent.
+
+  Three mutations each fail exactly one test: `<iframe>` put back among the box candidates, `form` dropped from the unsafe list, and the box click ignoring `hasPlayable`. The box click does not wait long enough for a delayed stream (first med below).
+
+- **high, `pointermove` — fixed.** The test is dropped, the fixture defaults to `wheel` and says why, and the Log corrects round 1's "seven red". The builder says the base test is racy. Its 6-failed and 7-failed runs are not reproduced here: base passed 5 of 5 for me. Either way, the dropped test could not prove anything.
+- **high, "scrolls to the largest candidate…" — fixed.** With the scroll back to the first match, 2 tests fail, the resolver test and the unit.
+- **med, `play()` in every frame — fixed.** `ad-outranks` returns `P/atk/real.mp4` and `top-nav-play` returns the real HLS. Playing every media element in a cross-origin frame, and the cross-origin `play()` ignoring `hasPlayable`, each fail "a scripted play() run there does not play an ad once the page's own stream is captured".
+- **med, the nudge — fixed for `nudge.html`** (real HLS); "still nudges the page 400 px…" fails when the nudge is skipped. The fix does not cover every layout (second med below).
+- **med, hover previews — fixed.** `hover-preview` gives `NO_MEDIA_FOUND` with no `/atk/preview-*` request. A three-step mouse sweep added back fails "sends no pointer movement…".
+- **low, the first commit — fixed.** The docstring and the Log both name 725740c3.
+
+**Found in this round's lines:**
+
+- **med** · no `Done when` line depends on it · **open decision 1** · **`hasPlayable` loses to a stream that is requested late.** Gate 1's related grid again, with the Play button's manifest `fetch` delayed by `?delay=` ms (`related-grid-delay.html`):
+
+  | delay   | base     | head                               |
+  | ------- | -------- | ---------------------------------- |
+  | 0 ms    | —        | real HLS                           |
+  | 300 ms  | real HLS | `navigated-away` → `/other-5.html` |
+  | 800 ms  | —        | `navigated-away`                   |
+  | 1500 ms | real HLS | `navigated-away`                   |
+  | 3000 ms | —        | `navigated-away`                   |
+
+  The box click checks `collector.hasPlayableHit()` after the press but before the player has asked for anything. A real player usually loads a script or calls an API before it requests the manifest.
+  - **A** (recommended): skip the box click once pass 0 pressed a play-ish control (`clickVisible` or `clickByText` returning that it clicked). The press itself is the evidence.
+  - **B**: wait up to about 1 s for a hit after a play-ish press.
+  - **C**: record and accept.
+
+- **med** · no `Done when` line depends on it · **the nudge still loses two layouts base reached** (`nudge-low.html`; the player mounts once `scrollY` reaches 300).
+
+  | layout                                                                                                                                                                             | base     | head             | head, box click removed |
+  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------- | ----------------------- |
+  | `top=500`: a 300x50 `player-header` just below the middle; centring moves it about 140 px, so no nudge                                                                             | real HLS | `NO_MEDIA_FOUND` | `NO_MEDIA_FOUND`        |
+  | `top=0&smooth=1`: the same slot at the top, page uses `scroll-behavior: smooth`; the box click picks the 300x50 header, and Playwright's scroll-into-view cancels the smooth nudge | real HLS | `NO_MEDIA_FOUND` | real HLS                |
+  | `top=500&smooth=1`                                                                                                                                                                 | real HLS | `NO_MEDIA_FOUND` | —                       |
+
+  `smooth-lazy.html` (smooth page, lazy shell far down) goes from `NO_MEDIA_FOUND` at base to real HLS at head. The first row is left over from the remedy gate 1 recommended. Recommended fix: nudge the top frame always, and a subframe only when the centring moved nothing (the frame-sized embed was the only case the nudge broke), and give the box click a minimum size, so a 300x50 header is never "the player".
+
+- **med** · no `Done when` line depends on it · **code scanning `CodeQL` fails on `092fc118`.** It reports two new high-severity "DOM text reinterpreted as HTML" alerts, in `hover-previews-keydown-player.html` (`v.src = v.getAttribute("data-preview")`) and `player-poster-related-grid.html` (`location.href = card.getAttribute("data-to")`). Both are this round's fixtures; `CodeQL` passed on `a280941b`. Nobody has excused them. Remedy: build the URL in the script from an index instead of reading it from an attribute, which needs no adr/005 excuse. A red leg should not land.
+- **dropped** · the cookie-banner result is a real click on the player, not a press through the banner. `cookie-banner-log.html` logs every click; with the gap above the box set to 0, 100, 200, 300, 400, 500, 700 and 1000 px:
+  - the box was clicked in 2 of 8 layouts, `player-box` at `y120` (`scrollY` 220) and `y180` (`scrollY` 200), both above the banner's top edge at 307 px;
+  - `NO_MEDIA_FOUND` in the other 6, with no click;
+  - `/beacon/banner-link` was never requested, in 8 of 8.
+
+  The Log credits the wheel's 120 px for this; `scrollY` was 200 and 220. The detail is off, but the conclusion holds. Not a defect.
+
+- **dropped** · the existing fixtures return the same stream at both base and head: `shadow-player-lazy-mount`, `mse`, `iframe-parent`, and `cross-origin-card-inner` and `shadow-player` behind a cross-site frame. Twenty cross-origin frames take 4144 ms. Not a defect.
+- **findings** · gate 1's 7: 7 fixed. The hunt over `a280941b..092fc118` returned 5; 3 carried (all med), 2 dropped. **Nothing is a `high`.**
+- NFR: security — the third med; clicking ads and submitting forms are gone · performance ✓ · reliability — the first two meds · maintainability ✓.
+
 ## Log
 
 - 2026-10-07 — **Built** (builder, Sonnet 5.5). Branch `dl-81-input-only-player`
