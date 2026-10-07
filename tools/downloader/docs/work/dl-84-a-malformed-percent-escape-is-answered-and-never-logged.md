@@ -107,6 +107,45 @@ that handler can write the line without changing the 400 the client sees was
 - NFR: security — the low above, everything else ✓ · performance n/a (one line per refused request, the same class as 404s) · reliability ✓ (keep-alive pipelining is unchanged; `redactLoggedUrl` does not throw on these inputs) · maintainability — the lows above.
 - Invariants checked: no cross-tool import ✓, contract untouched ✓, `redactLoggedUrl` on the logged URL ✓, test file already registered ✓, style ✓. Skipped as not touched: shell, SSRF, progress, `Dockerfile` closure.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-07 · `5c1954d2..2fd182cb` · Opus 5.5, depth standard
+
+Gate 1's findings:
+
+- **low, 414 test checked no headers — fixed.** "a parameter longer than the router allows is logged too, and still 414" now asserts `Content-Type: application/json`. The `reply.send` mutation (`m3-reply-send`), re-run at this head, makes it fail: 9 failed of 17, 414 included, on `'application/json; charset=utf-8'`. At gate 1 it stayed green.
+- **low, 414 fold-in not taken with the UI served — fixed.** The Log carries a correction, and the `createFrameworkErrorHandler` doc comment now says that with `webDir` set the over-long parameter is a 404 on the normal path. Re-measured with `webDir`: 5 of 5 over-long-parameter targets answered 404 with 1 line each, at the base and at this head.
+- **low, `durationMs` a constant 0 — fixed** by dropping the field from refused lines. 75 of 75 refused lines at this head carry no `durationMs`, and served lines still do. Putting it back (`m6-duration-back`) fails 8 of 17, on `to not have property "durationMs"`.
+- **open decision, malformed escape in or before the route — resolved by the owner as (b), and built as `redactRefusedUrl`.**
+  - The three gate-1 shapes now log `/api/files[truncated]`, `/api/fi[truncated]` and `/api/[truncated]`, with 0 token windows in any line.
+  - Swapping `redactRefusedUrl` for `redactLoggedUrl` (`m5-logged-not-refused`) fails 8 of 17, which matches the Log's "8 of 8". Dropping the UTF-8 run check (`m7-no-utf8-check`) fails the 2 overlong cases.
+
+Done when 1–5 still hold.
+
+- **Suite:** `npm test -- --project downloader` gives 2080 passed and 2 skipped of 2082 (gate 1 head: 2072 of 2074, so +8, the new cases).
+- **Check:** `npm run check` exits 0.
+- **Re-run of gate 1's mutations at this head:** dropping redaction fails 17 of 17. Logging `error.message` fails 17 of 17. A second line fails 17 of 17 (3 distinct `got 2` messages).
+- **PR #387 at `2fd182cb`:** every leg is green — `check`, `test (ubuntu-latest)`, `test (windows-latest, informational)`, both `e2e` legs, `docker` and `codeql`. The rollup also lists one `check` as CANCELLED. `gh pr checks` shows both `check` entries passing, so it is a superseded run.
+
+Attack on `redactRefusedUrl`, over a real socket at the base, at gate 1's head and at this head (84 targets, 30 of them new):
+
+- **Fuzz:** 200,000 random paths, compared against find-my-way's own `safeDecodeURI`. Of the 48,446 it refuses, the handler's line is cut or redacted for 48,446 and verbatim for 0. A marker placed after a `%zz` survived in 0 of 100,000 paths.
+- **Closed by the cut:** a lone `%` in the route, `%zz` after or before it, an overlong `/` in or after the prefix, an overlong 3-byte sequence, an encoded surrogate, truncated UTF-8, and a cut whose signed query is dropped along with the path.
+- **Read by `redactLoggedUrl` first:** double encoding (`%2566iles`, `files%252F`), `;x` after the prefix, and `%zz/../files/<t>`.
+- **Served lines unchanged:** 10 of 10 served targets wrote identical lines at the base, at gate 1's head and at this head. That includes the `FILE_EXPIRED` error line and a 404 with a signed query. 0 of 84 responses differ apart from a job body's timestamps.
+
+- **low** · `nfr:maintainability` · **The `redactRefusedUrl` doc comment over-states what happens to the query.** It says "otherwise the path cut at the first percent escape that does not decode, with the query dropped". A refused path with no such escape (every 414 off a capability route) comes back verbatim, query included: `GET /api/jobs/<token×3>` is logged whole, at 414. No credential route is affected, since a capability path goes through `redactLoggedUrl` first. The comment needs one clause.
+- **dropped** · a token placed _before_ the first bad escape, in a spelling `redactLoggedUrl` cannot read, still reaches the line. Measured shapes:
+  - `/api/filez/<t>%zz` and `/api/thumbnails/<t>%zz`;
+  - four layers of encoding, a full-width slash, a trailing dot, `%00` in the route;
+  - `/api/%C3%A9/files/<t>%zz` and `/<t>/api/fi%les/x`.
+
+  This is what option (b) leaves by construction, and the Log says so with `/api/filez/<token>%zz` as its example. Each one's escape-free version is already logged verbatim on a 404 at the base. Not a defect against the owner's decision.
+
+- **dropped** · the signed query kept after a redacted capability path (`/api/files/[redacted]?X-Amz-Signature=…`). This is dl-76's class, unchanged by this round and identical on served lines.
+- **findings** · the hunt returned 3: 1 carried, 2 dropped.
+- NFR: security ✓ (fuzz above) · performance n/a (one linear regex pass and one `decodeURIComponent` per escape run, refused requests only) · reliability ✓ (`decodes` catches `URIError`; nothing throws on 48,446 refused paths) · maintainability — the low above.
+
 ## Log
 
 - 2026-10-06 — Filed from dl-76's gate 1 (`7072830`), at the owner's choice to
