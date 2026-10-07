@@ -15,7 +15,13 @@ import {
   countPlayedSegments,
   SEGMENTS_WITHOUT_MANIFEST,
 } from "../../src/browser/classify.ts";
-import { HitCollector, MAX_ENCODED_CAPTURES_PER_PROBE } from "../../src/browser/intercept.ts";
+import {
+  ENCODED_SLOT_HOLD_MS,
+  HitCollector,
+  MAX_ENCODED_READS_IN_FLIGHT,
+  MAX_ENCODED_RETAINED_BYTES,
+  MAX_OVERSIZE_ENCODED_READS_PER_PROBE,
+} from "../../src/browser/intercept.ts";
 import { rankHits } from "../../src/browser/rank.ts";
 import type { NetworkHit } from "../../src/browser/types.ts";
 import {
@@ -136,6 +142,8 @@ function response(
     hangs?: boolean;
     /** A body read that returns only once this settles, like a slow master. */
     holdUntil?: Promise<void>;
+    /** Shared by several responses, to see how many `text()` reads overlap. */
+    concurrency?: { active: number; peak: number };
   } = {},
 ): Probe {
   const url = options.url ?? "https://site.example/api/playlist?id=1";
@@ -167,7 +175,18 @@ function response(
     },
     text: async () => {
       reads += 1;
-      return body.toString("utf8");
+      const tracker = options.concurrency;
+      if (tracker) {
+        tracker.active += 1;
+        tracker.peak = Math.max(tracker.peak, tracker.active);
+      }
+      try {
+        if (options.hangs === true) await new Promise<never>(() => {});
+        await options.holdUntil;
+        return body.toString("utf8");
+      } finally {
+        if (tracker) tracker.active -= 1;
+      }
     },
   };
   return { response: fake as unknown as Response, reads: () => reads };
@@ -501,78 +520,147 @@ describe("countPlayedSegments (dl-79 gate 1)", () => {
 
 const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + probe.reads(), 0);
 
-describe("a compressed typed manifest is read on a budget (dl-91)", () => {
+describe("a compressed typed manifest is read under three limits (dl-91)", () => {
+  // `MAX_CAPTURED_BODY_BYTES` in intercept.ts, which is not exported.
+  const FOUR_MIB = 4 * 1024 * 1024;
+  const gzip = { "content-encoding": "gzip" };
   const typed = { "content-type": "application/vnd.apple.mpegurl" };
+  const bomb = `${M3U8}${"x".repeat(FOUR_MIB)}`;
 
-  function manifest(index: number, headers: Record<string, string> = {}): Probe {
+  function manifest(
+    name: string,
+    headers: Record<string, string> = {},
+    overrides: Parameters<typeof response>[0] = {},
+  ): Probe {
     return response({
-      url: `https://site.example/media/${index}.m3u8`,
+      url: `https://site.example/media/${name}.m3u8`,
       headers: { ...typed, ...headers },
+      ...overrides,
     });
   }
 
-  test("no more than MAX_ENCODED_CAPTURES_PER_PROBE compressed bodies are read, and the rest are still hits", async () => {
-    // Chromium inflates before Playwright returns, so the declared length bounds
-    // nothing: 32 such reads of 12 MiB each took the process from 269 MB to ~800 MB.
-    const probes = Array.from({ length: 10 }, (_, index) =>
-      manifest(index, { "content-encoding": "gzip" }),
-    );
+  /** Declares what a bomb does: a few bytes on the wire, a large body once inflated. */
+  const bombed = (name: string, body = bomb): Probe =>
+    manifest(name, gzip, { declared: 100, body });
+
+  const bodyOf = (collector: HitCollector, name: string): string | undefined =>
+    collector.bodyFor(`https://site.example/media/${name}.m3u8`);
+
+  test("an ordinary compressed manifest is never charged: every one is read and kept", async () => {
+    // The first version of this budget counted reads, so two compressed ads that
+    // arrived before the page's master used it up and the master was never read.
+    const probes = Array.from({ length: 12 }, (_, index) => manifest(`m${index}`, gzip));
     const collector = await collect(...probes);
 
-    expect(reads(probes)).toBe(MAX_ENCODED_CAPTURES_PER_PROBE);
-    expect(probes.slice(MAX_ENCODED_CAPTURES_PER_PROBE).map((probe) => probe.reads())).toEqual(
-      Array.from({ length: 10 - MAX_ENCODED_CAPTURES_PER_PROBE }, () => 0),
-    );
-    // Not read is not lost: the hit stands and `#loadManifest` re-fetches it.
-    expect(collector.hits).toHaveLength(10);
-    expect(collector.hits.every((hit) => hit.kind === "hls")).toBe(true);
+    expect(reads(probes)).toBe(12);
+    expect(collector.hits.map((hit) => collector.bodyFor(hit.key))).toEqual(probes.map(() => M3U8));
   });
 
-  test("a compressed manifest inside the budget still yields its body from bodyFor", async () => {
-    const probes = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 1 }, (_, index) =>
-      manifest(index, { "content-encoding": "br" }),
+  test("two compressed ads arriving first leave the master its body, with or without polls", async () => {
+    const master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2800000\nhigh.m3u8\n";
+    const collector = await collect(
+      manifest("ad0", gzip),
+      manifest("ad1", gzip),
+      manifest("live?t=1", gzip),
+      manifest("live?t=2", gzip),
+      manifest("master", gzip, { body: master }),
+    );
+
+    expect(bodyOf(collector, "master")).toBe(master);
+  });
+
+  test("reads in flight never pass the limit, and the rest wait their turn instead of being dropped", async () => {
+    const tracker = { active: 0, peak: 0 };
+    const held = new Promise<void>((resolve) => {
+      setTimeout(resolve, 30);
+    });
+    const probes = Array.from({ length: 8 }, (_, index) =>
+      manifest(`m${index}`, gzip, { holdUntil: held, concurrency: tracker }),
     );
     const collector = await collect(...probes);
 
-    const bodies = collector.hits.map((hit) => collector.bodyFor(hit.key));
-    expect(bodies.slice(0, MAX_ENCODED_CAPTURES_PER_PROBE)).toEqual(
-      Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE }, () => M3U8),
+    expect(tracker.peak).toBe(MAX_ENCODED_READS_IN_FLIGHT);
+    expect(reads(probes)).toBe(8);
+    expect(collector.hits.map((hit) => collector.bodyFor(hit.key))).toEqual(probes.map(() => M3U8));
+  });
+
+  test("once enough reads come back oversize no further read starts, and no bomb body is kept", async () => {
+    const bombs = Array.from({ length: 10 }, (_, index) => bombed(`b${index}`));
+    const late = manifest("late", gzip);
+    const collector = await collect(...bombs, late);
+
+    // Charged when the size is known, but reads in flight are held to what is
+    // left, so a third read cannot start while two might still come back oversize.
+    expect(reads(bombs)).toBe(MAX_OVERSIZE_ENCODED_READS_PER_PROBE);
+    expect(late.reads()).toBe(0);
+    expect(collector.hits).toHaveLength(11);
+    expect(bodyOf(collector, "b0")).toBeUndefined();
+    expect(bodyOf(collector, "late")).toBeUndefined();
+  });
+
+  test("an oversize read under the budget does not cost the next manifest its body", async () => {
+    const bombs = Array.from({ length: MAX_OVERSIZE_ENCODED_READS_PER_PROBE - 1 }, (_, index) =>
+      bombed(`b${index}`),
     );
-    expect(bodies[MAX_ENCODED_CAPTURES_PER_PROBE]).toBeUndefined();
+    const collector = await collect(...bombs, manifest("master", gzip));
+
+    expect(bodyOf(collector, "master")).toBe(M3U8);
+  });
+
+  test("a read that never settles gives its slot back, so it cannot starve the manifest behind it", async () => {
+    const stuck = Array.from({ length: MAX_ENCODED_READS_IN_FLIGHT }, (_, index) =>
+      manifest(`stuck${index}`, gzip, { hangs: true }),
+    );
+    const master = manifest("master", gzip);
+    const collector = await collectWithin(ENCODED_SLOT_HOLD_MS + 500, ...stuck, master);
+
+    expect(bodyOf(collector, "master")).toBe(M3U8);
+  });
+
+  test("what is kept of compressed bodies is capped, and a read past the cap is still a hit", async () => {
+    // 3 MiB is under the oversize line, so only the retained total bounds these.
+    const body = `${M3U8}${"x".repeat(3 * 1024 * 1024)}`;
+    const probes = Array.from({ length: 6 }, (_, index) =>
+      manifest(`m${index}`, gzip, { declared: 100, body }),
+    );
+    const collector = await collect(...probes);
+
+    const kept = collector.hits.filter((hit) => collector.bodyFor(hit.key) !== undefined);
+    expect(reads(probes)).toBe(6);
+    expect(collector.hits).toHaveLength(6);
+    expect(kept.length).toBe(Math.floor(MAX_ENCODED_RETAINED_BYTES / body.length));
+  });
+
+  test("a compressed playlist polled again keeps its latest body, as an uncompressed one does", async () => {
+    const first = manifest("live", gzip, { body: `${M3U8}#first\n` });
+    const second = manifest("live", gzip, { body: `${M3U8}#second\n` });
+    const collector = await collect(first, second);
+
+    expect(bodyOf(collector, "live")).toBe(`${M3U8}#second\n`);
   });
 
   test("an uncompressed typed manifest is captured as before, however many there are", async () => {
-    const probes = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 8 }, (_, index) =>
-      manifest(index),
-    );
+    const probes = Array.from({ length: 12 }, (_, index) => manifest(`m${index}`));
     const collector = await collect(...probes);
 
     expect(reads(probes)).toBe(probes.length);
     expect(collector.hits.map((hit) => collector.bodyFor(hit.key))).toEqual(probes.map(() => M3U8));
   });
 
-  test("an uncompressed read is not charged to the budget, and identity is not compression", async () => {
-    const packed = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 3 }, (_, index) =>
-      manifest(index, { "content-encoding": "gzip" }),
+  test("an uncompressed read is not held up by compressed ones, and identity is not compression", async () => {
+    const tracker = { active: 0, peak: 0 };
+    const held = new Promise<void>((resolve) => {
+      setTimeout(resolve, 30);
+    });
+    const packed = Array.from({ length: 4 }, (_, index) =>
+      manifest(`m${index}`, gzip, { holdUntil: held, concurrency: tracker }),
     );
-    const plain = manifest(100);
-    const identity = manifest(101, { "content-encoding": "identity" });
-    await collect(...packed, plain, identity);
+    const plain = manifest("plain");
+    const identity = manifest("identity", { "content-encoding": "identity" });
+    await collectWithin(2000, ...packed, plain, identity);
 
     expect(plain.reads()).toBe(1);
     expect(identity.reads()).toBe(1);
-  });
-
-  test("a compressed url seen again is read once and spends the budget once", async () => {
-    // A live playlist is polled: the second response must neither re-read a body
-    // that may be a bomb nor starve a manifest that has not been read yet.
-    const gz = { "content-encoding": "gzip" };
-    const first = manifest(0, gz);
-    const again = manifest(0, gz);
-    const other = manifest(1, gz);
-    await collect(first, again, other);
-
-    expect(first.reads() + again.reads()).toBe(1);
-    expect(other.reads()).toBe(1);
+    expect(tracker.peak).toBe(MAX_ENCODED_READS_IN_FLIGHT);
   });
 });
