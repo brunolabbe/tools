@@ -15,7 +15,7 @@
 
 import { randomUUID } from "node:crypto";
 import { REDACTED, ROUTES } from "@downloader/contract";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "./context.ts";
 import type { AppLogger } from "./logger.ts";
 
@@ -207,4 +207,102 @@ export function registerRequestLogging(app: FastifyInstance, context: AppContext
     if (isNoisy(request)) request.logger.debug("request", fields);
     else request.logger.info("request", fields);
   });
+}
+
+/**
+ * The form of a *refused* request's URL that is safe to log: `redactLoggedUrl`'s
+ * answer when it finds a capability prefix, and otherwise the path **cut at the
+ * first percent escape that does not decode**, with the query dropped. A refused
+ * path with no such escape (every 414 off a capability route) is returned whole,
+ * query included, as `redactLoggedUrl` leaves any non-capability URL.
+ *
+ * The cut is for a path like `/api/files%zz/<t>`, `/api/fi%les/<t>` or
+ * `/api/%zz/files/<t>`: the malformed escape sits in or before the route, so
+ * `redactLoggedUrl` cannot read the path as a capability route's and would log the
+ * token whole. Before dl-84 such a request wrote no line, so logging it as it
+ * arrived would have been a new leak (owner decision 2026-10-07; dl-76 names the
+ * served-request analogue, a spelling no normaliser turns into the route, and
+ * leaves it). Whatever follows the first bad escape is dropped because it is
+ * exactly the part that cannot be read. Cutting at the *run* of escapes that
+ * fails, not the single byte, errs towards logging less.
+ *
+ * Only the refusal path calls this: a served request's line is unchanged.
+ */
+function redactRefusedUrl(url: string): string {
+  const redacted = redactLoggedUrl(url);
+  if (redacted !== url) return redacted;
+  const boundary = url.search(/[?#]/u);
+  const path = boundary === -1 ? url : url.slice(0, boundary);
+  // A `%` not followed by two hex digits, or a run of escapes that is not UTF-8.
+  for (const match of path.matchAll(/%(?![0-9a-f]{2})|(?:%[0-9a-f]{2})+/giu)) {
+    if (match[0] === "%" || !decodes(match[0])) {
+      return `${path.slice(0, match.index)}[truncated]`;
+    }
+  }
+  return url;
+}
+
+function decodes(escapes: string): boolean {
+  try {
+    decodeURIComponent(escapes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fastify's `frameworkErrors` handler: the line for a request its router refuses
+ * **before any hook runs**, which `registerRequestLogging`'s hooks never see
+ * (dl-84). A percent escape it cannot decode (`%zz`, a lone `%`, a truncated or
+ * overlong sequence) is `FST_ERR_BAD_URL`, 400; a path parameter past
+ * `maxParamLength` is `FST_ERR_MAX_PARAM_LENGTH`, 414 — but only with no UI served:
+ * with `webDir` set (the image's configuration) the over-long parameter reaches the
+ * not-found handler as a 404 through the normal path and was logged all along.
+ * Without this the service answered the 400s and wrote nothing, so a scan or a
+ * client building broken links was invisible.
+ *
+ * One `request` line, named and shaped like an ordinary request so the query that
+ * finds requests finds these, **at `info`** like every other request that is not a
+ * health check: a scanner already costs one `info` line per probe through the 404
+ * path, so this adds no new volume class, and `code` is what tells the two apart.
+ * It carries `url` through `redactRefusedUrl` and never the error's `message`,
+ * which Fastify builds by quoting the raw path, token and all. It has **no
+ * `durationMs`**: Fastify records no start time for a refused request (its
+ * `elapsedTime` reads 0), and a constant would read as a measurement.
+ *
+ * **The response is rewritten byte for byte** from what Fastify writes itself
+ * when this option is unset, because setting the option hands the whole answer to
+ * this function. It goes out on `reply.raw`, as Fastify's default does, so no
+ * hook runs for it and no second line is written by `onResponse`.
+ */
+export function createFrameworkErrorHandler(context: AppContext) {
+  return (error: FastifyError, request: FastifyRequest, reply: FastifyReply): void => {
+    // The refused request has had no `onRequest`, so no bound child logger yet.
+    context.logger.child({ requestId: request.id }).info("request", {
+      method: request.method,
+      url: redactRefusedUrl(request.url),
+      status: error.statusCode ?? 500,
+      ip: request.ip,
+      code: error.code,
+    });
+
+    const status = error.statusCode ?? 500;
+    // Fastify's own text, including its "Bad Request" for the 414 as well, so
+    // that nothing a client could read changes when this line began to be written.
+    const body = JSON.stringify(
+      status === 500
+        ? {
+            error: "Internal Server Error",
+            message: "Unexpected error from async constraint",
+            statusCode: 500,
+          }
+        : { error: "Bad Request", code: error.code, message: error.message, statusCode: status },
+    );
+    reply.raw.writeHead(status, {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    });
+    reply.raw.end(body);
+  };
 }
