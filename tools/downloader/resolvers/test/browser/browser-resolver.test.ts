@@ -603,8 +603,8 @@ describe("BrowserResolver", () => {
         server.requests.length = 0;
         const error = await probeError("/age-gate.html?inert", resolver);
 
-        // The server was set to confirm and did: "not set to confirm it" would
-        // be false.
+        // The server was set to confirm and did: "the server did not confirm
+        // it" would be false.
         expectCode(error, "NO_MEDIA_FOUND");
         expect(server.requests).toContain("/beacon/age-confirmed");
       },

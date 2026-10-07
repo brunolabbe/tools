@@ -43,7 +43,9 @@ export const DOWNLOADER_ERROR_CODES = [
    * the setting is off, or it is on and the press declined because the page left
    * no single control to press (dl-83). The wording says what the server did and
    * claims nothing about its setting, so it is true of both (dl-94). Not
-   * retryable: nothing changes until an operator does.
+   * retryable: the setting being off needs an operator to turn it on, and a
+   * declined press needs the page or the press rules to change, so a retry
+   * alone changes nothing in either case.
    */
   "AGE_CONFIRMATION_REQUIRED",
   /** Source refused our region. */

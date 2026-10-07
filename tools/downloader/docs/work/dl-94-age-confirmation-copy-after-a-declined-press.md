@@ -100,3 +100,21 @@ to confirm their age, and this server is not set to confirm it."`, after it
   still says only "with it off, such a page fails `AGE_CONFIRMATION_REQUIRED`";
   it is true but does not mention the declined press, and the ticket does not
   name it.
+
+**2026-10-07 — gate 1 round 2** (fixer, wording only; no behaviour and no
+message text a test pins).
+
+- **Owner decision, Build step 3:** add a `details.reason` field? Options: A
+  none (the builder's recommendation); B `details.reason` `"declined"` |
+  `"disabled"`; C a field for the declined case only. **Chosen: A, none.** The
+  two causes keep sharing one message and carry no `details` to tell them apart.
+- **Gate 1's three lows applied.** The comments in `resolvers/src/resolvers/browser.ts`
+  (the `classifyFailure` call) and in `browser-resolver.test.ts` (the test "a
+  press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal")
+  now quote "did not confirm", not the retired "not set to confirm". The
+  docstring in `contract/src/errors.ts` no longer ends "nothing changes until an
+  operator does": it says the setting being off needs an operator and a declined
+  press needs the page or the press rules to change. The `ENABLE_AGE_CONFIRMATION`
+  rows in `docs/00-ANALYSIS.md` (the "Age confirmation" row, which the build Log
+  had not named) and `docs/01-ARCHITECTURE.md` now name the declined press as a
+  second way to reach `AGE_CONFIRMATION_REQUIRED`.
