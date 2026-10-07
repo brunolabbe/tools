@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-ish box inside a link</title>
+  </head>
+  <body>
+    <h1>A player-ish box inside a link</h1>
+    <!-- dl-81: the only player-ish box is a card inside an `<a href>`. The
+         input pass's centre click must not press it: a click here navigates
+         the tab to the target, which the tier counts as leaving the page. -->
+    <a href="/related-card-target.html" style="display: block; width: 640px; height: 360px">
+      <div class="player-card" style="width: 640px; height: 360px; background: #ccc"></div>
+    </a>
+  </body>
+</html>

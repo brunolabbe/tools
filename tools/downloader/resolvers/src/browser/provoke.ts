@@ -833,11 +833,28 @@ const PLAY_TEXT =
  * fired and the manifest was never requested; the shadow-piercing selector
  * matches the shell on its class name alone (no `<video>` has mounted yet)
  * and scrolls to it, which is what triggers the fetch.
+ *
+ * **The largest eligible candidate, not the first** (dl-81), by the rule the
+ * surface click uses (`CHOOSE_VIDEO_INDEX_FN`: visible, not inside a link,
+ * largest area). An ad iframe or a `player-nav` bar above the fold took the
+ * first slot, and scrolling an element already in view scrolled nowhere. When
+ * nothing is eligible the first match is still used, as before. A layout
+ * wrapper that is the largest `[class*="player"]` wins on area, as it was
+ * first in document order before; only the click that follows guards against
+ * one (`MARK_PLAYER_BOX_SCRIPT`).
+ *
+ * **The 400 px nudge is for when there is nothing to centre.** It used to follow
+ * the centring, and in a frame the size of its player (a 640x360 embed) it
+ * pushed the player out of view before the page's `IntersectionObserver` had
+ * run, so a player that mounts on scroll into view never saw itself visible.
  */
-const SCROLL_SCRIPT = `(() => {
-  var el = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]')[0];
+export const SCROLL_SCRIPT = `(() => {
+  var candidates = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]');
+  var chosen = (${CHOOSE_VIDEO_INDEX_FN})(candidates);
+  var el = chosen === -1 ? candidates[0] : candidates[chosen];
   if (el && typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ block: 'center', inline: 'center' });
+    return true;
   }
   try { window.scrollBy(0, 400); } catch {}
   return !!el;
@@ -954,9 +971,22 @@ function originOf(raw: string): string | undefined {
 }
 
 /**
- * Frames we are willing to run script in. Cross-origin embeds still get clicked
- * through the locator API — that goes through the browser, not an evaluation
- * context, so it does not need same-origin access.
+ * Frames we are willing to run the **consent, modal and age-gate** script in.
+ * Cross-origin embeds still get clicked through the locator API — that goes
+ * through the browser, not an evaluation context, so it does not need
+ * same-origin access.
+ *
+ * **This is a policy, not a wall, and no reason is recorded for it** (dl-81,
+ * step 4). The first version (d1ec2c61) wrote the rule with no rationale, and
+ * its ticket (dl-2) asked only to "handle same-origin iframes". dl-55 measured
+ * that `frame.evaluate` works in a cross-origin frame and relaxed the policy for
+ * a read-only check, noting that it mutates nothing; that is a reason it was
+ * safe there, not a reason scripts were kept out. A scroll and a `play()` carry
+ * no credential, read nothing back, and do what the locator click already does
+ * to the same frame. So `SCROLL_SCRIPT` and `PLAY_SCRIPT` run in every frame;
+ * this predicate still gates what presses a control by its text — consent, a
+ * close control, the age gate — which stays on the page's own origin (dl-83
+ * owns the age gate).
  */
 function isScriptableFrame(frame: Frame, pageOrigin: string | undefined): boolean {
   const url = frame.url();
@@ -1340,9 +1370,10 @@ async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean>
  * In a scriptable frame the choice is made once, in-page, by
  * `CHOOSE_VIDEO_FN`, and only the marked element is clicked, through the
  * locator API. Elsewhere, `isScriptableFrame`'s policy of not running script
- * still applies to every *other* evaluation this file does — `SCROLL_SCRIPT`,
- * `PLAY_SCRIPT`, `dismissModal`'s scripted path — but not to this one narrow
- * case (dl-55, decision 3): `frame.evaluate(CHOOSE_VIDEO_INDEX_SCRIPT)` reads
+ * still applies to the evaluations that press a control by its text —
+ * `dismissModal`'s scripted path, consent, the age gate; since dl-81 not to the
+ * scroll or the `play()` either. This one narrow
+ * case (dl-55, decision 3) was the first exception: `frame.evaluate(CHOOSE_VIDEO_INDEX_SCRIPT)` reads
  * element geometry and ancestry back as a plain index, mutates nothing, and
  * costs one round trip regardless of frame origin, the same as the marked
  * click does in a scriptable frame — `Locator.evaluateAll` was tried first and
@@ -1359,16 +1390,18 @@ async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean>
  * related-video card from ever being the *target*, which is what made `force`
  * dangerous before. It no longer risks a click landing on unrelated content.
  */
-async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<void> {
+async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<boolean> {
   if (scriptable) {
     let marked = false;
+    let clicked = false;
     try {
       marked = await frame.evaluate<boolean>(CHOOSE_VIDEO_SCRIPT);
-      if (!marked) return;
+      if (!marked) return false;
       await frame
         .locator(`[${VIDEO_MARK}]`)
         .first()
         .click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
+      clicked = true;
     } catch {
       // No qualifying video, or it went away before the click landed.
     } finally {
@@ -1380,26 +1413,176 @@ async function clickChosenVideo(frame: Frame, scriptable: boolean): Promise<void
         }
       }
     }
-    return;
+    return clicked;
   }
 
   try {
     const index = await frame.evaluate<number>(CHOOSE_VIDEO_INDEX_SCRIPT);
-    if (index < 0) return;
+    if (index < 0) return false;
     const video = frame.locator("video").nth(index);
     if (await video.isVisible({ timeout: 150 })) {
       await video.click({ timeout: 1500, force: true, position: { x: 5, y: 5 } });
+      return true;
     }
   } catch {
     // No qualifying video, or it is not clickable.
   }
+  return false;
 }
 
+/** Marks the player-ish box `MARK_PLAYER_BOX_SCRIPT` chose, so the click goes through the locator API. */
+const BOX_MARK = "data-downloader-box";
+
+/**
+ * The share of the viewport above which a non-frame box is a layout wrapper, not
+ * a player (dl-81): a `class="player-page"` around the whole document is the
+ * largest `[class*="player"]` there is, and its centre is whatever the page put
+ * there. An `<iframe>` is exempt: a page that is one embed fills the viewport
+ * and is exactly what should be clicked.
+ */
+const BOX_MAX_COVER = 0.85;
+
+/**
+ * Chooses the player-ish box to press when no `<video>` was, and marks it
+ * (dl-81). The candidates are the ones `SCROLL_SCRIPT` scrolls to, minus
+ * `<video>`, and the choice is the same rule (`CHOOSE_VIDEO_INDEX_FN`), so the
+ * box the click lands on is the box the scroll centred.
+ *
+ * **It never marks a control a click could act on.** The point clicked is the
+ * centre of the box's visible part, and the topmost element there must not sit
+ * inside a link, a form control or a label: a wrapper with a "Read more" link in
+ * its middle is not a player, and pressing a form control or a label changes a
+ * form. A button is allowed, since a poster's play overlay is one; the
+ * departure guard catches whatever a button does to the page's address. Run
+ * after the scroll, so the point is in view; returns whether a box was marked.
+ */
+const MARK_PLAYER_BOX_SCRIPT = `(() => {
+  var candidates = (${ALL_MEDIA_FN})('iframe, [class*="player"], [id*="player"]');
+  var index = (${CHOOSE_VIDEO_INDEX_FN})(candidates);
+  if (index === -1) return false;
+  var el = candidates[index];
+  if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', inline: 'center' });
+  var rect = el.getBoundingClientRect();
+  var left = Math.max(rect.left, 0);
+  var top = Math.max(rect.top, 0);
+  var right = Math.min(rect.right, window.innerWidth);
+  var bottom = Math.min(rect.bottom, window.innerHeight);
+  if (right <= left || bottom <= top) return false;
+  var covered = ((right - left) * (bottom - top)) / (window.innerWidth * window.innerHeight);
+  if (el.tagName !== 'IFRAME' && covered > ${BOX_MAX_COVER}) return false;
+  var hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+  if (!hit) return false;
+  // Shadow-aware: a box in an open shadow root is reached through its host.
+  var up = function (node) {
+    return node.parentElement || (node.parentNode && node.parentNode.host) || null;
+  };
+  var within = function (inner, outer) {
+    for (var node = inner; node; node = up(node)) if (node === outer) return true;
+    return false;
+  };
+  if (!within(hit, el) && !within(el, hit)) return false;
+  var unsafe = 'a[href], [role="link"], input, select, textarea, label';
+  for (var node = hit; node; node = up(node)) {
+    if (node.matches && node.matches(unsafe)) return false;
+  }
+  el.setAttribute(${JSON.stringify(BOX_MARK)}, '');
+  return true;
+})()`;
+
+const UNMARK_PLAYER_BOX_SCRIPT = `(() => {
+  var marked = (${ALL_MEDIA_FN})('[${BOX_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(BOX_MARK)});
+})()`;
+
+/**
+ * A click on the middle of the largest player-ish box, for a player that is a
+ * poster in a `div` with no `<video>` to surface-click and no label to press
+ * (dl-81). Top frame only: an `<iframe>` is a candidate there, and the click
+ * lands on whatever the embed holds at its centre, whatever its origin, with no
+ * script run in that frame. A box inside a same-origin frame would be clicked by
+ * its parent's click on the frame; clicking in both would start a player and
+ * pause it.
+ */
+async function clickPlayerBox(frame: Frame): Promise<boolean> {
+  let marked = false;
+  try {
+    marked = await frame.evaluate<boolean>(MARK_PLAYER_BOX_SCRIPT);
+    if (!marked) return false;
+    await frame.locator(`[${BOX_MARK}]`).first().click({ timeout: 1500, force: true });
+    return true;
+  } catch {
+    // The box went away, or is not clickable.
+    return false;
+  } finally {
+    if (marked) {
+      try {
+        await frame.evaluate(UNMARK_PLAYER_BOX_SCRIPT);
+      } catch {
+        // The click removed the frame's document, or navigated it.
+      }
+    }
+  }
+}
+
+/**
+ * The viewport the input pass moves across, when the page has none of its own.
+ * `DEFAULT_VIEWPORT` in `resolvers/browser.ts` is the context's, and a context
+ * with `viewport: null` reports none.
+ */
+const INPUT_VIEWPORT = { width: 1366, height: 768 } as const;
+
+/**
+ * What a person does before looking for a play button: moves the pointer and
+ * scrolls the wheel (dl-81). Some pages inject their player only on the first
+ * `pointermove` or `wheel`, and until then show a bare poster with nothing to
+ * click. Then, if no `<video>` was clicked, a click on the largest player-ish
+ * box (`clickPlayerBox`).
+ *
+ * **No key, ever.** Enter or Space on a focused element can submit a form or
+ * follow a link; the only key this tier sends is the `Escape` of `dismissModal`.
+ * A page that waits for a `keydown` or a touch is not reached, on purpose.
+ *
+ * One pass of each, from `provokePlayback`'s pass boundary: it runs once per
+ * probe, so it adds a fixed, small amount of activity and cannot keep
+ * `waitForQuiet` from ever going quiet the way a repeated provocation could.
+ */
+async function provokeInput(page: Page, videoClicked: boolean): Promise<void> {
+  const { width, height } = page.viewportSize() ?? INPUT_VIEWPORT;
+  try {
+    await page.mouse.move(width * 0.25, height * 0.25);
+    await page.mouse.move(width * 0.75, height * 0.75, { steps: 6 });
+    // The wheel lands where the pointer is, so the centre first: a wheel over
+    // an edge menu scrolls the menu.
+    await page.mouse.move(width / 2, height / 2, { steps: 3 });
+    await page.mouse.wheel(0, 120);
+  } catch {
+    // The page closed or navigated mid-input.
+  }
+  if (!videoClicked) await clickPlayerBox(page.mainFrame());
+}
+
+/**
+ * One frame's provocation, in the order a person would try things. Returns
+ * whether a `<video>` was clicked, which the input pass reads.
+ *
+ * The rows, with the origin each one runs in (dl-81 moved the scroll and the
+ * `play()` out of the same-origin set; the rest are unchanged):
+ *
+ * | step                          | which frames        |
+ * | ----------------------------- | ------------------- |
+ * | close the modal               | every (locator-only where not scriptable) |
+ * | press consent                 | every (locator-only where not scriptable) |
+ * | confirm age                   | scriptable only     |
+ * | scroll the largest candidate  | every               |
+ * | play-ish selectors and text   | every (locator API) |
+ * | click the chosen `<video>`    | every               |
+ * | `play()` on every media       | every               |
+ */
 async function provokeFrame(
   frame: Frame,
   pageOrigin: string | undefined,
   confirmAge: boolean,
-): Promise<void> {
+): Promise<boolean> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
   await dismissModal(frame, { timeoutMs: 1500, scriptable });
   await dismissConsent(frame, 2000, scriptable);
@@ -1409,12 +1592,13 @@ async function provokeFrame(
   // which is why playback provocation still follows it.
   if (confirmAge && scriptable) await confirmAgeGate(frame, 2000);
 
-  if (scriptable) {
-    try {
-      await frame.evaluate<boolean>(SCROLL_SCRIPT);
-    } catch {
-      // Frame navigated away mid-probe.
-    }
+  // A scroll and a `play()` run in every frame, a cross-origin one included
+  // (dl-81; `isScriptableFrame` says why): a player there mounts on a scroll
+  // into view or starts on a scripted `play()` like any other.
+  try {
+    await frame.evaluate<boolean>(SCROLL_SCRIPT);
+  } catch {
+    // Frame navigated away mid-probe.
   }
 
   await clickVisible(frame, PLAY_SELECTORS, { timeoutMs: 2000, max: 3 });
@@ -1422,20 +1606,22 @@ async function provokeFrame(
 
   // Clicking the video surface itself is what a person would do when the player
   // has no visible chrome.
-  await clickChosenVideo(frame, scriptable);
+  const videoClicked = await clickChosenVideo(frame, scriptable);
 
-  if (scriptable) {
-    try {
-      await frame.evaluate<number>(PLAY_SCRIPT);
-    } catch {
-      // Same as above: never fatal.
-    }
+  try {
+    await frame.evaluate<number>(PLAY_SCRIPT);
+  } catch {
+    // Same as above: never fatal.
   }
+  return videoClicked;
 }
 
 /**
  * Two passes: players are frequently lazy-mounted, and the frame that holds the
- * real player often only exists after the consent banner is gone.
+ * real player often only exists after the consent banner is gone. Between them,
+ * the input pass (`provokeInput`): a page that injects its player on the first
+ * pointer or wheel input shows nothing to press until one arrives, so the second
+ * pass is the one that finds what the input mounted.
  */
 export async function provokePlayback(
   page: Page,
@@ -1446,16 +1632,20 @@ export async function provokePlayback(
     throwIfAborted(options.signal);
     if (remaining(options.deadline) < 2000) return;
 
+    let videoClicked = false;
     const frames = page.frames();
     for (const frame of frames) {
       if (remaining(options.deadline) < 1500) return;
       try {
-        await provokeFrame(frame, pageOrigin, options.confirmAge);
+        if (await provokeFrame(frame, pageOrigin, options.confirmAge)) videoClicked = true;
       } catch {
         // A frame can detach at any moment; the others still deserve a try.
       }
     }
-    if (pass === 0) await sleep(budget(options.deadline, 900), options.signal);
+    if (pass === 0) {
+      if (remaining(options.deadline) >= 1500) await provokeInput(page, videoClicked);
+      await sleep(budget(options.deadline, 900), options.signal);
+    }
   }
 }
 

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Player that loads on the first input</title>
+  </head>
+  <body>
+    <h1>Player that loads on the first input</h1>
+    <!-- dl-81: the page shows a bare poster, `<div><img></div>`, with no
+         `<video>`, no play-ish label and no button, and injects its player only
+         on the visitor's first pointer or wheel input (`?on=pointermove`, the
+         default, or `?on=wheel`). The listener is removed once it has fired,
+         and nothing else here starts anything: a tier that never sends such an
+         input never sees a stream. No key is listened for on purpose: the
+         tier presses none (Enter or Space can submit a form or follow a link),
+         so a keydown-only page is a documented gap, not a fixture. -->
+    <div id="poster"><img src="/media/poster.png" alt="Poster" width="640" height="360" /></div>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var on = new URLSearchParams(location.search).get("on") || "pointermove";
+        function mount() {
+          window.removeEventListener(on, mount);
+          document.getElementById("poster").remove();
+          var video = document.createElement("video");
+          video.width = 640;
+          video.height = 360;
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          document.body.appendChild(video);
+          video.src = "/media/hls/master.m3u8";
+          document.getElementById("status").textContent = "mounted";
+        }
+        window.addEventListener(on, mount, { passive: true });
+      })();
+    </script>
+  </body>
+</html>

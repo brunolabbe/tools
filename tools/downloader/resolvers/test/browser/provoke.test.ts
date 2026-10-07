@@ -19,6 +19,7 @@ import {
   provokePlayback,
   readMetadata,
   readSignals,
+  SCROLL_SCRIPT,
 } from "../../src/browser/provoke.ts";
 import { startFixtureServer } from "./helpers/fixture-server.ts";
 import type { FixtureServer } from "./helpers/fixture-server.ts";
@@ -444,5 +445,73 @@ describe("an age gate is recognised by its structure, and only that (dl-83)", ()
     ["a full-screen menu whose only 18 is its own 18+ link", "/age-negative-menu.html"],
   ])("%s is no gate", async (_name, pathname) => {
     expect(await ageGateAt(pathname)).toBe(false);
+  });
+});
+
+describe("the input pass sends no key but the existing Escape (dl-81)", () => {
+  /** Every `keydown` the page saw, in order, whoever sent it. */
+  async function keysPressedDuringProvocation(pathname: string): Promise<string[]> {
+    return await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext();
+      try {
+        await context.addInitScript({
+          content: `window.__keys = [];
+            window.addEventListener('keydown', function (e) { window.__keys.push(e.key); }, true);`,
+        });
+        const page = await context.newPage();
+        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+        await provokePlayback(page, {
+          deadline: Date.now() + 15_000,
+          signal: new AbortController().signal,
+          confirmAge: false,
+        });
+        return await page.evaluate<string[]>("window.__keys");
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  // Enter or Space on a focused element can submit a form or follow a link.
+  test("a page with nothing to dismiss receives no key at all", async () => {
+    expect(await keysPressedDuringProvocation("/input-gated-player.html")).toEqual([]);
+  });
+
+  test("a dialog with no close control still earns its Escape, and nothing beside it", async () => {
+    const keys = await keysPressedDuringProvocation("/modal-escape.html");
+
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((key) => key === "Escape")).toBe(true);
+  });
+});
+
+describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
+  test("brings the large shell into view, not the small nav bar that comes first", async () => {
+    const placement = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/player-scroll-target.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          await page.evaluate<boolean>(SCROLL_SCRIPT);
+          return await page.evaluate<{ top: number; bottom: number; height: number }>(
+            `(() => {
+              var rect = document.getElementById('player-main').getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom, height: window.innerHeight };
+            })()`,
+          );
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    // The first match, a 400x60 nav bar already in view, would scroll nowhere
+    // and leave the shell about 4000 px below the viewport.
+    expect(placement.top).toBeLessThan(placement.height);
+    expect(placement.bottom).toBeGreaterThan(0);
   });
 });

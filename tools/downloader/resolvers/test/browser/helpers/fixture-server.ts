@@ -124,6 +124,16 @@ const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> 
     innerPath: "/shadow-player-order.html",
     title: "Cross-origin shadow order",
   },
+  // dl-81: a player in another site's frame that starts only on a scroll into
+  // view, and one that starts only on a scripted `play()`.
+  "/cross-origin-scroll-player.html": {
+    innerPath: "/xo-scroll-player-inner.html",
+    title: "Cross-origin scroll player",
+  },
+  "/cross-origin-play-only.html": {
+    innerPath: "/xo-play-only-inner.html",
+    title: "Cross-origin play-only player",
+  },
   // dl-82 gate 2: a consent overlay in a frame where no script runs, with and
   // without dialog semantics.
   "/consent-xo-dialog.html": {

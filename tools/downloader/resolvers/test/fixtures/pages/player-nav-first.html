@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-ish nav bar above the real player</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: the first match of `SCROLL_SCRIPT`'s selector list is the ad
+         iframe or this nav bar, both already in view, so a first-match scroll
+         goes nowhere. The real player is a lazily attached shell, 3000 px down,
+         and the largest candidate by area. Only scrolling it into view makes
+         the observer fire and the page request its stream. Nothing here is
+         clickable: no `<video>` exists until the observer mounts one. -->
+    <iframe
+      class="ad"
+      srcdoc="<p>advert</p>"
+      width="300"
+      height="250"
+      title="Advert"
+      style="border: 0"
+    ></iframe>
+    <div class="player-nav" style="height: 60px; background: #eee">Home | Shows | Live</div>
+    <div style="height: 3000px"></div>
+    <div class="player-shell" style="width: 640px; height: 360px; background: #222"></div>
+    <div style="height: 800px"></div>
+
+    <script>
+      (function () {
+        var shell = document.querySelector(".player-shell");
+        var mounted = false;
+        new IntersectionObserver(function (entries) {
+          if (!entries[0].isIntersecting || mounted) return;
+          mounted = true;
+          var video = document.createElement("video");
+          video.width = 640;
+          video.height = 360;
+          video.muted = true;
+          shell.appendChild(video);
+          video.src = "/media/related/master.m3u8";
+        }).observe(shell);
+      })();
+    </script>
+  </body>
+</html>

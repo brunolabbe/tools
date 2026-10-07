@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player box with no video element and no label</title>
+  </head>
+  <body>
+    <h1>A player box with no video element and no label</h1>
+    <!-- dl-81: a poster in a `div` that starts its stream when the box is
+         clicked. There is no `<video>` to surface-click, no play-ish selector
+         or text to press, and nothing is a link. Only a click on the middle of
+         the largest player-ish box starts it. A smaller `player-` decoy sits
+         first in the document and does nothing when clicked. -->
+    <div class="player-badge" style="width: 120px; height: 40px; background: #eee">Live</div>
+    <div class="player-box" style="width: 640px; height: 360px">
+      <img src="/media/poster.png" alt="Poster" width="640" height="360" />
+    </div>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        document.querySelector(".player-box").addEventListener("click", function () {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .catch(function () {});
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -1939,3 +1939,112 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
     },
   );
 });
+
+describe("a player that waits for the visitor's first input (dl-81)", () => {
+  /**
+   * The quiet floor is switched to the base rule's here: every page below
+   * mounts or starts its player during provocation, so the extended floor only
+   * adds the time a failing case spends before it ends `NO_MEDIA_FOUND`.
+   */
+  function resolverWith(hls = recordingHlsParser()): BrowserResolver {
+    return new BrowserResolver({
+      pool,
+      hlsParser: hls.parser,
+      quietMs: 1200,
+      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+    });
+  }
+
+  test.each(["pointermove", "wheel"])(
+    "a player injected on the first %s is reached from a bare poster",
+    { timeout: TEST_TIMEOUT_MS },
+    async (input) => {
+      server.requests.length = 0;
+      // `<div><img></div>`: no `<video>`, no label, nothing to click. Until an
+      // input arrives the page asks for no media at all.
+      const result = await probe(`/input-gated-player.html?on=${input}`, resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      expect(server.requests).toContain("/media/hls/master.m3u8");
+    },
+  );
+
+  test(
+    "scrolls to the largest candidate, so a nav bar and an ad iframe above the fold do not take the slot",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const result = await probe("/player-nav-first.html", resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+
+  test(
+    "clicks the middle of the largest player-ish box when no <video> was clicked",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // No `<video>`, no play-ish selector or text, no link: the box itself is
+      // the only thing a person could press.
+      const result = await probe("/player-box-click-only.html", resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+    },
+  );
+
+  test.each([
+    ["a box inside a link", "/player-box-in-link.html"],
+    ["a link under the middle of the largest box", "/player-box-link-centre.html"],
+  ])(
+    "never presses a link through the centre click: %s",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_name, pathname) => {
+      server.requests.length = 0;
+      const error = await probeError(pathname, resolverWith());
+
+      // Plain absence, not the departure guard catching a click that navigated.
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(error.details?.["reason"]).not.toBe("navigated-away");
+      expect(server.requests).not.toContain("/related-card-target.html");
+    },
+  );
+
+  test(
+    "leaves a page-sized layout wrapper alone, whatever sits in its middle",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      await probeError("/player-box-wrapper.html", resolverWith());
+
+      expect(server.requests).not.toContain("/beacon/wrapper-centre");
+    },
+  );
+
+  describe("in a frame from another site", () => {
+    test(
+      "a scroll run there starts a player that mounts only when scrolled into view",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/cross-origin-scroll-player.html", resolverWith());
+
+        expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+      },
+    );
+
+    test(
+      "a scripted play() run there starts a player that listens for nothing else",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/cross-origin-play-only.html", resolverWith());
+
+        expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+      },
+    );
+  });
+});
