@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/brunolabbe/tools/compare/planner-v0.8.0...planner-v0.8.1) (2026-10-07)
+
+
+### Fixes
+
+* **planner:** build the contract before the dev API starts (pl-54) ([#365](https://github.com/brunolabbe/tools/issues/365)) ([056aab7](https://github.com/brunolabbe/tools/commit/056aab752f197c91831376a29f738b9fcefff1dd))
+
 ## [0.8.0](https://github.com/brunolabbe/tools/compare/planner-v0.7.0...planner-v0.8.0) (2026-10-03)
 
 
