@@ -872,64 +872,104 @@ describe("structural age-gate rules (dl-83)", () => {
   });
 });
 
-describe("rankHits with a master that has no file extension (dl-92)", () => {
+describe("rankHits among manifests: arrival order wins, the name breaks a tie (dl-92)", () => {
   const page = "https://site.example/watch";
+  const O = "https://site.example";
+  const first = (urls: readonly string[], kind: NetworkHit["kind"] = "hls"): string | undefined =>
+    rankHits(
+      urls.map((url, seq) => hit({ url, kind, seq })),
+      page,
+    )[0]?.url;
 
-  test.each(["/api/playlist?id=1", "/api/master?token=abc", "/video/manifest", "/stream"])(
-    "%s outranks a later variant named index.m3u8",
-    (route) => {
-      const master = `https://site.example${route}`;
-      const ranked = rankHits(
-        [
-          hit({ url: master, kind: "hls", seq: 0 }),
-          hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
-        ],
-        page,
-      );
-      expect(ranked[0]?.url).toBe(master);
+  test.each([
+    ["an extensionless route that names a master", `${O}/api/playlist?id=1`],
+    ["a route that names nothing", `${O}/hls?token=abc`],
+    ["a route with a path and a token", `${O}/api/hls/abc?token=1`],
+    ["a file whose name says nothing", `${O}/abc.m3u8`],
+  ])("%s, requested first, beats a later variant named index.m3u8", (_label, master) => {
+    expect(first([master, `${O}/v/high/index.m3u8`])).toBe(master);
+  });
+
+  test("an extensionless dash manifest requested first beats a later index.mpd", () => {
+    expect(first([`${O}/dash?token=1`, `${O}/v/high/index.mpd`], "dash")).toBe(`${O}/dash?token=1`);
+  });
+
+  test.each([
+    `${O}/api/video?id=1&r=720`,
+    `${O}/api/stream?r=720`,
+    `${O}/p/abc/mainstream`,
+    `${O}/api/domain`,
+    "https://ads.adnet.example/vast/video?id=1",
+  ])(
+    "a later route that carries a master word (%s) does not outrank an earlier master",
+    (later) => {
+      expect(first([`${O}/abc.m3u8`, later])).toBe(`${O}/abc.m3u8`);
     },
   );
 
   test("a typed master.m3u8 listed first still wins over a later extensionless route", () => {
-    const ranked = rankHits(
-      [
-        hit({ url: "https://site.example/api/master.m3u8", kind: "hls", seq: 0 }),
-        hit({ url: "https://site.example/api/playlist?id=1", kind: "hls", seq: 1 }),
-      ],
-      page,
-    );
-    expect(ranked[0]?.url).toBe("https://site.example/api/master.m3u8");
+    expect(first([`${O}/api/master.m3u8`, `${O}/api/playlist?id=1`])).toBe(`${O}/api/master.m3u8`);
   });
 
-  test("an extensionless dash manifest earns the same bonus", () => {
+  // The recorded cost of the rule, chosen by the owner on 2026-10-07: a page
+  // that requests another manifest before its real master offers that one. The
+  // real master is still the next candidate, which `#buildOutcome` falls back to
+  // if the first fails to parse.
+  test("an ad manifest requested before master.m3u8 is offered first; the master is next", () => {
     const ranked = rankHits(
       [
-        hit({ url: "https://site.example/api/manifest?id=1", kind: "dash", seq: 0 }),
-        hit({ url: "https://site.example/v/high/index.mpd", kind: "dash", seq: 1 }),
+        hit({ url: "https://ads.adnet.example/vast/slate.m3u8", kind: "hls", seq: 0 }),
+        hit({ url: `${O}/v/master.m3u8`, kind: "hls", seq: 1 }),
       ],
       page,
     );
-    expect(ranked[0]?.url).toBe("https://site.example/api/manifest?id=1");
+    expect(ranked.map((entry) => entry.url)).toEqual([
+      "https://ads.adnet.example/vast/slate.m3u8",
+      `${O}/v/master.m3u8`,
+    ]);
   });
 
-  test("a word in a directory, or before another extension, earns nothing", () => {
-    const earlier = rankHits(
+  test("the name breaks a tie between manifests that arrived together", () => {
+    const ranked = rankHits(
       [
-        hit({ url: "https://site.example/video/a/high.m3u8", kind: "hls", seq: 0 }),
-        hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
+        hit({ url: `${O}/v/720p.m3u8`, kind: "hls", seq: 3 }),
+        hit({ url: `${O}/v/master.m3u8`, kind: "hls", seq: 3 }),
       ],
       page,
     );
-    // Unchanged from before: only the file's own name is read.
-    expect(earlier[0]?.url).toBe("https://site.example/v/high/index.m3u8");
+    expect(ranked[0]?.url).toBe(`${O}/v/master.m3u8`);
+  });
 
-    const withOtherExtension = rankHits(
+  test("an earlier manifest the server refused does not outrank a later one that answered", () => {
+    const ranked = rankHits(
       [
-        hit({ url: "https://site.example/api/playlist.json", kind: "hls", seq: 0 }),
-        hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
+        hit({ url: `${O}/a.m3u8`, kind: "hls", seq: 0, status: 404 }),
+        hit({ url: `${O}/b.m3u8`, kind: "hls", seq: 1, status: 200 }),
       ],
       page,
     );
-    expect(withOtherExtension[0]?.url).toBe("https://site.example/v/high/index.m3u8");
+    expect(ranked[0]?.url).toBe(`${O}/b.m3u8`);
+  });
+
+  test("an earlier request that never got a response does not outrank one that did", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: `${O}/a.m3u8`, kind: "hls", seq: 0, confirmed: false }),
+        hit({ url: `${O}/b.m3u8`, kind: "hls", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked[0]?.url).toBe(`${O}/b.m3u8`);
+  });
+
+  test("a manifest still outranks a progressive file requested before it", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: `${O}/talk.mp4`, kind: "progressive", seq: 0, contentLength: 900_000_000 }),
+        hit({ url: `${O}/abc.m3u8`, kind: "hls", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked[0]?.kind).toBe("hls");
   });
 });

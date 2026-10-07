@@ -3,8 +3,8 @@
  *
  * The ordering rules, in the order they matter:
  *   1. adaptive manifests beat a progressive file — they carry every rendition;
- *   2. a master playlist beats a variant playlist — a player fetches the master
- *      first and its name usually says so;
+ *   2. among manifests, the first one requested wins — a player fetches the
+ *      master before the variants it names; the name only breaks a tie (dl-92);
  *   3. among progressive files, bigger is the real content and smaller is the
  *      trailer, the bumper or an ad slate.
  */
@@ -13,10 +13,6 @@ import { isChunkName, isNumberedName } from "./media-match.ts";
 import type { NetworkHit } from "./types.ts";
 
 const MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/]*\.(?:m3u8?|mpd)$/i;
-// A master served from a route (`/api/playlist?id=1`) has no extension to hang the
-// name on, so its last segment is read for the same words instead (dl-92). The
-// `.` is excluded after the word so a file with an extension stays MASTER_NAME's.
-const ROUTE_MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/.]*$/i;
 const VARIANT_NAME = /(?:chunklist|media[-_]?\d|\b\d{3,4}p\b|[-_]\d{3,5}k)[^/]*\.m3u8?$/i;
 
 function pathOf(raw: string): string {
@@ -52,10 +48,9 @@ export function scoreHit(hit: NetworkHit, pageUrl: string): number {
   }
 
   if (hit.kind === "hls" || hit.kind === "dash") {
-    if (MASTER_NAME.test(path) || ROUTE_MASTER_NAME.test(path)) score += 120;
+    if (MASTER_NAME.test(path)) score += 120;
     if (VARIANT_NAME.test(path)) score -= 80;
-    // The master is requested before the variants it names, so earlier wins.
-    score += Math.max(0, 100 - hit.seq * 10);
+    // Arrival order is not scored: `rankHits` puts it ahead of every term here.
   }
 
   if (hit.kind === "progressive" && hit.contentLength !== undefined && hit.contentLength > 0) {
@@ -97,12 +92,46 @@ function isChunkOfSegmentedPlayback(hit: NetworkHit, hits: readonly NetworkHit[]
   );
 }
 
-/** Playable candidates, best first. Segments are dropped, never offered. */
+/** An adaptive manifest that did not come back as an error: the candidates that order by arrival. */
+function isAnsweredManifest(hit: NetworkHit): boolean {
+  return (
+    (hit.kind === "hls" || hit.kind === "dash") && !(hit.status !== undefined && hit.status >= 400)
+  );
+}
+
+/**
+ * Playable candidates, best first. Segments are dropped, never offered.
+ *
+ * Among manifests that were not refused, **arrival order decides and the name
+ * only breaks a tie** (dl-92). The first manifest a page requests is the root of
+ * the tree it plays, whatever it is called: `/hls?token=…` and `/abc.m3u8` are
+ * masters no name rule can tell from a variant. The cost is a page that requests
+ * an ad or a preview manifest before the real `master.m3u8`: the ad is offered,
+ * and the real one is the next candidate if the ad fails to parse. A name that
+ * outweighed arrival order cannot be right for both pages, and the owner chose
+ * this one on 2026-10-07. An answered response outranks an unanswered request
+ * (the player abandoned it) before order is looked at.
+ */
 export function rankHits(hits: readonly NetworkHit[], pageUrl: string): NetworkHit[] {
   return hits
     .filter((hit) => hit.kind !== "segment" && !isChunkOfSegmentedPlayback(hit, hits))
     .map((hit, index) => ({ hit, index, score: scoreHit(hit, pageUrl) }))
     .filter((entry) => Number.isFinite(entry.score))
-    .toSorted((a, b) => b.score - a.score || a.index - b.index)
+    .toSorted((a, b) => {
+      const aManifest = isAnsweredManifest(a.hit);
+      const bManifest = isAnsweredManifest(b.hit);
+      // One sort key, compared lexicographically, so the order stays transitive:
+      // answered manifests above everything else, then by answered, arrival, score.
+      if (aManifest !== bManifest) return aManifest ? -1 : 1;
+      if (aManifest) {
+        return (
+          Number(b.hit.confirmed) - Number(a.hit.confirmed) ||
+          a.hit.seq - b.hit.seq ||
+          b.score - a.score ||
+          a.index - b.index
+        );
+      }
+      return b.score - a.score || a.index - b.index;
+    })
     .map((entry) => entry.hit);
 }

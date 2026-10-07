@@ -99,3 +99,64 @@ dl-79: it applies to any typed extensionless master.
   `browser-resolver.test.ts` `a master served from a route with no extension (dl-92)`.
 - Fold-in: none. The only adjacent piece, a rule for wordless masters, is the open
   decision above, not an already-specified one.
+- **Round 1's approach was replaced in round 2 (below); `ROUTE_MASTER_NAME` no
+  longer exists.**
+
+**2026-10-07, builder, round 2 (after gate 1, CONCERNS at `d864e947`).**
+
+- **Decision, recorded.** Question put to the owner on 2026-10-07: the route bonus
+  picks non-master routes that now beat a wordless master (13 of 34 shapes right to
+  wrong in the gate's harness), and `/hls?token=` is still lost. Options: (1) let
+  arrival order outweigh the name among same-kind manifests (the gate's
+  recommendation); (2) narrow the regex to a segment-start `master`/`manifest`/
+  `playlist`; (3) accept, record, and file `/hls?token=` as a follow-up (the
+  builder's recommendation); (4) drop dl-92. **Answer, owner, 2026-10-07: (1).** It
+  overrode the builder's recommendation, and it lifts Build step 3's ban on moving
+  `rankHits` expectations for the ones this rule changes.
+- **Rule built.** In `rankHits`, among manifests whose response was not an error
+  (hls/dash, status not 400 or above), the order is: answered before unanswered,
+  then arrival (`seq`) ascending, then score, then input position. Answered
+  manifests rank above everything else; progressive files and refused manifests
+  order by score as before. `scoreHit` no longer scores `seq`. The comparison is one
+  lexicographic key, so it stays transitive; an earlier version that mixed a
+  `seq` comparison with a score comparison across classes could cycle.
+- **`ROUTE_MASTER_NAME` removed, and why.** Under arrival-first the name only breaks
+  a tie, and `seq` is unique per recorded hit (`HitCollector` allocates it from one
+  counter, a sniffed hit keeps its reserved one), so the clause could not change an
+  answer in production. Its only effect would have been the false positives gate 1
+  measured (`/p/abc/mainstream`, `/api/domain`, a `/vast/video?id=1` ad). That also
+  closes gate 1's low about trailing slashes and percent-encoded letters: nothing
+  reads a route's name any more, so there is no edge to judge.
+  `MASTER_NAME` and `VARIANT_NAME` stay, as the tiebreak, because the unit fixtures
+  and any future caller that records equal `seq` values still rely on them.
+- **Existing expectations that moved: none.** Every `rankHits` expectation on
+  `origin/main` (`capture-rules.test.ts` "prefers the master playlist over the
+  variant it names", "prefers an adaptive manifest over a progressive file", the
+  numbered-name block, the dl-79 `sniff.test.ts` arrival-order test) lists the
+  expected winner first, so arrival order and the old name rule agree. Measured:
+  `npx vitest run tools/downloader/resolvers`, `20 passed (20)` files, `885 passed
+(885)`, none edited. What moved is the branch's own round-1 test "a word in a
+  directory, or before another extension, earns nothing" (old winner and new winner
+  differ: `/v/high/index.m3u8` before, `/video/a/high.m3u8`, the earlier request,
+  now), which was removed with the clause it tested.
+- **Answers that moved, measured with gate 1's harness on 34 capture shapes**
+  (`rank-base.ts` against this head, `npx tsx compare.ts`):
+  `cases=34 changed=18 head-wrong=1`. 17 changed from wrong to right, including
+  `/hls?token=abc`, `/api/hls/abc?token=1`, a dash `/dash?token=1`, `/abc.m3u8`
+  followed by `/api/video?id=1&r=720`, an ad `/vast/video?id=1`, `/p/abc/mainstream`,
+  `/api/domain`. One changed from right to wrong, the recorded cost: an ad
+  `/ads/stream?x=1` requested before master `/abc.m3u8` (base winner `/abc.m3u8`,
+  head winner the ad).
+- **The cost is pinned**, not accidental: `capture-rules.test.ts` "an ad manifest
+  requested before master.m3u8 is offered first; the master is next". The master is
+  the second candidate, which `#buildOutcome` falls back to when the first does not
+  parse, within `MAX_MANIFEST_ATTEMPTS`; an ad playlist that parses is still taken.
+- **Tests**, at the end of `capture-rules.test.ts`, "rankHits among manifests:
+  arrival order wins, the name breaks a tie (dl-92)": routes and a wordless file
+  first, the false-positive routes later, typed `master.m3u8` first, the ad, the
+  tie, a refused earlier manifest, an unanswered earlier request, a manifest above
+  a progressive file. Against the base `rank.ts`, `-t "dl-92"` gives `6 failed | 10
+passed`; against this head, all pass. The browser-resolver test is unchanged and
+  passes.
+- Gate low, fixture: `extless/v/low/index.m3u8` added, so the master's second
+  variant resolves.
