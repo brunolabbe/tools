@@ -66,3 +66,37 @@ over the builder's recommendation of (a). dl-83 does not touch the copy.
 **2026-10-06 — filed** on `dl-83-age-gate-phrasings` by dl-83's builder, on the
 owner's choice of option (b) above, relayed by the orchestrator after dl-83's
 gate round 1. Not built against.
+
+**2026-10-07 — built** on `dl-94-declined-press-copy` (base `1aece87d`).
+
+- **Reproduced** (Build 1): with `confirmAge: true` against the `?second`
+  fixture, the error carried "This video asks the viewer to confirm their age,
+  and this server is not set to confirm it." — pinned by a new assertion
+  `expect(error.message).not.toMatch(/not set/i)` in dl-83's test "two
+  candidates still standing after the choice presses nothing and fails
+  AGE_CONFIRMATION_REQUIRED"; before the fix, `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "two
+candidates still standing"` failed with `Received: "This video asks the viewer
+to confirm their age, and this server is not set to confirm it."`, after it
+  passes (1 passed, 137 skipped).
+- **New copy**, none of it naming the setting: contract message "This video asks
+  the viewer to confirm their age, and the server did not confirm it."; web
+  detail "The page asks the viewer to confirm they are an adult before it plays
+  the video. The server did not make that confirmation on anyone's behalf."; the
+  docstring in `contract/src/errors.ts` now names both causes and says the
+  wording is true of both. The mocked scenario's description in
+  `web/src/api/scenarios.ts` ("this server is not set to press") said the same
+  false thing and now reads "the server did not press" (a consumer of the copy,
+  step 2).
+- **Pinned by** `contract/test/contract-schemas.test.ts` "says the server did
+  not confirm, and claims nothing about its setting" and
+  `web/test/error-presentation.test.ts` "age confirmation says the server did
+  not make it, and claims nothing about its setting"; both failed on the old
+  copy (`Tests 2 failed | 34 passed (36)`) and pass now. No `api` test and no
+  other `web` test pinned the old text (grep of `api`, `web`, `e2e` for the old
+  strings found only the two source lines changed here).
+- **Not done:** the `details.reason` field (Build 3) is an open decision, left
+  to the orchestrator. `docs/01-ARCHITECTURE.md`'s `ENABLE_AGE_CONFIRMATION` row
+  still says only "with it off, such a page fails `AGE_CONFIRMATION_REQUIRED`";
+  it is true but does not mention the declined press, and the ticket does not
+  name it.

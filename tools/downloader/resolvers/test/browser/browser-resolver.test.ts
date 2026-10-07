@@ -717,6 +717,9 @@ describe("BrowserResolver", () => {
 
           // Told to confirm, and still the refusal: saying why beats guessing.
           expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          // The setting was on here, so a message about what the server is "set"
+          // to do would be false (dl-94).
+          expect(error.message).not.toMatch(/not set/i);
           expect(server.requests).not.toContain("/beacon/age-confirmed");
           expect(server.requests).not.toContain("/beacon/age-confirmed-2");
           expect(server.requests).not.toContain(MASTER);

@@ -351,7 +351,7 @@ export const SCENARIOS: readonly Scenario[] = [
   {
     keyword: "agegate",
     title: "Age confirmation required",
-    description: "An over-18 confirmation this server is not set to press.",
+    description: "An over-18 confirmation the server did not press.",
     probeDelayMs: 1_500,
     probeError: "AGE_CONFIRMATION_REQUIRED",
     job: SUCCESS,

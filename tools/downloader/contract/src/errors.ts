@@ -37,10 +37,13 @@ export const DOWNLOADER_ERROR_CODES = [
   "AUTH_REQUIRED",
   /**
    * The page puts a self-confirmation that the viewer is an adult where the
-   * player should be, and this server is not set to confirm it for them. That
-   * press is an attestation made on the user's behalf, so it happens only when
-   * the operator sets `ENABLE_AGE_CONFIRMATION` (dl-48). Not retryable: nothing
-   * changes until an operator does.
+   * player should be, and the server did not confirm it for them. That press is
+   * an attestation made on the user's behalf, so it happens only when the
+   * operator sets `ENABLE_AGE_CONFIRMATION` (dl-48). Two causes reach this code:
+   * the setting is off, or it is on and the press declined because the page left
+   * no single control to press (dl-83). The wording says what the server did and
+   * claims nothing about its setting, so it is true of both (dl-94). Not
+   * retryable: nothing changes until an operator does.
    */
   "AGE_CONFIRMATION_REQUIRED",
   /** Source refused our region. */
@@ -108,7 +111,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   DRM_PROTECTED: "This video is DRM-protected and cannot be downloaded.",
   AUTH_REQUIRED: "This video requires a signed-in account.",
   AGE_CONFIRMATION_REQUIRED:
-    "This video asks the viewer to confirm their age, and this server is not set to confirm it.",
+    "This video asks the viewer to confirm their age, and the server did not confirm it.",
   GEO_BLOCKED: "This video is not available from this server’s region.",
   BOT_CHALLENGE: "The site blocked our automated browser.",
   LIVE_STREAM_UNSUPPORTED: "This is a live stream. Set a recording duration to capture it.",

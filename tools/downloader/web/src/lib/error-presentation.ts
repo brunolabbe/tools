@@ -134,7 +134,7 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
   AGE_CONFIRMATION_REQUIRED: {
     title: "Age confirmation required",
     detail:
-      "The page asks the viewer to confirm they are an adult before it plays the video. This server does not confirm that on anyone's behalf unless its operator has turned it on.",
+      "The page asks the viewer to confirm they are an adult before it plays the video. The server did not make that confirmation on anyone's behalf.",
     tone: "blocked",
     allowRetry: false,
   },
