@@ -8,9 +8,10 @@
 
 import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
-import type { ClassificationRecord, ErrorResponse, InboxRow } from "@ledger/contract";
+import type { ClassificationRecord, ErrorResponse, InboxRow, RuleDraft } from "@ledger/contract";
 import type { App } from "../src/server.ts";
 import { SAM } from "./helpers/access.ts";
+import { renderPaste, withBalances } from "./helpers/paste.ts";
 import {
   GROCERIES,
   HISTORY,
@@ -171,11 +172,15 @@ describe("classifying on paste", () => {
   });
 });
 
-describe("two rules matching one row", () => {
-  test("send it to the inbox, never to the first rule", async () => {
+// Level at the top of the ranking, with different answers (lg-16 changed lg-4's
+// "two rules match" to this: a narrower rule now takes a row from a broader one).
+describe("two rules level at the top with different answers", () => {
+  const OTHER_ANSWER = { ...MORTGAGE_RULE, bucket: "current-expenses" } as const;
+
+  test("send the row to the inbox, never to the first rule", async () => {
     const target = await start();
     const first = await addRule(target, MORTGAGE_RULE);
-    const second = await addRule(target, { ...MORTGAGE_RULE, descriptionPattern: "*Prêteur*" });
+    const second = await addRule(target, OTHER_ANSWER);
 
     await pasteStatement(target);
 
@@ -187,13 +192,219 @@ describe("two rules matching one row", () => {
 
   test("the order the rules were added in changes nothing", async () => {
     const target = await start();
-    await addRule(target, { ...MORTGAGE_RULE, descriptionPattern: "*Prêteur*" });
+    await addRule(target, OTHER_ANSWER);
     await addRule(target, MORTGAGE_RULE);
 
     await pasteStatement(target);
 
     expect(classifications(target)).toEqual([]);
     expect(byDescription(await readInbox(target), MORTGAGE)[0]?.reason).toBe("ambiguous");
+  });
+
+  test("with the same answer the row is classified, by the newest of them", async () => {
+    const target = await start();
+    await addRule(target, MORTGAGE_RULE);
+    const newer = await addRule(target, { ...MORTGAGE_RULE, descriptionPattern: "HYPOTHÈQUE*" });
+
+    await pasteStatement(target);
+
+    expect(classifications(target)).toEqual([
+      expect.objectContaining({ row_id: rowId(target, MORTGAGE, -70000), rule_id: newer.id }),
+    ]);
+  });
+});
+
+describe("the most specific rule takes a row (lg-16)", () => {
+  // The caisse names the person, so the broad rule is the household's own and the
+  // narrow one is the person's fixed amount.
+  const BROAD: RuleDraft = {
+    descriptionPattern: "Virement entre folios*",
+    category: null,
+    amountCents: null,
+    personId: null,
+    bucket: "current-expenses",
+  };
+
+  test("a narrower fixed-amount rule takes its row from a broad one, in either order", async () => {
+    for (const narrowFirst of [false, true]) {
+      const target = await start();
+      const ids = { broad: 0, narrow: 0 };
+      if (narrowFirst) ids.narrow = (await addRule(target, TRANSFER_RULE)).id;
+      ids.broad = (await addRule(target, BROAD)).id;
+      if (!narrowFirst) ids.narrow = (await addRule(target, TRANSFER_RULE)).id;
+
+      await pasteStatement(target);
+
+      expect(classifications(target)).toEqual([
+        expect.objectContaining({
+          row_id: rowId(target, TRANSFER, 40000),
+          rule_id: ids.narrow,
+          person_id: "sam",
+        }),
+      ]);
+      await target.shutdown();
+      app = undefined;
+    }
+  });
+
+  test("an unusual amount is a question, though the broad rule matches it exactly", async () => {
+    const target = await start();
+    const broad = await addRule(target, BROAD);
+    const narrow = await addRule(target, TRANSFER_RULE);
+
+    await pasteStatement(target);
+
+    const [odd] = byDescription(await readInbox(target), TRANSFER);
+    expect(odd).toMatchObject({
+      amountCents: 45000,
+      reason: "differs",
+      suggestion: { id: narrow.id },
+    });
+    expect(odd?.matching.map((rule) => rule.id)).toEqual([broad.id]);
+    expect(classifications(target).map((c) => c.row_id)).not.toContain(odd?.id);
+  });
+});
+
+async function answerRow(
+  target: App,
+  id: number,
+  body: { personId: string | null; bucket: string } | { ruleId: number },
+): Promise<void> {
+  const response = await target.server.inject({
+    method: "POST",
+    url: ROUTES.classifications,
+    payload: { rowId: id, ...body },
+  });
+  expect(response.statusCode, response.body).toBe(200);
+}
+
+describe("the inbox carries what a person answered before (lg-16)", () => {
+  test("a description answered by a person carries that answer, and one never answered none", async () => {
+    const target = await start();
+    await pasteStatement(target);
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
+      personId: "sam",
+      bucket: "mortgage",
+    });
+
+    const inbox = await readInbox(target);
+
+    expect(byDescription(inbox, TRANSFER)[0]?.history).toEqual({
+      personId: "sam",
+      bucket: "mortgage",
+      times: 1,
+    });
+    expect(byDescription(inbox, GROCERIES)[0]?.history).toBeNull();
+  });
+
+  test("a description a rule answered carries none, so a rule is not mistaken for a person", async () => {
+    const target = await start();
+    await addRule(target, TRANSFER_RULE);
+
+    await pasteStatement(target);
+
+    const [odd] = byDescription(await readInbox(target), TRANSFER);
+    // The usual amount was filed by the rule; the unusual one has no person's answer to go on.
+    expect(classifications(target)).toEqual([expect.objectContaining({ source: "rule" })]);
+    expect(odd).toMatchObject({ reason: "differs", history: null });
+  });
+
+  test("an accepted rule is a person's answer too", async () => {
+    const target = await start();
+    // Stored before the rule exists, so it waits and the rule is a suggestion for it.
+    await pasteStatement(target, paste(0, 1));
+    const rule = await addRule(target, TRANSFER_RULE);
+    await answerRow(target, rowId(target, TRANSFER, 40000), { ruleId: rule.id });
+    await pasteStatement(target);
+
+    expect(classifications(target)[0]).toMatchObject({ source: "accepted" });
+    expect(byDescription(await readInbox(target), TRANSFER)[0]?.history).toEqual({
+      personId: "sam",
+      bucket: "mortgage",
+      times: 1,
+    });
+  });
+
+  test("a row a rule filed and a person corrected counts as the person's answer", async () => {
+    const target = await start();
+    await addRule(target, TRANSFER_RULE);
+    await pasteStatement(target);
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
+      personId: null,
+      bucket: "current-expenses",
+    });
+
+    expect(byDescription(await readInbox(target), TRANSFER)[0]?.history).toEqual({
+      personId: null,
+      bucket: "current-expenses",
+      times: 1,
+    });
+  });
+
+  test("the latest answer stands and the count is of those that agree with it", async () => {
+    const target = await start();
+    // Four rows with one description, so three can be answered and one left waiting.
+    const same = [1, 2, 3, 4].map((day) => ({
+      date: `2026-09-0${String(day)}`,
+      category: "Épicerie",
+      description: GROCERIES,
+      amountCents: -1000 * day,
+    }));
+    await pasteStatement(target, renderPaste(withBalances(same, 150000)));
+    const [a, b, c] = [1000, 2000, 3000].map((cents) => rowId(target, GROCERIES, -cents));
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, b ?? 0, { personId: "alex", bucket: "current-expenses" });
+    await answerRow(target, c ?? 0, { personId: "alex", bucket: "current-expenses" });
+
+    // The earliest answer differs and the two latest agree: "the last 2 times".
+    const [waiting] = await readInbox(target);
+    expect(waiting).toMatchObject({
+      amountCents: -4000,
+      history: { personId: "alex", bucket: "current-expenses", times: 2 },
+    });
+  });
+
+  test("a row answered twice counts once, by the answer that stands", async () => {
+    const target = await start();
+    const same = [1, 2, 3].map((day) => ({
+      date: `2026-09-0${String(day)}`,
+      category: "Épicerie",
+      description: GROCERIES,
+      amountCents: -1000 * day,
+    }));
+    await pasteStatement(target, renderPaste(withBalances(same, 150000)));
+    const [a, b] = [1000, 2000].map((cents) => rowId(target, GROCERIES, -cents));
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, b ?? 0, { personId: "sam", bucket: "mortgage" });
+
+    // Three records, two rows: "the last 2 times", not 3.
+    const [waiting] = await readInbox(target);
+    expect(waiting).toMatchObject({ amountCents: -3000, history: { personId: "sam", times: 2 } });
+  });
+
+  test("taking it is an ordinary manual answer, by whoever tapped", async () => {
+    const target = await start(SAM);
+    await pasteStatement(target);
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
+      personId: "alex",
+      bucket: "mortgage",
+    });
+    const [odd] = byDescription(await readInbox(target), TRANSFER);
+
+    await answerRow(target, odd?.id ?? 0, {
+      personId: odd?.history?.personId ?? null,
+      bucket: odd?.history?.bucket ?? "mortgage",
+    });
+
+    expect(classifications(target).at(-1)).toMatchObject({
+      row_id: odd?.id,
+      source: "manual",
+      rule_id: null,
+      person_id: "alex",
+      bucket: "mortgage",
+      classified_by: "sam",
+    });
   });
 });
 

@@ -86,4 +86,14 @@ describe("error presentation", () => {
     expect(localErrorPayload("TIMEOUT").retryable).toBe(true);
     expect(localErrorPayload("JOB_CANCELED").message).toBe(DEFAULT_ERROR_MESSAGES.JOB_CANCELED);
   });
+
+  // The code has two causes: the setting is off, or it is on and the press
+  // declined (dl-83). The detail must be true of both (dl-94).
+  test("age confirmation says the server did not make it, and claims nothing about its setting", () => {
+    const { detail } = presentError(payload("AGE_CONFIRMATION_REQUIRED"));
+    expect(detail).toBe(
+      "The page asks the viewer to confirm they are an adult before it plays the video. The server did not make that confirmation on anyone's behalf.",
+    );
+    expect(detail).not.toMatch(/not set|turned on|operator|enable|setting|configur/i);
+  });
 });

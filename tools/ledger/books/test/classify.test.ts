@@ -164,19 +164,16 @@ describe("classify, when two rules match one row", () => {
     expect(classify(TRANSFER, [first, second]).kind).toBe("inbox");
   });
 
-  test("the more specific of the two is what is suggested, for a person to take", () => {
-    const broad = rule(1, { descriptionPattern: "Virement*" });
-    const exact = rule(2, { amountCents: 40000 });
-
-    const result = classify(TRANSFER, [broad, exact]);
-
-    expect(result).toMatchObject({ reason: "ambiguous", suggestion: exact });
-  });
-
-  test("two identical rules are level, so nothing is suggested", () => {
-    const result = classify(TRANSFER, [rule(1), rule(2)]);
+  test("two rules level at the top with different answers suggest nothing", () => {
+    const result = classify(TRANSFER, [rule(1), rule(2, { personId: "sam" })]);
 
     expect(result).toMatchObject({ reason: "ambiguous", suggestion: null });
+  });
+
+  test("two rules differing only in the person are different answers", () => {
+    const result = classify(TRANSFER, [rule(1, { personId: null }), rule(2)]);
+
+    expect(result).toMatchObject({ kind: "inbox", reason: "ambiguous" });
   });
 
   test("a rule that matches the pattern but not the amount is not one of the two", () => {
@@ -184,6 +181,178 @@ describe("classify, when two rules match one row", () => {
     const other = rule(2, { amountCents: 50000 });
 
     expect(classify(TRANSFER, [usual, other])).toEqual({ kind: "classified", rule: usual });
+  });
+});
+
+describe("classify, when the most specific rule takes the row (lg-16)", () => {
+  // The caisse names the person, so a broad rule on it is the household's, and a
+  // narrower rule with the person's own fixed amount sits beside it.
+  const broad = rule(1, {
+    descriptionPattern: "Virement entre folios /Caisse*",
+    personId: null,
+    bucket: "current-expenses",
+  });
+  const narrow = rule(2, { amountCents: 40000 });
+
+  test("a broad pattern rule and a narrower fixed-amount rule: the narrower takes the row", () => {
+    expect(classify(TRANSFER, [broad, narrow])).toEqual({ kind: "classified", rule: narrow });
+  });
+
+  test("the same, with the two rules in the other order", () => {
+    expect(classify(TRANSFER, [narrow, broad])).toEqual({ kind: "classified", rule: narrow });
+  });
+
+  test("a fixed amount outranks a longer pattern", () => {
+    const long = rule(3, {
+      descriptionPattern: "Virement entre folios /Caisse du Lac",
+      bucket: "current-expenses",
+    });
+    const short = rule(4, { descriptionPattern: "Virement*", amountCents: 40000 });
+
+    expect(classify(TRANSFER, [long, short])).toEqual({ kind: "classified", rule: short });
+  });
+
+  test("with as many criteria named, the longer literal part of the pattern wins", () => {
+    const short = rule(3, { descriptionPattern: "Virement*", personId: null });
+    const long = rule(4, { descriptionPattern: "Virement entre folios*" });
+
+    expect(classify(TRANSFER, [short, long])).toEqual({ kind: "classified", rule: long });
+    expect(classify(TRANSFER, [long, short])).toEqual({ kind: "classified", rule: long });
+  });
+
+  test("stars are not literal characters", () => {
+    const stars = rule(3, { descriptionPattern: "*Virement*folios*", personId: null });
+    const plain = rule(4, { descriptionPattern: "Virement entre folios /Caisse du Lac" });
+
+    expect(classify(TRANSFER, [stars, plain])).toEqual({ kind: "classified", rule: plain });
+  });
+
+  test("level at the top with the same answer, the row is classified by the newest", () => {
+    const older = rule(5, { descriptionPattern: "Virement entre folios*" });
+    const newer = rule(9, { descriptionPattern: "VIREMENT ENTRE FOLIOS*" });
+
+    expect(classify(TRANSFER, [older, newer])).toEqual({ kind: "classified", rule: newer });
+    expect(classify(TRANSFER, [newer, older])).toEqual({ kind: "classified", rule: newer });
+  });
+
+  test("a lower rank cannot break a tie above it, and is not listed in it", () => {
+    const one = rule(5, { descriptionPattern: "Virement entre folios*" });
+    const other = rule(6, { descriptionPattern: "VIREMENT ENTRE FOLIOS*", personId: "sam" });
+    const lowest = rule(7, {
+      descriptionPattern: "*",
+      personId: "alex",
+      bucket: "current-expenses",
+    });
+
+    const result = classify(TRANSFER, [lowest, one, other]);
+
+    expect(result).toMatchObject({ kind: "inbox", reason: "ambiguous" });
+    expect(result.kind === "inbox" && result.matching.map((r) => r.id).toSorted()).toEqual([5, 6]);
+  });
+
+  test("a rule whose pattern does not match is no rival at all", () => {
+    // No narrower rule's pattern matches, so nothing outranks the broad one.
+    const elsewhere = rule(3, { descriptionPattern: "Taxes /Ville Exemple", amountCents: 40000 });
+
+    expect(classify(TRANSFER, [broad, elsewhere])).toEqual({ kind: "classified", rule: broad });
+  });
+});
+
+describe("classify, when a rule the row does not fit would outrank the one it does (lg-16)", () => {
+  const broad = rule(1, {
+    descriptionPattern: "Virement entre folios /Caisse*",
+    personId: null,
+    bucket: "current-expenses",
+  });
+  const narrow = rule(2, { amountCents: 40000 });
+  const unusual = { ...TRANSFER, amountCents: 45000 };
+
+  test("the row goes to the inbox as differs, with the outranking rule suggested", () => {
+    expect(classify(unusual, [broad, narrow])).toEqual({
+      kind: "inbox",
+      reason: "differs",
+      suggestion: narrow,
+      matching: [broad],
+    });
+  });
+
+  test("whatever order the rules are given in", () => {
+    expect(classify(unusual, [narrow, broad])).toMatchObject({
+      kind: "inbox",
+      reason: "differs",
+      suggestion: narrow,
+    });
+  });
+
+  // The owner's call, 2026-10-07: only an amount miss asks. A rule naming a
+  // category carves that category out, and the broad rule keeps the rest.
+  test("a category the row is not in does not outrank: the broad rule keeps the row", () => {
+    const only = rule(2, { category: "Virements" });
+
+    expect(classify({ ...TRANSFER, category: "Autres" }, [broad, only])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+    expect(classify({ ...TRANSFER, category: "Autres" }, [only, broad])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+  });
+
+  test("a rule missing the category and the amount does not outrank either", () => {
+    const both = rule(2, { category: "Virements", amountCents: 40000 });
+
+    expect(classify({ ...unusual, category: "Autres" }, [broad, both])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+  });
+
+  test("the category matching, a miss on the amount still outranks", () => {
+    const both = rule(2, { category: "Virements", amountCents: 40000 });
+
+    expect(classify(unusual, [broad, both])).toMatchObject({
+      kind: "inbox",
+      reason: "differs",
+      suggestion: both,
+    });
+  });
+
+  test("an exact match that outranks every rule the row does not fit takes the row", () => {
+    // The longer pattern wins the tie on criteria named, so the rule that fits
+    // outranks the one that does not.
+    const fits = rule(3, { category: "Virements" });
+    const misses = rule(4, { descriptionPattern: "Virement*", amountCents: 1 });
+
+    expect(classify(TRANSFER, [fits, misses])).toEqual({ kind: "classified", rule: fits });
+  });
+
+  test("a rule the row does not fit that is only level with the exact match does not stop it", () => {
+    const fits = rule(3, { amountCents: 45000 });
+    const misses = rule(4, { amountCents: 1, bucket: "current-expenses" });
+
+    expect(classify(unusual, [fits, misses])).toEqual({ kind: "classified", rule: fits });
+  });
+
+  test("two outranking rules equally near suggest nothing", () => {
+    const below = rule(3, { amountCents: 44000 });
+    const above = rule(4, { amountCents: 46000, bucket: "current-expenses" });
+
+    expect(classify(unusual, [broad, below, above])).toMatchObject({
+      kind: "inbox",
+      reason: "differs",
+      suggestion: null,
+    });
+  });
+
+  test("of two outranking rules, the nearer is suggested", () => {
+    const near = rule(3, { amountCents: 44000 });
+    const far = rule(4, { amountCents: 20000, bucket: "current-expenses" });
+
+    expect(classify(unusual, [far, broad, near])).toMatchObject({
+      reason: "differs",
+      suggestion: near,
+    });
   });
 });
 

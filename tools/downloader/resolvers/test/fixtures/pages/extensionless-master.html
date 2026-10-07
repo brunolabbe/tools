@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Extensionless typed master, then a variant named index.m3u8</title>
+  </head>
+  <body>
+    <h1>Extensionless typed master, then a variant named index.m3u8</h1>
+    <!--
+      dl-92: the master comes from a route with no extension, typed as a
+      playlist. The variant it names is requested next and happens to be called
+      index.m3u8, a name the ranking rewards.
+    -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+    <script src="/untyped-player.js"></script>
+    <script>
+      window.playUntyped("/api/playlist?id=4", ["/media/extless/v/high/index.m3u8"]);
+    </script>
+  </body>
+</html>

@@ -603,8 +603,8 @@ describe("BrowserResolver", () => {
         server.requests.length = 0;
         const error = await probeError("/age-gate.html?inert", resolver);
 
-        // The server was set to confirm and did: "not set to confirm it" would
-        // be false.
+        // The server was set to confirm and did: "the server did not confirm
+        // it" would be false.
         expectCode(error, "NO_MEDIA_FOUND");
         expect(server.requests).toContain("/beacon/age-confirmed");
       },
@@ -717,6 +717,9 @@ describe("BrowserResolver", () => {
 
           // Told to confirm, and still the refusal: saying why beats guessing.
           expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+          // The setting was on here, so a message about what the server is "set"
+          // to do would be false (dl-94).
+          expect(error.message).not.toMatch(/not set/i);
           expect(server.requests).not.toContain("/beacon/age-confirmed");
           expect(server.requests).not.toContain("/beacon/age-confirmed-2");
           expect(server.requests).not.toContain(MASTER);
@@ -1865,9 +1868,12 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       // Should have found media
       expect(result.variants.length).toBeGreaterThan(0);
 
-      // Should have finished well before the 9 second floor,
-      // since it captures media immediately
-      expect(elapsedMs).toBeLessThan(5000);
+      // Should have finished well before the 9 second floor, since it captures
+      // media immediately. The ceiling sits between what it must rule out (a
+      // floor applied anyway ends at or after 9000 ms, which the previous test
+      // asserts) and a slow Windows runner, which took 4470 ms here against a
+      // usual 2.8 s (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
     },
   );
 
@@ -1900,9 +1906,11 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       const error = caught as AppError;
       expectCode(error, "NO_MEDIA_FOUND");
 
-      // With a 500 ms floor and 1200 ms quiet timeout,
-      // should see NO_MEDIA_FOUND in roughly 1.7 seconds
-      expect(elapsedMs).toBeLessThan(3000);
+      // With a 500 ms floor and 1200 ms quiet timeout, NO_MEDIA_FOUND arrives
+      // in about 2.1 s. An ignored override would wait the default 9000 ms
+      // floor, so the ceiling only has to stay clear of that; 3000 ms did not
+      // survive a slow Windows runner, which took 3257 ms (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
     },
   );
 
@@ -1936,6 +1944,23 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       expectCode(caught as AppError, "TIMEOUT");
       // Ended by the deadline, not by waiting out the 9 s floor.
       expect(elapsedMs).toBeLessThan(timeoutMs);
+    },
+  );
+});
+
+describe("a master served from a route with no extension (dl-92)", () => {
+  test(
+    "outranks the variant it names, even when that variant is called index.m3u8",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/extensionless-master.html", resolver);
+
+      // The master's two renditions, not the one variant playlist.
+      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=4"));
+      expect(hls.calls[0]?.text).toContain("#EXT-X-STREAM-INF");
+      expect(result.variants).toHaveLength(2);
     },
   );
 });

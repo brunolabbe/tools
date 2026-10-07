@@ -9,8 +9,9 @@
  * period is whatever follows the last closed one.
  *
  * **The arithmetic is the books'.** This file gathers what they need — every
- * line and generated monthly line, every buffer deposit filed to a person, and
- * each closed period with the ratio its settlement recorded — and stores what
+ * line and generated monthly line, every buffer deposit filed to a person with
+ * the closed period it settles if it matched one, and each closed period with
+ * the ratio its settlement recorded — and stores what
  * a close computed: amount, payer, ratio and formula version (§5). A recorded
  * settlement is never recomputed: the next close is cumulative, so whatever an
  * earlier one got wrong is caught up there.
@@ -28,6 +29,7 @@ import type {
   CandidateRow,
   ClosedSpan,
   DepositInput,
+  DepositMatch,
   LineInput,
   WeighedPeriod,
 } from "@ledger/books";
@@ -411,8 +413,29 @@ function bufferRows(db: Database): CandidateRow[] {
 }
 
 /**
+ * What became of each closed period's expected deposit (`closed` oldest first),
+ * recomputed from the buffer rows' current classification on every read, so a
+ * reclassified row moves with it.
+ */
+function depositMatches(
+  closed: readonly PeriodColumns[],
+  rows: readonly CandidateRow[],
+): DepositMatch[] {
+  return matchDeposits(
+    closed.map((period) => ({
+      periodId: period.id,
+      end: period.end_date,
+      payerId: period.payer_id,
+      depositCents: period.deposit_cents,
+    })),
+    rows,
+  );
+}
+
+/**
  * What closing `[start, end]` after every closed period would settle, or `null`
- * when no ratio is in effect on `end`.
+ * when no ratio is in effect on `end`. A buffer row matched to a closed
+ * period's settlement is weighed at that period's ratio (lg-13).
  */
 function settlementFor(
   db: Database,
@@ -422,6 +445,12 @@ function settlementFor(
 ): SettlementFigures | null {
   const ratio = ratioInEffect(currentRatios(db), end);
   if (ratio === null) return null;
+  const rows = bufferRows(db);
+  const settles = new Map<number, string>();
+  for (const [index, match] of depositMatches(closed, rows).entries()) {
+    const period = closed[index];
+    if (match.rowId !== null && period !== undefined) settles.set(match.rowId, period.end_date);
+  }
   const periods: WeighedPeriod[] = [
     ...closed.map((period) => ({
       start: period.start_date,
@@ -431,7 +460,12 @@ function settlementFor(
     { start, end, ratio: ratio.shares },
   ];
   const lines: LineInput[] = linesThrough(db, end);
-  const deposits: DepositInput[] = bufferRows(db);
+  const deposits: DepositInput[] = rows.map((row) => ({
+    personId: row.personId,
+    date: row.date,
+    amountCents: row.amountCents,
+    settles: settles.get(row.id) ?? null,
+  }));
   const result = cumulativeSettlement(periods, lines, deposits);
   return {
     formula: result.formula,
@@ -512,15 +546,7 @@ function toClosed(
 export function closedPeriods(db: Database): ClosedPeriod[] {
   return db.transaction(() => {
     const closed = closedRows(db);
-    const matches = matchDeposits(
-      closed.map((period) => ({
-        periodId: period.id,
-        end: period.end_date,
-        payerId: period.payer_id,
-        depositCents: period.deposit_cents,
-      })),
-      bufferRows(db),
-    );
+    const matches = depositMatches(closed, bufferRows(db));
     return closed
       .map((period, index) =>
         toClosed(db, period, {

@@ -31,12 +31,16 @@ import { AppError } from "@downloader/contract";
 import type { JobOptions, MediaVariant, RequestContext, SubtitleTrack } from "@downloader/contract";
 import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
+import type { Logger } from "../src/logger.ts";
+import { NOOP_LOGGER } from "../src/logger.ts";
+import { expectedOutputBytes } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
 import { startFixtureServer } from "./helpers/http.ts";
 import {
   generateDash,
   generateHls,
+  generateLongGop,
   generateProgressive,
   listTree,
   probeMedia,
@@ -1032,4 +1036,174 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     },
     30_000,
   );
+});
+
+/** Every `ffmpeg` line the engine logged — the stderr that survived the runner (dl-96). */
+function capturingLogger(lines: string[]): Logger {
+  return {
+    ...NOOP_LOGGER,
+    debug: (message, fields) => {
+      if (message === "ffmpeg") lines.push(String(fields?.["line"]));
+    },
+  };
+}
+
+/**
+ * dl-96. A progressive file the browser tier found carries a size and no
+ * duration, and behind a slow origin its progress read `unknown total` and
+ * `0 B/s` for minutes: the percent waits on a duration nobody supplied, and
+ * the rate is measured on bytes that leave ffmpeg one whole fragment at a time.
+ */
+describe("dl-96: progress on a source the probe could not time", () => {
+  beforeAll(async () => {
+    await generateLongGop(path.join(fixtureRoot, "longgop9"), 9, 6);
+  }, 60_000);
+
+  test("ffmpeg's own Duration line turns the percent on, and the size becomes the total", async () => {
+    const source = path.join(fixtureRoot, "prog9", "moov-end.mp4");
+    const sourceBytes = (await fs.stat(source)).size;
+    const logged: string[] = [];
+    const seen: { percent: number | null; totalBytes: number | null }[] = [];
+    const engine = engineWith({ logger: capturingLogger(logged) });
+
+    const media = await engine.stream({
+      jobId: "dl-96-untimed",
+      // What the browser tier hands over: a measured size, no duration.
+      variant: {
+        id: "untimed",
+        protocol: "progressive",
+        url: `${origin.origin}/prog9/moov-end.mp4`,
+        hasVideo: true,
+        filesizeBytes: sourceBytes,
+        filesizeIsEstimate: false,
+        label: "untimed",
+      },
+      requestContext: CONTEXT,
+      onProgress: (progress) =>
+        seen.push({ percent: progress.percent, totalBytes: progress.totalBytes }),
+    });
+    media.body.resume();
+    const outcome = await media.done;
+
+    const percents = seen.map((entry) => entry.percent).filter((value) => value !== null);
+    expect(percents.length).toBeGreaterThan(0);
+    expect(Math.max(...percents)).toBeGreaterThan(95);
+    expect(Math.max(...percents)).toBeLessThanOrEqual(100);
+    expect(seen.every((entry) => entry.totalBytes === sourceBytes)).toBe(true);
+    // The expectation the total stands for: a copy differs by its boxes alone.
+    expect(Math.abs(outcome.bytes - sourceBytes) / sourceBytes).toBeLessThan(0.01);
+    expect(Math.abs((outcome.durationSec ?? 0) - 9)).toBeLessThan(TOLERANCE_SEC);
+
+    // Real ffmpeg at `level+info`, and none of its info reached the log or the
+    // matchers: no input description, no level tags.
+    expect(
+      logged.filter((line) => /Duration:|Stream #|Input #|\[(?:info|warning)\]/u.test(line)),
+    ).toEqual([]);
+  });
+
+  test("a long-GOP source still reaches the reader at least once a second", async () => {
+    const received = await exchange("dl-96-long-gop", () =>
+      engineWith().stream({
+        jobId: "dl-96-long-gop",
+        variant: {
+          id: "longgop9",
+          protocol: "progressive",
+          url: `${origin.origin}/longgop9/moov-end.mp4`,
+          hasVideo: true,
+          hasAudio: true,
+          label: "longgop9",
+        },
+        requestContext: CONTEXT,
+      }),
+    );
+
+    expect(received.status).toBe(200);
+    // Keyframes at 0 s and 6 s: two fragments uncapped, one a second capped.
+    const fragments = (await topLevelBoxes(received.file)).filter((box) => box === "moof");
+    expect(fragments.length).toBeGreaterThanOrEqual(9);
+    const probed = await probeMedia(received.file);
+    expect(Math.abs((probed.durationSec ?? 0) - 9)).toBeLessThan(TOLERANCE_SEC);
+  });
+
+  test("the source's size is a total only for a progressive file copied unchanged", () => {
+    const measured: MediaVariant = {
+      id: "m",
+      protocol: "progressive",
+      url: "https://cdn.example/a.mp4",
+      hasVideo: true,
+      filesizeBytes: 100_307_911,
+      filesizeIsEstimate: false,
+      label: "m",
+    };
+    const plain = { audioOnly: false, transcoded: false, live: false };
+
+    expect(expectedOutputBytes(measured, plain)).toBe(100_307_911);
+    expect(expectedOutputBytes({ ...measured, filesizeIsEstimate: undefined }, plain)).toBe(
+      100_307_911,
+    );
+    expect(expectedOutputBytes({ ...measured, filesizeIsEstimate: true }, plain)).toBeNull();
+    expect(expectedOutputBytes({ ...measured, filesizeBytes: undefined }, plain)).toBeNull();
+    expect(expectedOutputBytes({ ...measured, protocol: "hls" }, plain)).toBeNull();
+    expect(
+      expectedOutputBytes({ ...measured, audioUrl: "https://cdn.example/a.m4a" }, plain),
+    ).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, audioOnly: true })).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, transcoded: true })).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, live: true })).toBeNull();
+  });
+});
+
+/**
+ * dl-96's gate, F3. `expectedOutputBytes` is right on its own, but nothing
+ * pinned what `attempt` hands it: with `audioOnly`, `transcoded` or `live`
+ * hard-coded to false, every test still passed. Each of these makes the
+ * source's size a different file's, so each must report no total.
+ */
+describe("dl-96: no expected total where the output is not the source copied", () => {
+  async function totalsFor(options: JobOptions, isLive = false): Promise<(number | null)[]> {
+    const source = path.join(fixtureRoot, "prog4", "faststart.mp4");
+    const totals: (number | null)[] = [];
+    const media = await engineWith().stream({
+      jobId: "dl-96-no-total",
+      variant: {
+        id: "prog4-measured",
+        protocol: "progressive",
+        url: `${origin.origin}/prog4/faststart.mp4`,
+        hasVideo: true,
+        hasAudio: true,
+        filesizeBytes: (await fs.stat(source)).size,
+        filesizeIsEstimate: false,
+        // Declared, because the transcode is decided from these: an undeclared
+        // codec is copied, and H.264 copied into WebM is refused outright.
+        videoCodec: "avc1.42c01e",
+        audioCodec: "mp4a.40.2",
+        label: "prog4-measured",
+      },
+      requestContext: CONTEXT,
+      isLive,
+      options,
+      onProgress: (progress) => totals.push(progress.totalBytes),
+    });
+    media.body.resume();
+    await media.done;
+    return totals;
+  }
+
+  test("audio only", async () => {
+    const totals = await totalsFor({ audioOnly: true });
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  });
+
+  test("a transcode: H.264 into WebM", async () => {
+    const totals = await totalsFor({ container: "webm" });
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  }, 60_000);
+
+  test("a live capture", async () => {
+    const totals = await totalsFor({ liveDurationSec: 2 }, true);
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  });
 });

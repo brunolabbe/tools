@@ -27,7 +27,9 @@ e2e          Playwright specs — none yet; e2e/README.md says what earns the fi
 ```
 
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
-`classify`, which files a row under a rule only on an exact match (lg-4), and
+`classify`, which files a row under a rule only on an exact match, the most
+specific rule winning (lg-4, lg-16), `fromHistory`, which offers what a person
+answered before (lg-16), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
 period's deposit a paste has brought in (lg-6). The name is `books` because `ledger` is the tool. _Planned_, arriving

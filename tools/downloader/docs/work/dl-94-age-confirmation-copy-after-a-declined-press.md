@@ -3,7 +3,7 @@ id: dl-94
 tool: downloader
 title: The age-confirmation copy says the server is not set to confirm, also when it was and declined to press
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-83]
 difficulty: standard
@@ -61,8 +61,92 @@ over the builder's recommendation of (a). dl-83 does not touch the copy.
 - The dl-83 declined-press test still reports `AGE_CONFIRMATION_REQUIRED`.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** — 2026-10-07 · `1aece87d..4d115777` · Opus 5.5, depth standard (copy change, invariant sweep proportionate)
+
+| Done when                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The contract message, its docstring and the web detail make no claim about the server's setting, and a test pins the new contract message | `contract/test/contract-schemas.test.ts` › "says the server did not confirm, and claims nothing about its setting" ✓ (exact `toBe` on `DEFAULT_ERROR_MESSAGES.AGE_CONFIRMATION_REQUIRED`, plus a negative regex that cannot pass on empty because the `toBe` precedes it); `web/test/error-presentation.test.ts` › "age confirmation says the server did not make it, and claims nothing about its setting" ✓ (same pair on `detail`). Docstring: **verified** by reading — it names both causes and asserts neither as the case; its last sentence is a low below. Positive control: the old message and old detail planted, contract `dist` rebuilt and grepped (`is not set to confirm it` present), all three pinning tests went red (3 failed, 4 passed); restored, rebuilt, grepped back |
+| The dl-83 declined-press test still reports `AGE_CONFIRMATION_REQUIRED`                                                                   | `resolvers/test/browser/browser-resolver.test.ts` › "two candidates still standing after the choice presses nothing and fails AGE_CONFIRMATION_REQUIRED" ✓ — `expectCode(error, "AGE_CONFIRMATION_REQUIRED")` and the added `not.toMatch(/not set/i)`, which went red under the planted old copy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `npm run check` and `npm test -- --project downloader` pass                                                                               | **verified** — `npm run check` exit 0; `npm test -- --project downloader` exit 0, 100 of 101 files passed (1 skipped), 2065 of 2067 tests passed (2 skipped). PR #385 checks all pass on `4d115777`, including `test (ubuntu-latest)`, `e2e (direct)`, `e2e (sniffer)` and `docker`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+- **low** · `nfr:maintainability` · two comments still quote the retired copy as their reason. In `resolvers/src/resolvers/browser.ts`, at the `classifyFailure` call in the probe's no-outcome branch: "Saying the server \"is not set to confirm\" would be false". In `resolvers/test/browser/browser-resolver.test.ts`, inside "a press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal": "\"not set to confirm it\" would be false". The reasoning still holds, since the new "the server did not confirm it" is also false after a press, but the words they quote are no longer the message. Reproduction: `grep -rn "not set to confirm" tools/downloader/resolvers` prints both lines.
+- **low** · `nfr:maintainability` · the code's docstring in `contract/src/errors.ts` (`AGE_CONFIRMATION_REQUIRED`) ends "Not retryable: nothing changes until an operator does." For the declined-press cause, which the same docstring now names, the operator has already turned the setting on. What would have to change is the page or the press rules, not the operator's setting. The docstring is not shipped to users, and the classification is unchanged and correct.
+- **low** · `nfr:maintainability` · dl-83 residue, outside the three places the ticket names. `docs/00-ANALYSIS.md` (the "Age confirmation" row: "`ENABLE_AGE_CONFIRMATION` confirms it") and `docs/01-ARCHITECTURE.md` (the `ENABLE_AGE_CONFIRMATION` row) both describe the setting as what clears the code, and neither mentions a declined press. The branch's Log names the ARCHITECTURE row and does not name the ANALYSIS row.
+- **dropped** · the old phrasing in `dl-48` and `dl-83` ticket text. These are records of what was true then, and are not consumers of the message.
+- **dropped** · the change to `web/src/api/scenarios.ts`, checked as possible scope creep. It is a consumer the brief's step 2 names, and its old description made the same false claim.
+- **findings** · the hunt returned 5; 3 carried (all low), 2 dropped.
+- Scope (dispatch item 3): the `errors.ts` diff is two hunks, the docstring and the `DEFAULT_ERROR_MESSAGES` entry. `RETRYABLE_CODES`, the code list order, `api/src/http-errors.ts` (422) and `classify.ts`'s `details` are untouched. The single raise site (`classify.ts`, `classifyFailure`) passes `undefined` as message, so both causes carry the default copy: read from the error with the setting off ("not told to confirm ages…") and on-and-declined (`?second`) at this head, both "This video asks the viewer to confirm their age, and the server did not confirm it."
+- Invariants: contract edited with the owner's decision recorded in the brief ✓; no new test files, so no registration needed; no new imports. Skipped as untouched: cross-tool imports, shell, redaction, SSRF, progress, Dockerfile closure, routes.
+- NFR: security n/a · performance n/a · reliability n/a (copy only; classification unchanged) · maintainability — the three lows above.
+
+### Gate 2
+
+**Gate: PASS** — 2026-10-07 · `4d115777..171044ea` · Opus 5.5, narrow re-gate of the round's diff only
+
+- **fixed** · gate 1 low 1, the comments that quoted the retired copy. The comment at the `classifyFailure` call in `resolvers/src/resolvers/browser.ts` now reads "Saying the server \"did not confirm\" would be false". The comment in `browser-resolver.test.ts` › "a press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal" now reads "\"the server did not confirm it\" would be false". Both are true of the pressed-but-inert case they describe. Verified with a multi-line grep: `grep -rPzl "not\s+(//\s*|\*\s*)?set\s+(//\s*|\*\s*)?to\s+(//\s*|\*\s*)?(confirm|press)"` over `tools/downloader`, `packages` and `docs` now matches only the `dl-48`, `dl-83` and `dl-94` ticket records. Positive control: the same pattern run on `browser.ts` at `4d115777` matched `not set to\n        // confirm`, the phrase wrapped across a line break.
+- **fixed** · gate 1 low 2, the docstring's last sentence. The `AGE_CONFIRMATION_REQUIRED` docstring in `contract/src/errors.ts` now says what each cause needs to change: an operator turning the setting on, or the page or the press rules changing. It ends "a retry alone changes nothing in either case". The sentence is true of both causes, and the classification is unchanged.
+- **fixed** · gate 1 low 3, the docs rows. `docs/00-ANALYSIS.md`'s "Age confirmation" row and `docs/01-ARCHITECTURE.md`'s `ENABLE_AGE_CONFIRMATION` row both now name the declined press as a second way to reach `AGE_CONFIRMATION_REQUIRED`. A single-line grep for the old phrasings outside `docs/work/` (`not set to (confirm|press)`, `is not set to`, `unless its operator`, `turned it on`, `does not confirm that`, `nothing changes until an operator`, `ENABLE_AGE_CONFIRMATION. confirms`) found only `engine/src/ffmpeg/args.ts`'s unrelated "dl-19 turned it on".
+- **No pinned text moved.** `git diff -U0 4d115777..171044ea -- '*.ts'` has no changed line that is not a `//` or `*` comment line. `DEFAULT_ERROR_MESSAGES` and `ERROR_PRESENTATION` are untouched. The three spec files that pin the copy (`contract-schemas.test.ts`, `error-presentation.test.ts`, `browser-resolver.test.ts`) pass 174 of 174 after a rebuild.
+- **Gates.** `npm run check` exit 0 after `npm run build` exit 0. PR #385 on `171044ea`: every check passes except `test (windows-latest, informational)`, which was still pending when read. No `Done when` line depends on that informational leg.
+- **New in the round's lines:** none. The Log entry is accurate against the diff, and it records the owner's choice of option A (no `details.reason`) for Build step 3.
+- **findings** · 3 carried from gate 1, 3 fixed; 0 new; 0 dropped. Nothing at high.
+
 ## Log
 
 **2026-10-06 — filed** on `dl-83-age-gate-phrasings` by dl-83's builder, on the
 owner's choice of option (b) above, relayed by the orchestrator after dl-83's
 gate round 1. Not built against.
+
+**2026-10-07 — built** on `dl-94-declined-press-copy` (base `1aece87d`).
+
+- **Reproduced** (Build 1): with `confirmAge: true` against the `?second`
+  fixture, the error carried "This video asks the viewer to confirm their age,
+  and this server is not set to confirm it." — pinned by a new assertion
+  `expect(error.message).not.toMatch(/not set/i)` in dl-83's test "two
+  candidates still standing after the choice presses nothing and fails
+  AGE_CONFIRMATION_REQUIRED"; before the fix, `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "two
+candidates still standing"` failed with `Received: "This video asks the viewer
+to confirm their age, and this server is not set to confirm it."`, after it
+  passes (1 passed, 137 skipped).
+- **New copy**, none of it naming the setting: contract message "This video asks
+  the viewer to confirm their age, and the server did not confirm it."; web
+  detail "The page asks the viewer to confirm they are an adult before it plays
+  the video. The server did not make that confirmation on anyone's behalf."; the
+  docstring in `contract/src/errors.ts` now names both causes and says the
+  wording is true of both. The mocked scenario's description in
+  `web/src/api/scenarios.ts` ("this server is not set to press") said the same
+  false thing and now reads "the server did not press" (a consumer of the copy,
+  step 2).
+- **Pinned by** `contract/test/contract-schemas.test.ts` "says the server did
+  not confirm, and claims nothing about its setting" and
+  `web/test/error-presentation.test.ts` "age confirmation says the server did
+  not make it, and claims nothing about its setting"; both failed on the old
+  copy (`Tests 2 failed | 34 passed (36)`) and pass now. No `api` test and no
+  other `web` test pinned the old text (grep of `api`, `web`, `e2e` for the old
+  strings found only the two source lines changed here).
+- **Not done:** the `details.reason` field (Build 3) is an open decision, left
+  to the orchestrator. `docs/01-ARCHITECTURE.md`'s `ENABLE_AGE_CONFIRMATION` row
+  still says only "with it off, such a page fails `AGE_CONFIRMATION_REQUIRED`";
+  it is true but does not mention the declined press, and the ticket does not
+  name it.
+
+**2026-10-07 — gate 1 round 2** (fixer, wording only; no behaviour and no
+message text a test pins).
+
+- **Owner decision, Build step 3:** add a `details.reason` field? Options: A
+  none (the builder's recommendation); B `details.reason` `"declined"` |
+  `"disabled"`; C a field for the declined case only. **Chosen: A, none.** The
+  two causes keep sharing one message and carry no `details` to tell them apart.
+- **Gate 1's three lows applied.** The comments in `resolvers/src/resolvers/browser.ts`
+  (the `classifyFailure` call) and in `browser-resolver.test.ts` (the test "a
+  press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal")
+  now quote "did not confirm", not the retired "not set to confirm". The
+  docstring in `contract/src/errors.ts` no longer ends "nothing changes until an
+  operator does": it says the setting being off needs an operator and a declined
+  press needs the page or the press rules to change. The `ENABLE_AGE_CONFIRMATION`
+  rows in `docs/00-ANALYSIS.md` (the "Age confirmation" row, which the build Log
+  had not named) and `docs/01-ARCHITECTURE.md` now name the declined press as a
+  second way to reach `AGE_CONFIRMATION_REQUIRED`.

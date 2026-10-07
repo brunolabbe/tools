@@ -16,6 +16,15 @@
  * ratio in effect on its last day (§5, a ratio change takes effect at a period
  * boundary). An earlier settlement that asked too little, or a deposit never
  * made, is therefore caught up by the next close with no special case.
+ *
+ * **Except a settlement's own deposit** (lg-13). A deposit `matchDeposits` has
+ * matched to a closed period is counted when its date says, like any other, but
+ * it is weighed in **that period's stretch**, at the ratio its settlement
+ * recorded. The deposit was asked for as that period's debt divided by that
+ * ratio's share, so weighed at the same ratio it cancels the debt, to within the
+ * rounding of the figure asked; weighed at the ratio of the period its date falls
+ * in — nearly always a later one, since it is dated on or after the period's last
+ * day — it would leave a difference whenever the ratio changed at the boundary.
  */
 
 import type { DepositStatus } from "@ledger/contract";
@@ -49,6 +58,12 @@ export interface DepositInput {
   personId: string;
   date: string;
   amountCents: number;
+  /**
+   * The last day of the closed period whose settlement this deposit was
+   * matched to (`matchDeposits`), which weighs it at that period's ratio.
+   * Absent or `null` for every other deposit, weighed by its date.
+   */
+  settles?: string | null;
 }
 
 /** A fixed monthly item, as it stands. */
@@ -134,8 +149,9 @@ export function enteredLate(
 /**
  * The settlement closing the last of `periods` (oldest first, the first one
  * being where the two were last even) computes: every line and deposit dated in
- * any of them, each weighed at its own period's ratio, and the total divided by
- * the recipient's share at the last period's ratio.
+ * any of them, each weighed at its own period's ratio — a deposit that `settles`
+ * a period at that period's — and the total divided by the recipient's share at
+ * the last period's ratio.
  */
 export function cumulativeSettlement(
   periods: readonly WeighedPeriod[],
@@ -168,10 +184,16 @@ export function cumulativeSettlement(
     }
   }
   for (const deposit of deposits) {
-    const index = periodIndexOf(periods, deposit.date);
-    if (index >= 0) {
-      contributions[index]?.push({ personId: deposit.personId, cents: deposit.amountCents });
-    }
+    // Whether it counts at all is its date's to say, matched or not: the open
+    // period as of a day leaves out what is dated after it.
+    const dated = periodIndexOf(periods, deposit.date);
+    if (dated < 0) continue;
+    const settled =
+      deposit.settles === undefined || deposit.settles === null
+        ? -1
+        : periodIndexOf(periods, deposit.settles);
+    const index = settled >= 0 ? settled : dated;
+    contributions[index]?.push({ personId: deposit.personId, cents: deposit.amountCents });
   }
   const stretches: Stretch[] = periods.map((period, index) => ({
     ratio: period.ratio,

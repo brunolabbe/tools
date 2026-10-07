@@ -121,33 +121,81 @@ export class FfmpegProgressParser {
 }
 
 /**
+ * The `  Duration: 00:01:00.00, start: …` line ffmpeg writes about each input,
+ * at info level (dl-96). `N/A` — a live playlist — does not match.
+ */
+const DURATION_LINE = /^\s*Duration: (\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/u;
+
+/** Seconds from an input's `Duration:` line; null for any other line, or a zero. */
+export function durationFromInfoLine(line: string): number | null {
+  const match = DURATION_LINE.exec(line);
+  if (match === null) return null;
+  const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/**
  * Byte rate over a trailing window.
  *
  * `JobProgress.speedBps` is documented as a windowed rate, not a cumulative
  * average — a cumulative average makes a stream that stalled five minutes ago
  * still look healthy.
+ *
+ * **The window stretches to cover a whole fragment** (dl-96). Bytes leave
+ * ffmpeg one fragment at a time, so on a source many times slower than
+ * realtime a fragment can take longer than the window to arrive, and a fixed
+ * window reads 0 B/s between every pair of them — 27 of 31 readings, measured
+ * at 19x slower than realtime. So the window reaches back to the moment the
+ * fragment *before* the latest one landed, when that is further than
+ * `windowMs`: the bytes of the latest fragment were being fetched for all of
+ * that span. It is still bytes counted over a span that really elapsed.
+ *
+ * **Only while ffmpeg is still reading.** Bytes alone cannot tell a fragment
+ * on its way from a source that has stopped, and a stretched window over a
+ * stall decays for a minute instead of reading zero — the very thing the
+ * window exists to prevent. ffmpeg's media time can: it advances as packets
+ * are read, fragment flushed or not, and stands still when the input does. So
+ * the window stretches only when the media time moved inside the plain one.
+ * A sample with no media time never stretches it, and a stream that moves
+ * every few hundred milliseconds never needs to.
  */
 export class RateTracker {
   readonly #windowMs: number;
-  #samples: { at: number; bytes: number }[] = [];
+  readonly #maxWindowMs: number;
+  #samples: { at: number; bytes: number; mediaUs: number | null }[] = [];
 
-  constructor(windowMs = 5000) {
+  constructor(windowMs = 5000, maxWindowMs = 60_000) {
     this.#windowMs = windowMs;
+    this.#maxWindowMs = Math.max(windowMs, maxWindowMs);
   }
 
-  record(bytes: number, at: number): void {
-    this.#samples.push({ at, bytes });
-    const cutoff = at - this.#windowMs;
+  /** `mediaUs` is ffmpeg's `out_time` at the same moment, when it reported one. */
+  record(bytes: number, at: number, mediaUs: number | null = null): void {
+    this.#samples.push({ at, bytes, mediaUs });
+    const cutoff = at - this.#maxWindowMs;
     while (this.#samples.length > 2 && (this.#samples[0]?.at ?? 0) < cutoff) {
       this.#samples.shift();
     }
   }
 
-  /** Null until there are two samples spanning a non-zero interval. */
+  /**
+   * Null until there are two samples spanning a non-zero interval, and until
+   * the first byte: before it there is no rate to measure, only a wait.
+   */
   bytesPerSecond(): number | null {
-    const first = this.#samples[0];
-    const last = this.#samples.at(-1);
-    if (first === undefined || last === undefined) return null;
+    const samples = this.#samples;
+    const last = samples.at(-1);
+    if (last === undefined || samples.length < 2 || last.bytes === 0) return null;
+
+    // The ordinary window: the earliest sample inside it, and never the last.
+    const cutoff = last.at - this.#windowMs;
+    let start = samples.findIndex((sample) => sample.at >= cutoff);
+    if (start === -1 || start === samples.length - 1) start = samples.length - 2;
+
+    if (isReading(samples[start], last)) start = Math.min(start, previousRise(samples));
+
+    const first = samples[start];
+    if (first === undefined) return null;
     const elapsedMs = last.at - first.at;
     if (elapsedMs <= 0) return null;
     const delta = last.bytes - first.bytes;
@@ -158,6 +206,31 @@ export class RateTracker {
   reset(): void {
     this.#samples = [];
   }
+}
+
+function isReading(
+  from: { mediaUs: number | null } | undefined,
+  to: { mediaUs: number | null },
+): boolean {
+  return (
+    from !== undefined && from.mediaUs !== null && to.mediaUs !== null && to.mediaUs > from.mediaUs
+  );
+}
+
+/**
+ * Where the fragment before the latest one landed: the second-latest sample at
+ * which the count rose. With fewer than two rises in what is kept, the start
+ * of what is kept, which `maxWindowMs` bounds.
+ */
+function previousRise(samples: readonly { bytes: number }[]): number {
+  let rises = 0;
+  for (let index = samples.length - 1; index > 0; index -= 1) {
+    if ((samples[index]?.bytes ?? 0) > (samples[index - 1]?.bytes ?? 0)) {
+      rises += 1;
+      if (rises === 2) return index;
+    }
+  }
+  return 0;
 }
 
 export interface JobProgressContext {
