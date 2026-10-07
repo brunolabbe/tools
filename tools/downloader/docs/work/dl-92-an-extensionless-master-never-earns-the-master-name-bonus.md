@@ -87,6 +87,40 @@ dl-79: it applies to any typed extensionless master.
 2. **Narrow `ROUTE_MASTER_NAME`.** Anchor it to the start of the segment and drop the generic words (`stream`, `video`, `main`, `index`), so only `^(?:master|manifest|playlist)\b` earns the bonus on a route. Add a test that `/api/video?id=1&r=720` after `/abc.m3u8` still loses. Cost: small, but the branch's `/stream` route test has to go. It cuts down the false positives but leaves `/hls?token=` lost. File that as its own ticket.
 3. **Accept as is**, record the regression class in the ticket, and file `/hls?token=` as a follow-up. Cost: nothing now. The first finding stays live behind a condition whose frequency nobody has measured.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-07 · `d864e947..6f00fa15` · Opus 5.5, depth standard (re-gate of the round's diff only)
+
+| Done when                                                                                                                        | Proof                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The step-1 fixture yields the master's variants                                                                                  | `resolvers/test/browser/browser-resolver.test.ts` › "outranks the variant it names, even when that variant is called index.m3u8" ✓. Unchanged this round, passes at head, and goes red with base `rank.ts` under the head tests. `extless/v/low/index.m3u8` now exists                        |
+| A test proves an extensionless master outranks a later `index.m3u8`, and a typed `master.m3u8` listed first still wins as before | `resolvers/test/browser/capture-rules.test.ts` › "%s, requested first, beats a later variant named index.m3u8" ✓ (four shapes, `/hls?token=abc` among them; all four red at base) and › "a typed master.m3u8 listed first still wins over a later extensionless route" ✓                      |
+| `npm run check` and `npm test -- --project downloader` pass                                                                      | **verified** — rebuilt first (`dist/browser/rank.js` has `isAnsweredManifest` and no `ROUTE_MASTER_NAME`). Check exit 0. Downloader project exit 0, 2080 passed and 2 skipped of 2082, 100 of 101 files (gate 1: 2071; +9 is the dl-92 block's net growth). PR #388 CI is green on `6f00fa15` |
+
+Gate 1's findings:
+
+- **med, route bonus false positives — fixed.** `ROUTE_MASTER_NAME` is gone. Gate 1's `compare.ts` at this head prints `cases=34 changed=18 head-wrong=1`. All 13 shapes that went from right to wrong at `d864e947` are `same head-correct` against base. › "a later route that carries a master word (%s) does not outrank an earlier master" pins five of them. All five fail with the round-1 `rank.ts` under the head tests (`10 failed | 6 passed` for the dl-92 block).
+- **med, `/hls?token=` still lost — fixed.** `compare.ts`: `CHANGED head-correct … brief Why: /hls?token then index.m3u8`, and the same for `/api/hls/abc?token=1` and dash `/dash?token=1`. The head tests named in Done when 2 fail at base for these.
+- **low, route-name edges (trailing slash, percent-encoding, query word) — moot.** Nothing reads a route's name any more. All five such shapes in `compare.ts` are `head-correct`.
+- **low, missing `extless/v/low/index.m3u8` — fixed.** The file is added, byte-identical to `high/index.m3u8` (`cmp` exit 0).
+- **open decision — closed by the owner (option 1)**, recorded in the Log. The one right-to-wrong shape left is the accepted cost: an ad `/ads/stream?x=1` requested before `/abc.m3u8`. › "an ad manifest requested before master.m3u8 is offered first; the master is next" pins it.
+
+Checks the dispatch asked for:
+
+- **The comparator is transitive and stable.** The key is a partition (answered manifest or not) followed by a lexicographic tuple within each side, so it is a total preorder. Measured: `tsx fuzz.ts` (gate-2 scratch) ranks 6000 random sets of 2 to 8 hits. They mix hls, dash, progressive and segment, statuses undefined/200/206/403/404/500, confirmed true/false, two origins, and sizes from 1 kB to 1 GB. Half the sets have unique seq and half allow equal seq. Every pair in each full sort was checked against both two-element orderings, and every set against a shuffled copy: `pairwiseViolations=0 antisymViolations=0 permutationViolations=0`. Positive control: a rock-paper-scissors comparator through the same check (`control-cmp.ts`) gives `control violations=333`.
+- **Equal seq cannot occur in production.** `HitCollector` gives out `seq` from one counter per probe (`new HitCollector()` once in `resolvers/src/resolvers/browser.ts`). The sniff path reserves a number from the same counter. So the name tiebreak only matters in unit fixtures, whose `hit()` helper defaults `seq: 0`. The Log says the same.
+- **No caller relied on `seq` in the score.** `scoreHit` has one caller, `rankHits`. Nothing under `tools/downloader` imports it, tests included. `#buildOutcome` uses the ranking only through the order of `manifests` and of `files`, which it filters separately.
+- **No existing expectation moved.** I put the base (`1aece87d`) `capture-rules.test.ts`, `browser-resolver.test.ts` and `sniff.test.ts` over the head source: `329 passed (329)`. Positive control: with the `seq` comparison reversed in `rankHits` under the same base tests, 66 tests failed. All files were restored afterwards and the tree is clean.
+
+New in the round's lines:
+
+- **low** · no known live call site · **Answered-before-unanswered is now absolute, where the base made it a +30 term.** `tsx unconfirmed.ts` (gate-2 scratch): an unconfirmed `master.m3u8` at seq 0 next to a confirmed `/v/720p.m3u8` at seq 1 gives base the master and head the variant. The same happens with `chunklist_1.m3u8` at seq 5. This bites only when the master's response event is missed while its variants' responses are caught. I found no path that produces that, and it is unmeasured. › "an earlier request that never got a response does not outrank one that did" pins the rule on purpose. The owner's decision covered arrival order against the name, not this key, so this is the builder's call and the Log states it.
+- **low** · the Log's round-2 "answers that moved" bullet is wrong about its examples. "17 changed from wrong to right" is the right count, but it then names `/abc.m3u8` followed by `/api/video?id=1&r=720`, an ad `/vast/video?id=1`, `/p/abc/mainstream` and `/api/domain`. `compare.ts` prints all four as `same head-correct`: base ranked them right. They were round-1 regressions that are now gone, not base defects this fix closes. A reader would infer the base mis-ranked them.
+- **dropped** · the name tiebreak is unreachable in production (above). This is stated in the Log and the code comment, and `MASTER_NAME` still decides ties in unit fixtures. Not a defect.
+- **findings** · the hunt returned 3; 2 carried, 1 dropped. Nothing is a `high`.
+- Invariants: no imports, errors, shell, logging, SSRF, progress or contract code in the diff. Style is clean (check exit 0). Tests are in existing registered specs.
+- NFR: security n/a · performance n/a (comparator is O(1) per comparison) · reliability — the unconfirmed low above · maintainability ✓.
+
 ## Log
 
 **2026-10-07, builder.**
