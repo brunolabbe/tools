@@ -57,7 +57,15 @@ Taken by the owner on 2026-10-07, from the options recorded in the Log.
 4. **N is fixed at 4, with a per-host opt-out**: an environment list of hosts
    that always get one connection, for an origin whose terms or anti-bot layer
    object. 4 is what the measurement above showed paying off.
-5. **What it must not break** is unchanged: the SSRF check on every ranged
+5. **A host that refuses falls back, and is remembered until restart.** A
+   refusal is a 429, 403 or 503, or a reset, on an extra connection; a 200 that
+   ignores the range; or 4 connections together measuring no faster than 1,
+   which is a per-IP throttle. Any of these drops the job back to one
+   connection without failing it; the loopback server absorbs the switch, so
+   ffmpeg never sees it. The host goes into an in-memory set in the API process,
+   and later jobs to it stay on one connection. A restart clears the set, so
+   each process gives a host one new try.
+6. **What it must not break** is unchanged: the SSRF check on every ranged
    fetch; the egress proxy and its TLS verification on every byte; the replayed
    headers and cookies; the size cap, counted on reassembled bytes; and
    cancellation and process-tree kill, which must cover the fetchers too.
@@ -77,6 +85,10 @@ the right shape. Show a single-connection baseline, then the speed-up.
   each stay on exactly one connection, counted at the fixture.
 - The output is identical in media to a single-connection run, including a
   file whose `moov` is at the end.
+- For each kind of refusal (a 429, a reset, a 200 to a range request, and no
+  speed-up at 4), the job completes on one connection with output identical in
+  media, and a second job to that host opens one connection, counted at the
+  fixture.
 - Bytes held ahead never exceed 4 × 4 MB per job, measured, not assumed.
 - Every ranged fetch passes the SSRF check and the egress proxy, carries the
   replayed headers, counts toward the size cap, and stops on cancel.
@@ -94,3 +106,8 @@ slow; and N as a fixed 4 with a per-host opt-out, a fixed 4 alone, or an env N
 defaulting to 1. The first option was chosen each time. The 32 MB bound was
 stated with option (a). Staying on one connection when the bitrate cannot be
 computed follows from "only when measured slow".
+
+**2026-10-07** — the owner asked what happens when a host refuses several
+connections from one IP; nothing above said. The options were to fall back for
+the job only, to fall back and remember the host until restart, or to fall back
+and remember it in SQLite with an expiry. They chose until restart (decision 5).
