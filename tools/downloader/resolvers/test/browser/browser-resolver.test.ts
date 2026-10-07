@@ -1939,3 +1939,20 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
     },
   );
 });
+
+describe("a master served from a route with no extension (dl-92)", () => {
+  test(
+    "outranks the variant it names, even when that variant is called index.m3u8",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const result = await probe("/extensionless-master.html", resolver);
+
+      // The master's two renditions, not the one variant playlist.
+      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=4"));
+      expect(hls.calls[0]?.text).toContain("#EXT-X-STREAM-INF");
+      expect(result.variants).toHaveLength(2);
+    },
+  );
+});

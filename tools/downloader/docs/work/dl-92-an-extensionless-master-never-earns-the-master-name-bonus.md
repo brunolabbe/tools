@@ -61,3 +61,41 @@ dl-79: it applies to any typed extensionless master.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+**2026-10-07, builder.**
+
+- **Step 1, reproduced through the real `BrowserResolver` before any change to
+  `rank.ts`.** New fixture `test/fixtures/pages/extensionless-master.html` fetches
+  `/api/playlist?id=4` (served `application/vnd.apple.mpegurl`, two
+  `#EXT-X-STREAM-INF`s; `UNTYPED_ENDPOINTS` in `fixture-server.ts` gained the
+  route) and then `/media/extless/v/high/index.m3u8`. On the unchanged ranking,
+  `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "dl-92"`:
+  `1 failed | 138 skipped (139)`, `Expected: ".../api/playlist?id=4"`,
+  `Received: ".../media/extless/v/high/index.m3u8"`.
+- **Step 2, approach chosen: let an extensionless route earn the name bonus on its
+  own words** (`ROUTE_MASTER_NAME`, the same word list as `MASTER_NAME`, read off
+  the last path segment, which must carry no `.`). Over the other two:
+  - _Body_ (`#EXT-X-STREAM-INF`) needs every candidate's body before ranking, or a
+    second fetch per runner-up against a CDN that may rate-limit, and typed
+    manifests are not read at capture time. Larger than the defect.
+  - _Earliest hls wins_ changes the answer for inputs that are not this defect: a
+    page that fetches an unrelated manifest first (ad slate, preview) and then
+    `master.m3u8` picks the first today by name, and would pick the first under it.
+    The brief does not settle which is right (open decision, reported to the
+    orchestrator).
+  - Words alone change the score only for an hls/dash hit whose last segment has
+    no extension and carries one of the seven words, so no existing expectation
+    moves. Measured, `scoreHit` on `[route seq=0, /v/high/index.m3u8 seq=1]`:
+    `/api/playlist?id=1` `[1270, 1260]` winner the route (was `[1150, 1260]`).
+- **What this does not cover, measured:** `/hls?token=abc` `[1150, 1260]` and
+  `/api/ad-slate.m3u8` `[1150, 1260]` both still lose to the later
+  `index.m3u8`. The first is the `/hls?token=...` shape the Why names; the second
+  shows the cause is the 120 name bonus against the 10-per-step `seq` term, not the
+  missing extension, so any master whose name carries none of the seven words loses
+  the same way. Only a rule that lets arrival order outweigh the name closes those.
+- Tests, at the end of each suite: `capture-rules.test.ts`
+  `rankHits with a master that has no file extension (dl-92)`, five failing with
+  the clause removed (`5 failed | 2 passed`), all passing with it; and
+  `browser-resolver.test.ts` `a master served from a route with no extension (dl-92)`.
+- Fold-in: none. The only adjacent piece, a rule for wordless masters, is the open
+  decision above, not an already-specified one.

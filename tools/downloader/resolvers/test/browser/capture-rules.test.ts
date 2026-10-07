@@ -871,3 +871,65 @@ describe("structural age-gate rules (dl-83)", () => {
     }
   });
 });
+
+describe("rankHits with a master that has no file extension (dl-92)", () => {
+  const page = "https://site.example/watch";
+
+  test.each(["/api/playlist?id=1", "/api/master?token=abc", "/video/manifest", "/stream"])(
+    "%s outranks a later variant named index.m3u8",
+    (route) => {
+      const master = `https://site.example${route}`;
+      const ranked = rankHits(
+        [
+          hit({ url: master, kind: "hls", seq: 0 }),
+          hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
+        ],
+        page,
+      );
+      expect(ranked[0]?.url).toBe(master);
+    },
+  );
+
+  test("a typed master.m3u8 listed first still wins over a later extensionless route", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: "https://site.example/api/master.m3u8", kind: "hls", seq: 0 }),
+        hit({ url: "https://site.example/api/playlist?id=1", kind: "hls", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked[0]?.url).toBe("https://site.example/api/master.m3u8");
+  });
+
+  test("an extensionless dash manifest earns the same bonus", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: "https://site.example/api/manifest?id=1", kind: "dash", seq: 0 }),
+        hit({ url: "https://site.example/v/high/index.mpd", kind: "dash", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked[0]?.url).toBe("https://site.example/api/manifest?id=1");
+  });
+
+  test("a word in a directory, or before another extension, earns nothing", () => {
+    const earlier = rankHits(
+      [
+        hit({ url: "https://site.example/video/a/high.m3u8", kind: "hls", seq: 0 }),
+        hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
+      ],
+      page,
+    );
+    // Unchanged from before: only the file's own name is read.
+    expect(earlier[0]?.url).toBe("https://site.example/v/high/index.m3u8");
+
+    const withOtherExtension = rankHits(
+      [
+        hit({ url: "https://site.example/api/playlist.json", kind: "hls", seq: 0 }),
+        hit({ url: "https://site.example/v/high/index.m3u8", kind: "hls", seq: 1 }),
+      ],
+      page,
+    );
+    expect(withOtherExtension[0]?.url).toBe("https://site.example/v/high/index.m3u8");
+  });
+});

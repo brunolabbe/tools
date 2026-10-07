@@ -13,6 +13,10 @@ import { isChunkName, isNumberedName } from "./media-match.ts";
 import type { NetworkHit } from "./types.ts";
 
 const MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/]*\.(?:m3u8?|mpd)$/i;
+// A master served from a route (`/api/playlist?id=1`) has no extension to hang the
+// name on, so its last segment is read for the same words instead (dl-92). The
+// `.` is excluded after the word so a file with an extension stays MASTER_NAME's.
+const ROUTE_MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/.]*$/i;
 const VARIANT_NAME = /(?:chunklist|media[-_]?\d|\b\d{3,4}p\b|[-_]\d{3,5}k)[^/]*\.m3u8?$/i;
 
 function pathOf(raw: string): string {
@@ -48,7 +52,7 @@ export function scoreHit(hit: NetworkHit, pageUrl: string): number {
   }
 
   if (hit.kind === "hls" || hit.kind === "dash") {
-    if (MASTER_NAME.test(path)) score += 120;
+    if (MASTER_NAME.test(path) || ROUTE_MASTER_NAME.test(path)) score += 120;
     if (VARIANT_NAME.test(path)) score -= 80;
     // The master is requested before the variants it names, so earlier wins.
     score += Math.max(0, 100 - hit.seq * 10);

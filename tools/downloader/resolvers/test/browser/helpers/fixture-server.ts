@@ -54,6 +54,12 @@ const UNTYPED_ENDPOINTS: Record<string, { file: string; contentType: string }> =
     file: path.join("media", "dash", "manifest.mpd"),
     contentType: "text/plain; charset=utf-8",
   },
+  // dl-92: the one *typed* extensionless master. It is here because it shares
+  // the route shape, not the untyped body-sniffing path.
+  "/api/playlist?4": {
+    file: path.join("media", "extless", "master.m3u8"),
+    contentType: "application/vnd.apple.mpegurl",
+  },
 };
 
 /** Pages served with a deliberate non-2xx, so classification has something to read. */
