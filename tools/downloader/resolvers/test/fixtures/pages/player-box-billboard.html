@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A billboard ad frame above a click-only player box</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: a 970x250 billboard in another site's frame (242,500 px2)
+         is larger than the page's own 640x360 player box (230,400 px2). A frame
+         is never a candidate for the centre click, so the box is the one
+         pressed, and the billboard's link to the advertiser is never reached. -->
+    <iframe
+      width="970"
+      height="250"
+      title="Advertisement"
+      style="border: 0; display: block"
+      src="{{SECONDARY}}/ad-billboard-inner.html"
+    ></iframe>
+    <div class="player-box" style="width: 640px; height: 360px; background: #222"></div>
+    <script>
+      var started = false;
+      document.querySelector(".player-box").addEventListener("click", function () {
+        if (started) return;
+        started = true;
+        fetch("/media/related/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/related/v720.m3u8");
+          })
+          .catch(function () {});
+      });
+    </script>
+  </body>
+</html>

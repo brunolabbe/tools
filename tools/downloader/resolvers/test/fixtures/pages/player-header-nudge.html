@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player that mounts after the reader scrolls past the header</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: a small player-named header slot is already in view, and
+         the page mounts its real player only after the window has scrolled 300
+         px. Centring an element that is already in view scrolls nowhere, so the
+         400 px nudge has to follow it in exactly that case. -->
+    <div class="player-header" style="width: 300px; height: 50px; background: #eee">
+      Now playing
+    </div>
+    <div style="height: 4000px"></div>
+    <script>
+      var mounted = false;
+      window.addEventListener(
+        "scroll",
+        function () {
+          if (mounted || window.scrollY < 300) return;
+          mounted = true;
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        },
+        { passive: true },
+      );
+    </script>
+  </body>
+</html>

@@ -1955,14 +1955,18 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     });
   }
 
-  test.each(["pointermove", "wheel"])(
-    "a player injected on the first %s is reached from a bare poster",
+  // Not `pointermove`: headless Chromium sends one at (0,0) while a page loads,
+  // so a page gated on it mounts with no help from the tier and a test of it
+  // passes at base by timing (the gate's measurement). The tier sends no
+  // pointer movement at all; see `input-gated-player.html`.
+  test(
+    "a player injected on the first wheel is reached from a bare poster",
     { timeout: TEST_TIMEOUT_MS },
-    async (input) => {
+    async () => {
       server.requests.length = 0;
       // `<div><img></div>`: no `<video>`, no label, nothing to click. Until an
       // input arrives the page asks for no media at all.
-      const result = await probe(`/input-gated-player.html?on=${input}`, resolverWith());
+      const result = await probe("/input-gated-player.html?on=wheel", resolverWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       expect(server.requests).toContain("/media/hls/master.m3u8");
@@ -1974,10 +1978,27 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       server.requests.length = 0;
+      // Nothing on this page can be clicked, and the centre click does not
+      // scroll: only `SCROLL_SCRIPT` brings the lazily mounted shell into view,
+      // which is what makes this the resolver-level proof of choosing the
+      // largest candidate (a first-match scroll fails it, gate 1).
       const result = await probe("/player-nav-first.html", resolverWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
       expect(server.requests).toContain("/media/related/master.m3u8");
+    },
+  );
+
+  test(
+    "still nudges the page 400 px when the centring moved nothing, for a player that mounts on scroll",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The only candidate is a 300x50 header already in view, so centring it
+      // scrolls nowhere; the page mounts its player at `scrollY >= 300`.
+      const result = await probe("/player-header-nudge.html", resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
     },
   );
 
@@ -2022,6 +2043,72 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     },
   );
 
+  describe("what the centre click must not reach (gate 1, owner's decision 1)", () => {
+    test(
+      "is skipped once the label has started the stream, so a card under the largest box is not pressed",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/player-poster-related-grid.html", resolverWith());
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+        expect(server.requests).not.toContain("/beacon/card-clicked");
+      },
+    );
+
+    test(
+      "never presses a form's button, which would post",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const error = await probeError("/player-box-form.html", resolverWith());
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(server.requests).not.toContain("/beacon/form-submitted");
+      },
+    );
+
+    test(
+      "never clicks a frame: a billboard larger than the page's own box is not pressed",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/player-box-billboard.html", resolverWith());
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+        expect(server.requests).not.toContain("/beacon/billboard-clicked");
+        expect(server.requests).not.toContain("/advertiser.html");
+      },
+    );
+
+    test(
+      "leaves a box alone when an ad frame covers its centre",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const error = await probeError("/player-box-interstitial.html", resolverWith());
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).not.toBe("navigated-away");
+        expect(server.requests).not.toContain("/advertiser.html");
+      },
+    );
+  });
+
+  test(
+    "sends no pointer movement, so hover previews on related cards are not entered",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The page's own player waits for a keydown, which the tier never sends;
+      // a pointer sweep entered the cards and returned a preview clip.
+      const error = await probeError("/hover-previews-keydown-player.html", resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests.filter((pathname) => pathname.startsWith("/preview-"))).toEqual([]);
+    },
+  );
+
   describe("in a frame from another site", () => {
     test(
       "a scroll run there starts a player that mounts only when scrolled into view",
@@ -2044,6 +2131,20 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
 
         expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
         expect(server.requests).toContain("/media/related/master.m3u8");
+      },
+    );
+
+    test(
+      "a scripted play() run there does not play an ad once the page's own stream is captured",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/ad-frame-with-real-hls.html", resolverWith());
+
+        // Adaptive outranks nothing here: both are HLS masters, so what decides
+        // is which was requested, and the ad's is never asked for.
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+        expect(server.requests).not.toContain("/beacon/ad-played");
       },
     );
   });

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The page's own HLS player beside a cross-origin video ad</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: the page's `<video>` starts its stream on `play()`. Beside
+         it, a 300x250 ad in another site's frame whose `<video>` fetches a
+         different HLS master when played. Playing every media element in every
+         frame returned the ad's stream; a frame from another site is played
+         only for the video the chooser picks, and only while nothing has been
+         captured, which the page's own `play()` has settled by then. -->
+    <video id="real" width="640" height="360" muted playsinline></video>
+    <iframe
+      width="300"
+      height="250"
+      title="Advert"
+      style="border: 0"
+      src="{{SECONDARY}}/ad-video-inner.html"
+    ></iframe>
+    <script>
+      document.getElementById("real").addEventListener("play", function () {
+        fetch("/media/hls/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+      });
+    </script>
+  </body>
+</html>

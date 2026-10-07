@@ -351,6 +351,8 @@ export class BrowserResolver implements Resolver {
       deadline: deadline - TEARDOWN_RESERVE_MS,
       signal: options.signal,
       confirmAge: this.#confirmAge,
+      // dl-81: what could replace a stream with a worse one waits on this.
+      hasPlayable: () => collector.hasPlayableHit(),
     });
 
     this.#stage(options, "network-quiet");

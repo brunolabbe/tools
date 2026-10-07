@@ -85,7 +85,8 @@ building the fixtures is the first step.
   `origin/main`'s provocation (the only source change at that point being
   `export` on `SCROLL_SCRIPT`, so a test could call it):
   `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts tools/downloader/resolvers/test/browser/provoke.test.ts -t dl-81`
-  gave `Tests 7 failed | 4 passed | 344 skipped (355)`. The seven red are the
+  gave `Tests 7 failed | 4 passed | 344 skipped (355)` **in that run; the
+  `pointermove` page is not reliably red, see round 2**. The seven red were the
   `pointermove` and `wheel` input-gated pages (`input-gated-player.html?on=`),
   `player-nav-first.html` (an ad iframe and a `player-nav` bar above a lazily
   mounted shell 3000 px down), `player-box-click-only.html` (a poster in a `div`
@@ -125,7 +126,8 @@ building the fixtures is the first step.
   fixture needed it.
 
   **Step 4, the cross-origin policy.** `git log -S isScriptableFrame` gives four
-  commits: d1ec2c61 (the original, written with no rationale in the comment),
+  commits **when filtered to `tools/`; wrong, see round 2: unfiltered the first
+  is 725740c3**: d1ec2c61 (the monorepo move, where a path filter stops),
   b0abed06 (the docs commit that filed dl-78..dl-83, naming the predicate in
   this ticket), 829e7ff3 (dl-83, which only reads it) and 18065251 (dl-55). The ticket that asked for the behaviour, dl-2 step 4, says "handle
   same-origin iframes" and gives no reason for stopping at the origin. dl-55's
@@ -163,3 +165,130 @@ Tests 880 passed (880)`, among them "the empty floor is overridable to allow
   click-only `div` player inside a same-origin frame that is not the page's
   largest box; and hover previews, which a pointer sweep across the viewport can
   start on a related-video card (unmeasured).
+
+- 2026-10-07 — **Round 2** (builder, Sonnet 5.5), after gate 1 graded FAIL at
+  `a280941b` (three highs, three meds, one low). Findings and the owner's three
+  decisions below; the round-1 entry above is left as written except where it
+  says "round 2".
+
+  **Decided by the owner, 2026-10-07**, each the gate's recommendation, so a
+  later builder does not reopen them. Each was put as a question with options:
+
+  1. **The centre click on a player-ish box presses whatever is largest.**
+     Measured at `a280941b`: it navigated away on a related-video grid, a
+     newsletter form, a cross-origin `target=_top` billboard and a full-viewport
+     interstitial, posted a form, and returned an advertiser's `.mp4`. Options:
+     **A**, skip it once anything playable has been captured, never click an
+     `<iframe>`, treat a button inside a form as unsafe; **B**, drop the box
+     click; **C**, keep it and correct the docstring. **The owner chose A.**
+     Accepted cost: a click-only player alone in a cross-origin frame, with no
+     `<video>` and no label, is no longer reached.
+  2. **A cross-origin `play()` plays every media element in that frame.** An ad
+     frame's `<video>` outranked the page's own progressive file, and a frame
+     whose `play` handler sets `top.location` turned a real stream into
+     `navigated-away`. Options: **A**, in a frame from another site play only the
+     video the dl-55 chooser picks, and only while nothing has been captured;
+     **B**, keep `play()` main-origin and reword Done when 1; **C**, accept as
+     built. **The owner chose A.**
+  3. **The pointer sweep starts hover previews.** A keydown-gated page above
+     eight preview cards returned `/atk/preview-2.mp4`, a related video's clip.
+     Options: **A**, drop the mouse moves and keep the wheel; **B**, move only
+     over the chosen box; **C**, keep. **The owner chose A.**
+
+  **The `pointermove` premise, measured.** The coordinator relayed a
+  disagreement; both of us were right, and the fixture was not a reproduction.
+  At base `provoke.ts` (restored from 1aece87d), `pointer.mts idle`, which sends
+  no provocation at all, printed
+  `idle: {"ev":["pointermove@33(0,0)","mousemove@34(0,0)"],"status":"mounted"}`:
+  headless Chromium sends a `pointermove` and a `mousemove` at (0,0) while a page
+  loads. `npx vitest run … -t "first pointermove"` at base passed 3 of 3. But the
+  same two files with `-t dl-81`, as in round 1, gave `6 failed | 6 passed` and
+  `7 failed | 5 passed` on two runs, the `pointermove` test red in one and green
+  in the other: the load-time event is racy, so the page mounts by timing. The
+  ticket's premise ("the tier never sends a generic input") is false for
+  `pointermove` and `mousemove` listeners, and round 1's "seven red" was one lucky
+  run. A wheel is never sent by the browser itself, and
+  `?on=wheel` is red at base every time (`ERR NO_MEDIA_FOUND`) and green at head.
+  The `pointermove` case is dropped as a test (decision 3 removes the only thing
+  that could have mounted it, and a test of it cannot fail reliably); the fixture
+  says so in a comment.
+
+  **Fixes, by finding.**
+  - _High, the box click._ Decision 1. `MARK_PLAYER_BOX_SCRIPT` no longer lists
+    `<iframe>`, treats any point inside a `<form>` as unsafe (a form's submit
+    button is out; a button outside one is allowed), and **no longer scrolls**
+    (see the next finding); `provokePlayback` takes `hasPlayable?: () => boolean`
+    and `resolvers/browser.ts` passes `() => collector.hasPlayableHit()`, the
+    one line changed there. The docstring no longer says "never marks a control a
+    click could act on" without saying what it can see.
+  - _High, `pointermove`._ Above.
+  - _High, "scrolls to the largest candidate…" passed without the scroll._ The
+    box script's own `scrollIntoView` brought `player-nav-first.html`'s shell into
+    view. Removed; a box that is not already in view is now left alone. With
+    `SCROLL_SCRIPT` set back to `candidates[0]` the resolver test and the unit
+    both fail (`2 failed | 23 passed`).
+  - _Med, `PLAY_SCRIPT` in every frame._ Decision 2: `PLAY_CHOSEN_SCRIPT` in a
+    non-scriptable frame, behind `!hasPlayable()`. The gate's `ad-outranks.html`
+    (a progressive `preload=none` `<video>` beside a cross-origin ad frame whose
+    `<video>` fetches an HLS master on `play`) returns `P/atk/real.mp4` at base
+    and head both; at `a280941b` it returned the ad's master.
+  - _Med, the nudge._ The 400 px `scrollBy` now follows the centring whenever
+    the centring moved nothing (`scrollX`/`scrollY` compared; `behavior:
+'instant'` so a smooth-scrolling page is not misread). The gate's
+    `nudge.html` returns the stream at base and head;
+    `player-header-nudge.html` is the test. The frame-sized embed still gets no
+    nudge, because its shell is 1500 px down and the centring moves.
+  - _Med, hover previews._ Decision 3: no `page.mouse.move` anywhere in the tier.
+  - _Low, the first commit._ `git log -S isScriptableFrame` with no path filter
+    gives 725740c3 ("WP-2: Playwright browser sniffer resolver"), not d1ec2c61,
+    which is the monorepo move where a path filter stops. Its comment over the
+    DRM read-back says "A rejected read means the frame detached or is
+    cross-origin", so the likely origin is a belief that evaluation fails there,
+    which dl-55 measured false. The docstring and round 1's Step 4 name it.
+
+  **The gate's base-versus-head table, re-run on this result** with the gate's
+  `harness.mts` (its paths pointed at this worktree), the real `BrowserResolver`,
+  `quietMs: 1200`, `emptyMinWaitMs: 1200`, 25 s, the secondary origin
+  `localhost`. Base is `provoke.ts` from 1aece87d; head is this commit.
+
+  | page                                                                   | base                                                | head                                            |
+  | ---------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------- |
+  | `related-grid.html` (Play poster, grid of `onclick` cards)             | `P/media/hls/master.m3u8`                           | same                                            |
+  | `form-button.html` (Play poster, signup form box)                      | `P/media/hls/master.m3u8`                           | same                                            |
+  | `form-navigates.html`                                                  | `P/media/hls/master.m3u8`                           | same                                            |
+  | `billboard.html?mode=top` (cross-origin `_top` billboard, Play poster) | `P/media/hls/master.m3u8`                           | same                                            |
+  | `billboard.html?mode=blank`                                            | `P/media/hls/master.m3u8`                           | same                                            |
+  | `billboard-poster.html?mode=blank` (billboard, click-to-start poster)  | `NO_MEDIA_FOUND`                                    | `P/media/hls/master.m3u8`, the poster's own     |
+  | `interstitial.html` (full-viewport cross-origin ad)                    | `NO_MEDIA_FOUND`                                    | `NO_MEDIA_FOUND` (not `navigated-away`)         |
+  | `ad-vs-hls.html`, `top-nav-play.html`                                  | `P/media/hls/master.m3u8`                           | same                                            |
+  | `ad-outranks.html`                                                     | `P/atk/real.mp4`                                    | same                                            |
+  | `nudge.html`                                                           | `P/media/hls/master.m3u8`                           | same                                            |
+  | `hover-preview.html` (keydown player, hover previews)                  | `NO_MEDIA_FOUND`                                    | `NO_MEDIA_FOUND`, no `/atk/preview-*` requested |
+  | `cookie-banner.html` (box under a banner)                              | `NO_MEDIA_FOUND`                                    | `P/media/hls/master.m3u8`: see below            |
+  | `input-gated-player.html?on=wheel`                                     | `NO_MEDIA_FOUND`                                    | `P/media/hls/master.m3u8`                       |
+  | `input-gated-player.html?on=pointermove`                               | `P/media/hls/master.m3u8` (the browser's own event) | same                                            |
+  | `player-nav-first.html`, `player-box-click-only.html`                  | `NO_MEDIA_FOUND`                                    | the stream                                      |
+
+  `cookie-banner.html` differs from the gate's `a280941b` run, where it stayed
+  `NO_MEDIA_FOUND`: with the box click no longer scrolling, the wheel's 120 px
+  moves the box so its visible centre is above the banner, the click lands on the
+  box, and `/beacon/banner-link` is never requested. That is a click on the box
+  and not on the banner.
+
+  **Guards proven red**, by mutating `provoke.ts` one thing at a time and running
+  the `dl-81` tests (`mutate2.mjs`, each restored): scroll back to the first
+  match, 2 failed (the resolver test and the unit); `play()` in every frame, 1
+  failed (the ad test); the cross-origin `play()` ignoring `hasPlayable`, 1;
+  the box click ignoring `hasPlayable`, 1 (the related-grid test; its first
+  version had a two-row grid whose centre is a gap, and passed with the mutation,
+  so the grid is 3x3); `<iframe>` back among the box candidates, 1; `form` out of
+  the unsafe list, 1; the nudge removed, 1; the wheel removed, 1; a mouse sweep
+  added, 1 (the hover test); `keyboard.press("Enter")` added, 3; the cover cap
+  at 2, 1; the unsafe walk disabled, 2.
+
+  **Not covered, unchanged:** a player that waits for `keydown` or `touchstart`
+  (a hover-preview page that does is the regression above); a click-only `div`
+  player alone in a cross-origin frame; a click-only `div` in a same-origin frame
+  that is not the page's largest box. dl-92 (#388) merges first; this branch is
+  rebased onto it afterwards, both append at the end of
+  `browser-resolver.test.ts`.

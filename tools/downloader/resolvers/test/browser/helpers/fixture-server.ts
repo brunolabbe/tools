@@ -150,6 +150,7 @@ const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> 
 function makeHandler(
   requests: string[],
   secondaryOrigin: () => string,
+  primaryOrigin: () => string,
 ): (request: IncomingMessage, response: ServerResponse) => void {
   return (request, response) => {
     void (async () => {
@@ -248,8 +249,20 @@ function makeHandler(
       }
 
       try {
-        const body = await readFile(filePath);
         const extension = path.extname(filePath).toLowerCase();
+        const file = await readFile(filePath);
+        // dl-81: a page that embeds a frame from the other origin, or links back
+        // to this one, cannot know an ephemeral port in advance; `{{PRIMARY}}`
+        // and `{{SECONDARY}}` in an `.html` fixture are filled in here.
+        const body =
+          extension === ".html"
+            ? Buffer.from(
+                file
+                  .toString("utf8")
+                  .replaceAll("{{PRIMARY}}", primaryOrigin())
+                  .replaceAll("{{SECONDARY}}", secondaryOrigin()),
+              )
+            : file;
         response.writeHead(STATUS_OVERRIDES[pathname] ?? 200, {
           "content-type":
             untyped?.contentType ?? CONTENT_TYPES[extension] ?? "application/octet-stream",
@@ -278,10 +291,24 @@ export async function startFixtureServer(): Promise<FixtureServer> {
   // assigned a port yet when the primary one starts listening.
   let secondaryOrigin = "";
 
-  const primary: Server = createServer(makeHandler(requests, () => secondaryOrigin));
-  const secondary: Server = createServer(makeHandler(requests, () => secondaryOrigin));
+  let origin = "";
 
-  const origin = await listen(primary);
+  const primary: Server = createServer(
+    makeHandler(
+      requests,
+      () => secondaryOrigin,
+      () => origin,
+    ),
+  );
+  const secondary: Server = createServer(
+    makeHandler(
+      requests,
+      () => secondaryOrigin,
+      () => origin,
+    ),
+  );
+
+  origin = await listen(primary);
   secondaryOrigin = await listen(secondary);
 
   return {
