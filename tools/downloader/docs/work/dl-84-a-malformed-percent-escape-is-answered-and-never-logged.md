@@ -107,8 +107,44 @@ that handler can write the line without changing the 400 the client sees was
     (9 of 9 red for that reason), so the 400 body is the one the current code returns.
     Not echoed: `X-Request-Id`, which the base does not send for these either.
   - **Folded in.** The same hook also takes `FST_ERR_MAX_PARAM_LENGTH` (a path parameter
-    over 100 characters, 414, 0 lines on the base: the same blindness, and it would
-    have lost its default body to the new option otherwise). Covered by one test.
+    over 100 characters, 414, 0 lines on the base **only with no UI served**; see the
+    correction below: the same blindness, and it would have lost its default body to the
+    new option otherwise). Covered by one test.
     `FST_ERR_ASYNC_CONSTRAINT` is unreachable here (no async constraint is registered);
     its default body is kept so the handler cannot change it if one is added.
   - The brief's `Packages: api (server.ts, request-log.ts)` was right.
+- 2026-10-07 — Round 2, after gate 1 (PASS at `5c1954d2`, four lows).
+  - **Decision, with the owner, 2026-10-07.** Question: a malformed escape in or before
+    the route prefix (`/api/fi%les/<token>`, `/api/files%zz/<token>`,
+    `/api/%zz/files/<token>`) put the token into the new line, where the base wrote none,
+    because `redactLoggedUrl` finds no capability prefix in such a path. Options: (a)
+    accept it and record it as dl-76's named open class, which was the gate's
+    recommendation; (b) in the `frameworkErrors` handler only, when no capability prefix is
+    found, cut the logged path at the first escape that does not decode. **Chosen: (b)**,
+    over the gate's recommendation. Built as `redactRefusedUrl`: `redactLoggedUrl`'s answer
+    when it finds a prefix, else the path up to the first `%` not followed by two hex
+    digits or the first run of escapes that is not UTF-8 (an overlong `%C0%AF`, a truncated
+    `%E0%A4`), then `[truncated]`, query dropped. A served request's line is untouched.
+    It over-cuts on purpose: a run is cut at its start, not at the single bad byte.
+    What it does not close: a token _before_ the bad escape in a spelling `redactLoggedUrl`
+    cannot read (`/api/filez/<token>%zz`), the class dl-76 names, which the base already
+    logs on a 404.
+  - **Tests.** 8 new cases (4 spellings × `files` and `thumbnail`), over a real socket:
+    status 400, exactly one line, its `url` equal to the cut form, and no 8-character
+    window of the token in any line. Red first, with the cut replaced by `redactLoggedUrl`:
+    `Received: "/api/fi%les/44JuZ…"`, 8 of 8, and green after.
+  - **`durationMs` dropped from these lines.** Fastify's `Reply.elapsedTime` reads 0 for
+    a `frameworkErrors` reply because no start time is recorded (gate: 50 of 50 lines
+    read 0). Measuring it ourselves would time only the handler. A constant reads as a
+    measurement and `null` breaks a numeric aggregate, so the field is absent, and a test
+    asserts that. The first entry's "the ordinary request fields" therefore means those
+    minus `durationMs`.
+  - **Correction: the 414 claim.** "0 lines on the base" holds only with no UI served.
+    With `webDir` set, which the image's `Dockerfile` does, an over-long parameter reaches
+    the not-found handler as a 404 and was logged at the base; the 414 path is then never
+    taken. The doc comment on `createFrameworkErrorHandler` now says so. The 414 test now
+    also asserts `Content-Type: application/json`, which a `reply.send` rewrite changed
+    (gate mutation `m3-reply-send`).
+  - Dropped by the gate and left as is: query-string credentials (dl-76's class),
+    `X-Request-Id` not echoed (the base sends none), the async-constraint and
+    non-`Bad Request` text (no live call site).

@@ -1375,6 +1375,9 @@ describe("a request the router refuses before any hook runs", () => {
           code: "FST_ERR_BAD_URL",
         });
         expect(typeof logged[0]?.requestId).toBe("string");
+        // Fastify records no start time for a refused request, so a figure here
+        // would be a constant dressed as a measurement.
+        expect(logged[0]).not.toHaveProperty("durationMs");
         // The token's own characters, not only the whole of it: the escape is
         // what is malformed, and a log of the decoded part would still leak.
         expect(
@@ -1390,6 +1393,7 @@ describe("a request the router refuses before any hook runs", () => {
 
     const response = await rawExchange(port, target);
     expect(response.status).toBe(414);
+    expect(response.contentType).toBe("application/json");
     expect(JSON.parse(response.body)).toEqual({
       error: "Bad Request",
       code: "FST_ERR_MAX_PARAM_LENGTH",
@@ -1411,6 +1415,70 @@ describe("a request the router refuses before any hook runs", () => {
     });
     expect(JSON.stringify(lines)).not.toContain("a".repeat(20));
   });
+
+  /**
+   * A malformed escape in or before the route, so the path cannot be read as a
+   * capability route's and `redactLoggedUrl` leaves it whole. Before dl-84 these
+   * wrote no line; the refusal's line cuts the path at the escape instead
+   * (owner decision 2026-10-07, see the ticket).
+   */
+  const BEFORE_THE_TOKEN: Array<
+    [
+      label: string,
+      spell: (name: string, token: string) => string,
+      logged: (name: string) => string,
+    ]
+  > = [
+    [
+      "a lone percent inside the route",
+      (n, t) => `/api/${n.slice(0, 2)}%${n.slice(2)}/${t}`,
+      (n) => `/api/${n.slice(0, 2)}[truncated]`,
+    ],
+    [
+      "a non-hex escape after the route",
+      (n, t) => `/api/${n}%zz/${t}`,
+      (n) => `/api/${n}[truncated]`,
+    ],
+    [
+      "a non-hex segment before the route",
+      (n, t) => `/api/%zz/${n}/${t}`,
+      () => "/api/[truncated]",
+    ],
+    [
+      "an overlong encoding before the route",
+      (n, t) => `/api/%C0%AF/${n}/${t}`,
+      () => "/api/[truncated]",
+    ],
+  ];
+
+  describe.each(["files", "thumbnail"] as const)(
+    "a malformed escape in or before /api/%s",
+    (name) => {
+      test.each(BEFORE_THE_TOKEN)("%s", async (_label, spell, expectedUrl) => {
+        const { port, lines, tokens } = await listening();
+        const token = tokens[name];
+        const target = spell(name, token);
+
+        const response = await rawExchange(port, target);
+        expect(response.status).toBe(400);
+        await waitFor(
+          () => lines.filter((line) => line.msg === "request").length,
+          (count) => count >= 1,
+          { label: "the request line" },
+        );
+
+        const logged = lines.filter((line) => line.msg === "request");
+        expect(logged).toHaveLength(1);
+        expect(logged[0]).toMatchObject({ status: 400, code: "FST_ERR_BAD_URL" });
+        // Cut where the escape is, and say so, rather than log what follows it.
+        expect(logged[0]?.url).toBe(expectedUrl(name));
+        // Every 8-character window of the token, so a partial leak fails too.
+        const serialised = lines.map((line) => JSON.stringify(line)).join("\n");
+        const windows = Array.from({ length: token.length - 7 }, (_u, i) => token.slice(i, i + 8));
+        expect(windows.filter((window) => serialised.includes(window))).toEqual([]);
+      });
+    },
+  );
 });
 
 /** One GET with the target written verbatim, and the whole answer read back. */
