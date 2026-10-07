@@ -172,8 +172,8 @@ so a redirect to another host would be handed the first host's session.
   the client dials the origin, as the browser itself then does.
 - **Redirects.** Followed by hand, every hop a fresh request through the proxy,
   `MAX_MANIFEST_REDIRECTS` = 20, Playwright's default and so what the re-fetch
-  followed before. `authorization` is dropped on a cross-origin hop, as
-  Playwright did.
+  followed before. `authorization` is dropped at the first hop that changes
+  origin and stays dropped, even on a hop back, as Playwright had it.
 - **Cookies.** As `context.request` did them: the first hop sends the `cookie`
   the browser sent (it is in `replayHeaders(hit)`, via `allHeaders()`), and only
   if there is none asks the jar; every later hop drops it and asks
@@ -225,7 +225,8 @@ chunks when it is destroyed. The 256 MiB case is +4 to +5 MB against +763 to +77
   refused unread; an undeclared one refused; an unknown encoding refused; a
   non-2xx status; the deadline), redirects (limit; replayed cookie on hop one and
   the jar's on hop two, asked for that hop's URL; `Set-Cookie` stored;
-  `authorization` dropped cross-origin), and the proxy (every hop in absolute
+  `authorization` dropped cross-origin and not restored on the way back), and
+  the proxy (every hop in absolute
   form; a refused `CONNECT` is a status and nothing is dialled; a `socks5:` proxy
   is refused, not bypassed). 15 of 15.
 - `api/test/manifest-refetch.test.ts` (new, real `BrowserResolver`, real egress
@@ -239,11 +240,17 @@ chunks when it is destroyed. The 256 MiB case is +4 to +5 MB against +763 to +77
   the terminating-proxy test is the one that fails (above); the other six pass
   there too, because Playwright did those things, and are regression guards.
 - **Mutation-checked**, each against `manifest-fetch.ts`, rebuilt, both files run
-  (22 tests): redirect hops dialled directly instead of through the proxy fails
-  4, the guard test with `expected [ { url: '/latest/meta-data', …(1) } ] to
-deeply equal []`; the replayed cookie sent on every hop fails 2; any chain
-  accepted once a pin is set fails the mis-pinned test (`expected 1 to be +0`);
-  the cap multiplied by 1024 fails 3, both bomb tests among them.
+  (22 tests):
+  - redirect hops dialled directly instead of through the proxy fails 4, the
+    guard test among them because the secret origin was asked for
+    `/latest/meta-data`;
+  - the replayed cookie sent on every hop fails 2;
+  - any chain accepted once a pin is set fails the mis-pinned test
+    (`expected 1 to be +0`);
+  - the cap multiplied by 1024 fails 3, both bomb tests among them;
+  - `authorization` dropped only on hops whose origin differs from the first
+    URL's (the first cut of this branch) fails the return-hop test, unit file
+    only, 1 of 15.
 - **Not tested:** the half of the pin rule that requires the leaf to be _signed_
   by the pinned key rather than merely chained beside it. `resolvers` has no way
   to mint a certificate (Node writes none; `node-forge` is `api`'s), and in
