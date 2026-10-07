@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.1](https://github.com/brunolabbe/tools/compare/downloader-v0.8.0...downloader-v0.8.1) (2026-10-07)
+
+
+### Fixes
+
+* **downloader:** a progressive file is no longer demoted to a segment (dl-78) ([#371](https://github.com/brunolabbe/tools/issues/371)) ([7b87146](https://github.com/brunolabbe/tools/commit/7b87146cf6a2069d93d2573e112cb6fb52c55146))
+* **downloader:** age-confirmation copy claims nothing about the setting (dl-94) ([#385](https://github.com/brunolabbe/tools/issues/385)) ([3ba8ef0](https://github.com/brunolabbe/tools/commit/3ba8ef0b3de2b2207d6fd0c24edb849941055e04))
+* **downloader:** arrival order outranks the name among manifests (dl-92) ([#388](https://github.com/brunolabbe/tools/issues/388)) ([8ec736f](https://github.com/brunolabbe/tools/commit/8ec736ff1c56c60e88909c34f6618e15d2a93ab1))
+* **downloader:** bound the compressed typed manifest bodies read per probe (dl-91) ([#389](https://github.com/brunolabbe/tools/issues/389)) ([41abff2](https://github.com/brunolabbe/tools/commit/41abff23ef137898d8e968b56555ee50bf34fc29))
+* **downloader:** extend quiet floor when no playable media captured (dl-80) ([#372](https://github.com/brunolabbe/tools/issues/372)) ([10529a8](https://github.com/brunolabbe/tools/commit/10529a845235a32953ef111120a820ef9cde565d))
+* **downloader:** log a request with a malformed percent escape, redacted (dl-84) ([#387](https://github.com/brunolabbe/tools/issues/387)) ([e7db59c](https://github.com/brunolabbe/tools/commit/e7db59c192f2926bc05bf565d3a684693b4144ff))
+* **downloader:** press more consent-dialog labels, anchored and never generic (dl-82) ([#370](https://github.com/brunolabbe/tools/issues/370)) ([0254c9a](https://github.com/brunolabbe/tools/commit/0254c9a1b8216f4fc5e4b1238ec662126138cace))
+* **downloader:** recognise an age gate by its structure, press it strictly (dl-83) ([#374](https://github.com/brunolabbe/tools/issues/374)) ([829e7ff](https://github.com/brunolabbe/tools/commit/829e7ff3a02284a55c58b08268fcf8c62296a2a5))
+* **downloader:** redact a capability token however its path is spelled (dl-76) ([#366](https://github.com/brunolabbe/tools/issues/366)) ([7445523](https://github.com/brunolabbe/tools/commit/744552342b9b51eb3fcac08140bfd754e8622caa))
+* **downloader:** redact the thumbnail token in the request log (dl-75) ([#355](https://github.com/brunolabbe/tools/issues/355)) ([6469296](https://github.com/brunolabbe/tools/commit/646929643c095e3d2c5853c303ca293cd7c64e5f))
+* **downloader:** say why a refused download did not start, in the page (dl-77) ([#375](https://github.com/brunolabbe/tools/issues/375)) ([22a05cc](https://github.com/brunolabbe/tools/commit/22a05cc319be224f67b93b61a24193d044d57230))
+* **downloader:** sniff an untyped manifest, name segments-only probes (dl-79) ([#373](https://github.com/brunolabbe/tools/issues/373)) ([d6b015d](https://github.com/brunolabbe/tools/commit/d6b015dec52c98248321e91c0e51bbf4b122d1af))
+* **downloader:** steady speed, an expected total and a late duration on slow sources (dl-96) ([#391](https://github.com/brunolabbe/tools/issues/391)) ([a4d344e](https://github.com/brunolabbe/tools/commit/a4d344ebe0778c1092e5d191488e18db5e8b1264))
+
 ## [0.8.0](https://github.com/brunolabbe/tools/compare/downloader-v0.7.0...downloader-v0.8.0) (2026-10-03)
 
 
