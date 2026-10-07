@@ -21,10 +21,10 @@
  * matched to a closed period is counted when its date says, like any other, but
  * it is weighed in **that period's stretch**, at the ratio its settlement
  * recorded. The deposit was asked for as that period's debt divided by that
- * ratio's share, so weighed at the same ratio it cancels the debt exactly; weighed
- * at the ratio of the period its date falls in — nearly always a later one, since
- * it is dated on or after the period's last day — it would leave a difference
- * whenever the ratio changed at the boundary.
+ * ratio's share, so weighed at the same ratio it cancels the debt, to within the
+ * rounding of the figure asked; weighed at the ratio of the period its date falls
+ * in — nearly always a later one, since it is dated on or after the period's last
+ * day — it would leave a difference whenever the ratio changed at the boundary.
  */
 
 import type { DepositStatus } from "@ledger/contract";

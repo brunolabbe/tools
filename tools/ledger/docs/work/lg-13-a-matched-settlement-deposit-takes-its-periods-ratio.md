@@ -86,9 +86,10 @@ the Log).
 - 2026-10-07 — Built on `1aece87`. **The rule, as built:** a deposit is
   _counted_ when its date says, as before, and a deposit matched to a closed
   period is _weighed_ in that period's stretch, at the ratio its settlement
-  recorded. Why it is exact: a close asks for its cumulative net divided by the
-  recipient's share at its own ratio, so the same amount weighed at that ratio
-  cancels the net, whatever ratio follows.
+  recorded. Why it is exact, to within the rounding of the figure asked: a
+  close asks for its cumulative net divided by the recipient's share at its own
+  ratio, so the same amount weighed at that ratio cancels the net, whatever
+  ratio follows.
   - **`books`.** `DepositInput` gains an optional `settles`: the last day of the
     closed period the deposit was matched to. `cumulativeSettlement` puts it in
     the stretch holding that day (`periodIndexOf`), so the books need no period
@@ -143,3 +144,4 @@ ledger` passes `519 passed (519)`. `git diff --numstat` shows 0 lines
   - **Fold-in:** none was free. No open ledger ticket touches the settlement's
     weighing, and lg-6's unfiled lows (a third person's buffer row) are not
     specified work.
+- 2026-10-07 — Round 2, on `0132e35` (gate 1: CONCERNS), by the fixer. Added a books case at the end of `books/test/settlement.test.ts` for two closed periods (0.6, then 0.5) with period 1 paid after close 2: `settles` 2026-09-30 reads alex 83.33 / 25.00, `settles` 2026-10-31 reads 33.33 / 10.00, no `settles` reads 133.33 / 40.00. Mutant `periods.length - 2` in place of `periodIndexOf(periods, deposit.settles)`: `1 failed | 29 passed (30)` (8333 expected, 3333 received); restored: `30 passed (30)`. Qualified "exactly" as "to within the rounding of the figure asked" in the `periods.ts` header comment, §5 of `00-ANALYSIS.md` and "Why it is exact" above. Added lg-13 to lg-7's `depends_on` and a sentence to its Build 8. Left as recorded: gate 1's low on two asks within a cent of each other (a coincidence of lg-6's matcher, no live call site) and its open decision on `netCents === 0` (recommended: leave).

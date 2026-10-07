@@ -335,7 +335,8 @@ imported as they happened (lg-6 defines the three; lg-7 imports the two).
   falls in, but a deposit matched to a closed period's settlement is weighed at
   the ratio that settlement recorded, though it is nearly always dated in a
   later period. Paying
-  what a close asked then settles it, whatever the ratio does next (decided by
+  what a close asked then settles it, whatever the ratio does next, to within
+  the rounding of the figure asked (decided by
   the owner on 2026-10-06, built in
   [lg-13](./work/lg-13-a-matched-settlement-deposit-takes-its-periods-ratio.md)).
 

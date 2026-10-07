@@ -476,4 +476,33 @@ describe("a settlement's own deposit, across a ratio change", () => {
       });
     },
   );
+
+  test("with two closed periods, it is weighed at the one it settles, not the latest closed", () => {
+    // Period 1 at 0.6 asked 150.00 for sam's 100.00; period 2 at 0.5 is the
+    // latest closed when the deposit is dated, so a rule that took "the last
+    // closed period" would weigh it at 0.5 and read 33.33 / 10.00 below.
+    const first = period(null, "2026-09-30", 600_000);
+    const second = period("2026-10-01", "2026-10-31", 500_000);
+    const open = period("2026-11-01", "2026-11-30", 700_000);
+    const spends = [line("sam", "2026-09-10", 10_000), line("sam", "2026-10-10", 5_000)];
+    const paid = { personId: "alex", date: "2026-11-02", amountCents: 15_000 };
+
+    const readings = [
+      [
+        { ...paid, settles: "2026-09-30" },
+        { depositCents: 8_333, netCents: 2_500 },
+      ],
+      [
+        { ...paid, settles: "2026-10-31" },
+        { depositCents: 3_333, netCents: 1_000 },
+      ],
+      [paid, { depositCents: 13_333, netCents: 4_000 }],
+    ] as const;
+    for (const [deposit, expected] of readings) {
+      expect(cumulativeSettlement([first, second, open], spends, [deposit])).toMatchObject({
+        payerId: "alex",
+        ...expected,
+      });
+    }
+  });
 });
