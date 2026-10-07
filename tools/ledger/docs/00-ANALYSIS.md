@@ -330,6 +330,15 @@ imported as they happened (lg-6 defines the three; lg-7 imports the two).
 - **A ratio change takes effect at a period boundary.** Whatever is owed across
   the boundary carries over as an amount of money, so it does not change when
   the ratio does.
+- **A settlement's own deposit is weighed at the ratio of the period it
+  settles.** Every other amount is weighed at the ratio of the period its date
+  falls in, but a deposit matched to a closed period's settlement is weighed at
+  the ratio that settlement recorded, though it is nearly always dated in a
+  later period. Paying
+  what a close asked then settles it, whatever the ratio does next, to within
+  the rounding of the figure asked (decided by
+  the owner on 2026-10-06, built in
+  [lg-13](./work/lg-13-a-matched-settlement-deposit-takes-its-periods-ratio.md)).
 
 ## 6. Receipts and periods
 

@@ -5,7 +5,7 @@ title: Import the workbook's history since 2022, verified before it is written
 kind: work-package
 status: ready
 milestone: P3
-depends_on: [lg-5, lg-6]
+depends_on: [lg-5, lg-6, lg-13]
 difficulty: hard
 ---
 
@@ -68,7 +68,12 @@ prove it reproduces the workbook's own figures before it writes a row.
    - counts of rows imported, repaired, skipped and corrected;
    - each person's own money in the mortgage bucket, and the cumulative
      catch-up, each beside the figure the
-     workbook shows;
+     workbook shows. lg-13 changed the catch-up: a historical deposit that
+     `matchDeposits` matches to a period is weighed at that period's recorded
+     ratio, so import each period with the ratio its settlement used and
+     compute the catch-up through `openPeriod` in `api/src/periods.ts` (or
+     `cumulativeSettlement` with `settles` filled from `matchDeposits`), never
+     by date alone (lg-13's Log, "For lg-7's builder");
    - a nonzero exit when a verification fails.
      `--write` performs the import; without it, the command is a dry run.
 
