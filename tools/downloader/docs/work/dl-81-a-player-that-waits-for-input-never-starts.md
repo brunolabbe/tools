@@ -3,7 +3,7 @@ id: dl-81
 tool: downloader
 title: A player that loads only on the visitor's first input, with nothing to click, never starts
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -75,6 +75,64 @@ building the fixtures is the first step.
 - The Log records what step 4 found about the cross-origin policy.
 - `npm run check`, `npm test -- --project downloader` and
   `npm run e2e:downloader:sniffer` pass.
+
+## Review
+
+**Gate: FAIL** — 2026-10-07 · `1aece87d..a280941b` · Opus 5.5, depth standard
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each step-1 fixture yields its stream                             | `resolvers/test/browser/browser-resolver.test.ts` › "a player injected on the first %s is reached from a bare poster", › "scrolls to the largest candidate, so a nav bar and an ad iframe above the fold do not take the slot", › "in a frame from another site" › "a scroll run there starts a player…" and › "a scripted play() run there starts a player…" ✓ — each asserts `variants[0].url` and the manifest request. At base `provoke.ts`, 5 of 9 `dl-81` tests fail; `pointermove` passes there (see the first high). Under the dispatch's positive control (scroll and `play()` back to `scriptable` only) exactly the two cross-origin tests fail. The same two pages through a real cross-site origin (`localhost` beside `127.0.0.1`): `NO_MEDIA_FOUND` at base, the stream at head |
+| The input pass presses no key other than `Escape`                 | `resolvers/test/browser/provoke.test.ts` › "a page with nothing to dismiss receives no key at all" and › "a dialog with no close control still earns its Escape, and nothing beside it" ✓ — the second asserts `length > 0` as well as every key `=== "Escape"`, so it fails on empty output. With a `page.keyboard.press("Enter")` added to `provokeInput`, both fail                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Scrolling targets the largest candidate                           | `resolvers/test/browser/provoke.test.ts` › "SCROLL_SCRIPT targets the largest candidate (dl-81)" › "brings the large shell into view, not the small nav bar that comes first" ✓ — fails with `SCROLL_SCRIPT` set back to `candidates[0]`. The resolver test of the same name does not fail (third high)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| The Log records what step 4 found                                 | **verified** — the Log's Step 4 paragraph names the search, dl-2, dl-55 and dl-16 and says no reason was recorded. The commit it names as the first version is wrong (low below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `check`, the downloader project and `e2e:downloader:sniffer` pass | **verified** — `npm run check` exit 0. `npm test -- --project downloader`: 2075 passed and 2 skipped of 2077, in 100 of 101 files with 1 skipped. PR #390 `e2e (sniffer)` passed on `a280941b`, and so did every other check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+Every base/head comparison below was run with the real `BrowserResolver` (`quietMs: 1200`, `emptyMinWaitMs: 1200`, 25 s) against two loopback origins. The secondary origin is `localhost`, so it is cross-site. Base means `provoke.ts` restored from `1aece87d`, which is the only source file the diff changes.
+
+- **high** · **The box click presses whatever is largest, and its docstring says it cannot.** `MARK_PLAYER_BOX_SCRIPT` in `resolvers/src/browser/provoke.ts` says "**It never marks a control a click could act on**". In fact it allows a `<button>`, and it cannot see inside an `<iframe>`, which is a candidate exempt from the 85% cap. `clickPlayerBox` also runs after pass 0 has already captured the stream. Measured, base → head:
+
+  | page                                                                                             | base             | head                                                    |
+  | ------------------------------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------- |
+  | Play-labelled poster, below it a 1000x500 `related-players` grid of `onclick` cards              | real HLS         | `navigated-away` → `/other-5.html`                      |
+  | Play poster, beside it an 800x400 `player-newsletter` with a centred `<form method=post>` button | real HLS         | `navigated-away` → `/subscribed.html`                   |
+  | same, with the form posting to a 204                                                             | real HLS         | real HLS, **after `POST /beacon/form-submitted`**       |
+  | 970x250 cross-origin billboard (`<a target=_top>`) above a 640x360 Play poster                   | real HLS         | `navigated-away` → `/advertiser.html`                   |
+  | same billboard (`target=_blank`) above a click-to-start poster                                   | `NO_MEDIA_FOUND` | **the advertiser's `/atk/advert.mp4`**: the wrong video |
+  | full-viewport cross-origin ad interstitial                                                       | `NO_MEDIA_FOUND` | `navigated-away` (the ad was clicked through)           |
+
+  A cookie banner over the box centre was correctly refused (`NO_MEDIA_FOUND` at both). No `Done when` line depends on this. Open decision 1.
+
+- **high** · **The `pointermove` fixture reproduces nothing, and the Log says it did.** The Log's Step 1 says `pointermove` was among "the seven red" on `origin/main`. At base `provoke.ts` it passed 1 of 1 in vitest and 4 of 4 through the harness. With the whole input pass deleted at head (`provokeInput` call removed) it still passes (2 of 9 `dl-81` tests fail: wheel and box). The cause is the browser itself: headless Chromium sends `pointermove@19(0,0)` and `mousemove@20(0,0)` on load, and with no provocation at all the page's status reads `mounted` (`pointer.mts idle`). So the test passes when the pointer moves it is named for are gone, and the ticket's premise ("the tier never sends a generic input") is false for `pointermove`/`mousemove` listeners. Done when 1 holds literally; the reproduction the brief asks for does not.
+
+- **high** · **"scrolls to the largest candidate…" (browser-resolver) passes with the scroll reverted.** With `SCROLL_SCRIPT` set back to `candidates[0]`, all 9 resolver `dl-81` tests pass and only the provoke unit fails. `player-nav-first.html` is reached by `MARK_PLAYER_BOX_SCRIPT`'s own `scrollIntoView`. Done when 3 is carried by the unit, so the fix is the test's name or fixture.
+
+- **med** · no `Done when` line depends on it · **`PLAY_SCRIPT` now plays every media element in every frame, ad frames included.** A 640x360 progressive `<video preload=none>` beside a 300x250 cross-origin ad frame whose `<video>` fetches an HLS master on `play`: base gives `/atk/real.mp4`, head gives the ad's `S/media/related/master.m3u8`, because adaptive outranks progressive in `scoreHit`. With the frame policy reverted, head gives `real.mp4` again. Same mechanism: a cross-origin frame whose `play` handler sets `top.location` turns base's real HLS into `navigated-away` at head, and Chromium allowed that navigation. dl-55's trap already named `PLAY_SCRIPT` playing cards. Open decision 2.
+
+- **med** · no `Done when` line depends on it · **The nudge change loses a page base reached.** The page has a 300x50 `player-header` already in view and mounts its player when `scrollY >= 300`. Base: real HLS. Head: `NO_MEDIA_FOUND`, because centring an in-view element scrolls nowhere and the 120 px wheel falls short. Before and after, the existing fixtures return the same stream: `shadow-player-lazy-mount`, `mse`, `iframe-parent`, and `cross-origin-card-inner` and `shadow-player` behind a cross-site frame. Remedy, recommended: nudge when `scrollIntoView` moved nothing, which still spares the frame-sized embed the Log describes (its shell is 1500 px down, so the centring moves).
+
+- **med** · no `Done when` line depends on it · **The pointer sweep starts hover previews and returns one.** The Log lists this as unmeasured. Measured: a keydown-gated player above eight `<a href><video data-preview>` cards that load a clip on `mouseenter`. Base: `NO_MEDIA_FOUND`. Head: `P/atk/preview-2.mp4`, a related video's preview. Open decision 3.
+
+- **low** · the `isScriptableFrame` docstring and the Log name d1ec2c61 as "the first version". That commit is the monorepo move, where a path-filtered `git log -S` stops. Unfiltered, the search finds 725740c3 (WP-2). In that commit, the comment over the cross-frame DRM read says "A rejected read means the frame detached or is cross-origin", still true of `readBackDrm` in `resolvers/browser.ts`. The likely original reason was therefore a belief that evaluation fails cross-origin, which dl-55 measured false. It is not a security reason, so step 4's conclusion stands; its history is wrong.
+
+- **dropped** · a frame that throws from `scrollIntoView`, one that is removed when it plays and one that navigates itself when it plays: real HLS at both. Not a defect.
+- **dropped** · 20 cross-origin frames: 3835 ms at base, 4391 ms at head, bounded by the per-frame `remaining < 1500` check. Not a defect.
+- **dropped** · a real HLS player beside a cross-origin HLS ad: the real one wins at both, on request order. Not a defect.
+- **dropped** · a billboard with `target=_blank` above a Play poster: the real one wins at both, and the popup's mp4 ranks lower. Not a defect.
+- **open decision 1** (box click):
+  - **A** (recommended): skip `clickPlayerBox` once a playable hit exists, which needs a predicate passed into `provokePlayback`. Never box-click an `<iframe>`. Count a `button` inside a `form` as unsafe. This fixes all six rows. Cost: a click-only player alone in a cross-origin frame with no `<video>` and no label is not reached. No `Done when` fixture is that case.
+  - **B**: drop the box click. `player-box-click-only.html` is lost; it is not a step-1 fixture.
+  - **C**: keep it, and correct the docstring.
+- **open decision 2** (cross-origin `play()`):
+  - **A** (recommended): in a non-scriptable frame, `play()` only the video `CHOOSE_VIDEO_INDEX_FN` picks, and only while nothing has been captured.
+  - **B**: keep `play()` main-origin and relax the scroll only. This fails `xo-play-only`, so the owner would have to reword Done when 1.
+  - **C**: accept.
+- **open decision 3** (pointer sweep):
+  - **A** (recommended): drop the `mouse.move` sweep and keep the wheel. Chromium already sends the load-time move, and the sweep's only measured effect here is the preview.
+  - **B**: move only over the chosen box.
+  - **C**: keep.
+- **findings** · the hunt returned 11; 7 carried (3 high, 3 med, 1 low), 4 dropped.
+- NFR: security — clicking ads and submitting a third party's form is a side effect on other people's servers (first high) · performance ✓ (+556 ms with 20 frames) · reliability — the meds · maintainability — the low.
 
 ## Log
 
