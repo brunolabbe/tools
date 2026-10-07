@@ -265,7 +265,7 @@ describe("the most specific rule takes a row (lg-16)", () => {
   });
 });
 
-async function answer(
+async function answerRow(
   target: App,
   id: number,
   body: { personId: string | null; bucket: string } | { ruleId: number },
@@ -282,7 +282,10 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
   test("a description answered by a person carries that answer, and one never answered none", async () => {
     const target = await start();
     await pasteStatement(target);
-    await answer(target, rowId(target, TRANSFER, 40000), { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
+      personId: "sam",
+      bucket: "mortgage",
+    });
 
     const inbox = await readInbox(target);
 
@@ -311,7 +314,7 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
     // Stored before the rule exists, so it waits and the rule is a suggestion for it.
     await pasteStatement(target, paste(0, 1));
     const rule = await addRule(target, TRANSFER_RULE);
-    await answer(target, rowId(target, TRANSFER, 40000), { ruleId: rule.id });
+    await answerRow(target, rowId(target, TRANSFER, 40000), { ruleId: rule.id });
     await pasteStatement(target);
 
     expect(classifications(target)[0]).toMatchObject({ source: "accepted" });
@@ -326,7 +329,7 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
     const target = await start();
     await addRule(target, TRANSFER_RULE);
     await pasteStatement(target);
-    await answer(target, rowId(target, TRANSFER, 40000), {
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
       personId: null,
       bucket: "current-expenses",
     });
@@ -349,9 +352,9 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
     }));
     await pasteStatement(target, renderPaste(withBalances(same, 150000)));
     const [a, b, c] = [1000, 2000, 3000].map((cents) => rowId(target, GROCERIES, -cents));
-    await answer(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
-    await answer(target, b ?? 0, { personId: "alex", bucket: "current-expenses" });
-    await answer(target, c ?? 0, { personId: "alex", bucket: "current-expenses" });
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, b ?? 0, { personId: "alex", bucket: "current-expenses" });
+    await answerRow(target, c ?? 0, { personId: "alex", bucket: "current-expenses" });
 
     // The earliest answer differs and the two latest agree: "the last 2 times".
     const [waiting] = await readInbox(target);
@@ -364,10 +367,13 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
   test("taking it is an ordinary manual answer, by whoever tapped", async () => {
     const target = await start(SAM);
     await pasteStatement(target);
-    await answer(target, rowId(target, TRANSFER, 40000), { personId: "alex", bucket: "mortgage" });
+    await answerRow(target, rowId(target, TRANSFER, 40000), {
+      personId: "alex",
+      bucket: "mortgage",
+    });
     const [odd] = byDescription(await readInbox(target), TRANSFER);
 
-    await answer(target, odd?.id ?? 0, {
+    await answerRow(target, odd?.id ?? 0, {
       personId: odd?.history?.personId ?? null,
       bucket: odd?.history?.bucket ?? "mortgage",
     });
