@@ -22,6 +22,18 @@ import type { NetworkHit } from "./types.ts";
 /** Manifests are small; anything larger than this is not a playlist worth keeping. */
 const MAX_CAPTURED_BODY_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Compressed typed manifests whose body is read at interception time, per probe
+ * (dl-91). Chromium inflates a body before Playwright returns it, so the declared
+ * length is the size on the wire and bounds nothing: 32 typed `.m3u8` responses of
+ * ~12 KB each, inflating to 12 MiB, took the Node process from 269 MB to ~800 MB
+ * peak RSS. Two because `#loadManifest` tries at most two manifests and *re-fetches*
+ * each, so this read is only the fallback for a re-fetch that fails; two covers a
+ * master and the variant it names, and a third is a body nothing is waiting on.
+ * Its own budget, apart from the sniff's, because a probe can have both.
+ */
+export const MAX_ENCODED_CAPTURES_PER_PROBE = 2;
+
 /** A page that fires thousands of media requests is not worth unbounded memory. */
 const MAX_HITS = 400;
 
@@ -32,6 +44,8 @@ export class HitCollector {
   /** Urls whose body was already read for a manifest (dl-79), so a poll reads once. */
   readonly #sniffed = new Set<string>();
   #encodedSniffs = 0;
+  /** Urls whose compressed typed body was admitted to the read budget (dl-91). */
+  readonly #encodedCaptured = new Set<string>();
   #seq = 0;
   #lastActivityAt = Date.now();
   #attached = false;
@@ -145,7 +159,9 @@ export class HitCollector {
     });
     if (!hit) return;
     this.#enrichHeaders(request, hit);
-    if (kind === "hls" || kind === "dash") this.#captureBody(response, hit);
+    if (kind === "hls" || kind === "dash") {
+      this.#captureBody(response, hit, headers["content-encoding"]);
+    }
   }
 
   #record(
@@ -267,8 +283,16 @@ export class HitCollector {
     );
   }
 
-  #captureBody(response: Response, hit: NetworkHit): void {
+  #captureBody(response: Response, hit: NetworkHit, contentEncoding: string | undefined): void {
     if (hit.contentLength !== undefined && hit.contentLength > MAX_CAPTURED_BODY_BYTES) return;
+    // A compressed body is inflated before we see it (dl-91), so only the number
+    // of such reads is ours to cap. A url is charged once: a poll of the same
+    // manifest must not spend the budget again, nor read a bomb twice.
+    if (isContentEncoded(contentEncoding)) {
+      if (this.#encodedCaptured.has(hit.key)) return;
+      if (this.#encodedCaptured.size >= MAX_ENCODED_CAPTURES_PER_PROBE) return;
+      this.#encodedCaptured.add(hit.key);
+    }
     this.#pending.add(
       (async () => {
         try {

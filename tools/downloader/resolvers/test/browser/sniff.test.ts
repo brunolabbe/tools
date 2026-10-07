@@ -15,7 +15,7 @@ import {
   countPlayedSegments,
   SEGMENTS_WITHOUT_MANIFEST,
 } from "../../src/browser/classify.ts";
-import { HitCollector } from "../../src/browser/intercept.ts";
+import { HitCollector, MAX_ENCODED_CAPTURES_PER_PROBE } from "../../src/browser/intercept.ts";
 import { rankHits } from "../../src/browser/rank.ts";
 import type { NetworkHit } from "../../src/browser/types.ts";
 import {
@@ -496,5 +496,83 @@ describe("countPlayedSegments (dl-79 gate 1)", () => {
     ],
   ])("does not count %s", (_label, hit) => {
     expect(countPlayedSegments([hit])).toBe(0);
+  });
+});
+
+describe("a compressed typed manifest is read on a budget (dl-91)", () => {
+  const typed = { "content-type": "application/vnd.apple.mpegurl" };
+
+  function manifest(index: number, headers: Record<string, string> = {}): Probe {
+    return response({
+      url: `https://site.example/media/${index}.m3u8`,
+      headers: { ...typed, ...headers },
+    });
+  }
+
+  const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + probe.reads(), 0);
+
+  test("no more than MAX_ENCODED_CAPTURES_PER_PROBE compressed bodies are read, and the rest are still hits", async () => {
+    // Chromium inflates before Playwright returns, so the declared length bounds
+    // nothing: 32 such reads of 12 MiB each took the process from 269 MB to ~800 MB.
+    const probes = Array.from({ length: 10 }, (_, index) =>
+      manifest(index, { "content-encoding": "gzip" }),
+    );
+    const collector = await collect(...probes);
+
+    expect(reads(probes)).toBe(MAX_ENCODED_CAPTURES_PER_PROBE);
+    expect(probes.slice(MAX_ENCODED_CAPTURES_PER_PROBE).map((probe) => probe.reads())).toEqual(
+      Array.from({ length: 10 - MAX_ENCODED_CAPTURES_PER_PROBE }, () => 0),
+    );
+    // Not read is not lost: the hit stands and `#loadManifest` re-fetches it.
+    expect(collector.hits).toHaveLength(10);
+    expect(collector.hits.every((hit) => hit.kind === "hls")).toBe(true);
+  });
+
+  test("a compressed manifest inside the budget still yields its body from bodyFor", async () => {
+    const probes = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 1 }, (_, index) =>
+      manifest(index, { "content-encoding": "br" }),
+    );
+    const collector = await collect(...probes);
+
+    const bodies = collector.hits.map((hit) => collector.bodyFor(hit.key));
+    expect(bodies.slice(0, MAX_ENCODED_CAPTURES_PER_PROBE)).toEqual(
+      Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE }, () => M3U8),
+    );
+    expect(bodies[MAX_ENCODED_CAPTURES_PER_PROBE]).toBeUndefined();
+  });
+
+  test("an uncompressed typed manifest is captured as before, however many there are", async () => {
+    const probes = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 8 }, (_, index) =>
+      manifest(index),
+    );
+    const collector = await collect(...probes);
+
+    expect(reads(probes)).toBe(probes.length);
+    expect(collector.hits.map((hit) => collector.bodyFor(hit.key))).toEqual(probes.map(() => M3U8));
+  });
+
+  test("an uncompressed read is not charged to the budget, and identity is not compression", async () => {
+    const packed = Array.from({ length: MAX_ENCODED_CAPTURES_PER_PROBE + 3 }, (_, index) =>
+      manifest(index, { "content-encoding": "gzip" }),
+    );
+    const plain = manifest(100);
+    const identity = manifest(101, { "content-encoding": "identity" });
+    await collect(...packed, plain, identity);
+
+    expect(plain.reads()).toBe(1);
+    expect(identity.reads()).toBe(1);
+  });
+
+  test("a compressed url seen again is read once and spends the budget once", async () => {
+    // A live playlist is polled: the second response must neither re-read a body
+    // that may be a bomb nor starve a manifest that has not been read yet.
+    const gz = { "content-encoding": "gzip" };
+    const first = manifest(0, gz);
+    const again = manifest(0, gz);
+    const other = manifest(1, gz);
+    await collect(first, again, other);
+
+    expect(first.reads() + again.reads()).toBe(1);
+    expect(other.reads()).toBe(1);
   });
 });
