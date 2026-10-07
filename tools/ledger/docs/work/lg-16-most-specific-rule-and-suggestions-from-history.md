@@ -111,6 +111,58 @@ Positive controls, each restored after: making the first exact match in insertio
 - **findings** · the hunt returned 10; 6 carried, 4 dropped.
 - NFR: security n/a (no URL, header, subprocess or auth path touched; the contract change is the one Build 3 asks for) · performance ✓ (one extra query per inbox read, grouped by folded description once) · reliability ✓ (order and id invariance brute-forced above) · maintainability — the third bullet.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-07 · `6a4afb22..f812cbfc` · Opus 5.5, depth standard
+
+This gate covers only this round's diff. The owner decided gate 1's three open decisions on 2026-10-07: (1) only an amount miss outranks, gate 1's option (b), overriding the build; (2) "latest" stays the classification id; (3) when the rule's suggestion and the history agree, the one control stays the rule's Accept, storing `accepted` with the rule id.
+
+| Done when                                                                                                     | Proof                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3. Amount differs from an outranking rule's fixed amount: `differs`, even when a broader rule matches exactly | Still proven: `books/test/classify.test.ts` › "the row goes to the inbox as differs, with the outranking rule suggested" ✓, and new › "the category matching, a miss on the amount still outranks" ✓                            |
+| 6. Gates green                                                                                                | **verified** — `npm run check` exit 0; `npm test` 4454 passed, 2 skipped, of 4456; PR #384 on `f812cbfc`: check, test (ubuntu-latest), test (windows-latest, informational), docker, codeql, CodeQL, dependency-review all pass |
+
+Done when 1, 2, 4 and 5: their tests are unchanged this round, and all pass in the 545 of 545 run by `npm test -- --project ledger`.
+
+Re-runs at `f812cbfc`, after a rebuild (`dist/classify.js` holds `amountMiss`, 4 hits):
+
+- `probe.mjs`: line 5 now reads "classified by #1 (alex · current-expenses)"; at gate 1 it was `differs`. Lines 1a–4b are unchanged.
+- New probe lines, for a rule naming a category and an amount:
+  - (6a) the row misses both → classified by the broad rule;
+  - (6b) the row misses only the category → classified by the broad rule;
+  - (6c) the row misses only the amount → `differs`, the rule suggested, `matching [1]`;
+  - (6d) no exact match at all, a category-only miss → `differs`, as lg-4 had it.
+- Invariance: 3,000 rule sets, 573,716 combinations of insertion order and id assignment, **0** results that changed. The same harness on an insertion-order mutant of this head found 253,168.
+- `history-probe.mjs`: S2–S7 read exactly as at gate 1.
+
+Gate 1's findings:
+
+- **Category miss outranks (open decision 1): fixed.** The owner chose (b).
+  - The outranking filter in `classify` (`books/src/classify.ts`) now requires `amountMiss && !categoryMiss`.
+  - Putting back gate 1's filter (`misses > 0`) turns 2 of 47 in `classify.test.ts` red: "a category the row is not in does not outrank: the broad rule keeps the row" and "a rule missing the category and the amount does not outrank either".
+- **Latest by classification id (open decision 2): closed, kept by the owner.**
+- **Standing-only history had no test: fixed.** New test: `api/test/classifications.test.ts` › "a row answered twice counts once, by the answer that stands". Changing `FROM current_classifications c` to `FROM classifications c` now turns 1 of 30 red; at gate 1 it was 0 of 29.
+- **Accept stores `accepted` when the suggestion and history agree (open decision 3): closed, kept by the owner.**
+- **lg-17's "Use this answer" wording: fixed.** Build 8 now says what each case shows and what it stores, and that matches `InboxItem`: "Use this answer" sends no `ruleId`; the agreeing case is a note under Accept.
+- **Broad rule not shown on a `differs` row: not fixed, left recorded as a low.** The builder is right that gate 1 named only the symptom. The remedy is one of two:
+  - (a) on a `differs` row whose `matching` is not empty, list that rule as "A broader rule fits: `<pattern>` → `<answer>`", with its own Accept (`onAccept(rule.id)`);
+  - (b) list it with no control, and change the `differs` label so it says a broader rule fits.
+
+  Recommend (a). No line depends on it, and it may land unfixed.
+
+New in this round's lines:
+
+- **The builder's reading of a rule that misses both the category and the amount: follows the owner's answer, not an open decision.**
+  - Option (b) as gate 1 wrote it, which the owner chose, has two halves: "only an _amount_ miss outranks" and "a category-narrowed rule carves out its category and the broad rule keeps the rest".
+  - A row outside the rule's category is in "the rest", whatever its amount. The other reading, that any miss including the amount outranks, would leave the broad rule unable to keep those rows, which contradicts the second half.
+  - The brief does not reach this case: its trap says "outrank", which the owner's answer then narrowed.
+  - Probes 6a and 6b and the new test pin the reading, and dropping `!categoryMiss` turns that test red (1 of 47).
+  - **One contingency, for the coordinator:** the Log quotes the question as "(b) only an amount miss outranks", without its rationale. If the owner was shown only those five words, the case is still a real choice between: (i) the builder's reading, under which the broad rule files the row; and (ii) any miss that includes the amount outranks, under which the row goes to the inbox as `differs`, suggesting the rule. Recommend (i). It is one line in `classify.ts` either way.
+- **dropped** · the `INBOX_REASONS` comment in `contract/src/api.ts` now has a line far over the wrapping width ("…a category the row is not in never does). `ambiguous`: …"). `npm run check` passes, oxfmt does not wrap comments, and the text is true against the code. Cosmetic.
+- **dropped** · the builder added a sentence to the brief's Build 6 trap recording the owner's decision. It records a decision the Log carries with its options, and it does not loosen a Done-when line.
+- **findings** · the hunt in this round's lines returned 3; 1 carried (the contingency above), 2 dropped. No `high`, no `med`.
+- NFR: security n/a · performance ✓ (two booleans per candidate) · reliability ✓ (invariance re-run above) · maintainability ✓ (both new branches have tests that fail without them).
+
 ## Log
 
 - 2026-10-06 — Filed from a conversation with the owner, who chose "most
