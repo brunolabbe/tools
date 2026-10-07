@@ -197,7 +197,8 @@ candidate remedy:
   player's own Play press still has to hold back the main frame's box click.
   The row that A does not settle is the cross-site ad's "Watch now" button, which
   matches `PLAY_TEXT` by design: it, the bare "Watch" link and "Play slideshow"
-  (a word starting with "play") would still set the flag. Whoever builds this
+  (a word starting with "play") would still set the flag (derived from
+  `PLAY_SELECTORS` and `PLAY_TEXT`; not measured). Whoever builds this
   decides whether those three are acceptable, or whether the flag should count a
   press only in the frame that holds the chosen player, or only when the press
   was followed by media activity. That is the judgement this ticket exists to
