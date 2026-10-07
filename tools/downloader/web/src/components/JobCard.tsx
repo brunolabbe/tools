@@ -138,14 +138,19 @@ export function JobCard({
             <div>
               <dt>Progress</dt>
               <dd>
-                {progress.percent === null ? "unknown total" : formatPercent(progress.percent)}
+                {progress.percent !== null
+                  ? formatPercent(progress.percent)
+                  : progress.totalBytes === null
+                    ? "unknown total"
+                    : UNKNOWN}
               </dd>
             </div>
             <div>
               <dt>Downloaded</dt>
               <dd>
                 {formatBytes(progress.downloadedBytes)}
-                {progress.totalBytes !== null ? ` / ${formatBytes(progress.totalBytes)}` : ""}
+                {/* An expectation, not a measurement (dl-96), so it says so. */}
+                {progress.totalBytes !== null ? ` / ~${formatBytes(progress.totalBytes)}` : ""}
               </dd>
             </div>
             <div>

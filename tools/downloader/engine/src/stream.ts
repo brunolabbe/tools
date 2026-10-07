@@ -50,7 +50,7 @@ import type { EngineConfig } from "./config.ts";
 import { downloadCandidates, isHostFailure } from "./download/failover.ts";
 import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
 import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./ffmpeg/args.ts";
-import { RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
+import { durationFromInfoLine, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 import type { FfmpegStream } from "./ffmpeg/runner.ts";
 import { isTlsVerificationFailure, streamFfmpeg } from "./ffmpeg/runner.ts";
 import type { Logger } from "./logger.ts";
@@ -458,6 +458,30 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
   }
 }
 
+/**
+ * What the visitor's file should come to, when that is the source's own size
+ * (dl-96).
+ *
+ * Only for a progressive file the probe measured, copied as it is: `-c copy`
+ * moves every sample unchanged, so the output differs from the source by its
+ * boxes alone — measured within 0.07% on a 45.7 MB file whose index moved from
+ * the end to a fragmented front. A transcode, an audio-only cut, a separate
+ * audio input and a live capture each make the source's size a different
+ * file's, and HLS and DASH are left out because a segment sum counts MPEG-TS
+ * packet overhead the MP4 does not carry. It is an expectation, never a
+ * percent: the bar still moves only on media time.
+ */
+export function expectedOutputBytes(
+  variant: MediaVariant,
+  context: { audioOnly: boolean; transcoded: boolean; live: boolean },
+): number | null {
+  if (variant.protocol !== "progressive" || variant.audioUrl !== undefined) return null;
+  if (context.audioOnly || context.transcoded || context.live) return null;
+  if (variant.filesizeIsEstimate === true) return null;
+  const bytes = variant.filesizeBytes;
+  return bytes !== undefined && Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
+
 async function attempt(
   request: StreamRequest,
   deps: StreamDeps,
@@ -496,6 +520,15 @@ async function attempt(
 
   // A live capture's duration is the caller's limit; a VOD's is the manifest's.
   const mediaDurationSec = context.liveDurationSec ?? context.durationSec;
+  // When the probe could not time the source, ffmpeg can: it reads the
+  // duration before its first output byte and says so at info level (dl-96).
+  // Until then the percent stays null, as it must.
+  let learnedDurationSec: number | null = null;
+  const totalBytes = expectedOutputBytes(request.variant, {
+    audioOnly: context.audioOnly,
+    transcoded: transcodes.length > 0,
+    live: context.liveDurationSec !== null,
+  });
   const rate = new RateTracker();
   let sent = 0;
   // For `SEGMENT_SKIPPED`: what ffmpeg said before it gave up on a segment.
@@ -519,16 +552,22 @@ async function attempt(
       const now = Date.now();
       rate.record(sent, now);
       // Bytes *sent*, not ffmpeg's `total_size`: what the visitor has is what
-      // went through the pipe, and a total is never known (dl-53).
+      // went through the pipe (dl-53).
       request.onProgress({
         ...toJobProgress(snapshot, {
           stage: "downloading",
-          durationSec: mediaDurationSec,
-          totalBytes: null,
+          durationSec: mediaDurationSec ?? learnedDurationSec,
+          totalBytes,
           speedBps: rate.bytesPerSecond(),
         }),
         downloadedBytes: sent,
       });
+    },
+    onInfoLine: (line) => {
+      if (mediaDurationSec !== null || learnedDurationSec !== null) return;
+      // The first input's line: a second input is a separate audio rendition
+      // or a subtitle track, timed against the same video.
+      learnedDurationSec = durationFromInfoLine(line);
     },
     onStderrLine: (line) => {
       logger.debug("ffmpeg", { line });
@@ -622,7 +661,8 @@ async function attempt(
       logger.info("engine stream complete", { jobId: request.jobId, bytes: sent });
       return {
         bytes: sent,
-        durationSec: observedUs === null ? mediaDurationSec : observedUs / 1_000_000,
+        durationSec:
+          observedUs === null ? (mediaDurationSec ?? learnedDurationSec) : observedUs / 1_000_000,
       };
     })
     .catch((error: unknown) => {

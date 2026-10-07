@@ -31,12 +31,15 @@ import { AppError } from "@downloader/contract";
 import type { JobOptions, MediaVariant, RequestContext, SubtitleTrack } from "@downloader/contract";
 import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
+import type { Logger } from "../src/logger.ts";
+import { expectedOutputBytes } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
 import { startFixtureServer } from "./helpers/http.ts";
 import {
   generateDash,
   generateHls,
+  generateLongGop,
   generateProgressive,
   listTree,
   probeMedia,
@@ -1032,4 +1035,122 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     },
     30_000,
   );
+});
+
+/**
+ * dl-96. A progressive file the browser tier found carries a size and no
+ * duration, and behind a slow origin its progress read `unknown total` and
+ * `0 B/s` for minutes: the percent waits on a duration nobody supplied, and
+ * the rate is measured on bytes that leave ffmpeg one whole fragment at a time.
+ */
+describe("dl-96: progress on a source the probe could not time", () => {
+  beforeAll(async () => {
+    await generateLongGop(path.join(fixtureRoot, "longgop9"), 9, 6);
+  }, 60_000);
+
+  /** Every `ffmpeg` line the engine logged — the stderr that survived the runner. */
+  function capturingLogger(lines: string[]): Logger {
+    const noop = (): void => undefined;
+    return {
+      debug: (message, fields) => {
+        if (message === "ffmpeg") lines.push(String(fields?.["line"]));
+      },
+      info: noop,
+      warn: noop,
+      error: noop,
+    };
+  }
+
+  test("ffmpeg's own Duration line turns the percent on, and the size becomes the total", async () => {
+    const source = path.join(fixtureRoot, "prog9", "moov-end.mp4");
+    const sourceBytes = (await fs.stat(source)).size;
+    const logged: string[] = [];
+    const seen: { percent: number | null; totalBytes: number | null }[] = [];
+    const engine = engineWith({ logger: capturingLogger(logged) });
+
+    const media = await engine.stream({
+      jobId: "dl-96-untimed",
+      // What the browser tier hands over: a measured size, no duration.
+      variant: {
+        id: "untimed",
+        protocol: "progressive",
+        url: `${origin.origin}/prog9/moov-end.mp4`,
+        hasVideo: true,
+        filesizeBytes: sourceBytes,
+        filesizeIsEstimate: false,
+        label: "untimed",
+      },
+      requestContext: CONTEXT,
+      onProgress: (progress) =>
+        seen.push({ percent: progress.percent, totalBytes: progress.totalBytes }),
+    });
+    media.body.resume();
+    const outcome = await media.done;
+
+    const percents = seen.map((entry) => entry.percent).filter((value) => value !== null);
+    expect(percents.length).toBeGreaterThan(0);
+    expect(Math.max(...percents)).toBeGreaterThan(95);
+    expect(Math.max(...percents)).toBeLessThanOrEqual(100);
+    expect(seen.every((entry) => entry.totalBytes === sourceBytes)).toBe(true);
+    // The expectation the total stands for: a copy differs by its boxes alone.
+    expect(Math.abs(outcome.bytes - sourceBytes) / sourceBytes).toBeLessThan(0.01);
+    expect(Math.abs((outcome.durationSec ?? 0) - 9)).toBeLessThan(TOLERANCE_SEC);
+
+    // Real ffmpeg at `level+info`, and none of its info reached the log or the
+    // matchers: no input description, no level tags.
+    expect(logged.filter((line) => /Duration:|Stream #|Input #|\[(?:info|warning)\]/u.test(line))).toEqual(
+      [],
+    );
+  });
+
+  test("a long-GOP source still reaches the reader at least once a second", async () => {
+    const received = await exchange("dl-96-long-gop", () =>
+      engineWith().stream({
+        jobId: "dl-96-long-gop",
+        variant: {
+          id: "longgop9",
+          protocol: "progressive",
+          url: `${origin.origin}/longgop9/moov-end.mp4`,
+          hasVideo: true,
+          hasAudio: true,
+          label: "longgop9",
+        },
+        requestContext: CONTEXT,
+      }),
+    );
+
+    expect(received.status).toBe(200);
+    // Keyframes at 0 s and 6 s: two fragments uncapped, one a second capped.
+    const fragments = (await topLevelBoxes(received.file)).filter((box) => box === "moof");
+    expect(fragments.length).toBeGreaterThanOrEqual(9);
+    const probed = await probeMedia(received.file);
+    expect(Math.abs((probed.durationSec ?? 0) - 9)).toBeLessThan(TOLERANCE_SEC);
+  });
+
+  test("the source's size is a total only for a progressive file copied unchanged", () => {
+    const measured: MediaVariant = {
+      id: "m",
+      protocol: "progressive",
+      url: "https://cdn.example/a.mp4",
+      hasVideo: true,
+      filesizeBytes: 100_307_911,
+      filesizeIsEstimate: false,
+      label: "m",
+    };
+    const plain = { audioOnly: false, transcoded: false, live: false };
+
+    expect(expectedOutputBytes(measured, plain)).toBe(100_307_911);
+    expect(expectedOutputBytes({ ...measured, filesizeIsEstimate: undefined }, plain)).toBe(
+      100_307_911,
+    );
+    expect(expectedOutputBytes({ ...measured, filesizeIsEstimate: true }, plain)).toBeNull();
+    expect(expectedOutputBytes({ ...measured, filesizeBytes: undefined }, plain)).toBeNull();
+    expect(expectedOutputBytes({ ...measured, protocol: "hls" }, plain)).toBeNull();
+    expect(
+      expectedOutputBytes({ ...measured, audioUrl: "https://cdn.example/a.m4a" }, plain),
+    ).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, audioOnly: true })).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, transcoded: true })).toBeNull();
+    expect(expectedOutputBytes(measured, { ...plain, live: true })).toBeNull();
+  });
 });

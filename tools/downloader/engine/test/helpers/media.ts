@@ -201,6 +201,28 @@ export async function generateProgressive(dir: string, seconds: number): Promise
   await ffmpeg(["-i", muxed, "-map", "0:a", "-c", "copy", path.join(dir, "audio-only.m4a")]);
 }
 
+/**
+ * A progressive MP4 whose keyframes are `gopSeconds` apart (dl-96). Every
+ * fixture above keys once a second, which is exactly the interval dl-96's
+ * fragment cap enforces, so none of them can tell the cap from its absence.
+ */
+export async function generateLongGop(
+  dir: string,
+  seconds: number,
+  gopSeconds: number,
+): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+  const frames = String(gopSeconds * 15);
+  await ffmpeg([
+    ...SOURCES(seconds),
+    ...["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
+    ...["-g", frames, "-keyint_min", frames, "-sc_threshold", "0"],
+    ...AAC,
+    "-shortest",
+    path.join(dir, "moov-end.mp4"),
+  ]);
+}
+
 export const SUBTITLE_VTT = [
   "WEBVTT",
   "",

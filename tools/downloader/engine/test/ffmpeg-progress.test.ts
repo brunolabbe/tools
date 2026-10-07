@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { FfmpegProgressParser, RateTracker, toJobProgress } from "../src/ffmpeg/progress.ts";
+import {
+  durationFromInfoLine,
+  FfmpegProgressParser,
+  RateTracker,
+  toJobProgress,
+} from "../src/ffmpeg/progress.ts";
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -142,5 +147,28 @@ describe("RateTracker", () => {
     expect(tracker.bytesPerSecond()).toBeNull();
     tracker.record(100, 500);
     expect(tracker.bytesPerSecond()).toBeNull();
+  });
+});
+
+/**
+ * dl-96. The probe often has no duration for a progressive file — the browser
+ * tier sees a size and nothing else — but ffmpeg has read one before its first
+ * output byte, and says so at info level. These are the lines it writes.
+ */
+describe("durationFromInfoLine (dl-96)", () => {
+  test("reads an input's Duration line, as ffmpeg writes it after the level tag is stripped", () => {
+    expect(durationFromInfoLine("  Duration: 00:01:00.00, start: 0.000000, bitrate: 6094 kb/s")).toBe(
+      60,
+    );
+    expect(durationFromInfoLine("  Duration: 01:02:03.50, start: 0.000000, bitrate: N/A")).toBe(
+      3723.5,
+    );
+  });
+
+  test("a live playlist's N/A, a zero, and every other line are null", () => {
+    expect(durationFromInfoLine("  Duration: N/A, start: 1.400000, bitrate: N/A")).toBeNull();
+    expect(durationFromInfoLine("  Duration: 00:00:00.00, start: 0.000000")).toBeNull();
+    expect(durationFromInfoLine("    title           : Duration: 00:10:00.00")).toBeNull();
+    expect(durationFromInfoLine("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'x.mp4':")).toBeNull();
   });
 });

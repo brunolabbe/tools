@@ -22,7 +22,7 @@
 import process from "node:process";
 import { AppError } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
-import { streamFfmpeg } from "../src/ffmpeg/runner.ts";
+import { StderrLevels, streamFfmpeg } from "../src/ffmpeg/runner.ts";
 import type { FfmpegRunOptions, FfmpegRunResult } from "../src/ffmpeg/runner.ts";
 
 /** The runner as every caller uses it since dl-53: stdout drained, completion awaited. */
@@ -129,5 +129,78 @@ describe("onStderrLine redacts what ffmpeg echoes, case included (D3)", () => {
     ]);
     expect(seen.join("\n")).not.toContain("lower");
     expect(seen.join("\n")).not.toContain("UPPER");
+  });
+});
+
+/**
+ * dl-96 asks ffmpeg for `level+info` so the input's `Duration:` line arrives,
+ * and the runner hands everything else back exactly as `-loglevel warning`
+ * wrote it. The lines below are the shapes measured on 6.1.1 and 7.0.2.
+ */
+describe("StderrLevels: info goes to onInfoLine, warnings arrive untagged (dl-96)", () => {
+  test("a tag is stripped and the component prefix kept", () => {
+    const levels = new StderrLevels();
+    expect(levels.read("[http @ 0x5569fb8a5540] [warning] HTTP error 404 Not Found")).toEqual({
+      info: false,
+      text: "[http @ 0x5569fb8a5540] HTTP error 404 Not Found",
+    });
+    expect(levels.read("[error] Error opening input file x.mp4.")).toEqual({
+      info: false,
+      text: "Error opening input file x.mp4.",
+    });
+    expect(levels.read("[info]   Duration: 00:01:00.00, start: 0.000000")).toEqual({
+      info: true,
+      text: "  Duration: 00:01:00.00, start: 0.000000",
+    });
+  });
+
+  test("an untagged line takes the level of the message it continues", () => {
+    const levels = new StderrLevels();
+    // Before any tag: a stand-in, or a build that ignored the flag.
+    expect(levels.read("Stream ends prematurely at 30028").info).toBe(false);
+    levels.read("[info]     title           : first line of a title");
+    expect(levels.read("                     : certificate verify failed").info).toBe(true);
+    levels.read("[hls @ 0x2] [warning] Failed to open segment 3");
+    expect(levels.read("continued").info).toBe(false);
+  });
+
+  test("a certificate-sounding title fails nothing, reaches no tail, and is offered as info", async () => {
+    const info: string[] = [];
+    const warnings: string[] = [];
+    const failure = await runFfmpeg({
+      ...emitting([
+        "[info]     title           : certificate verification failed: self-signed",
+        "[info]   Duration: 00:00:09.00, start: 0.000000, bitrate: 512 kb/s",
+        "[hls @ 0x2] [warning] Segment 1 of playlist 0 failed too many times, skipping",
+      ]),
+      failureCode: "DOWNLOAD_FAILED",
+      onInfoLine: (line) => info.push(line),
+      onStderrLine: (line) => warnings.push(line),
+    }).then(
+      () => null,
+      (error: unknown) => AppError.from(error),
+    );
+
+    expect(failure?.code).toBe("DOWNLOAD_FAILED");
+    const stderr = String(failure?.details?.["stderr"]);
+    expect(stderr).not.toContain("certificate");
+    expect(stderr).toContain("[hls @ 0x2] Segment 1 of playlist 0 failed too many times");
+    expect(info).toHaveLength(2);
+    expect(info[1]).toContain("Duration: 00:00:09.00");
+    expect(warnings).toEqual([
+      "[hls @ 0x2] Segment 1 of playlist 0 failed too many times, skipping",
+    ]);
+  });
+
+  test("a last line without a newline still reaches the tail", async () => {
+    const failure = await runFfmpeg({
+      ffmpegPath: process.execPath,
+      args: ["-e", `process.stderr.write("[fatal] Conversion failed!"); process.exit(1);`],
+      failureCode: "DOWNLOAD_FAILED",
+    }).then(
+      () => null,
+      (error: unknown) => AppError.from(error),
+    );
+    expect(String(failure?.details?.["stderr"])).toBe("Conversion failed!");
   });
 });

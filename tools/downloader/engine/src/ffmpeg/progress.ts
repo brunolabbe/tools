@@ -121,6 +121,20 @@ export class FfmpegProgressParser {
 }
 
 /**
+ * The `  Duration: 00:01:00.00, start: …` line ffmpeg writes about each input,
+ * at info level (dl-96). `N/A` — a live playlist — does not match.
+ */
+const DURATION_LINE = /^\s*Duration: (\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/u;
+
+/** Seconds from an input's `Duration:` line; null for any other line, or a zero. */
+export function durationFromInfoLine(line: string): number | null {
+  const match = DURATION_LINE.exec(line);
+  if (match === null) return null;
+  const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/**
  * Byte rate over a trailing window.
  *
  * `JobProgress.speedBps` is documented as a windowed rate, not a cumulative
