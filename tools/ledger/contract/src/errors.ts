@@ -80,7 +80,8 @@ export const LEDGER_ERROR_CODES = [
   /**
    * The paste reaches back past the oldest stored row. A stored row's position
    * is never changed, and adding older history means numbering rows below the
-   * oldest, which this ticket does not do; a later one may.
+   * oldest, which a paste never does: only the workbook's one-off import does
+   * (lg-7), and it places its rows by position against what is stored.
    */
   "STATEMENT_BEFORE_HISTORY",
   // --- Rules and the inbox (lg-4) ---

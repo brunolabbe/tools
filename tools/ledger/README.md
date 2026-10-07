@@ -9,8 +9,8 @@ spreadsheet.
 > stored and chained onto what is stored, its rows filed by rule, with an
 > inbox for the rest, and what each bucket holds and whose it is, with the
 > salaries and the ratio, and periods of personal-card spending closed with
-> the settlement they compute. The workbook's import, receipts and the charts
-> are not built. What is decided
+> the settlement they compute, and the old workbook's history imported once,
+> by a command (below). Receipts and the charts are not built. What is decided
 > and what comes next is in
 > [docs/02-ROADMAP.md](./docs/02-ROADMAP.md); where it stands is
 > `npm run status -- --tool ledger`.
@@ -68,6 +68,26 @@ Beside the other tools, on the same host and the same tunnel — the
 [docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) for the walkthrough and
 [its ledger section](../../docs/02-DEPLOYMENT.md#the-ledger). Its Access policy
 admits two people rather than one, and gets no Bypass rule.
+
+### Importing the old workbook
+
+Once, from the repo root, into the database the API is configured with
+(`DATABASE_PATH`), as a command rather than a route (lg-7):
+
+```bash
+ACCESS_PEOPLE=… npm run import:ledger -- ~/classeur.xlsx --as alex [--corrections ~/corrections.json] [--write]
+```
+
+Without `--write` it is a dry run: it imports into a copy held in memory, prints
+the report — rows imported, repaired, skipped and corrected, each bucket's
+figures beside the workbook's, the catch-up — and writes nothing. It exits
+nonzero, and writes nothing, when any verification fails. Keep the workbook and
+the corrections file **outside the repository**: both are bank data.
+`--corrections` is the owner's JSON of rows to file otherwise, and of workbook
+names that are not already a person's id; its shape is on `readCorrections` in
+`books/src/workbook.ts`. In the image, where nothing can build, run
+`node tools/ledger/api/dist/import-ledger.js` with the same arguments and the
+workbook mounted in.
 
 ## Docs
 
