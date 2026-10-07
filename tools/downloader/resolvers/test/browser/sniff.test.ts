@@ -499,6 +499,8 @@ describe("countPlayedSegments (dl-79 gate 1)", () => {
   });
 });
 
+const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + probe.reads(), 0);
+
 describe("a compressed typed manifest is read on a budget (dl-91)", () => {
   const typed = { "content-type": "application/vnd.apple.mpegurl" };
 
@@ -508,8 +510,6 @@ describe("a compressed typed manifest is read on a budget (dl-91)", () => {
       headers: { ...typed, ...headers },
     });
   }
-
-  const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + probe.reads(), 0);
 
   test("no more than MAX_ENCODED_CAPTURES_PER_PROBE compressed bodies are read, and the rest are still hits", async () => {
     // Chromium inflates before Playwright returns, so the declared length bounds
