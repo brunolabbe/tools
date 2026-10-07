@@ -3,7 +3,9 @@
  *
  * Each row shows why it is here and, when there is one, the nearest rule as a
  * suggestion. **One tap accepts the suggestion**; or the person answers with a
- * person and a bucket of their own. Either way a new classification is appended
+ * person and a bucket of their own. A description answered before shows that
+ * answer too (lg-16), taken in one tap as an answer of the person's own; when the
+ * rule's suggestion says the same, it is one control, not two. Either way a new classification is appended
  * and the row leaves the list — what was said before about it is kept by the API.
  *
  * After an answer of the person's own the screen offers to turn it into a rule,
@@ -23,6 +25,7 @@ import {
   REASON_LABELS,
   answerLabel,
   criteriaLabel,
+  historyLabel,
   personLabel,
 } from "../labels.ts";
 import { RuleForm } from "../rules/RuleForm.tsx";
@@ -175,9 +178,16 @@ interface InboxItemProps {
 }
 
 function InboxItem({ row, people, onAccept, onAnswer }: InboxItemProps): React.ReactElement {
-  const { suggestion } = row;
-  const [person, setPerson] = useState(suggestion?.personId ?? "");
-  const [bucket, setBucket] = useState<Bucket>(suggestion?.bucket ?? "current-expenses");
+  const { suggestion, history } = row;
+  const agrees =
+    suggestion !== null &&
+    history !== null &&
+    suggestion.personId === history.personId &&
+    suggestion.bucket === history.bucket;
+  const [person, setPerson] = useState(suggestion?.personId ?? history?.personId ?? "");
+  const [bucket, setBucket] = useState<Bucket>(
+    suggestion?.bucket ?? history?.bucket ?? "current-expenses",
+  );
 
   return (
     <li>
@@ -209,8 +219,20 @@ function InboxItem({ row, people, onAccept, onAnswer }: InboxItemProps): React.R
               — rule {suggestion.descriptionPattern} ({criteriaLabel(suggestion)})
             </span>
           </p>
+          {/* The rule and the history saying the same thing is one answer, not two. */}
+          {history !== null && agrees && <p className="muted">Answered {historyLabel(history)}.</p>}
           <button type="button" onClick={() => onAccept(suggestion.id)}>
             Accept
+          </button>
+        </div>
+      )}
+      {history !== null && !agrees && (
+        <div className="suggestion">
+          <p>
+            Answered <strong>{historyLabel(history)}</strong>
+          </p>
+          <button type="button" onClick={() => onAnswer(history.personId, history.bucket)}>
+            Use this answer
           </button>
         </div>
       )}

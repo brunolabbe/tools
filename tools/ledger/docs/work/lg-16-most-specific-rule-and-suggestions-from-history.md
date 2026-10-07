@@ -87,3 +87,44 @@ amendment).
   specific rule wins" and "suggest from history" together, and auto-filing as a
   separate ticket (lg-17) built on this one. The ranking order, the
   same-answer tie and the `differs` trap are the filer's, not put to the owner.
+- 2026-10-07 — Built, on `origin/main` at 1aece87d.
+  - **What it does.** `classify` ranks the exact matches by `score`'s `named`,
+    then `literal` (one notion of narrower, as the brief asked); the top rank
+    with one answer (person and bucket) takes the row, the newest by `id`; the
+    top rank with two answers is `ambiguous`, `matching` listing only it. A
+    pattern-matching rule the row does not fit that outranks the best exact
+    match is `differs`, suggesting the nearest of those outranking rules.
+    `MatchableRule` gained `bucket` and `personId`, which "same answer" needs and
+    the API's `Rule` already carries. `fromHistory` is in `books/src/history.ts`;
+    `InboxRow.history` is `{ personId, bucket, times }` or `null`.
+  - **Ruled by the brief's silence.** "How many of the latest answers agree" is
+    read as the run of latest answers equal to the newest, counting back until
+    one differs (`times`), so "the last 3 times" is literally the last three. The
+    answers are each row's _standing_ classification (`current_classifications`)
+    with `source` `manual` or `accepted`, so a row a rule filed and a person then
+    corrected counts as the person's answer, and the rule's own filing never
+    does. "Latest" is by classification `id`, as the tool's other latest-wins
+    reads are.
+  - **`matching` under `differs`** is the exact rules at the top rank (the broad
+    rule the narrower one displaced), where lg-4 left it empty; the web lists it
+    only when it holds two or more, so nothing shows differently.
+  - **The brief's tests.** lg-4's two-rules API tests changed to "level at the
+    top with different answers", and `classify.test.ts`'s "the more specific is
+    suggested" test, which asserted the behaviour this ticket removes, became
+    "classified by the narrower"; two-rule tests with identical patterns and
+    identical answers now differ in the person or the bucket, since they would
+    otherwise classify. Done-when 2 of lg-4's own file still reads "two rules
+    matching one row"; it is a finished ticket with a gate record and is not edited
+    here.
+  - **Not folded in.** lg-4's Done-when 2 wording (above): its file is `done`
+    with a record, which a build does not touch. Nothing else made another piece
+    free. lg-15 and lg-17's Build sections were amended in this change with what
+    this builds under them.
+  - **Proof.** `npx vitest run tools/ledger/books`: 8 files, 212 tests;
+    `tools/ledger/api`: 274; `tools/ledger/web`: 52;
+    `npm test -- --project ledger`: 34 files, 542 tests. Failed before the
+    behaviour existed, by mutation: replacing the outranking filter in
+    `classify.ts` with `false` fails 5 of 45 in `classify.test.ts`, all in the
+    `differs` describe; replacing the API's `source IN ('manual', 'accepted')`
+    with `1 = 1` fails 1 of 29 in `classifications.test.ts`, the rule-only
+    description test.

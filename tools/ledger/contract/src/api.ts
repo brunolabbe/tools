@@ -179,13 +179,28 @@ export interface PeopleResponse {
 /**
  * Why a row is in the inbox. `no-rule`: no rule's description pattern matches.
  * `differs`: one does, and its category or its fixed amount does not — a transfer
- * that is not its usual amount is a question, not a guess. `ambiguous`: more than
- * one rule matches exactly, and no row goes to the first of them. `matches`: one
- * rule matches exactly but the row has not been classified, because the rule was
- * added after the paste.
+ * that is not its usual amount is a question, not a guess — including when a
+ * broader rule matches exactly, because a narrower rule it does not fit outranks
+ * it (lg-16). `ambiguous`: several rules level at the top rank, the most
+ * specific that match exactly, give different answers, and no row goes to the
+ * first of them. `matches`: the top rank matches exactly with one answer but the
+ * row has not been classified, because the rule was added after the paste.
  */
 export const INBOX_REASONS = ["no-rule", "differs", "ambiguous", "matches"] as const;
 export type InboxReason = (typeof INBOX_REASONS)[number];
+
+/**
+ * What a person said the last times this row's description came up (lg-16). Only
+ * a person's answers count — never a classification a rule applied. Taking it is
+ * an ordinary `POST /api/classifications` with this `personId` and `bucket`,
+ * which stores a `manual` answer by whoever tapped.
+ */
+export interface InboxHistory {
+  personId: string | null;
+  bucket: Bucket;
+  /** How many of the latest answers agree, counting back and stopping at one that does not. */
+  times: number;
+}
 
 /** A stored row nobody has classified, with the nearest rule offered as an answer. */
 export interface InboxRow {
@@ -197,7 +212,12 @@ export interface InboxRow {
   balanceCents: number;
   reason: InboxReason;
   suggestion: Rule | null;
-  /** The rules that match exactly: more than one only when the reason is `ambiguous`. */
+  /** The earlier answer to this description, or `null` when no person ever gave one. */
+  history: InboxHistory | null;
+  /**
+   * The rules at the top rank among those matching exactly: more than one only
+   * when the reason is `ambiguous`.
+   */
   matching: Rule[];
 }
 

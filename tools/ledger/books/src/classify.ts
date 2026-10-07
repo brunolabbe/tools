@@ -7,17 +7,32 @@
  * when it names one. Nothing here is "close enough". A transfer that is not its
  * usual amount is a question for a person, not a guess (`00-ANALYSIS.md` §3).
  *
- * - **Exactly one rule matches exactly:** the row takes it.
- * - **None, or more than one:** the row takes none. Two rules matching one row
- *   is two answers, and taking the first of them is how a row ends up in the
- *   wrong bucket with nobody having been asked.
+ * **The most specific rule takes a row** (lg-16). Rules matching a row exactly
+ * are ranked by, in order, the more criteria they name beyond the pattern (a
+ * fixed amount, a category), then the longer literal part of the pattern (its
+ * characters other than `*`). A broad rule on account info can therefore live
+ * beside a narrow one with a fixed amount, and the narrow one takes its rows.
  *
- * Either way the function says which rule is nearest, as a *suggestion* — a
- * person still has to take it. Nearest is, in order: the fewest criteria the row
- * fails, the smallest gap between the rule's fixed amount and the row's, the
- * most criteria the rule names, the longest literal pattern. When two rules are
- * still level there is no nearest, and the suggestion is `null` rather than the
- * older of two equals.
+ * - **One rule at the top rank, or several level there with the same answer**
+ *   (person and bucket): the row takes it — the newest of them, by `id`.
+ * - **Several level at the top with different answers:** the row takes none.
+ *   That is two answers with no reason to prefer either, and taking the first of
+ *   them is how a row ends up in the wrong bucket with nobody having been asked.
+ * - **A rule whose pattern matches but whose category or amount does not, and
+ *   which would outrank the best exact match:** the row takes none (`differs`).
+ *   A mortgage transfer at an unusual amount is a question, and a broad rule
+ *   must not file it in silence. An exact match that outranks every such rule
+ *   takes the row.
+ * - **None matches exactly:** the row takes none.
+ *
+ * Whenever the row takes none the function says which rule is nearest, as a
+ * *suggestion* — a person still has to take it. Nearest is, in order: the
+ * fewest criteria the row fails, the smallest gap between the rule's fixed
+ * amount and the row's, the most criteria the rule names, the longest literal
+ * pattern. When two rules are still level there is no nearest, and the
+ * suggestion is `null` rather than the older of two equals. For a `differs`
+ * that is an outranking rule, so the rule suggested is the one that stopped the
+ * row being filed.
  *
  * Only a rule whose description pattern matches is a candidate. The pattern is
  * what a rule says a row *is*; a category or an amount on its own is far too
@@ -38,6 +53,10 @@ export interface MatchableRule {
   category: string | null;
   /** An exact amount in cents, or `null` for any. */
   amountCents: number | null;
+  /** The bucket the rule files a row under; two rules agree when this and `personId` do. */
+  bucket: string;
+  /** Whose the filed row is, or `null` for the joint account. */
+  personId: string | null;
 }
 
 /** The part of a stored row a rule is judged against. */
@@ -53,17 +72,22 @@ export type RuleMatch<R extends MatchableRule> =
       kind: "inbox";
       /**
        * `no-rule`: no pattern matches. `differs`: a pattern does, and the
-       * category or the fixed amount does not. `ambiguous`: more than one rule
-       * matches exactly.
+       * category or the fixed amount does not, and no exact match outranks it.
+       * `ambiguous`: several rules level at the top rank match exactly with
+       * different answers.
        */
       reason: "no-rule" | "differs" | "ambiguous";
       suggestion: R | null;
-      /** The rules that match exactly: two or more only for `ambiguous`. */
+      /**
+       * The rules at the top rank among those that match exactly: two or more
+       * only for `ambiguous`, and possibly one under `differs`, where a
+       * narrower rule the row does not fit stopped it being filed.
+       */
       matching: R[];
     };
 
 /** Case, accents and runs of whitespace are not differences a rule should care about. */
-function normalize(text: string): string {
+export function normalize(text: string): string {
   return fold(text).replace(/\s+/gu, " ").trim();
 }
 
@@ -133,6 +157,20 @@ function nearer<R extends MatchableRule>(a: Scored<R>, b: Scored<R>): number {
   );
 }
 
+/**
+ * Negative when `a` is the more specific rule: the more criteria beyond the
+ * pattern, then the longer literal. These are `score`'s own `named` and
+ * `literal`, so there is one notion of "narrower", not two.
+ */
+function narrower<R extends MatchableRule>(a: Scored<R>, b: Scored<R>): number {
+  return b.named - a.named || b.literal - a.literal;
+}
+
+/** Two rules file a row the same way when they name the same person and bucket. */
+function sameAnswer(a: MatchableRule, b: MatchableRule): boolean {
+  return a.bucket === b.bucket && a.personId === b.personId;
+}
+
 export function classify<R extends MatchableRule>(
   row: ClassifiableRow,
   rules: readonly R[],
@@ -142,16 +180,45 @@ export function classify<R extends MatchableRule>(
     .map((rule) => score(rule, row))
     .toSorted(nearer);
 
-  const matching = candidates.filter((candidate) => candidate.misses === 0).map((c) => c.rule);
-  const [only] = matching;
-  if (matching.length === 1 && only !== undefined) return { kind: "classified", rule: only };
+  const exact = candidates.filter((candidate) => candidate.misses === 0).toSorted(narrower);
+  const [best] = exact;
+  const top = best === undefined ? [] : exact.filter((c) => narrower(c, best) === 0);
+  const matching = top.map((c) => c.rule);
 
-  const [best, second] = candidates;
+  // A rule the row only nearly fits, but which says more than anything that fits
+  // it, is the one whose question the row is: filing it under a broader rule
+  // would be answering that question with nobody asked.
+  const outranking = candidates.filter(
+    (candidate) => candidate.misses > 0 && (best === undefined || narrower(candidate, best) < 0),
+  );
+
+  if (outranking.length > 0) {
+    const [first, second] = outranking;
+    return {
+      kind: "inbox",
+      reason: "differs",
+      suggestion:
+        first === undefined || (second !== undefined && nearer(first, second) === 0)
+          ? null
+          : first.rule,
+      matching,
+    };
+  }
+
+  if (best !== undefined && top.every((c) => sameAnswer(c.rule, best.rule))) {
+    // Ids only grow, and a rule's newer version has a newer id.
+    const newest = top.reduce((a, b) => (b.rule.id > a.rule.id ? b : a));
+    return { kind: "classified", rule: newest.rule };
+  }
+
+  const [nearest, second] = candidates;
   const suggestion =
-    best === undefined || (second !== undefined && nearer(best, second) === 0) ? null : best.rule;
+    nearest === undefined || (second !== undefined && nearer(nearest, second) === 0)
+      ? null
+      : nearest.rule;
   return {
     kind: "inbox",
-    reason: candidates.length === 0 ? "no-rule" : matching.length > 1 ? "ambiguous" : "differs",
+    reason: candidates.length === 0 ? "no-rule" : exact.length > 0 ? "ambiguous" : "differs",
     suggestion,
     matching,
   };

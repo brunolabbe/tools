@@ -62,6 +62,7 @@ const WAITING: Omit<InboxRow, "id" | "description" | "amountCents"> = {
   balanceCents: 111111,
   reason: "no-rule",
   suggestion: null,
+  history: null,
   matching: [],
 };
 

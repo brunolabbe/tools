@@ -1,6 +1,6 @@
 /** Words for the things the books file a row under. */
 
-import type { Bucket, InboxReason, Rule } from "@ledger/contract";
+import type { Bucket, InboxHistory, InboxReason, Rule } from "@ledger/contract";
 import { formatCents } from "@ledger/books";
 
 export const BUCKET_LABELS: Record<Bucket, string> = {
@@ -25,10 +25,16 @@ export function criteriaLabel(rule: Pick<Rule, "category" | "amountCents">): str
   return `${category}, ${amount}`;
 }
 
+/** What a person last answered for a description: "alex · Mortgage, the last 3 times". */
+export function historyLabel(history: Pick<InboxHistory, "personId" | "bucket" | "times">): string {
+  const when = history.times === 1 ? "last time" : `the last ${String(history.times)} times`;
+  return `${answerLabel(history)}, ${when}`;
+}
+
 export const REASON_LABELS: Record<InboxReason, string> = {
   "no-rule": "No rule matches this.",
   differs: "A rule matches the description, but not the category or the amount.",
-  ambiguous: "More than one rule matches this, so none was applied.",
+  ambiguous: "Equally specific rules match this with different answers, so none was applied.",
   matches: "A rule matches this exactly. It was added after the paste.",
 };
 

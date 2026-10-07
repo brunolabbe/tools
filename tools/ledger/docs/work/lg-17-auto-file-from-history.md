@@ -57,6 +57,24 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
    not include them.
 7. **Amend [00-ANALYSIS.md §3](../00-ANALYSIS.md)'s amendment** if the build
    finds the limits above unworkable — never quietly loosen them in code.
+8. **What lg-16 built, for this ticket to start from.**
+   - `fromHistory(row, answers)` returns `{ bucket, personId, times }`, where
+     `times` is the run of latest answers that agree, counting back from the
+     latest and stopping at the first that differs. "The latest three name the
+     same person and bucket" is therefore `times >= 3`. It does not return the
+     amounts or the ids of the answers `autoFile` needs; `HistoryAnswer` holds
+     the classification `id` (larger is later) and no amount, so extend it with
+     `amountCents` and have `autoFile` reuse its folding (`normalizeDescription`)
+     rather than a second copy.
+   - The API reads answers in `answersByDescription`
+     (`api/src/classifications.ts`): the **standing** classification of each row
+     (`current_classifications`) whose `source IN ('manual', 'accepted')`. A new
+     `source`, or a sibling record, stays out of history only if that list is
+     left alone; do not widen it, and make the storage choice in item 4 keep the
+     standing-classification read honest for it.
+   - **`InboxRow.history` already shows the answer** and its one-tap "Use this
+     answer"; an automatic filing is not offered there, since the row is no longer
+     in the inbox.
 
 ## Done when
 

@@ -69,7 +69,17 @@ so the two can never be read for each other.
    lg-7 imports, charts as uncategorised, its text shown in the detail.
 8. **Traps.**
    - `lg-16` changes `classify` and the inbox in the same files. Whichever lands
-     second rebases; neither depends on the other.
+     second rebases; neither depends on the other. What lg-16 built, for the
+     rebase: `MatchableRule` now also carries `bucket` and `personId`, because
+     two rules level at the top **share an answer** when those two agree, and
+     the row then takes the newest by `id`; `classify` ranks by `score`'s
+     `named` and `literal`, so a rule that only differs by its spending
+     category is level with the other and the newest wins. A rule's spending
+     category is therefore not part of "the same answer": decide whether it
+     should be before two rules differing only in it classify silently.
+     `InboxRow` gained `history`, and `classifyingRule` for `spendingCategory`
+     is the rule `classify` returned, which is what `classifications.rule_id`
+     already stores.
    - The rule form's spending category is part of a rule version, so editing it
      supersedes the rule like any other field.
 
