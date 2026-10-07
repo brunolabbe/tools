@@ -1299,3 +1299,138 @@ describe("redactLoggedUrl, on spellings the router would not match", () => {
     expect(redactLoggedUrl(url)).toBe(url);
   });
 });
+
+/**
+ * A request Fastify's router refuses before any hook runs used to be answered and
+ * never logged (dl-84). The target has to reach the router verbatim, so these go
+ * over a real socket: `inject` normalises it first and never takes this path.
+ */
+describe("a request the router refuses before any hook runs", () => {
+  const GIF = Buffer.from("R0lGODlhAgACAIAAAP///wAAACH5BAAAAAAALAAAAAACAAIAAAIDRAJZADs=", "base64");
+
+  /** What follows the token: each is a percent escape Fastify cannot decode. */
+  const MALFORMED: Array<[string, string]> = [
+    ["a truncated escape", "%E0%A4%A"],
+    ["a lone percent", "%"],
+    ["a non-hex escape", "%zz"],
+    ["an overlong encoding", "%C0%AF"],
+  ];
+
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  async function listening(): Promise<{
+    port: number;
+    lines: Line[];
+    tokens: Record<"files" | "thumbnail", string>;
+  }> {
+    const { logger, lines } = capturing();
+    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+    const tokens = {
+      files: (await issuedToken(harness)).token,
+      thumbnail: harness.app.context.thumbnails.put({ contentType: "image/gif", bytes: GIF }),
+    };
+    await harness.app.server.listen({ port: 0, host: "127.0.0.1" });
+    const { port } = harness.app.server.server.address() as AddressInfo;
+    lines.length = 0;
+    return { port, lines, tokens };
+  }
+
+  describe.each(["files", "thumbnail"] as const)("on /api/%s/:token", (name) => {
+    test.each(MALFORMED)(
+      "%s is logged once, redacted, and still answered 400",
+      async (_l, tail) => {
+        const { port, lines, tokens } = await listening();
+        const token = tokens[name];
+
+        const response = await rawExchange(port, `/api/${name}/${token}${tail}`);
+
+        // Asserted before the line is waited for, so a red run shows the answer was
+        // already this one and only the log was missing.
+        expect(response.status).toBe(400);
+        expect(response.contentType).toBe("application/json");
+        expect(JSON.parse(response.body)).toEqual({
+          error: "Bad Request",
+          code: "FST_ERR_BAD_URL",
+          message: `'/api/${name}/${token}${tail}' is not a valid url component`,
+          statusCode: 400,
+        });
+        await waitFor(
+          () => lines.filter((line) => line.msg === "request").length,
+          (count) => count >= 1,
+          { label: "the request line" },
+        );
+
+        const logged = lines.filter((line) => line.msg === "request");
+        expect(logged).toHaveLength(1);
+        expect(logged[0]).toMatchObject({
+          level: "info",
+          method: "GET",
+          url: `/api/${name}/${REDACTED}`,
+          status: 400,
+          code: "FST_ERR_BAD_URL",
+        });
+        expect(typeof logged[0]?.requestId).toBe("string");
+        // The token's own characters, not only the whole of it: the escape is
+        // what is malformed, and a log of the decoded part would still leak.
+        expect(
+          lines.map((line) => JSON.stringify(line)).filter((l) => l.includes(token.slice(1))),
+        ).toEqual([]);
+      },
+    );
+  });
+
+  test("a parameter longer than the router allows is logged too, and still 414", async () => {
+    const { port, lines } = await listening();
+    const target = `/api/files/${"a".repeat(200)}`;
+
+    const response = await rawExchange(port, target);
+    expect(response.status).toBe(414);
+    expect(JSON.parse(response.body)).toEqual({
+      error: "Bad Request",
+      code: "FST_ERR_MAX_PARAM_LENGTH",
+      message: `'${target}' is exceeding the max param length`,
+      statusCode: 414,
+    });
+    await waitFor(
+      () => lines.filter((line) => line.msg === "request").length,
+      (count) => count >= 1,
+      { label: "the request line" },
+    );
+
+    const logged = lines.filter((line) => line.msg === "request");
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({
+      url: `/api/files/${REDACTED}`,
+      status: 414,
+      code: "FST_ERR_MAX_PARAM_LENGTH",
+    });
+    expect(JSON.stringify(lines)).not.toContain("a".repeat(20));
+  });
+});
+
+/** One GET with the target written verbatim, and the whole answer read back. */
+function rawExchange(
+  port: number,
+  target: string,
+): Promise<{ status: number; contentType: string | undefined; body: string }> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const socket = connect(port, "127.0.0.1", () => {
+      socket.write(`GET ${target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+    });
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+    socket.on("error", reject);
+    socket.on("close", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      const [head = "", ...rest] = text.split("\r\n\r\n");
+      const status = Number(/^HTTP\/1\.1 (\d{3})/u.exec(head)?.[1]);
+      const contentType = /^content-type: (.*)$/imu.exec(head)?.[1];
+      resolve({ status, contentType, body: rest.join("\r\n\r\n") });
+    });
+  });
+}

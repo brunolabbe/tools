@@ -87,3 +87,28 @@ that handler can write the line without changing the 400 the client sees was
   with the table above (6 of 6 targets answered as shown, `redactLoggedUrl` on
   the 4 malformed ones returned `/api/files/[redacted]` and did not throw). Not
   built.
+- 2026-10-07 — Built. `Fastify({ frameworkErrors })` is the hook the ticket's lead
+  pointed at: `createFrameworkErrorHandler` in `request-log.ts` writes the line, then
+  writes the refusal itself.
+  - **Level and fields.** One `request` line at **`info`**, the same message and fields
+    as an ordinary request (`method`, `url` through `redactLoggedUrl`, `status`,
+    `durationMs`, `ip`, plus `requestId`) and one more, `code` (`FST_ERR_BAD_URL`).
+    Level reason: every request that is not a health check is already `info`, and a
+    scanner's 404 probes already cost one `info` line each, so this adds no new volume
+    class; `debug` would hide the one signal the ticket exists to surface, and `warn`
+    would make a client's broken link page someone. `code` is how a reader tells these
+    from a 404. The error's `message` is never logged: Fastify builds it by quoting the
+    raw path, token included.
+  - **Response unchanged, measured.** Setting the option hands Fastify's whole answer to
+    the handler, so it is rewritten to the byte: `Content-Type: application/json`,
+    `Content-Length`, body `{error:"Bad Request",code,message,statusCode}` via `reply.raw`.
+    The tests assert the response _before_ waiting for the line, and on the base the
+    response assertions pass and only `the request line` times out with `last value: 0`
+    (9 of 9 red for that reason), so the 400 body is the one the current code returns.
+    Not echoed: `X-Request-Id`, which the base does not send for these either.
+  - **Folded in.** The same hook also takes `FST_ERR_MAX_PARAM_LENGTH` (a path parameter
+    over 100 characters, 414, 0 lines on the base: the same blindness, and it would
+    have lost its default body to the new option otherwise). Covered by one test.
+    `FST_ERR_ASYNC_CONSTRAINT` is unreachable here (no async constraint is registered);
+    its default body is kept so the handler cannot change it if one is added.
+  - The brief's `Packages: api (server.ts, request-log.ts)` was right.

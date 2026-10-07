@@ -38,7 +38,12 @@ import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { PerClientConcurrencyGate } from "./per-client-gate.ts";
-import { redactLoggedUrl, registerRequestLogging, requestIdFrom } from "./request-log.ts";
+import {
+  createFrameworkErrorHandler,
+  redactLoggedUrl,
+  registerRequestLogging,
+  requestIdFrom,
+} from "./request-log.ts";
 import { buildRegistry } from "./resolvers.ts";
 import { registerClientConfigRoute } from "./routes/config.ts";
 import { registerEventRoutes } from "./routes/events.ts";
@@ -552,6 +557,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // Fastify's own ids are a per-process counter, which collide across
     // restarts and across replicas — useless for correlating anything.
     genReqId: (request) => requestIdFrom(request as { headers: Record<string, unknown> }),
+    // A request the router refuses (an undecodable percent escape, an over-long
+    // parameter) never reaches a hook, so the request log would not see it.
+    frameworkErrors: createFrameworkErrorHandler(context),
   });
 
   registerRequestLogging(server, context);

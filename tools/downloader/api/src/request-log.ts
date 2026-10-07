@@ -15,7 +15,7 @@
 
 import { randomUUID } from "node:crypto";
 import { REDACTED, ROUTES } from "@downloader/contract";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "./context.ts";
 import type { AppLogger } from "./logger.ts";
 
@@ -207,4 +207,57 @@ export function registerRequestLogging(app: FastifyInstance, context: AppContext
     if (isNoisy(request)) request.logger.debug("request", fields);
     else request.logger.info("request", fields);
   });
+}
+
+/**
+ * Fastify's `frameworkErrors` handler: the line for a request its router refuses
+ * **before any hook runs**, which `registerRequestLogging`'s hooks never see
+ * (dl-84). A percent escape it cannot decode (`%zz`, a lone `%`, a truncated or
+ * overlong sequence) is `FST_ERR_BAD_URL`, 400; a path parameter past
+ * `maxParamLength` is `FST_ERR_MAX_PARAM_LENGTH`, 414. Without this the service
+ * answered them and wrote nothing, so a scan or a client building broken links
+ * was invisible.
+ *
+ * One `request` line, the same name and fields as an ordinary request so the
+ * query that finds requests finds these, **at `info`** like every other request
+ * that is not a health check: a scanner already costs one `info` line per probe
+ * through the 404 path, so this adds no new volume class, and `code` is what
+ * tells the two apart. It carries `url` through `redactLoggedUrl` and never the
+ * error's `message`, which Fastify builds by quoting the raw path, token and all.
+ *
+ * **The response is rewritten byte for byte** from what Fastify writes itself
+ * when this option is unset, because setting the option hands the whole answer to
+ * this function. It goes out on `reply.raw`, as Fastify's default does, so no
+ * hook runs for it and no second line is written by `onResponse`.
+ */
+export function createFrameworkErrorHandler(context: AppContext) {
+  return (error: FastifyError, request: FastifyRequest, reply: FastifyReply): void => {
+    // The refused request has had no `onRequest`, so no bound child logger yet.
+    context.logger.child({ requestId: request.id }).info("request", {
+      method: request.method,
+      url: redactLoggedUrl(request.url),
+      status: error.statusCode ?? 500,
+      durationMs: Math.round(reply.elapsedTime),
+      ip: request.ip,
+      code: error.code,
+    });
+
+    const status = error.statusCode ?? 500;
+    // Fastify's own text, including its "Bad Request" for the 414 as well, so
+    // that nothing a client could read changes when this line began to be written.
+    const body = JSON.stringify(
+      status === 500
+        ? {
+            error: "Internal Server Error",
+            message: "Unexpected error from async constraint",
+            statusCode: 500,
+          }
+        : { error: "Bad Request", code: error.code, message: error.message, statusCode: status },
+    );
+    reply.raw.writeHead(status, {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    });
+    reply.raw.end(body);
+  };
 }
