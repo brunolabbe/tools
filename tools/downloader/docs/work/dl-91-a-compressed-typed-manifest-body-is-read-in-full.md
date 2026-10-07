@@ -150,6 +150,13 @@ the end of the file. With the budget block disabled, 3 of the 5 fail; with it,
    as [dl-97](./dl-97-a-manifest-refetch-is-read-in-full-whatever-its-size.md),
    `difficulty: hard`, with the measured table as its reproduction.
 
+_Superseded in round 3 below. Gate 2 showed the premise behind the choice of (a)
+as worded, "peak memory is still at most two inflations", false: a body under
+4 MiB is never charged, so every one is read, and the garbage builds up faster
+than it is collected. The oversize count, the 8 MiB retained total and the
+"exactly 2" claim under "What changed" are replaced; the in-flight limit, the
+queue and the latest-body-per-poll behaviour stay._
+
 **What changed** (`resolvers/src/browser/intercept.ts`). Compressed typed bodies
 are read under three limits, none of which an ordinary manifest can spend:
 
@@ -178,9 +185,9 @@ reproduction:
   page abandoned (`settle`'s own comment), so two such reads would hold both
   slots for ever and starve the master behind them. A slot is released after 1.5 s
   whether or not the read settled; a read that is merely slow still completes. A
-  genuine inflation is well inside it (256 MiB took 1.8 s in Node). With the
-  timer disabled, the new test "a read that never settles gives its slot back"
-  goes red.
+  genuine inflation is well inside it (_wrong as cited: 256 MiB took 1.8 s, which
+  is longer than 1.5 s; corrected in round 3_). With the timer disabled, the new
+  test "a read that never settles gives its slot back" goes red.
 
 **Premise corrected.** "A typed manifest that is not captured here is not lost"
 was false (see the correction above): the constant's doc comment, the first
@@ -219,4 +226,94 @@ under three limits (dl-91)", ten tests. The first version's five are replaced; a
 shared `reads` helper and a `concurrency` tracker on the file's `response()`
 helper are added. Mutation-checked, each against `intercept.ts`: counting every
 read as the budget (the old shape) fails 7 of 10; no in-flight limit fails 3; no
-slot release fails 1; no retained total fails 1.
+slot release fails 1; no retained total fails 1. Replaced in part in round 3.
+
+### 2026-10-07 — round 3, after gate 2 (CONCERNS at dad7a1d3)
+
+**Gate 2's med.** Bodies inflating to just under 4 MiB are never charged by the
+oversize count, so with 3 MiB bodies (about 3 KB on the wire) peak RSS was 412 and
+418 MB at N = 32 and 523 and 549 MB at N = 100, against ~222 MB for round 1 and
+464 and 895 MB for base. The builder's own round-2 run agrees: `bombs.mts 32 3`
+at the round-2 head gave 416 and 420 MB, with the retained cap in place.
+
+**Owner decision, 2026-10-07**, put as a question with options. Remedy for that
+med: (a) replace the oversize count and the 8 MiB retained cap with one per-probe
+budget on total inflated bytes, charged as each read returns (the gate's
+recommendation); (b) lower the oversize line to ~1 MiB; (c) accept, correct the
+comments and file a follow-up; (d) revert to round 1's charge-every-read plus the
+queue. **Chosen: (a)**, the figure left to the builder to choose by measurement,
+the queue, the in-flight limit and the latest-body-per-poll behaviour kept unless
+the measurement said otherwise (it did not).
+
+**What changed.** `MAX_ENCODED_INFLATED_BYTES_PER_PROBE` replaces
+`MAX_OVERSIZE_ENCODED_READS_PER_PROBE` and `MAX_ENCODED_RETAINED_BYTES`. Every
+compressed typed read is charged its inflated length when it returns; once the
+total reaches the budget no further compressed read starts, and queued ones are
+answered with nothing. The in-flight limit (2), the queue and the slot hold
+(1500 ms) stay, and a polled playlist still keeps its latest body.
+
+**The figure: 8 MiB, chosen by measurement.** Peak RSS of the Node process,
+`bombs.mts`, three runs each, same machine, MB. The budget is the only thing
+changed between rows:
+
+| budget | 3 MiB bodies, N = 32 | 3 MiB bodies, N = 100 | 12 MiB bodies, N = 32 |
+| ------ | -------------------- | --------------------- | --------------------- |
+| 8 MiB  | 251, 236, 239        | 238, 239, 239         | 330, 347, 328         |
+| 16 MiB | 271, 258, 259        | 265, 269, 267         | 369, 398, 385         |
+| 32 MiB | 321, 310, 319        | 320, 324, 323         | 386, 426, 399         |
+
+Memory follows the budget, so the smallest that still covers ordinary use is
+the choice. A real playlist is far under it (dl-79 sized a three-hour signed one
+at ~590 KB, so 8 MiB covers about a dozen), and the 12 MiB column shows why 16 is
+worse than it looks: with a budget above one bomb's size a third read starts
+after the first returns. A retained total is no longer needed: every kept body
+was charged, so what is kept is bounded by the budget plus the reads in flight
+when it is spent.
+
+**Final numbers at the figure chosen**, `bombs.mts`, six runs each, peak RSS in
+MB (every run served N + 1 requests):
+
+| bodies | N = 1                        | N = 32                       | N = 100                      |
+| ------ | ---------------------------- | ---------------------------- | ---------------------------- |
+| 3 MiB  | 226, 212, 214, 215, 214, 214 | 239, 240, 240, 240, 238, 239 | 242, 238, 242, 239, 241, 239 |
+| 12 MiB | 273, 262, 258, 258, 271, 260 | 327, 331, 350, 336, 327, 329 | not run                      |
+
+At 3 MiB the process is within 30 MB of one body at N = 100, where round 2 was
+523-549 and base 895. At 12 MiB N = 32 is +54 to +92 MB over N = 1 across runs
+(round 2: 258-270 against 315-384), so that figure is now in line with round 1.
+
+`ads-first.mts` (two gzip ads on another origin, then a gzip master whose replay
+returns 403), at the final head, 0, 2 and 5 ads: the probe returns the master's
+`1080p` and `720p` under `/v/` every time.
+
+**Gate 2's lows.**
+
+- **The slot hold (fixed).** With the hold, a read slower than
+  `ENCODED_SLOT_HOLD_MS` stops counting and a slow one can overlap with later
+  ones: `hold.mts 10 4000 12` started six at once. The comments claiming "exactly
+  this many" and "peak memory is that many inflations" are gone, and the constant
+  now says the budget is the bound and the in-flight number is how many start
+  together. The "256 MiB took 1.8 s" citation was longer than the hold it was
+  cited for and is replaced by the 12 MiB figure (0.1 s). Gate 2 saw no memory
+  cost in real Chromium (it answered late reads with "evicted from inspector
+  cache"); a bound that counted released reads would bring back starvation by
+  abandoned reads, so none is added.
+- **The retained cap (superseded, not moot in effect).** The cap is gone. The
+  case the gate named, a page's own two near-4 MiB bodies kept ahead of a small
+  master, has the same shape under the new budget: two bodies of 4 MiB or more
+  spend 8 MiB and a master queued behind them is not read. It is the choice made
+  in (a), a page attacking its own playback, and a unit test states it ("a page
+  that sends bodies past the budget loses its own fallback").
+- **dl-97's two defects (fixed).** Its "Proxy and TLS" bullet now names the pinned
+  egress root (`--ignore-certificate-errors-spki-list`, fed by
+  `proxyRootSpkiSha256`) and not `ignoreHTTPSErrors`, which nothing here sets; and
+  "three things" now reads "four things".
+
+**Tests.** Describe renamed "a compressed typed manifest is read within a budget
+of inflated bytes (dl-91)", ten tests: the two oversize-count tests and the
+retained-cap test are replaced by three (bodies just under 4 MiB are charged;
+a body inside the budget does not cost the next manifest its body; a page that
+sends bodies past the budget loses its own fallback). Mutation-checked: charging
+only bodies past 4 MiB (the round-2 shape) fails the 3 MiB test; charging nothing
+fails it and the past-budget test. `npx vitest run
+tools/downloader/resolvers/test/browser/sniff.test.ts` is 59 of 59.

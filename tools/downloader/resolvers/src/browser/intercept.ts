@@ -23,49 +23,49 @@ import type { NetworkHit } from "./types.ts";
 const MAX_CAPTURED_BODY_BYTES = 4 * 1024 * 1024;
 
 /**
- * A compressed typed manifest is read at interception time under three limits
- * (dl-91). Chromium inflates a body before Playwright returns it, so the declared
+ * A compressed typed manifest is read at interception time on a budget of
+ * inflated bytes, through a short queue (dl-91). Chromium inflates a body before Playwright returns it, so the declared
  * length is the size on the wire and bounds nothing: 32 typed `.m3u8` responses of
  * ~12 KB each, inflating to 12 MiB, took the Node process from 269 MB to ~800 MB
  * peak RSS. The captured body is the fallback for a failed `#loadManifest`
  * re-fetch, and a manifest whose body was never read is lost to that fallback:
  * the probe then parses the next ranked manifest, which may be an ad. So the
- * limits are shaped to cost an ordinary manifest nothing and a bomb its own slot.
+ * limits are shaped to cost an ordinary manifest almost nothing and a page that
+ * sends large bodies its own fallback. What follows is what each limit does and
+ * does not bound; none of them bounds peak memory by itself.
  *
- * **Reads in flight.** At most this many at once; the rest queue rather than
- * drop, so peak memory is that many inflations however many urls the page sends.
+ * **Inflated bytes per probe.** Charged as each read returns, by the length of
+ * what came back, so what a page costs is bounded by bytes and not by how many
+ * urls it sends. An earlier cut counted only bodies past 4 MiB, and bodies just
+ * under it were never charged: 3 MiB bodies took the process to 412-418 MB at
+ * N = 32 and 523-549 MB at N = 100, where charging every read measured ~222 MB.
+ * Once spent, no further compressed read starts. A read already running cannot be
+ * taken back, so the total can pass this by what the reads then in flight return.
+ *
+ * 8 MiB because a real playlist is far under it (dl-79 sized a three-hour signed
+ * one at ~590 KB, so it covers a dozen), and because the figure is what the
+ * memory follows: with 3 MiB bodies at N = 32 the process peaked at 236-251 MB
+ * at 8 MiB, 258-271 at 16 and 310-321 at 32; with 12 MiB bodies, 328-347, 369-398
+ * and 386-426. Above the size of one bomb a third read starts after the first
+ * returns, which is what the larger two cost.
+ */
+export const MAX_ENCODED_INFLATED_BYTES_PER_PROBE = 8 * 1024 * 1024;
+
+/**
+ * **Reads in flight.** The rest queue rather than drop, so a master that arrives
+ * behind two ads is still read. A read that has run for `ENCODED_SLOT_HOLD_MS`
+ * stops counting (below), so this is the number that start together, not a bound
+ * on how many are ever running at once; the budget above is the bound.
  */
 export const MAX_ENCODED_READS_IN_FLIGHT = 2;
-
-/**
- * **Reads that came back oversize.** The inflated size is only known once the
- * read returns, so the budget is charged then, and only for a body past
- * `MAX_CAPTURED_BODY_BYTES`; a read of an ordinary manifest costs nothing. Once
- * this many have come back oversize no further read starts. A read in flight
- * cannot be taken back, and any of them may be the next bomb, so reads in flight
- * are also held to what is left of this budget: that is what keeps the total at
- * exactly this many (an earlier cut that did not let a third through, and
- * measured 311-404 MB at N = 32 against 258-281 MB at N = 1). Two because a page
- * that sends bombs has no manifest worth waiting for, and each costs a full
- * inflation.
- */
-export const MAX_OVERSIZE_ENCODED_READS_PER_PROBE = 2;
-
-/**
- * **Bytes kept.** A read that comes back just under 4 MiB is kept, so without a
- * total the page's 400 urls would retain 1.6 GB of inflated text from a few
- * hundred kilobytes on the wire. Twice `MAX_CAPTURED_BODY_BYTES`, what the
- * two-reads budget this replaced could keep. Reads past it are still made and
- * still hits; only their body is not retained.
- */
-export const MAX_ENCODED_RETAINED_BYTES = 2 * MAX_CAPTURED_BODY_BYTES;
 
 /**
  * How long a read holds its in-flight slot. `response.text()` never settles for
  * a body the page abandoned (see `settle`), so two such reads would otherwise
  * hold every slot and starve the manifest behind them. A read past this stops
- * counting as in flight and carries on; a genuine inflation is done well within
- * it (a 256 MiB body took 1.8 s to arrive in Node, 12 MiB 0.1 s).
+ * counting as in flight and carries on, and is still charged when it returns. An
+ * ordinary manifest returns in milliseconds; a 12 MiB bomb took 0.1 s to arrive
+ * in Node, so a read this slow is abandoned or deliberately slow.
  */
 export const ENCODED_SLOT_HOLD_MS = 1500;
 
@@ -81,11 +81,8 @@ export class HitCollector {
   #encodedSniffs = 0;
   #encodedInFlight = 0;
   readonly #encodedQueue: Array<() => void> = [];
-  /** Compressed typed reads that came back past `MAX_CAPTURED_BODY_BYTES` (dl-91). */
-  #encodedOversize = 0;
-  /** Inflated length kept per url for compressed typed bodies, so a poll replaces its own. */
-  readonly #encodedKept = new Map<string, number>();
-  #encodedRetained = 0;
+  /** Inflated length of every compressed typed read that has returned (dl-91). */
+  #encodedInflated = 0;
   #seq = 0;
   #lastActivityAt = Date.now();
   #attached = false;
@@ -348,16 +345,10 @@ export class HitCollector {
     if (release === undefined) return;
     try {
       const text = await response.text();
-      if (text.length > MAX_CAPTURED_BODY_BYTES) {
-        // Charged now, when the size is known: an ordinary manifest never is.
-        this.#encodedOversize += 1;
-        return;
-      }
-      const previous = this.#encodedKept.get(hit.key) ?? 0;
-      if (this.#encodedRetained - previous + text.length > MAX_ENCODED_RETAINED_BYTES) return;
-      this.#encodedRetained += text.length - previous;
-      this.#encodedKept.set(hit.key, text.length);
-      this.#bodies.set(hit.key, text);
+      // Charged now, when the size is known. What is kept is bounded by this too,
+      // since every kept body was charged, so there is no separate total.
+      this.#encodedInflated += text.length;
+      if (text.length <= MAX_CAPTURED_BODY_BYTES) this.#bodies.set(hit.key, text);
     } catch {
       // Body already discarded or navigation raced us — we re-fetch instead.
     } finally {
@@ -368,12 +359,12 @@ export class HitCollector {
   /**
    * Resolves with the slot's release once fewer than
    * `MAX_ENCODED_READS_IN_FLIGHT` are running, or with `undefined` when the
-   * oversize budget is spent by then and the read should not happen at all.
+   * inflated-bytes budget is spent by then and the read should not happen at all.
    */
   #acquireEncodedSlot(): Promise<(() => void) | undefined> {
     return new Promise((resolve) => {
       const start = (): void => {
-        if (this.#encodedOversize >= MAX_OVERSIZE_ENCODED_READS_PER_PROBE) {
+        if (this.#encodedInflated >= MAX_ENCODED_INFLATED_BYTES_PER_PROBE) {
           resolve(undefined);
           return;
         }
@@ -391,24 +382,14 @@ export class HitCollector {
         hold.unref?.();
         resolve(release);
       };
-      if (this.#encodedInFlight < this.#encodedCapacity()) start();
+      if (this.#encodedInFlight < MAX_ENCODED_READS_IN_FLIGHT) start();
       else this.#encodedQueue.push(start);
     });
   }
 
-  /**
-   * Reads allowed in flight now: the limit, and never more than the oversize
-   * budget has left, because any one of them may turn out to be a bomb. Once the
-   * budget is spent this is 0 and a queued read is answered `undefined` — see
-   * `start` — which does not need a slot.
-   */
-  #encodedCapacity(): number {
-    const left = MAX_OVERSIZE_ENCODED_READS_PER_PROBE - this.#encodedOversize;
-    return left <= 0 ? Infinity : Math.min(MAX_ENCODED_READS_IN_FLIGHT, left);
-  }
-
+  /** A queued read, once the budget is spent, is answered `undefined` without a slot. */
   #startQueuedEncodedReads(): void {
-    while (this.#encodedInFlight < this.#encodedCapacity()) {
+    while (this.#encodedInFlight < MAX_ENCODED_READS_IN_FLIGHT) {
       const next = this.#encodedQueue.shift();
       if (next === undefined) return;
       next();

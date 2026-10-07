@@ -64,7 +64,7 @@ hostile server compresses regardless of what it was asked for.
    ~590 KB for a three-hour VOD with signed urls, and `MAX_CAPTURED_BODY_BYTES`
    is 4 MiB. The cap applies to the **inflated** length, so decompress as a stream
    and count what comes out.
-3. **What leaving `context.request` costs, and the three things that must be
+3. **What leaving `context.request` costs, and the four things that must be
    rebuilt by hand:**
    - **Cookies.** `context.request` sends the context's session cookies, which the
      CDN demands on replay (see `resolvers/src/browser/size-probe.ts` for why
@@ -81,9 +81,15 @@ hostile server compresses regardless of what it was asked for.
      vetted-address fetch (dl-8) is the other precedent.
    - **Redirects.** `context.request` follows them. A streaming client must follow
      them itself, with a hop limit.
-   - **Proxy and TLS.** Whatever the browser context was launched with (proxy,
-     `ignoreHTTPSErrors`) has to reach the new client, or a manifest that loads in
-     the page fails to re-fetch. The proxy is the same item as the guard above.
+   - **Proxy and TLS trust.** The proxy is the same item as the guard above. The
+     egress proxy can terminate TLS and mint leaves from its own root, and the
+     pool trusts that root by SPKI pin: the `--ignore-certificate-errors-spki-list`
+     launch flag, fed by `BrowserPoolOptions.proxyRootSpkiSha256` (dl-37; its
+     comment in `pool.ts` says why this and not `ignoreHTTPSErrors`, which nothing
+     here sets). A client of our own has to trust that same root, or a manifest
+     that loads in the page fails to re-fetch. A launch flag is a Chromium
+     setting, so step 1 should also check how `context.request` is trusting the
+     proxy today before deciding what to copy.
 4. **Keep the fallback.** A re-fetch that fails or is refused still falls back to
    `collector.bodyFor(hit.key)`, as today; a refused (over-cap) body is logged as
    a refusal, not an error. Redact the url in any log line (`redactUrl`).

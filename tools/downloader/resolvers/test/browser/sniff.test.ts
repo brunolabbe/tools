@@ -19,8 +19,7 @@ import {
   ENCODED_SLOT_HOLD_MS,
   HitCollector,
   MAX_ENCODED_READS_IN_FLIGHT,
-  MAX_ENCODED_RETAINED_BYTES,
-  MAX_OVERSIZE_ENCODED_READS_PER_PROBE,
+  MAX_ENCODED_INFLATED_BYTES_PER_PROBE,
 } from "../../src/browser/intercept.ts";
 import { rankHits } from "../../src/browser/rank.ts";
 import type { NetworkHit } from "../../src/browser/types.ts";
@@ -523,12 +522,13 @@ const reads = (probes: Probe[]): number => probes.reduce((sum, probe) => sum + p
 const bodyOf = (collector: HitCollector, name: string): string | undefined =>
   collector.bodyFor(`https://site.example/media/${name}.m3u8`);
 
-describe("a compressed typed manifest is read under three limits (dl-91)", () => {
-  // `MAX_CAPTURED_BODY_BYTES` in intercept.ts, which is not exported.
-  const FOUR_MIB = 4 * 1024 * 1024;
+describe("a compressed typed manifest is read within a budget of inflated bytes (dl-91)", () => {
+  const MIB = 1024 * 1024;
   const gzip = { "content-encoding": "gzip" };
   const typed = { "content-type": "application/vnd.apple.mpegurl" };
-  const bomb = `${M3U8}${"x".repeat(FOUR_MIB)}`;
+  /** Just under the 4 MiB a body may be kept at: the size the first two cuts never charged. */
+  const nearlyFour = `${M3U8}${"x".repeat(3 * MIB)}`;
+  const bomb = `${M3U8}${"x".repeat(12 * MIB)}`;
 
   function manifest(
     name: string,
@@ -584,27 +584,47 @@ describe("a compressed typed manifest is read under three limits (dl-91)", () =>
     expect(collector.hits.map((hit) => collector.bodyFor(hit.key))).toEqual(probes.map(() => M3U8));
   });
 
-  test("once enough reads come back oversize no further read starts, and no bomb body is kept", async () => {
-    const bombs = Array.from({ length: 10 }, (_, index) => bombed(`b${index}`));
+  test("bodies just under 4 MiB are charged too, so no further read starts once the budget is spent", async () => {
+    // The gate's attack: a size no oversize line would catch, and 100 urls. Both
+    // earlier cuts read every one of these and peaked at 523-549 MB.
+    const probes = Array.from({ length: 100 }, (_, index) =>
+      manifest(`n${index}`, gzip, { declared: 100, body: nearlyFour }),
+    );
+    const late = manifest("late", gzip);
+    const collector = await collect(...probes, late);
+
+    const needed = Math.ceil(MAX_ENCODED_INFLATED_BYTES_PER_PROBE / nearlyFour.length);
+    // Charged as each read returns, so the reads in flight when it is spent finish.
+    expect(reads(probes)).toBeGreaterThanOrEqual(needed);
+    expect(reads(probes)).toBeLessThanOrEqual(needed + MAX_ENCODED_READS_IN_FLIGHT - 1);
+    expect(late.reads()).toBe(0);
+    expect(collector.hits).toHaveLength(101);
+    // Everything kept was charged, so what is kept is bounded by the budget too.
+    const kept = collector.hits.filter((hit) => collector.bodyFor(hit.key) !== undefined);
+    expect(kept.length).toBeLessThanOrEqual(reads(probes));
+  });
+
+  test("a body inside the budget does not cost the next manifest its body", async () => {
+    const collector = await collect(
+      manifest("big", gzip, { body: nearlyFour }),
+      manifest("m", gzip),
+    );
+
+    expect(bodyOf(collector, "m")).toBe(M3U8);
+  });
+
+  test("a page that sends bodies past the budget loses its own fallback, and no bomb body is kept", async () => {
+    // Two 12 MiB bodies spend an 8 MiB budget between them, so what is queued
+    // behind them is not read. The choice of charging by size, stated.
+    const bombs = [bombed("b0"), bombed("b1")];
     const late = manifest("late", gzip);
     const collector = await collect(...bombs, late);
 
-    // Charged when the size is known, but reads in flight are held to what is
-    // left, so a third read cannot start while two might still come back oversize.
-    expect(reads(bombs)).toBe(MAX_OVERSIZE_ENCODED_READS_PER_PROBE);
+    expect(reads(bombs)).toBe(2);
     expect(late.reads()).toBe(0);
-    expect(collector.hits).toHaveLength(11);
     expect(bodyOf(collector, "b0")).toBeUndefined();
     expect(bodyOf(collector, "late")).toBeUndefined();
-  });
-
-  test("an oversize read under the budget does not cost the next manifest its body", async () => {
-    const bombs = Array.from({ length: MAX_OVERSIZE_ENCODED_READS_PER_PROBE - 1 }, (_, index) =>
-      bombed(`b${index}`),
-    );
-    const collector = await collect(...bombs, manifest("master", gzip));
-
-    expect(bodyOf(collector, "master")).toBe(M3U8);
+    expect(collector.hits).toHaveLength(3);
   });
 
   test("a read that never settles gives its slot back, so it cannot starve the manifest behind it", async () => {
@@ -615,20 +635,6 @@ describe("a compressed typed manifest is read under three limits (dl-91)", () =>
     const collector = await collectWithin(ENCODED_SLOT_HOLD_MS + 500, ...stuck, master);
 
     expect(bodyOf(collector, "master")).toBe(M3U8);
-  });
-
-  test("what is kept of compressed bodies is capped, and a read past the cap is still a hit", async () => {
-    // 3 MiB is under the oversize line, so only the retained total bounds these.
-    const body = `${M3U8}${"x".repeat(3 * 1024 * 1024)}`;
-    const probes = Array.from({ length: 6 }, (_, index) =>
-      manifest(`m${index}`, gzip, { declared: 100, body }),
-    );
-    const collector = await collect(...probes);
-
-    const kept = collector.hits.filter((hit) => collector.bodyFor(hit.key) !== undefined);
-    expect(reads(probes)).toBe(6);
-    expect(collector.hits).toHaveLength(6);
-    expect(kept.length).toBe(Math.floor(MAX_ENCODED_RETAINED_BYTES / body.length));
   });
 
   test("a compressed playlist polled again keeps its latest body, as an uncompressed one does", async () => {
