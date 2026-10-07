@@ -122,7 +122,10 @@ export class StderrLevels {
     }
     const level = match[2] as string;
     this.#level = level;
-    return { info: BELOW_WARNING.has(level), text: `${match[1] ?? ""}${line.slice(match[0].length)}` };
+    return {
+      info: BELOW_WARNING.has(level),
+      text: `${match[1] ?? ""}${line.slice(match[0].length)}`,
+    };
   }
 }
 

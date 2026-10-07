@@ -32,6 +32,7 @@ import type { JobOptions, MediaVariant, RequestContext, SubtitleTrack } from "@d
 import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
 import type { Logger } from "../src/logger.ts";
+import { NOOP_LOGGER } from "../src/logger.ts";
 import { expectedOutputBytes } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
@@ -1037,6 +1038,16 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   );
 });
 
+/** Every `ffmpeg` line the engine logged — the stderr that survived the runner (dl-96). */
+function capturingLogger(lines: string[]): Logger {
+  return {
+    ...NOOP_LOGGER,
+    debug: (message, fields) => {
+      if (message === "ffmpeg") lines.push(String(fields?.["line"]));
+    },
+  };
+}
+
 /**
  * dl-96. A progressive file the browser tier found carries a size and no
  * duration, and behind a slow origin its progress read `unknown total` and
@@ -1047,19 +1058,6 @@ describe("dl-96: progress on a source the probe could not time", () => {
   beforeAll(async () => {
     await generateLongGop(path.join(fixtureRoot, "longgop9"), 9, 6);
   }, 60_000);
-
-  /** Every `ffmpeg` line the engine logged — the stderr that survived the runner. */
-  function capturingLogger(lines: string[]): Logger {
-    const noop = (): void => undefined;
-    return {
-      debug: (message, fields) => {
-        if (message === "ffmpeg") lines.push(String(fields?.["line"]));
-      },
-      info: noop,
-      warn: noop,
-      error: noop,
-    };
-  }
 
   test("ffmpeg's own Duration line turns the percent on, and the size becomes the total", async () => {
     const source = path.join(fixtureRoot, "prog9", "moov-end.mp4");
@@ -1098,9 +1096,9 @@ describe("dl-96: progress on a source the probe could not time", () => {
 
     // Real ffmpeg at `level+info`, and none of its info reached the log or the
     // matchers: no input description, no level tags.
-    expect(logged.filter((line) => /Duration:|Stream #|Input #|\[(?:info|warning)\]/u.test(line))).toEqual(
-      [],
-    );
+    expect(
+      logged.filter((line) => /Duration:|Stream #|Input #|\[(?:info|warning)\]/u.test(line)),
+    ).toEqual([]);
   });
 
   test("a long-GOP source still reaches the reader at least once a second", async () => {

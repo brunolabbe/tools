@@ -550,7 +550,7 @@ async function attempt(
     onProgress: (snapshot) => {
       if (request.onProgress === undefined) return;
       const now = Date.now();
-      rate.record(sent, now);
+      rate.record(sent, now, snapshot.outTimeUs);
       // Bytes *sent*, not ffmpeg's `total_size`: what the visitor has is what
       // went through the pipe (dl-53).
       request.onProgress({

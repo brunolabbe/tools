@@ -351,8 +351,12 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
     ffmpeg from a segment fetch by any route, so the proxy answers the `CONNECT`
     with `502 TLS certificate verification failed (<verify code>)`; ffmpeg
     echoes a proxy's status line at warning level, which is why `GLOBAL_ARGS`
-    asks for `-loglevel warning`, and `runner.ts` reads it back as
-    `TLS_VERIFICATION_FAILED` rather than a dead link.
+    asks for at least `warning`, and `runner.ts` reads it back as
+    `TLS_VERIFICATION_FAILED` rather than a dead link. Since
+    [dl-96](./work/dl-96-progress-reads-zero-on-a-slow-untimed-source.md) it
+    asks for `level+info`, for the input's `Duration:` line, and the runner
+    routes every `[info]` message away from the failure patterns, so what
+    they read is still exactly the `warning` stream.
 
   **[`dl-37`](./work/dl-37-tiers-move-onto-the-terminating-proxy.md) puts the
   resolver tiers on the same footing, and it is three mechanisms rather than

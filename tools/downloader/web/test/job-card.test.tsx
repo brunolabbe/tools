@@ -968,3 +968,23 @@ test("following the link tells the list, and does not stop the browser following
   expect(fireEvent.click(link)).toBe(true);
   expect(spies.onFollowLink).toHaveBeenCalledExactlyOnceWith("job-9");
 });
+
+// ---------------------------------------------------------------------------
+// dl-96: an expected total is shown as one, and is still not a percent
+// ---------------------------------------------------------------------------
+
+test("an expected size reads as approximate, and leaves the bar indeterminate", () => {
+  mount(
+    job("downloading", {
+      progress: { percent: null, downloadedBytes: 7_130_000, totalBytes: 100_307_911 },
+    }),
+  );
+
+  // "Downloaded" is a pipeline step as well, so the row is found by its term.
+  const downloaded = screen.getByText("Downloaded", { selector: "dt" });
+  expect(downloaded.nextElementSibling?.textContent).toBe("6.8 MB / ~96 MB");
+  // The total is known, so "unknown total" would be false; the percent is not.
+  expect(stat("Progress")).toBe(UNKNOWN);
+  expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
+  expect(screen.queryByText(/%/u)).toBeNull();
+});
