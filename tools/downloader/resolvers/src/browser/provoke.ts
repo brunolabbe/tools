@@ -843,14 +843,17 @@ const PLAY_TEXT =
  * first in document order before; only the click that follows guards against
  * one (`MARK_PLAYER_BOX_SCRIPT`).
  *
- * **The 400 px nudge is for when the centring moved nothing.** It used to follow
- * the centring always, and in a frame the size of its player (a 640x360 embed)
- * it pushed the player out of view before the page's `IntersectionObserver` had
- * run, so a player that mounts on scroll into view never saw itself visible.
- * Skipped only when the centring did move the page, it is still there for an
- * element already in view (a small `player-header` slot, with the real player
- * mounted by the page once `scrollY` passes 300 — the gate's reproduction), which
- * centring leaves where it is.
+ * **The 400 px nudge follows the centring in the top frame, as it always did,
+ * and in a subframe only when the centring moved nothing.** A subframe is the
+ * size of its player (a 640x360 embed), and there the nudge pushed the player
+ * out of view before the page's `IntersectionObserver` had run, so a player that
+ * mounts on scroll into view never saw itself visible. In the top frame the
+ * nudge is what reaches a page that mounts its player once `scrollY` passes
+ * some threshold: a "when the centring moved nothing" rule lost a 300x50 header
+ * just below the middle, whose centring moves the page about 140 px and so
+ * skipped the nudge the page needed (gate 2). Both scrolls are `instant`: on a
+ * page with `scroll-behavior: smooth` an unqualified `scrollBy` animates, and
+ * the next step's own scroll cancels it.
  */
 export const SCROLL_SCRIPT = `(() => {
   var candidates = (${ALL_MEDIA_FN})('video, iframe, [class*="player"], [id*="player"]');
@@ -863,8 +866,8 @@ export const SCROLL_SCRIPT = `(() => {
     el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
     moved = window.scrollX !== x || window.scrollY !== y;
   }
-  if (!moved) {
-    try { window.scrollBy(0, 400); } catch {}
+  if (window === window.top || !moved) {
+    try { window.scrollBy({ top: 400, behavior: 'instant' }); } catch {}
   }
   return !!el;
 })()`;
@@ -1478,6 +1481,15 @@ const BOX_MARK = "data-downloader-box";
 const BOX_MAX_COVER = 0.85;
 
 /**
+ * The smallest a box may be and still be taken for a player (gate 2): a 300x50
+ * `player-header` slot or a 120x40 `player-badge` is a bar or a label, and a
+ * click on it is not what a person would call pressing the player. Below the
+ * smallest thumbnail a player is ever shown at, and above every bar.
+ */
+const BOX_MIN_WIDTH = 200;
+const BOX_MIN_HEIGHT = 120;
+
+/**
  * Chooses the player-ish box to press when no `<video>` was, and marks it
  * (dl-81). The candidates are the ones `SCROLL_SCRIPT` scrolls to, minus
  * `<video>` and **minus `<iframe>`**, and the choice is the same rule
@@ -1498,7 +1510,10 @@ const BOX_MAX_COVER = 0.85;
  * than reached by this step's own scroll. Returns whether a box was marked.
  */
 const MARK_PLAYER_BOX_SCRIPT = `(() => {
-  var candidates = (${ALL_MEDIA_FN})('[class*="player"], [id*="player"]');
+  var candidates = (${ALL_MEDIA_FN})('[class*="player"], [id*="player"]').filter(function (box) {
+    var size = box.getBoundingClientRect();
+    return size.width >= ${BOX_MIN_WIDTH} && size.height >= ${BOX_MIN_HEIGHT};
+  });
   var index = (${CHOOSE_VIDEO_INDEX_FN})(candidates);
   if (index === -1) return false;
   var el = candidates[index];
@@ -1566,8 +1581,8 @@ async function clickPlayerBox(frame: Frame): Promise<boolean> {
 /**
  * What a person does before looking for a play button: scrolls the wheel
  * (dl-81). Some pages inject their player only on the first `wheel`, and until
- * then show a bare poster with nothing to click. Then, if no `<video>` was
- * clicked and nothing playable has been captured, a click on the largest
+ * then show a bare poster with nothing to click. Then, if pass 0 pressed no play
+ * control or video and nothing playable has been captured, a click on the largest
  * player-ish box (`clickPlayerBox`).
  *
  * **No pointer sweep** (owner's decision 3, 2026-10-07). It started hover
@@ -1586,19 +1601,25 @@ async function clickPlayerBox(frame: Frame): Promise<boolean> {
  */
 async function provokeInput(
   page: Page,
-  options: { videoClicked: boolean; hasPlayable: () => boolean },
+  options: { pressed: boolean; hasPlayable: () => boolean },
 ): Promise<void> {
   try {
     await page.mouse.wheel(0, 120);
   } catch {
     // The page closed or navigated mid-input.
   }
-  if (!options.videoClicked && !options.hasPlayable()) await clickPlayerBox(page.mainFrame());
+  // Pass 0 pressing a play control is itself the evidence that a player was
+  // started, whether or not it has asked for its manifest yet (owner's decision,
+  // 2026-10-07): a real player loads a script or calls an API first, so a stream
+  // check made right after the press reads "nothing" for 300 ms to 3 s and a
+  // centre click then pressed a related-video card (gate 2).
+  if (!options.pressed && !options.hasPlayable()) await clickPlayerBox(page.mainFrame());
 }
 
 /**
  * One frame's provocation, in the order a person would try things. Returns
- * whether a `<video>` was clicked, which the input pass reads.
+ * whether it **pressed something that starts a player** — a play-ish selector or
+ * label, or the chosen `<video>` — which the input pass reads.
  *
  * The rows, with the frames each one runs in (dl-81 moved the scroll and a
  * narrower `play()` out of the same-origin set; the rest are unchanged):
@@ -1636,8 +1657,8 @@ async function provokeFrame(
     // Frame navigated away mid-probe.
   }
 
-  await clickVisible(frame, PLAY_SELECTORS, { timeoutMs: 2000, max: 3 });
-  await clickByText(frame, PLAY_TEXT, 2000);
+  const playClicks = await clickVisible(frame, PLAY_SELECTORS, { timeoutMs: 2000, max: 3 });
+  const labelClicked = await clickByText(frame, PLAY_TEXT, 2000);
 
   // Clicking the video surface itself is what a person would do when the player
   // has no visible chrome.
@@ -1652,7 +1673,7 @@ async function provokeFrame(
   } catch {
     // Same as above: never fatal.
   }
-  return videoClicked;
+  return playClicks > 0 || labelClicked || videoClicked;
 }
 
 /**
@@ -1682,7 +1703,7 @@ export async function provokePlayback(
     throwIfAborted(options.signal);
     if (remaining(options.deadline) < 2000) return;
 
-    let videoClicked = false;
+    let pressed = false;
     const frames = page.frames();
     for (const frame of frames) {
       if (remaining(options.deadline) < 1500) return;
@@ -1690,7 +1711,7 @@ export async function provokePlayback(
         if (
           await provokeFrame(frame, pageOrigin, { confirmAge: options.confirmAge, hasPlayable })
         ) {
-          videoClicked = true;
+          pressed = true;
         }
       } catch {
         // A frame can detach at any moment; the others still deserve a try.
@@ -1698,7 +1719,7 @@ export async function provokePlayback(
     }
     if (pass === 0) {
       if (remaining(options.deadline) >= 1500) {
-        await provokeInput(page, { videoClicked, hasPlayable });
+        await provokeInput(page, { pressed, hasPlayable });
       }
       await sleep(budget(options.deadline, 900), options.signal);
     }

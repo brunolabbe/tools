@@ -1944,15 +1944,15 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
   /**
    * The quiet floor is switched to the base rule's here: every page below
    * mounts or starts its player during provocation, so the extended floor only
-   * adds the time a failing case spends before it ends `NO_MEDIA_FOUND`.
+   * adds the time a failing case spends before it ends `NO_MEDIA_FOUND`. A page
+   * whose manifest is requested seconds after the press needs the real floor
+   * (`emptyMinWaitMs`), or the wait ends before the request is made.
    */
-  function resolverWith(hls = recordingHlsParser()): BrowserResolver {
-    return new BrowserResolver({
-      pool,
-      hlsParser: hls.parser,
-      quietMs: 1200,
-      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-    });
+  function resolverWith(
+    hls = recordingHlsParser(),
+    emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+  ): BrowserResolver {
+    return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, emptyMinWaitMs });
   }
 
   // Not `pointermove`: headless Chromium sends one at (0,0) while a page loads,
@@ -1989,14 +1989,23 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     },
   );
 
-  test(
-    "still nudges the page 400 px when the centring moved nothing, for a player that mounts on scroll",
+  // The only candidate is a 300x50 header, and the page mounts its player at
+  // `scrollY >= 300`. Where the header sits decides how far centring it moves
+  // the page (nothing at the top; about 140 px a little below the middle), and
+  // the 400 px nudge has to follow either way, on a page that scrolls smoothly
+  // too, where the centre click must not aim at the header and cancel it
+  // (gate 2: the first two lost to a "nudge only when nothing moved" rule).
+  test.each([
+    ["at the top", "/player-header-nudge.html"],
+    ["just below the middle", "/player-header-nudge.html?top=500"],
+    ["at the top of a smooth-scrolling page", "/player-header-nudge.html?smooth=1"],
+    ["below the middle of a smooth-scrolling page", "/player-header-nudge.html?top=500&smooth=1"],
+  ])(
+    "nudges the page 400 px after centring a small header, for a player that mounts on scroll: %s",
     { timeout: TEST_TIMEOUT_MS },
-    async () => {
+    async (_name, pathname) => {
       server.requests.length = 0;
-      // The only candidate is a 300x50 header already in view, so centring it
-      // scrolls nowhere; the page mounts its player at `scrollY >= 300`.
-      const result = await probe("/player-header-nudge.html", resolverWith());
+      const result = await probe(pathname, resolverWith());
 
       expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
     },
@@ -2044,15 +2053,49 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
   );
 
   describe("what the centre click must not reach (gate 1, owner's decision 1)", () => {
-    test(
-      "is skipped once the label has started the stream, so a card under the largest box is not pressed",
+    // The press starts the player and the manifest is requested `delay` ms
+    // later, as a real player does after loading a script or calling an API:
+    // at 0 ms a stream is already captured when the click would be made, and at
+    // 300 ms to 3 s it is not, so only the press itself can say a player was
+    // started (gate 2, owner's decision 2026-10-07). At base all of these
+    // returned the real stream; before the fix all but 0 ms navigated away.
+    test.each([0, 300, 1500, 3000])(
+      "is skipped once a play control was pressed, whether the manifest is requested after %i ms or not",
       { timeout: TEST_TIMEOUT_MS },
-      async () => {
+      async (delay) => {
         server.requests.length = 0;
-        const result = await probe("/player-poster-related-grid.html", resolverWith());
+        const result = await probe(
+          `/player-poster-related-grid.html?delay=${String(delay)}`,
+          // The shipped floor (`EMPTY_MIN_WAIT_MS`, 9 s), which a request at 3 s needs.
+          resolverWith(undefined, 9000),
+        );
 
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
         expect(server.requests).not.toContain("/beacon/card-clicked");
+      },
+    );
+
+    test(
+      "is skipped once a stream is captured, though nothing was pressed",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const result = await probe("/player-autostart-related-grid.html", resolverWith());
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+        expect(server.requests).not.toContain("/beacon/card-clicked");
+      },
+    );
+
+    test(
+      "never aims at a header bar: a box under 200x120 is not a player",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        server.requests.length = 0;
+        const error = await probeError("/player-header-only.html", resolverWith());
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(server.requests).not.toContain("/beacon/header-clicked");
       },
     );
 

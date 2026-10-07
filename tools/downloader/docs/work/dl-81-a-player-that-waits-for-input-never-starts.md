@@ -270,10 +270,13 @@ Tests 880 passed (880)`, among them "the empty floor is overridable to allow
   | `player-nav-first.html`, `player-box-click-only.html`                  | `NO_MEDIA_FOUND`                                    | the stream                                      |
 
   `cookie-banner.html` differs from the gate's `a280941b` run, where it stayed
-  `NO_MEDIA_FOUND`: with the box click no longer scrolling, the wheel's 120 px
-  moves the box so its visible centre is above the banner, the click lands on the
-  box, and `/beacon/banner-link` is never requested. That is a click on the box
-  and not on the banner.
+  `NO_MEDIA_FOUND`: with the box click no longer scrolling, the page ends up
+  scrolled (to 200 or 220 px, gate 2's measurement, **not** by the wheel's 120 px
+  as this entry first said) so the box's visible centre is above the banner, the
+  click lands on the box, and `/beacon/banner-link` is never requested. That is a
+  click on the box and not on the banner. Gate 2 varied the gap above the box over
+  eight layouts: the box was clicked in 2, no click was made in the other 6, and
+  the banner link was never requested in 8 of 8.
 
   **Guards proven red**, by mutating `provoke.ts` one thing at a time and running
   the `dl-81` tests (`mutate2.mjs`, each restored): scroll back to the first
@@ -292,3 +295,79 @@ Tests 880 passed (880)`, among them "the empty floor is overridable to allow
   that is not the page's largest box. dl-92 (#388) merges first; this branch is
   rebased onto it afterwards, both append at the end of
   `browser-resolver.test.ts`.
+
+- 2026-10-07 — **Round 3** (builder, Sonnet 5.5), after gate 2 graded CONCERNS at
+  `092fc118`: gate 1's seven findings all fixed, three new meds, no high.
+
+  **Decided by the owner, 2026-10-07.** Question: the centre click checks for a
+  captured stream right after pass 0's press, before a slow player has requested
+  its manifest (a request 300 to 3000 ms after the press: base returned the real
+  stream, `092fc118` navigated away to a related-video card). Options: **A**,
+  skip the box click once pass 0 has pressed a play button or label (the gate's
+  recommendation); **B**, after such a press wait up to about 1 s for a stream
+  before box-clicking; **C**, record and accept. **The owner chose A.** The press
+  is the evidence a player was started, whether or not it has asked for anything
+  yet. `provokeFrame` now returns whether it pressed a play-ish selector, a
+  label or the chosen `<video>`, and `provokeInput` skips the click on it, as well
+  as on a captured stream.
+
+  **Fixes, by finding.**
+  - _CodeQL, two high "DOM text reinterpreted as HTML" alerts_ in this branch's
+    fixtures (`hover-previews-keydown-player.html:43`, `v.src =
+v.getAttribute("data-preview")`; `player-poster-related-grid.html:58`,
+    `location.href = card.getAttribute("data-to")`), read from the CodeQL check
+    page of `092fc118`. Both URLs are now built from the card's index in the
+    script and the attributes are gone, so no adr/005 excuse is needed.
+  - _The race._ Above. Pinned with `player-poster-related-grid.html?delay=<ms>`
+    (the manifest request held back after the press) at 0, 300, 1500 and 3000 ms,
+    on the shipped 9 s floor (at the tests' 1.2 s floor a request at 3 s arrives
+    after the wait has ended, which is the test's artefact, not the tier's). With
+    the press check removed: 3 of the 4 fail (300, 1500, 3000). A fifth case, a
+    stream captured with nothing pressed (`player-autostart-related-grid.html`),
+    is what still needs `hasPlayable`: with that check removed, it fails.
+  - _The nudge._ `SCROLL_SCRIPT` nudges by 400 px in the top frame always, as at
+    base, and in a subframe only when the centring moved nothing (the frame-sized
+    embed is the one case the nudge ever broke). Both scrolls are `instant`. The
+    centre click takes a minimum size (200x120, `BOX_MIN_WIDTH`/`BOX_MIN_HEIGHT`),
+    so a 300x50 `player-header` is never "the player". `player-header-nudge.html`
+    takes `?top=` and `?smooth=1` and is tested at the top, at 500 px, and both on
+    a smooth-scrolling page; with the nudge reduced to "only when nothing moved",
+    the two `top=500` layouts fail. `player-header-only.html` (a fixed 300x50 bar
+    recording clicks) fails with the minimum removed.
+  - _Log._ The round-2 cookie-banner entry now says the page was scrolled to 200
+    or 220 px, not by the wheel's 120.
+
+  **Base versus head, re-run.** The gate's `harness.mts` over the real
+  `BrowserResolver`, the secondary origin `localhost`. For this round base is
+  `provoke.ts` **and** `resolvers/browser.ts` from 1aece87d (head adds the
+  `hasPlayable` argument there).
+
+  | page                                                                                      | base                           | head                                       |
+  | ----------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------ |
+  | `related-grid.html`, `form-button.html`, `form-navigates.html`                            | real HLS                       | same                                       |
+  | `billboard.html?mode=top` and `?mode=blank`                                               | real HLS                       | same                                       |
+  | `billboard-poster.html?mode=blank`                                                        | `NO_MEDIA_FOUND`               | real HLS, the poster's own                 |
+  | `interstitial.html`                                                                       | `NO_MEDIA_FOUND`               | `NO_MEDIA_FOUND`                           |
+  | `ad-vs-hls.html`, `top-nav-play.html`, `ad-outranks.html`                                 | real HLS, real HLS, `real.mp4` | same                                       |
+  | `nudge.html`, `nudge-low.html?top=500`, `?top=0&smooth=1`, `?top=500&smooth=1`            | real HLS                       | same (all four)                            |
+  | `smooth-lazy.html`                                                                        | `NO_MEDIA_FOUND`               | real HLS                                   |
+  | `hover-preview.html`                                                                      | `NO_MEDIA_FOUND`               | `NO_MEDIA_FOUND`                           |
+  | `cookie-banner.html`                                                                      | `NO_MEDIA_FOUND`               | real HLS (a click on the box, see round 2) |
+  | `input-gated-player.html?on=wheel`, `player-nav-first.html`, `player-box-click-only.html` | `NO_MEDIA_FOUND`               | the stream                                 |
+
+  The delay table, on the shipped floors (`GATE_DEFAULTS=1`):
+
+  | `related-grid-delay.html?delay=` | base                 | head                                  |
+  | -------------------------------- | -------------------- | ------------------------------------- |
+  | 0, 300, 800, 1500, 3000 ms       | real HLS in all five | real HLS in all five, no card pressed |
+
+  **Mutations this round** (`mutate2.mjs`, each restored; the first batch
+  overlapped a second run on the same file and was repeated alone, so only the
+  repeated results are quoted): press check removed, 3 failed (the delay cases);
+  `hasPlayable` check removed, 1 (the autostart page); nudge reduced to "when
+  nothing moved", 2; nudge removed, 4; minimum size removed, 1 (the header bar);
+  scroll back to the first match, 2. **`behavior: 'instant'` on the nudge is not
+  pinned**: a plain `scrollBy(0, 400)` on a smooth-scrolling page still reaches
+  the 300 px threshold in every layout here, so that mutation survives.
+
+  **Not covered, unchanged from round 2.**
