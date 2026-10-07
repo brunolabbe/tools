@@ -71,9 +71,9 @@ prove it reproduces the workbook's own figures before it writes a row.
      workbook shows. lg-13 changed the catch-up: a historical deposit that
      `matchDeposits` matches to a period is weighed at that period's recorded
      ratio, so import each period with the ratio its settlement used and
-     compute the catch-up through `settlementFor` (or `cumulativeSettlement`
-     with `settles` filled from `matchDeposits`), never by date alone (lg-13's
-     Log, "For lg-7's builder");
+     compute the catch-up through `openPeriod` in `api/src/periods.ts` (or
+     `cumulativeSettlement` with `settles` filled from `matchDeposits`), never
+     by date alone (lg-13's Log, "For lg-7's builder");
    - a nonzero exit when a verification fails.
      `--write` performs the import; without it, the command is a dry run.
 

@@ -699,4 +699,30 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
       netCents: 1_500,
     });
   });
+
+  test("with two closed periods, it is weighed at the period it settles, not the latest closed", async () => {
+    const target = await start(undefined, () => new Date("2026-11-03T09:30:00Z"));
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    await withBufferRule(target);
+    await addLine(target, draft("sam", "2026-09-10", 10_000));
+    await close(target, null, "2026-09-30");
+    await ratio(target, "2026-10-01", 5_000_000, 5_000_000);
+    await addLine(target, draft("sam", "2026-10-10", 5_000));
+    await close(target, "2026-10-01", "2026-10-31");
+    await ratio(target, "2026-11-01", 7_000_000, 3_000_000);
+
+    // Period 1 asked 150.00 and is paid after period 2 closed. Weighed at
+    // period 1's 0.6 it leaves 25.00 owed, divided by the new 0.3; weighed at
+    // period 2's 0.5 it would leave 10.00, and 33.33 asked.
+    await account().paste({ date: "2026-11-02", description: ALEX_BUFFER, amountCents: 15_000 });
+
+    // Newest first: period 2's own ask is a different figure and is unpaid.
+    const closed = await periods(target);
+    expect(closed.map((period) => period.deposit.status)).toEqual(["expected", "matched"]);
+    expect((await open(target)).settlement).toMatchObject({
+      payerId: "alex",
+      depositCents: 8_333,
+      netCents: 2_500,
+    });
+  });
 });
