@@ -201,6 +201,87 @@ Lines 2–4 are unchanged from gate 1, and each still dies under its mutation: E
 - **findings** · gate 1's 7: 7 fixed. The hunt over `a280941b..092fc118` returned 5; 3 carried (all med), 2 dropped. **Nothing is a `high`.**
 - NFR: security — the third med; clicking ads and submitting forms are gone · performance ✓ · reliability — the first two meds · maintainability ✓.
 
+### Gate 3
+
+**Gate: CONCERNS** — 2026-10-07 · `092fc118..1a224b86` · Opus 5.5, depth narrow (owner's choice of a third gate)
+
+| Done when                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each step-1 fixture yields its stream                             | Unchanged from gate 2, and still green at head: the 26 `dl-81` tests in `resolvers/test/browser/browser-resolver.test.ts` and `provoke.test.ts` pass, 26 of 26. The round's subframe rule is pinned: with the nudge put back in every frame, › "in a frame from another site" › "a scroll run there starts a player that mounts only when scrolled into view" fails ✓                                                                    |
+| A test proves scrolling targets the largest candidate             | The round changed `SCROLL_SCRIPT`'s nudge, not its target. `provoke.test.ts` › "SCROLL_SCRIPT targets the largest candidate (dl-81)" still passes at head ✓                                                                                                                                                                                                                                                                              |
+| `check`, the downloader project and `e2e:downloader:sniffer` pass | **verified** — after `npm run build`, `npm run check` exit 0. `npm test -- --project downloader`: 2089 passed and 2 skipped of 2091, in 100 of 101 files, against 2081 of 2083 at gate 2. Two tests were replaced by `test.each` rows and two were added, so the count is +8, and none of the old assertions was dropped. PR #390 on `1a224b86`: `e2e (sniffer)` passed, and so did every other check, code scanning's `CodeQL` included |
+
+**Gate 2's findings.** Re-run with gate 2's harness and the real `BrowserResolver`, `localhost` as the cross-site origin. Base is `provoke.ts` and `resolvers/browser.ts` from `1aece87d`, and prev is the same two files from `092fc118`, as a positive control.
+
+- **med, `hasPlayable` races a slow player — fixed**, as the owner decided (A).
+
+  | `related-grid-delay.html?delay=` | base                     | prev                                            | head                     |
+  | -------------------------------- | ------------------------ | ----------------------------------------------- | ------------------------ |
+  | 0                                | real HLS, 5 of 5         | real HLS, 2 of 2                                | real HLS, 5 of 5         |
+  | 300, 800, 1500                   | real HLS, 5 of 5 each    | `navigated-away` → `/other-5.html`, 2 of 2 each | real HLS, 5 of 5 each    |
+  | 3000                             | `NO_MEDIA_FOUND`, 5 of 5 | `navigated-away`, 2 of 2                        | `NO_MEDIA_FOUND`, 5 of 5 |
+  | 3000 and 800, shipped floors     | real HLS, 2 of 2         | —                                               | real HLS, 2 of 2         |
+
+  At 3000 ms the harness's 1.2 s floor ends the wait before the request, at base and at head alike. No card was pressed at head in any run. Three mutations:
+  - the `pressed` check removed: 3 tests fail, › "is skipped once a play control was pressed, whether the manifest is requested after %i ms or not" at 300, 1500 and 3000;
+  - `provokeFrame` returning only the video click: the same 3 fail;
+  - the `hasPlayable` half removed: 1 fails, › "is skipped once a stream is captured, though nothing was pressed".
+
+- **med, the nudge loses two layouts — fixed.** Each row is 5 of 5 at base and at head, and 2 of 2 at prev:
+
+  | `nudge-low.html`   | base             | prev             | head     |
+  | ------------------ | ---------------- | ---------------- | -------- |
+  | `top=500`          | real HLS         | `NO_MEDIA_FOUND` | real HLS |
+  | `top=0&smooth=1`   | real HLS         | `NO_MEDIA_FOUND` | real HLS |
+  | `top=500&smooth=1` | real HLS         | `NO_MEDIA_FOUND` | real HLS |
+  | `smooth-lazy.html` | `NO_MEDIA_FOUND` | real HLS         | real HLS |
+
+  Mutations:
+  - the nudge reduced to "when nothing moved": 2 fail, › "nudges the page 400 px after centring a small header…: just below the middle" and "…: below the middle of a smooth-scrolling page";
+  - the 200x120 minimum removed: 1 fails, › "never aims at a header bar: a box under 200x120 is not a player".
+
+- **med, code scanning `CodeQL` — fixed.** On `1a224b86` the `CodeQL` check passed. Its check page says "No new alerts in code changed by this pull request". In the branch's fixtures, `git grep` finds no `getAttribute` that feeds a `src` or `location.href`. No test can fail on this. The proof is the check on this head.
+
+**Found in this round's lines:**
+
+- **med** · no `Done when` line depends on it · **open decision 1** · **`pressed` is set by more than a play button, so the box click is lost more widely than option A stated.** `provokeFrame` returns true for any successful `clickVisible` press over `PLAY_SELECTORS`, and those are substring matches. `provokePlayback` also ORs the result across every frame, a cross-site ad frame included, while the box click acts only in the main frame. Measured on `box-with-control.html`: `player-box-click-only.html`'s box, plus one control that records its click and does nothing to the player.
+
+  | added control                                                               | base             | prev       | head             |
+  | --------------------------------------------------------------------------- | ---------------- | ---------- | ---------------- |
+  | none                                                                        | `NO_MEDIA_FOUND` | the stream | the stream       |
+  | `<button aria-label="Autoplay">`                                            | —                | the stream | `NO_MEDIA_FOUND` |
+  | a carousel's `<button aria-label="Play slideshow">`                         | —                | the stream | `NO_MEDIA_FOUND` |
+  | `<span data-testid="display-name">`, not a control                          | —                | the stream | `NO_MEDIA_FOUND` |
+  | a "Watch" link to a `#fragment`                                             | —                | the stream | `NO_MEDIA_FOUND` |
+  | a cross-site 300x250 ad frame with a "Watch now" button (`box-xo-cta.html`) | `NO_MEDIA_FOUND` | the stream | `NO_MEDIA_FOUND` |
+
+  Each row is 3 of 3. Each control's beacon was requested and `/beacon/box-clicked` was not. Nothing is lost against `main`, which never had the box click. The cost the owner accepted was "a play button that does nothing". What is measured is wider: a word that merely contains "play" (`[data-testid*='play' i]` matches "display", `aria-label*='play'` matches "Autoplay"), and any press in another site's frame.
+  - **A**: count a press only when its label starts a word with "play", or matches `PLAY_TEXT`. This drops `autoplay` and `display`, and `box-with-control.html` can pin it. The cross-frame OR stays, because an embedded player's own Play press still has to hold back the main frame's box click.
+  - **B** (recommended): record it, and file a downloader ticket with `box-with-control.html` and `box-xo-cta.html` as its reproduction. Nothing is lost against `main`, no `Done when` line depends on it, and a round costs more than the fallback is worth on this branch.
+  - **C**: accept, and add a sentence to the Log saying the cost is wider than stated.
+
+- **low** · `nfr:maintainability` · **the 200x120 minimum's docstring overclaims.** `BOX_MIN_WIDTH`/`BOX_MIN_HEIGHT` says it is "below the smallest thumbnail a player is ever shown at". But a 16:9 box needs to be 214 px wide to pass the height, so a 200x113 player fails. On `small-box.html` (click-only, 3 of 3 each), a 192x108 box gives the stream at prev and `NO_MEDIA_FOUND` at head and at base. At 320x180 it gives the stream at head. Nothing is lost against `main`. The comment should state a choice, not a fact about every player.
+- **dropped** · the surviving mutation (`behavior: 'instant'` on the nudge → `scrollBy(0, 400)`) changes no result in any layout I built. It does change the timing.
+  - **Layouts:** 8 layouts, 7 of them on smooth-scrolling pages, each 3 of 3 under the mutation:
+    - `nudge-low` `top=0` and `top=500`;
+    - `smooth-dead-box.html` with a dead 640x200 `player-promo`, which passes the minimum, so the box click aims at it, at `top=0` and `top=500`;
+    - `smooth-lazy`;
+    - `smooth-carousel.html` with a "Play slideshow" button at the top whose press scrolls back, with and without the button, and with `smooth=0`.
+  - **Timing:** the stream comes about 0.4 s later on `smooth-dead-box` and about 0.7 s later on `smooth-carousel`.
+  - **Why it survives:** pass 1 nudges the top frame again, and nothing cancels the second nudge. The guard is redundant: › "…: at the top of a smooth-scrolling page" fails only when the minimum, the top-frame nudge and `instant` are all reverted together (4 fail). Any two of them reverted leave it green.
+  - **Testable** only by a page that cancels both passes' nudges, or by timing. Not a defect.
+- **dropped** · the nudge running in the top frame always loses no layout that base reached. These pages give the same result at base and head:
+  - the four `nudge-low` and `smooth-lazy` rows, where `smooth-lazy` is better at head;
+  - `smooth-dead-box` at both offsets, which prev lost at `top=0`;
+  - `smooth-carousel` in all three variants;
+  - `sub-nudge.html`, `nudge-low` inside a same-origin 800x600 frame under a 100 px header, at `top=500` and `top=0`. It gives real HLS at base, prev and head, and also with the nudge forced in every frame.
+
+  Not a defect.
+
+- **dropped** · `delay=3000` gives `NO_MEDIA_FOUND` at base and at head. This is the harness's 1.2 s floor: on the shipped floors both give real HLS. Not a defect.
+- **findings** · gate 2's 3: 3 fixed. The hunt over `092fc118..1a224b86` returned 5: 2 carried (1 med, 1 low) and 3 dropped. **Nothing is a `high`.**
+- NFR: security ✓ (the new presses send nothing anywhere new) · performance ✓ · reliability — the med · maintainability — the low.
+
 ## Log
 
 - 2026-10-07 — **Built** (builder, Sonnet 5.5). Branch `dl-81-input-only-player`
