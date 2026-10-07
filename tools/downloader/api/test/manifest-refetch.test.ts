@@ -19,8 +19,10 @@
  * `captured` fell back to the captured body.
  */
 
+import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import zlib from "node:zlib";
 import type { ProbeResult } from "@downloader/contract";
 import { BrowserResolver } from "@downloader/resolvers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -84,6 +86,23 @@ function variantUrls(probe: ProbeResult): string {
   return probe.variants.map((variant) => variant.url).join(" ");
 }
 
+/** `#EXTM3U` then `mebibytes` of spaces, gzipped a block at a time. */
+async function gzipBomb(mebibytes: number): Promise<Buffer> {
+  const gzip = zlib.createGzip({ level: 9 });
+  const chunks: Buffer[] = [];
+  gzip.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const done = new Promise<void>((resolve) => gzip.once("end", () => resolve()));
+  gzip.write("#EXTM3U\n");
+  const block = Buffer.alloc(1024 * 1024, 0x20);
+  for (let index = 0; index < mebibytes; index++) {
+    // oxlint-disable-next-line no-await-in-loop
+    if (!gzip.write(block)) await new Promise<void>((resolve) => gzip.once("drain", resolve));
+  }
+  gzip.end();
+  await done;
+  return Buffer.concat(chunks);
+}
+
 describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
   /** Not in DNS: only the proxy can reach these, so a hit on either came through it. */
   const FIXTURE_HOST = "fixture.test";
@@ -96,6 +115,7 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
   /** What `/master.m3u8` does the second time it is asked, per test. */
   let onRefetch: (response: http.ServerResponse) => void;
   let fixture: Origin;
+  const warnings: { message: string; fields?: Record<string, unknown> }[] = [];
 
   beforeAll(async () => {
     // Something on loopback no re-fetch is entitled to reach.
@@ -149,7 +169,16 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
       logger: NOOP_LOGGER,
       resolve: async () => [{ address: "127.0.0.1", family: 4 }],
     });
-    resolver = new BrowserResolver({ maxConcurrentBrowsers: 1, headless: true, quietMs: 1200 });
+    resolver = new BrowserResolver({
+      maxConcurrentBrowsers: 1,
+      headless: true,
+      quietMs: 1200,
+      logger: {
+        warn: (message, fields) => {
+          warnings.push({ message, ...(fields === undefined ? {} : { fields }) });
+        },
+      },
+    });
   }, TEST_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -233,6 +262,60 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  test(
+    "refuses a body that inflates past the cap, logs it as a refusal and falls back",
+    async () => {
+      // 256 MiB of spaces from about 255 KB on the wire.
+      const bomb = await gzipBomb(256);
+      const before = masterRequests();
+      warnings.length = 0;
+      onRefetch = (response) => {
+        response
+          .writeHead(200, {
+            "content-type": "application/vnd.apple.mpegurl",
+            "content-encoding": "gzip",
+          })
+          .end(bomb);
+      };
+
+      const result = await probe();
+
+      expect(masterRequests() - before).toBe(2);
+      expect(variantUrls(result)).toContain("captured.m3u8");
+      expect(warnings).toEqual([
+        {
+          message: "manifest re-fetch refused: its body passed the cap",
+          fields: {
+            url: `http://${FIXTURE_HOST}:${String(fixture.port)}/master.m3u8`,
+            limitBytes: 4 * 1024 * 1024,
+          },
+        },
+      ]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "parses a compressed manifest inside the cap through the same path",
+    async () => {
+      warnings.length = 0;
+      onRefetch = (response) => {
+        response
+          .writeHead(200, {
+            "content-type": "application/vnd.apple.mpegurl",
+            "content-encoding": "gzip",
+          })
+          .end(zlib.gzipSync(manifest("refetched.m3u8")));
+      };
+
+      const result = await probe();
+
+      expect(variantUrls(result)).toContain("refetched.m3u8");
+      expect(warnings).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
 
 describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)", () => {
@@ -292,6 +375,45 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
       const masters = origin.requests.filter((request) => request.url === "/master.m3u8");
       expect(masters).toHaveLength(2);
       expect(variantUrls(result)).toContain("refetched.m3u8");
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "and refuses a leaf that a key other than the pinned one signed",
+    async () => {
+      // The page is plain HTTP so it loads whatever either side trusts; only its
+      // manifest is HTTPS. Chromium records the hit when it asks, before the
+      // handshake it then fails, so the re-fetch is still attempted: and with a
+      // pin that is not the proxy's root, it must fail too.
+      const page = await startOrigin((_request, response) => {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(
+          `<!doctype html><title>fixture</title><body><video></video><script>
+             fetch("https://127.0.0.1:${String(origin.port)}/master.m3u8").catch(() => {});
+           </script></body>`,
+        );
+      });
+      const mispinned = new BrowserResolver({
+        maxConcurrentBrowsers: 1,
+        headless: true,
+        quietMs: 1200,
+        proxyRootSpkiSha256: createHash("sha256").update("not the proxy's root").digest("base64"),
+      });
+      const before = origin.requests.length;
+      try {
+        const result = await mispinned.resolve(
+          new URL(`http://127.0.0.1:${String(page.port)}/page.html`),
+          { timeoutMs: PROBE_TIMEOUT_MS, signal: new AbortController().signal, proxyUrl: proxy.url },
+        );
+
+        // Nothing reached the origin: not the page's fetch, not the re-fetch.
+        expect(origin.requests.length - before).toBe(0);
+        // So the probe has only the manifest's address to offer.
+        expect(variantUrls(result)).toBe(`https://127.0.0.1:${String(origin.port)}/master.m3u8`);
+      } finally {
+        await mispinned.dispose();
+        await page.close();
+      }
     },
     TEST_TIMEOUT_MS,
   );

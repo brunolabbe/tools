@@ -58,8 +58,12 @@ export type ManifestFetchResult =
   | { outcome: "ok"; text: string }
   /** A final response outside 2xx, the proxy's own refusal included. */
   | { outcome: "status"; status: number }
-  /** The inflated body passed `maxBodyBytes`, and was not read further. */
-  | { outcome: "too-large"; limitBytes: number }
+  /**
+   * The inflated body passed `maxBodyBytes`, and was not read further.
+   * `readBytes` is how much of it was inflated before stopping: 0 when the
+   * declared length alone refused it.
+   */
+  | { outcome: "too-large"; limitBytes: number; readBytes: number }
   /** Something this client declines to do, named. */
   | { outcome: "refused"; reason: RefusalReason };
 
@@ -350,7 +354,7 @@ async function readCapped(
     const declared = Number(response.headers["content-length"]);
     if (Number.isFinite(declared) && declared > limit) {
       response.destroy();
-      return { outcome: "too-large", limitBytes: limit };
+      return { outcome: "too-large", limitBytes: limit, readBytes: 0 };
     }
   } else {
     track(decoder, open);
@@ -377,7 +381,7 @@ async function readCapped(
         // is inflated.
         decoder?.destroy();
         response.destroy();
-        resolve({ outcome: "too-large", limitBytes: limit });
+        resolve({ outcome: "too-large", limitBytes: limit, readBytes: total });
         return;
       }
       chunks.push(chunk);
