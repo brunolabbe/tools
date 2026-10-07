@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { FfmpegProgressParser, RateTracker, toJobProgress } from "../src/ffmpeg/progress.ts";
+import {
+  durationFromInfoLine,
+  FfmpegProgressParser,
+  RateTracker,
+  toJobProgress,
+} from "../src/ffmpeg/progress.ts";
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -141,6 +146,80 @@ describe("RateTracker", () => {
     const tracker = new RateTracker();
     expect(tracker.bytesPerSecond()).toBeNull();
     tracker.record(100, 500);
+    expect(tracker.bytesPerSecond()).toBeNull();
+  });
+});
+
+/**
+ * dl-96. The probe often has no duration for a progressive file — the browser
+ * tier sees a size and nothing else — but ffmpeg has read one before its first
+ * output byte, and says so at info level. These are the lines it writes.
+ */
+describe("durationFromInfoLine (dl-96)", () => {
+  test("reads an input's Duration line, as ffmpeg writes it after the level tag is stripped", () => {
+    expect(
+      durationFromInfoLine("  Duration: 00:01:00.00, start: 0.000000, bitrate: 6094 kb/s"),
+    ).toBe(60);
+    expect(durationFromInfoLine("  Duration: 01:02:03.50, start: 0.000000, bitrate: N/A")).toBe(
+      3723.5,
+    );
+  });
+
+  test("a live playlist's N/A, a zero, and every other line are null", () => {
+    expect(durationFromInfoLine("  Duration: N/A, start: 1.400000, bitrate: N/A")).toBeNull();
+    expect(durationFromInfoLine("  Duration: 00:00:00.00, start: 0.000000")).toBeNull();
+    expect(durationFromInfoLine("    title           : Duration: 00:10:00.00")).toBeNull();
+    expect(durationFromInfoLine("Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'x.mp4':")).toBeNull();
+  });
+});
+
+/**
+ * dl-96. A source many times slower than realtime delivers one fragment every
+ * ~18 s — the reported case: ~2.15 Mbit/s media behind a 15 KB/s origin — and
+ * a fixed 5 s window read 0 B/s between every pair. Samples once a second, as
+ * ffmpeg's progress blocks arrive, with the media time advancing throughout.
+ */
+describe("RateTracker across fragments slower than its window (dl-96)", () => {
+  const RATE = 15_000;
+  const FRAGMENT_MS = 18_000;
+
+  /** Bytes the reader has after `ms`: whole fragments only, as ffmpeg writes them. */
+  function sentAt(ms: number): number {
+    return Math.floor(ms / FRAGMENT_MS) * (RATE * (FRAGMENT_MS / 1000));
+  }
+
+  test("reads the source's rate between fragments, never zero", () => {
+    const tracker = new RateTracker();
+    const readings: number[] = [];
+    for (let ms = 0; ms <= 120_000; ms += 1000) {
+      tracker.record(sentAt(ms), ms, ms * 50);
+      if (ms >= 2 * FRAGMENT_MS) readings.push(tracker.bytesPerSecond() ?? 0);
+    }
+    expect(Math.min(...readings)).toBeGreaterThan(RATE / 2);
+    expect(Math.max(...readings)).toBeLessThanOrEqual(RATE * 1.01);
+  });
+
+  test("a stall that stops the media time still reads zero once the window passes", () => {
+    const tracker = new RateTracker();
+    for (let ms = 0; ms <= 40_000; ms += 1000) tracker.record(sentAt(ms), ms, ms * 50);
+    // The input stops: bytes and media time both stand still.
+    for (let ms = 41_000; ms <= 50_000; ms += 1000) tracker.record(sentAt(40_000), ms, 40_000 * 50);
+    expect(tracker.bytesPerSecond()).toBe(0);
+  });
+
+  test("a steady stream reads the plain 5 s window, as before", () => {
+    const tracker = new RateTracker();
+    for (let ms = 0; ms <= 30_000; ms += 500) {
+      // 1 MB/s for 20 s, then 2 MB/s.
+      const bytes = ms <= 20_000 ? ms * 1000 : 20_000_000 + (ms - 20_000) * 2000;
+      tracker.record(bytes, ms, ms * 1000);
+    }
+    expect(tracker.bytesPerSecond()).toBeCloseTo(2_000_000, 0);
+  });
+
+  test("before the first byte there is no rate, not a zero one", () => {
+    const tracker = new RateTracker();
+    for (let ms = 0; ms <= 10_000; ms += 1000) tracker.record(0, ms, ms * 50);
     expect(tracker.bytesPerSecond()).toBeNull();
   });
 });

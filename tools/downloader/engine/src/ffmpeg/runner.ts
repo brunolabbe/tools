@@ -13,6 +13,14 @@
  * stdout is the media itself (`streamFfmpeg`, dl-53); stderr is kept as a
  * bounded tail so a failure carries evidence without unbounded memory or a log
  * flood.
+ *
+ * **Everything downstream of stderr sees what `-loglevel warning` would write.**
+ * `GLOBAL_ARGS` asks for `level+info` so the input's `Duration:` line arrives
+ * (dl-96), and `StderrLevels` takes it back out: an `[info]` message goes to
+ * `onInfoLine` and nowhere else, and a `[warning]` or `[error]` one loses its
+ * tag. Every pattern read off stderr here was measured at `warning`, and an
+ * info message carries the source's own metadata — a title is somebody else's
+ * text, and must not be able to read as a rejected certificate.
  */
 
 import { spawn } from "node:child_process";
@@ -43,7 +51,10 @@ export interface FfmpegRunOptions {
   /** Exported to ffmpeg as `http_proxy`/`https_proxy`; its http protocol honours both. */
   proxyUrl?: string | undefined;
   onProgress?: ((snapshot: FfmpegProgressSnapshot) => void) | undefined;
+  /** A warning or worse, with ffmpeg's level tag removed. */
   onStderrLine?: ((line: string) => void) | undefined;
+  /** An info message, which nothing else is shown: see `StderrLevels`. */
+  onInfoLine?: ((line: string) => void) | undefined;
   /**
    * Abort with `SIZE_LIMIT_EXCEEDED` once the output passes this. The pre-flight
    * estimate in `estimate.ts` catches the common case; this catches the one
@@ -83,6 +94,51 @@ function tail(text: string, maxBytes: number): string {
 }
 
 /**
+ * The tag ffmpeg's `level` log flag writes, after any `[component @ address] `
+ * prefixes. Measured on 2026-10-07 on both builds this repo runs, 6.1.1 and
+ * `ffmpeg-static`'s 7.0.2: `[http @ 0x5569fb8a5540] [warning] HTTP error 404
+ * Not Found`. 7.x writes **two** for a decoder's messages —
+ * `[vist#0:0/h264 @ 0x…] [dec:h264 @ 0x…] [warning] corrupt decoded frame` —
+ * and a pattern allowing one read those as continuations of the line above,
+ * so after an `[info]` line a real warning vanished (dl-96's gate, F1).
+ */
+const LEVEL_TAG = /^((?:\[[^\]]*\] )*)\[(trace|debug|verbose|info|warning|error|fatal|panic)\] /u;
+const BELOW_WARNING: ReadonlySet<string> = new Set(["trace", "debug", "verbose", "info"]);
+
+/**
+ * Sorts one ffmpeg stderr line by its level, and strips the tag.
+ *
+ * **A line with no tag continues the message above it** and takes that
+ * message's level: ffmpeg tags a message where it starts, so a metadata value
+ * holding a newline arrives as an `[info]` line followed by an untagged one,
+ * and the second is the source's text as much as the first. Before any tag has
+ * been seen — a stand-in binary, or a build that ignores the flag — a line is
+ * passed through, which is what every line was before dl-96.
+ *
+ * **It is a rule about text, and a source can forge text** (dl-96's gate, F2).
+ * ffmpeg prints a metadata tag's *key* unescaped, so a key holding a newline
+ * and `[warning] certificate has expired` arrives as a tagged warning line of
+ * that job's own, and a key forging `  Duration:` can set that job's percent.
+ * See the ticket for what the owner decided about it.
+ */
+export class StderrLevels {
+  #level: string | null = null;
+
+  read(line: string): { info: boolean; text: string } {
+    const match = LEVEL_TAG.exec(line);
+    if (match === null) {
+      return { info: this.#level !== null && BELOW_WARNING.has(this.#level), text: line };
+    }
+    const level = match[2] as string;
+    this.#level = level;
+    return {
+      info: BELOW_WARNING.has(level),
+      text: `${match[1] ?? ""}${line.slice(match[0].length)}`,
+    };
+  }
+}
+
+/**
  * What a rejected certificate looks like on ffmpeg's stderr.
  *
  * There is no exit code for it — libavformat turns every TLS failure into
@@ -105,7 +161,9 @@ function tail(text: string, maxBytes: number): string {
  * `502 TLS certificate verification failed (<code>)`, which ffmpeg echoes as
  * `[httpproxy] HTTP error 502 …`. That is the **only** channel for a refused
  * *segment* origin — dl-21 measured that nothing else about the certificate
- * reaches ffmpeg — and it is why `GLOBAL_ARGS` asks for `-loglevel warning`.
+ * reaches ffmpeg — and it is why what reaches these patterns must include
+ * warnings: `GLOBAL_ARGS` asks for `level+info`, and `StderrLevels` passes on
+ * the warning stream untagged.
  * Both halves match it as written, which is not an accident.
  */
 const CERTIFICATE_MENTIONED = /certificate/iu;
@@ -199,6 +257,7 @@ function launch(options: FfmpegRunOptions): Launched {
     const parser = new FfmpegProgressParser();
     let stderrBuffer = "";
     let stderrLineBuffer = "";
+    const levels = new StderrLevels();
     let sawCertificateRejection = false;
     let lastSnapshot: FfmpegProgressSnapshot | null = null;
     let settled = false;
@@ -271,24 +330,33 @@ function launch(options: FfmpegRunOptions): Launched {
       }
     });
 
+    const readStderrLine = (raw: string): void => {
+      if (raw.length === 0) return;
+      const { info, text } = levels.read(raw);
+      if (info) {
+        options.onInfoLine?.(redactUrlsInText(text));
+        return;
+      }
+      stderrBuffer = tail(`${stderrBuffer}${text}\n`, stderrTailBytes);
+      // Sticky, and read off the whole stream rather than off the tail: a
+      // playlist whose every segment is refused logs three lines per segment,
+      // so on a stream of any length the certificate lines scroll out of the
+      // 4 KB tail long before ffmpeg exits and the run is filed as a plain
+      // download failure. dl-19's tail check stays below as well — it can
+      // still match across two lines, which this cannot.
+      if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(text);
+      options.onStderrLine?.(redactUrlsInText(text));
+    };
+
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
-      stderrBuffer = tail(stderrBuffer + chunk, stderrTailBytes);
       stderrLineBuffer += chunk;
       let newlineAt = stderrLineBuffer.indexOf("\n");
       while (newlineAt !== -1) {
         const line = stderrLineBuffer.slice(0, newlineAt).trimEnd();
         stderrLineBuffer = stderrLineBuffer.slice(newlineAt + 1);
         newlineAt = stderrLineBuffer.indexOf("\n");
-        if (line.length === 0) continue;
-        // Sticky, and read off the whole stream rather than off the tail: a
-        // playlist whose every segment is refused logs three lines per segment,
-        // so on a stream of any length the certificate lines scroll out of the
-        // 4 KB tail long before ffmpeg exits and the run is filed as a plain
-        // download failure. dl-19's tail check stays below as well — it can
-        // still match across two lines, which this cannot.
-        if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
-        options.onStderrLine?.(redactUrlsInText(line));
+        readStderrLine(line);
       }
     });
 
@@ -304,6 +372,9 @@ function launch(options: FfmpegRunOptions): Launched {
     });
 
     child.once("close", (exitCode, signalName) => {
+      // A last line with no newline: a killed ffmpeg's final words often are.
+      readStderrLine(stderrLineBuffer.trimEnd());
+      stderrLineBuffer = "";
       const flushed = parser.flush();
       if (flushed !== null) lastSnapshot = flushed;
       const stderrTail = redactUrlsInText(stderrBuffer).trim();

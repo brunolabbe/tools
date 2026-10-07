@@ -34,12 +34,20 @@ import { buildRequestContextArgs } from "./headers.ts";
  * The noise it buys is nil where it was measured — a clean HLS download over the
  * terminating proxy emits **zero** bytes of stderr at this level — and what does
  * arrive goes to `logger.debug` and to a failure's stderr tail.
+ *
+ * **Asked for as `level+info`, and read as `warning`** (dl-96). The input's
+ * `Duration:` line is an info message, and on a source the probe could not
+ * time it is the only thing that turns an indeterminate bar into a percent —
+ * ffmpeg has read the duration before its first output byte, `moov` at the end
+ * or not. `level` tags every message, and the runner's `StderrLevels` routes
+ * the `[info]` ones to `onInfoLine` alone, so `onStderrLine`, the tail and
+ * every pattern above still see exactly what `warning` wrote.
  */
 export const GLOBAL_ARGS: readonly string[] = [
   "-hide_banner",
   "-nostdin",
   "-loglevel",
-  "warning",
+  "level+info",
   "-y",
 ];
 

@@ -177,10 +177,15 @@ export interface OutputArgsOptions {
  * costs on 2026-09-14 — some players show the duration late or seek slowly in
  * a long file (dl-53).
  *
- * Fragments start at each video keyframe. With no video there are no
- * keyframes to cut at in any useful sense — every audio packet is one, and a
- * fragment per packet multiplies the index — so audio-only output is cut by
- * duration instead.
+ * Fragments start at each video keyframe, and **at least once a second**
+ * (dl-96). ffmpeg holds a whole fragment before writing any of it, so the
+ * keyframe interval alone set how often the visitor received anything: a
+ * source with a 6 s GOP behind a 20 KB/s origin went minutes between writes,
+ * and the bytes-sent rate read 0 B/s for all of them. Capped at 1 s, a 60 s
+ * fixture went from 8 fragments to 65 for 12 KB more on 45.7 MB, and decoded
+ * the same. With no video there are no keyframes to cut at in any useful
+ * sense — every audio packet is one, and a fragment per packet multiplies the
+ * index — so audio-only output is cut by duration alone.
  *
  * Matroska and WebM need nothing: their muxer already writes front to back,
  * and on a pipe it simply omits the seek index it cannot go back for.
@@ -188,7 +193,14 @@ export interface OutputArgsOptions {
 export function streamingContainerArgs(container: OutputContainer, hasVideo: boolean): string[] {
   if (container === "mp4") {
     return hasVideo
-      ? ["-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4"]
+      ? [
+          "-movflags",
+          "frag_keyframe+empty_moov+default_base_moof",
+          "-frag_duration",
+          "1000000",
+          "-f",
+          "mp4",
+        ]
       : ["-movflags", "empty_moov+default_base_moof", "-frag_duration", "2000000", "-f", "mp4"];
   }
   return ["-f", container === "webm" ? "webm" : "matroska"];

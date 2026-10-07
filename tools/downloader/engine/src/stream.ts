@@ -50,7 +50,7 @@ import type { EngineConfig } from "./config.ts";
 import { downloadCandidates, isHostFailure } from "./download/failover.ts";
 import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
 import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./ffmpeg/args.ts";
-import { RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
+import { durationFromInfoLine, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 import type { FfmpegStream } from "./ffmpeg/runner.ts";
 import { isTlsVerificationFailure, streamFfmpeg } from "./ffmpeg/runner.ts";
 import type { Logger } from "./logger.ts";
@@ -121,8 +121,9 @@ const SUBTITLE_DEMUXERS: Readonly<Record<string, string>> = { vtt: "webvtt", srt
  * output option, both, and as `-f_err_detect`; so does `-xerror`. The gate's
  * exit 255 came from its command lacking `-bsf:a aac_adtstoasc`, which fails
  * the mux whatever else is set — measured, with the same bytes, on 2026-09-27.
- * The line below is what the demuxer writes at `-loglevel warning`, which
- * `GLOBAL_ARGS` asks for; the same bind `isTlsVerificationFailure` is in.
+ * The line below is what the demuxer writes at `-loglevel warning`, which is
+ * what the runner passes on from `GLOBAL_ARGS`' `level+info` (dl-96); the same
+ * bind `isTlsVerificationFailure` is in.
  *
  * **Not measured against real-world sources for false failures.** A source
  * whose segments ffmpeg used to skip over quietly now fails where it used to
@@ -458,6 +459,34 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
   }
 }
 
+/**
+ * What the visitor's file should come to, when that is the source's own size
+ * (dl-96).
+ *
+ * Only for a progressive file the probe measured, copied as it is: `-c copy`
+ * moves every sample unchanged, so for a source of one video and one audio
+ * track the output differs by its boxes alone — measured within 0.07% on a
+ * 45.7 MB file whose index moved from the end to a fragmented front. **Only
+ * the first of each is mapped**, so a source carrying more tracks comes out
+ * smaller: 13.9% under on one with four audio tracks (dl-96's gate, F4). The
+ * variant does not say how many tracks it has, so that case keeps the size,
+ * shown as approximate. A transcode, an audio-only cut, a separate
+ * audio input and a live capture each make the source's size a different
+ * file's, and HLS and DASH are left out because a segment sum counts MPEG-TS
+ * packet overhead the MP4 does not carry. It is an expectation, never a
+ * percent: the bar still moves only on media time.
+ */
+export function expectedOutputBytes(
+  variant: MediaVariant,
+  context: { audioOnly: boolean; transcoded: boolean; live: boolean },
+): number | null {
+  if (variant.protocol !== "progressive" || variant.audioUrl !== undefined) return null;
+  if (context.audioOnly || context.transcoded || context.live) return null;
+  if (variant.filesizeIsEstimate === true) return null;
+  const bytes = variant.filesizeBytes;
+  return bytes !== undefined && Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
+
 async function attempt(
   request: StreamRequest,
   deps: StreamDeps,
@@ -496,6 +525,15 @@ async function attempt(
 
   // A live capture's duration is the caller's limit; a VOD's is the manifest's.
   const mediaDurationSec = context.liveDurationSec ?? context.durationSec;
+  // When the probe could not time the source, ffmpeg can: it reads the
+  // duration before its first output byte and says so at info level (dl-96).
+  // Until then the percent stays null, as it must.
+  let learnedDurationSec: number | null = null;
+  const totalBytes = expectedOutputBytes(request.variant, {
+    audioOnly: context.audioOnly,
+    transcoded: transcodes.length > 0,
+    live: context.liveDurationSec !== null,
+  });
   const rate = new RateTracker();
   let sent = 0;
   // For `SEGMENT_SKIPPED`: what ffmpeg said before it gave up on a segment.
@@ -517,18 +555,25 @@ async function attempt(
     onProgress: (snapshot) => {
       if (request.onProgress === undefined) return;
       const now = Date.now();
-      rate.record(sent, now);
+      rate.record(sent, now, snapshot.outTimeUs);
       // Bytes *sent*, not ffmpeg's `total_size`: what the visitor has is what
-      // went through the pipe, and a total is never known (dl-53).
+      // went through the pipe (dl-53).
       request.onProgress({
         ...toJobProgress(snapshot, {
           stage: "downloading",
-          durationSec: mediaDurationSec,
-          totalBytes: null,
+          durationSec: mediaDurationSec ?? learnedDurationSec,
+          totalBytes,
           speedBps: rate.bytesPerSecond(),
         }),
         downloadedBytes: sent,
       });
+    },
+    onInfoLine: (line) => {
+      if (mediaDurationSec !== null || learnedDurationSec !== null) return;
+      // The first line that parses. Inputs are described in order, so that is
+      // the video's unless its input says `N/A`; a later input is a separate
+      // audio rendition or a subtitle track, timed against the same video.
+      learnedDurationSec = durationFromInfoLine(line);
     },
     onStderrLine: (line) => {
       logger.debug("ffmpeg", { line });
@@ -622,7 +667,8 @@ async function attempt(
       logger.info("engine stream complete", { jobId: request.jobId, bytes: sent });
       return {
         bytes: sent,
-        durationSec: observedUs === null ? mediaDurationSec : observedUs / 1_000_000,
+        durationSec:
+          observedUs === null ? (mediaDurationSec ?? learnedDurationSec) : observedUs / 1_000_000,
       };
     })
     .catch((error: unknown) => {

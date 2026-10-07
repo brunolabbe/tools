@@ -4,6 +4,7 @@ import {
   containerSupports,
   formatMapArg,
   normalizeCodecName,
+  streamingContainerArgs,
 } from "../src/mux.ts";
 import type { StreamMap } from "../src/mux.ts";
 
@@ -137,5 +138,24 @@ describe("buildOutputArgs", () => {
     });
     expect(args[args.indexOf("-movflags") + 1]).toBe("empty_moov+default_base_moof");
     expect(args[args.indexOf("-frag_duration") + 1]).toBe("2000000");
+  });
+});
+
+/**
+ * dl-96. ffmpeg writes a fragment only once it is whole, so the keyframe
+ * interval alone set how often a visitor received bytes — minutes, on a long
+ * GOP behind a slow origin, all of it read as 0 B/s. The stream test proves
+ * the cadence on a real file; this pins the flag that buys it.
+ */
+describe("fragment cadence (dl-96)", () => {
+  test("video MP4 is cut at each keyframe and at least once a second", () => {
+    const args = streamingContainerArgs("mp4", true);
+    expect(args[args.indexOf("-movflags") + 1]).toBe("frag_keyframe+empty_moov+default_base_moof");
+    expect(args[args.indexOf("-frag_duration") + 1]).toBe("1000000");
+  });
+
+  test("Matroska and WebM are left to their own clusters", () => {
+    expect(streamingContainerArgs("mkv", true)).not.toContain("-frag_duration");
+    expect(streamingContainerArgs("webm", true)).not.toContain("-frag_duration");
   });
 });
