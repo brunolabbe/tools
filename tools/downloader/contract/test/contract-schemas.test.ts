@@ -9,6 +9,7 @@
 import { describe, expect, test } from "vitest";
 import {
   appErrorPayloadSchema,
+  DEFAULT_ERROR_MESSAGES,
   ERROR_CODES,
   JOB_STATUSES,
   JOB_TRANSITIONS,
@@ -418,5 +419,18 @@ describe("the refused frame (dl-77)", () => {
 
   test("names its job, unlike a heartbeat", () => {
     expect(jobEventSchema.safeParse({ ...refused, jobId: "" }).success).toBe(false);
+  });
+});
+
+describe("AGE_CONFIRMATION_REQUIRED copy (dl-94)", () => {
+  // The code has two causes: the setting is off, or it is on and the press
+  // declined (dl-83). The words must be true of both, so they say what the
+  // server did and nothing about what it is set to do.
+  test("says the server did not confirm, and claims nothing about its setting", () => {
+    const message = DEFAULT_ERROR_MESSAGES.AGE_CONFIRMATION_REQUIRED;
+    expect(message).toBe(
+      "This video asks the viewer to confirm their age, and the server did not confirm it.",
+    );
+    expect(message).not.toMatch(/not set|turned on|operator|enable|setting|configur/i);
   });
 });
