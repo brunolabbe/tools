@@ -212,7 +212,9 @@ export function registerRequestLogging(app: FastifyInstance, context: AppContext
 /**
  * The form of a *refused* request's URL that is safe to log: `redactLoggedUrl`'s
  * answer when it finds a capability prefix, and otherwise the path **cut at the
- * first percent escape that does not decode**, with the query dropped.
+ * first percent escape that does not decode**, with the query dropped. A refused
+ * path with no such escape (every 414 off a capability route) is returned whole,
+ * query included, as `redactLoggedUrl` leaves any non-capability URL.
  *
  * The cut is for a path like `/api/files%zz/<t>`, `/api/fi%les/<t>` or
  * `/api/%zz/files/<t>`: the malformed escape sits in or before the route, so
