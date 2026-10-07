@@ -22,6 +22,7 @@
     "dev:ledger": "concurrently -n api,web -c cyan,magenta -k \"npm:dev:ledger:api\" \"npm:dev:ledger:web\"",
     "dev:ledger:api": "npm run dev -w @ledger/api",
     "dev:ledger:web": "npm run dev -w @ledger/web",
+    "import:ledger": "npm run import:ledger -w @ledger/api --",
     "typecheck": "tsc --build --verbose",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -60,7 +61,13 @@
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
+  },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "// overrides": "exceljs (the ledger's workbook import, lg-7) pins uuid ^8, which carries a moderate advisory (GHSA-w5hq-g745-h8pq, fixed in 11.1.1) that the dependency-review job refuses at moderate. exceljs calls only uuid's v4, which 11 keeps, and 11 still ships the CommonJS build exceljs requires. Scoped to exceljs, so nothing else's uuid moves. Drop it when an exceljs release takes a fixed uuid itself."
 }

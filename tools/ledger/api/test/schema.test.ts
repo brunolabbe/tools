@@ -12,7 +12,7 @@ describe("the schema's migrations", () => {
   test("migration 1 stores the statement rows and the imports they came from", () => {
     const db = open();
 
-    expect(db.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.pragma("user_version", { simple: true })).toBe(5);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -82,7 +82,7 @@ describe("the schema's migrations", () => {
 
     migrate(db);
 
-    expect(db.pragma("user_version", { simple: true })).toBe(4);
+    expect(db.pragma("user_version", { simple: true })).toBe(5);
     expect(db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({ n: 1 });
     db.close();
   });

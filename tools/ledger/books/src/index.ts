@@ -38,3 +38,29 @@ export { fromHistory } from "./history.ts";
 export type { HistoryAnswer, HistorySuggestion } from "./history.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
+export {
+  NO_CORRECTIONS,
+  cellRef,
+  noteOf,
+  readCorrections,
+  readWorkbook,
+  toCents,
+  workbookFigures,
+} from "./workbook.ts";
+export type {
+  CarryOver,
+  Cell,
+  CellValue,
+  Correction,
+  Corrections,
+  Movement,
+  ReadOptions,
+  Repair,
+  Sheet,
+  Skip,
+  WorkbookFigures,
+  WorkbookLine,
+  WorkbookPeriod,
+  WorkbookReading,
+  WorkbookSettlement,
+} from "./workbook.ts";

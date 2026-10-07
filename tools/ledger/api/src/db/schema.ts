@@ -287,6 +287,20 @@ const MIGRATIONS: readonly string[] = [
   -- same open period at once cannot both record a settlement.
   CREATE UNIQUE INDEX periods_start ON periods (coalesce(start_date, ''));
   `,
+
+  // 5 — the workbook's history, imported once (lg-7).
+  `
+  -- Where a batch of rows came from: 'paste' is AccèsD (lg-2), and every batch
+  -- stored before this migration was one; 'workbook' is the household's old
+  -- spreadsheet, imported once, whose rows are numbered below the oldest pasted
+  -- one. The rows themselves say nothing of it: a row is a row of the account.
+  ALTER TABLE statement_imports
+    ADD COLUMN source TEXT NOT NULL DEFAULT 'paste' CHECK (source IN ('paste', 'workbook'));
+
+  -- What the workbook's own note said about a row, and what a correction made
+  -- on import says about it. Written with the row, never after; NULL on a paste.
+  ALTER TABLE statement_rows ADD COLUMN note TEXT;
+  `,
 ];
 
 /**
