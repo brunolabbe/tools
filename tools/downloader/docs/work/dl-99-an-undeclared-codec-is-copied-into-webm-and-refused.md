@@ -3,7 +3,7 @@ id: dl-99
 tool: downloader
 title: A variant with undeclared codecs, chosen as WebM, is copied as H.264 and refused
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -38,32 +38,54 @@ Copying an undeclared codec is right for MP4 and MKV, where an unknown
 progressive file is nearly always H.264/AAC and a copy is lossless. It is wrong
 for WebM, which holds almost nothing such a file carries.
 
-## Decisions needed
+## Decisions
 
-1. **What an undeclared codec means for WebM.**
-   - (a) Transcode: treat it as unsupported for WebM only. This always works,
-     but VP9 is slow, and a file that was already VP9 is re-encoded for nothing.
-   - (b) Learn the codec first. `resolvers/src/mp4-header.ts` already reads a
-     progressive MP4's sample entries (dl-64), but only the yt-dlp tier runs it.
-     This costs two ranged reads per variant at probe time.
-   - (c) Refuse WebM up front for a variant with undeclared codecs, with a
-     typed error that says why. This is honest and cheap, and the visitor picks
-     MP4 instead.
-2. **Whether the UI should offer WebM at all** for a variant whose codecs are
-   unknown.
+Taken by the owner on 2026-10-07. The rule is about a variant whose codecs are
+undeclared and whose output container is WebM. MP4 and MKV are unchanged.
+
+1. **A WebM source is copied.** Progressive variants already carry `container`,
+   taken from the Content-Type or the URL extension (`containerOf` in
+   `resolvers/src/browser/variants.ts`, and `direct.ts`). WebM can hold only
+   VP8, VP9 or AV1 video and Vorbis or Opus audio, so a source whose container
+   is `webm` copies into WebM losslessly. `containerSupports` ignores that field
+   today.
+2. **An MP4 source declares its codecs from its header.** `mp4-header.ts`
+   (dl-64, today run only by the yt-dlp tier) reads the sample entries for
+   progressive MP4 variants that carry no codecs, at two ranged reads per
+   variant. Once the codecs are declared, the existing transcode path takes an
+   H.264/AAC source into VP9/Opus.
+3. **Any other source is refused for WebM.** That covers an unknown container
+   and an MP4 whose header read fails. The job fails with a typed error that
+   says why, and the UI does not offer WebM for that variant, so the visitor
+   picks MP4. Any source is still offered MP4 and MKV.
+
+Considered and not taken: transcoding every undeclared source (slow VP9 on the
+host, and a WebM source re-encoded for nothing).
 
 ## Build
 
-After the decision. Reproduce first, as a stream test in
-`engine/test/stream.test.ts`, appended at the end, with the undeclared variant
-above into WebM.
+Reproduce first, as a stream test in `engine/test/stream.test.ts`, appended at
+the end, with the undeclared variant above into WebM.
 
 ## Done when
 
-To be written with the decision. At minimum, the reproduction above no longer
-ends in `DOWNLOAD_FAILED`.
+- The reproduction above, an undeclared H.264/AAC MP4 into WebM, completes as
+  VP9/Opus because its codecs are now read from the header.
+- An undeclared variant with `container: "webm"` into WebM is a stream copy,
+  asserted from the ffmpeg arguments, and completes.
+- An undeclared variant with an unknown container, and an MP4 whose header read
+  fails, are refused for WebM with a typed error before ffmpeg starts, and the
+  variant does not offer WebM in the UI.
+- Each case has a test that fails if its branch is removed.
 
 ## Log
 
 **2026-10-07** — filed from dl-96's session; the owner chose a ticket over
 widening dl-96.
+
+**2026-10-07** — decisions taken by the owner. They asked why a WebM source
+should need transcoding at all. It does not: the failure is the copy of a
+_non_-WebM source, and the variant's existing `container` field tells the two
+apart. The options for a non-WebM source were refusing WebM and hiding it,
+transcoding, or reading the MP4 header. They chose the header read for MP4, and
+then refusing and hiding WebM for everything else over transcoding it.
