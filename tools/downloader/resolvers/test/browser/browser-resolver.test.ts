@@ -1865,9 +1865,12 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       // Should have found media
       expect(result.variants.length).toBeGreaterThan(0);
 
-      // Should have finished well before the 9 second floor,
-      // since it captures media immediately
-      expect(elapsedMs).toBeLessThan(5000);
+      // Should have finished well before the 9 second floor, since it captures
+      // media immediately. The ceiling sits between what it must rule out (a
+      // floor applied anyway ends at or after 9000 ms, which the previous test
+      // asserts) and a slow Windows runner, which took 4470 ms here against a
+      // usual 2.8 s (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
     },
   );
 
@@ -1900,9 +1903,11 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       const error = caught as AppError;
       expectCode(error, "NO_MEDIA_FOUND");
 
-      // With a 500 ms floor and 1200 ms quiet timeout,
-      // should see NO_MEDIA_FOUND in roughly 1.7 seconds
-      expect(elapsedMs).toBeLessThan(3000);
+      // With a 500 ms floor and 1200 ms quiet timeout, NO_MEDIA_FOUND arrives
+      // in about 2.1 s. An ignored override would wait the default 9000 ms
+      // floor, so the ceiling only has to stay clear of that; 3000 ms did not
+      // survive a slow Windows runner, which took 3257 ms (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
     },
   );
 
