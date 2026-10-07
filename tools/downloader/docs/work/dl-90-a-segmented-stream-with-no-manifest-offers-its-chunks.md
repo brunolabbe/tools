@@ -130,6 +130,30 @@ numbered `.mp4` files are chunks of one stream rather than separate videos?
 numbering habit. The source change therefore lives in `browser.ts` and not in
 `rank.ts`, and `depends_on` now carries dl-97 for that reason.
 
+### Refinement, owner, 2026-10-07: the evidence is a `moof`, not a missing `moov`
+
+Gate 1 of this record found that "no `moov` means chunk" makes the acceptance
+lines ask opposite answers of the same bytes. The reproduction's chunks
+(`Buffer.alloc(2 * MB)`) and dl-78's committed `clip-720.mp4` fixture
+(`Buffer.alloc(PROGRESSIVE_FILE_BYTES)`) are both all zeros, so a read finds no
+box in either; yet `/nomanifest.html` must lose its chunks and dl-78's
+"a whole file with a resolution suffix in its name is offered" must stay green.
+
+Question put to the owner: how should `Done when` be reworded?
+
+- (a) **Drop on `moof`, with real fMP4 fixtures.** The sniff drops a candidate
+  only on positive evidence of a fragment, and offers anything else, including a
+  body it cannot parse. The gate's recommendation.
+- (b) Keep "no `moov` means drop", and let dl-78's fixture be given a `moov`.
+  It drops any numbered non-MP4 body the sniff cannot read.
+- (c) Never read a lone file: narrow the candidates by a name and count rule,
+  which is the kind of rule the owner turned down above.
+- (d) Record the conflict and decide later.
+
+**Chosen: (a).** The sniff's evidence is a `moof` box, not the absence of a
+`moov`. The owner had seen the "Known misses" and "Accurate for fMP4" wording of
+the first question when answering it.
+
 ## Build
 
 Steps 2 to 4 below are **superseded by the Decision above**; they are kept
@@ -137,9 +161,33 @@ because the measurements in the Log are what the decision rests on. Step 1 was
 done on 2026-10-07 (Log). What is left to design is the `moov` sniff: which
 candidates it reads (numbered, progressive, no manifest in the capture), the
 read's size and deadline, how it replays the captured headers, SSRF-checks the
-URL and counts against the probe's budget, and what a failed read means (offer
-the file, as today). Start from dl-97's merged `#loadManifest`, not from this
-page.
+URL and counts against the probe's budget, and what a failed read or an
+unparseable body means (offer the file, as today). Start from dl-97's merged
+`#loadManifest`, not from this page.
+
+Facts the builder will hit, **measured by gate 1 of this record (not re-run by
+its author)** with ffmpeg on a 3-segment fMP4 HLS and two whole files:
+
+- `00000.mp4: ftyp(28) moov(799) [mvex inside]`,
+  `00001.mp4: styp(24) sidx(52) moof(1300) mdat(23459)`,
+  `whole-tail.mp4: ftyp(32) free(8) mdat(19985) moov(1971)`. So the **init
+  segment** (`/n/00000.mp4` in `Done when` 1) has a `moov` and **no `moof`**: a
+  rule that drops only on `moof` leaves it offered. How the init segment is
+  caught is the builder's to design and `Done when` 1 requires it gone. Two
+  starting points, neither a decision: a `moov` that contains `mvex` is itself
+  positive evidence of a fragmented stream, or a numbered sibling in the same
+  directory proven to be a fragment demotes the others.
+- A whole file written without faststart has its `moov` **after** `mdat`, past
+  any read of the head. A head-only sniff must not read "no `moov` yet" as
+  "chunk".
+- `demoteChunks` in `resolvers/src/browser/media-match.ts` already demotes a
+  declared length under 512 KiB, which covers a typical init segment, but only
+  when a length is declared.
+- `readMp4Tracks` in `resolvers/src/mp4-header.ts` already walks the top-level
+  boxes over ranged reads, tail `moov` included. The `SizeProbe.bytes` doc in
+  `resolvers/src/size-sample.ts` says the Playwright-backed probe leaves ranged
+  reads out on purpose, because `APIResponse` only hands over a body read in
+  full; that constrains how the sniff can read inside `browser.ts`.
 
 1. **Re-run the reproduction** on `origin/main` as it stands, and record what it
    prints. If dl-79 has merged, add the JSON-borne and blob variants to the
@@ -165,13 +213,26 @@ page.
 
 ## Done when
 
-- The `/nomanifest.html` reproduction does not offer `/n/00000.mp4`…`/n/00002.mp4`
-  as downloads: a browser-resolver spec that fails on `origin/main` and passes
-  with the fix.
-- A test proves three whole numbered files in one directory are still offered.
-- A test proves `clip-720.mp4`/`clip-1080.mp4` stay whole files.
+Reworded on 2026-10-07 after the owner chose (a) in the Decision's refinement:
+the fixtures carry real MP4 boxes where a line depends on what the sniff reads,
+because an all-zero body has no box and the sniff drops only on positive
+evidence of a fragment.
+
+- The `/nomanifest.html` reproduction, with its chunks served as **real fMP4**
+  (an init segment `ftyp`+`moov`, then media segments `styp`/`sidx`/`moof`/`mdat`),
+  does not offer `/n/00000.mp4`…`/n/00002.mp4` as downloads: a browser-resolver
+  spec that fails on `origin/main` and passes with the fix. The init segment is
+  part of the set, so the build has to catch a `moov` with no `moof`.
+- A test proves three whole numbered files in one directory are still offered,
+  with real non-fragmented MP4 bodies (one of them with `moov` after `mdat`).
+- A test proves `clip-720.mp4`/`clip-1080.mp4` stay whole files, with real
+  non-fragmented MP4 bodies.
+- A body the sniff cannot parse, including an all-zero one, is offered: a test
+  proves it, so a failed or unreadable sniff never costs the user a file.
 - dl-78's fixtures still pass: a resolution-suffixed whole file and a file whose
-  server answers every `Range` with a short 206.
+  server answers every `Range` with a short 206. The fixture's `BODY` may stay
+  zeros, which the unparseable-body line keeps green, or become a real MP4; the
+  build chooses and says which in the Log.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
@@ -189,6 +250,53 @@ page.
   with the real parsers and 25 s per probe, 2 MB `video/mp4` chunks, and one
   page per shape below. Each page's script `fetch`es the listed URLs, except
   `/gallery-video.html`, which uses `<video preload="auto">` elements.
+
+  The pages, so the table can be re-run with the ticket's `page`, `fetchAll`,
+  `HLS`, `MB` and `CHUNK` (the chunk files are served `video/mp4` with a
+  `Content-Length` from any path ending `.mp4`). `HLS("/n/", PADDED)` is the
+  ticket's playlist with `PADDED = ["00000.mp4", "00001.mp4", "00002.mp4"]`:
+
+  ```ts
+  const PAGES = {
+    "/nomanifest.html": page(
+      fetchAll(["/api/playlist?id=7", "/n/00000.mp4", "/n/00001.mp4", "/n/00002.mp4"]),
+    ),
+    // the same, but /api/playlist-len replies text/plain WITH a content-length
+    "/nomanifest-len.html": page(
+      fetchAll(["/api/playlist-len?id=7", "/n/00000.mp4", "/n/00001.mp4", "/n/00002.mp4"]),
+    ),
+    // /api/info replies application/json: {"hls": HLS("/n/", PADDED), "chunks": ["/n/00000.mp4", ...]}
+    "/json.html": page(
+      `(async()=>{const j=await (await fetch('/api/info')).json();
+       for(const u of j.chunks){try{await (await fetch(u)).arrayBuffer();}catch(e){}}})();`,
+    ),
+    // the playlist is built in the page, so no request names it
+    "/blob.html": page(
+      `(async()=>{const b=new Blob([${JSON.stringify(HLS("/n/", PADDED))}],
+       {type:'application/vnd.apple.mpegurl'});await (await fetch(URL.createObjectURL(b))).text();
+       for(const u of ['/n/00000.mp4','/n/00001.mp4','/n/00002.mp4']){
+         try{await (await fetch(u)).arrayBuffer();}catch(e){}}})();`,
+    ),
+    "/bare-padded.html": page(fetchAll(["/n/00000.mp4", "/n/00001.mp4", "/n/00002.mp4"])),
+    "/bare-unpadded0.html": page(fetchAll(["/u/0.mp4", "/u/1.mp4", "/u/2.mp4", "/u/3.mp4"])),
+    "/gallery.html": page(fetchAll(["/media/1.mp4", "/media/2.mp4", "/media/3.mp4"])),
+    "/gallery-padded.html": page(fetchAll(["/media/01.mp4", "/media/02.mp4", "/media/03.mp4"])),
+    "/resolutions.html": page(fetchAll(["/media/clip-720.mp4", "/media/clip-1080.mp4"])),
+    "/resolutions3.html": page(
+      fetchAll(["/media/clip-480.mp4", "/media/clip-720.mp4", "/media/clip-1080.mp4"]),
+    ),
+    "/gallery-video.html": page(
+      "",
+      ["1", "2", "3"]
+        .map((n) => `<video muted preload="auto" src="/media/${n}.mp4"></video>`)
+        .join(""),
+    ),
+  };
+  ```
+
+  The bodies were all zeros (`Buffer.alloc(2 * MB)`), as in the ticket's
+  harness. That is why none of these rows says anything about what a `moov` read
+  would find; see the 2026-10-07 refinement in Decision.
 
   **Brief correction.** The ticket says dl-79 narrows the untyped-playlist case.
   It does only when the response declares a `Content-Length`:
@@ -233,6 +341,16 @@ return false;`. The ticket's own harness answers with
 
 - 2026-10-07, owner decision: option 2, sniff each chunk for `moov`, over the
   builder's recommendation of option 1. See Decision. `depends_on` gains dl-97.
-  `status` stays `ready` and `difficulty` is unchanged. The `Done when` lines
-  about the reproduction and the whole-file cases still hold; the fix that
-  satisfies them is now a `moov` read, not a name rule.
+  `status` stays `ready` and `difficulty` is unchanged. This entry first said
+  the `Done when` lines "still hold" under the `moov` read. **That was wrong**:
+  with the quoted all-zero fixtures, line 1 (drop the chunks) and line 4 (keep
+  dl-78's `clip-720.mp4`) ask opposite answers of the same bytes. Gate 1 of this
+  record found it (reproduced with `names.mts`: `/n/00000.mp4` and
+  `/media/clip-720.mp4` are both numbered, progressive and all zeros, and
+  dl-78's fixture answers `206` with `nonZero=false`).
+- 2026-10-07, owner refinement: option (a), drop on a `moof` with real fMP4
+  fixtures, over "no `moov` means drop", "never read a lone file" and "decide
+  later". `Done when` is reworded; see Decision. Gate 1 also measured the box
+  layouts recorded under Build, and noted that `difficulty: standard` has no
+  stated basis (the author's call; reassess once dl-97 merges). It is left as it
+  is on the owner's instruction.
