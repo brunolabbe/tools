@@ -72,8 +72,11 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
      `source`, or a sibling record, stays out of history only if that list is
      left alone; do not widen it, and make the storage choice in item 4 keep the
      standing-classification read honest for it.
-   - **`InboxRow.history` already shows the answer** and its one-tap "Use this
-     answer"; an automatic filing is not offered there, since the row is no longer
+   - **`InboxRow.history` already shows the answer.** Beside a rule's suggestion
+     that says something else it has its own one-tap "Use this answer", storing
+     `manual`; where the suggestion says the same, the history is a note under the
+     rule's "Accept" (storing `accepted` with the rule id), and there is no second
+     control. An automatic filing is not offered there, since the row is no longer
      in the inbox.
 
 ## Done when

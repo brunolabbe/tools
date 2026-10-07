@@ -180,8 +180,8 @@ export interface PeopleResponse {
  * Why a row is in the inbox. `no-rule`: no rule's description pattern matches.
  * `differs`: one does, and its category or its fixed amount does not — a transfer
  * that is not its usual amount is a question, not a guess — including when a
- * broader rule matches exactly, because a narrower rule it does not fit outranks
- * it (lg-16). `ambiguous`: several rules level at the top rank, the most
+ * broader rule matches exactly, because a narrower rule whose fixed amount it
+ * does not have outranks it (lg-16; a category the row is not in never does). `ambiguous`: several rules level at the top rank, the most
  * specific that match exactly, give different answers, and no row goes to the
  * first of them. `matches`: the top rank matches exactly with one answer but the
  * row has not been classified, because the rule was added after the paste.

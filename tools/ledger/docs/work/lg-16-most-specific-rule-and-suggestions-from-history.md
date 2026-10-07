@@ -62,7 +62,9 @@ amendment).
      — exactly what §3 asks about. So: a `differs` candidate that would
      **outrank** the best exact match, by the ranking above, sends the row to
      the inbox as `differs`, with that rule suggested. An exact match that
-     outranks every `differs` candidate takes the row.
+     outranks every `differs` candidate takes the row. **Only an amount miss
+     counts** (owner, 2026-10-07, in the Log): a rule naming a category the row
+     is not in does not send it to the inbox.
    - The ranking's last two criteria are already computed for suggestions
      (`score`'s `named` and `literal`); reuse them rather than add a second
      notion of "narrower".
@@ -128,3 +130,43 @@ amendment).
     `differs` describe; replacing the API's `source IN ('manual', 'accepted')`
     with `1 = 1` fails 1 of 29 in `classifications.test.ts`, the rule-only
     description test.
+- 2026-10-07 — Round 2, after gate 1 (PASS at 6a4afb22, six lows, three open
+  decisions). **Owner decisions, 2026-10-07**, each put as a question with
+  options:
+  1. _A rule naming a Desjardins category outranks a broad rule on every row its
+     pattern matches in other categories, so those rows go to the inbox as
+     `differs`. Options: (a) keep it, the brief's literal reading; (b) only an
+     amount miss outranks._ **Chosen: (b)**, overriding the build. `classify`
+     now lets a candidate outrank an exact match only when the amount is the one
+     thing it misses; a rule naming a category the row is not in carves that
+     category out and the broad rule keeps the rest. Where the rule misses the
+     category and the amount, the brief and the answer do not say; I read it as
+     not outranking, since the row is outside what the rule describes. **Not
+     put to the owner; recommend keeping it, and a one-line change in
+     `classify.ts` if the owner reads it the other way.** With no exact match
+     at all, any miss still makes a `differs`, as lg-4 had it.
+  2. _"Latest" in `fromHistory`: (a) the classification id; (b) the row's place
+     in the account._ **Chosen: (a)**, as built.
+  3. _When the rule's suggestion and the history agree: (a) one control, the
+     rule's Accept, storing `accepted` with the rule id; (b) one control storing
+     `manual`._ **Chosen: (a)**, as built.
+  - **Test.** "a category the row is not in outranks too" is replaced by "a
+    category the row is not in does not outrank: the broad rule keeps the row"
+    (both rule orders), with "a rule missing the category and the amount does not
+    outrank either" and "the category matching, a miss on the amount still
+    outranks". `npx vitest run tools/ledger/books tools/ledger/api`: 25 files,
+    489 tests passed. The gate's `probe.mjs` against this build: line 5 reads
+    "classified by #1 (alex · current-expenses)", where it was `differs`, and
+    the 3,000-set invariance run still reports 0 variants over 573,716
+    orderings.
+  - **Lows fixed.** History reads only the standing classification, and now a
+    test pins it ("a row answered twice counts once, by the answer that
+    stands"); changing `FROM current_classifications c` to `FROM classifications
+c` fails 1 of 30, and `history-probe.mjs` S3 still reads `times: 2`. lg-17's
+    Build 8 no longer says the agreeing case has a "Use this answer"; it says
+    what each case shows and stores. lg-15 and lg-17's other additions say
+    nothing about which rows outrank, so they stand.
+  - **Lows left as recorded.** The broad rule is not shown on a `differs` row
+    where a narrower rule outranks it (the finding states the symptom, not what
+    to show or where); the oldest-row-corrected ordering (decision 2); the
+    accepted-versus-manual split (decision 3).

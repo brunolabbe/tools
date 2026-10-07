@@ -284,13 +284,37 @@ describe("classify, when a rule the row does not fit would outrank the one it do
     });
   });
 
-  test("a category the row is not in outranks too", () => {
+  // The owner's call, 2026-10-07: only an amount miss asks. A rule naming a
+  // category carves that category out, and the broad rule keeps the rest.
+  test("a category the row is not in does not outrank: the broad rule keeps the row", () => {
     const only = rule(2, { category: "Virements" });
 
-    expect(classify({ ...TRANSFER, category: "Autres" }, [broad, only])).toMatchObject({
+    expect(classify({ ...TRANSFER, category: "Autres" }, [broad, only])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+    expect(classify({ ...TRANSFER, category: "Autres" }, [only, broad])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+  });
+
+  test("a rule missing the category and the amount does not outrank either", () => {
+    const both = rule(2, { category: "Virements", amountCents: 40000 });
+
+    expect(classify({ ...unusual, category: "Autres" }, [broad, both])).toEqual({
+      kind: "classified",
+      rule: broad,
+    });
+  });
+
+  test("the category matching, a miss on the amount still outranks", () => {
+    const both = rule(2, { category: "Virements", amountCents: 40000 });
+
+    expect(classify(unusual, [broad, both])).toMatchObject({
       kind: "inbox",
       reason: "differs",
-      suggestion: only,
+      suggestion: both,
     });
   });
 

@@ -18,11 +18,13 @@
  * - **Several level at the top with different answers:** the row takes none.
  *   That is two answers with no reason to prefer either, and taking the first of
  *   them is how a row ends up in the wrong bucket with nobody having been asked.
- * - **A rule whose pattern matches but whose category or amount does not, and
- *   which would outrank the best exact match:** the row takes none (`differs`).
- *   A mortgage transfer at an unusual amount is a question, and a broad rule
- *   must not file it in silence. An exact match that outranks every such rule
- *   takes the row.
+ * - **A rule whose pattern and category match but whose fixed amount does not,
+ *   and which would outrank the best exact match:** the row takes none
+ *   (`differs`). A mortgage transfer at an unusual amount is a question, and a
+ *   broad rule must not file it in silence. An exact match that outranks every
+ *   such rule takes the row. **Only an amount miss asks:** a rule that names a
+ *   category the row is not in carves that category out of the broad rule's
+ *   reach and has no say over the rows outside it.
  * - **None matches exactly:** the row takes none.
  *
  * Whenever the row takes none the function says which rule is nearest, as a
@@ -31,8 +33,8 @@
  * amount and the row's, the most criteria the rule names, the longest literal
  * pattern. When two rules are still level there is no nearest, and the
  * suggestion is `null` rather than the older of two equals. For a `differs`
- * that is an outranking rule, so the rule suggested is the one that stopped the
- * row being filed.
+ * that an exact match did not prevent, the rule suggested is the nearest of the
+ * outranking ones, the one that stopped the row being filed.
  *
  * Only a rule whose description pattern matches is a candidate. The pattern is
  * what a rule says a row *is*; a category or an amount on its own is far too
@@ -72,7 +74,8 @@ export type RuleMatch<R extends MatchableRule> =
       kind: "inbox";
       /**
        * `no-rule`: no pattern matches. `differs`: a pattern does, and the
-       * category or the fixed amount does not, and no exact match outranks it.
+       * category or the fixed amount does not, and no exact match outranks it
+       * (against an exact match, only an amount miss counts).
        * `ambiguous`: several rules level at the top rank match exactly with
        * different answers.
        */
@@ -129,6 +132,10 @@ interface Scored<R extends MatchableRule> {
   rule: R;
   /** How many of the rule's own criteria the row fails. */
   misses: number;
+  /** Whether the rule names a category the row is not in. */
+  categoryMiss: boolean;
+  /** Whether the rule names an amount the row does not have. */
+  amountMiss: boolean;
   /** How far the row's amount is from the rule's fixed one. */
   distance: number;
   /** How many criteria beyond the pattern the rule names. */
@@ -144,6 +151,8 @@ function score<R extends MatchableRule>(rule: R, row: ClassifiableRow): Scored<R
   return {
     rule,
     misses: Number(categoryMiss) + Number(amountMiss),
+    categoryMiss,
+    amountMiss,
     distance: rule.amountCents === null ? 0 : Math.abs(rule.amountCents - row.amountCents),
     named: Number(rule.category !== null) + Number(rule.amountCents !== null),
     literal: rule.descriptionPattern.replaceAll("*", "").length,
@@ -188,8 +197,13 @@ export function classify<R extends MatchableRule>(
   // A rule the row only nearly fits, but which says more than anything that fits
   // it, is the one whose question the row is: filing it under a broader rule
   // would be answering that question with nobody asked.
-  const outranking = candidates.filter(
-    (candidate) => candidate.misses > 0 && (best === undefined || narrower(candidate, best) < 0),
+  // Only an amount is that question (§3): a rule naming a category carves that
+  // category out, and the broad rule keeps every row outside it. So a candidate
+  // outranks an exact match only when the amount is the one thing it misses.
+  const outranking = candidates.filter((candidate) =>
+    best === undefined
+      ? candidate.misses > 0
+      : candidate.amountMiss && !candidate.categoryMiss && narrower(candidate, best) < 0,
   );
 
   if (outranking.length > 0) {

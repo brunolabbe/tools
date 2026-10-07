@@ -364,6 +364,25 @@ describe("the inbox carries what a person answered before (lg-16)", () => {
     });
   });
 
+  test("a row answered twice counts once, by the answer that stands", async () => {
+    const target = await start();
+    const same = [1, 2, 3].map((day) => ({
+      date: `2026-09-0${String(day)}`,
+      category: "Épicerie",
+      description: GROCERIES,
+      amountCents: -1000 * day,
+    }));
+    await pasteStatement(target, renderPaste(withBalances(same, 150000)));
+    const [a, b] = [1000, 2000].map((cents) => rowId(target, GROCERIES, -cents));
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, a ?? 0, { personId: "sam", bucket: "mortgage" });
+    await answerRow(target, b ?? 0, { personId: "sam", bucket: "mortgage" });
+
+    // Three records, two rows: "the last 2 times", not 3.
+    const [waiting] = await readInbox(target);
+    expect(waiting).toMatchObject({ amountCents: -3000, history: { personId: "sam", times: 2 } });
+  });
+
   test("taking it is an ordinary manual answer, by whoever tapped", async () => {
     const target = await start(SAM);
     await pasteStatement(target);
