@@ -371,3 +371,19 @@ v.getAttribute("data-preview")`; `player-poster-related-grid.html:58`,
   the 300 px threshold in every layout here, so that mutation survives.
 
   **Not covered, unchanged from round 2.**
+
+- 2026-10-07 — **Decided by the owner, after gate 3** (`1a224b86`, CONCERNS).
+  Question: the `pressed` flag that skips the box click is set by any
+  `PLAY_SELECTORS` hit (substring matches: `aria-label*='play'` catches
+  "Autoplay" and "Play slideshow", `data-testid*='play'` catches
+  `display-name`), by a bare "Watch" link through `PLAY_TEXT`, and by a press in
+  any frame including a cross-site ad. On a click-only player box the stream at
+  `092fc118` becomes `NO_MEDIA_FOUND`, 3 of 3; nothing is lost against `main`,
+  and the round 3 entry above states the cost as "a play button that does
+  nothing". Options: **A**, narrow what counts as a press now (the gate's option
+  A); **B**, record it and file a downloader ticket with the gate's fixtures as
+  its reproduction (gate 3's recommendation); **C**, accept it and correct the
+  Log's stated cost. **The owner chose B.** No code changed on this branch for
+  it; [dl-100](./dl-100-a-click-only-player-box-is-skipped-after-an-unrelated-play-press.md)
+  was filed for it, `needs-decision`. Gate 3's low, the 200x120 minimum's
+  docstring overclaiming, stays recorded and unfixed by the severity floor.
