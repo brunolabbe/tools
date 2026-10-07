@@ -338,10 +338,16 @@ export async function listTree(root: string): Promise<string[]> {
 export async function generateWebm(dir: string, seconds: number): Promise<string> {
   await fs.mkdir(dir, { recursive: true });
   const out = path.join(dir, "source.webm");
+  const encode = ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "150k"];
   await ffmpeg([
     ...SOURCES(seconds),
-    ...["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "150k"],
-    ...["-c:a", "libopus", "-b:a", "32k", "-shortest", out],
+    ...encode,
+    "-c:a",
+    "libopus",
+    "-b:a",
+    "32k",
+    "-shortest",
+    out,
   ]);
   return out;
 }

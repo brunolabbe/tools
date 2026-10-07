@@ -49,9 +49,25 @@ function ffmpeg(args: readonly string[]): Promise<string> {
 }
 
 const SOURCES = [
-  ...["-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=2"],
-  ...["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=2"],
+  "-f",
+  "lavfi",
+  "-i",
+  "testsrc=size=160x120:rate=10:duration=2",
+  "-f",
+  "lavfi",
+  "-i",
+  "sine=frequency=440:sample_rate=44100:duration=2",
 ];
+
+const QUIET = ["-loglevel", "error", "-y"];
+const H264_AAC = [
+  ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac"],
+  ["-shortest", "-movflags", "+faststart"],
+].flat();
+const VP9_OPUS = [
+  ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "100k"],
+  ["-c:a", "libopus", "-shortest"],
+].flat();
 
 /** Codec names of a file's streams, read back by ffmpeg itself. */
 async function codecsOf(file: string): Promise<string[]> {
@@ -63,18 +79,8 @@ async function codecsOf(file: string): Promise<string[]> {
 
 beforeAll(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "dl99-"));
-  await ffmpeg([
-    ...["-loglevel", "error", "-y"],
-    ...SOURCES,
-    ...["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"],
-    ...["-c:a", "aac", "-shortest", "-movflags", "+faststart", path.join(dir, "h264.mp4")],
-  ]);
-  await ffmpeg([
-    ...["-loglevel", "error", "-y"],
-    ...SOURCES,
-    ...["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "100k"],
-    ...["-c:a", "libopus", "-shortest", path.join(dir, "vp9.webm")],
-  ]);
+  await ffmpeg([...QUIET, ...SOURCES, ...H264_AAC, path.join(dir, "h264.mp4")]);
+  await ffmpeg([...QUIET, ...SOURCES, ...VP9_OPUS, path.join(dir, "vp9.webm")]);
   // Named like an MP4 and served as one; the bytes are not.
   await fs.writeFile(path.join(dir, "not-media.mp4"), Buffer.alloc(200_000, 0x41));
 
