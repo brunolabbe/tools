@@ -265,20 +265,20 @@ describe("the most specific rule takes a row (lg-16)", () => {
   });
 });
 
-describe("the inbox carries what a person answered before (lg-16)", () => {
-  async function answer(
-    target: App,
-    id: number,
-    body: { personId: string | null; bucket: string } | { ruleId: number },
-  ): Promise<void> {
-    const response = await target.server.inject({
-      method: "POST",
-      url: ROUTES.classifications,
-      payload: { rowId: id, ...body },
-    });
-    expect(response.statusCode, response.body).toBe(200);
-  }
+async function answer(
+  target: App,
+  id: number,
+  body: { personId: string | null; bucket: string } | { ruleId: number },
+): Promise<void> {
+  const response = await target.server.inject({
+    method: "POST",
+    url: ROUTES.classifications,
+    payload: { rowId: id, ...body },
+  });
+  expect(response.statusCode, response.body).toBe(200);
+}
 
+describe("the inbox carries what a person answered before (lg-16)", () => {
   test("a description answered by a person carries that answer, and one never answered none", async () => {
     const target = await start();
     await pasteStatement(target);
