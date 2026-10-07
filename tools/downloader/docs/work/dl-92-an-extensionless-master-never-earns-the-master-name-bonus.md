@@ -142,9 +142,12 @@ dl-79: it applies to any typed extensionless master.
 - **Answers that moved, measured with gate 1's harness on 34 capture shapes**
   (`rank-base.ts` against this head, `npx tsx compare.ts`):
   `cases=34 changed=18 head-wrong=1`. 17 changed from wrong to right, including
-  `/hls?token=abc`, `/api/hls/abc?token=1`, a dash `/dash?token=1`, `/abc.m3u8`
-  followed by `/api/video?id=1&r=720`, an ad `/vast/video?id=1`, `/p/abc/mainstream`,
-  `/api/domain`. One changed from right to wrong, the recorded cost: an ad
+  `/hls?token=abc`, `/api/hls/abc?token=1` and a dash `/dash?token=1`. The shapes
+  `/abc.m3u8` followed by `/api/video?id=1&r=720`, an ad `/vast/video?id=1`,
+  `/p/abc/mainstream` and `/api/domain` are not among the changes: base already
+  ranked them right, and they are round-1 regressions (the route-name regex) that
+  this round removed, not base defects. One changed from right to wrong, the
+  recorded cost: an ad
   `/ads/stream?x=1` requested before master `/abc.m3u8` (base winner `/abc.m3u8`,
   head winner the ad).
 - **The cost is pinned**, not accidental: `capture-rules.test.ts` "an ad manifest
