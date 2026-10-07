@@ -81,6 +81,18 @@ over the builder's recommendation of (a). dl-83 does not touch the copy.
 - Invariants: contract edited with the owner's decision recorded in the brief ✓; no new test files, so no registration needed; no new imports. Skipped as untouched: cross-tool imports, shell, redaction, SSRF, progress, Dockerfile closure, routes.
 - NFR: security n/a · performance n/a · reliability n/a (copy only; classification unchanged) · maintainability — the three lows above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-07 · `4d115777..171044ea` · Opus 5.5, narrow re-gate of the round's diff only
+
+- **fixed** · gate 1 low 1, the comments that quoted the retired copy. The comment at the `classifyFailure` call in `resolvers/src/resolvers/browser.ts` now reads "Saying the server \"did not confirm\" would be false". The comment in `browser-resolver.test.ts` › "a press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal" now reads "\"the server did not confirm it\" would be false". Both are true of the pressed-but-inert case they describe. Verified with a multi-line grep: `grep -rPzl "not\s+(//\s*|\*\s*)?set\s+(//\s*|\*\s*)?to\s+(//\s*|\*\s*)?(confirm|press)"` over `tools/downloader`, `packages` and `docs` now matches only the `dl-48`, `dl-83` and `dl-94` ticket records. Positive control: the same pattern run on `browser.ts` at `4d115777` matched `not set to\n        // confirm`, the phrase wrapped across a line break.
+- **fixed** · gate 1 low 2, the docstring's last sentence. The `AGE_CONFIRMATION_REQUIRED` docstring in `contract/src/errors.ts` now says what each cause needs to change: an operator turning the setting on, or the page or the press rules changing. It ends "a retry alone changes nothing in either case". The sentence is true of both causes, and the classification is unchanged.
+- **fixed** · gate 1 low 3, the docs rows. `docs/00-ANALYSIS.md`'s "Age confirmation" row and `docs/01-ARCHITECTURE.md`'s `ENABLE_AGE_CONFIRMATION` row both now name the declined press as a second way to reach `AGE_CONFIRMATION_REQUIRED`. A single-line grep for the old phrasings outside `docs/work/` (`not set to (confirm|press)`, `is not set to`, `unless its operator`, `turned it on`, `does not confirm that`, `nothing changes until an operator`, `ENABLE_AGE_CONFIRMATION. confirms`) found only `engine/src/ffmpeg/args.ts`'s unrelated "dl-19 turned it on".
+- **No pinned text moved.** `git diff -U0 4d115777..171044ea -- '*.ts'` has no changed line that is not a `//` or `*` comment line. `DEFAULT_ERROR_MESSAGES` and `ERROR_PRESENTATION` are untouched. The three spec files that pin the copy (`contract-schemas.test.ts`, `error-presentation.test.ts`, `browser-resolver.test.ts`) pass 174 of 174 after a rebuild.
+- **Gates.** `npm run check` exit 0 after `npm run build` exit 0. PR #385 on `171044ea`: every check passes except `test (windows-latest, informational)`, which was still pending when read. No `Done when` line depends on that informational leg.
+- **New in the round's lines:** none. The Log entry is accurate against the diff, and it records the owner's choice of option A (no `details.reason`) for Build step 3.
+- **findings** · 3 carried from gate 1, 3 fixed; 0 new; 0 dropped. Nothing at high.
+
 ## Log
 
 **2026-10-06 — filed** on `dl-83-age-gate-phrasings` by dl-83's builder, on the
