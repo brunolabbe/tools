@@ -401,3 +401,79 @@ describe("a deposit of one cent", () => {
     });
   });
 });
+
+// lg-13: a deposit matched to a closed period's settlement is weighed at that
+// period's ratio, not the ratio of the period its date falls in.
+describe("a settlement's own deposit, across a ratio change", () => {
+  const settled = period(null, "2026-09-30");
+  const lines = [line("sam", "2026-09-10", 10_000)];
+  const matched = {
+    personId: "alex",
+    date: "2026-10-02",
+    amountCents: 15_000,
+    settles: "2026-09-30",
+  };
+
+  test.each([
+    [600_000, "unchanged"],
+    [500_000, "0.5"],
+    [700_000, "0.7"],
+  ])("matched, it leaves the next period owing nothing at alex's share %i (%s)", (share) => {
+    expect(cumulativeSettlement([settled], lines, [])).toMatchObject({
+      payerId: "alex",
+      depositCents: 15_000,
+    });
+    const next = period("2026-10-01", "2026-12-31", share);
+
+    expect(cumulativeSettlement([settled, next], lines, [matched])).toEqual({
+      formula: "v3",
+      payerId: null,
+      recipientId: null,
+      depositCents: 0,
+      netCents: 0,
+    });
+  });
+
+  test("unmatched, 90.00 paid where 150.00 was asked is still weighed by its date", () => {
+    const next = period("2026-10-01", "2026-12-31", 500_000);
+    const short = { personId: "alex", date: "2026-10-02", amountCents: 9_000 };
+
+    // 60.00 owed at 0.6, less 90.00 weighed at 0.5 (45.00): 15.00, into a
+    // buffer owned 50:50, 30.00. Weighed at 0.6 it would be 24.00 and 48.00.
+    for (const deposit of [short, { ...short, settles: null }]) {
+      expect(cumulativeSettlement([settled, next], lines, [deposit])).toMatchObject({
+        payerId: "alex",
+        depositCents: 3_000,
+        netCents: 1_500,
+      });
+    }
+  });
+
+  test("matched, it is still counted only when its date says", () => {
+    // The open period as of 1 October leaves out the deposit dated the 2nd.
+    const next = period("2026-10-01", "2026-10-01", 500_000);
+
+    expect(cumulativeSettlement([settled, next], lines, [matched])).toMatchObject({
+      payerId: "alex",
+      netCents: 6_000,
+      depositCents: 12_000,
+    });
+  });
+
+  test.each([500_000, 700_000])(
+    "a figure that did not divide evenly, paid as asked, settles at nothing at alex's share %i",
+    (share) => {
+      const odd = [line("sam", "2026-09-10", 10_001)];
+      // 100.01 × 1.5 = 150.015, asked as 150.02.
+      expect(cumulativeSettlement([settled], odd, []).depositCents).toBe(15_002);
+      const paid = [{ ...matched, amountCents: 15_002 }];
+      const next = period("2026-10-01", "2026-12-31", share);
+
+      expect(cumulativeSettlement([settled, next], odd, paid)).toMatchObject({
+        payerId: null,
+        depositCents: 0,
+        netCents: 0,
+      });
+    },
+  );
+});

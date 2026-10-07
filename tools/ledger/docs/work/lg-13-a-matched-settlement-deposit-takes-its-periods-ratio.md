@@ -83,3 +83,63 @@ the Log).
   `asked 15000 of alex; deposit matched; open period: payer null, deposit 0, net 0`,
   `… payer sam, deposit 3000, net 1500`,
   `… payer alex, deposit 5000, net 1500`.
+- 2026-10-07 — Built on `1aece87`. **The rule, as built:** a deposit is
+  _counted_ when its date says, as before, and a deposit matched to a closed
+  period is _weighed_ in that period's stretch, at the ratio its settlement
+  recorded. Why it is exact: a close asks for its cumulative net divided by the
+  recipient's share at its own ratio, so the same amount weighed at that ratio
+  cancels the net, whatever ratio follows.
+  - **`books`.** `DepositInput` gains an optional `settles`: the last day of the
+    closed period the deposit was matched to. `cumulativeSettlement` puts it in
+    the stretch holding that day (`periodIndexOf`), so the books need no period
+    ids. Optional, so every lg-6 caller and test is untouched. A date after the
+    open period's last day still leaves the deposit out, matched or not.
+    Without that, `GET /api/periods/open?end=` a day before the deposit would
+    have counted a deposit dated after it.
+  - **`api`.** `settlementFor` now runs `matchDeposits` over the same buffer
+    rows it weighs, through `depositMatches`, which `closedPeriods` shares. The
+    match is still recomputed on every read from the current classification.
+    There is no schema change.
+  - **The brief had nothing wrong.** Its "always dated after the period it
+    settles" is nearly always: `matchDeposits` accepts a row dated on the
+    period's last day, which falls in that period anyway. The comment and §5
+    say "nearly always".
+  - Red, then green. `npx vitest run tools/ledger/books` with `periods.ts`
+    reverted: `4 failed | 193 passed (197)` (the 0.5 and 0.7 cases, at 100.00
+    and at 100.01). Restored: `197 passed (197)`. `npx vitest run
+tools/ledger/api/test/periods.test.ts` against the books `dist` built
+    before the change: `2 failed | 25 passed (27)` (0.5 and 0.7). After
+    rebuilding books (`grep -n "deposit.settles"` in
+    `books/dist/periods.js` finds lines 130 and 132), `npx vitest run
+tools/ledger/api` passes `269 passed (269)`. `npm test -- --project
+ledger` passes `519 passed (519)`. `git diff --numstat` shows 0 lines
+    removed from either test file, so every lg-6 test stands unchanged.
+  - **Sub-cent residue, measured, not changed.** I ran a seeded sweep (a scratch
+    script over `books/dist`) of 20 000 trials. Each draws a random share
+    (0.05–0.95) and one card line of up to 5 000.00, closes, pays exactly the
+    asked figure, matches it, and reads the next period. With a new random
+    ratio, 4 506 of 20 000 name a payer, worst deposit 8 cents, net 0 in every
+    case. With the ratio unchanged, 2 843 of 20 000 name one, worst deposit 9
+    cents, net 0. lg-6 already asks for a deposit of a few cents whose net
+    rounds to nothing, by gate 2 low 12's rule that a deposit of 0, not a net of
+    0, names nobody. lg-13 adds no new kind of outcome. Before lg-13 the same
+    exact payment across a change named 30.00 or 50.00.
+  - **For lg-7's builder.** Done-when 3's buffer balance is `bufferAsOf`
+    (`books/src/buckets.ts`), a sum of rows. No settlement weighing reaches it,
+    so lg-13 does not move it. lg-13 does move the cumulative catch-up that
+    Build 8 reports, and any v3 close after the import. Each imported v1/v2
+    period is a closed period with a recorded payer and deposit, so
+    `matchDeposits` matches its historical deposit if one was paid within a
+    cent, dated on or after the period's end, filed to the payer. That deposit
+    is then weighed at the ratio the period records, which is the
+    `periods.ratio_id` the import writes. Import each period with the ratio its
+    historical settlement used, or a matched deposit is weighed wrong. Compute
+    the catch-up through `settlementFor` (or `cumulativeSettlement` with
+    `settles` filled from `matchDeposits`), never by date alone. A historical
+    deposit paid off by more than a cent stays weighed by its date. If the
+    workbook's ratio changed at a period boundary, its own catch-up figure
+    followed neither rule necessarily, so a difference there is not a defect in
+    the import.
+  - **Fold-in:** none was free. No open ledger ticket touches the settlement's
+    weighing, and lg-6's unfiled lows (a third person's buffer row) are not
+    specified work.
