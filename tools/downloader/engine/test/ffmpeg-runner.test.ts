@@ -204,3 +204,24 @@ describe("StderrLevels: info goes to onInfoLine, warnings arrive untagged (dl-96
     expect(String(failure?.details?.["stderr"])).toBe("Conversion failed!");
   });
 });
+
+/**
+ * dl-96's gate, F1. ffmpeg 7.x writes two prefixes for a decoder's messages,
+ * and a tag pattern allowing one read the warning as a continuation of the
+ * `[info]` line above it — gone from the tail and from `onStderrLine`.
+ * Captured from `ffmpeg-static` 7.0.2 on a corrupted H.264 file.
+ */
+describe("StderrLevels with a decoder's two prefixes (dl-96, F1)", () => {
+  test("a doubly-prefixed warning after an info line is still a warning", () => {
+    const levels = new StderrLevels();
+    expect(levels.read("[info] Stream mapping:").info).toBe(true);
+    expect(
+      levels.read(
+        "[vist#0:0/h264 @ 0x6d6cc80] [dec:h264 @ 0x6d716c0] [warning] corrupt decoded frame",
+      ),
+    ).toEqual({
+      info: false,
+      text: "[vist#0:0/h264 @ 0x6d6cc80] [dec:h264 @ 0x6d716c0] corrupt decoded frame",
+    });
+  });
+});

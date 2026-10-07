@@ -1152,3 +1152,58 @@ describe("dl-96: progress on a source the probe could not time", () => {
     expect(expectedOutputBytes(measured, { ...plain, live: true })).toBeNull();
   });
 });
+
+/**
+ * dl-96's gate, F3. `expectedOutputBytes` is right on its own, but nothing
+ * pinned what `attempt` hands it: with `audioOnly`, `transcoded` or `live`
+ * hard-coded to false, every test still passed. Each of these makes the
+ * source's size a different file's, so each must report no total.
+ */
+describe("dl-96: no expected total where the output is not the source copied", () => {
+  async function totalsFor(options: JobOptions, isLive = false): Promise<(number | null)[]> {
+    const source = path.join(fixtureRoot, "prog4", "faststart.mp4");
+    const totals: (number | null)[] = [];
+    const media = await engineWith().stream({
+      jobId: "dl-96-no-total",
+      variant: {
+        id: "prog4-measured",
+        protocol: "progressive",
+        url: `${origin.origin}/prog4/faststart.mp4`,
+        hasVideo: true,
+        hasAudio: true,
+        filesizeBytes: (await fs.stat(source)).size,
+        filesizeIsEstimate: false,
+        // Declared, because the transcode is decided from these: an undeclared
+        // codec is copied, and H.264 copied into WebM is refused outright.
+        videoCodec: "avc1.42c01e",
+        audioCodec: "mp4a.40.2",
+        label: "prog4-measured",
+      },
+      requestContext: CONTEXT,
+      isLive,
+      options,
+      onProgress: (progress) => totals.push(progress.totalBytes),
+    });
+    media.body.resume();
+    await media.done;
+    return totals;
+  }
+
+  test("audio only", async () => {
+    const totals = await totalsFor({ audioOnly: true });
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  });
+
+  test("a transcode: H.264 into WebM", async () => {
+    const totals = await totalsFor({ container: "webm" });
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  }, 60_000);
+
+  test("a live capture", async () => {
+    const totals = await totalsFor({ liveDurationSec: 2 }, true);
+    expect(totals.length).toBeGreaterThan(0);
+    expect(totals.every((total) => total === null)).toBe(true);
+  });
+});

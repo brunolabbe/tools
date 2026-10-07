@@ -20,7 +20,7 @@
  * rather than pretending there is a cleaner channel.
  *
  * The patterns below are **measured against the bundled ffmpeg**, not guessed.
- * On 2026-09-07, at `-loglevel warning` (what `GLOBAL_ARGS` asks for), against
+ * On 2026-09-07, at `-loglevel warning` (what the runner still passes on), against
  * local fixture origins:
  *
  * | condition | what ffmpeg wrote | mirror? |

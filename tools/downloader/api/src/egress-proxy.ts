@@ -626,8 +626,9 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // the one channel that carries *why* into the failing run's own
           // stderr, where `isTlsVerificationFailure` reads it and the job fails
           // as `TLS_VERIFICATION_FAILED` rather than as a dead link. Measured
-          // in dl-27; it needs `-loglevel warning`, which is why `GLOBAL_ARGS`
-          // now asks for one.
+          // in dl-27; it needs warnings on stderr, which is why `GLOBAL_ARGS`
+          // asks for at least `warning` (`level+info` since dl-96, read back
+          // as the warning stream).
           onRejected: (error) => {
             const code = certificateRejectionCode(error);
             // Before `fail`, so the record is already there when the client's

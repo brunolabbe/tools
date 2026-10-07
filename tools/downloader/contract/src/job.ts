@@ -90,8 +90,9 @@ export interface JobProgress {
   /**
    * What the finished file is expected to come to, or null. Today only the
    * source's measured size for a progressive file copied unchanged (dl-96):
-   * an expectation the output tracks closely, never a measurement of it, so
-   * it is shown beside `downloadedBytes` and never drives `percent`.
+   * an expectation, never a measurement — close for a source of one video and
+   * one audio track, smaller when the source carries more — so it is shown
+   * beside `downloadedBytes` and never drives `percent`.
    */
   totalBytes: number | null;
   segmentsDone: number | null;

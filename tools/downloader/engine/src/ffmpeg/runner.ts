@@ -14,7 +14,7 @@
  * bounded tail so a failure carries evidence without unbounded memory or a log
  * flood.
  *
- * **Everything downstream of stderr sees what `-loglevel warning` wrote.**
+ * **Everything downstream of stderr sees what `-loglevel warning` would write.**
  * `GLOBAL_ARGS` asks for `level+info` so the input's `Duration:` line arrives
  * (dl-96), and `StderrLevels` takes it back out: an `[info]` message goes to
  * `onInfoLine` and nowhere else, and a `[warning]` or `[error]` one loses its
@@ -94,12 +94,15 @@ function tail(text: string, maxBytes: number): string {
 }
 
 /**
- * The tag ffmpeg's `level` log flag writes, after the `[component @ address] `
- * prefix when there is one. Measured on 2026-10-07 on both builds this repo
- * runs, 6.1.1 and `ffmpeg-static`'s 7.0.2:
- * `[http @ 0x5569fb8a5540] [warning] HTTP error 404 Not Found`.
+ * The tag ffmpeg's `level` log flag writes, after any `[component @ address] `
+ * prefixes. Measured on 2026-10-07 on both builds this repo runs, 6.1.1 and
+ * `ffmpeg-static`'s 7.0.2: `[http @ 0x5569fb8a5540] [warning] HTTP error 404
+ * Not Found`. 7.x writes **two** for a decoder's messages —
+ * `[vist#0:0/h264 @ 0x…] [dec:h264 @ 0x…] [warning] corrupt decoded frame` —
+ * and a pattern allowing one read those as continuations of the line above,
+ * so after an `[info]` line a real warning vanished (dl-96's gate, F1).
  */
-const LEVEL_TAG = /^((?:\[[^\]]*\] )?)\[(trace|debug|verbose|info|warning|error|fatal|panic)\] /u;
+const LEVEL_TAG = /^((?:\[[^\]]*\] )*)\[(trace|debug|verbose|info|warning|error|fatal|panic)\] /u;
 const BELOW_WARNING: ReadonlySet<string> = new Set(["trace", "debug", "verbose", "info"]);
 
 /**
@@ -111,6 +114,12 @@ const BELOW_WARNING: ReadonlySet<string> = new Set(["trace", "debug", "verbose",
  * and the second is the source's text as much as the first. Before any tag has
  * been seen — a stand-in binary, or a build that ignores the flag — a line is
  * passed through, which is what every line was before dl-96.
+ *
+ * **It is a rule about text, and a source can forge text** (dl-96's gate, F2).
+ * ffmpeg prints a metadata tag's *key* unescaped, so a key holding a newline
+ * and `[warning] certificate has expired` arrives as a tagged warning line of
+ * that job's own, and a key forging `  Duration:` can set that job's percent.
+ * See the ticket for what the owner decided about it.
  */
 export class StderrLevels {
   #level: string | null = null;
@@ -152,7 +161,9 @@ export class StderrLevels {
  * `502 TLS certificate verification failed (<code>)`, which ffmpeg echoes as
  * `[httpproxy] HTTP error 502 …`. That is the **only** channel for a refused
  * *segment* origin — dl-21 measured that nothing else about the certificate
- * reaches ffmpeg — and it is why `GLOBAL_ARGS` asks for `-loglevel warning`.
+ * reaches ffmpeg — and it is why what reaches these patterns must include
+ * warnings: `GLOBAL_ARGS` asks for `level+info`, and `StderrLevels` passes on
+ * the warning stream untagged.
  * Both halves match it as written, which is not an accident.
  */
 const CERTIFICATE_MENTIONED = /certificate/iu;

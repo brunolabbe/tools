@@ -121,8 +121,9 @@ const SUBTITLE_DEMUXERS: Readonly<Record<string, string>> = { vtt: "webvtt", srt
  * output option, both, and as `-f_err_detect`; so does `-xerror`. The gate's
  * exit 255 came from its command lacking `-bsf:a aac_adtstoasc`, which fails
  * the mux whatever else is set — measured, with the same bytes, on 2026-09-27.
- * The line below is what the demuxer writes at `-loglevel warning`, which
- * `GLOBAL_ARGS` asks for; the same bind `isTlsVerificationFailure` is in.
+ * The line below is what the demuxer writes at `-loglevel warning`, which is
+ * what the runner passes on from `GLOBAL_ARGS`' `level+info` (dl-96); the same
+ * bind `isTlsVerificationFailure` is in.
  *
  * **Not measured against real-world sources for false failures.** A source
  * whose segments ffmpeg used to skip over quietly now fails where it used to
@@ -463,9 +464,13 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
  * (dl-96).
  *
  * Only for a progressive file the probe measured, copied as it is: `-c copy`
- * moves every sample unchanged, so the output differs from the source by its
- * boxes alone — measured within 0.07% on a 45.7 MB file whose index moved from
- * the end to a fragmented front. A transcode, an audio-only cut, a separate
+ * moves every sample unchanged, so for a source of one video and one audio
+ * track the output differs by its boxes alone — measured within 0.07% on a
+ * 45.7 MB file whose index moved from the end to a fragmented front. **Only
+ * the first of each is mapped**, so a source carrying more tracks comes out
+ * smaller: 13.9% under on one with four audio tracks (dl-96's gate, F4). The
+ * variant does not say how many tracks it has, so that case keeps the size,
+ * shown as approximate. A transcode, an audio-only cut, a separate
  * audio input and a live capture each make the source's size a different
  * file's, and HLS and DASH are left out because a segment sum counts MPEG-TS
  * packet overhead the MP4 does not carry. It is an expectation, never a
@@ -565,8 +570,9 @@ async function attempt(
     },
     onInfoLine: (line) => {
       if (mediaDurationSec !== null || learnedDurationSec !== null) return;
-      // The first input's line: a second input is a separate audio rendition
-      // or a subtitle track, timed against the same video.
+      // The first line that parses. Inputs are described in order, so that is
+      // the video's unless its input says `N/A`; a later input is a separate
+      // audio rendition or a subtitle track, timed against the same video.
       learnedDurationSec = durationFromInfoLine(line);
     },
     onStderrLine: (line) => {

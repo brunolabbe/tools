@@ -195,7 +195,7 @@ describe("RateTracker across fragments slower than its window (dl-96)", () => {
       tracker.record(sentAt(ms), ms, ms * 50);
       if (ms >= 2 * FRAGMENT_MS) readings.push(tracker.bytesPerSecond() ?? 0);
     }
-    expect(Math.min(...readings)).toBeGreaterThan(RATE / 2.2);
+    expect(Math.min(...readings)).toBeGreaterThan(RATE / 2);
     expect(Math.max(...readings)).toBeLessThanOrEqual(RATE * 1.01);
   });
 
