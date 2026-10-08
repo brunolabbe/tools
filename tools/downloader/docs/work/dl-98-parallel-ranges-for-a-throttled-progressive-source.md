@@ -76,6 +76,17 @@ Reproduce first with a fixture origin that throttles **per connection**. The
 throttled range server used to reproduce dl-96 throttles per request, which is
 the right shape. Show a single-connection baseline, then the speed-up.
 
+**After dl-102.** Build this after [dl-102](./dl-102-a-range-ignoring-origin-finishes-a-tail-moov-mp4-undecodable.md)
+has merged (the owner's order, 2026-10-08; both rewrite the progressive input
+path in `engine/src/stream.ts`). dl-102's Done when 2 and 3 make `stream()`
+refuse a tail-`moov` MP4 from an origin that ignores `Range`, with a new
+contract code, before the first byte. So the "200 to a range request" refusal
+test cannot serve a tail-`moov` file from an origin that answers `200` to every
+request: that job fails with dl-102's code and never reaches the fan-out. Use a
+fast-start MP4 from such an origin (dl-102's Done when 3 keeps it completing
+whole), or an origin that honours the ranges `stream()` and ffmpeg make and
+answers `200` only to the extra connections the fan-out opens.
+
 ## Done when
 
 - Against a fixture origin throttled per connection, a job that measures slow
@@ -85,10 +96,11 @@ the right shape. Show a single-connection baseline, then the speed-up.
   each stay on exactly one connection, counted at the fixture.
 - The output is identical in media to a single-connection run, including a
   file whose `moov` is at the end.
-- For each kind of refusal (a 429, a reset, a 200 to a range request, and no
-  speed-up at 4), the job completes on one connection with output identical in
-  media, and a second job to that host opens one connection, counted at the
-  fixture.
+- For each kind of refusal in Decision 5 (a 429, a 403, a 503, a reset, a 200
+  to a range request, and no speed-up at 4), the job completes on one
+  connection with output identical in media, and a second job to that host opens
+  one connection, counted at the fixture. The 200 case has a constraint: see
+  Build, "After dl-102".
 - Bytes held ahead never exceed 4 × 4 MB per job, measured, not assumed.
 - Every ranged fetch passes the SSRF check and the egress proxy, carries the
   replayed headers, counts toward the size cap, and stops on cancel.
@@ -111,3 +123,25 @@ computed follows from "only when measured slow".
 connections from one IP; nothing above said. The options were to fall back for
 the job only, to fall back and remember the host until restart, or to fall back
 and remember it in SQLite with an expiry. They chose until restart (decision 5).
+
+**2026-10-08** — two records, no source changed, nobody building this ticket.
+
+1. **Refusal scope in Done when.** The orchestrator (session tools-f1) put the
+   question: "dl-98's Decision 5 counts 429, 403, 503, a reset, a 200 to a range
+   request and 'no speed-up at 4' as refusals. Its Done when line tests only 429,
+   a reset, a 200 and no speed-up. If dl-98 is built, should its refusal tests
+   also cover 403 and 503?" The options were "Cover 403 and 503 too
+   (Recommended)" and "Done when as written". **The owner chose "Cover 403 and
+   503 too"**, which was the recommended option (the orchestrator's
+   recommendation). The Done when bullet now names all six kinds.
+2. **Deferred behind dl-102.** The owner deferred this ticket until
+   [dl-102](./dl-102-a-range-ignoring-origin-finishes-a-tail-moov-mp4-undecodable.md)
+   has merged, because both rewrite the progressive input path in
+   `engine/src/stream.ts`. Read on `origin/main` at `856a4e87`: dl-102's Done when
+   2 has `stream()` throw a typed `AppError` with a new code before the first
+   byte for a tail-`moov` MP4 from an origin that ignores `Range`, and its Done
+   when 3 keeps a fast-start MP4 from that origin completing whole. So the "200
+   to a range request" refusal test cannot use a tail-`moov` source from an
+   origin that ignores `Range` on every request; Build, "After dl-102", says so.
+   `status` stays `ready`: dl-102 is not in `depends_on`, and the owner's order
+   is recorded here and in Build.
