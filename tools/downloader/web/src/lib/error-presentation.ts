@@ -178,6 +178,13 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "unavailable",
     allowRetry: false,
   },
+  SOURCE_NOT_SEEKABLE: {
+    title: "Can't be streamed from this source",
+    detail:
+      "This file keeps its index at the end, and the site serving it won't let us skip ahead to read it, so it can't be streamed to you. Another quality or format of the same video may work.",
+    tone: "unavailable",
+    allowRetry: false,
+  },
   SIZE_LIMIT_EXCEEDED: {
     title: "Too large",
     detail: "This video is bigger than the configured size limit. Pick a lower quality.",

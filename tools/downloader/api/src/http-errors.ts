@@ -48,6 +48,8 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   VARIANT_GONE: 410,
   DOWNLOAD_FAILED: 502,
   CONTAINER_UNSUPPORTED: 422,
+  // The source is the problem, and it will be the problem every time.
+  SOURCE_NOT_SEEKABLE: 422,
   SIZE_LIMIT_EXCEEDED: 413,
   DISK_FULL: 507,
 

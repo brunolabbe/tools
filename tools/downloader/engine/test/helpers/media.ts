@@ -351,3 +351,80 @@ export async function generateWebm(dir: string, seconds: number): Promise<string
   ]);
   return out;
 }
+
+/**
+ * dl-102: a progressive MP4 large enough to fail from an origin that ignores
+ * `Range`. Below roughly 64 to 91 KB ffmpeg reads the whole of a tail-`moov`
+ * file before it needs to seek, so a smaller fixture cannot fail (gate 1
+ * measured 63,749 B decoding and 91,053 B not). Four seconds at a constant
+ * 2 Mb/s is about 1 MB, whatever the encoder does with a test pattern.
+ * `moov-end.mp4` is ffmpeg's default layout, `ftyp,free,mdat,moov`;
+ * `faststart.mp4` is the same samples with the index first.
+ */
+export async function generateLargeProgressive(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+  const muxed = path.join(dir, "moov-end.mp4");
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=640x480:rate=25:duration=4",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:sample_rate=44100:duration=4",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-pix_fmt",
+    "yuv420p",
+    "-b:v",
+    "2M",
+    "-minrate",
+    "2M",
+    "-maxrate",
+    "2M",
+    "-bufsize",
+    "2M",
+    ...AAC,
+    "-shortest",
+    muxed,
+  ]);
+  await ffmpeg([
+    "-i",
+    muxed,
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    path.join(dir, "faststart.mp4"),
+  ]);
+}
+
+/**
+ * How many video frames of `file` actually decode, read off ffmpeg's own
+ * `-progress` counter (dl-102). A container can declare its full duration
+ * around samples that do not decode, so a duration is no evidence here.
+ */
+export async function decodedVideoFrames(
+  file: string,
+): Promise<{ frames: number; exit: number | null }> {
+  const ran = await run(FFMPEG, [
+    "-hide_banner",
+    "-nostdin",
+    "-v",
+    "error",
+    "-i",
+    file,
+    "-map",
+    "0:v:0",
+    "-f",
+    "null",
+    "-progress",
+    "pipe:1",
+    "-",
+  ]);
+  const counts = [...ran.stdout.matchAll(/frame=(\d+)/gu)].map((match) => Number(match[1]));
+  return { frames: counts.at(-1) ?? 0, exit: ran.code };
+}

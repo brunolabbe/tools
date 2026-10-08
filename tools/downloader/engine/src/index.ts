@@ -32,8 +32,10 @@
  *  - `stream()` throws `AppError` and nothing else, before the first byte:
  *    `JOB_CANCELED`, `DOWNLOAD_FAILED` (re-probe and retry), `SIZE_LIMIT_EXCEEDED`,
  *    `TIMEOUT`, `TLS_VERIFICATION_FAILED`, `LIVE_STREAM_UNSUPPORTED`,
- *    `CONTAINER_UNSUPPORTED` (not retryable; dl-99). After it,
- *    the same codes arrive on `done`, and a retry is no longer possible.
+ *    `CONTAINER_UNSUPPORTED` (not retryable; dl-99), `SOURCE_NOT_SEEKABLE` (not
+ *    retryable; dl-102: a tail-`moov` file from an origin that ignores
+ *    `Range`). After it, the same codes arrive on `done`, and a retry is no
+ *    longer possible.
  *  - The engine does not re-probe. Signed URLs expire in 30–300 s (analysis §5),
  *    so the caller must hand in a *fresh* variant.
  *  - The engine does not enforce SSRF policy on `variant.url`, nor on
@@ -41,6 +43,14 @@
  *    output is attacker-influenced, so the guard must run before this is called
  *    — `urlsInProbeResult` covers both — and ffmpeg's egress must be the
  *    guarded proxy, which is the only check that sees each segment.
+ *  - **One request is the engine's own, not ffmpeg's** (dl-102): before a
+ *    progressive input is opened, `download/seek-probe.ts` asks its origin for
+ *    one byte with `Range`. It leaves by ffmpeg's route — `proxyUrl`, or the
+ *    `http_proxy` ffmpeg would inherit, with the same `tlsVerify` and
+ *    `tlsCaFile` — never around a configured proxy, and each redirect hop is a
+ *    fresh request on that route. So the proxy that vets ffmpeg vets it too,
+ *    and an engine built without one probes directly, exactly as its ffmpeg
+ *    fetches directly.
  */
 
 import type { EngineConfig, EngineConfigInput } from "./config.ts";
@@ -121,6 +131,14 @@ export {
 } from "./ffmpeg/preview-frame.ts";
 
 export { downloadCandidates, isHostFailure } from "./download/failover.ts";
+export type { IndexPlacement, SeekProbeOptions, SeekVerdict } from "./download/seek-probe.ts";
+export {
+  indexPlacement,
+  probeSeek,
+  SeekProbeCanceled,
+  TopLevelBoxWalk,
+  WALK_LIMIT_BYTES,
+} from "./download/seek-probe.ts";
 
 export type { EstimateBasis, EstimateOptions, SizeEstimate } from "./estimate.ts";
 export { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";

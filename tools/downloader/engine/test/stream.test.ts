@@ -27,7 +27,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
-import { AppError } from "@downloader/contract";
+import { AppError, DEFAULT_ERROR_MESSAGES } from "@downloader/contract";
 import type { JobOptions, MediaVariant, RequestContext, SubtitleTrack } from "@downloader/contract";
 import type { EngineConfigInput } from "../src/config.ts";
 import { createEngine } from "../src/index.ts";
@@ -780,13 +780,13 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   });
 
   test("a progressive body cut after the first byte and never served again fails the stream", async () => {
-    // The third request is the sequential body read, after ffmpeg has found the
-    // index at the end; it stops at 40%, and every reconnect finds the URL gone
-    // (a 404 — a signed link expiring mid-download — rather than a reset, only
-    // because ffmpeg gives up on it in 11 s rather than 55).
+    // The fourth request is the sequential body read: dl-102’s seek probe, then
+    // ffmpeg finding the index at the end; it stops at 40%, and every reconnect
+    // finds the URL gone (a 404 — a signed link expiring mid-download — rather
+    // than a reset, only because ffmpeg gives up on it in 11 s rather than 55).
     fault = (pathname, count, request, response, body) => {
-      if (!pathname.endsWith("/prog9/moov-end.mp4") || count < 3) return false;
-      if (count === 3) cutShort(request, response, body, 0.4);
+      if (!pathname.endsWith("/prog9/moov-end.mp4") || count < 4) return false;
+      if (count === 4) cutShort(request, response, body, 0.4);
       else response.writeHead(404).end();
       return true;
     };
@@ -800,7 +800,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     // ffmpeg logs "Stream ends prematurely" here too, and then reconnects and
     // gets the rest — which is why that line cannot be the signal.
     fault = (pathname, count, request, response, body) => {
-      if (!pathname.endsWith("/prog9/moov-end.mp4") || count !== 3) return false;
+      if (!pathname.endsWith("/prog9/moov-end.mp4") || count !== 4) return false;
       cutShort(request, response, body, 0.4);
       return true;
     };
@@ -1439,4 +1439,315 @@ describe("dl-99: a manifest variant with undeclared codecs is not copied into We
     expect(built.args).not.toContain("-c:v");
     expect(built.args).not.toContain("-c:a");
   });
+});
+
+type Outcome =
+  | { refused: string; retryable: boolean; message: string }
+  | { streamed: number; done: number | string; decodedFrames: number };
+
+function large(url: string, overrides: Partial<MediaVariant> = {}): MediaVariant {
+  return {
+    id: "large",
+    protocol: "progressive",
+    url,
+    hasVideo: true,
+    hasAudio: true,
+    durationSec: 4,
+    label: "large",
+    ...overrides,
+  };
+}
+
+/** All 100 frames of the 4 s, 25 fps fixture, and `done` resolved with what was streamed. */
+function expectWhole(outcome: Outcome): void {
+  expect(outcome).toMatchObject({ decodedFrames: 100 });
+  if ("streamed" in outcome) expect(outcome.done).toBe(outcome.streamed);
+}
+
+/**
+ * A forward proxy that records what it is asked for. `refuse` answers `403`
+ * to everything, which is what the guarded egress proxy does to a target it
+ * will not reach.
+ */
+async function startForwardProxy(refuse: boolean): Promise<FixtureServer> {
+  return startFixtureServer(async (request, response) => {
+    if (refuse) {
+      response.writeHead(403).end();
+      return;
+    }
+    const target = new URL(request.url ?? "");
+    await new Promise<void>((resolve) => {
+      const upstream = http.request(
+        target,
+        { method: request.method, headers: request.headers },
+        (answer) => {
+          response.writeHead(answer.statusCode ?? 502, answer.headers);
+          answer.pipe(response);
+          answer.once("end", resolve);
+        },
+      );
+      upstream.once("error", () => {
+        if (!response.headersSent) response.writeHead(502);
+        response.end();
+        resolve();
+      });
+      upstream.end();
+    });
+  });
+}
+
+/**
+ * dl-102. A progressive source goes to ffmpeg as a URL so that ffmpeg can seek
+ * to an index at the end of the file — which it does with `Range`. An origin
+ * that answers every request with `200` and the whole body takes that away,
+ * and a tail-`moov` MP4 from it used to finish as a clean response of which
+ * not one frame decodes. The fixture is about 1 MB because a small one cannot
+ * fail: below roughly 64 to 91 KB ffmpeg has the whole file before it needs
+ * to seek.
+ *
+ * Imported here rather than at the top so this block moves no line above it.
+ */
+describe("dl-102: an origin that ignores Range", () => {
+  let generateLargeProgressive: (dir: string) => Promise<void>;
+  let decodedVideoFrames: (file: string) => Promise<{ frames: number }>;
+  /** The whole file with a `200`, whatever was asked. Gated like `origin`. */
+  let ignoring: FixtureServer;
+
+  beforeAll(async () => {
+    ({ generateLargeProgressive, decodedVideoFrames } = await import("./helpers/media.ts"));
+    await generateLargeProgressive(path.join(fixtureRoot, "large"));
+    ignoring = await startFixtureServer(async (request, response) => {
+      if (
+        request.headers.referer !== CONTEXT.headers["Referer"] ||
+        request.headers.cookie !== CONTEXT.headers["Cookie"]
+      ) {
+        response.writeHead(403).end("forbidden");
+        return;
+      }
+      let pathname = new URL(request.url ?? "/", "http://x").pathname;
+      // `/moved/<path>` answers with a redirect to `<path>` on the same origin.
+      if (pathname.startsWith("/moved/")) {
+        response.writeHead(302, { location: pathname.slice("/moved".length) }).end();
+        return;
+      }
+      // `/slow/<path>` is `<path>`, two seconds late.
+      if (pathname.startsWith("/slow/")) {
+        pathname = pathname.slice("/slow".length);
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      const file = path.join(fixtureRoot, ...pathname.split("/").filter((part) => part !== ".."));
+      let body: Buffer;
+      try {
+        body = await fs.readFile(file);
+      } catch {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, {
+        "content-type": TYPES[path.extname(file)] ?? "application/octet-stream",
+        "content-length": String(body.length),
+      });
+      response.end(body);
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await ignoring?.close();
+  });
+
+  /** What a visitor would be left with: the code that stopped it, or the file and its frames. */
+  async function outcomeOf(
+    label: string,
+    variant: MediaVariant,
+    overrides: EngineConfigInput = {},
+  ): Promise<Outcome> {
+    return engineWith(overrides)
+      .stream({ jobId: label, variant, requestContext: CONTEXT })
+      .then(
+        async (media): Promise<Outcome> => {
+          const chunks: Buffer[] = [];
+          media.body.on("data", (chunk: Buffer) => chunks.push(chunk));
+          const done = await media.done.then(
+            (outcome) => outcome.bytes,
+            (error: unknown) => AppError.from(error).code,
+          );
+          const file = path.join(outputDir, `${label}.mp4`);
+          await fs.writeFile(file, Buffer.concat(chunks));
+          const decoded = await decodedVideoFrames(file);
+          return { streamed: Buffer.concat(chunks).length, done, decodedFrames: decoded.frames };
+        },
+        (error: unknown): Outcome => {
+          const appError = AppError.from(error);
+          return {
+            refused: appError.code,
+            retryable: appError.retryable,
+            message: appError.message,
+          };
+        },
+      );
+  }
+
+  test("a tail-moov MP4 from an origin that ignores Range is refused before the first byte", async () => {
+    const source = path.join(fixtureRoot, "large", "moov-end.mp4");
+    // Able to fail: past the size below which ffmpeg never seeks, and in the
+    // layout ffmpeg itself writes, with `free` between `ftyp` and `mdat`.
+    expect((await fs.stat(source)).size).toBeGreaterThanOrEqual(91_053);
+    expect(await topLevelBoxes(source)).toEqual(["ftyp", "free", "mdat", "moov"]);
+
+    const before = ignoring.requests.length;
+    const outcome = await outcomeOf(
+      "dl-102-refused",
+      large(`${ignoring.origin}/large/moov-end.mp4`),
+    );
+
+    expect(outcome).toEqual({
+      refused: "SOURCE_NOT_SEEKABLE",
+      retryable: false,
+      message: DEFAULT_ERROR_MESSAGES.SOURCE_NOT_SEEKABLE,
+    });
+    // One request, the probe's, with the captured headers replayed on it; no
+    // ffmpeg was started to make a second.
+    const asked = ignoring.requests.slice(before);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.headers.referer).toBe(CONTEXT.headers["Referer"]);
+  }, 60_000);
+
+  test("control: the same tail-moov file from an origin that honours Range completes whole", async () => {
+    expectWhole(await outcomeOf("dl-102-honoured", large(`${origin.origin}/large/moov-end.mp4`)));
+  }, 60_000);
+
+  test("control: a fast-start MP4 from an origin that ignores Range completes whole", async () => {
+    const before = ignoring.requests.length;
+    expectWhole(
+      await outcomeOf("dl-102-faststart", large(`${ignoring.origin}/large/faststart.mp4`)),
+    );
+    // The probe asked and was answered with the whole file; ffmpeg then read it.
+    expect(ignoring.requests.length - before).toBeGreaterThanOrEqual(2);
+  }, 60_000);
+
+  test("a redirect is followed to the origin that answers, and that origin is the one judged", async () => {
+    const outcome = await outcomeOf(
+      "dl-102-moved",
+      large(`${ignoring.origin}/moved/large/moov-end.mp4`),
+    );
+    expect(outcome).toMatchObject({ refused: "SOURCE_NOT_SEEKABLE" });
+  }, 60_000);
+
+  test("a mirror that honours Range is tried after a primary that does not", async () => {
+    const before = ignoring.requests.length;
+    expectWhole(
+      await outcomeOf(
+        "dl-102-mirror",
+        large(`${ignoring.origin}/large/moov-end.mp4`, {
+          alternateUrls: [`${origin.origin}/large/moov-end.mp4`],
+        }),
+      ),
+    );
+    // The primary was asked once, by the probe, and never by ffmpeg.
+    expect(ignoring.requests.length - before).toBe(1);
+  }, 60_000);
+
+  test("when every mirror ignores Range, the last refusal is the answer", async () => {
+    const outcome = await outcomeOf(
+      "dl-102-no-mirror",
+      large(`${ignoring.origin}/large/moov-end.mp4`, {
+        alternateUrls: [`${ignoring.origin}/moved/large/moov-end.mp4`],
+      }),
+    );
+    expect(outcome).toMatchObject({ refused: "SOURCE_NOT_SEEKABLE" });
+  }, 60_000);
+
+  test("a separate audio file from an origin that ignores Range is refused as well", async () => {
+    // `audio-only.m4a` is ffmpeg's default layout, its index last.
+    expect(await topLevelBoxes(path.join(fixtureRoot, "pair5", "audio-only.m4a"))).toEqual([
+      "ftyp",
+      "free",
+      "mdat",
+      "moov",
+    ]);
+    const error = await engineWith()
+      .stream({
+        jobId: "dl-102-audio",
+        variant: large(`${origin.origin}/large/faststart.mp4`, {
+          audioUrl: `${ignoring.origin}/pair5/audio-only.m4a`,
+        }),
+        requestContext: CONTEXT,
+      })
+      .then(
+        () => null,
+        (cause: unknown) => AppError.from(cause),
+      );
+    expect(error?.code).toBe("SOURCE_NOT_SEEKABLE");
+    expect(error?.details).toMatchObject({ input: "audio" });
+  }, 60_000);
+
+  test("with subtitles attached, a refusal is final and not retried without them", async () => {
+    const before = ignoring.requests.length;
+    const error = await engineWith()
+      .stream({
+        jobId: "dl-102-subtitles",
+        variant: large(`${ignoring.origin}/large/moov-end.mp4`),
+        requestContext: CONTEXT,
+        subtitles: [{ language: "en", url: `${origin.origin}/subs/en.vtt`, format: "vtt" }],
+        options: { embedSubtitles: true, subtitleLanguages: ["en"] },
+      })
+      .then(
+        () => null,
+        (cause: unknown) => AppError.from(cause),
+      );
+    expect(error?.code).toBe("SOURCE_NOT_SEEKABLE");
+    expect(ignoring.requests.length - before).toBe(1);
+  }, 60_000);
+
+  test("a cancel while the probe waits is JOB_CANCELED, and ffmpeg never starts", async () => {
+    const controller = new AbortController();
+    const started = performance.now();
+    setTimeout(() => controller.abort(), 200);
+    const error = await engineWith()
+      .stream({
+        jobId: "dl-102-cancel",
+        variant: large(`${ignoring.origin}/slow/large/moov-end.mp4`),
+        requestContext: CONTEXT,
+        signal: controller.signal,
+      })
+      .then(
+        () => null,
+        (cause: unknown) => AppError.from(cause),
+      );
+    expect(error?.code).toBe("JOB_CANCELED");
+    expect(performance.now() - started).toBeLessThan(1_500);
+  }, 60_000);
+
+  test("the probe goes through the configured proxy, in absolute form", async () => {
+    const proxy = await startForwardProxy(false);
+    try {
+      const url = `${ignoring.origin}/large/moov-end.mp4`;
+      const outcome = await outcomeOf("dl-102-proxied", large(url), { proxyUrl: proxy.origin });
+      expect(outcome).toMatchObject({ refused: "SOURCE_NOT_SEEKABLE" });
+      expect(proxy.requests.map((entry) => [entry.url, entry.headers.range])).toEqual([
+        [url, "bytes=1-1"],
+      ]);
+    } finally {
+      await proxy.close();
+    }
+  }, 60_000);
+
+  test("a proxy that refuses the probe is not gone around, by the probe or by ffmpeg", async () => {
+    const proxy = await startForwardProxy(true);
+    try {
+      const before = ignoring.requests.length;
+      const outcome = await outcomeOf(
+        "dl-102-proxy-refuses",
+        large(`${ignoring.origin}/large/moov-end.mp4`),
+        { proxyUrl: proxy.origin },
+      );
+      // Unknown to the probe, so ffmpeg ran, through the same proxy, and failed
+      // on its own terms.
+      expect(outcome).toMatchObject({ refused: "DOWNLOAD_FAILED" });
+      expect(proxy.requests.length).toBeGreaterThanOrEqual(2);
+      expect(ignoring.requests.length).toBe(before);
+    } finally {
+      await proxy.close();
+    }
+  }, 60_000);
 });

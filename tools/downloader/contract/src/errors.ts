@@ -69,6 +69,16 @@ export const DOWNLOADER_ERROR_CODES = [
    * Not `DOWNLOAD_FAILED`: that code's copy tells the visitor to try again.
    */
   "CONTAINER_UNSUPPORTED",
+  /**
+   * A progressive MP4 whose index (`moov`) is at the end of the file, from an
+   * origin that ignores `Range` and answers every request with the whole body
+   * (dl-102). ffmpeg has to seek to that index before it can write a frame,
+   * and from such an origin it cannot: it used to finish a clean response of
+   * which no frame decodes. Raised before the first byte, from a probe of the
+   * origin itself, and not retryable — the same origin answers the same way.
+   * Not `DOWNLOAD_FAILED`: that code's copy tells the visitor to try again.
+   */
+  "SOURCE_NOT_SEEKABLE",
 
   // --- Serving ---
   /**
@@ -130,6 +140,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   DOWNLOAD_FAILED: "The download failed partway through.",
   CONTAINER_UNSUPPORTED:
     "This file can't be saved as WebM, because what it holds is not known to fit. Choose MP4 or MKV.",
+  SOURCE_NOT_SEEKABLE:
+    "This video can't be streamed from its source: the file keeps its index at the end, and the source won't let us skip ahead to read it.",
   THUMBNAIL_NOT_FOUND: "That preview image is no longer available.",
 };
 
