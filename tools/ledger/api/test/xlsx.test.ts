@@ -71,4 +71,18 @@ describe("reading an .xlsx file", () => {
       /^The file could not be read as an \.xlsx workbook \(.+\)\.$/u,
     );
   });
+
+  test("a formula saved as 0 or FALSE keeps its value", async () => {
+    const data = await file((sheet) => {
+      sheet.getCell("A1").value = { formula: "0*1", result: 0 };
+      sheet.getCell("B1").value = { formula: "1=2", result: false };
+    });
+
+    const [sheet] = await readSheets(data);
+
+    expect(sheet?.rows[0]).toEqual([
+      { value: { kind: "number", number: 0 }, formula: "0*1" },
+      { value: { kind: "text", text: "FALSE" }, formula: "1=2" },
+    ]);
+  });
 });

@@ -22,7 +22,15 @@
  * written), 2 when the command could not run at all.
  */
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -71,7 +79,13 @@ function copyBooks(databasePath: string, into: string): string | undefined {
   if (databasePath === ":memory:" || !existsSync(databasePath)) return undefined;
   const copy = path.join(into, "ledger.db");
   copyFileSync(databasePath, copy);
-  if (existsSync(`${databasePath}-wal`)) copyFileSync(`${databasePath}-wal`, `${copy}-wal`);
+  // A copy keeps the original's mode, and a read-only copy cannot be opened to
+  // work on; the copy is this process's alone, in a 0700 directory.
+  chmodSync(copy, 0o600);
+  if (existsSync(`${databasePath}-wal`)) {
+    copyFileSync(`${databasePath}-wal`, `${copy}-wal`);
+    chmodSync(`${copy}-wal`, 0o600);
+  }
   return copy;
 }
 

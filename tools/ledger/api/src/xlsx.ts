@@ -47,7 +47,14 @@ function cellOf(cell: ExcelJS.Cell): Cell | null {
   // A merged cell's other parts repeat the first part's value; only the first
   // part is the cell.
   if (cell.type === ExcelJS.ValueType.Merge) return null;
-  const value = valueOf(cell.value);
+  // A formula's saved result is read from the cell's model: exceljs copies only
+  // truthy fields into `cell.value`, so a saved 0 or FALSE would read as no
+  // value at all there.
+  const value = valueOf(
+    cell.type === ExcelJS.ValueType.Formula
+      ? (cell.model as { result?: unknown }).result
+      : cell.value,
+  );
   const formula = cell.type === ExcelJS.ValueType.Formula ? (cell.formula ?? null) : null;
   if (value === null && formula === null) return null;
   return { value, formula };

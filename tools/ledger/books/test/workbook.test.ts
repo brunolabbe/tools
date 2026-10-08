@@ -266,7 +266,7 @@ describe("reading the workbook", () => {
     expect(reading.problems).toEqual([
       "2022!G2: 500.005 is not a whole number of cents.",
       "2022!G3: the amount is not a number.",
-      "2022!G4: the amount is a formula with no saved value; open the workbook in Excel and save it.",
+      "2022!G4: the amount is a formula with no readable value; open the workbook in Excel and save it.",
     ]);
     expect(reading.skipped).toEqual([]);
   });
@@ -290,7 +290,31 @@ describe("reading the workbook", () => {
       { sheet: "2024", row: 3, from: "2023-12-30", to: "2024-12-30" },
     ]);
     expect(reading.problems).toEqual([
-      "2024!B2: dated 2024-01-20, but the row below it, row 3, is dated 2024-12-30; newest first, no row is older than the one below it (a year was repaired here, from 2023-12-30).",
+      "2024!B3: typed 2023-12-30 and repaired to 2024-12-30, the sheet's year, but row 2 (2024-01-20) is listed above row 3 (2024-12-30); newest first, the order does not prove the repair.",
+    ]);
+  });
+
+  test("a date typed a few days off, with no year repaired, is reported and imported as typed", () => {
+    const reading = readWorkbook(
+      [
+        year("2024", [
+          ["2024-01-20", "Hypothèque", "Versement", "Alex", 1_000, 500],
+          ["2024-01-25", "Hypothèque", "Versement", "Alex", 500, 250],
+          ["2024-01-05", "Hypothèque", "Versement", "Alex", 250, 250],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.problems).toEqual([]);
+    expect(reading.outOfOrder).toEqual([
+      { sheet: "2024", row: 2, date: "2024-01-20", belowRow: 3, belowDate: "2024-01-25" },
+    ]);
+    expect(reading.movements.map((movement) => movement.date)).toEqual([
+      "2024-01-05",
+      "2024-01-25",
+      "2024-01-20",
     ]);
   });
 });

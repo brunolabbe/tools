@@ -32,6 +32,8 @@ export interface YearRow {
   person?: string;
   /** In dollars; absent on a placeholder. */
   amount?: number;
+  /** The amount cell as a formula, saved with `amount`, or with 0 when there is none. */
+  amountFormula?: string;
   note?: string;
 }
 
@@ -39,6 +41,8 @@ export interface YearSheet {
   year: number;
   /** The `Solde reporté` rows at the bottom of the sheet, in dollars. */
   carry: { mortgage: number; buffer: number };
+  /** A carry-over cell written as a formula, saved with its amount above. */
+  carryFormula?: { mortgage?: string; buffer?: string };
   /** Oldest first. The sheet lists them newest first. */
   rows: YearRow[];
 }
@@ -227,6 +231,10 @@ function day(text: string): Date {
 
 const DATE_FORMAT = "yyyy-mm-dd";
 
+function carried(amount: number, formula: string | undefined): ExcelJS.CellValue {
+  return formula === undefined ? amount : { formula, result: amount };
+}
+
 /** The fixture as an `.xlsx` file. */
 export async function render(fixture: Fixture): Promise<Buffer> {
   const book = new ExcelJS.Workbook();
@@ -237,7 +245,7 @@ export async function render(fixture: Fixture): Promise<Buffer> {
   for (const year of fixture.years) {
     const sheet = book.addWorksheet(String(year.year));
     sheet.addRow(["", "Date", "Compte", "Détail", "Personne", "Solde", "Montant", "Note"]);
-    const lines: (string | number | Date | null)[][] = [];
+    const lines: ExcelJS.CellValue[][] = [];
     for (const row of year.rows) {
       if (row.amount !== undefined) balance = Math.round((balance + row.amount) * 100) / 100;
       lines.push([
@@ -247,7 +255,9 @@ export async function render(fixture: Fixture): Promise<Buffer> {
         row.detail,
         row.person ?? null,
         row.amount === undefined ? null : balance,
-        row.amount ?? null,
+        row.amountFormula === undefined
+          ? (row.amount ?? null)
+          : { formula: row.amountFormula, result: row.amount ?? 0 },
         row.note ?? null,
       ]);
     }
@@ -259,7 +269,7 @@ export async function render(fixture: Fixture): Promise<Buffer> {
       "Solde reporté",
       null,
       null,
-      year.carry.buffer,
+      carried(year.carry.buffer, year.carryFormula?.buffer),
     ]);
     sheet.addRow([
       null,
@@ -268,7 +278,7 @@ export async function render(fixture: Fixture): Promise<Buffer> {
       "Solde reporté",
       null,
       null,
-      year.carry.mortgage,
+      carried(year.carry.mortgage, year.carryFormula?.mortgage),
     ]);
     sheet.getColumn(2).numFmt = DATE_FORMAT;
   }

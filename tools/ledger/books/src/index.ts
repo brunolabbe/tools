@@ -54,6 +54,7 @@ export type {
   Correction,
   Corrections,
   Movement,
+  OutOfOrder,
   ReadOptions,
   Repair,
   Sheet,

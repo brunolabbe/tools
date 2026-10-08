@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -13,6 +14,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -740,5 +742,61 @@ describe("the workbook against the rows already pasted", () => {
     expect(ran.code).toBe(1);
     expect(ran.out).toContain("so a row is in one and not the other.");
     expect(ran.out).not.toContain("0.00 $ is unexplained");
+  });
+
+  test("a read-only books file dry-runs, refuses --write, and keeps its mode", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    db.close();
+    chmodSync(databasePath, 0o444);
+    const mode = statSync(databasePath).mode;
+    const hash = sha256(databasePath);
+
+    const dry = await run(await workbook(), "--as", "alex");
+    const written = await run(await workbook(), "--as", "alex", "--write");
+
+    expect(dry.code, dry.err).toBe(0);
+    expect(written.code).not.toBe(0);
+    expect(statSync(databasePath).mode).toBe(mode);
+    expect(sha256(databasePath)).toBe(hash);
+    chmodSync(databasePath, 0o644);
+  });
+
+  test("a formula saved as 0 is a placeholder's amount, or a carry-over of nothing, not an unreadable cell", async () => {
+    const fixture = history();
+    const [first] = fixture.years;
+    if (first === undefined) throw new Error("the fixture has no 2022");
+    const placeholder = first.rows[6];
+    if (placeholder?.amount !== undefined) throw new Error("row 7 of 2022 is the placeholder");
+    if (placeholder !== undefined) placeholder.amountFormula = "0*1";
+    first.carryFormula = { buffer: "0*1" };
+
+    const ran = await run(await workbook(fixture), "--as", "alex");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("skipped: 2022 row 4, no amount");
+  });
+
+  test("a date a few days off, with no year repaired, is reported and imported as typed", async () => {
+    const fixture = history();
+    const row = fixture.years[2]?.rows[0];
+    if (row === undefined) throw new Error("the fixture has no 2024");
+    row.written = "2024-01-25";
+
+    const ran = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain(
+      "dated out of order: 2024 row 3, 2024-01-20, is listed above row 4, 2024-01-25; imported as typed",
+    );
+    const db = books();
+    expect(
+      db
+        .prepare(
+          "SELECT date FROM statement_rows WHERE amount_cents = 50000 AND date LIKE '2024-%'",
+        )
+        .all(),
+    ).toEqual([{ date: "2024-01-25" }]);
+    db.close();
   });
 });

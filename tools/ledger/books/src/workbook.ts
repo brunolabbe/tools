@@ -128,6 +128,16 @@ export interface Skip {
   row: number;
 }
 
+/** A row listed above a row dated after it: reported, and imported as typed. */
+export interface OutOfOrder {
+  sheet: string;
+  row: number;
+  date: string;
+  /** The row just below it in the sheet, which is dated later. */
+  belowRow: number;
+  belowDate: string;
+}
+
 export interface WorkbookLine {
   sheet: string;
   row: number;
@@ -165,6 +175,7 @@ export interface WorkbookReading {
   opening: Record<Bucket, number>;
   repairs: Repair[];
   skipped: Skip[];
+  outOfOrder: OutOfOrder[];
   /** Closed periods, oldest first. */
   periods: WorkbookPeriod[];
   open: WorkbookPeriod | null;
@@ -321,7 +332,7 @@ function readYear(
   sheet: Sheet,
   year: number,
   people: People,
-  out: Pick<WorkbookReading, "repairs" | "skipped" | "problems">,
+  out: Pick<WorkbookReading, "repairs" | "skipped" | "outOfOrder" | "problems">,
 ): YearRead {
   const movements: Movement[] = [];
   const carryOvers: CarryOver[] = [];
@@ -358,7 +369,7 @@ function readYear(
     if (amount === null && amountCell !== null) {
       out.problems.push(
         amountCell.value === null
-          ? `${at(COLUMN.G)}: the amount is a formula with no saved value; open the workbook in Excel and save it.`
+          ? `${at(COLUMN.G)}: the amount is a formula with no readable value; open the workbook in Excel and save it.`
           : `${at(COLUMN.G)}: the amount is not a number.`,
       );
       continue;
@@ -425,8 +436,10 @@ function readYear(
   // The sheet lists the newest first; the books keep the oldest first.
   const oldestFirst = movements.toReversed();
   // The row order is what proves a repaired year, so it is checked: newest
-  // first, no row is older than the one below it. A row the order contradicts
-  // would count on the wrong day in every figure read as of a date.
+  // first, no row is older than the one below it. Where a repaired row breaks
+  // that order the repair is unproven, and it is refused at that row's cell.
+  // Any other inversion is a date typed a few days off; the figures are read
+  // by position, so it is reported and imported as typed (decided 2026-10-08).
   const repaired = new Map(
     out.repairs
       .filter((repair) => repair.sheet === sheet.name)
@@ -435,9 +448,19 @@ function readYear(
   for (const [index, movement] of oldestFirst.entries()) {
     const below = oldestFirst[index - 1];
     if (below === undefined || movement.date >= below.date) continue;
-    const typed = repaired.get(movement.row) ?? repaired.get(below.row);
+    const suspect = repaired.has(movement.row) ? movement : repaired.has(below.row) ? below : null;
+    if (suspect === null) {
+      out.outOfOrder.push({
+        sheet: sheet.name,
+        row: movement.row,
+        date: movement.date,
+        belowRow: below.row,
+        belowDate: below.date,
+      });
+      continue;
+    }
     out.problems.push(
-      `${cellRef(sheet.name, movement.row, COLUMN.B)}: dated ${movement.date}, but the row below it, row ${String(below.row)}, is dated ${below.date}; newest first, no row is older than the one below it${typed === undefined ? "" : ` (a year was repaired here, from ${typed})`}.`,
+      `${cellRef(sheet.name, suspect.row, COLUMN.B)}: typed ${repaired.get(suspect.row) ?? ""} and repaired to ${suspect.date}, the sheet's year, but row ${String(movement.row)} (${movement.date}) is listed above row ${String(below.row)} (${below.date}); newest first, the order does not prove the repair.`,
     );
   }
   return { year, movements: oldestFirst, carryOvers };
@@ -827,6 +850,7 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
     opening: { mortgage: 0, "current-expenses": 0 },
     repairs: [],
     skipped: [],
+    outOfOrder: [],
     periods: [],
     open: null,
     salaries: [],

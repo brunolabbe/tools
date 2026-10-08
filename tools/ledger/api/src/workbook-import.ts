@@ -629,6 +629,11 @@ function run(
   for (const skip of reading.skipped) {
     say(`  skipped: ${skip.sheet} row ${String(skip.row)}, no amount`);
   }
+  for (const late of reading.outOfOrder) {
+    say(
+      `  dated out of order: ${late.sheet} row ${String(late.row)}, ${late.date}, is listed above row ${String(late.belowRow)}, ${late.belowDate}; imported as typed`,
+    );
+  }
   for (const movement of corrected) {
     const was = movement.workbook;
     if (was === null) continue;
