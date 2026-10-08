@@ -29,7 +29,8 @@ import {
   countPlayedSegments,
 } from "../browser/classify.ts";
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
-import { HitCollector } from "../browser/intercept.ts";
+import { HitCollector, MAX_CAPTURED_BODY_BYTES } from "../browser/intercept.ts";
+import { fetchManifest } from "../browser/manifest-fetch.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
 import {
@@ -74,6 +75,11 @@ const EMPTY_MIN_WAIT_MS = 9000;
 const TEARDOWN_RESERVE_MS = 4000;
 /** Manifests to try parsing before falling back to an opaque variant. */
 const MAX_MANIFEST_ATTEMPTS = 2;
+/**
+ * Redirects the manifest re-fetch follows (dl-97). Twenty is Playwright's
+ * default, which is what the re-fetch followed while it was `context.request`.
+ */
+const MAX_MANIFEST_REDIRECTS = 20;
 /** Longest we wait for in-flight header and body reads to land. */
 const SETTLE_TIMEOUT_MS = 3000;
 /** Slack past the internal deadline before the hard cap fires. */
@@ -144,11 +150,19 @@ export interface BrowserResolverOptions {
    * Passed to the pool this resolver builds for itself — see
    * `BrowserPoolOptions.proxyRootSpkiSha256`, which carries the reasoning.
    *
-   * **Ignored when `pool` is supplied**, on the same rule `dispose` follows: a
-   * pool handed in belongs to the caller, and its browsers may already be
-   * launched with launch flags of the caller's choosing.
+   * **The pool ignores it when `pool` is supplied**, on the same rule `dispose`
+   * follows: a pool handed in belongs to the caller, and its browsers may
+   * already be launched with launch flags of the caller's choosing. Chromium's
+   * alone: the manifest re-fetch takes the root as `proxyRootCaPem`.
    */
   proxyRootSpkiSha256?: string;
+  /**
+   * The same root, as its PEM: the only anchor the manifest re-fetch trusts when
+   * the proxy terminates TLS, handed to Node's `ca` (dl-97). Used whether or not
+   * `pool` is supplied, since the re-fetch is this process's client, not
+   * Chromium.
+   */
+  proxyRootCaPem?: string;
   /**
    * Press a recognised "I am over 18" control. Off by default, because the
    * press is an attestation made on the user's behalf and only an operator can
@@ -180,6 +194,7 @@ export class BrowserResolver implements Resolver {
   readonly #emptyMinWaitMs: number;
   readonly #confirmAge: boolean;
   readonly #logger: BrowserResolverLogger;
+  readonly #proxyRootCaPem: string | undefined;
 
   constructor(options: BrowserResolverOptions = {}) {
     this.#ownsPool = options.pool === undefined;
@@ -200,6 +215,7 @@ export class BrowserResolver implements Resolver {
     this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
     this.#confirmAge = options.confirmAge ?? false;
     this.#logger = options.logger ?? NOOP_LOGGER;
+    this.#proxyRootCaPem = options.proxyRootCaPem;
   }
 
   /** Whether this tier presses an age confirmation, for the boot log. */
@@ -471,7 +487,7 @@ export class BrowserResolver implements Resolver {
       // the runner-up costs a request against a CDN that may rate-limit us.
       this.#stage(options, "manifest-fetch");
       // oxlint-disable-next-line no-await-in-loop
-      const text = await this.#loadManifest(context, collector, hit, deadline);
+      const text = await this.#loadManifest(context, collector, hit, deadline, options.proxyUrl);
       if (text === undefined) continue;
       this.#stage(options, "manifest-parse");
       const parsed = this.#parseManifest(hit, text);
@@ -544,24 +560,39 @@ export class BrowserResolver implements Resolver {
    * how the parsers get their input and a live check that the context we are
    * about to hand the engine actually works. Falls back to the body captured at
    * interception time when the replay fails.
+   *
+   * Not `context.request` (dl-97): that reads and inflates the whole body before
+   * returning, so a compressed body of a few hundred KB could hold hundreds of
+   * MB. `fetchManifest` streams it and stops at the cap, through the same proxy
+   * and with the same cookies; its docstring has what that took.
    */
   async #loadManifest(
     context: BrowserContext,
     collector: HitCollector,
     hit: NetworkHit,
     deadline: number,
+    proxyUrl: string | undefined,
   ): Promise<string | undefined> {
     const timeout = budget(deadline, 8000);
     if (timeout > 500) {
       try {
-        const response = await context.request.get(hit.url, {
+        const result = await fetchManifest(hit.url, {
           headers: replayHeaders(hit),
-          timeout,
-          failOnStatusCode: false,
+          cookieFor: async (url) => jarCookieHeader(await context.cookies(url.href)),
+          storeCookies: async (url, setCookie) => await storeSetCookies(context, url, setCookie),
+          proxyUrl,
+          proxyRootCaPem: this.#proxyRootCaPem,
+          maxBodyBytes: MAX_CAPTURED_BODY_BYTES,
+          maxRedirects: MAX_MANIFEST_REDIRECTS,
+          timeoutMs: timeout,
         });
-        if (response.ok()) {
-          const text = await response.text();
-          if (text.trim().length > 0) return text;
+        if (result.outcome === "ok" && result.text.trim().length > 0) return result.text;
+        if (result.outcome === "too-large") {
+          // A refusal, not a fault: the captured body still stands in for it.
+          this.#logger.warn("manifest re-fetch refused: its body passed the cap", {
+            url: redactUrl(hit.url),
+            limitBytes: result.limitBytes,
+          });
         }
       } catch {
         // Expired signature, network hiccup or a CDN that dislikes us twice.
@@ -749,6 +780,51 @@ async function applyCookieHeader(
     await context.addCookies(cookies);
   } catch {
     // A malformed jar must not take down an otherwise workable probe.
+  }
+}
+
+/** The jar's cookies for one URL, as the `Cookie` header a browser would send. */
+function jarCookieHeader(cookies: readonly { name: string; value: string }[]): string | undefined {
+  if (cookies.length === 0) return undefined;
+  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+}
+
+/**
+ * Hands a re-fetch response's `Set-Cookie` back to the context, as
+ * `context.request` did, so a redirect that sets a cookie and then demands it
+ * still works (dl-97). Deliberately narrow: each cookie is scoped to the URL
+ * that set it, which is never wider than its own `Domain` and `Path` would make
+ * it, and one that deletes or expires itself is skipped rather than stored.
+ */
+async function storeSetCookies(
+  context: BrowserContext,
+  url: URL,
+  setCookie: readonly string[],
+): Promise<void> {
+  const cookies = setCookie.flatMap((line) => {
+    const [pair = "", ...attributes] = line.split(";");
+    const separator = pair.indexOf("=");
+    if (separator <= 0) return [];
+    const expires = attributes.some((attribute) => {
+      const [key = "", value = ""] = attribute.split("=").map((part) => part.trim());
+      if (key.toLowerCase() === "max-age") return Number(value) <= 0;
+      if (key.toLowerCase() === "expires") return Date.parse(value) <= Date.now();
+      return false;
+    });
+    if (expires) return [];
+    return [
+      {
+        name: pair.slice(0, separator).trim(),
+        value: pair.slice(separator + 1).trim(),
+        url: url.href,
+      },
+    ];
+  });
+  if (cookies.length === 0) return;
+  try {
+    await context.addCookies(cookies);
+  } catch {
+    // A cookie Chromium will not take is one the next hop goes without.
   }
 }
 

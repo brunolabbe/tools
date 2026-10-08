@@ -19,8 +19,12 @@ import {
 } from "./sniff.ts";
 import type { NetworkHit } from "./types.ts";
 
-/** Manifests are small; anything larger than this is not a playlist worth keeping. */
-const MAX_CAPTURED_BODY_BYTES = 4 * 1024 * 1024;
+/**
+ * Manifests are small; anything larger than this is not a playlist worth keeping.
+ * Also the cap on `#loadManifest`'s re-fetch (dl-97), whose answer stands in for
+ * a body kept here: one this file would refuse to keep is not one to read there.
+ */
+export const MAX_CAPTURED_BODY_BYTES = 4 * 1024 * 1024;
 
 /**
  * A compressed typed manifest is read at interception time on a budget of
