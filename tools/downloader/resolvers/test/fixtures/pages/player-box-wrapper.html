@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-named page wrapper</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: the largest `[class*="player"]` is the layout wrapper around the
+         whole page, and something that reacts to a click sits in its middle.
+         A wrapper that covers most of the viewport is a layout, not a player,
+         so the input pass's centre click must not land on what it holds. -->
+    <div class="player-page" style="width: 100%; min-height: 100vh">
+      <div
+        id="centre"
+        style="position: absolute; left: 40%; top: 40%; width: 20%; height: 20%; background: #ddd"
+        onclick="fetch('/beacon/wrapper-centre')"
+      >
+        Promo
+      </div>
+    </div>
+  </body>
+</html>

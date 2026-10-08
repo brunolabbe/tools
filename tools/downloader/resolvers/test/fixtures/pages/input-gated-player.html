@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Player that loads on the first input</title>
+  </head>
+  <body>
+    <h1>Player that loads on the first input</h1>
+    <!-- dl-81: the page shows a bare poster, `<div><img></div>`, with no
+         `<video>`, no play-ish label and no button, and injects its player only
+         on the visitor's first wheel (`?on=wheel`, the default). The listener is
+         removed once it has fired, and nothing else here starts anything: a tier
+         that never scrolls a wheel never sees a stream.
+
+         `?on=pointermove` is **not** a case this fixture makes a test of. Headless
+         Chromium sends a `pointermove` and a `mousemove` at (0,0) on its own while
+         the page loads, racily, so that page mounts with no help from the tier
+         and a test of it passes or fails by timing (the gate measured it passing
+         at base, 4 of 4). The tier sends no pointer movement (it started hover
+         previews on related cards), and no key (Enter or Space can submit a form
+         or follow a link). -->
+    <div id="poster"><img src="/media/poster.png" alt="Poster" width="640" height="360" /></div>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var on = new URLSearchParams(location.search).get("on") || "wheel";
+        function mount() {
+          window.removeEventListener(on, mount);
+          document.getElementById("poster").remove();
+          var video = document.createElement("video");
+          video.width = 640;
+          video.height = 360;
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          document.body.appendChild(video);
+          video.src = "/media/hls/master.m3u8";
+          document.getElementById("status").textContent = "mounted";
+        }
+        window.addEventListener(on, mount, { passive: true });
+      })();
+    </script>
+  </body>
+</html>

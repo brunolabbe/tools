@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player that mounts after the reader scrolls past the header</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1 and 2: a small player-named header slot, and a page that
+         mounts its real player only after the window has scrolled 300 px.
+         `?top=<px>` puts the slot that far down (default 0), so centring it moves
+         the page by anything from nothing to a few hundred px, and the 400 px
+         nudge has to follow whatever the centring did. `?smooth=1` sets
+         `scroll-behavior: smooth` on the page, where an unqualified scroll
+         animates and the next step's own scroll cancels it. The slot is a 300x50
+         bar: not a player, and never the box the centre click aims at. -->
+    <div id="spacer"></div>
+    <div class="player-header" style="width: 300px; height: 50px; background: #eee">
+      Now playing
+    </div>
+    <div style="height: 4000px"></div>
+    <script>
+      var query = new URLSearchParams(location.search);
+      document.getElementById("spacer").style.height = (query.get("top") || "0") + "px";
+      if (query.get("smooth")) document.documentElement.style.scrollBehavior = "smooth";
+      var mounted = false;
+      window.addEventListener(
+        "scroll",
+        function () {
+          if (mounted || window.scrollY < 300) return;
+          mounted = true;
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        },
+        { passive: true },
+      );
+    </script>
+  </body>
+</html>

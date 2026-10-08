@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player this tier cannot start, above hover-preview related cards</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: the page's own player waits for a keydown, which the tier
+         never sends. Below it, related-video cards load a preview clip when the
+         pointer enters them. A pointer sweep across the viewport entered them
+         and the first preview was returned as this page's stream; the tier
+         sends no pointer movement, so the page reads as having no video.
+
+         The preview paths are built from the card's index, not read from an
+         attribute: a value read out of the DOM and assigned to `src` is a
+         code-scanning finding, and this page has no use for the value. -->
+    <div id="poster" style="width: 640px; height: 200px; background: #222"></div>
+    <div style="display: grid; grid-template-columns: repeat(4, 320px); gap: 8px">
+      <a class="card" href="/other-1.html"><video muted playsinline width="320" height="180"></video></a>
+      <a class="card" href="/other-2.html"><video muted playsinline width="320" height="180"></video></a>
+      <a class="card" href="/other-3.html"><video muted playsinline width="320" height="180"></video></a>
+      <a class="card" href="/other-4.html"><video muted playsinline width="320" height="180"></video></a>
+    </div>
+    <script>
+      window.addEventListener(
+        "keydown",
+        function () {
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        },
+        { once: true },
+      );
+      document.querySelectorAll(".card").forEach(function (card, index) {
+        var v = card.querySelector("video");
+        card.addEventListener("mouseenter", function () {
+          if (!v.src) {
+            v.src = "/preview-" + String(index + 1) + ".mp4";
+            v.play().catch(function () {});
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

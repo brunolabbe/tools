@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A full-viewport ad interstitial over a click-only player box</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: an ad frame covers the whole viewport, and its middle is a
+         link to the advertiser. The player box under it is what the centre
+         click would aim at; the topmost thing at that point is not part of the
+         box, so nothing is pressed. -->
+    <div class="player-box" style="width: 640px; height: 360px; background: #222"></div>
+    <iframe
+      title="Advertisement"
+      style="position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0"
+      src="{{SECONDARY}}/ad-interstitial-inner.html"
+    ></iframe>
+    <script>
+      document.querySelector(".player-box").addEventListener("click", function () {
+        fetch("/media/related/master.m3u8").catch(function () {});
+      });
+    </script>
+  </body>
+</html>

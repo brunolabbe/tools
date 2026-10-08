@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-ish wrapper with a link under its centre</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: the only player-ish element is a layout wrapper, and a link sits
+         under the middle of it. It is not an ancestor of the box, so the
+         link-ancestor rule does not exclude the box; only looking at what is
+         under the point about to be clicked does. The input pass must not press
+         a link, a form control or a label, whatever box it chose. -->
+    <div
+      id="player-layout"
+      style="position: relative; width: 900px; height: 500px; background: #fafafa"
+    >
+      <a
+        href="/related-card-target.html"
+        style="
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 200px;
+          height: 80px;
+          transform: translate(-50%, -50%);
+        "
+        >Read more</a
+      >
+    </div>
+  </body>
+</html>

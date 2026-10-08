@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embed: a player that starts when scrolled into view</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: the inner page of a cross-origin embed. The player is a shell
+         1500 px down this frame's own document, and the page asks for its
+         stream only when the observer reports the shell visible. Nothing here
+         is clickable and no `<video>` exists until then, so only a scroll run
+         in this frame, whose origin is not the page's, starts it. -->
+    <div style="height: 1500px">intro</div>
+    <div class="player-shell" style="width: 600px; height: 340px; background: #222"></div>
+    <div style="height: 800px"></div>
+
+    <script>
+      (function () {
+        var shell = document.querySelector(".player-shell");
+        var mounted = false;
+        new IntersectionObserver(function (entries) {
+          if (!entries[0].isIntersecting || mounted) return;
+          mounted = true;
+          fetch("/media/related/master.m3u8").catch(function () {});
+        }).observe(shell);
+      })();
+    </script>
+  </body>
+</html>

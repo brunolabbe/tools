@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-named signup box with a form button in its middle</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: the only player-ish box is a signup panel whose middle is
+         a form's submit button. Nothing here plays, so nothing has been
+         captured and the centre click is not skipped; only the rule that a
+         point inside a form is never pressed keeps it from posting. -->
+    <div
+      class="player-newsletter"
+      style="
+        width: 800px;
+        height: 400px;
+        background: #eef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <form action="/beacon/form-submitted" method="post">
+        <button style="width: 200px; height: 60px">Subscribe</button>
+      </form>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A Play-labelled poster above a grid of related-video cards</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: the poster is a 640x360 player with a labelled Play
+         button that fetches the stream without mounting a `<video>`. Below it,
+         a 1000x500 `related-players` wrapper (larger than the poster, so the
+         largest player-ish box) holds cards that navigate by script. The grid
+         is 3x3 so that the middle of the wrapper is the middle card; an even
+         number of rows leaves a gap there. The press starts the stream, and a
+         centre click on the wrapper after it would press a card and leave the
+         page.
+
+         `?delay=<ms>` (gate 2) holds the manifest request back after the press,
+         as a real player does while it loads a script or calls an API first: a
+         stream is not captured yet when the press returns, so only the press
+         itself can say a player was started.
+
+         The card targets are built from the card's index, not read from an
+         attribute: a value read out of the DOM and assigned to `location.href`
+         is a code-scanning finding, and this page has no use for the value. -->
+    <div
+      class="player-poster"
+      style="width: 640px; height: 360px; background: #222; position: relative"
+    >
+      <button id="play" aria-label="Play" style="position: absolute; left: 10px; bottom: 10px">
+        Play
+      </button>
+    </div>
+    <div
+      class="related-players"
+      style="
+        width: 1000px;
+        height: 500px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+      "
+    >
+      <div class="card" style="background: #ccc">Next video 1</div>
+      <div class="card" style="background: #ccc">Next video 2</div>
+      <div class="card" style="background: #ccc">Next video 3</div>
+      <div class="card" style="background: #ccc">Next video 4</div>
+      <div class="card" style="background: #ccc">Next video 5</div>
+      <div class="card" style="background: #ccc">Next video 6</div>
+      <div class="card" style="background: #ccc">Next video 7</div>
+      <div class="card" style="background: #ccc">Next video 8</div>
+      <div class="card" style="background: #ccc">Next video 9</div>
+    </div>
+    <script>
+      var started = false;
+      var delay = Number(new URLSearchParams(location.search).get("delay") || 0);
+      document.getElementById("play").addEventListener("click", function () {
+        if (started) return;
+        started = true;
+        setTimeout(function () {
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
+        }, delay);
+      });
+      var cards = document.querySelectorAll(".card");
+      cards.forEach(function (card, index) {
+        card.addEventListener("click", function () {
+          fetch("/beacon/card-clicked").catch(function () {});
+          location.href = "/other-" + String(index + 1) + ".html";
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Scroll target: the largest candidate</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: three candidates for `SCROLL_SCRIPT`, none with a listener. The
+         first in document order is a small nav bar; the second a linked card
+         (never the player); the largest, a 640x360 shell, sits far below the
+         fold. A first-match scroll leaves the shell outside the viewport. -->
+    <div class="player-nav" style="height: 60px; width: 400px; background: #eee">nav</div>
+    <a href="/related-card-target.html" style="display: block; width: 500px; height: 300px">
+      <div class="player-card" style="width: 500px; height: 300px; background: #ccc"></div>
+    </a>
+    <div style="height: 4000px"></div>
+    <div id="player-main" style="width: 640px; height: 360px; background: #222"></div>
+    <div style="height: 4000px"></div>
+  </body>
+</html>

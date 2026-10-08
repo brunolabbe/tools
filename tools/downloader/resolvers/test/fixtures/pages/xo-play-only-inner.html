@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embed: a player that starts on play()</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81: the inner page of a cross-origin embed. The `<video>` has no
+         controls and no click listener; it starts only when something calls
+         `.play()` on it. A click on a bare `<video>` plays nothing, so only the
+         scripted `play()`, run in this frame, starts it. -->
+    <video id="v" width="640" height="360" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        document.getElementById("v").addEventListener("play", function () {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .catch(function () {});
+        });
+      })();
+    </script>
+  </body>
+</html>

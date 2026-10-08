@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player-named header bar and nothing else</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 2: the only player-ish element is a 300x50 header bar that
+         records a click. A bar is not a player, so the centre click, which has
+         nothing captured and nothing pressed to hold it back, must not aim at
+         it. The bar is fixed so that the scroll and the wheel leave it in view:
+         a bar scrolled out of view is not clicked for that reason, not this one. -->
+    <div
+      class="player-header"
+      style="position: fixed; top: 0; left: 0; width: 300px; height: 50px; background: #eee"
+      onclick="fetch('/beacon/header-clicked')"
+    >
+      Now playing
+    </div>
+    <div style="height: 2000px"></div>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Billboard</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-81 gate 1: an ad whose link navigates the top page to the advertiser. -->
+    <a
+      id="ad"
+      href="{{PRIMARY}}/advertiser.html"
+      target="_top"
+      style="display: block; width: 970px; height: 250px; background: #fc0"
+      >Buy now</a
+    >
+    <script>
+      document.getElementById("ad").addEventListener("click", function () {
+        fetch("/beacon/billboard-clicked").catch(function () {});
+      });
+    </script>
+  </body>
+</html>
