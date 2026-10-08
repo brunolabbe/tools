@@ -38,9 +38,16 @@
  * fast-start file ffmpeg reads front to back, and it streams as before;
  * `mdat` first is refused with `SOURCE_NOT_SEEKABLE`, before the first byte,
  * and the next mirror is tried if there is one. Anything the probe cannot
- * decide lets ffmpeg run exactly as it did before, so that ffmpeg's own
- * failures keep their codes. The probe takes ffmpeg's route — the same proxy,
- * the same `tlsVerify` and `tlsCaFile` — and never goes around a proxy.
+ * decide lets ffmpeg run, so that ffmpeg's own failures keep their codes (the
+ * owner's choice, 2026-10-08). That is **not** quite ffmpeg running as it did
+ * before: the probe is now the first request the origin sees, so a fault that
+ * hits only the first request — one `429` or `500`, one refused `CONNECT` —
+ * is spent on the probe. From an origin that honours `Range` that heals; from
+ * one that ignores it, it turns what was a `DOWNLOAD_FAILED` into the
+ * undecodable file this section is about. That, and every other way a probe
+ * can go unanswered while the origin still ignores `Range`, is dl-103's
+ * second line of defence. The probe goes through ffmpeg's proxy, with the same
+ * `tlsVerify` and `tlsCaFile`, and never around it.
  *
  * A small tail-`moov` file from such an origin is refused too, though ffmpeg
  * can read one whole without seeking (gate 1 measured 63,749 B decoding and

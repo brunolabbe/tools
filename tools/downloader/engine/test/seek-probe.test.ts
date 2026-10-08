@@ -4,7 +4,9 @@
  * `stream.test.ts` has the same probe end to end, with real ffmpeg.
  */
 
-import http from "node:http";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { RequestContext } from "@downloader/contract";
 import {
@@ -54,12 +56,12 @@ const layouts = {
 
 describe("dl-102: where the index is, from the top-level boxes", () => {
   test.each([
-    ["ftyp,free,mdat,moov", layouts.tailFree, "end"],
-    ["ftyp,moov,free,mdat", layouts.fastStart, "front"],
-    ["wide,mdat,moov", layouts.quickTime, "end"],
-    ["ftyp,mdat,moov", layouts.tailBare, "end"],
-    ["ftyp,free(64-bit),uuid,moov,mdat(64-bit)", layouts.wideFront, "front"],
-  ] as const)("%s is %s", (_name, bytes, expected) => {
+    ["ftyp,free,mdat,moov", "end", layouts.tailFree],
+    ["ftyp,moov,free,mdat", "front", layouts.fastStart],
+    ["wide,mdat,moov", "end", layouts.quickTime],
+    ["ftyp,mdat,moov", "end", layouts.tailBare],
+    ["ftyp,free(64-bit),uuid,moov,mdat(64-bit)", "front", layouts.wideFront],
+  ] as const)("%s is %s", (_name, expected, bytes) => {
     expect(indexPlacement(bytes)).toBe(expected);
   });
 
@@ -110,6 +112,8 @@ const PROBE = { requestContext: CONTEXT, tlsVerify: true, tlsCaFile: undefined, 
 
 describe("dl-102: the probe's request", () => {
   let origin: FixtureServer;
+  /** A second origin, which only a redirect names. It records any direct request. */
+  let elsewhere: FixtureServer;
   let proxy: FixtureServer;
 
   beforeAll(async () => {
@@ -130,28 +134,28 @@ describe("dl-102: the probe's request", () => {
         response.writeHead(200, { "content-length": String(body.length) }).end(body);
       }
     });
-    proxy = await startFixtureServer(async (request, response) => {
-      await new Promise<void>((resolve) => {
-        const upstream = http.request(
-          new URL(request.url ?? ""),
-          { headers: request.headers },
-          (answer) => {
-            response.writeHead(answer.statusCode ?? 502, answer.headers);
-            answer.pipe(response);
-            answer.once("end", resolve);
-          },
-        );
-        upstream.once("error", () => {
-          response.writeHead(502).end();
-          resolve();
-        });
-        upstream.end();
-      });
+    elsewhere = await startFixtureServer((_request, response) => {
+      response.writeHead(200, { "content-length": String(layouts.tailFree.length) });
+      response.end(layouts.tailFree);
+    });
+    // Records the absolute URL it is asked for and answers as the origin would,
+    // itself: `/hop` redirects to `elsewhere`, anything else is the whole
+    // tail-`moov` file. It never sends a request on, so what it records is
+    // exactly what reached it.
+    proxy = await startFixtureServer((request, response) => {
+      const asked = new URL(request.url ?? "/", "http://invalid.example");
+      if (asked.pathname === "/hop") {
+        response.writeHead(302, { location: `${elsewhere.origin}/tail` }).end();
+        return;
+      }
+      response.writeHead(200, { "content-length": String(layouts.tailFree.length) });
+      response.end(layouts.tailFree);
     });
   });
 
   afterAll(async () => {
     await origin?.close();
+    await elsewhere?.close();
     await proxy?.close();
   });
 
@@ -222,5 +226,47 @@ describe("dl-102: the probe's request", () => {
       });
     }
     expect(origin.requests.length).toBe(before);
+  });
+
+  test("every redirect hop goes through the proxy, not only the first", async () => {
+    // The guard vets what reaches the proxy and nothing else, so a hop that
+    // went direct would be a hop nobody vetted (dl-102's gate, F2).
+    const start = `${origin.origin}/hop`;
+    const proxied = proxy.requests.length;
+    const direct = elsewhere.requests.length;
+    expect(await probeSeek(start, { ...PROBE, proxyUrl: proxy.origin })).toEqual({
+      kind: "unseekable",
+    });
+    expect(proxy.requests.slice(proxied).map((entry) => entry.url)).toEqual([
+      start,
+      `${elsewhere.origin}/tail`,
+    ]);
+    expect(elsewhere.requests.length).toBe(direct);
+  });
+
+  test("the CA file configures trust and is never sent", async () => {
+    // The register under docs/adr/005 in `seek-probe.ts` names this test: the
+    // CA file is the one file the probe reads, and none of it may leave.
+    const dir = await mkdtemp(path.join(os.tmpdir(), "dl102-ca-"));
+    const caFile = path.join(dir, "ca.pem");
+    const body = "DL102CAFILEBYTESTHATMUSTNEVERLEAVETHEPROCESS";
+    await writeFile(caFile, `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`);
+    try {
+      const before = origin.requests.length;
+      const proxied = proxy.requests.length;
+      const url = `${origin.origin}/tail`;
+      // A verdict, so the file was read and the request made.
+      for (const proxyUrl of [undefined, proxy.origin]) {
+        // oxlint-disable-next-line no-await-in-loop
+        expect(await probeSeek(url, { ...PROBE, proxyUrl, tlsCaFile: caFile })).toEqual({
+          kind: "unseekable",
+        });
+      }
+      const sent = [...origin.requests.slice(before), ...proxy.requests.slice(proxied)];
+      expect(sent).toHaveLength(2);
+      expect(JSON.stringify(sent)).not.toContain(body);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -430,8 +430,12 @@ Each is considered and not taken on 2026-10-08; kept with its cost.
 2. After the fix, that test asserts a typed `AppError` with the new code,
    thrown from `stream()` before the first byte. The code is not retryable
    (`RETRYABLE_CODES` does not hold it) and has a message in
-   `DEFAULT_ERROR_MESSAGES`. In no case does `done` resolve with a file that
-   decodes 0 frames.
+   `DEFAULT_ERROR_MESSAGES`. Wherever the probe gets an answer, `done` never
+   resolves with a file that decodes 0 frames; where it gets none, ffmpeg runs,
+   and the paths that still end in such a file are listed in the Log and
+   carried by dl-103. (Scoped by the owner's decision of 2026-10-08, recorded
+   in the Log; it read "In no case does `done` resolve with a file that decodes
+   0 frames.")
 3. Two controls pass in the same file: the existing honouring-origin
    tail-`moov` case still completes whole, and a **fast-start** MP4 from the
    Range-ignoring origin still completes whole (today it does, so a fix that
@@ -682,3 +686,102 @@ downloader`; it prints no counts. The one full run that did print them, at
    the failure `web/test/mock-api.test.ts` "every ErrorCode is demonstrable",
    which the `norange` scenario fixed (that file and the presentation test:
    38 of 38).
+
+**2026-10-08** — round 1, on gate 1's findings at `2f91f2e` (Sonnet 5.5,
+CONCERNS, no high).
+
+**The owner's decision on what the probe does with no answer** (F1), asked by
+the orchestrator after gate 1 measured the premise:
+
+- Question: "dl-102: when the Range probe gets no answer, the branch lets
+  ffmpeg run as before. Measured: on a Range-ignoring origin, 8 of 13
+  no-answer paths still end in a 0-frame file reported as done. That breaks
+  Done when 2's 'in no case'. Two paths are worse than main for that origin: a
+  one-shot 429/500, or a first CONNECT refused. What should the probe do?"
+- Options put: keep the fallback and file a C ticket (the orchestrator's
+  recommendation, built on the builder's option C); keep the fallback, no
+  ticket (the builder's option A); build C into this branch; B, refuse on any
+  no-answer.
+- **Chosen: keep the fallback and file a C ticket.** The answer authorises
+  rewording Done when 2's last clause, which is now scoped to the case where
+  the probe gets an answer. The ticket is
+  [dl-103](./dl-103-an-unanswered-seek-probe-still-finishes-a-tail-moov-mp4-undecodable.md),
+  `depends_on: [dl-102]`.
+
+**The no-answer paths that still end in a 0-frame file**, from gate 1's Item 4
+table (1.02 MB `ftyp,free,mdat,moov`, a Range-ignoring origin, ffmpeg 7.0.2
+and 6.1.1 alike), by its row numbers: 2, a `403` or `416` to `bytes=1-1` only;
+3, a `429` or `500` on the first request only (`DOWNLOAD_FAILED` before
+dl-102); 4, the probe timing out at 15 s; 5, the first connection reset; 6, six
+redirects, of which the probe follows 5 and ffmpeg 8; 8, a box chain past the
+1 MiB walk limit; 10, a proxy URL that is not `http://`; 13, the first
+`CONNECT` alone refused (`DOWNLOAD_FAILED` before dl-102). Rows 1, 11 and 12
+fail with ffmpeg's own code, and rows 7 and 9 stream a good file. The
+`stream.ts` header and `seek-probe.ts`'s no longer say that an unanswered probe
+leaves ffmpeg running "exactly as it did before": they name rows 3 and 13, the
+one-shot fault the probe now absorbs, which heals on a Range-honouring origin
+and yields the undecodable file on a Range-ignoring one.
+
+**F2, every redirect hop through the proxy: fixed.** New last test in
+`engine/test/seek-probe.test.ts`, "every redirect hop goes through the proxy,
+not only the first": the origin URL redirects to a second origin, and the
+recording proxy's log must list both absolute URLs while the second origin
+sees nothing direct. Against gate 1's mutation (`hop === 0 ? route : { kind:
+"direct" }`):
+`AssertionError: expected [ 'http://127.0.0.1:43479/hop' ] to deeply equal [ 'http://127.0.0.1:43479/hop', …(1) ]`,
+`Tests 1 failed | 15 passed (16)`; unmutated, `Tests 16 passed (16)`.
+
+**F3, the five CodeQL alerts: triaged under adr/005, all false positives.**
+Read from the check run's page (run 113491508891, at `2f91f2e`):
+
+- **Server-side request forgery, Critical, ×2**: `engine/test/seek-probe.test.ts`
+  and `engine/test/stream.test.ts`, the forward-proxy fixtures, which
+  `http.request` the URL from their request line. Test doubles (adr/005 step
+  5). **Not excused: removed.** Both proxies now record the absolute URL and
+  answer for the origin themselves, so no fixture sends a request on, and what
+  a proxy records is exactly what reached it — which the F2 test needs anyway.
+- **File data in outbound network request (`js/file-access-to-http`), Medium,
+  ×3**: `engine/src/download/seek-probe.ts`, the direct `http.request`, the
+  direct `https.request` and the tunnelled `https.request` in `get`. The one
+  file the module reads is `tlsCaFile`, the CA bundle the origin is verified
+  against; it is passed as the TLS trust anchor and never sent. Structural for
+  any version of this code that verifies against the operator's CA file, so
+  **excused in place**, a `// codeql[js/file-access-to-http]` line above each
+  call with the five fields. **The plain-HTTP call is handed no CA, and why
+  the scanner reports file data there was not traced**: the check page showed
+  no flow path ("Error loading related location"), and the reasoning there
+  rests on the CA being the module's only file read.
+- **The test that would catch the true positive**, written first (adr/005 rule
+  3): "the CA file configures trust and is never sent", in
+  `engine/test/seek-probe.test.ts` (`http:`, direct and through a proxy) and in
+  `api/test/range-ignoring-origin.test.ts` (`https:`, direct and tunnelled
+  through `server.ts`'s terminating proxy). Measured with a mutation that puts
+  a CA line into a header: the engine test failed on the leaked marker, and so
+  did the api test, once for the direct route and once with the mutation
+  limited to the tunnel. The api test first passed that mutation: the
+  generated PEMs are CRLF, so its lines carried a `\r` the header did not; it
+  now splits on `\r?\n`. Unmutated: both pass.
+- The `CodeQL` check stays red on the pull request; the dismissal step runs on
+  a push to `main` (adr/005, "Register and mechanism are two jobs").
+
+**F6, two comments: fixed.** `api/src/server.ts` now says the probe is the
+engine's one request of its own and takes ffmpeg's proxy, in the same three
+lines. `seek-probe.ts`'s header and `createEngine`'s notes say the probe's
+reach is a subset of ffmpeg's, not the same: it ignores `no_proxy` and stays
+on the proxy, and sends nothing where ffmpeg would ignore a non-`http://`
+proxy and go direct.
+
+**F7, the heal control: fixed.** It now asserts that its fault fired on the
+sequential read (an open-ended range starting past byte 1 and before the
+file's midpoint). With the count at 99 and at the old 3, each run gives
+`AssertionError: expected false to be true`, `Tests 1 failed | 55 skipped
+(56)`.
+
+**F8, the titles: fixed.** The tuple is now `(name, expected, bytes)`, so
+`"%s is %s"` prints the verdict.
+
+F4, F5 and F9 are left as gate 1 recorded them, by the dispatch.
+
+The three files, after: `npx vitest run tools/downloader/engine/test/seek-probe.test.ts tools/downloader/engine/test/stream.test.ts tools/downloader/api/test/range-ignoring-origin.test.ts`,
+`Test Files 3 passed (3)`, `Tests 77 passed (77)`, against gate 1's 74 (one
+hop test and two CA tests added).

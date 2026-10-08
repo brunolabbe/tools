@@ -28,12 +28,19 @@
  *  - anything else — another status, a body that is not boxes, a box chain
  *    that runs past `WALK_LIMIT_BYTES` before deciding, a refused tunnel, a
  *    certificate failure, a timeout — is **unknown**, and unknown lets ffmpeg
- *    run exactly as it did before dl-102. That is deliberate: those failures
- *    are ffmpeg's to report and classify (a certificate failure must still
- *    arrive as `TLS_VERIFICATION_FAILED`, a `500` must still buy a mirror), and
- *    a probe that refused on them would turn every flaky origin into a final
- *    refusal. The cost is that an origin which fails the probe and then serves
- *    ffmpeg normally is not checked.
+ *    run. That is deliberate, and the owner's choice of 2026-10-08: those
+ *    failures are ffmpeg's to report and classify (a certificate failure must
+ *    still arrive as `TLS_VERIFICATION_FAILED`, a `500` must still buy a
+ *    mirror), and a probe that refused on them would turn every flaky origin
+ *    into a final refusal. Two costs, both measured by dl-102's gate. An
+ *    origin that fails the probe and then serves ffmpeg the whole body is not
+ *    checked, and still yields a file of which no frame decodes (dl-103 is the
+ *    second line of defence). And it is **not quite** ffmpeg running as it did
+ *    before: the probe is now the first request the origin sees, so a fault
+ *    that hits only the first request (one `429` or `500`, one refused
+ *    `CONNECT`) is spent on the probe. From an origin that honours `Range`
+ *    that heals; from one that ignores it, it turns a `DOWNLOAD_FAILED` into
+ *    that undecodable file.
  *
  * A start of 1, not 0: the seek ffmpeg needs is to a later offset, and a `206`
  * for a range at zero is the weaker evidence (dl-64's size probe accepts a
@@ -49,15 +56,19 @@
  * ## Egress
  *
  * The engine enforces no SSRF policy of its own; the API's guarded egress
- * proxy is the check (see `createEngine`'s notes). So this request takes
- * **exactly ffmpeg's route**: through the proxy the runner gives ffmpeg —
- * `EngineConfig.proxyUrl`, or else the `http_proxy` ffmpeg would inherit —
- * as an absolute-form request for `http:` and a `CONNECT` tunnel for
- * `https:`, verifying the certificate with the same `tlsVerify` and
- * `tlsCaFile` ffmpeg gets. Each redirect hop is a fresh request on the same
- * route, so the proxy vets each one. **It never connects around a configured
- * proxy**: a proxy it cannot speak to (not `http://`) makes the verdict
- * unknown rather than sending the request direct.
+ * proxy is the check (see `createEngine`'s notes). So this request goes
+ * through the proxy the runner gives ffmpeg — `EngineConfig.proxyUrl`, or
+ * else the `http_proxy` ffmpeg would inherit — as an absolute-form request
+ * for `http:` and a `CONNECT` tunnel for `https:`, verifying the
+ * certificate with the same `tlsVerify` and `tlsCaFile` ffmpeg gets. Each
+ * redirect hop is a fresh request on the same route, so the proxy vets each
+ * one; "every redirect hop goes through the proxy, not only the first" in
+ * `seek-probe.test.ts` fails if one does not. **It never connects around a
+ * configured proxy**, and that makes its reach a subset of ffmpeg's rather
+ * than the same: ffmpeg goes direct to a host an inherited `no_proxy`
+ * names, where the probe stays on the proxy, and ffmpeg ignores a proxy that
+ * is not `http://` and goes direct, where the probe sends nothing and the
+ * verdict is unknown.
  */
 
 import { readFile } from "node:fs/promises";
@@ -265,6 +276,18 @@ async function get(
 ): Promise<IncomingMessage> {
   if (target.protocol === "http:") {
     if (route.kind === "direct") {
+      // Handed no CA at all: plain HTTP. The flow the scanner reports here was not traced.
+      // js/file-access-to-http: the only file this module reads is `tlsCaFile`,
+      // read in `probeSeek` and handed to `get` as `tlsSettings.ca`. It is the
+      // CA bundle the origin's certificate is verified against, the same file
+      // ffmpeg gets as `-ca_file`: it configures trust and is never sent. The
+      // request's URL, headers and (empty) body come from the candidate URL, a
+      // redirect's `Location` and the replayed `RequestContext`. Excused under
+      // docs/adr/005, in engine/src/download/seek-probe.ts, 2026-10-08. If the
+      // CA's bytes ever reach a request, "the CA file configures trust and is
+      // never sent" fails, in engine/test/seek-probe.test.ts for `http:` and in
+      // api/test/range-ignoring-origin.test.ts for `https:`, direct and tunnelled.
+      // codeql[js/file-access-to-http]
       return awaitResponse(http.request(target, { headers, agent: false, signal }));
     }
     // Absolute form: the proxy names, resolves and vets the host itself.
@@ -288,10 +311,22 @@ async function get(
     ...(net.isIP(host) === 0 ? { servername: host } : {}),
   };
   if (route.kind === "direct") {
+    // js/file-access-to-http, excused under docs/adr/005, in
+    // engine/src/download/seek-probe.ts, 2026-10-08: `secure.ca` is
+    // the `tlsCaFile` trust anchor and is never sent; the reasoning is above the
+    // plain-HTTP request in this function. "the CA file configures trust and is
+    // never sent" in api/test/range-ignoring-origin.test.ts fails if it is.
+    // codeql[js/file-access-to-http]
     return awaitResponse(https.request(target, { headers, agent: false, signal, ...secure }));
   }
   const socket = await openTunnel(route.url, target, signal);
   const response = await awaitResponse(
+    // js/file-access-to-http, excused under docs/adr/005, in
+    // engine/src/download/seek-probe.ts, 2026-10-08: `secure.ca`, inside the tunnel, is
+    // the `tlsCaFile` trust anchor and is never sent; the reasoning is above the
+    // plain-HTTP request in this function. "the CA file configures trust and is
+    // never sent" in api/test/range-ignoring-origin.test.ts fails if it is.
+    // codeql[js/file-access-to-http]
     https.request(target, {
       headers,
       signal,

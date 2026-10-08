@@ -157,6 +157,13 @@ async function runJob(name: string): Promise<{ job: Job; status: number; file: s
   return { job: finished as Job, status: opened.statusCode, file };
 }
 
+/** A PEM file's base64 lines. The generated ones are CRLF, so split on both. */
+async function pemBody(file: string): Promise<string[]> {
+  return (await fs.readFile(file, "utf8"))
+    .split(/\r?\n/u)
+    .filter((line) => line.length >= 40 && !line.startsWith("-----"));
+}
+
 describe("dl-102: a Range-ignoring origin through the real app", () => {
   test(
     "a tail-moov MP4 fails its job with SOURCE_NOT_SEEKABLE, never completes undecodable",
@@ -200,5 +207,34 @@ describe("dl-102: a Range-ignoring origin through the real app", () => {
     expect(await probeSeek(url, { ...base, tlsVerify: true, tlsCaFile: undefined })).toMatchObject({
       kind: "unknown",
     });
+  });
+
+  test("the CA file configures trust and is never sent", async () => {
+    // The register under docs/adr/005 in `seek-probe.ts` names this test for
+    // `https:`. Direct, the CA is the fixture's; tunnelled through the
+    // terminating proxy production gives the engine, it is that proxy's root.
+    const proxyCa = app.context.engine.config.tlsCaFile;
+    expect(proxyCa).toBeDefined();
+    const secrets = [...(await pemBody(certificate.caPath)), ...(await pemBody(proxyCa ?? ""))];
+    expect(secrets.length).toBeGreaterThan(4);
+
+    const url = `https://127.0.0.1:${origin.port}/moov-end.mp4`;
+    const base = { requestContext: { headers: {} }, env: {}, tlsVerify: true };
+    const before = origin.requests.length;
+    expect(
+      await probeSeek(url, { ...base, proxyUrl: undefined, tlsCaFile: certificate.caPath }),
+    ).toEqual({ kind: "unseekable" });
+    expect(
+      await probeSeek(url, {
+        ...base,
+        proxyUrl: app.context.ffmpegProxyUrl,
+        tlsCaFile: proxyCa,
+      }),
+    ).toEqual({ kind: "unseekable" });
+
+    const sent = origin.requests.slice(before);
+    expect(sent).toHaveLength(2);
+    const seen = JSON.stringify(sent);
+    for (const line of secrets) expect(seen).not.toContain(line);
   });
 });

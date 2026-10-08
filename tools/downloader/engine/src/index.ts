@@ -45,12 +45,14 @@
  *    guarded proxy, which is the only check that sees each segment.
  *  - **One request is the engine's own, not ffmpeg's** (dl-102): before a
  *    progressive input is opened, `download/seek-probe.ts` asks its origin for
- *    one byte with `Range`. It leaves by ffmpeg's route — `proxyUrl`, or the
- *    `http_proxy` ffmpeg would inherit, with the same `tlsVerify` and
- *    `tlsCaFile` — never around a configured proxy, and each redirect hop is a
- *    fresh request on that route. So the proxy that vets ffmpeg vets it too,
- *    and an engine built without one probes directly, exactly as its ffmpeg
- *    fetches directly.
+ *    one byte with `Range`. It goes through ffmpeg's proxy — `proxyUrl`, or
+ *    the `http_proxy` ffmpeg would inherit — with the same `tlsVerify` and
+ *    `tlsCaFile`, never around a configured proxy, and each redirect hop is a
+ *    fresh request through it. So the proxy that vets ffmpeg vets it too, and
+ *    an engine built without one probes directly, as its ffmpeg fetches
+ *    directly. Its reach is a subset of ffmpeg's, not the same: it ignores
+ *    `no_proxy` and stays on the proxy, and where ffmpeg would ignore a proxy
+ *    that is not `http://` and go direct, it sends nothing.
  */
 
 import type { EngineConfig, EngineConfigInput } from "./config.ts";

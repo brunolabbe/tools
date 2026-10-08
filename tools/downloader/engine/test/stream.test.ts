@@ -799,12 +799,19 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   test("control: a progressive body cut once and resumed on reconnect completes whole", async () => {
     // ffmpeg logs "Stream ends prematurely" here too, and then reconnects and
     // gets the rest — which is why that line cannot be the signal.
+    let cut = false;
     fault = (pathname, count, request, response, body) => {
       if (!pathname.endsWith("/prog9/moov-end.mp4") || count !== 4) return false;
+      // The sequential read: open-ended from just past the header, so neither
+      // the probe's bytes=1-1 nor ffmpeg's read of the tail.
+      const start = Number(/^bytes=(\d+)-$/u.exec(request.headers.range ?? "")?.[1] ?? -1);
+      cut = start > 1 && start < body.length / 2;
       cutShort(request, response, body, 0.4);
       return true;
     };
     const { received, done } = await streamed("prog-heal", prog9());
+    // A count that drifts off the body read leaves nothing to heal from.
+    expect(cut).toBe(true);
     expect(received.aborted).toBe(false);
     await expect(done).resolves.toMatchObject({ bytes: received.bytes });
     const probed = await probeMedia(received.file);
@@ -1465,34 +1472,25 @@ function expectWhole(outcome: Outcome): void {
 }
 
 /**
- * A forward proxy that records what it is asked for. `refuse` answers `403`
- * to everything, which is what the guarded egress proxy does to a target it
- * will not reach.
+ * A proxy that records the absolute URL it is asked for and answers as a
+ * Range-ignoring origin would, itself, from `fixtureRoot`: it never sends a
+ * request on. `refuse` answers `403` to everything, which is what the guarded
+ * egress proxy does to a target it will not reach.
  */
-async function startForwardProxy(refuse: boolean): Promise<FixtureServer> {
+async function startRecordingProxy(refuse: boolean): Promise<FixtureServer> {
   return startFixtureServer(async (request, response) => {
     if (refuse) {
       response.writeHead(403).end();
       return;
     }
-    const target = new URL(request.url ?? "");
-    await new Promise<void>((resolve) => {
-      const upstream = http.request(
-        target,
-        { method: request.method, headers: request.headers },
-        (answer) => {
-          response.writeHead(answer.statusCode ?? 502, answer.headers);
-          answer.pipe(response);
-          answer.once("end", resolve);
-        },
-      );
-      upstream.once("error", () => {
-        if (!response.headersSent) response.writeHead(502);
-        response.end();
-        resolve();
-      });
-      upstream.end();
-    });
+    const pathname = new URL(request.url ?? "/", "http://invalid.example").pathname;
+    const file = path.join(fixtureRoot, ...pathname.split("/").filter((part) => part !== ".."));
+    const body = await fs.readFile(file).catch(() => null);
+    if (body === null) {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, { "content-length": String(body.length) }).end(body);
   });
 }
 
@@ -1728,7 +1726,7 @@ describe("dl-102: an origin that ignores Range", () => {
   }, 60_000);
 
   test("the probe goes through the configured proxy, in absolute form", async () => {
-    const proxy = await startForwardProxy(false);
+    const proxy = await startRecordingProxy(false);
     try {
       const url = `${ignoring.origin}/large/moov-end.mp4`;
       const outcome = await outcomeOf("dl-102-proxied", large(url), { proxyUrl: proxy.origin });
@@ -1742,7 +1740,7 @@ describe("dl-102: an origin that ignores Range", () => {
   }, 60_000);
 
   test("a proxy that refuses the probe is not gone around, by the probe or by ffmpeg", async () => {
-    const proxy = await startForwardProxy(true);
+    const proxy = await startRecordingProxy(true);
     try {
       const before = ignoring.requests.length;
       const outcome = await outcomeOf(
