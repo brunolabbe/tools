@@ -81,6 +81,40 @@ prove it reproduces the workbook's own figures before it writes a row.
 one. It needs a typo'd year, a placeholder row, a joint row, a carry-over, a v1
 period and a v2 period.
 
+## Decisions
+
+Taken by the owner on 2026-10-07 and 2026-10-08, after the first build and
+its gate 1. Each was asked with the options listed; the first three were the
+builder's open decisions and the last two gate 1's (F1, F4).
+
+1. **A nonzero opening balance in the first year.** The books count nothing
+   before their first row, so a workbook whose first year carries money in
+   cannot reproduce its own balances. Options: refuse, as built; import the
+   carry-in as opening rows, split by the owner; report it as an accepted
+   difference. **Chosen: refuse, as built.**
+2. **The ratio of a historical period.** The workbook stores only today's
+   salaries, on `Accueil`. Options: Accueil's ratio for every period, as built;
+   a ratio per period in the corrections file, Accueil's when none is given;
+   derive it back from each sheet's own figures. **Chosen: a ratio per period
+   in the corrections file**, over the builder's recommendation. A closed
+   period given one records it, and its settlement and the catch-up use it; a
+   malformed ratio, or one that names no closed period, is refused naming its
+   entry.
+3. **Books that already hold periods, period lines, recurring items, salaries
+   or ratios.** Options: refuse, as built; allow them and reconcile the two
+   histories. **Chosen: refuse, as built.**
+4. **What a dry run may touch** (gate 1, F1). Opening the books file, even to
+   read it, let SQLite recover an unclean stop's write-ahead log into it and
+   create a shared-memory file beside it. Options: never open the original, and
+   work on a byte copy of the file and its log in a private directory; or keep
+   the code and soften the sentences that say a dry run writes nothing.
+   **Chosen: never open the original.**
+5. **A correction naming a row a paste already holds** (gate 1, F4). Its note
+   cannot be written, because a stored row is never written again. Options:
+   refuse that correction, naming the cell, and file the row in the app; or
+   store the note elsewhere, which needs a column or a table and so a second
+   migration. **Chosen: refuse it.**
+
 ## Done when
 
 1. The dry run on the synthetic workbook reports every repair and writes
@@ -94,6 +128,9 @@ period and a v2 period.
 5. Imported period settlements keep their historical amounts and their formula
    version.
 6. Gates green.
+7. A closed period given its own ratio in the corrections file records it,
+   and its settlement and the catch-up use it; a malformed ratio, or one that
+   names no closed period, is refused naming its entry (Decision 2).
 
 ## Log
 
@@ -212,3 +249,108 @@ period and a v2 period.
   - **Not covered.** The owner's real workbook was not read. Every layout
     assumption above is unmeasured against it. No e2e spec, and no run inside
     the image.
+
+- 2026-10-08 — Round 1, on `77a5d45` (gate 1: CONCERNS, no high), by the
+  builder (Opus 5.5), with the owner's five answers now in **Decisions**.
+  Migrations stay at one (number 5). Each new test was run against round 0's
+  `api/src` and `books/src` (`git checkout 77a5d452 -- …`, books rebuilt) and
+  failed there: 13 of 13, with the 19 earlier ones passing. Restored, and
+  `grep -c applyRatios books/dist/workbook.js` printed 2. F7's test was run the
+  same way against round 0's `workbook-import.ts`: it failed, printing
+  `… leaves 2604.99 $ where it leaves 2604.99 $: 0.00 $ is unexplained.`
+  - **Decision 2, a ratio per period, built.** The corrections file takes
+    `"ratios": [{ "sheet": …, "shares": { name: percent, … } }]`, read by
+    `readCorrections` to the part per million.
+    - Each closed period records its own ratio, or Accueil's when it has none.
+    - A change of ratio takes effect the day after the close before it, and
+      Accueil's ratio takes effect again after the last close. The ratio in
+      effect on any day is then the one its period was settled at.
+    - Accueil's ratio records cite their salaries; a corrections ratio cites
+      none.
+    - Tests: "a period given its own ratio records it, and its settlement and
+      the catch-up use it" (50/50 on the v2 period: 230.00 / 138.00 in place of
+      130.00 / 78.00, and three ratio records). "a ratio that is malformed, or
+      names no closed period, is refused naming its entry" (exit 2 and exit 1).
+      `books/test/workbook.test.ts`: the malformed-ratio and ratio-placement
+      cases.
+    - The open period is refused a ratio of its own: it takes Accueil's, which
+      is today's.
+  - **F1 (Decision 4), fixed.** A dry run copies the file and its `-wal`, byte
+    for byte, into a `mkdtemp` directory, works on the copy and deletes it. It
+    never opens the original.
+    - Test: "a dry run never opens the books: a crash image's file and log stay
+      as they were, and nothing appears beside them". It hashes the file and
+      the log, and lists the directory. The output shows the rows only the log
+      held.
+    - On round 0 it failed with `ENOENT … crash/ledger.db-wal`: the log had
+      been recovered into the file and deleted, which is the gate's
+      reproduction.
+  - **F2, fixed.** Every consistent placement now counts, including one that
+    runs past the stored rows. Two or more are refused as ambiguous, and
+    "runs past" is refused only when it is the sole reading. Test: "a workbook
+    that fits two ways is refused even when one way runs past the stored rows"
+    (the gate's two-stored-row case).
+  - **F3, fixed.** Both sides compare the rows up to the workbook's newest
+    position, and `asOf` is the latest date among them. Test: "a stored newest
+    row dated a day after the workbook's copy of it is reported, not refused".
+    The gate's other case, a typed date that runs ahead of the rows after it,
+    is now also refused by F9's order check.
+  - **F4 (Decision 5), fixed.** A correction that names a row a paste holds is
+    refused, naming the cell. Test: "a correction naming a row a paste already
+    holds is refused, naming the row".
+  - **F5, fixed, both ways.**
+    - Migrations now run inside the import's transaction, as savepoints
+      (`applyMigrations` in `db/schema.ts`; `migrate` is now `configure` plus
+      that).
+    - `--write` rehearses on the private copy first and opens the real file
+      only when every verification held there.
+    - Tests: "a refused --write leaves books at an older schema version as they
+      were, and so does a dry run" (a version-4 file, its hash and the
+      directory). "a refused --write into books that do not exist leaves no
+      file".
+  - **F6, fixed, not as the gate worded it.** An amount cell holding text, or
+    a formula with no saved value, is now a problem at its own cell. A cell
+    that is empty is still a placeholder.
+    - The gate's suggestion was to refuse a skipped row whose balance cell
+      holds a figure. That would refuse every placeholder in a workbook whose
+      `F` is a formula (`=F_prev+G` carries a figure on an empty-amount row).
+      This is reasoned, not measured: the real workbook was not available.
+    - Test: "an amount that is text, a formula with no saved value, or finer
+      than a cent is refused at its cell".
+  - **F7, three of four fixed.**
+    - A stored row the workbook lacks is now named as "a row is in one and not
+      the other", not "0.00 $ is unexplained" (test: "a stored row the workbook
+      lacks …").
+    - An amount or balance finer than a cent is refused at its own cell (same
+      test as F6).
+    - An unreadable `.xlsx` carries exceljs's reason (`api/test/xlsx.test.ts`,
+      "a file that is not a workbook is refused, with exceljs's reason").
+    - **Left recorded:** a `--write` into a read-only directory still fails
+      with SQLite's own message. The finding states no remedy. A dry run no
+      longer touches that directory.
+  - **F8, fixed.**
+    - A dry run on a version-4 file is in F5's test.
+    - Migration 5 on a populated version-4 database is
+      `api/test/schema.test.ts` › "migration 5 marks every stored batch a
+      paste, notes no row, and refuses an unknown source".
+    - `api/test/xlsx.test.ts` covers rich text, shared formulas, booleans,
+      errors, hyperlinks, merged cells and an unreadable file.
+    - F1's test hashes the `-wal`.
+  - **F9, fixed.** Newest first, a row dated before the row below it is now a
+    problem at its cell, saying when a year was repaired there. Test: "a
+    repaired year the row order contradicts is refused at its cell".
+    - This also refuses an out-of-order row whose year was not repaired. The
+      owner corrects the date in the workbook, because the corrections file
+      changes no dates.
+  - **F10, left recorded.** The finding states no bound to set. The file is
+    the owner's own, read on their machine, so there is no live call site.
+  - **Measured:**
+    - `npx vitest run --project ledger`: 592 of 592, 37 files.
+    - The built command with `--corrections` giving the v2 period 50/50,
+      `--write`: exit 0. It printed three ratio lines (60/40 from 2022-01-05,
+      50/50 from 2022-09-01, 60/40 from 2023-04-01) and "sam deposits 230.00 $
+      (net 138.00 $), v3".
+  - **Corrects round 0's entry:** "A dry run copies the database into memory
+    and works on the copy, so it never writes to the file" was false in three
+    conditions (F1). The copy is now made from the file's bytes, never by
+    opening the file.

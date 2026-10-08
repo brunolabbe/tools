@@ -78,16 +78,20 @@ Once, from the repo root, into the database the API is configured with
 ACCESS_PEOPLE=… npm run import:ledger -- ~/classeur.xlsx --as alex [--corrections ~/corrections.json] [--write]
 ```
 
-Without `--write` it is a dry run: it imports into a copy held in memory, prints
-the report — rows imported, repaired, skipped and corrected, each bucket's
-figures beside the workbook's, the catch-up — and writes nothing. It exits
-nonzero, and writes nothing, when any verification fails. Keep the workbook and
-the corrections file **outside the repository**: both are bank data.
-`--corrections` is the owner's JSON of rows to file otherwise, and of workbook
-names that are not already a person's id; its shape is on `readCorrections` in
-`books/src/workbook.ts`. In the image, where nothing can build, run
-`node tools/ledger/api/dist/import-ledger.js` with the same arguments and the
-workbook mounted in.
+Without `--write` it is a dry run. It copies the database file and its
+write-ahead log into a private temporary directory, never opening the
+originals, and imports into the copy. Then it prints the report — rows imported,
+repaired, skipped and corrected, each bucket's figures beside the workbook's,
+the catch-up — and deletes the copy. `--write` runs that rehearsal first, and
+opens the real database only when every verification held there; a refused
+import leaves the books as they were, schema version included, and creates no
+file where there was none. Keep the workbook and the corrections file **outside
+the repository**: both are bank data. `--corrections` is the owner's JSON: rows
+to file otherwise, workbook names that are not already a person's id, and the
+ratio a closed period was settled at when it was not Accueil's; its shape is on
+`readCorrections` in `books/src/workbook.ts`. In the image, where nothing can
+build, run `node tools/ledger/api/dist/import-ledger.js` with the same arguments
+and the workbook mounted in.
 
 ## Docs
 

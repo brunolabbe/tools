@@ -716,4 +716,29 @@ describe("the workbook against the rows already pasted", () => {
     );
     expect(ran.out).toContain("File that row in the app");
   });
+
+  test("a stored row the workbook lacks is named as a row in one and not the other, not as 0.00 unexplained", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    const rows = withBalances(
+      [
+        {
+          date: "2024-01-05",
+          description: "Virement entre folios /Caisse du Lac",
+          amountCents: 50_000,
+        },
+        { date: "2024-01-10", description: "Remise /Caisse du Lac", amountCents: 100 },
+        { date: "2024-01-20", description: "Hypothèque /Prêteur Exemple", amountCents: -70_000 },
+      ],
+      210_499,
+    );
+    importStatement({ db, personId: "alex", now: () => NOW }, renderPaste(rows));
+    db.close();
+
+    const ran = await run(await workbook(), "--as", "alex");
+
+    expect(ran.code).toBe(1);
+    expect(ran.out).toContain("so a row is in one and not the other.");
+    expect(ran.out).not.toContain("0.00 $ is unexplained");
+  });
 });

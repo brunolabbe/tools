@@ -974,12 +974,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *   "people": { "Alex B.": "alex" },
  *   "corrections": [
  *     { "sheet": "2024", "row": 14, "bucket": "current-expenses", "note": "Filed under the mortgage by mistake." }
+ *   ],
+ *   "ratios": [
+ *     { "sheet": "$ (Avril-Août)", "shares": { "Alex": 55, "Sam": 45 } }
  *   ]
  * }
  * ```
  *
  * `person` may also be given: a workbook name or a person id, or `null` for
- * joint. Every entry needs a note, because each lands on its row.
+ * joint. Every correction needs a note, because each lands on its row, and so
+ * it names a row the import adds, never one a paste already holds. A ratio is
+ * the one a closed period was settled at, as percentages summing to 100; a
+ * period given none is settled at Accueil's.
  */
 export function readCorrections(json: unknown): Corrections {
   if (!isRecord(json)) refuse("it is not a JSON object.");
