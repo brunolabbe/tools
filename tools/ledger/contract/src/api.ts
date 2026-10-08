@@ -403,10 +403,11 @@ export interface RatiosResponse {
 }
 
 /**
- * Where a period line came from. `manual` is a person's own entry (lg-6); the
- * workbook's import (lg-7) and receipts (lg-8) add their own.
+ * Where a period line came from. `manual` is a person's own entry (lg-6) and
+ * `workbook` a line of one of the old workbook's period sheets, imported once
+ * (lg-7); receipts (lg-8) add their own.
  */
-export const PERIOD_LINE_SOURCES = ["manual"] as const;
+export const PERIOD_LINE_SOURCES = ["manual", "workbook"] as const;
 export type PeriodLineSource = (typeof PERIOD_LINE_SOURCES)[number];
 
 /**
