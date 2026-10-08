@@ -60,6 +60,15 @@ export const DOWNLOADER_ERROR_CODES = [
   "VARIANT_GONE",
   /** Segment fetching failed past the retry budget. */
   "DOWNLOAD_FAILED",
+  /**
+   * The container the visitor chose cannot hold this source as it is, and
+   * nothing known about the source says a conversion would fit (dl-99): today
+   * WebM for a source whose codecs are undeclared and whose container is not
+   * WebM. Raised before any byte is fetched, and not retryable — the same
+   * source and the same choice fail the same way; picking MP4 or MKV works.
+   * Not `DOWNLOAD_FAILED`: that code's copy tells the visitor to try again.
+   */
+  "CONTAINER_UNSUPPORTED",
 
   // --- Serving ---
   /**
@@ -119,6 +128,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   LIVE_STREAM_UNSUPPORTED: "This is a live stream. Set a recording duration to capture it.",
   VARIANT_GONE: "The stream link expired. Analyse the page again.",
   DOWNLOAD_FAILED: "The download failed partway through.",
+  CONTAINER_UNSUPPORTED:
+    "This file can't be saved as WebM, because what it holds is not known to fit. Choose MP4 or MKV.",
   THUMBNAIL_NOT_FOUND: "That preview image is no longer available.",
 };
 

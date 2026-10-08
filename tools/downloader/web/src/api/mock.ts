@@ -107,6 +107,14 @@ function halt(runtime: JobRuntime): void {
   runtime.timers = [];
 }
 
+/** The script a job plays: a failure tied to one container is dropped for any other. */
+function scriptFor(script: JobScript, jobOptions: JobOptions): JobScript {
+  if (script.failOnlyForContainer === undefined) return script;
+  if (script.failOnlyForContainer === jobOptions.container) return script;
+  const { failWith: _failWith, failAt: _failAt, ...succeeding } = script;
+  return succeeding;
+}
+
 export function createMockClient(options: MockClientOptions = {}): ApiClient {
   const clock = options.clock ?? systemClock;
   const speed = options.speed ?? 1;
@@ -365,7 +373,7 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       runtime,
       scenario.job.linkExpires === true
         ? linkExpirySteps()
-        : buildSteps(scenario.job, result, variant),
+        : buildSteps(scriptFor(scenario.job, jobOptions), result, variant),
     );
     return { job };
   }

@@ -214,7 +214,12 @@ describe("job event streams", () => {
   test("every job-time failure scenario ends failed with its declared code", async () => {
     for (const scenario of SCENARIOS) {
       if (!scenario.job.failWith) continue;
-      const { job } = await run(scenarioUrl(scenario.keyword));
+      // A refusal tied to one container (dl-99) is asked for with that container.
+      const asked: JobOptions =
+        scenario.job.failOnlyForContainer === undefined
+          ? {}
+          : { container: scenario.job.failOnlyForContainer };
+      const { job } = await run(scenarioUrl(scenario.keyword), asked);
       const server = (await api.getJob(job.id)).job;
       expect(server.status).toBe("failed");
       expect(server.error?.code).toBe(scenario.job.failWith);
@@ -496,5 +501,21 @@ describe("stored MUX_FAILED records are transformed to DOWNLOAD_FAILED (dl-74)",
       expect(parsed.data.error?.code).toBe("DOWNLOAD_FAILED");
       expect(parsed.data.status).toBe("failed");
     }
+  });
+});
+
+describe("the nowebm scenario refuses WebM and nothing else (dl-99)", () => {
+  const url = scenarioUrl("nowebm");
+
+  test("a job that asked for WebM fails with CONTAINER_UNSUPPORTED", async () => {
+    const { events } = await run(url, { container: "webm" });
+    const failed = events.find((event) => event.type === "failed");
+    expect(failed?.type === "failed" ? failed.error.code : null).toBe("CONTAINER_UNSUPPORTED");
+  });
+
+  test("a job that asked for MP4 completes", async () => {
+    const { events } = await run(url, { container: "mp4" });
+    expect(events.some((event) => event.type === "failed")).toBe(false);
+    expect(events.some((event) => event.type === "completed")).toBe(true);
   });
 });

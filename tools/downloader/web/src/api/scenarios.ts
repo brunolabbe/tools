@@ -9,6 +9,7 @@
  */
 
 import type {
+  ContainerOption,
   ErrorCode,
   JobStatus,
   ProbeStage,
@@ -22,6 +23,12 @@ export interface JobScript {
   failWith?: ErrorCode;
   /** Stage at which `failWith` is emitted. */
   failAt?: JobStatus;
+  /**
+   * `failWith` applies only to a job that asked for this container; any other
+   * plays out as a success. A refusal that belongs to one container must not
+   * fail the visitor who chose another (dl-99).
+   */
+  failOnlyForContainer?: ContainerOption;
   /** Report `percent: null` throughout — live capture, no Content-Length. */
   indeterminate?: boolean;
   /** Download tick indices at which the SSE connection is dropped. */
@@ -449,6 +456,14 @@ export const SCENARIOS: readonly Scenario[] = [
     description: "Segment fetching gives up past the retry budget, mid-download. Retryable.",
     probeDelayMs: 1_000,
     job: { failWith: "DOWNLOAD_FAILED", failAt: "downloading" },
+  },
+  {
+    keyword: "nowebm",
+    title: "WebM refused",
+    description:
+      "The chosen container cannot hold a file nothing describes (dl-99), refused before any bytes move. Not retryable.",
+    probeDelayMs: 1_000,
+    job: { failWith: "CONTAINER_UNSUPPORTED", failAt: "probing", failOnlyForContainer: "webm" },
   },
   {
     keyword: "toobig",

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { canMakeWebm } from "@downloader/contract";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
 import { pickDefaultVariantId, toDisplayRows } from "../lib/variants.ts";
@@ -43,10 +44,27 @@ export function ProbePanel({
   // different hat.
   const { rows: shownRows, collapsed } = toDisplayRows(probe.variants);
 
+  // dl-99: WebM is offered only for a variant it can be made from. With no
+  // variant chosen yet the server picks one, and refuses WebM itself if it must.
+  // The choice falls back to MP4 rather than staying on an option that is no
+  // longer in the list, and the same fallback is what is submitted.
+  const selectedVariant = probe.variants.find((variant) => variant.id === variantId);
+  const webmOffered = selectedVariant === undefined || canMakeWebm(selectedVariant, { audioOnly });
+  // "keep source" is WebM for a WebM source (the engine's `resolveContainer`),
+  // so it is withheld with it: a WebM file with an undeclared separate audio
+  // stream cannot make WebM, and offering the option would only move the
+  // refusal one click later.
+  const sourceIsWebm =
+    selectedVariant?.container?.trim().toLowerCase().replace(/^\./u, "") === "webm";
+  const offered = CONTAINERS.filter(
+    (value) => webmOffered || (value !== "webm" && !(value === "source" && sourceIsWebm)),
+  );
+  const chosenContainer = offered.includes(container) ? container : "mp4";
+
   function submit(): void {
     const options: JobOptions = {
       ...(variantId ? { variantId } : {}),
-      container,
+      container: chosenContainer,
       audioOnly,
       embedSubtitles,
       ...(embedSubtitles && subtitleLanguages.length > 0 ? { subtitleLanguages } : {}),
@@ -94,14 +112,14 @@ export function ProbePanel({
           <label htmlFor={containerId}>Container</label>
           <select
             id={containerId}
-            value={container}
+            value={chosenContainer}
             onChange={(event) => {
               const next = event.target.value;
               const match = CONTAINERS.find((candidate) => candidate === next);
               if (match) setContainer(match);
             }}
           >
-            {CONTAINERS.map((value) => (
+            {offered.map((value) => (
               <option key={value} value={value}>
                 {value === "source" ? "keep source" : value}
               </option>
