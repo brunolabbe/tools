@@ -32,7 +32,8 @@ specific rule winning (lg-4, lg-16), `fromHistory`, which offers what a person
 answered before (lg-16), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
-period's deposit a paste has brought in (lg-6). The name is `books` because `ledger` is the tool. _Planned_, arriving
+period's deposit a paste has brought in (lg-6), and the reader of the old
+workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7). The name is `books` because `ledger` is the tool. _Planned_, arriving
 with the ticket that first needs it rather than as an empty package now:
 **`receipts`**, the one package that talks to a model, reading a receipt photo.
 
@@ -44,6 +45,7 @@ npm run dev:ledger:api      # just the API
 npm run dev:ledger:web      # just the UI
 npm test -- --project ledger
 npm run e2e:ledger          # "No tests found" until the first spec
+npm run import:ledger -- <workbook.xlsx> --as <person>   # the one-off import; a dry run without --write
 ```
 
 **Every API route but health answers 403 until you name a person.** The API

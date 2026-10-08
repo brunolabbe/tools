@@ -171,6 +171,13 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "transient",
     allowRetry: true,
   },
+  CONTAINER_UNSUPPORTED: {
+    title: "Not available as WebM",
+    detail:
+      "WebM only holds VP8, VP9 or AV1 video with Opus or Vorbis audio, and nothing known about this file says it is one. Choose MP4 or MKV instead.",
+    tone: "unavailable",
+    allowRetry: false,
+  },
   SIZE_LIMIT_EXCEEDED: {
     title: "Too large",
     detail: "This video is bigger than the configured size limit. Pick a lower quality.",

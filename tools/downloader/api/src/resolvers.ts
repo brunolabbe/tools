@@ -22,9 +22,11 @@
  * 90) and the registry sorts by them, so this function only decides membership.
  */
 
-import { AppError, redactUrl } from "@downloader/contract";
+import { AppError, canMakeWebm, redactUrl } from "@downloader/contract";
 import {
   BrowserResolver,
+  createFetchSizeProbe,
+  describeProgressiveTracks,
   DirectUrlResolver,
   ResolverRegistry,
   YtDlpResolver,
@@ -67,6 +69,11 @@ export interface BuildRegistryOptions {
 export interface TierEgress {
   /** Chromium's `--ignore-certificate-errors-spki-list`. */
   rootSpkiSha256: string;
+  /**
+   * The same root as PEM: the browser tier's manifest re-fetch is a Node client,
+   * which the SPKI flag never reached, and takes it as its only `ca` (dl-97).
+   */
+  rootCaPem: string;
   /** yt-dlp's `SSL_CERT_FILE`. */
   trustBundlePath: string;
   /**
@@ -174,6 +181,72 @@ export function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectio
   };
 }
 
+/**
+ * Reads the codecs a progressive MP4 declares for itself, for the tiers that
+ * leave them blank (dl-99).
+ *
+ * The browser sniffer and the direct tier describe a plain file by its size and
+ * its Content-Type, which says nothing about what is inside — and WebM can be
+ * made only from what is known (`canMakeWebm`). The yt-dlp tier already runs
+ * this itself (dl-64), so it is not wrapped. Done here, over the guarded fetch
+ * and the probe's own replayed headers, because the browser tier's request
+ * context cannot ask for a range and its files are not this wrapper's to edit.
+ *
+ * Two ranged reads per undeclared MP4. A file that is not an MP4, a read that
+ * fails and an abort all leave the variant as the tier reported it: this only
+ * ever adds what the file says, and the engine refuses WebM for what stays
+ * undeclared.
+ */
+export function describingProgressiveTracks(
+  resolver: Resolver,
+  fetchImpl: GuardedFetch,
+  logger?: AppLogger,
+): Resolver {
+  return {
+    name: resolver.name,
+    priority: resolver.priority,
+    canHandle: (url: URL) => resolver.canHandle(url),
+    ...(resolver.dispose === undefined
+      ? {}
+      : { dispose: async (): Promise<void> => await resolver.dispose?.() }),
+    async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      const probe = await resolver.resolve(url, options);
+      if (probe.drm.protected || !probe.variants.some((v) => v.protocol === "progressive")) {
+        return probe;
+      }
+      const sizeProbe = createFetchSizeProbe({
+        fetch: fetchImpl,
+        headers: probe.requestContext.headers,
+        signal: options.signal,
+      });
+      const variants = await describeProgressiveTracks(probe.variants, sizeProbe, {
+        signal: options.signal,
+      });
+      // The read swallows its own failures, so this is the only trace of one:
+      // a variant that could not make WebM before and still cannot, which is
+      // the case the picker then hides WebM for. Never a URL — a signed one
+      // carries its credential in the query.
+      for (const [index, described] of variants.entries()) {
+        const before = probe.variants[index];
+        if (
+          before !== undefined &&
+          before.protocol === "progressive" &&
+          !canMakeWebm(before) &&
+          !canMakeWebm(described)
+        ) {
+          logger?.debug("a progressive variant is still undeclared after its header read", {
+            resolver: resolver.name,
+            variantId: described.id,
+            container: described.container ?? null,
+            url: redactUrl(described.url),
+          });
+        }
+      }
+      return { ...probe, variants };
+    },
+  };
+}
+
 export interface RegistryBuild {
   registry: ResolverRegistry;
   /** What actually got registered, for `/api/health` and for the boot log. */
@@ -223,13 +296,24 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
       // dl-55: so a detected navigation-away is diagnosable from the service
       // log rather than only from the error it also throws.
       logger,
-      ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
+      ...(tierEgress === undefined
+        ? {}
+        : {
+            proxyRootSpkiSha256: tierEgress.rootSpkiSha256,
+            proxyRootCaPem: tierEgress.rootCaPem,
+          }),
     });
-    resolvers.push(named(browser));
+    resolvers.push(describingProgressiveTracks(named(browser), options.fetchImpl, logger));
   }
 
   if (config.enableDirectResolver) {
-    resolvers.push(new DirectUrlResolver({ fetch: options.fetchImpl }));
+    resolvers.push(
+      describingProgressiveTracks(
+        new DirectUrlResolver({ fetch: options.fetchImpl }),
+        options.fetchImpl,
+        logger,
+      ),
+    );
   }
 
   const registry = new ResolverRegistry(resolvers);

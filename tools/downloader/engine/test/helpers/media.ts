@@ -328,3 +328,26 @@ export async function listTree(root: string): Promise<string[]> {
   const entries = await fs.readdir(root, { recursive: true }).catch(() => [] as string[]);
   return entries.map(String).toSorted();
 }
+
+/**
+ * A WebM of VP9 and Opus (dl-99): the one source that can be copied into WebM,
+ * which is why a variant saying `container: "webm"` needs no codec to be named.
+ * Realtime VP9 at the smallest size, because the fixture's job is to be a
+ * WebM and not to be good.
+ */
+export async function generateWebm(dir: string, seconds: number): Promise<string> {
+  await fs.mkdir(dir, { recursive: true });
+  const out = path.join(dir, "source.webm");
+  const encode = ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "150k"];
+  await ffmpeg([
+    ...SOURCES(seconds),
+    ...encode,
+    "-c:a",
+    "libopus",
+    "-b:a",
+    "32k",
+    "-shortest",
+    out,
+  ]);
+  return out;
+}

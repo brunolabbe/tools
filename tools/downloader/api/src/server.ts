@@ -448,6 +448,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       : {
           tierEgress: {
             rootSpkiSha256: tierInterception.rootSpkiSha256,
+            rootCaPem: tierInterception.rootCaPem,
             trustBundlePath: tierInterception.trustBundlePath,
             rejections: tierRejections,
           },

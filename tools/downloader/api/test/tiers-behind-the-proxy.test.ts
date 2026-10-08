@@ -160,13 +160,15 @@ describe("the browser tier behind the proxy", () => {
   );
 
   test(
-    "the manifest re-fetch is proxied too",
+    "the size probe's context.request is proxied too",
     async () => {
-      // `#loadManifest` re-fetches the chosen manifest with `context.request`,
-      // from this process rather than from the page — an attacker-influenced URL
-      // whose body reaches a parser. It inherits the context's proxy, which is
-      // the only reason that fetch is checked at all, so it is worth pinning
-      // against Playwright itself rather than against our wrapper.
+      // `createRequestSizeProbe` weighs renditions with `context.request`, from
+      // this process rather than from the page — attacker-influenced URLs out of
+      // a manifest. It inherits the context's proxy, which is the only reason
+      // those fetches are checked at all, so it is worth pinning against
+      // Playwright itself rather than against our wrapper. The manifest re-fetch
+      // used to be the other caller; since dl-97 it is its own client, routed
+      // through the proxy by hand, and `manifest-refetch.test.ts` pins that.
       const browser = await chromium.launch({ headless: true, proxy: { server: proxy.url } });
       try {
         const context = await browser.newContext();
