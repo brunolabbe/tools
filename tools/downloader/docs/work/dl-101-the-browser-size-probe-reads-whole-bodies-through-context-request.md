@@ -136,3 +136,40 @@ the small, already-specified work the fold-in exception covers.
   used. A behaviour change nobody specified.
 - `npx vitest run tools/downloader/resolvers` took 557 s for 947 tests (the browser
   suites launch Chromium); the new probe tests alone run in about 1 s.
+
+### 2026-10-08 — gate 1 at 498ca6e failed with two highs; round 1
+
+**Owner decision on F1, 2026-10-08.** The orchestrator put it with AskUserQuestion:
+the replaced "size probe's requests are proxied too" test hands the client its
+proxy itself, so it passes when `BrowserResolver` stops giving the size probe one,
+and over plain HTTP nothing notices. Options: "Add a resolver-level test
+(Recommended)" (drive a real `BrowserResolver` over plain HTTP through the real
+guard, name the rendition on a refused host, assert the origin never sees it), or
+"Rename the test only". **The owner chose "Add a resolver-level test".**
+
+Each new or tightened test was run against the gate's mutant before commit:
+
+- **F1** (high). `size-probe-behind-the-proxy.test.ts` › "the size probe goes
+  through the egress guard over plain HTTP". With `...client, proxyUrl: undefined,`
+  in both spreads of `createSizeRequest` (and `resolvers` rebuilt), it goes red:
+  `expected [ { method: 'GET', …(2) }, …(6) ] to deeply equal []`, 7 requests with
+  `Host: localhost`. Its control, run with the guard allowing `localhost`, sees
+  `/media.m3u8` at that host. The client-level test in `tiers-behind-the-proxy`
+  is renamed to what it proves ("…routes a length and a playlist through the proxy
+  it is given") and says where the wiring is pinned.
+- **F2** (high). The ranged-`GET` test now offers 512 MiB in 64 KiB writes and
+  bounds what the origin managed to write at four caps (16 MiB), against about
+  2.5 MiB when the client closes at once. With `fetchHeaders` made to read 32 MiB
+  before closing it goes red: `expected 35717120 to be less than 16777216`. A
+  client that read less than the bound would still pass: the bound is the cap plus
+  the socket buffers, which differ by platform, and not a byte count.
+- **F3** (low). The overshoot allowed is now one decoder chunk (16 KiB), as measured.
+  With the decoder stopped three chunks late, all three encodings go red:
+  `expected 4259840 to be less than or equal to 4210688`.
+- **F4** (low). The bomb test runs for gzip, deflate and br. With the cap not
+  applied to br, only br goes red: `expected '#EXTM3U\n …' to be undefined`.
+- **F5** (low). The two `SizeProbe.bytes` sentences in `size-sample.ts` now say
+  only that the fetch-backed probe implements it and that the browser client could
+  but nothing asks for it yet.
+- **F6** (low). The client's deadline error reads "The request exceeded its time
+  budget." since it is no longer only the manifest re-fetch's.

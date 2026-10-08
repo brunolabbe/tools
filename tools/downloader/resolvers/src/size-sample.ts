@@ -60,10 +60,10 @@ export interface SizeProbe {
    * first. Used by `mp4-header.ts` to read a progressive file's sample entries
    * (dl-64).
    *
-   * **Optional**, because only the fetch-backed probe has it: it
-   * has to stop reading when a server ignores `Range` and sends the whole file,
-   * and the browser tier's probe (dl-101) reads headers only, never a body.
-   * A probe without it leaves codecs as the tier reported them.
+   * **Optional**, because only the fetch-backed probe implements it. It has to
+   * stop reading when a server ignores `Range` and sends the whole file; the
+   * browser tier's client can now do that too (dl-101), but nothing there asks
+   * for it yet. A probe without it leaves codecs as the tier reported them.
    */
   bytes?(url: string, start: number, endInclusive: number): Promise<RangedBytes | undefined>;
 }

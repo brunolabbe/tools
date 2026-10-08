@@ -266,60 +266,73 @@ function realProbe(): ReturnType<typeof createRequestSizeProbe> {
   );
 }
 
-/** `#EXTM3U` then `mebibytes` of spaces, gzipped a block at a time. */
-async function gzipBomb(mebibytes: number): Promise<Buffer> {
-  const gzip = zlib.createGzip({ level: 9 });
+type Encoding = "gzip" | "deflate" | "br";
+
+/** `#EXTM3U` then `mebibytes` of spaces, compressed a block at a time. */
+async function bomb(encoding: Encoding, mebibytes: number): Promise<Buffer> {
+  const stream =
+    encoding === "gzip"
+      ? zlib.createGzip({ level: 9 })
+      : encoding === "deflate"
+        ? zlib.createDeflate({ level: 9 })
+        : zlib.createBrotliCompress({ params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } });
   const chunks: Buffer[] = [];
-  gzip.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const done = new Promise<void>((resolve) => gzip.once("end", () => resolve()));
-  gzip.write("#EXTM3U\n");
+  stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const done = new Promise<void>((resolve) => stream.once("end", () => resolve()));
+  stream.write("#EXTM3U\n");
   const block = Buffer.alloc(1024 * 1024, 0x20);
   for (let index = 0; index < mebibytes; index++) {
     // oxlint-disable-next-line no-await-in-loop
-    if (!gzip.write(block)) await new Promise<void>((resolve) => gzip.once("drain", resolve));
+    if (!stream.write(block)) await new Promise<void>((resolve) => stream.once("drain", resolve));
   }
-  gzip.end();
+  stream.end();
   await done;
   return Buffer.concat(chunks);
 }
 
+/** zlib's and brotli's default output chunk: what a decoder stopped on time overshoots by. */
+const DECODER_CHUNK = 16 * 1024;
+
 describe("a playlist's text over the real client (dl-101)", () => {
-  test("refuses a gzip playlist that inflates past the cap, inflating no more than a chunk past it", async () => {
-    const bomb = await gzipBomb(64);
-    expect(bomb.length).toBeLessThan(100 * 1024);
-    const origin = await serve((_request, response) => {
-      response.writeHead(200, { "content-encoding": "gzip" }).end(bomb);
-    });
+  test.each(["gzip", "deflate", "br"] as const)(
+    "refuses a %s playlist that inflates past the cap, inflating no more than a chunk past it",
+    async (encoding) => {
+      const body = await bomb(encoding, 64);
+      expect(body.length).toBeLessThan(100 * 1024);
+      const origin = await serve((_request, response) => {
+        response.writeHead(200, { "content-encoding": encoding }).end(body);
+      });
 
-    // The seam is also where a test sees what the client reported.
-    const reported: ManifestFetchResult[] = [];
-    const real = createSizeRequest({
-      cookieFor: async () => undefined,
-      storeCookies: async () => {},
-      maxRedirects: 20,
-    });
-    const watching: SizeRequestLike = {
-      headers: real.headers,
-      body: async (url, request) => {
-        const result = await real.body(url, request);
-        reported.push(result);
-        return result;
-      },
-    };
+      // The seam is also where a test sees what the client reported.
+      const reported: ManifestFetchResult[] = [];
+      const real = createSizeRequest({
+        cookieFor: async () => undefined,
+        storeCookies: async () => {},
+        maxRedirects: 20,
+      });
+      const watching: SizeRequestLike = {
+        headers: real.headers,
+        body: async (url, request) => {
+          const result = await real.body(url, request);
+          reported.push(result);
+          return result;
+        },
+      };
 
-    const text = await createRequestSizeProbe(watching, {}, Date.now() + 60_000).text(
-      `${origin.origin}/media.m3u8`,
-    );
+      const text = await createRequestSizeProbe(watching, {}, Date.now() + 60_000).text(
+        `${origin.origin}/media.m3u8`,
+      );
 
-    expect(text).toBeUndefined();
-    const [result] = reported;
-    expect(result?.outcome).toBe("too-large");
-    if (result?.outcome !== "too-large") return;
-    expect(result.limitBytes).toBe(MAX_PLAYLIST_BYTES);
-    // Of the 64 MiB the body would have become, the cap and one decoder chunk.
-    expect(result.readBytes).toBeGreaterThan(MAX_PLAYLIST_BYTES);
-    expect(result.readBytes).toBeLessThanOrEqual(MAX_PLAYLIST_BYTES + 64 * 1024);
-  });
+      expect(text).toBeUndefined();
+      const [result] = reported;
+      expect(result?.outcome).toBe("too-large");
+      if (result?.outcome !== "too-large") return;
+      expect(result.limitBytes).toBe(MAX_PLAYLIST_BYTES);
+      // Of the 64 MiB the body would have become, the cap and one decoder chunk.
+      expect(result.readBytes).toBeGreaterThan(MAX_PLAYLIST_BYTES);
+      expect(result.readBytes).toBeLessThanOrEqual(MAX_PLAYLIST_BYTES + DECODER_CHUNK);
+    },
+  );
 
   test("reads a playlist inside the cap", async () => {
     const playlist = "#EXTM3U\n#EXTINF:4,\nseg-0.ts\n#EXT-X-ENDLIST\n";
@@ -343,8 +356,8 @@ describe("a rendition's size over the real client (dl-101)", () => {
 
   test("a ranged GET answered 200 with a large body reads none of it", async () => {
     // Rejects HEAD, ignores Range, and would stream 512 MiB if anyone listened.
-    const BLOCK = Buffer.alloc(1024 * 1024, 0x61);
-    const total = 512;
+    const BLOCK = Buffer.alloc(64 * 1024, 0x61);
+    const total = 8192;
     let written = 0;
     let finished = false;
     const origin = await serve((request, response) => {
@@ -372,11 +385,13 @@ describe("a rendition's size over the real client (dl-101)", () => {
     expect(length).toBeUndefined();
     expect(origin.requests.map((request) => request.method)).toEqual(["HEAD", "GET"]);
     expect(origin.requests[1]?.range).toBe("bytes=0-0");
-    // Backpressure stops the server after the socket buffers fill; had the
-    // client read the body, `written` would have reached the whole 512.
+    // Backpressure stops the server once the socket buffers are full, so what it
+    // managed to write is what the client read plus those buffers (about 2.5 MiB
+    // here, measured). A client that read the body would have drawn the rest; one
+    // that read 32 MiB before closing is caught by the bound, which is four caps.
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
     expect(finished).toBe(false);
-    expect(written).toBeLessThan(64);
+    expect(written * BLOCK.length).toBeLessThan(4 * MAX_PLAYLIST_BYTES);
   });
 
   test("reads the total off a 206's Content-Range", async () => {

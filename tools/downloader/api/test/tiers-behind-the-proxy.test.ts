@@ -159,16 +159,19 @@ describe("the browser tier behind the proxy", () => {
   );
 
   test(
-    "the size probe's requests are proxied too",
+    "the size probe's client routes a length and a playlist through the proxy it is given",
     async () => {
       // `createRequestSizeProbe` weighs renditions from this process rather than
       // from the page — attacker-influenced URLs out of a manifest — with the
       // browser tier's own client, `fetchHeaders` for a length and `fetchManifest`
       // for a playlist (dl-101). Both route every hop through the proxy by hand,
       // which is the only reason those fetches are checked at all, so it is
-      // pinned here against the real guard. Until dl-101 this pinned Playwright's
-      // `context.request`, which the probe no longer uses; the manifest
-      // re-fetch's own routing is pinned in `manifest-refetch.test.ts`.
+      // pinned here against the real guard. That the probe is *given* the proxy
+      // is not pinned here, because this hands it over itself:
+      // `size-probe-behind-the-proxy.test.ts` drives a real `BrowserResolver`
+      // for that. Until dl-101 this pinned Playwright's `context.request`, which
+      // the probe no longer uses; the manifest re-fetch's own routing is pinned
+      // in `manifest-refetch.test.ts`.
       const client = {
         cookieFor: async () => undefined,
         storeCookies: async () => {},

@@ -162,7 +162,7 @@ async function run<T>(
   // must not be able to outlive it.
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new AppError("TIMEOUT", "The manifest re-fetch exceeded its time budget."));
+      reject(new AppError("TIMEOUT", "The request exceeded its time budget."));
     }, options.timeoutMs);
   });
   try {
