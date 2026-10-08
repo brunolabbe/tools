@@ -222,6 +222,86 @@ attacker: the compressed length is not what is counted.
 - Unverified: Windows behaviour beyond the informational CI leg (green on this head); the base suite's counts; Chromium's own pin
   handling beyond what the branch's `api` spec exercises.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-08 · `f37a257..d926915` · Sonnet 5.5, depth full
+
+Reviewed only the diff from the gated sha to this head (five commits, 9 files). Nothing found is a `high`; no third gate is called for. CI read once
+on this head: every check passes, `CodeQL` and the `windows-latest` informational leg included. The three `Done when` rows stand as gate 1
+graded them: the unit and `api` specs for the cap, the redirect refusal and the cookie pass 31 of 31 (15 unit + 16 `api`, up from 22),
+and the two positive controls I re-ran on this head still bite (later hops dialled straight to the origin: 4 of 31 red, the guard test
+among them; the jar not asked on later hops: 2 of 31 red). `npm run check` exit 0. `npm test -- --project downloader` exit 0, 102 of 103
+files (1 skipped), 2160 of 2162 tests (2 skipped), up 9 from gate 1, which is the 9 tests added. `spawn-safety` and `image-closure` 25 of 25
+with the new test-side `spawn`. A textual merge with `origin/main` (dl-81 landed) is clean; I did not re-run `check` on the merge.
+
+| Gate 1 finding                                                          | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1, the red `CodeQL` check (`js/disabling-certificate-validation`)      | **fixed, by design.** The client no longer sets `rejectUnauthorized` as an option: Node verifies, and the proxy root is `ca: [rootCaPem]`. The `CodeQL` check-run and the `codeql` job both pass on this head. No excusal was written or needed. One word survives, in the header comment (N1)                                                                                                                                                                                                                                                                                 |
+| F2, signer, host and validity halves unproven (owner treated as `high`) | **fixed.** The gate-1 pin mutations no longer have code to land on (`signedByPin` is deleted), so I re-ran the design's own: `rejectUnauthorized: false` restored with nothing behind it → 6 of 31 red, "refuses a leaf another key signed under the proxy root's name, sent beside that root" among them; the root never handed to `ca` → 4 of 31; name check switched off → 2 of 31, "refuses a leaf the proxy's root signed for another host" among them; no error called a certificate refusal → 5 of 31. Under the old code the same signer mutations left 22 of 22 green |
+| F3, IP-literal identity against `localhost`                             | **fixed, measured both ways.** Server on `127.0.0.1`, leaf from a CA given to Node by `NODE_EXTRA_CA_CERTS`: an IP SAN → `ok` direct and through a tunnelling proxy (was refused); a leaf naming only `localhost` → `refused` (was accepted); plain `https.get` agrees on both. `host` dropped from `tls.connect` → 6 of 31 red, both IP-literal tests among them                                                                                                                                                                                                              |
+| F4, expired and not-yet-valid leaves accepted                           | **fixed.** Both → `refused: untrusted-certificate`, origin saw 0 requests, in my matrix and in the two new tests that mint their own root; turning verification off turns both red                                                                                                                                                                                                                                                                                                                                                                                             |
+| F5, a jar read outliving the deadline lets `follow` carry on            | **not fixed, recorded in the Log, stays `low`.** `follow` is untouched in this range                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| F6, the refusal log's redaction unproven                                | **fixed.** The page now asks for `/master.m3u8?token=s3cr3t-signature`; the test expects `redactUrl(...)` and asserts the warnings omit the signature. `url: hit.url` instead → 1 of 16 red (was 7 of 7 green)                                                                                                                                                                                                                                                                                                                                                                 |
+
+**The new client's TLS matrix, run** (25 minted-chain rows plus 3 non-certificate failures; chains served over `node:https`, `fetchManifest`
+direct). `NODE_EXTRA_CA_CERTS` unset. Accepted: a leaf the handed root signed for the host, [leaf, root] (the control); the same leaf with the
+root not sent (the root is the anchor); a leaf under an intermediate under the root; an IP-literal target with a handed-root leaf carrying the
+IP SAN. Refused, `untrusted-certificate`: the same chain with no root handed, or another root; the attacker-signed leaf (issuer name and AKID
+copied) beside the real root in the orders [leaf, root], [leaf, atkCA, root], [leaf, root, atkCA]; the attacker leaf under its own CA; a leaf for
+another host; expired; not yet valid; a self-signed leaf carrying the root's key; the root presented as the leaf; a leaf naming only
+`localhost` for an IP target; a leaf with only the `clientAuth` EKU; a self-signed leaf. **`ca: [rootCaPem]` replaces Node's trust, it does
+not add to it:** with `NODE_EXTRA_CA_CERTS` set, a leaf from that CA is accepted when no root is handed and **refused when one is** (the
+documented behaviour of `ca`, measured). So a publicly trusted leaf for the target is refused whenever a proxy root is set, and a
+proxy-root-signed leaf is refused whenever none is.
+
+**The three tier configurations, real `startEgressProxy` + `createTlsInterception`** (`fetchManifest` against an HTTPS origin whose chain the
+proxy trusts): terminating proxy with its PEM → `ok`; terminating proxy, no PEM → `refused`; terminating proxy, another interception's PEM →
+`refused`; tunnelling proxy (`FFMPEG_TLS_INTERCEPT` off), no PEM, Node-trusted chain → `ok`; tunnelling with a PEM handed → `refused`; no
+proxy, no PEM → `ok`; no proxy with a PEM → `refused`. The real `leafFor("localhost")` and `leafFor("127.0.0.1")` both verify.
+
+**Could the classification swallow or let through the wrong thing.** `isCertificateRefusal` runs only after Node has already destroyed the
+socket, so it cannot admit a chain: an error it does not recognise rethrows, and nothing is written before `startTls` returns the socket.
+Which failure gets which label, measured: `ERR_TLS_CERT_ALTNAME_INVALID`, `SELF_SIGNED_CERT_IN_CHAIN`, `CERT_HAS_EXPIRED` and the other listed
+verify codes → `refused`; `ECONNREFUSED`, `ECONNRESET`, `ERR_SSL_WRONG_VERSION_NUMBER` and a 512-bit-key handshake failure → thrown; an
+md5-signed leaf → thrown as `UNSPECIFIED`, a certificate refusal with a code the set does not list. `#loadManifest` treats a throw and a
+`refused` outcome the same way (silent fallback), so none of this changes what a probe returns (N3).
+
+**Wiring.** `tierEgress` is built exactly when `tierInterception` is non-null (`ffmpegTlsIntercept` on and the browser or yt-dlp tier
+registered), and `tierProxy` gets its `interceptTls` from the same variable, so the PEM is present exactly when the proxy terminates and
+absent exactly when it tunnels, where none is wanted. `TierEgress.rootCaPem` is required and `TlsInterception.rootCaPem` is the generated
+root's PEM, never empty. `server.ts` is the only production caller of `buildRegistry`, and `buildRegistry` the only production site that
+builds a `BrowserResolver`. Dropping the PEM at the `BrowserResolver` hop → 2 of 16 `api` tests red; at the `buildRegistry` hop → 1 of 21 red.
+The third hop is N2.
+
+- **low** · `nfr:maintainability` · **N1.** The Log says `rejectUnauthorized` "appears nowhere in the file or its `dist`". It appears once,
+  in `manifest-fetch.ts`'s header comment ("…checked the chain by hand behind `rejectUnauthorized: false`"), and that comment is copied into
+  `dist`; `egress-proxy.ts` has its own, unchanged. The substance is true (the `CodeQL` check passes), so this is a sentence to reword to
+  "only in a comment", not a defect in the code.
+- **low** · `nfr:reliability` · **N2.** The `server.ts` line that fills `rootCaPem` from `tierInterception.rootCaPem` is held by the type only
+  against omission. With that line set to `""` the four specs that run `createApp` or `buildRegistry` with a terminating proxy
+  (`manifest-refetch`, `tiers-on-the-terminating-proxy`, `two-origin-tls`, `egress-ca`) stay **42 of 42 green**; `startTls` treats `""` as
+  no root, so every HTTPS re-fetch behind the default proxy would refuse silently and fall back, which is the pre-dl-97 behaviour this branch
+  exists to end. A wrong string field (`rootCaPath`) typechecks too. No live defect; a probe of an HTTPS origin through `createApp` would pin it.
+- **low** · **N3.** The line between a certificate refusal and any other failure is unpinned: `isCertificateRefusal` returning `true` for
+  every coded error leaves **31 of 31 green** (the opposite, `false`, turns 5 red). Effect today: none, for the reason above; `UNSPECIFIED`
+  (a weak signature) is the one certificate verdict the set omits. No live call site, since no caller distinguishes the two outcomes.
+- **low** · **N4.** "Replaces, not adds" is a measured property with no test: putting `...tls.rootCertificates` beside the root in `ca` leaves
+  **31 of 31 green**. It matters only to a library caller that hands a root but no proxy, which then refuses a publicly trusted origin (the
+  "no proxy with a PEM" row); the API always passes both. No live call site.
+- **dropped** · an IPv6-literal HTTPS target is refused even with the right root, because Node's identity check rejects `::1` against the
+  SAN's `0:0:0:0:0:0:0:1` (plain `https.get` with the same `ca` fails identically: `ERR_TLS_CERT_ALTNAME_INVALID`). The same held at the
+  gated sha, so it is not from this range, and no manifest URL here has one.
+- **dropped** · `rootCaPem === ""` treated as "no root" fails closed (refuses), so it is not a way in; N2 is the test gap it leaves.
+- **findings** · the hunt returned 6 new; 4 carried (N1–N4), 2 dropped. Beside the six earlier findings above, 5 fixed and F5 left recorded.
+- NFR: security ✓ — Node does the verifying with the option left on; no stage writes a byte before the chain is accepted; every hop still
+  goes through the proxy (control re-run). Performance n/a (unchanged). Reliability — F5, N2. Maintainability — N1–N4; the client is exported
+  from `@downloader/resolvers` so `api` can drive it, which the `api` image already depends on.
+- Invariants walked: no tool imports another; no shell (the test's child process is an argument array with `shell: false`; `spawn-safety`
+  passes); no `any` or `console`; contract untouched; no new workspace dependency, so no `Dockerfile` edit; a required field added to
+  `TierEgress` has two call sites besides `server.ts`, both carrying it. Skipped: error taxonomy, progress, routes.
+- Unverified: the TLS half's failure at base, not re-run this round (the test's assertion is unchanged and base reads no `proxyRootCaPem`); the
+  builder's preflight against the new `origin/main`; Windows beyond the informational leg, green on this head.
+
 ## Log
 
 ### 2026-10-07 — filed by dl-91's builder
