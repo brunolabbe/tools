@@ -60,7 +60,10 @@ export async function readSheets(data: Buffer): Promise<Sheet[]> {
     // exceljs's declared parameter type predates Node's generic Buffer.
     await workbook.xlsx.load(data as unknown as ArrayBuffer);
   } catch (error: unknown) {
-    throw new AppError("BAD_REQUEST", "The file could not be read as an .xlsx workbook.", {
+    // exceljs's own reason is the only clue to which part of the file it
+    // choked on. It goes to the owner's terminal, the only place this prints.
+    const reason = error instanceof Error && error.message !== "" ? ` (${error.message})` : "";
+    throw new AppError("BAD_REQUEST", `The file could not be read as an .xlsx workbook${reason}.`, {
       cause: error,
     });
   }

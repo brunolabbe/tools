@@ -35,6 +35,8 @@ import { AppError } from "@ledger/contract";
 import { bufferAsOf, mortgageAsOf } from "./buckets.ts";
 import type { FiledRow, MortgagePosition } from "./buckets.ts";
 import { daysInMonth, fold } from "./months.ts";
+import { PARTS_PER_MILLION } from "./ratio.ts";
+import type { Share } from "./ratio.ts";
 
 /** A cell's cached value. A date is a calendar day, `yyyy-mm-dd`. */
 export type CellValue =
@@ -66,13 +68,26 @@ export interface Correction {
   note: string;
 }
 
+/**
+ * The ratio a closed period was settled at, when it was not Accueil's: the
+ * workbook keeps only today's salaries, so an earlier ratio is the owner's to
+ * say (decided 2026-10-08).
+ */
+export interface PeriodRatio {
+  /** The period sheet's name. */
+  sheet: string;
+  /** Workbook name or person id → share, in parts per million; the two sum to 1 000 000. */
+  shares: ReadonlyMap<string, number>;
+}
+
 export interface Corrections {
   /** Workbook name → person id, for names that are not already a person's id. */
   people: ReadonlyMap<string, string>;
   corrections: readonly Correction[];
+  ratios: readonly PeriodRatio[];
 }
 
-export const NO_CORRECTIONS: Corrections = { people: new Map(), corrections: [] };
+export const NO_CORRECTIONS: Corrections = { people: new Map(), corrections: [], ratios: [] };
 
 /** A row of the account, as it will be stored, oldest first. */
 export interface Movement {
@@ -138,6 +153,8 @@ export interface WorkbookPeriod {
   lines: WorkbookLine[];
   /** What the sheet's `Montant à déposer` asked; `null` when it has none. */
   settlement: WorkbookSettlement | null;
+  /** The ratio the corrections file gives it, in id order; `null` is Accueil's. */
+  ratio: Share[] | null;
 }
 
 export interface WorkbookReading {
@@ -334,8 +351,24 @@ function readYear(
       }
       continue;
     }
+    // A placeholder's amount is empty. One that holds text, or a formula Excel
+    // never saved a value for, is an amount the books cannot read, and on the
+    // newest rows nothing after it would show the money missing.
+    const amountCell = cellAt(sheet, row, COLUMN.G);
+    if (amount === null && amountCell !== null) {
+      out.problems.push(
+        amountCell.value === null
+          ? `${at(COLUMN.G)}: the amount is a formula with no saved value; open the workbook in Excel and save it.`
+          : `${at(COLUMN.G)}: the amount is not a number.`,
+      );
+      continue;
+    }
     if (amount === null || toCents(amount) === 0) {
       out.skipped.push({ sheet: sheet.name, row });
+      continue;
+    }
+    if (!wholeCents(amount)) {
+      out.problems.push(`${at(COLUMN.G)}: ${String(amount)} is not a whole number of cents.`);
       continue;
     }
 
@@ -364,6 +397,10 @@ function readYear(
       out.problems.push(`${at(COLUMN.F)}: a movement has no running balance.`);
       continue;
     }
+    if (!wholeCents(balance)) {
+      out.problems.push(`${at(COLUMN.F)}: ${String(balance)} is not a whole number of cents.`);
+      continue;
+    }
     const name = textOf(cellAt(sheet, row, COLUMN.E));
     let personId: string | null = null;
     if (name !== null) {
@@ -386,7 +423,30 @@ function readYear(
     });
   }
   // The sheet lists the newest first; the books keep the oldest first.
-  return { year, movements: movements.toReversed(), carryOvers };
+  const oldestFirst = movements.toReversed();
+  // The row order is what proves a repaired year, so it is checked: newest
+  // first, no row is older than the one below it. A row the order contradicts
+  // would count on the wrong day in every figure read as of a date.
+  const repaired = new Map(
+    out.repairs
+      .filter((repair) => repair.sheet === sheet.name)
+      .map((repair) => [repair.row, repair.from]),
+  );
+  for (const [index, movement] of oldestFirst.entries()) {
+    const below = oldestFirst[index - 1];
+    if (below === undefined || movement.date >= below.date) continue;
+    const typed = repaired.get(movement.row) ?? repaired.get(below.row);
+    out.problems.push(
+      `${cellRef(sheet.name, movement.row, COLUMN.B)}: dated ${movement.date}, but the row below it, row ${String(below.row)}, is dated ${below.date}; newest first, no row is older than the one below it${typed === undefined ? "" : ` (a year was repaired here, from ${typed})`}.`,
+    );
+  }
+  return { year, movements: oldestFirst, carryOvers };
+}
+
+/** Whether a cached figure is a whole number of cents, to within a float's noise. */
+function wholeCents(value: number): boolean {
+  const scaled = Math.abs(value) * 100;
+  return Math.abs(scaled - Math.round(scaled)) < 1e-6;
 }
 
 const BUCKETS_IN_ORDER: readonly Bucket[] = ["mortgage", "current-expenses"];
@@ -677,7 +737,7 @@ function readPeriod(sheet: Sheet, people: People, out: WorkbookReading): Workboo
       );
     }
   }
-  return { sheet: sheet.name, start, end: end ?? null, lines, settlement };
+  return { sheet: sheet.name, start, end: end ?? null, lines, settlement, ratio: null };
 }
 
 function orderPeriods(read: readonly WorkbookPeriod[], out: WorkbookReading): void {
@@ -814,9 +874,47 @@ export function readWorkbook(sheets: readonly Sheet[], options: ReadOptions): Wo
   if (accueil === undefined)
     out.problems.push("The workbook has no Accueil sheet, so no salaries.");
   else readSalaries(accueil, people, out);
+  applyRatios(corrections.ratios, people, out);
 
   out.problems.unshift(...people.problems);
   return out;
+}
+
+/**
+ * Each closed period the corrections file gives its own ratio. A ratio names
+ * the same two people Accueil does; the open period takes Accueil's, which is
+ * today's, so it cannot be given another.
+ */
+function applyRatios(ratios: readonly PeriodRatio[], people: People, out: WorkbookReading): void {
+  const household = out.salaries.map((salary) => salary.personId).toSorted();
+  for (const [index, ratio] of ratios.entries()) {
+    const where = `The corrections file's ratio ${String(index + 1)}, for "${ratio.sheet}",`;
+    if (out.open?.sheet === ratio.sheet) {
+      out.problems.push(
+        `${where} names the open period, which is settled at Accueil's ratio, today's.`,
+      );
+      continue;
+    }
+    const period = out.periods.find((candidate) => candidate.sheet === ratio.sheet);
+    if (period === undefined) {
+      out.problems.push(`${where} names no closed period sheet of the workbook.`);
+      continue;
+    }
+    const shares: Share[] = [];
+    for (const [name, partsPerMillion] of ratio.shares) {
+      const personId = people.resolve(name, where);
+      if (personId !== undefined) shares.push({ personId, partsPerMillion });
+    }
+    if (shares.length !== 2) continue;
+    const named = shares.map((share) => share.personId).toSorted();
+    if (named[0] === named[1] || (household.length === 2 && named.join() !== household.join())) {
+      out.problems.push(
+        `${where} names ${named.join(" and ")}; a ratio is between the two people Accueil names (${household.join(" and ")}).`,
+      );
+      continue;
+    }
+    period.ratio = shares.toSorted((a, b) => (a.personId < b.personId ? -1 : 1));
+  }
 }
 
 // --- What the workbook says the buckets hold ---
@@ -843,7 +941,12 @@ export function workbookFigures(
     bucket: movement.bucket,
     personId: movement.personId,
   }));
-  const asOf = reading.movements.at(-1)?.date ?? "0000-01-01";
+  // The latest day among them, not the newest row's: every row the workbook
+  // holds counts, whatever its date says.
+  const asOf = reading.movements.reduce(
+    (latest, movement) => (movement.date > latest ? movement.date : latest),
+    "0000-01-01",
+  );
   const mortgage = mortgageAsOf(rows, people, asOf);
   return {
     asOf,
@@ -881,7 +984,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function readCorrections(json: unknown): Corrections {
   if (!isRecord(json)) refuse("it is not a JSON object.");
   for (const key of Object.keys(json)) {
-    if (key !== "people" && key !== "corrections") refuse(`"${key}" is not a field it has.`);
+    if (key !== "people" && key !== "corrections" && key !== "ratios") {
+      refuse(`"${key}" is not a field it has.`);
+    }
   }
   const people = new Map<string, string>();
   const names = json["people"] ?? {};
@@ -928,5 +1033,55 @@ export function readCorrections(json: unknown): Corrections {
       note: note.trim(),
     };
   });
-  return { people, corrections };
+  return { people, corrections, ratios: readRatios(json["ratios"]) };
+}
+
+/**
+ * `"ratios": [{ "sheet": "$ (Avril-Août)", "shares": { "Alex": 55, "Sam": 45 } }]`:
+ * each share a percentage, the two summing to 100, to the part per million.
+ */
+function readRatios(raw: unknown): PeriodRatio[] {
+  const list = raw ?? [];
+  if (!Array.isArray(list)) refuse(`"ratios" is not a list.`);
+  const seen = new Set<string>();
+  return list.map((entry: unknown, index): PeriodRatio => {
+    const where = `ratio ${String(index + 1)}`;
+    if (!isRecord(entry)) refuse(`${where} is not an object.`);
+    for (const key of Object.keys(entry)) {
+      if (key !== "sheet" && key !== "shares") {
+        refuse(`${where} has "${key}", which is not a field a ratio has.`);
+      }
+    }
+    const { sheet, shares } = entry;
+    if (typeof sheet !== "string" || sheet.trim() === "") refuse(`${where} names no period sheet.`);
+    if (seen.has(sheet)) refuse(`${where} gives "${sheet}" a second ratio; a period has one.`);
+    seen.add(sheet);
+    if (!isRecord(shares) || Object.keys(shares).length !== 2) {
+      refuse(`${where}'s shares name two people, each with a percentage.`);
+    }
+    const parts = new Map<string, number>();
+    for (const [name, percent] of Object.entries(shares)) {
+      if (
+        typeof percent !== "number" ||
+        !Number.isFinite(percent) ||
+        percent < 0 ||
+        percent > 100
+      ) {
+        refuse(
+          `${where} gives "${name}" ${String(percent)}, which is not a percentage from 0 to 100.`,
+        );
+      }
+      const ppm = percent * (PARTS_PER_MILLION / 100);
+      if (Math.abs(ppm - Math.round(ppm)) > 1e-6) {
+        refuse(
+          `${where} gives "${name}" ${String(percent)} %, finer than a part per million (four decimals).`,
+        );
+      }
+      parts.set(name, Math.round(ppm));
+    }
+    const total = [...parts.values()].reduce((sum, value) => sum + value, 0);
+    if (total !== PARTS_PER_MILLION)
+      refuse(`${where}'s shares add up to ${String(total / 10_000)} %, not 100 %.`);
+    return { sheet, shares: parts };
+  });
 }

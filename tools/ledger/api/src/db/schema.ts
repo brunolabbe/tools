@@ -309,25 +309,40 @@ const MIGRATIONS: readonly string[] = [
  * rest of the way, which is what an upgrade does.
  */
 export function migrate(db: Database, target: number = MIGRATIONS.length): void {
+  configure(db);
+  applyMigrations(db, target);
+}
+
+/** The connection's settings. None of them can change inside a transaction. */
+export function configure(db: Database): void {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   // Without this, a concurrent writer fails instantly with SQLITE_BUSY rather
   // than waiting.
   db.pragma("busy_timeout = 5000");
+}
 
+/**
+ * The migrations `db` lacks, each in its own transaction — or, when a
+ * transaction is already open, each in a savepoint inside it, so that rolling
+ * that transaction back leaves the database at the version it had (the
+ * workbook import, lg-7, migrates inside the transaction it may refuse).
+ */
+export function applyMigrations(db: Database, target: number = MIGRATIONS.length): void {
   const current = Number((db.pragma("user_version", { simple: true }) as number) ?? 0);
+  const nested = db.inTransaction;
   for (let version = current; version < Math.min(target, MIGRATIONS.length); version++) {
     const statement = MIGRATIONS[version];
     if (statement === undefined) continue;
-    db.exec("BEGIN");
+    db.exec(nested ? "SAVEPOINT migration" : "BEGIN");
     try {
       db.exec(statement);
       // Interpolated because PRAGMA does not accept a bound parameter. The
       // value is a loop counter, never user input.
       db.exec(`PRAGMA user_version = ${String(version + 1)}`);
-      db.exec("COMMIT");
+      db.exec(nested ? "RELEASE migration" : "COMMIT");
     } catch (error: unknown) {
-      db.exec("ROLLBACK");
+      db.exec(nested ? "ROLLBACK TO migration; RELEASE migration" : "ROLLBACK");
       throw error;
     }
   }

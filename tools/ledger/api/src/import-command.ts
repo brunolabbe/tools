@@ -4,16 +4,26 @@
  *
  * A command and not a route: the import is a one-off, run by the owner on the
  * machine that holds the database, and has no reason to exist on the network.
- * It writes to the database the API is configured with (`DATABASE_PATH`), and
- * without `--write` it is a dry run that never opens that file for writing: the
- * books are copied into memory and the import is done there, so the report it
- * prints is what `--write` would store.
+ * It writes to the database the API is configured with (`DATABASE_PATH`).
+ *
+ * **A dry run never opens that file.** The file and its write-ahead log are
+ * copied, byte for byte, into a private directory, and the import is done on
+ * the copy, which is then deleted. Opening the original, even only to read it,
+ * is a write in SQLite's terms: a log left by an unclean stop is recovered into
+ * the file on close, and a missing shared-memory file is created beside it.
+ *
+ * **`--write` rehearses first.** The same import runs on a copy, and only when
+ * every verification holds there is the real file opened, created if need be,
+ * and migrated and imported in one transaction that the import verifies again
+ * before it commits. A refused `--write` therefore leaves the books as they were
+ * — their schema version included — or leaves no file where there was none.
  *
  * Exit status: 0 when every verification holds, 1 when one fails (nothing is
  * written), 2 when the command could not run at all.
  */
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { readCorrections, NO_CORRECTIONS } from "@ledger/books";
@@ -21,7 +31,7 @@ import type { Corrections } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { loadApiConfig } from "./config.ts";
-import { migrate } from "./db/schema.ts";
+import { configure } from "./db/schema.ts";
 import { configuredPeople } from "./people.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import { readSheets } from "./xlsx.ts";
@@ -50,39 +60,31 @@ function usage(io: CommandIo, message: string): number {
 }
 
 /**
- * The books to import into. A dry run copies the database file into memory —
- * opened read-only, so nothing can write to it — and works on the copy; a
- * database that does not exist yet is an empty one.
+ * A private copy of the books: the file and, when there is one, its
+ * write-ahead log, read and never opened. `undefined` when there are no books
+ * yet, which a dry run reads as empty ones. The copy is taken while the API
+ * may be writing; a copy torn by a checkpoint between the two reads can only
+ * make the rehearsal differ from the real import, which verifies everything
+ * again on the real file before it commits.
  */
-function openBooks(databasePath: string, write: boolean): Database.Database {
-  if (write) {
-    if (databasePath !== ":memory:") mkdirSync(path.dirname(databasePath), { recursive: true });
-    const db = new Database(databasePath);
-    migrate(db);
-    return db;
-  }
-  let db: Database.Database;
-  if (databasePath === ":memory:" || !existsSync(databasePath)) {
-    db = new Database(":memory:");
-  } else {
-    // Not `readonly`: SQLite cannot open a WAL database read-only unless its
-    // shared-memory file already exists, which it does only while another
-    // connection is open. Nothing is written through this connection; it is
-    // there to take a consistent copy, the uncheckpointed WAL included.
-    const file = new Database(databasePath, { fileMustExist: true });
-    try {
-      const image = file.serialize();
-      // Bytes 18 and 19 of the header say the file is in WAL mode, which a
-      // database held in memory cannot be: SQLite refuses to open the copy
-      // ("unable to open database file") until they say rollback journal.
-      image[18] = 1;
-      image[19] = 1;
-      db = new Database(image);
-    } finally {
-      file.close();
-    }
-  }
-  migrate(db);
+function copyBooks(databasePath: string, into: string): string | undefined {
+  if (databasePath === ":memory:" || !existsSync(databasePath)) return undefined;
+  const copy = path.join(into, "ledger.db");
+  copyFileSync(databasePath, copy);
+  if (existsSync(`${databasePath}-wal`)) copyFileSync(`${databasePath}-wal`, `${copy}-wal`);
+  return copy;
+}
+
+function openCopy(copy: string | undefined): Database.Database {
+  const db = new Database(copy ?? ":memory:");
+  configure(db);
+  return db;
+}
+
+function openReal(databasePath: string): Database.Database {
+  if (databasePath !== ":memory:") mkdirSync(path.dirname(databasePath), { recursive: true });
+  const db = new Database(databasePath);
+  configure(db);
   return db;
 }
 
@@ -157,16 +159,38 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
     }
     const sheets = await readSheets(data);
 
-    const db = openBooks(config.databasePath, values.write);
+    const options = {
+      personId,
+      configured: configuredPeople(config.access.people),
+      corrections,
+      write: values.write,
+      now: io.now,
+    };
+    const print = (report: string): void => {
+      io.stdout(`Workbook: ${workbookPath}\nDatabase: ${config.databasePath}\n\n${report}`);
+    };
+
+    const scratch = mkdtempSync(path.join(os.tmpdir(), "ledger-import-"));
+    let rehearsal;
     try {
-      const result = importWorkbook(db, sheets, {
-        personId,
-        configured: configuredPeople(config.access.people),
-        corrections,
-        write: values.write,
-        now: io.now,
-      });
-      io.stdout(`Workbook: ${workbookPath}\nDatabase: ${config.databasePath}\n\n${result.report}`);
+      const copy = openCopy(copyBooks(config.databasePath, scratch));
+      try {
+        rehearsal = importWorkbook(copy, sheets, { ...options, commit: false });
+      } finally {
+        copy.close();
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+    if (!values.write || !rehearsal.ok) {
+      print(rehearsal.report);
+      return rehearsal.ok ? 0 : 1;
+    }
+
+    const db = openReal(config.databasePath);
+    try {
+      const result = importWorkbook(db, sheets, { ...options, commit: true });
+      print(result.report);
       return result.ok ? 0 : 1;
     } finally {
       db.close();

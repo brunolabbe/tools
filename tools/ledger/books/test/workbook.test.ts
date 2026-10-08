@@ -187,4 +187,108 @@ describe("reading the workbook", () => {
     expect(() => readCorrections({ fixes: [] })).toThrow('"fixes" is not a field it has');
     expect(() => readCorrections([])).toThrow("not a JSON object");
   });
+
+  test("a ratio in the corrections file is refused whole when it is malformed", () => {
+    const one = (shares: unknown, sheet: unknown = "$ (A)"): unknown => ({
+      ratios: [{ sheet, shares }],
+    });
+    expect(() => readCorrections(one({ Alex: 60, Sam: 30 }))).toThrow(
+      "ratio 1's shares add up to 90 %, not 100 %.",
+    );
+    expect(() => readCorrections(one({ Alex: 60 }))).toThrow("ratio 1's shares name two people");
+    expect(() => readCorrections(one({ Alex: 60.00001, Sam: 39.99999 }))).toThrow(
+      "finer than a part per million",
+    );
+    expect(() => readCorrections(one({ Alex: 120, Sam: -20 }))).toThrow("not a percentage");
+    expect(() => readCorrections(one({ Alex: 60, Sam: 40 }, ""))).toThrow(
+      "ratio 1 names no period sheet",
+    );
+    expect(readCorrections(one({ Alex: 55.5, Sam: 44.5 })).ratios).toEqual([
+      {
+        sheet: "$ (A)",
+        shares: new Map([
+          ["Alex", 555_000],
+          ["Sam", 445_000],
+        ]),
+      },
+    ]);
+  });
+
+  test("a ratio is given to the closed period it names, and refused for any other", () => {
+    const corrections = readCorrections({
+      ratios: [
+        { sheet: "$ (A)", shares: { Sam: 45, Alex: 55 } },
+        { sheet: "$ (B)", shares: { Alex: 50, Sam: 50 } },
+      ],
+    });
+    const reading = readWorkbook(
+      [period("$ (A)", [{ formula: "D12/B1-C12", result: 380 }]), ACCUEIL],
+      {
+        people,
+        corrections,
+      },
+    );
+
+    expect(reading.periods[0]?.ratio).toEqual([
+      { personId: "alex", partsPerMillion: 550_000 },
+      { personId: "sam", partsPerMillion: 450_000 },
+    ]);
+    // This grid has no year sheet, which is its own problem; of the ratios, only the second is one.
+    expect(reading.problems.filter((problem) => problem.includes("ratio"))).toEqual([
+      `The corrections file's ratio 2, for "$ (B)", names no closed period sheet of the workbook.`,
+    ]);
+  });
+
+  test("an amount that is text, a formula with no saved value, or finer than a cent is refused at its cell", () => {
+    const reading = readWorkbook(
+      [
+        {
+          name: "2022",
+          rows: [
+            [null, "Date", "Compte", "Détail", "Personne", "Solde", "Montant"].map(cell),
+            [null, d("2022-03-01"), "Hypothèque", "Versement", "Alex", 1_000.005, 500.005].map(
+              cell,
+            ),
+            [null, d("2022-02-01"), "Hypothèque", "Versement", "Alex", 500, "9,99 $"].map(cell),
+            [
+              ...[null, d("2022-01-01"), "Hypothèque", "Versement", "Alex", 500].map(cell),
+              { value: null, formula: "SUM(Z1:Z9)" },
+            ],
+          ],
+        },
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.problems).toEqual([
+      "2022!G2: 500.005 is not a whole number of cents.",
+      "2022!G3: the amount is not a number.",
+      "2022!G4: the amount is a formula with no saved value; open the workbook in Excel and save it.",
+    ]);
+    expect(reading.skipped).toEqual([]);
+  });
+
+  test("a repaired year the row order contradicts is refused at its cell", () => {
+    const reading = readWorkbook(
+      [
+        year("2024", [
+          ["2024-01-20", "Hypothèque", "Versement", "Alex", 1_000, 500],
+          // Typed 2023-12-30, between January rows: the sheet's year would
+          // put it in December 2024, after the row above it.
+          ["2023-12-30", "Hypothèque", "Versement", "Alex", 500, 250],
+          ["2024-01-05", "Hypothèque", "Versement", "Alex", 250, 250],
+        ]),
+        ACCUEIL,
+      ],
+      { people },
+    );
+
+    expect(reading.repairs).toEqual([
+      { sheet: "2024", row: 3, from: "2023-12-30", to: "2024-12-30" },
+    ]);
+    expect(reading.problems).toEqual([
+      "2024!B2: dated 2024-01-20, but the row below it, row 3, is dated 2024-12-30; newest first, no row is older than the one below it (a year was repaired here, from 2023-12-30).",
+    ]);
+  });
 });

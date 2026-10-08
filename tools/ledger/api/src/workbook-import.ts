@@ -8,11 +8,12 @@
  * mortgage, the buffer and the open period, through the same code the API
  * answers with — and sets those figures beside the workbook's own.
  *
- * **One transaction, and nothing kept unless everything holds.** Every write
- * happens inside it, the report is built from what the writes produced, and
- * only then is it committed — and only with `write` and no problem left. A dry
- * run, and any import that fails a verification, is rolled back, so the report
- * a dry run prints is exactly what `--write` would store.
+ * **One transaction, and nothing kept unless everything holds.** The schema's
+ * migrations and every write happen inside it, the report is built from what
+ * the writes produced, and only then is it committed — and only with `commit`
+ * and no problem left. A dry run, and any import that fails a verification, is
+ * rolled back, so the report a dry run prints is exactly what `--write` would
+ * store.
  *
  * **Placing the rows.** A statement row has no identity of its own (lg-2), so
  * the workbook is matched to the stored rows by **position**: its newest rows
@@ -33,6 +34,7 @@ import {
   formatCents,
   mortgageAsOf,
   noteOf,
+  ratioFromSalaries,
   readWorkbook,
   workbookFigures,
 } from "@ledger/books";
@@ -40,11 +42,13 @@ import type {
   Corrections,
   FiledRow,
   Movement,
+  Share,
   Sheet,
   WorkbookFigures,
   WorkbookReading,
 } from "@ledger/books";
 import type { Bucket, OwnMoney, SettlementFigures } from "@ledger/contract";
+import { applyMigrations } from "./db/schema.ts";
 import type { Database } from "better-sqlite3";
 import { classifyRow } from "./classifications.ts";
 import { enrollPeople, knownPeople } from "./people.ts";
@@ -58,8 +62,10 @@ export interface WorkbookImportOptions {
   /** The configured people, enrolled as a boot would enrol them. */
   configured: readonly string[];
   corrections: Corrections;
-  /** Without it, everything is done and then rolled back: a dry run. */
+  /** Whether this is meant as the import itself, which only changes what the report says. */
   write: boolean;
+  /** Whether to keep it, once every verification holds. Without it, all is rolled back. */
+  commit: boolean;
   now: () => Date;
 }
 
@@ -160,18 +166,11 @@ function place(
       lastSeq: movements.length - 1,
     };
   }
-  const all = readings(movements, stored);
+  const found = readings(movements, stored);
   const newest = movements.at(-1);
-  // A reading that leaves workbook rows after the newest stored one is not a
-  // place the workbook can go: those rows would be a paste's.
-  const found = all.filter((before) => movements.length - before <= stored.length);
-  const past = all.find((before) => movements.length - before > stored.length);
-  if (found.length === 0 && past !== undefined) {
-    problems.push(
-      `The workbook runs ${String(movements.length - past - stored.length)} rows past the newest stored row, ${describeStored(stored.at(-1) as StoredColumns)}. Those rows belong to a paste: paste the statement through ${newest?.date ?? ""} first, so the import adds only what is older.`,
-    );
-    return null;
-  }
+  // Every consistent reading counts, the ones that would leave workbook rows
+  // after the newest stored row included: refusing those alone and taking the
+  // one left would be choosing between two readings by a rule, not by the data.
   if (found.length > 1) {
     problems.push(
       `The workbook can be placed against the stored rows ${String(found.length)} ways (with ${found.map((before) => String(movements.length - before)).join(" or ")} of its rows already stored), because the same amounts and balances come round again. The books cannot tell which is meant.`,
@@ -185,28 +184,42 @@ function place(
       problems.push(
         `The workbook's newest row, ${describeMovement(newest)}, leaves ${formatCents(newest.balanceCents)}, but the oldest stored row, ${describeStored(head)}, opens from ${formatCents(opening)}: ${formatCents(opening - newest.balanceCents)} is unexplained between them.`,
       );
-    } else {
-      // The likeliest place, said precisely when there is one: the workbook's
-      // row on the stored row's day with its amount, whose balance disagrees.
-      const near = movements.find(
-        (movement) => movement.date === head.date && movement.amountCents === head.amount_cents,
-      );
-      if (near !== undefined) {
-        problems.push(
-          `${describeMovement(near)} moves the same day and amount as the oldest stored row, but leaves ${formatCents(near.balanceCents)} where it leaves ${formatCents(head.balance_cents)}: ${formatCents(head.balance_cents - near.balanceCents)} is unexplained.`,
-        );
-        return null;
-      }
-      problems.push(
-        `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, one for one by amount and balance.`,
-      );
+      return null;
     }
+    // The likeliest place, said precisely when there is one: the workbook's
+    // row on the stored row's day with its amount, whose balance disagrees.
+    const near = movements.find(
+      (movement) =>
+        movement.date === head.date &&
+        movement.amountCents === head.amount_cents &&
+        movement.balanceCents !== head.balance_cents,
+    );
+    problems.push(
+      near === undefined
+        ? `The workbook's rows do not line up with the stored ones: no run of them matches the stored rows from the oldest, ${describeStored(head)}, one for one by amount and balance, so a row is in one and not the other.`
+        : `${describeMovement(near)} moves the same day and amount as the oldest stored row, but leaves ${formatCents(near.balanceCents)} where it leaves ${formatCents(head.balance_cents)}: ${formatCents(head.balance_cents - near.balanceCents)} is unexplained.`,
+    );
+    return null;
+  }
+  if (movements.length - before > stored.length) {
+    problems.push(
+      `The workbook runs ${String(movements.length - before - stored.length)} rows past the newest stored row, ${describeStored(stored.at(-1) as StoredColumns)}. Those rows belong to a paste: paste the statement through ${newest?.date ?? ""} first, so the import adds only what is older.`,
+    );
     return null;
   }
   const overlap = movements.slice(before).map((movement, index) => ({
     movement,
     stored: stored[index] as StoredColumns,
   }));
+  // A correction is written as a note on the row it moves, and a stored row
+  // is never written again: the row is the app's to file (decided 2026-10-08).
+  const held = overlap.filter(({ movement }) => movement.workbook !== null);
+  for (const { movement, stored: row } of held) {
+    problems.push(
+      `The correction for ${movement.sheet} row ${String(movement.row)} names a row a paste already holds, ${describeStored(row)}. File that row in the app, and take it out of the corrections file.`,
+    );
+  }
+  if (held.length > 0) return null;
   return {
     added: movements.slice(0, before),
     firstSeq: head.seq - before,
@@ -247,8 +260,29 @@ interface Written {
   rows: number;
   periods: number;
   lines: number;
-  ratioFrom: string | null;
+  /** Each ratio the import confirmed, oldest first. */
+  ratios: { from: string; shares: readonly Share[]; accueil: boolean }[];
   openLinesFrom: string | null;
+}
+
+/** A ratio the corrections file gives, which no salary record derives. */
+function insertRatio(
+  db: Database,
+  context: RuleContext,
+  from: string,
+  shares: readonly Share[],
+): number {
+  const ratio = db
+    .prepare(
+      "INSERT INTO ratios (effective_from, supersedes, entered_at, entered_by) VALUES (?, NULL, ?, ?)",
+    )
+    .run(from, context.now().toISOString(), context.personId);
+  const id = Number(ratio.lastInsertRowid);
+  const insert = db.prepare(
+    "INSERT INTO ratio_shares (ratio_id, person_id, parts_per_million, salary_id) VALUES (?, ?, ?, NULL)",
+  );
+  for (const share of shares) insert.run(id, share.personId, share.partsPerMillion);
+  return id;
 }
 
 function writeAll(
@@ -258,7 +292,7 @@ function writeAll(
   context: RuleContext,
 ): Written {
   const at = context.now().toISOString();
-  const written: Written = { rows: 0, periods: 0, lines: 0, ratioFrom: null, openLinesFrom: null };
+  const written: Written = { rows: 0, periods: 0, lines: 0, ratios: [], openLinesFrom: null };
 
   if (placement.added.length > 0) {
     const batch = db
@@ -293,8 +327,12 @@ function writeAll(
   }
 
   // The salaries Accueil holds are the only ones the workbook has, so they
-  // and their ratio take effect from the start of the history, and every
-  // imported period records that ratio.
+  // are dated in the history's first year. Their ratio is in effect wherever
+  // the corrections file gives a closed period none of its own (decided
+  // 2026-10-08), and after the last close. Each change of ratio takes effect
+  // at a period boundary, the day after the close before it, as the books'
+  // own ratios do, so the ratio in effect on any day is the one its period
+  // was settled at.
   const firstDay = [
     reading.movements[0]?.date,
     ...reading.periods.map((period) => period.start),
@@ -302,18 +340,34 @@ function writeAll(
   ]
     .filter((date): date is string => date !== undefined)
     .toSorted()[0];
-  let ratioId: number | null = null;
+  const ratioOf = new Map<string, number>();
   if (firstDay !== undefined && reading.salaries.length === 2) {
     const entered = enterSalaries(context, {
       year: Number(firstDay.slice(0, 4)),
       salaries: reading.salaries,
     });
-    const ratio = confirmRatio(context, {
-      effectiveFrom: firstDay,
-      salaryIds: entered.salaries.map((salary) => salary.id),
-    });
-    ratioId = ratio.id;
-    written.ratioFrom = firstDay;
+    const salaryIds = entered.salaries.map((salary) => salary.id);
+    const accueil = ratioFromSalaries(reading.salaries);
+    const keyOf = (shares: readonly Share[]): string =>
+      shares.map((share) => `${share.personId}:${String(share.partsPerMillion)}`).join(",");
+    let current: { key: string; id: number } | null = null;
+    const takeEffect = (from: string, shares: Share[] | null): number => {
+      const key = keyOf(shares ?? accueil);
+      if (current?.key === key) return current.id;
+      const id =
+        shares === null
+          ? confirmRatio(context, { effectiveFrom: from, salaryIds }).id
+          : insertRatio(db, context, from, shares);
+      written.ratios.push({ from, shares: shares ?? accueil, accueil: shares === null });
+      current = { key, id };
+      return id;
+    };
+    let from = firstDay;
+    for (const period of reading.periods) {
+      ratioOf.set(period.sheet, takeEffect(from, period.ratio));
+      from = dayAfter(period.end ?? from);
+    }
+    takeEffect(from, null);
   }
 
   const insertLine = db.prepare(
@@ -326,7 +380,8 @@ function writeAll(
   );
   for (const period of reading.periods) {
     const { settlement, end } = period;
-    if (settlement === null || end === null || ratioId === null) continue;
+    const ratioId = ratioOf.get(period.sheet);
+    if (settlement === null || end === null || ratioId === undefined) continue;
     // The settlement as it happened. A historical formula had no separate
     // figure for paying directly, so the direct figure is the one it asked.
     insertPeriod.run(
@@ -388,12 +443,14 @@ interface LedgerFigures {
 }
 
 /** The two buckets as the stored books now file them, through the workbook's newest row. */
-function ledgerFigures(
-  db: Database,
-  lastSeq: number,
-  people: readonly string[],
-  asOf: string,
-): LedgerFigures {
+/**
+ * The two buckets as the stored books now file them, over the stretch the
+ * workbook covers: every row up to the position of its newest, whatever the
+ * rows' dates say. A cut by date would leave out a stored row dated a day
+ * after the workbook's copy of it, and count in nothing a workbook row whose
+ * typed date runs ahead of the rows after it.
+ */
+function ledgerFigures(db: Database, lastSeq: number, people: readonly string[]): LedgerFigures {
   const rows = (
     db
       .prepare(
@@ -423,6 +480,7 @@ function ledgerFigures(
       )
       .get(lastSeq) as { n: number }
   ).n;
+  const asOf = rows.reduce((latest, row) => (row.date > latest ? row.date : latest), "0000-01-01");
   const mortgage = mortgageAsOf(rows, people, asOf);
   return {
     own: mortgage.own,
@@ -430,6 +488,11 @@ function ledgerFigures(
     bufferBalanceCents: bufferAsOf(rows, people, asOf).balanceCents,
     unclassified,
   };
+}
+
+/** `60.0000 %`: a share in parts per million, to the four decimals it holds. */
+function percent(partsPerMillion: number): string {
+  return `${(partsPerMillion / 10_000).toFixed(4)} %`;
 }
 
 function money(cents: number): string {
@@ -494,8 +557,10 @@ export function importWorkbook(
 ): WorkbookImportResult {
   db.exec("BEGIN IMMEDIATE");
   try {
+    // Inside the transaction, so a refused import leaves the schema as it was.
+    applyMigrations(db);
     const { ok, report } = run(db, sheets, options);
-    if (options.write && ok) {
+    if (options.commit && ok) {
       db.exec("COMMIT");
       return { ok, written: true, report: `${report}\nWritten.\n` };
     }
@@ -585,8 +650,12 @@ function run(
         : settlement.payerId === null
           ? `${settlement.formula}, nobody owed`
           : `${settlement.formula}, ${settlement.payerId} deposited ${money(settlement.depositCents)}`;
+    const ratio =
+      period.ratio === null
+        ? ""
+        : `, settled at ${period.ratio.map((share) => `${share.personId} ${percent(share.partsPerMillion)}`).join(", ")}`;
     say(
-      `  ${period.sheet}: ${period.start} to ${period.end ?? ""}, ${String(period.lines.length)} lines, ${asked}`,
+      `  ${period.sheet}: ${period.start} to ${period.end ?? ""}, ${String(period.lines.length)} lines, ${asked}${ratio}`,
     );
   }
   if (reading.open !== null) {
@@ -610,8 +679,11 @@ function run(
       people: new Set(people),
     };
     const written = writeAll(db, reading, placement, context);
-    if (written.ratioFrom !== null)
-      say(`  ratio from those salaries, in effect from ${written.ratioFrom}`);
+    for (const ratio of written.ratios) {
+      say(
+        `  ratio from ${ratio.from}: ${ratio.shares.map((share) => `${share.personId} ${percent(share.partsPerMillion)}`).join(", ")} (${ratio.accueil ? "Accueil's salaries" : "the corrections file"})`,
+      );
+    }
     if (
       written.openLinesFrom !== null &&
       reading.open !== null &&
@@ -622,10 +694,10 @@ function run(
       );
     }
 
-    const ledger = ledgerFigures(db, placement.lastSeq, people, expected.asOf);
+    const ledger = ledgerFigures(db, placement.lastSeq, people);
     const { lines, failed } = compare(expected, ledger);
     say();
-    say(`Figures as of ${expected.asOf}`);
+    say(`Figures over the workbook's rows, through ${expected.asOf}`);
     for (const line of lines) say(line);
     if (failed.length === 0) passed.push("The books show the workbook's figures for both buckets.");
     if (failed.length > 0) {

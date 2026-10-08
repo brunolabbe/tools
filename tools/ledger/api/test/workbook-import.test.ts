@@ -5,7 +5,16 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -296,13 +305,154 @@ describe("the workbook import", () => {
     expect(ran.out).toContain("this period alone, v2): sam deposits 18.00 $");
     db.close();
   });
+
+  test("a period given its own ratio records it, and its settlement and the catch-up use it", async () => {
+    writeFileSync(
+      path.join(dir, "corrections.json"),
+      JSON.stringify({ ratios: [{ sheet: "$ (Sept-Mars)", shares: { Alex: 50, Sam: 50 } }] }),
+    );
+
+    const ran = await run(
+      await workbook(),
+      "--as",
+      "alex",
+      "--corrections",
+      "corrections.json",
+      "--write",
+    );
+
+    expect(ran.code, ran.out).toBe(0);
+    const db = books();
+    expect(
+      closedPeriods(db).map((period) => [
+        period.end,
+        period.settlement.formula,
+        period.settlement.depositCents,
+        period.settlement.shares.map((share) => share.partsPerMillion),
+      ]),
+    ).toEqual([
+      ["2023-03-31", "v2", 10_000, [500_000, 500_000]],
+      ["2022-08-31", "v1", 38_000, [600_000, 400_000]],
+    ]);
+    // Each ratio takes effect at a period boundary: Accueil's, the period's own
+    // from the day after the close before it, and Accueil's again after it.
+    expect(
+      currentRatios(db).map((ratio) => [
+        ratio.effectiveFrom,
+        ratio.shares.map((share) => [share.partsPerMillion, share.salaryId === null]),
+      ]),
+    ).toEqual([
+      [
+        "2022-01-05",
+        [
+          [600_000, false],
+          [400_000, false],
+        ],
+      ],
+      [
+        "2022-09-01",
+        [
+          [500_000, true],
+          [500_000, true],
+        ],
+      ],
+      [
+        "2023-04-01",
+        [
+          [600_000, false],
+          [400_000, false],
+        ],
+      ],
+    ]);
+    // At 0.5, period 2 leaves sam owing 100.00 rather than 40.00; with period
+    // 1's 20.00 and the open period's 18.00 that is 138.00, deposited at 0.6.
+    expect(ran.out).toContain(
+      "books (cumulative, the catch-up folded in): sam deposits 230.00 $ (net 138.00 $), v3",
+    );
+    expect(ran.out).toContain("settled at alex 50.0000 %, sam 50.0000 %");
+    db.close();
+  });
+
+  test("a ratio that is malformed, or names no closed period, is refused naming its entry", async () => {
+    const file = path.join(dir, "corrections.json");
+    writeFileSync(
+      file,
+      JSON.stringify({ ratios: [{ sheet: "$ (Sept-Mars)", shares: { Alex: 50, Sam: 40 } }] }),
+    );
+    const malformed = await run(
+      await workbook(),
+      "--as",
+      "alex",
+      "--corrections",
+      "corrections.json",
+    );
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ratios: [
+          { sheet: "$ (Nulle part)", shares: { Alex: 50, Sam: 50 } },
+          { sheet: "$ (Avril - …)", shares: { Alex: 50, Sam: 50 } },
+        ],
+      }),
+    );
+    const nowhere = await run(
+      await workbook(),
+      "--as",
+      "alex",
+      "--corrections",
+      "corrections.json",
+    );
+
+    expect(malformed.code).toBe(2);
+    expect(malformed.err).toContain("ratio 1's shares add up to 90 %, not 100 %.");
+    expect(nowhere.code).toBe(1);
+    expect(nowhere.out).toContain(
+      `The corrections file's ratio 1, for "$ (Nulle part)", names no closed period sheet of the workbook.`,
+    );
+    expect(nowhere.out).toContain(
+      `The corrections file's ratio 2, for "$ (Avril - …)", names the open period`,
+    );
+  });
+
+  test("a refused --write leaves books at an older schema version as they were, and so does a dry run", async () => {
+    mkdirSync(path.dirname(databasePath), { recursive: true });
+    const old = new Database(databasePath);
+    migrate(old, 4);
+    enrollPeople(old, ["alex", "sam"], NOW);
+    old.close();
+    const hash = sha256(databasePath);
+    const fixture = history();
+    const year = fixture.years[1];
+    if (year === undefined) throw new Error("the fixture has no 2023");
+    year.carry.buffer = 579;
+
+    const dry = await run(await workbook(), "--as", "alex");
+    const refused = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(dry.code, dry.out).toBe(0);
+    expect(refused.code, refused.err).toBe(1);
+    expect(sha256(databasePath)).toBe(hash);
+    expect(readdirSync(path.dirname(databasePath))).toEqual(["ledger.db"]);
+  });
+
+  test("a refused --write into books that do not exist leaves no file", async () => {
+    const fixture = history();
+    const year = fixture.years[1];
+    if (year === undefined) throw new Error("the fixture has no 2023");
+    year.carry.buffer = 579;
+
+    const ran = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(1);
+    expect(existsSync(path.dirname(databasePath))).toBe(false);
+  });
 });
 
 describe("the workbook against the rows already pasted", () => {
   /** The workbook's last three rows as AccèsD pasted them, with the bank's own descriptions. */
   function pasteTail(
     db: Database.Database,
-    change: { date?: string; balanceCents?: number } = {},
+    change: { date?: string; newest?: string; balanceCents?: number } = {},
   ): void {
     const rows = withBalances(
       [
@@ -316,7 +466,11 @@ describe("the workbook against the rows already pasted", () => {
           description: "Hypothèque /Prêteur Exemple",
           amountCents: -70_000,
         },
-        { date: "2024-02-02", description: "Achat /Quincaillerie Exemple", amountCents: -30_000 },
+        {
+          date: change.newest ?? "2024-02-02",
+          description: "Achat /Quincaillerie Exemple",
+          amountCents: -30_000,
+        },
       ],
       // What the workbook's account held at the end of 2023.
       change.balanceCents ?? 210_499,
@@ -440,5 +594,126 @@ describe("the workbook against the rows already pasted", () => {
     expect(ran.code).toBe(2);
     expect(ran.err).toContain("--as");
     expect(existsSync(databasePath)).toBe(false);
+  });
+
+  test("a dry run never opens the books: a crash image's file and log stay as they were, and nothing appears beside them", async () => {
+    // What an unclean stop of the API leaves: the file, and a log holding
+    // rows the file does not have yet, with no shared-memory file.
+    const live = books();
+    enrollPeople(live, ["alex", "sam"], NOW);
+    pasteTail(live);
+    const crash = path.join(dir, "crash");
+    mkdirSync(crash);
+    copyFileSync(databasePath, path.join(crash, "ledger.db"));
+    copyFileSync(`${databasePath}-wal`, path.join(crash, "ledger.db-wal"));
+    live.close();
+    databasePath = path.join(crash, "ledger.db");
+    const before = {
+      file: sha256(databasePath),
+      log: sha256(`${databasePath}-wal`),
+      entries: readdirSync(crash),
+    };
+    expect(before.entries).toEqual(["ledger.db", "ledger.db-wal"]);
+
+    const ran = await run(await workbook(), "--as", "alex");
+
+    expect(ran.code, ran.out).toBe(0);
+    // The rows only the log held were read.
+    expect(ran.out).toMatch(/already stored +3 /u);
+    expect({
+      file: sha256(databasePath),
+      log: sha256(`${databasePath}-wal`),
+      entries: readdirSync(crash),
+    }).toEqual(before);
+  });
+
+  test("a workbook that fits two ways is refused even when one way runs past the stored rows", async () => {
+    const fixture = history();
+    const year = fixture.years[2];
+    if (year === undefined) throw new Error("the fixture has no 2024");
+    year.rows.push(
+      {
+        written: "2024-03-01",
+        bucket: "Dép. Courantes",
+        detail: "Virement",
+        person: "Sam",
+        amount: 10,
+      },
+      {
+        written: "2024-03-01",
+        bucket: "Dép. Courantes",
+        detail: "Retour",
+        person: "Sam",
+        amount: -10,
+      },
+      {
+        written: "2024-03-01",
+        bucket: "Dép. Courantes",
+        detail: "Virement",
+        person: "Sam",
+        amount: 10,
+      },
+    );
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    // Two rows stored: they are the tail's first two (the workbook one row
+    // ahead of the paste), or they follow its last row. Either fits.
+    const rows = withBalances(
+      [
+        { date: "2024-03-01", description: "Virement /Caisse du Mont", amountCents: 1_000 },
+        { date: "2024-03-01", description: "Retour /Caisse du Mont", amountCents: -1_000 },
+      ],
+      160_499,
+    );
+    importStatement({ db, personId: "alex", now: () => NOW }, renderPaste(rows));
+    db.close();
+
+    const ran = await run(await workbook(fixture), "--as", "alex", "--write");
+
+    expect(ran.code, ran.err).toBe(1);
+    expect(ran.out).toContain("can be placed against the stored rows 2 ways");
+  });
+
+  test("a stored newest row dated a day after the workbook's copy of it is reported, not refused", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    pasteTail(db, { newest: "2024-02-03" });
+    db.close();
+
+    const ran = await run(await workbook(), "--as", "alex", "--write");
+
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.out).toContain("dated differently: 2024 row 2, 2024-02-02");
+    expect(ran.out).toContain("The books show the workbook's figures for both buckets.");
+  });
+
+  test("a correction naming a row a paste already holds is refused, naming the row", async () => {
+    const db = books();
+    enrollPeople(db, ["alex", "sam"], NOW);
+    pasteTail(db);
+    db.close();
+    writeFileSync(
+      path.join(dir, "corrections.json"),
+      JSON.stringify({
+        corrections: [
+          { sheet: "2024", row: 4, bucket: "current-expenses", note: "Meant for the buffer." },
+        ],
+      }),
+    );
+
+    const ran = await run(
+      await workbook(),
+      "--as",
+      "alex",
+      "--corrections",
+      "corrections.json",
+      "--write",
+    );
+
+    expect(ran.code, ran.err).toBe(1);
+    expect(ran.out).toContain(
+      "The correction for 2024 row 4 names a row a paste already holds, 2024-01-05",
+    );
+    expect(ran.out).toContain("File that row in the app");
   });
 });
