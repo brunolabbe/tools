@@ -675,4 +675,10 @@ message: DEFAULT_ERROR_MESSAGES.SOURCE_NOT_SEEKABLE }`, and the origin saw
    origin's certificate is trusted only by the proxy, so the refusal is itself
    proof that the probe went through it.
 5. This entry, and the `stream.ts` header's "An origin that ignores Range".
-6. `npm test -- --project downloader` and `npm run check`: see the next entry.
+6. `node scripts/preflight.mjs --base origin/main --title "…"` at `41653474`,
+   exit 0, printing `ok npm run check` and `ok npm test -- --project
+downloader`; it prints no counts. The one full run that did print them, at
+   the commit before, was `Tests 1 failed | 2257 passed | 2 skipped (2260)`,
+   the failure `web/test/mock-api.test.ts` "every ErrorCode is demonstrable",
+   which the `norange` scenario fixed (that file and the presentation test:
+   38 of 38).
