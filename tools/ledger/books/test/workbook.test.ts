@@ -65,6 +65,11 @@ function period(name: string, deposit: Input[]): Sheet {
 
 const people = ["alex", "sam"];
 
+/** A corrections file holding one ratio. */
+function one(shares: unknown, name: unknown = "$ (A)"): unknown {
+  return { ratios: [{ sheet: name, shares }] };
+}
+
 describe("reading the workbook", () => {
   test("a cached figure is rounded to the cent once, half away from zero", () => {
     expect(toCents(380)).toBe(38_000);
@@ -189,9 +194,6 @@ describe("reading the workbook", () => {
   });
 
   test("a ratio in the corrections file is refused whole when it is malformed", () => {
-    const one = (shares: unknown, sheet: unknown = "$ (A)"): unknown => ({
-      ratios: [{ sheet, shares }],
-    });
     expect(() => readCorrections(one({ Alex: 60, Sam: 30 }))).toThrow(
       "ratio 1's shares add up to 90 %, not 100 %.",
     );

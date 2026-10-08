@@ -265,6 +265,11 @@ interface Written {
   openLinesFrom: string | null;
 }
 
+/** What tells two ratios apart: each person's parts, in id order. */
+function keyOf(shares: readonly Share[]): string {
+  return shares.map((share) => `${share.personId}:${String(share.partsPerMillion)}`).join(",");
+}
+
 /** A ratio the corrections file gives, which no salary record derives. */
 function insertRatio(
   db: Database,
@@ -348,8 +353,6 @@ function writeAll(
     });
     const salaryIds = entered.salaries.map((salary) => salary.id);
     const accueil = ratioFromSalaries(reading.salaries);
-    const keyOf = (shares: readonly Share[]): string =>
-      shares.map((share) => `${share.personId}:${String(share.partsPerMillion)}`).join(",");
     let current: { key: string; id: number } | null = null;
     const takeEffect = (from: string, shares: Share[] | null): number => {
       const key = keyOf(shares ?? accueil);
