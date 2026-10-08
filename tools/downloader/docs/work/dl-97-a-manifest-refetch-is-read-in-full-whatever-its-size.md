@@ -3,7 +3,7 @@ id: dl-97
 tool: downloader
 title: A manifest's re-fetch is read in full, inflated, whatever its size
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -105,6 +105,122 @@ hostile server compresses regardless of what it was asked for.
 - A test proves a redirect from the manifest url to an address the SSRF guard
   refuses is not followed, and that the session cookie reaches the re-fetch.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-08 · `9dcf0f6..f37a257` · Sonnet 5.5, depth full
+
+Base `9dcf0f6f`, head `f37a2571bc9c9b7cfe05d340fc09e9cb81c820eb`, draft PR #395. CI read on that head: every check passes
+(`check` x2, `test (ubuntu-latest)`, `test (windows-latest, informational)`, `e2e (direct)`, `e2e (sniffer)`, `docker`,
+`codeql` job, `dependency-review`, `changes`) except the code-scanning check `CodeQL`, which fails (F1). Preflight was not
+run by this gate (the dispatch scoped its exit 16 out).
+
+| Done when                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A gzip body that inflates past the cap from a few KB is refused without holding the inflated body | `resolvers/test/browser/manifest-fetch.test.ts` › "refuses a gzip body that inflates past the cap, having inflated no more than a chunk past it" ✓ (64 MiB from under 100 KB; asserts `readBytes` is above the cap and at most cap + 64 KiB). Also `api/test/manifest-refetch.test.ts` › "refuses a body that inflates past the cap, logs it as a refusal and falls back" ✓ (256 MiB from ~255 KB, real resolver)                       |
+| …peak RSS delta for the 256 MiB case within a few tens of MiB, both numbers in the Log            | **verified** — no test asserts RSS; the Log carries both numbers (about +763..+772 MB through `context.request`, +4..+5 MB through `fetchManifest`) and I re-ran them in fresh processes: same 260,949-byte body, `fetchManifest` → `too-large`, `readBytes` 4,210,688 (cap + one 16 KiB chunk), 154 ms, **+15 MiB** (module load included); Playwright `request.newContext().get().text()` → 268,435,464 chars, 2,498 ms, **+871 MiB** |
+| …and a manifest inside the cap still parses through the same path                                 | `api/test/manifest-refetch.test.ts` › "parses a compressed manifest inside the cap through the same path" ✓ (the probe's variants name the re-fetched playlist, and the warning list is empty); `manifest-fetch.test.ts` › "reads a %s body inside the cap" ✓ (gzip, deflate, br)                                                                                                                                                       |
+| A redirect from the manifest url to an address the SSRF guard refuses is not followed             | `api/test/manifest-refetch.test.ts` › "a redirect to an address the guard refuses is not followed" ✓ — real `BrowserResolver`, real egress proxy and guard; the assertion that carries it is `secret.requests` equal to `[]` beside "the re-fetch happened" (`masterRequests() - before` is 2). Positive control: sending hops after the first straight to the origin turns 4 of 22 red, this test among them                           |
+| …and the session cookie reaches the re-fetch                                                      | `api/test/manifest-refetch.test.ts` › "the session cookie reaches the re-fetch, on a hop it was redirected to as well" ✓ (asserts both the first hop's and the redirected hop's cookie). Positive control: never asking the jar on later hops turns this test and the unit "sends the replayed cookie on the first hop and asks the jar for every later one" red (2 of 22)                                                              |
+| `npm run check` and `npm test -- --project downloader` pass                                       | **verified** — `npm run check` exit 0; `npm test -- --project downloader` exit 0, 102 of 103 files passed (1 skipped), 2151 of 2153 tests passed (2 skipped). CI `check` and `test (ubuntu-latest)` green on this head. Base suite not run (unmeasured); the new specs add 15 + 7 = 22 tests, and the only edit to an existing test is a title and comment in `api/test/tiers-behind-the-proxy.test.ts`, no assertion touched           |
+
+Not a Done-when line, but the Log's headline claim: "HTTPS re-fetches behind the default terminating proxy failed since dl-37
+and now succeed" is **verified in both halves**. With `browser.ts` put back to the base and `resolvers` rebuilt, the branch's
+`api/test/manifest-refetch.test.ts` › "trusts the proxy's root by its pin, so the re-fetch is answered" fails with `expected [ { method: 'GET', …(2) } ] to
+have a length of 2 but got 1`; at head it passes (7 of 7). Second method: the real `createTlsInterception` leaf for `localhost` and for
+`127.0.0.1`, served over `node:https`: Node's default trust gives `SELF_SIGNED_CERT_IN_CHAIN`, `fetchManifest` with the root's pin returns
+`ok`, without the pin `refused: untrusted-certificate`. End to end through Chromium over plain HTTP with no proxy the re-fetch carried the page's
+User-Agent, Accept-Language, Referer, `Sec-Fetch-Mode` and the session cookie, and its playlist was the one parsed.
+
+- **med** · no `Done when` line depends on it · **F1, the `CodeQL` check is red on this head and nothing excuses it.** One new
+  alert, "Disabling certificate validation" (`js/disabling-certificate-validation`, High) on `rejectUnauthorized: false` in
+  `startTls` in `resolvers/src/browser/manifest-fetch.ts`. The file carries no `// codeql[…]` comment and the ticket's Log records no
+  excusal, so under adr/005 and the lg-5 precedent the row is a red check nobody excused; this gate does not grant one. The
+  verification is redone by hand and the matrix below shows it holds, so this reads as a false positive in effect, but adr/005 rule 3
+  asks for the test that goes red if the design regresses, and F2 is exactly the part of the design that has none. Read from the check
+  run's page with WebFetch; `gh pr checks` gives only "fail".
+- **med** · no `Done when` line depends on it · **F2, the signer-binding and host-name halves of `signedByPin` are unproven, and the
+  Log's reason for not testing them is wrong.** The code is right as run (matrix below); nothing on the branch would notice if it
+  were not. Mutations, each rebuilt into `dist`, both new specs run (22 tests): _any chain accepted once a pin is set_ → 21 of 22,
+  red on "and refuses a leaf that a key other than the pinned one signed" (`expected 1 to be +0`), the planted positive control;
+  _every chain accepted_ → red on the same test. But dropping `leaf.verify(candidate.publicKey)` (the signature), replacing the
+  `checkIssued && verify` pair with `return true` (the cert carrying the pinned key merely sits in the chain), and dropping
+  `tls.checkServerIdentity` from the pin rule each leave **22 of 22 green**. Under the first of those, the harness accepts a leaf
+  signed by an attacker key whose issuer name and AKID are copied from the root, sent beside the real root certificate; at head it is
+  refused. The Log says "`resolvers` has no way to mint a certificate… and in `api` the only leaves on offer are the proxy's own";
+  `node-forge` is `api`'s runtime dependency and `api/test/helpers/tls-origin.ts` already mints with it, and a 40-line forge script
+  produced the attacker CA and leaf. The existing test's title ("a leaf that a key other than the pinned one signed") describes
+  what these mutations break while its body varies the pin and leaves the chain without the pinned key, which is why I considered a
+  `high` ("a test that passes when the thing it claims to prove is broken") and graded `med`: the body and comment say what they
+  prove, the Log discloses the gap, and the code is correct. Regrade if the title is read as the claim. Remedy: in `api/test/manifest-refetch.test.ts`
+  add an origin whose chain is [leaf signed by a forge-minted key under the root's subject name, `intercept.rootCaPem`] and one whose
+  leaf names another host but is signed by the real root, assert the origin sees no request; the three surviving mutations must go
+  red. Rename the existing test to say it refuses a pin the chain does not carry.
+- **med** · no `Done when` line depends on it · **F3, an IP-literal HTTPS target is verified against `localhost`, not against the IP.**
+  `startTls` passes `servername` only for DNS names and no `host`, and with a wrapped `socket` Node checks identity against
+  `servername || host || socket._host || "localhost"`; `_host` is unset for a literal-IP `net.connect` and is the proxy's address for a
+  CONNECT tunnel. Reproduction: a server on `127.0.0.1` with a leaf signed by a CA handed to Node through `NODE_EXTRA_CA_CERTS`.
+  (a) Leaf naming only `localhost`: `fetchManifest("https://127.0.0.1:PORT/m")` → `ok`; plain `https.get` to the same URL →
+  `ERR_TLS_CERT_ALTNAME_INVALID`. (b) Leaf with an IP SAN `127.0.0.1`: `fetchManifest` → `refused: untrusted-certificate`, direct and
+  through a tunnelling proxy; plain `https.get` → 200; `tls.connect({ socket, host })` → `authorized: true`. So (a) accepts any
+  Node-trusted certificate for "localhost" for every IP-literal target (needs a trusted CA that issues such a certificate, which the
+  public roots do not) and (b) refuses a CA-valid IP certificate where `context.request` accepted, in tunnel mode
+  (`FFMPEG_TLS_INTERCEPT` off) or with no proxy; the fallback to the captured body covers (b). The default terminating proxy is
+  unaffected: the pin path checks `host`, and the real leaf for `127.0.0.1` is accepted. The `startTls` docstring ("for every other
+  chain it is the verdict Node would have reached") is false for this case. Remedy: give `tls.connect` a `checkServerIdentity` that
+  checks `host`, or pass `host`. dl-101 reuses this client and should carry it if not fixed here.
+- **low** · `nfr:security` — **F4**, an expired and a not-yet-valid leaf signed by the pinned key are accepted (matrix: both
+  ACCEPTED; Node's own verification would reject). Chromium's flag does the same and the docstring lists only host and signer under
+  "narrower", so nothing is misstated; the proxy mints ten-year, five-minute-backdated leaves from a per-process key, so no live call
+  site.
+- **low** · `nfr:reliability` — **F5**, a jar read that outlives the deadline lets `follow` carry on after `fetchManifest` has
+  thrown: with `cookieFor` resolving after `timeoutMs` on the second hop, one request to the next hop was made after the call had
+  already rejected with `TIMEOUT`, and its sockets are registered after the `finally` that destroys them. `context.cookies` answers in
+  milliseconds or rejects when the context closes: no live call site. A trickling body does end at
+  the deadline (401 ms for a 400 ms budget).
+- **low** · **F6**, the redaction of the refusal log's URL is unproven. Replacing `redactUrl(hit.url)` with `hit.url` in the warn line
+  leaves `api/test/manifest-refetch.test.ts` 7 of 7 green: the fixture URL has no query, so `redactUrl` returns it unchanged. The
+  code complies (ticket Build 4, not a Done-when line); a manifest URL with `?token=` in that test would pin it.
+- **dropped** · a self-signed leaf whose SPKI equals the pin is refused (Node gives no `issuerCertificate` for it, and holding the
+  key is the proxy's own position). Not a defect.
+- **dropped** · `proxyUrl: ""` dials the origin directly. It is the convention `pool.ts` uses for the browser itself, and
+  `routes/probe.ts` always passes `tierProxy.url`. A non-http, scheme-less or malformed proxy URL never dials: 10 forms, 0 origin hits.
+- **dropped** · the narrowing of `Set-Cookie` (attributes ignored, deletions skipped) is disclosed in the Log and is a product choice,
+  not a defect.
+- **findings** · the hunt returned 9; 6 carried (F1–F6), 3 dropped.
+
+**TLS acceptance matrix, run at head** (forge-minted chains served over `node:https`, `fetchManifest` direct with the pin set unless
+noted; 17 rows, `NODE_EXTRA_CA_CERTS` unset): leaf signed by the pinned root, [leaf, root] → accepted (control); same chain with no
+pin → refused; with a wrong pin → refused; attacker-signed leaf copying issuer name and AKID beside the pinned root cert, in the
+orders [leaf, root], [leaf, atkCA, root], [leaf, root, atkCA] → refused x3; attacker leaf under an honest attacker CA → refused; leaf
+for another host signed by the pinned root → refused; leaf under an intermediate under the pinned root → refused; leaf signed by the
+pinned root with the root not sent → refused; the root certificate presented as the leaf → refused; expired and not-yet-valid leaves
+signed by the pinned root → accepted (F4). With `NODE_EXTRA_CA_CERTS` set to an ordinary CA: its leaf for `localhost` → accepted
+with no pin, its leaf for another host → refused with and without a pin.
+
+**SSRF and redirects, real egress proxy and guard** (`createSsrfGuard` + `startEgressProxy`, fixture host exempt by name): a
+redirect to each of `127.0.0.1`, `localhost`, `[::1]`, `169.254.169.254`, decimal `2130706433`, `0x7f.0.0.1`, a name resolving to
+loopback, `https://127.0.0.1`, `[::ffff:127.0.0.1]`, `0.0.0.0`, `10.0.0.5` → 11 of 11 `status 403`, 0 hits on the secret origin; a
+three-hop chain allowed → allowed → private → 403, 0 hits; scheme changes to `ftp:`, `file:`, `gopher:`, `data:`, `javascript:`,
+`ws:` → `unsupported-scheme`, and a protocol-relative `//127.0.0.1:…` → 403, 0 hits; a redirect loop → `too-many-redirects` after
+21 origin requests (1 + 20 followed, Playwright's limit).
+
+**The cap, other encodings** (fresh process each): deflate 256 MiB (260,937 B) → `readBytes` 4,210,688, +18 MiB; br 256 MiB (224 B)
+→ 4,210,688, +31 MiB (the decoder's 16 MiB window included); gzip 1 GiB (1,043,671 B) → 4,210,688 in 134 ms, +15 MiB; a gzip body
+of 18,393 B that inflates to 6 MiB, sent chunked with no Content-Length → refused at 4,199,775. Content-Length does not help an
+attacker: the compressed length is not what is counted.
+
+- NFR: security — F1, F2, F3 above; every hop of the re-fetch goes through the proxy (verified), `Authorization` is dropped at the
+  first origin change and stays dropped (unit test, and red when the drop is removed), and the only log line redacts the URL (F6 for its test).
+- NFR: performance ✓ — a 256 MiB or 1 GiB bomb costs 134..159 ms and +15..+31 MiB against 2.5 s and +871 MiB through `context.request`.
+- NFR: reliability — F5; the fallback to the captured body is kept for every non-`ok` outcome.
+- NFR: maintainability — the TLS branch of a new file is covered only by a Chromium-backed `api` spec (F2); the stale comments naming
+  `context.request` were updated, and the size probe's remaining use is filed as dl-101 (`npm run status -- --show dl-101` exit 0, blocked by dl-97).
+- Invariants walked: no tool imports another; failures are `AppError` (`TIMEOUT` is core) or outcomes; no shell and no spawn; no
+  `any` or `console`; the new specs are in existing packages' `test/` and were typechecked and run (15 + 7); no new workspace
+  dependency, so no `Dockerfile` edit; contract package untouched. Skipped: progress, routes.
+- Unverified: Windows behaviour beyond the informational CI leg (green on this head); the base suite's counts; Chromium's own pin
+  handling beyond what the branch's `api` spec exercises.
 
 ## Log
 
