@@ -273,10 +273,16 @@ Checked on 2026-10-08 against `dl-99-webm-undeclared-codecs` (PR #394, head
   input handling are the same as on `main`, so the defect above is reached
   exactly as before.
 - So dl-99 refuses WebM for a Range-ignoring tail-`moov` source whose header it
-  could not read. It does not make MP4 or MKV safe, and it does not carry the
-  "this origin ignored Range" fact forward: `describingProgressiveTracks` drops
-  it after the debug line. That is a possible input to the Build options below,
-  not a fix.
+  could not read. It does not make MP4 or MKV safe, and it never has the "this
+  origin ignored Range" fact to carry forward: the fact is lost earlier, inside
+  `createFetchSizeProbe().bytes()` in `resolvers/src/size-probe.ts`, which
+  returns the same `undefined` for a `200` to a read starting past zero as for
+  every other failure (a `206` for the wrong range, a status that is neither, a
+  range over `maxRangeBytes`, a thrown fetch). dl-99's debug line says only that
+  the codecs are still undeclared. Read on `origin/main` at `1101aff8` by gate 1
+  and again by the fixer: the `else` branch and the `catch` of `bytes()` both
+  `return undefined`. Making the fact available is a change to that return type,
+  which is option D's cost below, not something dl-99 already does and discards.
 
 ## Build
 
@@ -297,10 +303,21 @@ What the fix must settle, as options with their real costs:
   starting ffmpeg for a progressive source, ask the origin for a one-byte range
   and see whether it answers `206`; if it answers `200`, fail. Cost: one more
   request per progressive stream, through the same egress proxy and the same
-  replayed headers. It refuses a fast-start file that would have worked, unless
-  the check also learns where `moov` is (a read of the first bytes, which needs
-  no `Range`, then `ftyp` followed by `moov` or by `mdat`); that is more code,
-  and a wrong sniff refuses a good file. Which code is the open part:
+  replayed headers, and it is **new engine code**: `engine/src` has no HTTP
+  client (the `createEngine` notes in `engine/src/index.ts` say the engine does
+  not enforce SSRF and relies on the guarded egress proxy), so the probe either
+  goes through `proxyUrl` with the same `tlsCaFile` or moves to the api before
+  `stream()`. Either way it repeats for each candidate in
+  `variant.alternateUrls`, which the engine opens on a failover. It refuses a
+  fast-start file that would have worked, unless the check also learns where
+  `moov` is. That is a read of the first bytes, which needs no `Range`, and a
+  **walk of the top-level boxes** until `moov` or `mdat` is reached, not a test
+  on what follows `ftyp`: gate 1 measured ffmpeg 6.1.1's tail-`moov` layout as
+  `ftyp,free,mdat,moov` (4 of 4 sources, 50,241 B to about 1 MB), while dl-99's
+  fast-start `h264.mp4` is `ftyp,moov,free,mdat`, so `free` can sit between
+  `ftyp` and either. `readMp4Tracks` already walks boxes, and `bytes()` accepts a
+  `200` for a read from byte 0, so a walk works against this origin. That is
+  more code, and a wrong walk refuses a good file. Which code is the open part:
   `DOWNLOAD_FAILED` is what a mid-stream loss uses today, and no existing code
   says "this origin cannot be seeked". A new one is a contract change, so the
   owner decides it; it is not invented in the build.
@@ -309,25 +326,41 @@ What the fix must settle, as options with their real costs:
   temporary file and hand ffmpeg that. It turns a refusal into a download.
   Cost: **it breaks the rule in the header of `stream.ts`**, that nothing is
   written to disk and the owner's reason (2026-09-14) is that no copy of a video
-  is kept. A bounded in-memory buffer keeps the rule and costs RAM per
+  is kept. A bounded in-memory buffer keeps the letter of the rule (nothing
+  touches a disk); whether it keeps its reason, "no copy of one should be kept
+  anywhere" in the `stream.ts` header, is the owner's call, since a whole-file
+  copy in RAM is arguably such a copy. It costs RAM per
   concurrent job up to `maxFileSizeBytes`, whose default is 4096 MB
   (`ENGINE_DEFAULTS.maxFileSizeMb`), so a buffer needs its own, smaller bound.
   Time to first byte becomes the whole download. Needs the owner's
   decision on both the rule and the bound.
 - **C. Detect it after the fact, from ffmpeg's own words.** Treat `partial file`
   (from the mov demuxer), or a `Stream ends prematurely` whose reconnect then
-  fails to find the index, as a loss. Cost: not measured. `partial file` appears
-  in this reproduction's log and in dl-53's cut-body cases; whether it also
-  appears on a source that heals on reconnect (which would make it a false
-  positive, the reason dl-53 refused `Stream ends prematurely`) was not
-  checked here, and the first bytes may already have gone to the visitor by the
-  time the line is written, which makes it a cut connection rather than a
-  refusal. Unmeasured: when the line arrives relative to the first output byte.
-- **D. Carry the probe-time fact forward.** The size probe already knows when an
-  origin answers a later range with a `200` (see the dl-64 link above) and dl-99
-  drops it. A variant could carry it and the stream could refuse, or choose B,
-  on it. Cost: a field on `MediaVariant`, which is `@downloader/contract` and
-  is not edited without the owner; it covers only tiers that run the probe; and
+  fails to find the index, as a loss. Cost: partly measured, by gate 1 on
+  2026-10-08. `partial file` appears in this reproduction's log and in dl-53's
+  cut-body cases. (a) A progressive body that is cut and then healed does not
+  log it: dl-53's Log says so for its healing control, and gate 1's run that cut
+  a roughly 1 MB tail-`moov` file at 50% and let ffmpeg reconnect logged only
+  `Stream ends prematurely` and `Will reconnect`, and decoded 100 of 100. So it
+  was not a false positive in the one healing case run. (b) In 5 of 5 runs
+  `partial file` reached the engine's `onStderrLine` before `stream()` resolved,
+  that is before the first byte reached the reader. stdout and stderr are
+  separate pipes, so that is observed order, not a guarantee; if it held, C
+  could refuse before the first byte rather than cut a connection. Not
+  measured: other ffmpeg versions, and a healing case that is cut inside the
+  `moov` itself.
+- **D. Carry the probe-time fact forward.** The size probe sees an origin
+  answer a later range with a `200` (see the dl-64 link above) but does not
+  report it: `createFetchSizeProbe().bytes()` returns `undefined` for that, the
+  same as for every other failure, so nothing downstream, dl-99 included, has
+  the fact. A variant could carry it once it is reported, and the stream could
+  refuse, or choose B, on it. Cost: a field on `MediaVariant`, which is
+  `@downloader/contract` and is not edited without the owner; **and a change to
+  `@downloader/resolvers`**, where `bytes()`'s return type (`RangedBytes |
+undefined`, on `SizeProbe` in `size-sample.ts`) must grow a way to say "the
+  origin ignored Range" and that has to be threaded through `readMp4Tracks` and
+  `describeProgressiveTracks` in `mp4-header.ts` and the resolver wrapper that
+  sets the field. It covers only tiers that run the probe; and
   an origin can answer a probe differently from the ffmpeg request that follows
   (a different path, headers, a signed URL), so it is a hint and not a check.
 - **E. Accept and document it.** Only if the owner judges the shape too rare.
@@ -348,8 +381,9 @@ ffmpeg as a URL too" has to say what happens when the origin does not honour
 2. After the chosen fix, that test asserts the owner's outcome: a typed
    `AppError` with the owner's code, before the first byte (A); or a received
    file with the control's frame count, within the suite's `TOLERANCE_SEC` of
-   the control's duration (B); or the cut connection and `done` rejecting
-   (C and D). In no case does `done` resolve with a file that decodes 0 frames.
+   the control's duration (B); or the cut connection and `done` rejecting (C);
+   or, for D, a typed error before the first byte (as A) or B's outcome,
+   whichever the stream does on the carried fact. In no case does `done` resolve with a file that decodes 0 frames.
 3. Two controls pass in the same file: the existing honouring-origin
    tail-`moov` case still completes whole, and a **fast-start** MP4 from the
    Range-ignoring origin still completes whole (today it does, so a fix that
@@ -397,12 +431,49 @@ second(s)`, then about a hundred `Invalid NAL unit size` and
 
 **The brief had the failure wrong in one respect:** it described the output as
 a ~1.3 KB file. That is ffmpeg alone. Through the engine the file is larger and
-worse, because the engine's reconnect flags let ffmpeg carry on reading a body
-that is not the continuation it asked for, and `STREAM_ENDED_EARLY` is cleared
-by the reconnect. The harness in Why runs both so the next reader sees both.
+worse, because `STREAM_ENDED_EARLY` is cleared by the reconnect (that part is
+read from `stream.ts` and confirmed by the stderr). The builder's account of
+why the reconnected body reads as garbage ("the engine's reconnect flags let
+ffmpeg carry on reading a body that is not the continuation it asked for") is
+**not supported by the origin's request log**, which gate 1 took on 2026-10-08:
+against the Range-ignoring origin ffmpeg makes exactly 2 requests, both
+`Range: bytes=0-`, both answered `200`. It never asks for the tail, and the
+second request asks for byte 0, not byte 48. Against the honouring origin it
+asks `bytes=0-`, then `bytes=<tail>-`, then `bytes=48-`. So the cause stays
+unmeasured, as the Why says. The harness in Why runs both so the next reader
+sees both.
 
 **2026-10-08** — the dl-99 question, checked rather than guessed: see "dl-99 does
 not change this ticket's scope" in Why. In one line, dl-99's header read is a
 probe-time ranged read that fails against such an origin and leaves the codecs
 undeclared; the only consequence is that WebM is refused, and MP4 and MKV
 requests reach the defect unchanged. Not run: dl-99's branch was read, not built.
+
+**2026-10-08** — gate 1 (Opus 5.5) on the filing, measured with its own harness
+and recorded here as its numbers, not the builder's:
+
+- **The size threshold** for the Range-ignoring origin lies between 63,749 B
+  (a tail-`moov` MP4 that decodes 100 of 100 frames) and 91,053 B (decodes 0 of
+  100). The ticket's own bound is 59,622 B (fine) and 103,485 B (broken), so the
+  gate narrowed it to 63,749 to 91,053 B; the exact value is still not found.
+- **The bad output is a constant size:** exactly 37,615 B for each of 4
+  sources from 91,053 B to 1,031,212 B. Its generated sources were
+  1,021,416 to 1,031,212 B rather than the ticket's 1,021,968 B (x264 output
+  varies from run to run); every outcome matched.
+- Box order of every tail-`moov` file ffmpeg 6.1.1 wrote for gate 1:
+  `ftyp,free,mdat,moov` (4 of 4).
+- Not measured by gate 1: the dl-99 fixture runs above (103,485 B / 1,292 B /
+  37,607 B), whose files are in another agent's scratch directory.
+
+**2026-10-08** — gate 1's findings F1 to F8 folded in by the fixer, in the ticket
+only: F1 (the Range-ignored fact is lost inside `bytes()`, not dropped by
+dl-99; the resolvers change added to D's cost), F2 (A's sniff walks top-level
+boxes), F3 (A needs new engine HTTP code, per `alternateUrls` candidate), F4
+(B keeps the rule's letter, the reason is the owner's call), F5 (C's two
+measured facts), F6 (Done when 2's D outcome), F7 (this Log's cause, above).
+**F8, for whoever records the owner's answer:** `difficulty: standard`
+is what the filing carries. Option A with a new code, and
+D, each edit `@downloader/contract` and/or `@downloader/resolvers`, and
+`docs/01-TICKETS.md` rates a contract change `hard`. Re-rate `difficulty` in
+the commit that records the owner's answer; it was left unchanged here on
+purpose. The ticket recommends no option.
