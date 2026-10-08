@@ -19,12 +19,17 @@
  * `captured` fell back to the captured body.
  */
 
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
+import { redactUrl } from "@downloader/contract";
 import type { ProbeResult } from "@downloader/contract";
-import { BrowserResolver } from "@downloader/resolvers";
+import { BrowserResolver, fetchManifest } from "@downloader/resolvers";
+import type { ManifestFetchResult } from "@downloader/resolvers";
+import forge from "node-forge";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
@@ -53,6 +58,9 @@ const PAGE = `<!doctype html><title>fixture</title><body><video></video><script>
   fetch("/master.m3u8").catch(() => {});
 </script></body>`;
 
+/** A signed manifest URL, so the refusal log has a credential to redact (gate 1, F6). */
+const SIGNED_PAGE = PAGE.replace("/master.m3u8", "/master.m3u8?token=s3cr3t-signature");
+
 interface Recorded {
   url: string;
   cookie: string | undefined;
@@ -67,7 +75,8 @@ interface Origin {
 async function startOrigin(handler: http.RequestListener): Promise<Origin> {
   const requests: Recorded[] = [];
   const server = http.createServer((request, response) => {
-    requests.push({ url: request.url ?? "", cookie: request.headers.cookie });
+    // The path only: a test asks which resource was hit, never with which query.
+    requests.push({ url: (request.url ?? "").split("?")[0] ?? "", cookie: request.headers.cookie });
     handler(request, response);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -128,7 +137,7 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
 
     let masterCalls = 0;
     fixture = await startOrigin((request, response) => {
-      if (request.url === "/master.m3u8") {
+      if (request.url?.split("?")[0] === "/master.m3u8") {
         masterCalls += 1;
         if (masterCalls % 2 === 0) {
           onRefetch(response);
@@ -155,7 +164,7 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
           "content-type": "text/html; charset=utf-8",
           "set-cookie": "session=s3cr3t; Path=/",
         })
-        .end(PAGE);
+        .end(SIGNED_PAGE);
     });
 
     // The fixture hosts are exempt by name; the literal loopback address is not,
@@ -287,11 +296,15 @@ describe("the manifest re-fetch behind the egress proxy (dl-97)", () => {
         {
           message: "manifest re-fetch refused: its body passed the cap",
           fields: {
-            url: `http://${FIXTURE_HOST}:${String(fixture.port)}/master.m3u8`,
+            url: redactUrl(
+              `http://${FIXTURE_HOST}:${String(fixture.port)}/master.m3u8?token=s3cr3t-signature`,
+            ),
             limitBytes: 4 * 1024 * 1024,
           },
         },
       ]);
+      // The signature is the credential; the log line must not carry it.
+      expect(JSON.stringify(warnings)).not.toContain("s3cr3t-signature");
     },
     TEST_TIMEOUT_MS,
   );
@@ -380,12 +393,14 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
   );
 
   test(
-    "and refuses a leaf that a key other than the pinned one signed",
+    "and refuses the proxy's leaf when the pin names a key its chain does not carry",
     async () => {
       // The page is plain HTTP so it loads whatever either side trusts; only its
       // manifest is HTTPS. Chromium records the hit when it asks, before the
       // handshake it then fails, so the re-fetch is still attempted: and with a
-      // pin that is not the proxy's root, it must fail too.
+      // pin that is not the proxy's root, it must fail too. What a chain that
+      // *does* carry the pinned key must still prove — signer and host — is the
+      // minted-chain suite below.
       const page = await startOrigin((_request, response) => {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(
           `<!doctype html><title>fixture</title><body><video></video><script>
@@ -417,6 +432,211 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
       } finally {
         await mispinned.dispose();
         await page.close();
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+/**
+ * dl-97 gate 1, F2 and F3: the client's TLS rules against chains minted here,
+ * with `fetchManifest` driven directly, no proxy and no Chromium, so that what
+ * accepts or refuses a chain is the client alone.
+ *
+ * - **F2**, the pin rule's other halves. A chain that *carries* the pinned key is
+ *   still refused unless the pinned key signed the leaf and the leaf names the
+ *   host: one leaf signed by another key under the root's name and key
+ *   identifier, sent beside the real root; one the real root signed for another
+ *   host.
+ * - **F3**, identity for an IP literal. Node's own verification needs a CA Node
+ *   trusts, and the only way in from outside is `NODE_EXTRA_CA_CERTS`, which is
+ *   read at start-up, so those two run the client in a child process.
+ */
+describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
+  /** This package's directory, where `@downloader/resolvers` resolves. */
+  const API_DIR = fileURLToPath(new URL("..", import.meta.url));
+  const IP_HOST = "127.0.0.1";
+
+  let intercept: TlsInterception;
+
+  beforeAll(async () => {
+    intercept = await createTlsInterception({ verifyOrigins: true });
+  }, TEST_TIMEOUT_MS);
+
+  afterAll(async () => {
+    await intercept.close();
+  });
+
+  /** An HTTPS origin on loopback serving `cert` (leaf first) under `key`. */
+  async function serveChain(key: string, cert: string): Promise<TlsOrigin> {
+    return await startTlsOrigin(
+      { ca: "", caPath: "", key, cert, cleanup: async () => {} },
+      (_request, response) => {
+        response
+          .writeHead(200, { "content-type": "application/vnd.apple.mpegurl" })
+          .end(manifest("refetched.m3u8"));
+      },
+    );
+  }
+
+  async function fetchPinned(port: number): Promise<ManifestFetchResult> {
+    return await fetchManifest(`https://${IP_HOST}:${String(port)}/master.m3u8`, {
+      headers: {},
+      cookieFor: async () => undefined,
+      storeCookies: async () => {},
+      proxyRootSpkiSha256: intercept.rootSpkiSha256,
+      maxBodyBytes: 1024 * 1024,
+      maxRedirects: 0,
+      timeoutMs: 5000,
+    });
+  }
+
+  test("accepts a leaf the pinned root signed for this host", async () => {
+    // The control for the two below: same root, same pin, an honest leaf.
+    const leaf = intercept.leafFor(IP_HOST);
+    const origin = await serveChain(leaf.key, leaf.cert);
+    try {
+      expect(await fetchPinned(origin.port)).toEqual({
+        outcome: "ok",
+        text: manifest("refetched.m3u8"),
+      });
+      expect(origin.requests).toHaveLength(1);
+    } finally {
+      await origin.close();
+    }
+  });
+
+  test(
+    "refuses a leaf another key signed under the pinned root's name, sent beside that root",
+    async () => {
+      // Everything a name-based check looks at is copied from the real root —
+      // issuer name, authority key identifier — and the real root certificate
+      // rides along in the chain, so the pinned key is *present*. Only the
+      // signature is wrong.
+      const root = forge.pki.certificateFromPem(intercept.rootCaPem);
+      const attacker = forge.pki.rsa.generateKeyPair({ bits: 2048 });
+      const leaf = forge.pki.createCertificate();
+      leaf.publicKey = attacker.publicKey;
+      leaf.serialNumber = "0badc0de";
+      leaf.validity.notBefore = new Date(Date.now() - 60_000);
+      leaf.validity.notAfter = new Date(Date.now() + 60 * 60 * 1000);
+      leaf.setSubject([{ name: "commonName", value: IP_HOST }]);
+      leaf.setIssuer(root.subject.attributes);
+      leaf.setExtensions([
+        { name: "basicConstraints", cA: false, critical: true },
+        { name: "keyUsage", critical: true, digitalSignature: true, keyEncipherment: true },
+        { name: "extKeyUsage", serverAuth: true },
+        { name: "subjectAltName", altNames: [{ type: 7, ip: IP_HOST }] },
+        {
+          name: "authorityKeyIdentifier",
+          keyIdentifier: root.generateSubjectKeyIdentifier().getBytes(),
+        },
+      ]);
+      leaf.sign(attacker.privateKey, forge.md.sha256.create());
+
+      const origin = await serveChain(
+        forge.pki.privateKeyToPem(attacker.privateKey),
+        `${forge.pki.certificateToPem(leaf).trim()}\n${intercept.rootCaPem.trim()}\n`,
+      );
+      try {
+        expect(await fetchPinned(origin.port)).toEqual({
+          outcome: "refused",
+          reason: "untrusted-certificate",
+        });
+        expect(origin.requests).toEqual([]);
+      } finally {
+        await origin.close();
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test("refuses a leaf the pinned root signed for another host", async () => {
+    const leaf = intercept.leafFor("other.example");
+    const origin = await serveChain(leaf.key, leaf.cert);
+    try {
+      expect(await fetchPinned(origin.port)).toEqual({
+        outcome: "refused",
+        reason: "untrusted-certificate",
+      });
+      expect(origin.requests).toEqual([]);
+    } finally {
+      await origin.close();
+    }
+  });
+
+  /** The child's whole program: one re-fetch of `TARGET_URL`, its answer on stdout. */
+  const CHILD = `
+    const { fetchManifest } = await import("@downloader/resolvers");
+    let answer;
+    try {
+      answer = await fetchManifest(process.env.TARGET_URL, {
+        headers: {},
+        cookieFor: async () => undefined,
+        storeCookies: async () => {},
+        maxBodyBytes: 1048576,
+        maxRedirects: 0,
+        timeoutMs: 5000,
+      });
+    } catch (error) {
+      answer = { error: String(error?.code ?? error) };
+    }
+    process.stdout.write(JSON.stringify(answer));
+  `;
+
+  /** Runs the client in a Node whose trust store holds `caPath` too. */
+  async function fetchTrusting(url: string, caPath: string): Promise<unknown> {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", CHILD], {
+      cwd: API_DIR,
+      env: { ...process.env, NODE_EXTRA_CA_CERTS: caPath, TARGET_URL: url },
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString("utf8")));
+    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
+    const code = await new Promise<number | null>((resolve) => child.once("close", resolve));
+    expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
+    return JSON.parse(stdout) as unknown;
+  }
+
+  test(
+    "checks an IP-literal target's certificate against the IP, not against localhost",
+    async () => {
+      // Self-signed, so each is its own CA: the child trusts both.
+      const localhostOnly = await createFixtureCertificate({
+        dnsNames: ["localhost"],
+        commonName: "localhost-only",
+      });
+      const forTheIp = await createFixtureCertificate({
+        ipAddresses: [IP_HOST],
+        commonName: "ip-origin",
+      });
+      const wrongName = await serveChain(localhostOnly.key, localhostOnly.cert);
+      const rightName = await serveChain(forTheIp.key, forTheIp.cert);
+      try {
+        // (a) A trusted certificate naming only `localhost` is not one for 127.0.0.1.
+        expect(
+          await fetchTrusting(
+            `https://${IP_HOST}:${String(wrongName.port)}/master.m3u8`,
+            localhostOnly.caPath,
+          ),
+        ).toEqual({ outcome: "refused", reason: "untrusted-certificate" });
+        expect(wrongName.requests).toEqual([]);
+        // (b) A trusted certificate whose IP SAN is 127.0.0.1 is.
+        expect(
+          await fetchTrusting(
+            `https://${IP_HOST}:${String(rightName.port)}/master.m3u8`,
+            forTheIp.caPath,
+          ),
+        ).toEqual({ outcome: "ok", text: manifest("refetched.m3u8") });
+      } finally {
+        await wrongName.close();
+        await rightName.close();
+        await localhostOnly.cleanup();
+        await forTheIp.cleanup();
       }
     },
     TEST_TIMEOUT_MS,

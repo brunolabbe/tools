@@ -26,6 +26,11 @@ export {
 } from "./resolvers/browser.ts";
 export type { BrowserResolverOptions } from "./resolvers/browser.ts";
 export type { BrowserPoolStats } from "./browser/pool.ts";
+// The browser tier's manifest re-fetch client (dl-97). Exported so `api`, which
+// holds `node-forge` and the egress proxy, can drive its TLS rules with minted
+// chains rather than only through Chromium.
+export { fetchManifest } from "./browser/manifest-fetch.ts";
+export type { ManifestFetchOptions, ManifestFetchResult } from "./browser/manifest-fetch.ts";
 
 export { DirectUrlResolver } from "./resolvers/direct.ts";
 export type { DirectResolverOptions } from "./resolvers/direct.ts";

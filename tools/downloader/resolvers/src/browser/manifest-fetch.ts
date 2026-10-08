@@ -283,6 +283,13 @@ async function connectTunnel(
  * minted by the pinned root can pass; for every other chain it is the verdict
  * Node would have reached with `rejectUnauthorized`, which is the one
  * `context.request` reached. `undefined` means the chain was refused.
+ *
+ * `host` is passed as well as `servername`, and for an IP literal it is the only
+ * name: with a wrapped socket Node checks identity against `servername`, then
+ * `host`, then the socket's own `_host`, then `"localhost"`. An IP has no SNI, so
+ * without `host` an `https://127.0.0.1/` target was checked against
+ * `"localhost"` directly and against the proxy's address through a tunnel (dl-97
+ * gate 1, F3).
  */
 async function startTls(
   raw: Duplex,
@@ -294,6 +301,7 @@ async function startTls(
   const socket = track(
     tls.connect({
       socket: raw,
+      host,
       ...(net.isIP(host) === 0 ? { servername: host } : {}),
       rejectUnauthorized: false,
     }),
