@@ -18,6 +18,7 @@ import { AppError, canMakeWebm, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, MediaVariant, ProbeResult } from "@downloader/contract";
 import { createEngine, resolveFfmpegPath } from "@downloader/engine";
 import { DirectUrlResolver } from "@downloader/resolvers";
+import type * as ResolversModule from "@downloader/resolvers";
 import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import { buildRegistry } from "../src/resolvers.ts";
@@ -32,7 +33,7 @@ import type { Harness } from "./helpers.ts";
  */
 const browserTier = vi.hoisted(() => ({ url: "" }));
 vi.mock("@downloader/resolvers", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@downloader/resolvers")>();
+  const actual = await importOriginal<typeof ResolversModule>();
   class FakeBrowserTier {
     readonly name = "browser";
     readonly priority = 50;

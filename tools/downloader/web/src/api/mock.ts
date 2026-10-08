@@ -107,6 +107,14 @@ function halt(runtime: JobRuntime): void {
   runtime.timers = [];
 }
 
+/** The script a job plays: a failure tied to one container is dropped for any other. */
+function scriptFor(script: JobScript, jobOptions: JobOptions): JobScript {
+  if (script.failOnlyForContainer === undefined) return script;
+  if (script.failOnlyForContainer === jobOptions.container) return script;
+  const { failWith: _failWith, failAt: _failAt, ...succeeding } = script;
+  return succeeding;
+}
+
 export function createMockClient(options: MockClientOptions = {}): ApiClient {
   const clock = options.clock ?? systemClock;
   const speed = options.speed ?? 1;
@@ -303,14 +311,6 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       for (const cancel of cancelBeats) cancel();
       if (probeId !== undefined) emitProbe(probeId, { type: "done", probeId, at: nowIso() });
     }
-  }
-
-  /** The script a job plays: a failure tied to one container is dropped for any other. */
-  function scriptFor(script: JobScript, jobOptions: JobOptions): JobScript {
-    if (script.failOnlyForContainer === undefined) return script;
-    if (script.failOnlyForContainer === jobOptions.container) return script;
-    const { failWith: _failWith, failAt: _failAt, ...succeeding } = script;
-    return succeeding;
   }
 
   async function createJob(request: CreateJobRequest): Promise<JobResponse> {
