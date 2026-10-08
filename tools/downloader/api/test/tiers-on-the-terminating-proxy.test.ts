@@ -117,6 +117,7 @@ function registryFor(
       : {
           tierEgress: {
             rootSpkiSha256: intercept.rootSpkiSha256,
+            rootCaPem: intercept.rootCaPem,
             trustBundlePath: intercept.trustBundlePath,
             rejections,
           },

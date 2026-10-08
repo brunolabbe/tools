@@ -67,6 +67,8 @@ export interface BuildRegistryOptions {
 export interface TierEgress {
   /** Chromium's `--ignore-certificate-errors-spki-list`. */
   rootSpkiSha256: string;
+  /** The manifest re-fetch's `ca` (dl-97). */
+  rootCaPem: string;
   /** yt-dlp's `SSL_CERT_FILE`. */
   trustBundlePath: string;
   /**
@@ -223,7 +225,12 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
       // dl-55: so a detected navigation-away is diagnosable from the service
       // log rather than only from the error it also throws.
       logger,
-      ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
+      ...(tierEgress === undefined
+        ? {}
+        : {
+            proxyRootSpkiSha256: tierEgress.rootSpkiSha256,
+            proxyRootCaPem: tierEgress.rootCaPem,
+          }),
     });
     resolvers.push(named(browser));
   }

@@ -152,11 +152,17 @@ export interface BrowserResolverOptions {
    *
    * **The pool ignores it when `pool` is supplied**, on the same rule `dispose`
    * follows: a pool handed in belongs to the caller, and its browsers may
-   * already be launched with launch flags of the caller's choosing. The manifest
-   * re-fetch, which is this process's own client and not Chromium, trusts the
-   * same root by the same pin either way (dl-97).
+   * already be launched with launch flags of the caller's choosing. Chromium's
+   * alone: the manifest re-fetch takes the root as `proxyRootCaPem`.
    */
   proxyRootSpkiSha256?: string;
+  /**
+   * The same root, as its PEM: the only anchor the manifest re-fetch trusts when
+   * the proxy terminates TLS, handed to Node's `ca` (dl-97). Used whether or not
+   * `pool` is supplied, since the re-fetch is this process's client, not
+   * Chromium.
+   */
+  proxyRootCaPem?: string;
   /**
    * Press a recognised "I am over 18" control. Off by default, because the
    * press is an attestation made on the user's behalf and only an operator can
@@ -188,7 +194,7 @@ export class BrowserResolver implements Resolver {
   readonly #emptyMinWaitMs: number;
   readonly #confirmAge: boolean;
   readonly #logger: BrowserResolverLogger;
-  readonly #proxyRootSpkiSha256: string | undefined;
+  readonly #proxyRootCaPem: string | undefined;
 
   constructor(options: BrowserResolverOptions = {}) {
     this.#ownsPool = options.pool === undefined;
@@ -209,7 +215,7 @@ export class BrowserResolver implements Resolver {
     this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
     this.#confirmAge = options.confirmAge ?? false;
     this.#logger = options.logger ?? NOOP_LOGGER;
-    this.#proxyRootSpkiSha256 = options.proxyRootSpkiSha256;
+    this.#proxyRootCaPem = options.proxyRootCaPem;
   }
 
   /** Whether this tier presses an age confirmation, for the boot log. */
@@ -573,7 +579,7 @@ export class BrowserResolver implements Resolver {
           cookieFor: async (url) => jarCookieHeader(await context.cookies(url.href)),
           storeCookies: async (url, setCookie) => await storeSetCookies(context, url, setCookie),
           proxyUrl,
-          proxyRootSpkiSha256: this.#proxyRootSpkiSha256,
+          proxyRootCaPem: this.#proxyRootCaPem,
           maxBodyBytes: MAX_CAPTURED_BODY_BYTES,
           maxRedirects: MAX_MANIFEST_REDIRECTS,
           timeoutMs: timeout,

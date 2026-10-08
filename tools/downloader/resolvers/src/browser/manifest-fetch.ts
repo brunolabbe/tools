@@ -25,11 +25,13 @@
  * - **Trust.** The egress proxy can terminate TLS under a root it generates, which
  *   Chromium trusts by its SPKI pin (dl-37). Node never trusted it, so before this
  *   client every HTTPS re-fetch behind that proxy failed its handshake and fell
- *   back to the captured body. A chain verifies here if Node's own store accepts
- *   it, or if its leaf names the host and was signed by the pinned key.
+ *   back to the captured body. Here Node verifies every chain itself, and when
+ *   the proxy terminates, the anchor it verifies against is that root's PEM, the
+ *   way ffmpeg is handed `rootCaPath`. An earlier cut of dl-97 took the SPKI pin
+ *   instead and checked the chain by hand behind `rejectUnauthorized: false`;
+ *   that version and why it was replaced are in the ticket's Log.
  */
 
-import { createHash, X509Certificate } from "node:crypto";
 import http from "node:http";
 import net from "node:net";
 import type { Duplex } from "node:stream";
@@ -46,8 +48,8 @@ export interface ManifestFetchOptions {
   storeCookies: (url: URL, setCookie: readonly string[]) => Promise<void>;
   /** The browser's own egress proxy. Absent, the client dials the origin itself. */
   proxyUrl?: string | undefined;
-  /** Base64 SHA-256 of the SPKI of the proxy's generated root, when it terminates TLS. */
-  proxyRootSpkiSha256?: string | undefined;
+  /** The proxy's generated root, PEM, when it terminates TLS: then the only anchor. */
+  proxyRootCaPem?: string | undefined;
   /** Inflated bytes past which the body is abandoned. */
   maxBodyBytes: number;
   maxRedirects: number;
@@ -217,7 +219,7 @@ async function request(
         return { kind: "result", result: { outcome: "status", status: tunnel } };
       raw = tunnel;
     }
-    const secured = await startTls(raw, target, options.proxyRootSpkiSha256, open);
+    const secured = await startTls(raw, target, options.proxyRootCaPem, open);
     if (secured === undefined) {
       return { kind: "result", result: { outcome: "refused", reason: "untrusted-certificate" } };
     }
@@ -279,22 +281,20 @@ async function connectTunnel(
 }
 
 /**
- * Wraps `raw` in TLS. Verification is ours rather than OpenSSL's, so that a leaf
- * minted by the pinned root can pass; for every other chain it is the verdict
- * Node would have reached with `rejectUnauthorized`, which is the one
- * `context.request` reached. `undefined` means the chain was refused.
+ * Wraps `raw` in TLS and lets Node verify it: chain, signature, validity and
+ * host. Behind the terminating proxy the only anchor is the proxy's own root,
+ * handed over as its PEM, exactly as ffmpeg is handed `rootCaPath`; otherwise
+ * Node's default store, the verdict `context.request` reached. `undefined`
+ * means the chain was refused.
  *
  * `host` is passed as well as `servername`, and for an IP literal it is the only
  * name: with a wrapped socket Node checks identity against `servername`, then
- * `host`, then the socket's own `_host`, then `"localhost"`. An IP has no SNI, so
- * without `host` an `https://127.0.0.1/` target was checked against
- * `"localhost"` directly and against the proxy's address through a tunnel (dl-97
- * gate 1, F3).
+ * `host`, then the socket's own `_host`, then `"localhost"` (dl-97 gate 1, F3).
  */
 async function startTls(
   raw: Duplex,
   target: URL,
-  pin: string | undefined,
+  rootCaPem: string | undefined,
   open: Set<Closable>,
 ): Promise<tls.TLSSocket | undefined> {
   const host = bare(target.hostname);
@@ -303,47 +303,49 @@ async function startTls(
       socket: raw,
       host,
       ...(net.isIP(host) === 0 ? { servername: host } : {}),
-      rejectUnauthorized: false,
+      ...(rootCaPem === undefined || rootCaPem === "" ? {} : { ca: [rootCaPem] }),
     }),
     open,
   );
-  await new Promise<void>((resolve, reject) => {
-    socket.once("secureConnect", () => resolve());
-    socket.once("error", reject);
-  });
-  if (socket.authorized || signedByPin(socket, host, pin)) return socket;
-  socket.destroy();
-  return undefined;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once("secureConnect", () => resolve());
+      socket.once("error", reject);
+    });
+  } catch (error) {
+    if (!isCertificateRefusal(error)) throw error;
+    socket.destroy();
+    return undefined;
+  }
+  return socket;
 }
 
-/**
- * The SPKI-pin rule, narrower than Chromium's: the leaf must still name the host,
- * and must have been signed by a certificate in the chain carrying the pinned
- * key, not merely arrive beside one.
- */
-function signedByPin(socket: tls.TLSSocket, host: string, pin: string | undefined): boolean {
-  if (pin === undefined || pin === "") return false;
-  const peer = socket.getPeerCertificate(true);
-  if (peer.raw === undefined) return false;
-  if (tls.checkServerIdentity(host, peer) !== undefined) return false;
-  try {
-    const leaf = new X509Certificate(peer.raw);
-    const seen = new Set<string>();
-    let issuer: tls.DetailedPeerCertificate | undefined = peer.issuerCertificate;
-    while (issuer?.raw !== undefined && !seen.has(issuer.fingerprint256)) {
-      seen.add(issuer.fingerprint256);
-      const candidate = new X509Certificate(issuer.raw);
-      const spki = candidate.publicKey.export({ type: "spki", format: "der" });
-      if (createHash("sha256").update(spki).digest("base64") === pin) {
-        return leaf.checkIssued(candidate) && leaf.verify(candidate.publicKey);
-      }
-      issuer = issuer.issuerCertificate;
-    }
-  } catch {
-    // A certificate Node cannot parse is not one to trust.
-  }
-  return false;
+/** OpenSSL's verify codes and Node's own name check: a chain that arrived and was refused. */
+function isCertificateRefusal(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code !== "string") return false;
+  return code.startsWith("ERR_TLS_CERT_") || CERTIFICATE_CODES.has(code);
 }
+
+const CERTIFICATE_CODES: ReadonlySet<string> = new Set([
+  "CERT_CHAIN_TOO_LONG",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "CERT_REJECTED",
+  "CERT_REVOKED",
+  "CERT_SIGNATURE_FAILURE",
+  "CERT_UNTRUSTED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "HOSTNAME_MISMATCH",
+  "INVALID_CA",
+  "INVALID_PURPOSE",
+  "PATH_LENGTH_EXCEEDED",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_DECRYPT_CERT_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
 
 /**
  * Reads the body through its decoder and stops at `limit` inflated bytes. The

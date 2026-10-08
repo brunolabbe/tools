@@ -20,7 +20,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -366,6 +366,7 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
       headless: true,
       quietMs: 1200,
       proxyRootSpkiSha256: intercept.rootSpkiSha256,
+      proxyRootCaPem: intercept.rootCaPem,
     });
   }, TEST_TIMEOUT_MS);
 
@@ -378,7 +379,7 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
   });
 
   test(
-    "trusts the proxy's root by its pin, so the re-fetch is answered",
+    "trusts the proxy's root it was handed, so the re-fetch is answered",
     async () => {
       const result = await resolver.resolve(
         new URL(`https://127.0.0.1:${String(origin.port)}/watch`),
@@ -393,14 +394,14 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
   );
 
   test(
-    "and refuses the proxy's leaf when the pin names a key its chain does not carry",
+    "and refuses the proxy's leaf when it was not handed the proxy's root",
     async () => {
       // The page is plain HTTP so it loads whatever either side trusts; only its
       // manifest is HTTPS. Chromium records the hit when it asks, before the
-      // handshake it then fails, so the re-fetch is still attempted: and with a
-      // pin that is not the proxy's root, it must fail too. What a chain that
-      // *does* carry the pinned key must still prove — signer and host — is the
-      // minted-chain suite below.
+      // handshake it then fails, so the re-fetch is still attempted: and with no
+      // `proxyRootCaPem`, only Node's own store to verify against, it must fail
+      // too. What a chain that *does* carry the root must still prove — signer,
+      // host, validity — is the minted-chain suite below.
       const page = await startOrigin((_request, response) => {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(
           `<!doctype html><title>fixture</title><body><video></video><script>
@@ -443,11 +444,12 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
  * with `fetchManifest` driven directly, no proxy and no Chromium, so that what
  * accepts or refuses a chain is the client alone.
  *
- * - **F2**, the pin rule's other halves. A chain that *carries* the pinned key is
- *   still refused unless the pinned key signed the leaf and the leaf names the
- *   host: one leaf signed by another key under the root's name and key
- *   identifier, sent beside the real root; one the real root signed for another
- *   host.
+ * - **F2**, a chain that *carries* the proxy's root is still refused unless that
+ *   root signed the leaf and the leaf names the host: one leaf signed by another
+ *   key under the root's name and key identifier, sent beside the real root; one
+ *   the real root signed for another host.
+ * - **F4**, validity: a leaf that root signed is refused when expired or not yet
+ *   valid.
  * - **F3**, identity for an IP literal. Node's own verification needs a CA Node
  *   trusts, and the only way in from outside is `NODE_EXTRA_CA_CERTS`, which is
  *   read at start-up, so those two run the client in a child process.
@@ -479,24 +481,24 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
     );
   }
 
-  async function fetchPinned(port: number): Promise<ManifestFetchResult> {
+  async function fetchTrustingRoot(port: number): Promise<ManifestFetchResult> {
     return await fetchManifest(`https://${IP_HOST}:${String(port)}/master.m3u8`, {
       headers: {},
       cookieFor: async () => undefined,
       storeCookies: async () => {},
-      proxyRootSpkiSha256: intercept.rootSpkiSha256,
+      proxyRootCaPem: intercept.rootCaPem,
       maxBodyBytes: 1024 * 1024,
       maxRedirects: 0,
       timeoutMs: 5000,
     });
   }
 
-  test("accepts a leaf the pinned root signed for this host", async () => {
-    // The control for the two below: same root, same pin, an honest leaf.
+  test("accepts a leaf the proxy's root signed for this host", async () => {
+    // The control for the two below: same root, an honest leaf.
     const leaf = intercept.leafFor(IP_HOST);
     const origin = await serveChain(leaf.key, leaf.cert);
     try {
-      expect(await fetchPinned(origin.port)).toEqual({
+      expect(await fetchTrustingRoot(origin.port)).toEqual({
         outcome: "ok",
         text: manifest("refetched.m3u8"),
       });
@@ -507,11 +509,11 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
   });
 
   test(
-    "refuses a leaf another key signed under the pinned root's name, sent beside that root",
+    "refuses a leaf another key signed under the proxy root's name, sent beside that root",
     async () => {
       // Everything a name-based check looks at is copied from the real root —
       // issuer name, authority key identifier — and the real root certificate
-      // rides along in the chain, so the pinned key is *present*. Only the
+      // rides along in the chain, so the trusted key is *present*. Only the
       // signature is wrong.
       const root = forge.pki.certificateFromPem(intercept.rootCaPem);
       const attacker = forge.pki.rsa.generateKeyPair({ bits: 2048 });
@@ -539,7 +541,7 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
         `${forge.pki.certificateToPem(leaf).trim()}\n${intercept.rootCaPem.trim()}\n`,
       );
       try {
-        expect(await fetchPinned(origin.port)).toEqual({
+        expect(await fetchTrustingRoot(origin.port)).toEqual({
           outcome: "refused",
           reason: "untrusted-certificate",
         });
@@ -551,11 +553,11 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
     TEST_TIMEOUT_MS,
   );
 
-  test("refuses a leaf the pinned root signed for another host", async () => {
+  test("refuses a leaf the proxy's root signed for another host", async () => {
     const leaf = intercept.leafFor("other.example");
     const origin = await serveChain(leaf.key, leaf.cert);
     try {
-      expect(await fetchPinned(origin.port)).toEqual({
+      expect(await fetchTrustingRoot(origin.port)).toEqual({
         outcome: "refused",
         reason: "untrusted-certificate",
       });
@@ -564,6 +566,130 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
       await origin.close();
     }
   });
+
+  /**
+   * A root and leaves of our own, for validity periods `leafFor` never issues.
+   * The proxy's root key never leaves `createTlsInterception`, so these stand in
+   * for it: to the client, a root is whatever PEM it was handed.
+   */
+  function mintRoot(): { pem: string; cert: forge.pki.Certificate; key: forge.pki.rsa.PrivateKey } {
+    const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const key = forge.pki.privateKeyFromPem(
+      pair.privateKey.export({ type: "pkcs1", format: "pem" }).toString(),
+    );
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = forge.pki.publicKeyFromPem(
+      pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    cert.serialNumber = "01";
+    cert.validity.notBefore = new Date(Date.now() - 60_000);
+    cert.validity.notAfter = new Date(Date.now() + 60 * 60 * 1000);
+    const name = [{ name: "commonName", value: "dl-97 stand-in proxy root" }];
+    cert.setSubject(name);
+    cert.setIssuer(name);
+    cert.setExtensions([
+      { name: "basicConstraints", cA: true, critical: true },
+      { name: "keyUsage", critical: true, keyCertSign: true, cRLSign: true },
+      { name: "subjectKeyIdentifier" },
+    ]);
+    cert.sign(key, forge.md.sha256.create());
+    return { pem: forge.pki.certificateToPem(cert), cert, key };
+  }
+
+  function mintLeaf(
+    root: ReturnType<typeof mintRoot>,
+    validity: { notBefore: Date; notAfter: Date },
+  ): { key: string; cert: string } {
+    const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const leaf = forge.pki.createCertificate();
+    leaf.publicKey = forge.pki.publicKeyFromPem(
+      pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    leaf.serialNumber = "02";
+    leaf.validity.notBefore = validity.notBefore;
+    leaf.validity.notAfter = validity.notAfter;
+    leaf.setSubject([{ name: "commonName", value: IP_HOST }]);
+    leaf.setIssuer(root.cert.subject.attributes);
+    leaf.setExtensions([
+      { name: "basicConstraints", cA: false, critical: true },
+      { name: "keyUsage", critical: true, digitalSignature: true, keyEncipherment: true },
+      { name: "extKeyUsage", serverAuth: true },
+      { name: "subjectAltName", altNames: [{ type: 7, ip: IP_HOST }] },
+      {
+        name: "authorityKeyIdentifier",
+        keyIdentifier: root.cert.generateSubjectKeyIdentifier().getBytes(),
+      },
+    ]);
+    leaf.sign(root.key, forge.md.sha256.create());
+    return {
+      key: pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+      cert: `${forge.pki.certificateToPem(leaf).trim()}\n${root.pem.trim()}\n`,
+    };
+  }
+
+  async function answerFor(validity: { notBefore: Date; notAfter: Date }): Promise<{
+    answer: ManifestFetchResult;
+    requests: number;
+  }> {
+    const root = mintRoot();
+    const leaf = mintLeaf(root, validity);
+    const origin = await serveChain(leaf.key, leaf.cert);
+    try {
+      const answer = await fetchManifest(`https://${IP_HOST}:${String(origin.port)}/master.m3u8`, {
+        headers: {},
+        cookieFor: async () => undefined,
+        storeCookies: async () => {},
+        proxyRootCaPem: root.pem,
+        maxBodyBytes: 1024 * 1024,
+        maxRedirects: 0,
+        timeoutMs: 5000,
+      });
+      return { answer, requests: origin.requests.length };
+    } finally {
+      await origin.close();
+    }
+  }
+
+  const HOUR = 60 * 60 * 1000;
+
+  test(
+    "accepts a current leaf the given root signed (the control for the two below)",
+    async () => {
+      expect(
+        await answerFor({
+          notBefore: new Date(Date.now() - HOUR),
+          notAfter: new Date(Date.now() + HOUR),
+        }),
+      ).toEqual({ answer: { outcome: "ok", text: manifest("refetched.m3u8") }, requests: 1 });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "refuses an expired leaf the given root signed",
+    async () => {
+      expect(
+        await answerFor({
+          notBefore: new Date(Date.now() - 2 * HOUR),
+          notAfter: new Date(Date.now() - HOUR),
+        }),
+      ).toEqual({ answer: { outcome: "refused", reason: "untrusted-certificate" }, requests: 0 });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "refuses a not-yet-valid leaf the given root signed",
+    async () => {
+      expect(
+        await answerFor({
+          notBefore: new Date(Date.now() + HOUR),
+          notAfter: new Date(Date.now() + 2 * HOUR),
+        }),
+      ).toEqual({ answer: { outcome: "refused", reason: "untrusted-certificate" }, requests: 0 });
+    },
+    TEST_TIMEOUT_MS,
+  );
 
   /** The child's whole program: one re-fetch of `TARGET_URL`, its answer on stdout. */
   const CHILD = `
