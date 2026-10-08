@@ -390,7 +390,9 @@ on the F1 answer; a line is on its Log.
   - Validation is left on, so Node checks chain, signature, validity and host.
   - A certificate failure (`ERR_TLS_CERT_*` or an OpenSSL verify code) is the
     `refused: untrusted-certificate` outcome; any other socket error still rejects.
-  - `rejectUnauthorized` appears nowhere in the file or its `dist`.
+  - `rejectUnauthorized` is no longer set as an option. The word appears in
+    `manifest-fetch.ts` only in its header comment, which describes the first
+    cut, and in that comment's copy in `dist` (corrected per gate 2, N1).
 - **`browser.ts`:** a new option, `proxyRootCaPem`, stored on the resolver and
   passed to the client. `proxyRootSpkiSha256` is back to Chromium's alone, as it
   was before dl-97; its doc comment says so.
@@ -438,3 +440,14 @@ longer have code to land on: `signedByPin` is deleted.
 | `buildRegistry` does not pass `tierEgress.rootCaPem` (31-test run) | 1 of 31 red | a registry built with tierEgress re-fetches through the terminating proxy                                                                 |
 
 **F5 stays recorded, not fixed**: its finding states no fix.
+
+### 2026-10-08 — landing, after gate 2 (PASS at d9269157)
+
+- **N1, fixed:** the round-2 sentence claiming `rejectUnauthorized` "appears
+  nowhere" now says it appears only in `manifest-fetch.ts`'s header comment and
+  that comment's copy in `dist`.
+- **N2, N3 and N4 (low) stay recorded, not fixed**, by the orchestrator's
+  instruction for this round. In order: `rootCaPem: ""` in `server.ts` is held
+  only by the type; the line `isCertificateRefusal` draws is not pinned by a
+  test; "the PEM replaces Node's store rather than adding to it" is not pinned by
+  a test. F5 also stays recorded. None has a live call site, per gate 2.
