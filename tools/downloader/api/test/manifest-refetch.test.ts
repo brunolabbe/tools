@@ -31,11 +31,15 @@ import { BrowserResolver, fetchManifest } from "@downloader/resolvers";
 import type { ManifestFetchResult } from "@downloader/resolvers";
 import forge from "node-forge";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { loadApiConfig } from "../src/config.ts";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
+import type { GuardedFetch } from "../src/guarded-fetch.ts";
+import { buildRegistry } from "../src/resolvers.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
+import { TlsRejectionLog } from "../src/tls-rejections.ts";
 import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
 import type { FixtureCertificate, TlsOrigin } from "./helpers/tls-origin.ts";
 
@@ -439,6 +443,31 @@ describe("the manifest re-fetch behind the proxy that terminates its TLS (dl-97)
   );
 });
 
+/** A stand-in proxy root, for validity periods `leafFor` never issues (see `mintLeaf`). */
+function mintRoot(): { pem: string; cert: forge.pki.Certificate; key: forge.pki.rsa.PrivateKey } {
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const key = forge.pki.privateKeyFromPem(
+    pair.privateKey.export({ type: "pkcs1", format: "pem" }).toString(),
+  );
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = forge.pki.publicKeyFromPem(
+    pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
+  );
+  cert.serialNumber = "01";
+  cert.validity.notBefore = new Date(Date.now() - 60_000);
+  cert.validity.notAfter = new Date(Date.now() + 60 * 60 * 1000);
+  const name = [{ name: "commonName", value: "dl-97 stand-in proxy root" }];
+  cert.setSubject(name);
+  cert.setIssuer(name);
+  cert.setExtensions([
+    { name: "basicConstraints", cA: true, critical: true },
+    { name: "keyUsage", critical: true, keyCertSign: true, cRLSign: true },
+    { name: "subjectKeyIdentifier" },
+  ]);
+  cert.sign(key, forge.md.sha256.create());
+  return { pem: forge.pki.certificateToPem(cert), cert, key };
+}
+
 /**
  * dl-97 gate 1, F2 and F3: the client's TLS rules against chains minted here,
  * with `fetchManifest` driven directly, no proxy and no Chromium, so that what
@@ -572,30 +601,6 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
    * The proxy's root key never leaves `createTlsInterception`, so these stand in
    * for it: to the client, a root is whatever PEM it was handed.
    */
-  function mintRoot(): { pem: string; cert: forge.pki.Certificate; key: forge.pki.rsa.PrivateKey } {
-    const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const key = forge.pki.privateKeyFromPem(
-      pair.privateKey.export({ type: "pkcs1", format: "pem" }).toString(),
-    );
-    const cert = forge.pki.createCertificate();
-    cert.publicKey = forge.pki.publicKeyFromPem(
-      pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
-    );
-    cert.serialNumber = "01";
-    cert.validity.notBefore = new Date(Date.now() - 60_000);
-    cert.validity.notAfter = new Date(Date.now() + 60 * 60 * 1000);
-    const name = [{ name: "commonName", value: "dl-97 stand-in proxy root" }];
-    cert.setSubject(name);
-    cert.setIssuer(name);
-    cert.setExtensions([
-      { name: "basicConstraints", cA: true, critical: true },
-      { name: "keyUsage", critical: true, keyCertSign: true, cRLSign: true },
-      { name: "subjectKeyIdentifier" },
-    ]);
-    cert.sign(key, forge.md.sha256.create());
-    return { pem: forge.pki.certificateToPem(cert), cert, key };
-  }
-
   function mintLeaf(
     root: ReturnType<typeof mintRoot>,
     validity: { notBefore: Date; notAfter: Date },
@@ -764,6 +769,81 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
       expect(
         await trustedOriginAnswer({ ipAddresses: [IP_HOST], commonName: "ip-origin" }),
       ).toEqual({ answer: { outcome: "ok", text: manifest("refetched.m3u8") }, requests: 1 });
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+describe("buildRegistry hands the re-fetch the proxy's root (dl-97)", () => {
+  test(
+    "a registry built with tierEgress re-fetches through the terminating proxy",
+    async () => {
+      // The wiring, not the client: `TierEgress.rootCaPem` has to reach the
+      // browser tier as `proxyRootCaPem`, or the re-fetch fails its handshake and
+      // the probe quietly parses the captured body instead.
+      const certificate = await createFixtureCertificate({
+        ipAddresses: ["127.0.0.1"],
+        commonName: "registry-origin",
+      });
+      let masterCalls = 0;
+      const origin = await startTlsOrigin(certificate, (request, response) => {
+        if (request.url === "/master.m3u8") {
+          masterCalls += 1;
+          response
+            .writeHead(200, { "content-type": "application/vnd.apple.mpegurl" })
+            .end(manifest(masterCalls === 1 ? "captured.m3u8" : "refetched.m3u8"));
+          return;
+        }
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(PAGE);
+      });
+      const intercept = await createTlsInterception({
+        operatorCa: certificate.ca,
+        verifyOrigins: true,
+      });
+      const proxy = await startEgressProxy({
+        guard: createSsrfGuard({ allowHosts: ["127.0.0.1"], allowPrivateAddresses: true }),
+        logger: NOOP_LOGGER,
+        interceptTls: intercept,
+      });
+      const build = buildRegistry({
+        config: loadApiConfig(
+          {
+            enableBrowserResolver: true,
+            enableYtdlpResolver: false,
+            enableDirectResolver: false,
+            maxConcurrentBrowsers: 1,
+          },
+          {},
+        ),
+        logger: NOOP_LOGGER,
+        // The browser tier never calls it; the other tiers are off.
+        fetchImpl: globalThis.fetch as GuardedFetch,
+        tierEgress: {
+          rootSpkiSha256: intercept.rootSpkiSha256,
+          rootCaPem: intercept.rootCaPem,
+          trustBundlePath: intercept.trustBundlePath,
+          rejections: new TlsRejectionLog(),
+        },
+      });
+      try {
+        const result = await build.registry.resolve(
+          new URL(`https://127.0.0.1:${String(origin.port)}/watch`),
+          {
+            timeoutMs: PROBE_TIMEOUT_MS,
+            signal: new AbortController().signal,
+            proxyUrl: proxy.url,
+          },
+        );
+
+        expect(masterCalls).toBe(2);
+        expect(variantUrls(result)).toContain("refetched.m3u8");
+      } finally {
+        await build.registry.dispose();
+        await proxy.close();
+        await intercept.close();
+        await origin.close();
+        await certificate.cleanup();
+      }
     },
     TEST_TIMEOUT_MS,
   );

@@ -80,9 +80,14 @@ the small, already-specified work the fold-in exception covers.
 
 - `fetchManifest` now checks an IP-literal target's certificate against the IP
   (gate 1, F3), and is exported from `@downloader/resolvers`.
-- **Build step 1's "trusts the pinned root" may change.** dl-97's gate raised
-  whether the client should keep its SPKI pin, which needs
-  `rejectUnauthorized: false` and a CodeQL excusal, or take the proxy root's PEM
-  as `ca` and let Node verify. Until dl-97 lands, read its Log and the client
-  itself for which one it uses. Either way this ticket's `HEAD` and ranged read
-  get it for free.
+- **Build step 1's "trusts the pinned root" is now wrong; read "trusts the proxy's
+  root, by its PEM".** The owner chose on 2026-10-08, in dl-97's round 2:
+  - the client takes the root as `proxyRootCaPem` and hands it to Node's `ca`;
+  - Node verifies chain, signature, validity and host, with no
+    `rejectUnauthorized: false` and no CodeQL excusal;
+  - `TierEgress.rootCaPem` reaches the browser tier through `buildRegistry`.
+
+  So this ticket's `HEAD` and ranged read inherit expiry checking too (dl-97's
+  F4). The size probe must be given the same PEM, through the same resolver
+  field, or it fails the handshake behind the terminating proxy exactly as
+  `context.request` does today.

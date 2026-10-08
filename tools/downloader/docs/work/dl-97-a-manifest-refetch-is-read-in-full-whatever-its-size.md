@@ -359,3 +359,82 @@ the option they pass, so they hold whichever design lands.
 
 **dl-101** inherits the F3 fix, and its brief's "trusts the pinned root" depends
 on the F1 answer; a line is on its Log.
+
+### 2026-10-08 — round 2: the proxy root by its PEM, not its pin
+
+**Owner decisions on F1, both 2026-10-08, relayed by the orchestrator.**
+
+1. **First: "Fix all three, then excuse"** (recorded under round 1). It assumed
+   the hand-written check behind `rejectUnauthorized: false` was the only way to
+   trust the proxy's root, so the alert could only be excused.
+2. **Why that premise failed.** adr/005 allows an excusal only for a finding that
+   is "structurally permanent", one that "will be wrong for every version of this
+   code", and calls reaching for a suppression comment when the code could change
+   "the failure mode this paragraph exists to prevent". This alert can be avoided.
+   `TlsInterception.rootCaPem` already exists, so the client can take the root as
+   Node's `ca` and drop the validation bypass; round 1 measured that design
+   (above).
+3. **Second, superseding the first as far as the excusal goes.** Question:
+   "dl-97 F1: the CodeQL alert ('Disabling certificate validation') can be
+   avoided. adr/005 only allows an excusal when it can't be. How should it be
+   resolved?" Options: trust the proxy root's PEM; excuse as originally decided.
+   **Chosen: trust the proxy root's PEM.** No excusal is written.
+
+**What changed** (round 1's measured patch, applied, plus the docs it left stale):
+
+- **`manifest-fetch.ts`:**
+  - `proxyRootSpkiSha256` becomes `proxyRootCaPem`, and `signedByPin` is gone.
+  - `startTls` hands the PEM to `tls.connect` as `ca: [rootCaPem]`. That is the
+    only anchor, as ffmpeg gets `rootCaPath` alone: behind the terminating proxy
+    the client only ever meets leaves minted under that root.
+  - Validation is left on, so Node checks chain, signature, validity and host.
+  - A certificate failure (`ERR_TLS_CERT_*` or an OpenSSL verify code) is the
+    `refused: untrusted-certificate` outcome; any other socket error still rejects.
+  - `rejectUnauthorized` appears nowhere in the file or its `dist`.
+- **`browser.ts`:** a new option, `proxyRootCaPem`, stored on the resolver and
+  passed to the client. `proxyRootSpkiSha256` is back to Chromium's alone, as it
+  was before dl-97; its doc comment says so.
+- **`api/src/resolvers.ts`:** `TierEgress` gains a required `rootCaPem`, and
+  `buildRegistry` passes it to the browser tier as `proxyRootCaPem` beside the
+  SPKI.
+- **`api/src/server.ts`:** fills `rootCaPem` from `tierInterception.rootCaPem`.
+  Required on the type, so dropping it fails typecheck.
+- **`tiers-on-the-terminating-proxy.test.ts`:** its hand-built `TierEgress`
+  carries the PEM.
+
+**F4, fixed.** Node now rejects an out-of-date leaf. The proxy root's private key
+never leaves `createTlsInterception`, so the validity tests mint a root of their
+own and hand its PEM to the client; to the client, a root is whatever PEM it was
+given. Three tests were added to the minted-chain describe:
+
+- "accepts a current leaf the given root signed (the control for the two below)";
+- "refuses an expired leaf the given root signed";
+- "refuses a not-yet-valid leaf the given root signed".
+
+**F2's tests carry over unchanged in what they assert.** Their wording is renamed
+off the pin: "accepts a leaf the proxy's root signed for this host", "refuses a
+leaf another key signed under the proxy root's name, sent beside that root",
+"refuses a leaf the proxy's root signed for another host". The Chromium pair is
+now "trusts the proxy's root it was handed, so the re-fetch is answered" and "and
+refuses the proxy's leaf when it was not handed the proxy's root".
+
+**Wiring test, new.** "a registry built with tierEgress re-fetches through the
+terminating proxy", in its own describe at the end of
+`api/test/manifest-refetch.test.ts`. A `buildRegistry` with `tierEgress` probes
+an HTTPS origin through the terminating proxy, and the origin must see the
+manifest twice.
+
+**Mutations under this design**, each applied, rebuilt into `dist` (checked by
+grepping it) and run against both specs. Gate 1's three pin-rule mutations no
+longer have code to land on: `signedByPin` is deleted.
+
+| mutation                                                           | result      | red                                                                                                                                       |
+| ------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `rejectUnauthorized: false` restored, no check behind it           | 6 of 30 red | the mis-anchored Chromium test, attacker signature, other host, expired, not yet valid, localhost-only for an IP                          |
+| the PEM not handed to `ca`                                         | 3 of 30 red | trusts the proxy's root it was handed; accepts a leaf the proxy's root signed for this host; accepts a current leaf the given root signed |
+| `host` dropped from `tls.connect` (F3)                             | 5 of 30 red | the three acceptance tests above, plus both IP-literal tests                                                                              |
+| warn line logs `hit.url` (F6)                                      | 1 of 30 red | refuses a body that inflates past the cap, logs it as a refusal and falls back                                                            |
+| `browser.ts` does not pass `proxyRootCaPem` to the client          | 1 of 30 red | trusts the proxy's root it was handed, so the re-fetch is answered                                                                        |
+| `buildRegistry` does not pass `tierEgress.rootCaPem` (31-test run) | 1 of 31 red | a registry built with tierEgress re-fetches through the terminating proxy                                                                 |
+
+**F5 stays recorded, not fixed**: its finding states no fix.
