@@ -602,42 +602,42 @@ describe("the re-fetch's TLS rules against minted chains (dl-97)", () => {
     return JSON.parse(stdout) as unknown;
   }
 
+  /** A self-signed origin on loopback, which is its own CA, and the answer a child trusting it gets. */
+  async function trustedOriginAnswer(names: {
+    dnsNames?: readonly string[];
+    ipAddresses?: readonly string[];
+    commonName: string;
+  }): Promise<{ answer: unknown; requests: number }> {
+    const certificate = await createFixtureCertificate(names);
+    const origin = await serveChain(certificate.key, certificate.cert);
+    try {
+      const answer = await fetchTrusting(
+        `https://${IP_HOST}:${String(origin.port)}/master.m3u8`,
+        certificate.caPath,
+      );
+      return { answer, requests: origin.requests.length };
+    } finally {
+      await origin.close();
+      await certificate.cleanup();
+    }
+  }
+
   test(
-    "checks an IP-literal target's certificate against the IP, not against localhost",
+    "refuses a trusted certificate naming only localhost for an IP-literal target",
     async () => {
-      // Self-signed, so each is its own CA: the child trusts both.
-      const localhostOnly = await createFixtureCertificate({
-        dnsNames: ["localhost"],
-        commonName: "localhost-only",
-      });
-      const forTheIp = await createFixtureCertificate({
-        ipAddresses: [IP_HOST],
-        commonName: "ip-origin",
-      });
-      const wrongName = await serveChain(localhostOnly.key, localhostOnly.cert);
-      const rightName = await serveChain(forTheIp.key, forTheIp.cert);
-      try {
-        // (a) A trusted certificate naming only `localhost` is not one for 127.0.0.1.
-        expect(
-          await fetchTrusting(
-            `https://${IP_HOST}:${String(wrongName.port)}/master.m3u8`,
-            localhostOnly.caPath,
-          ),
-        ).toEqual({ outcome: "refused", reason: "untrusted-certificate" });
-        expect(wrongName.requests).toEqual([]);
-        // (b) A trusted certificate whose IP SAN is 127.0.0.1 is.
-        expect(
-          await fetchTrusting(
-            `https://${IP_HOST}:${String(rightName.port)}/master.m3u8`,
-            forTheIp.caPath,
-          ),
-        ).toEqual({ outcome: "ok", text: manifest("refetched.m3u8") });
-      } finally {
-        await wrongName.close();
-        await rightName.close();
-        await localhostOnly.cleanup();
-        await forTheIp.cleanup();
-      }
+      expect(
+        await trustedOriginAnswer({ dnsNames: ["localhost"], commonName: "localhost-only" }),
+      ).toEqual({ answer: { outcome: "refused", reason: "untrusted-certificate" }, requests: 0 });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "accepts a trusted certificate whose IP SAN is the IP-literal target",
+    async () => {
+      expect(
+        await trustedOriginAnswer({ ipAddresses: [IP_HOST], commonName: "ip-origin" }),
+      ).toEqual({ answer: { outcome: "ok", text: manifest("refetched.m3u8") }, requests: 1 });
     },
     TEST_TIMEOUT_MS,
   );
