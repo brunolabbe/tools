@@ -455,9 +455,14 @@ test("keep source is withheld with WebM for a WebM file whose separate audio is 
   mount(
     probe({
       variants: [
-        file("webm-split", { container: "webm", audioUrl: "https://cdn.example.com/a.m4a" }),
-        file("mp4-bare"),
-        file("webm-whole", { container: "webm" }),
+        // Different heights, or the table merges rows that look the same.
+        file("webm-split", {
+          container: "webm",
+          audioUrl: "https://cdn.example.com/a.m4a",
+          height: 720,
+        }),
+        file("mp4-bare", { height: 480 }),
+        file("webm-whole", { container: "webm", height: 360 }),
       ],
     }),
   );
