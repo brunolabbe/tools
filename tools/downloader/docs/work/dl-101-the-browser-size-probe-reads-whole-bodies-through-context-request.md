@@ -75,3 +75,14 @@ playlist the size probe reads with `text()`:
 Filed rather than folded in: the fix needs the client to grow a `HEAD`, a
 ranged read and a body-less answer, and a test of its own in `api`, which is not
 the small, already-specified work the fold-in exception covers.
+
+### 2026-10-08 — dl-97 round 1 changed the client this reuses
+
+- `fetchManifest` now checks an IP-literal target's certificate against the IP
+  (gate 1, F3), and is exported from `@downloader/resolvers`.
+- **Build step 1's "trusts the pinned root" may change.** dl-97's gate raised
+  whether the client should keep its SPKI pin, which needs
+  `rejectUnauthorized: false` and a CodeQL excusal, or take the proxy root's PEM
+  as `ca` and let Node verify. Until dl-97 lands, read its Log and the client
+  itself for which one it uses. Either way this ticket's `HEAD` and ranged read
+  get it for free.

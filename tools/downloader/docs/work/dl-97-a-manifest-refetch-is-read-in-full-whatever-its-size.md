@@ -252,10 +252,10 @@ chunks when it is destroyed. The 256 MiB case is +4 to +5 MB against +763 to +77
     URL's (the first cut of this branch) fails the return-hop test, unit file
     only, 1 of 15.
 - **Not tested:** the half of the pin rule that requires the leaf to be _signed_
-  by the pinned key rather than merely chained beside it. `resolvers` has no way
-  to mint a certificate (Node writes none; `node-forge` is `api`'s), and in
-  `api` the only leaves on offer are the proxy's own. It is code, not a
-  measurement.
+  by the pinned key rather than merely chained beside it. _Wrong, corrected in
+  round 1 below:_ this said `api` had no way to mint such a chain, but
+  `node-forge` is `api`'s runtime dependency and `api/test/helpers/tls-origin.ts`
+  already mints with it. The tests now exist.
 
 **Also changed.** `tiers-behind-the-proxy.test.ts`'s "the manifest re-fetch is
 proxied too" pinned Playwright's `context.request` on the grounds that
@@ -271,3 +271,91 @@ for `/refetched.m3u8`, the media playlist the size probe reads; behind the
 terminating proxy it is not. Fixing it needs this client to grow `HEAD`, a
 ranged read and a body-less answer, plus its own `api` test, which is not the
 small, already-specified work the exception covers.
+
+### 2026-10-08 — round 1, after gate 1 (CONCERNS at f37a2571)
+
+**Owner decision, 2026-10-08**, relayed by the orchestrator. Question: "dl-97
+(#395): its new hand-written TLS client has a red CodeQL check, an untested
+signer/host check, and an IP-identity bug, none of which an acceptance line
+depends on. What should happen before it lands?" Options: fix all three, then
+excuse; fix F2 and F3, leave CodeQL; land as built, findings recorded. **Chosen:
+fix all three, then excuse.**
+
+**`fetchManifest` is now exported from `@downloader/resolvers`**, so the `api`
+suite can drive its TLS rules against chains minted with `node-forge`, with no
+proxy and no Chromium deciding anything.
+
+**F2, the pin rule's signer and host halves (fixed).** A new describe at the end
+of `api/test/manifest-refetch.test.ts`, "the re-fetch's TLS rules against minted
+chains (dl-97)", calls `fetchManifest` directly with the interception root's pin:
+
+- "accepts a leaf the pinned root signed for this host" is the control;
+- "refuses a leaf another key signed under the pinned root's name, sent beside
+  that root": issuer name and authority key identifier copied from the root,
+  signed by a fresh key, chain `[leaf, real root]`;
+- "refuses a leaf the pinned root signed for another host" uses `leafFor("other.example")`.
+
+The two refusal tests assert both that the outcome is `refused: untrusted-certificate`
+and that the origin received no request. The Chromium test the gate named is
+renamed to what it proves: "and refuses the proxy's leaf when the pin names a key
+its chain does not carry".
+
+**F3, IP-literal identity (fixed).** `startTls` now passes `host` to
+`tls.connect`, so an IP literal is checked against itself and not against
+`"localhost"` or the proxy's address. The docstring says so. Node's own
+verification needs a CA it trusts, and `NODE_EXTRA_CA_CERTS` is read only at
+start-up, so two tests run the client in a child `node` (argument array,
+`shell: false`):
+
+- "refuses a trusted certificate naming only localhost for an IP-literal target"
+  covers the gate's case (a);
+- "accepts a trusted certificate whose IP SAN is the IP-literal target" covers
+  its case (b).
+
+**F6, the refusal log's redaction (fixed).** The proxied fixture's page now asks
+for `/master.m3u8?token=s3cr3t-signature`. The refusal test expects
+`redactUrl(...)` of that URL and asserts that the warnings carry no
+`s3cr3t-signature`.
+
+**Mutations**, each applied to `src`, rebuilt into `dist` (checked by grepping
+`dist` for the change), and run against both new specs (27 tests):
+
+| mutation                                                        | result      | red                                                                                                                                               |
+| --------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| drop `leaf.verify(candidate.publicKey)`                         | 1 of 27 red | refuses a leaf another key signed under the pinned root's name, sent beside that root                                                             |
+| `checkIssued && verify` replaced by `return true`               | 1 of 27 red | the same                                                                                                                                          |
+| drop `tls.checkServerIdentity` from the pin rule                | 1 of 27 red | refuses a leaf the pinned root signed for another host                                                                                            |
+| drop `host` from `tls.connect` (this branch before the round)   | 2 of 27 red | refuses a trusted certificate naming only localhost for an IP-literal target; accepts a trusted certificate whose IP SAN is the IP-literal target |
+| `url: hit.url` instead of `redactUrl(hit.url)` in the warn line | 1 of 27 red | refuses a body that inflates past the cap, logs it as a refusal and falls back                                                                    |
+
+At gate 1 the first three left 22 of 22 green.
+
+**F4 and F5 (lows): not fixed, left recorded.** Neither states its fix. F4: an
+expired or not-yet-valid leaf signed by the pinned key is accepted, as Chromium's
+flag also accepts it. F5: a jar read that outlives the deadline lets `follow`
+send one more request after `fetchManifest` has already rejected.
+
+**F1, the `CodeQL` excusal, is not written this round.** adr/005 limits excusals
+to findings that are "structurally permanent", where no shape of the code would
+stop the query firing. This one has such a shape, and it was measured. The
+measurement went back to the orchestrator as a question, and this entry does not
+settle it.
+
+The shape is design B: hand Node the proxy root's PEM (`TlsInterception.rootCaPem`,
+through `TierEgress` and a new `BrowserResolverOptions.proxyRootCaPem`) as `ca`,
+and delete `signedByPin` and `rejectUnauthorized: false`. Built in place,
+measured, kept as a patch in the build's scratch directory and reverted. Results:
+
+- `api/test/manifest-refetch.test.ts`, `resolvers/test/browser/manifest-fetch.test.ts`,
+  `api/test/tiers-on-the-terminating-proxy.test.ts` and `api/test/resolvers.test.ts`
+  pass, 48 of 48;
+- `rejectUnauthorized` appears 0 times in the client's source and in `dist`;
+- putting `rejectUnauthorized: false` back turns 4 of 27 red: the mis-pinned,
+  attacker-chain, other-host and localhost-only tests;
+- not handing the PEM to `ca` turns 2 of 27 red: both acceptance tests.
+
+These tests are the ones written this round for design A, unchanged except for
+the option they pass, so they hold whichever design lands.
+
+**dl-101** inherits the F3 fix, and its brief's "trusts the pinned root" depends
+on the F1 answer; a line is on its Log.
