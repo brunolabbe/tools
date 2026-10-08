@@ -114,6 +114,15 @@ builder's open decisions and the last two gate 1's (F1, F4).
    refuse that correction, naming the cell, and file the row in the app; or
    store the note elsewhere, which needs a column or a table and so a second
    migration. **Chosen: refuse it.**
+6. **A ratio naming the open period** (2026-10-08). The open period always
+   takes Accueil's ratio, which is today's. Options: refuse it, as built; allow
+   overriding it. **Chosen: refuse it, as built.**
+7. **A row dated out of order** (2026-10-08, gate 2, G2-4). Round 1's order
+   check refused any row listed above a row dated after it, though the
+   corrections file cannot date a row. Options: refuse only an inversion at a
+   row whose year the import repaired, naming that row's own cell, and print
+   every other as a report line, the row imported as typed; or keep refusing
+   all. **Chosen: refuse only at a year-repaired row.**
 
 ## Done when
 
@@ -354,3 +363,37 @@ builder's open decisions and the last two gate 1's (F1, F4).
     and works on the copy, so it never writes to the file" was false in three
     conditions (F1). The copy is now made from the file's bytes, never by
     opening the file.
+
+- 2026-10-08 — Round 2, on `46c6911` (gate 2: CONCERNS, no high), the landing
+  round, by the builder (Opus 5.5). Decisions 6 and 7 are recorded above.
+  Each new test was made to fail by a mutation (books rebuilt, `dist`
+  grepped), then restored: 5 failed and 33 passed across
+  `books/test/workbook.test.ts`, `api/test/xlsx.test.ts` and
+  `api/test/workbook-import.test.ts`.
+  - **G2-1, fixed.** The private copy, and its log, are set to mode 0600
+    after copying, so a read-only books file dry-runs again. Test: "a
+    read-only books file dry-runs, refuses --write, and keeps its mode" (dry
+    run exit 0, `--write` nonzero, the file's mode and hash unchanged).
+    Mutation: the copy's `chmodSync` removed.
+  - **G2-2, fixed.** `api/src/xlsx.ts` reads a formula's saved result from
+    `cell.model.result`, which keeps a saved 0 or FALSE that `cell.value`
+    drops. The refusal now says "no readable value". Tests: "a formula saved as
+    0 or FALSE keeps its value" (`xlsx.test.ts`) and "a formula saved as 0 is a
+    placeholder's amount, or a carry-over of nothing, not an unreadable cell".
+    Mutation: `cell.value` read in its place.
+  - **G2-4 (Decision 7), built.** Only an inversion at a year-repaired row is
+    refused, at that row's own cell. Any other is a `dated out of order:` report
+    line, and the row is imported as typed. Tests: "a date typed a few days
+    off, with no year repaired, is reported and imported as typed" (books) and
+    "a date a few days off, with no year repaired, is reported and imported as
+    typed" (the command, `--write`). The repaired case's test now expects the
+    repaired row's cell, `2024!B3`. Mutation: every inversion refused.
+  - **G2-3, left recorded.** The two-file copy is not a consistent snapshot
+    while the API checkpoints. A torn copy can only mislead a dry run, because
+    `--write` verifies again on the real file inside its transaction. The
+    window is microseconds at a household's write rate.
+  - **G2-5, left recorded.** An override equal to Accueil's ratio is stored as
+    the corrections file's and cites no salary. The figures are right; only the
+    link to the salaries is lost.
+  - **Gate 1's F7 (a read-only directory) and F10 (inflation) stay recorded**,
+    as round 1 said.
