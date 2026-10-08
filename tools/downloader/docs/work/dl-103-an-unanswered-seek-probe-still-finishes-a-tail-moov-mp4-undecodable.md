@@ -54,12 +54,42 @@ Rows 1, 11 and 12 (a `404` everywhere, an untrusted certificate, every
 body, a fast-start file past the limit) stream a good file; none of those five
 is this ticket's.
 
+**A ninth case, found by dl-102's gate 2 and not in the table above:** an
+origin that honours bounded ranges and answers open-ended ones with the whole
+file as `200`. Here the probe does get an answer: it asks `bytes=1-1`, gets
+`206` and says `seekable`; ffmpeg asks `bytes=0-` twice and is given the
+garbage. Measured by gate 2 at `040d42f` through `engine.stream()`:
+`0/100 frames, done=resolved(37609)`, the origin seeing
+`bytes=1-1 , bytes=0- , bytes=0-`. No real server of this shape was found. It
+ends in the same file as the eight rows, so this ticket carries it with them;
+it is recorded in dl-102's Log.
+
 What C would see, sampled by the same gate: in **4 of 4** sampled garbage rows
 (row 2's `403` on `bytes=1-1`, row 10's socks proxy, row 8's chain past the
 limit, row 6's six redirects), ffmpeg logged exactly one `partial file` line and
 one `Stream ends prematurely`, and the `partial file` line had reached the
 engine's stderr handler **before `stream()` resolved**. Sampled on
 ffmpeg-static 7.0.2 only. Not sampled: ffmpeg 6.1.1, and the other four rows.
+
+## Decisions
+
+Taken by the owner on 2026-10-08.
+
+1. **Which error code the build raises: `SOURCE_NOT_SEEKABLE`.**
+   - Question: dl-103, filed on the dl-102 branch, will spot ffmpeg's
+     `partial file` line and fail the job when the seek probe got no answer.
+     Its brief left the error code to its builder, but the code is a
+     `@downloader/contract` question, which the owner answered for dl-102.
+     Which code should dl-103 raise?
+   - Options put: reuse `SOURCE_NOT_SEEKABLE` (recommended): the same cause,
+     the same visitor copy, not retryable, one comment-only contract edit to
+     widen its doc comment ("raised before the first byte"), dl-103 stays
+     `ready`; a new non-retryable code; `DOWNLOAD_FAILED`; decide later
+     (`needs-decision`).
+   - **Chosen: reuse `SOURCE_NOT_SEEKABLE`.** It was the recommendation of
+     dl-102's gate 2 (N5) and of the orchestrator. The comment-only widening of
+     its doc comment in `@downloader/contract` is part of this ticket's build
+     and is pre-authorised by this answer.
 
 ## Build
 
@@ -89,18 +119,27 @@ measurement before it commits to a shape:
 1. **Reproduce first**, as the next test at the end of
    `engine/test/stream.test.ts`: a row above that ends in garbage on `main`
    after dl-102 (row 2 is the simplest to serve), red with `done` resolved and 0
-   frames decoding. Row 3 is the one that regressed with dl-102 and is worth
-   its own case.
-2. **Measure on the bundled ffmpeg (6.1.1)** what dl-102's gate measured on
-   7.0.2: that `partial file` arrives, and whether it arrives before the first
-   byte, across the eight rows.
+   frames decoding. Rows 3 and 13 are the ones that regressed with dl-102 (both
+   were `DOWNLOAD_FAILED` on `main`) and are worth their own cases.
+2. **Measure on the distro ffmpeg, 6.1.1** (the image's: the `Dockerfile`
+   installs it and sets `FFMPEG_PATH=/usr/bin/ffmpeg`; run with that variable
+   set, since the bundled `ffmpeg-static` in a checkout is 7.0.2 and is what
+   the default picks) what dl-102's gate measured on 7.0.2: that
+   `partial file` arrives, and whether it arrives before the first byte,
+   across the eight rows and the ninth case. Print `ffmpeg -version | head -1` for the
+   binary used into the Log beside the counts.
 3. **Measure the false-positive side** on what C's text left unmeasured: a
    healing progressive body cut inside the `moov` itself, beside dl-53's
    existing heal controls, which must stay green.
 4. Then the shape: a typed error before the first byte when `partial file`
    arrives first, otherwise a cut connection and `done` rejecting, in
-   `stream.ts` beside `STREAM_ENDED_EARLY`. Which code it carries is the
-   build's to settle and record in the Log.
+   `stream.ts` beside `STREAM_ENDED_EARLY`. The error is
+   `SOURCE_NOT_SEEKABLE`, decided by the owner (see Decisions). Widen that
+   code's doc comment in `@downloader/contract` (`contract/src/errors.ts`) as
+   part of this build: it now says "Raised before the first byte, from a probe
+   of the origin itself", which the after-the-first-byte branch contradicts.
+   The edit is comment-only and pre-authorised by the owner's answer; change
+   nothing else in the contract.
 
 ## Done when
 

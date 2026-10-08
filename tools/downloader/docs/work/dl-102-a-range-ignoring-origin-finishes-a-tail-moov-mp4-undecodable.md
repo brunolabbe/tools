@@ -722,6 +722,17 @@ leaves ffmpeg running "exactly as it did before": they name rows 3 and 13, the
 one-shot fault the probe now absorbs, which heals on a Range-honouring origin
 and yields the undecodable file on a Range-ignoring one.
 
+**A ninth case, beside the eight rows, found by gate 2 and not in gate 1's
+table:** an origin that honours bounded ranges and answers open-ended ones
+with the whole file as `200`. The probe asks `bytes=1-1`, gets `206` and says
+`seekable`; ffmpeg then asks `bytes=0-` twice and is given the garbage.
+Measured by gate 2 on `040d42f` through `engine.stream()`: `0/100 frames,
+done=resolved(37609)`, the origin seeing `bytes=1-1 , bytes=0- , bytes=0-`.
+This is the converse of F9, which recorded a bounded range answered
+differently. No real server of this shape was found. Done when 2's first clause ("wherever the probe gets an
+answer") is therefore not true of it, and it is carried by dl-103 beside the
+eight rows.
+
 **F2, every redirect hop through the proxy: fixed.** New last test in
 `engine/test/seek-probe.test.ts`, "every redirect hop goes through the proxy,
 not only the first": the origin URL redirects to a second origin, and the
@@ -761,8 +772,12 @@ Read from the check run's page (run 113491508891, at `2f91f2e`):
   limited to the tunnel. The api test first passed that mutation: the
   generated PEMs are CRLF, so its lines carried a `\r` the header did not; it
   now splits on `\r?\n`. Unmutated: both pass.
-- The `CodeQL` check stays red on the pull request; the dismissal step runs on
-  a push to `main` (adr/005, "Register and mechanism are two jobs").
+- At `040d42f` (this round's head), `gh pr checks 404` shows `CodeQL pass`
+  (the code-scanning check run). The three `js/file-access-to-http` alerts are
+  still listed on the check page and stay open until the dismissal step runs
+  on a push to `main` (adr/005, "Register and mechanism are two jobs"); after
+  that push the security tab should show them dismissed with "Suppressed via
+  SARIF".
 
 **F6, two comments: fixed.** `api/src/server.ts` now says the probe is the
 engine's one request of its own and takes ffmpeg's proxy, in the same three

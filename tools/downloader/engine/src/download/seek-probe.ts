@@ -284,9 +284,13 @@ async function get(
       // request's URL, headers and (empty) body come from the candidate URL, a
       // redirect's `Location` and the replayed `RequestContext`. Excused under
       // docs/adr/005, in engine/src/download/seek-probe.ts, 2026-10-08. If the
-      // CA's bytes ever reach a request, "the CA file configures trust and is
-      // never sent" fails, in engine/test/seek-probe.test.ts for `http:` and in
-      // api/test/range-ignoring-origin.test.ts for `https:`, direct and tunnelled.
+      // CA's bytes ever reach a request's URL or headers, "the CA file configures
+      // trust and is never sent" fails, in engine/test/seek-probe.test.ts for
+      // `http:` and in api/test/range-ignoring-origin.test.ts for `https:`,
+      // direct and tunnelled. The boundary of that proof: the fixtures record
+      // method, URL and headers, not a request body, and the api test's proxy
+      // does not see the `CONNECT` request's headers. No code path puts the CA
+      // in either; the tests do not observe them.
       // codeql[js/file-access-to-http]
       return awaitResponse(http.request(target, { headers, agent: false, signal }));
     }
@@ -315,7 +319,8 @@ async function get(
     // engine/src/download/seek-probe.ts, 2026-10-08: `secure.ca` is
     // the `tlsCaFile` trust anchor and is never sent; the reasoning is above the
     // plain-HTTP request in this function. "the CA file configures trust and is
-    // never sent" in api/test/range-ignoring-origin.test.ts fails if it is.
+    // never sent" in api/test/range-ignoring-origin.test.ts fails if it reaches
+    // the URL or headers; a request body is not observed (see above).
     // codeql[js/file-access-to-http]
     return awaitResponse(https.request(target, { headers, agent: false, signal, ...secure }));
   }
@@ -325,7 +330,9 @@ async function get(
     // engine/src/download/seek-probe.ts, 2026-10-08: `secure.ca`, inside the tunnel, is
     // the `tlsCaFile` trust anchor and is never sent; the reasoning is above the
     // plain-HTTP request in this function. "the CA file configures trust and is
-    // never sent" in api/test/range-ignoring-origin.test.ts fails if it is.
+    // never sent" in api/test/range-ignoring-origin.test.ts fails if it reaches
+    // the URL or headers; a request body and the `CONNECT` request's headers
+    // are not observed (see above).
     // codeql[js/file-access-to-http]
     https.request(target, {
       headers,
