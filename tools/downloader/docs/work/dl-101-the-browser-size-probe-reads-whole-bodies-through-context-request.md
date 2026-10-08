@@ -117,6 +117,41 @@ playlist the size probe reads with `text()`:
 - **Invariants.** No cross-tool import ✓. No new `AppError` codes ✓. No logging, so nothing to redact ✓. The contract is untouched ✓. The new `api` spec is registered and ran ✓. SSRF: F1. Skipped as untouched: Dockerfile, shell and process trees, progress, routes.
 - **NFR.** Security: F1. Performance ✓, measured above. Reliability ✓: `undefined` on every failure, including a client `refused` and a throw. Maintainability: F5, F6.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-08 · `498ca6e..b9f84f2` · Opus 5.5, round scope
+
+| Done when                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A gzip playlist that inflates past the cap is refused by `text()`, inflating no more than a chunk past it | `resolvers/test/browser/size-probe.test.ts` › "refuses a %s playlist that inflates past the cap, inflating no more than a chunk past it" ✓ for gzip, deflate and br. The bound is `readBytes <= MAX_PLAYLIST_BYTES + DECODER_CHUNK`, 16 KiB. With the decoder stopped two chunks late, all three go red: `expected 4243456 to be less than or equal to 4210688`. |
+| A ranged `GET` answered `200` with a large body reads no more than the cap                                | `resolvers/test/browser/size-probe.test.ts` › "a ranged GET answered 200 with a large body reads none of it" ✓. The bound is `written * BLOCK.length < 4 * MAX_PLAYLIST_BYTES`, together with `finished === false`. With `fetchHeaders` reading 32 MiB first, it goes red: `expected 35717120 to be less than 16777216`. The residual band is a low (G2-1).      |
+| An `api` test proves the size probe reaches an HTTPS origin behind the terminating proxy                  | `api/test/size-probe-behind-the-proxy.test.ts` › "trusts the proxy's root it was handed, so the origin is asked for the playlist and weighed" ✓. The round did not change it.                                                                                                                                                                                    |
+| `npm run check` and `npm test -- --project downloader` pass                                               | **verified**. `npm run check` exits 0. `npm test -- --project downloader` exits 0 with 2246 passed and 2 skipped of 2248 tests, in 105 passed and 1 skipped of 106 files. That is +4 tests on gate 1's 2242. PR #403 at `b9f84f2`: all 11 checks pass, including `test (ubuntu-latest)` and `test (windows-latest, informational)`.                              |
+
+**Gate 1 findings:**
+
+- **F1 (high): fixed.** This is the owner's option (a). The new test is `api/test/size-probe-behind-the-proxy.test.ts` › "the size probe goes through the egress guard over plain HTTP (dl-101)", with its two tests.
+  - I planted `...client, proxyUrl: undefined,` in both spreads of `createSizeRequest` and rebuilt `resolvers`, then ran the three api proxy specs, `manifest-refetch` and `size-probe.test.ts`. 2 of 45 went red: "a rendition on a host the guard refuses is never asked for" (`expected [ { method: 'GET', …(2) }, …(6) ] to deeply equal []`) and the HTTPS test "trusts the proxy's root…".
+  - At the head, the control "and the same rendition is asked for once the guard allows its host" passes, so the empty list is the guard's doing and not the fixture's.
+  - The `tiers-behind-the-proxy` test is renamed to what it proves, the client and not the size probe.
+- **F2 (high): fixed.** The 32 MiB mutant is red, as shown in the table.
+  - **Stability.** The run-count arithmetic is in the bullet below.
+    - Pass/fail: 8 idle runs and 6 under load (24 CPU burners on 12 cores, load average 26–31) all passed.
+    - The origin wrote 2,621,440–2,686,976 B in 5 runs under load and 3 idle, against the 16,777,216 B bound.
+    - The Windows leg passed on `b9f84f2`.
+- **F3 (low): fixed.** The tolerance is now one 16 KiB chunk, and the mutant in the table proves it. The overshoot can be at most one decoder output chunk, so the bound cannot drift. In those same 14 runs all three encodings passed.
+- **F4 (low): fixed.** Bomb tests now run for deflate and br as well. The F3 mutant turns the br case red too.
+- **F5 (low): fixed.** The `SizeProbe.bytes` comment in `resolvers/src/size-sample.ts` now matches the code.
+- **F6 (low): fixed.** The deadline message now reads "The request exceeded its time budget." No test asserted the old text, and the suite is green.
+
+**Findings in the round's lines:**
+
+- **low** · G2-1 · Done when 2's bound of four caps still passes a client that reads 8 MiB or 4 MiB of a ranged `GET`'s body before closing (`fetchHeaders` mutant, 1 passed each time). The branch's Log records this trade-off.
+  - **Why low.** The shipped path reads 0 bytes: `response.destroy()` in `fetchHeaders` and the `finally` in `run`. The test catches a client that reads the whole body, and any read past about 14 MiB. A regression that reads 1–3 caps and then stops has no mechanism in this code.
+  - **If it is tightened.** A bound of 2 caps would pass a 4 MiB reader (about 6.5 MiB written) and fail an 8 MiB one (about 10.5 MiB). On Linux that leaves 5.4 MiB of headroom over the measured 2.6 MiB. Windows' socket buffers at that bound are unmeasured.
+- **findings** · the round's lines returned 1 (G2-1), carried; none dropped.
+- **NFR.** Security ✓: F1 is pinned at the wiring. Performance n/a. Reliability ✓: the bounds held under load. Maintainability ✓.
+
 ## Log
 
 ### 2026-10-07 — filed by dl-97's builder
