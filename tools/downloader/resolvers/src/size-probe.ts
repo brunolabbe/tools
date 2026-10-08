@@ -1,8 +1,8 @@
 /**
  * A `SizeProbe` over an ordinary `fetch`, for the resolvers whose network is
  * one — the direct tier's `GuardedFetch`, and the same guarded fetch handed to
- * the yt-dlp tier for this. The browser tier builds its own over Playwright's
- * request context instead, because its cookies live there.
+ * the yt-dlp tier for this. The browser tier builds its own over its HTTP client
+ * instead (`./browser/size-probe.ts`), because its cookies live in the context.
  *
  * Everything here answers `undefined` rather than throwing. A size we could not
  * measure leaves the declared estimate in place, which is where we started; a
