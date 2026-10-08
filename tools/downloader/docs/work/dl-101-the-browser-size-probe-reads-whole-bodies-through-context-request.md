@@ -3,7 +3,7 @@ id: dl-101
 tool: downloader
 title: The browser tier's size probe reads whole bodies through `context.request`, and cannot reach an origin behind the terminating proxy
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-97]
 difficulty: standard
@@ -67,6 +67,55 @@ playlist the size probe reads with `text()`:
 - A test in `api` proves the size probe reaches an HTTPS origin behind the
   terminating proxy (the origin is asked for the media playlist).
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: FAIL** — 2026-10-08 · `856a4e8..498ca6e` · Opus 5.5, depth full
+
+| Done when                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A gzip playlist that inflates past the cap is refused by `text()`, inflating no more than a chunk past it | `resolvers/test/browser/size-probe.test.ts` › "refuses a gzip playlist that inflates past the cap, inflating no more than a chunk past it" ✓. The assertions that carry it are `text` undefined, `outcome` `too-large` and `readBytes <= MAX_PLAYLIST_BYTES + 64 KiB`. It goes red when `text()`'s cap is lifted to 1 GiB (`expected '#EXTM3U …' to be undefined`). On base the file cannot load, because it imports symbols this branch adds. The tolerance is a low (F3).     |
+| A ranged `GET` answered `200` with a large body reads no more than the cap                                | **unproven**. `resolvers/test/browser/size-probe.test.ts` › "a ranged GET answered 200 with a large body reads none of it" bounds the origin's writes at 64 MiB, 16 times the cap. It passes on a client that reads 32 MiB of the body (F2).                                                                                                                                                                                                                                    |
+| An `api` test proves the size probe reaches an HTTPS origin behind the terminating proxy                  | `api/test/size-probe-behind-the-proxy.test.ts` › "trusts the proxy's root it was handed, so the origin is asked for the playlist and weighed" ✓. With base `resolvers/src` built, it fails for the stated reason: `expected 0 to be greater than or equal to 1` on `mediaPlaylistGets`. Its control, "and does not reach the origin when it was not handed the proxy's root", passed in the same run with `masterGets >= 1`.                                                    |
+| `npm run check` and `npm test -- --project downloader` pass                                               | **verified**. `npm run check` exits 0. `npm test -- --project downloader` exits 0 with 2242 passed and 2 skipped of 2244 tests, in 105 passed and 1 skipped of 106 files. The base count was not run. The only test removed from the test-file diffs is the replaced test in `tiers-behind-the-proxy.test.ts` (F1). At reading, PR #403's CI on `498ca6e` still showed `test (ubuntu-latest)` and `test (windows-latest, informational)` pending. Every other check had passed. |
+
+- **high** · `nfr:security` · F1 · no `Done when` line names it; the SSRF invariant does. The replaced test in `api/test/tiers-behind-the-proxy.test.ts` › "the size probe's requests are proxied too" calls `fetchHeaders` and `fetchManifest` directly and hands them `proxyUrl` itself. It therefore passes when the size probe is not proxied.
+  - **Mutant.** In `createSizeRequest` (`resolvers/src/browser/size-probe.ts`), change both spreads `...client,` to `...client, proxyUrl: undefined,`, then run `npm run build -w @downloader/resolvers`. Then run `npx vitest run` over `size-probe-behind-the-proxy`, `tiers-behind-the-proxy` and `manifest-refetch` in `api/test`, plus `resolvers/test/browser/size-probe.test.ts`. Result: 1 of 41 red. The red one is `size-probe-behind-the-proxy` › "trusts the proxy's root…", and it fails only because a direct handshake does not trust the operator-CA origin.
+  - **Over plain HTTP the mutant reaches a host the guard refuses.** Setup: the guard is `createSsrfGuard({ allowHosts: ["127.0.0.1"] })`, and the master on `127.0.0.1` names `http://localhost:<port>/media.m3u8`. With the mutant, the origin logs `GET /media.m3u8`, `HEAD /seg-0.ts` and `HEAD /seg-1.ts` with `host: localhost:<port>`, which is 3 requests around the guard. At `498ca6e` it logs 0. The master was fetched 2 times in both runs.
+  - **What was lost.** Before this branch, the size probe could not leave the proxy without the browser context leaving it too. It now has its own `proxyUrl` argument, and no wiring-level test covers plain HTTP or tunnel mode (no PEM).
+  - **Open decision.** (a) Add a test that drives a `BrowserResolver` over plain HTTP through the real guard, with the rendition on a refused host, and asserts the origin never sees it (recommended). (b) Rename the test to what it proves, which is the client and not the size probe, and leave the wiring unpinned.
+- **high** · F2 · Done when 2 depends on it. "a ranged GET answered 200 with a large body reads none of it" asserts `finished === false` and `written < 64` 1 MiB blocks.
+  - **Mutant.** Make `fetchHeaders`' finish callback read 32 MiB of the body before destroying it. The callback becomes `async`, and `response.destroy()` is replaced with a `data` loop that destroys past `32 * 1024 * 1024`. Running `npx vitest run tools/downloader/resolvers/test/browser/size-probe.test.ts` then gives 18 of 18 passed.
+  - **What the bound should be.** At `498ca6e`, `written` is 3 blocks in all 3 runs, measured by temporarily asserting `toBe(-1)`. A bound near the socket buffers would catch the mutant, as would counting the bytes the client actually receives.
+  - **Where it holds.** A client that reads the whole body is caught: `expected true to be false`.
+- **low** · F3 · Done when 1's test allows `readBytes` up to cap + 64 KiB, four zlib output chunks. It was copied from dl-97's `manifest-fetch.test.ts`. Measured `readBytes - cap` is 16384, one chunk, so a decoder stopped up to three chunks late would pass. Whether the line's "a chunk" means 16 KiB or 64 KiB is ambiguous, so this is graded low.
+- **low** · F4 · only gzip has a bomb test. Deflate and br, which the client also advertises in `accept-encoding`, are tested only inside the cap, in `manifest-fetch.test.ts`. Measured through the egress proxy with a 4 MiB cap, a 256 MiB bomb gave the results below. `readCapped` is unchanged by this branch, so this is a pre-existing gap from dl-97.
+
+  | Encoding | Wire size | `readBytes`                                  | Peak RSS rise   |
+  | -------- | --------- | -------------------------------------------- | --------------- |
+  | gzip     | 260,949 B | 4,210,688 (cap + 16384), over HTTP and HTTPS | 0.3 MiB at most |
+  | deflate  | 260,937 B | 4,210,688 (cap + 16384), over HTTP and HTTPS | 0               |
+  | br       | 418 B     | 4,210,688 (cap + 16384), over HTTP and HTTPS | 4.3 MiB at most |
+
+- **low** · F5 · two `SizeProbe.bytes` comments in `resolvers/src/size-sample.ts` mislead.
+  - "the browser tier's probe (dl-101) reads headers only, never a body" is false of its `text()`, which reads a capped body.
+  - "Optional, because only the fetch-backed probe has it" no longer gives a reason. The branch's own Log says the client could now provide it.
+- **low** · F6 · no live call site. `run` in `manifest-fetch.ts` throws `AppError("TIMEOUT", "The manifest re-fetch exceeded its time budget.")` for size-probe calls too. `createRequestSizeProbe` swallows it, so the wrong message never surfaces.
+- **dropped** · D1 · with no `proxyUrl`, the client dials the origin with no guard. This is dl-97's merged behaviour, not this branch's. In `api` the browser tier always gets the tier proxy: `routes/probe.ts` passes `egressProxyUrl`, and `server.ts` gives the orchestrator `tierProxy.url`.
+- **dropped** · D2 · the replayed `cookie` and `authorization` captured for the master are sent on the first hop to a rendition URL that may be on another origin. The dispatch specifies carrying the replayed headers. This matches what `context.request` was given explicitly before. Playwright's own merge behaviour was not verified by me.
+- **checked, not a finding** · "closes the response unread" stops the transfer through the proxy. A ranged `GET` was sent to an origin that ignores `Range` and streams 1 GiB.
+
+  | Path                                            | Result             | Origin wrote before the close | Origin closed after |
+  | ----------------------------------------------- | ------------------ | ----------------------------- | ------------------- |
+  | Plain HTTP through the egress proxy             | `headers` in 14 ms | 6,422,528 B                   | 12 ms               |
+  | HTTPS through the terminating proxy             | returned           | 262,144 B                     | 4 ms                |
+  | Control, plain HTTP: body read uncapped for 2 s | —                  | 945,750,016 B                 | —                   |
+  | Control, HTTPS: body read uncapped for 2 s      | —                  | 499,777,536 B                 | —                   |
+
+- **positive control** · bypassing `proxyUrl` in the size probe's client turns 1 of 41 tests red, and only through trust (F1). The plain-HTTP harness shows 3 requests reaching the origin around the guard under the mutant and 0 at the head.
+- **findings** · the hunt returned 8: 6 carried (F1–F6) and 2 dropped (D1, D2).
+- **Invariants.** No cross-tool import ✓. No new `AppError` codes ✓. No logging, so nothing to redact ✓. The contract is untouched ✓. The new `api` spec is registered and ran ✓. SSRF: F1. Skipped as untouched: Dockerfile, shell and process trees, progress, routes.
+- **NFR.** Security: F1. Performance ✓, measured above. Reliability ✓: `undefined` on every failure, including a client `refused` and a throw. Maintainability: F5, F6.
 
 ## Log
 
