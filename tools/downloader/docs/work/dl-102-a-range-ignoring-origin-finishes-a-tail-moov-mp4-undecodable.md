@@ -3,10 +3,10 @@ id: dl-102
 tool: downloader
 title: A Range-ignoring origin turns a tail-moov progressive MP4 into an undecodable file reported as success
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
-difficulty: standard
+difficulty: hard
 ---
 
 # dl-102 — A Range-ignoring origin turns a tail-moov progressive MP4 into an undecodable file reported as success
@@ -284,43 +284,93 @@ Checked on 2026-10-08 against `dl-99-webm-undeclared-codecs` (PR #394, head
   `return undefined`. Making the fact available is a change to that return type,
   which is option D's cost below, not something dl-99 already does and discards.
 
+## Decisions
+
+Taken by the owner on 2026-10-08, in two questions.
+
+1. **Which fix the ticket carries: option A.**
+   - Question: a tail-`moov` MP4 (over roughly 64 to 91 KB) from an origin that
+     ignores `Range` finishes as a clean `200` that does not play, 0 of 100
+     frames decoding. Which fix should the ticket carry?
+   - Options put: A, probe `Range` before the stream (the filing builder's
+     suggestion; the gate recommended nothing); C, detect it from ffmpeg's
+     stderr; B, buffer the whole file and then remux; decide later (D and E
+     remained available).
+   - **Chosen: A.**
+2. **Which error the visitor gets: a new, non-retryable code.**
+   - Question: option A refuses a tail-`moov` MP4 from a Range-ignoring origin
+     before the first byte. Which error should the visitor get?
+   - Options put: a new code, non-retryable (a downloader contract code meaning
+     "this origin cannot be seeked and the file's index is at the end", name
+     chosen in the build, UI copy saying the source cannot be streamed),
+     recommended; or reuse `DOWNLOAD_FAILED`.
+   - **Chosen: a new code, non-retryable.** The addition to
+     `@downloader/contract` is pre-authorised by this answer, and the build
+     names the code.
+
+Considered and not taken, kept below so the next reader does not reopen them
+without the cost: B, C, D and E, each under "Options not taken". Reusing
+`DOWNLOAD_FAILED` was also considered and not taken (it is in `RETRYABLE_CODES`
+today).
+
 ## Build
 
-**There is a decision here, and it is the owner's.** Do not pick one in the
-building session.
+Option A, with the owner's code. Three things are the build's to settle, each
+with its cost named here so the choice is made knowingly.
 
-Reproduce first, as a stream test in `engine/test/stream.test.ts`, appended at
-the end (a block inserted mid-file moves other tickets' recorded line
-citations). Serve a tail-`moov` MP4 **larger than the threshold above** from an
-origin that answers every request with a `200` and the whole body. Keep the
-suite's honouring origin as the control. Take the fixture's size and the
-expected outcome from the owner's answer, and record the red run in the Log
-before changing source.
+**Reproduce first**, as a stream test in `engine/test/stream.test.ts`, appended
+at the end (a block inserted mid-file moves other tickets' recorded line
+citations). Serve a tail-`moov` MP4 **larger than the threshold** (between
+63,749 B, which decodes, and 91,053 B, which does not; take a source of at least
+91,053 B so the test can fail) from an origin that answers every request with a
+`200` and the whole body. Keep the suite's honouring origin as the control.
+Record the red run in the Log before changing source.
 
-What the fix must settle, as options with their real costs:
+**The behaviour.** Before starting ffmpeg for a progressive source, decide
+whether the origin will let ffmpeg seek to the index, and if it will not and the
+index is at the end, throw a typed `AppError` from `stream()` before the first
+byte. The probe asks for a one-byte range and reads whether the answer is `206`.
+A `200` alone must not refuse, or a fast-start file that works today would
+fail, which Done when 3 guards.
 
-- **A. Detect it and fail with a typed error before the first byte.** Before
-  starting ffmpeg for a progressive source, ask the origin for a one-byte range
-  and see whether it answers `206`; if it answers `200`, fail. Cost: one more
-  request per progressive stream, through the same egress proxy and the same
-  replayed headers, and it is **new engine code**: `engine/src` has no HTTP
-  client (the `createEngine` notes in `engine/src/index.ts` say the engine does
-  not enforce SSRF and relies on the guarded egress proxy), so the probe either
-  goes through `proxyUrl` with the same `tlsCaFile` or moves to the api before
-  `stream()`. Either way it repeats for each candidate in
-  `variant.alternateUrls`, which the engine opens on a failover. It refuses a
-  fast-start file that would have worked, unless the check also learns where
-  `moov` is. That is a read of the first bytes, which needs no `Range`, and a
-  **walk of the top-level boxes** until `moov` or `mdat` is reached, not a test
-  on what follows `ftyp`: gate 1 measured ffmpeg 6.1.1's tail-`moov` layout as
-  `ftyp,free,mdat,moov` (4 of 4 sources, 50,241 B to about 1 MB), while dl-99's
-  fast-start `h264.mp4` is `ftyp,moov,free,mdat`, so `free` can sit between
-  `ftyp` and either. `readMp4Tracks` already walks boxes, and `bytes()` accepts a
-  `200` for a read from byte 0, so a walk works against this origin. That is
-  more code, and a wrong walk refuses a good file. Which code is the open part:
-  `DOWNLOAD_FAILED` is what a mid-stream loss uses today, and no existing code
-  says "this origin cannot be seeked". A new one is a contract change, so the
-  owner decides it; it is not invented in the build.
+1. **Where the index is.** A `200` is a refusal only when `moov` is at the
+   end. Read the first bytes of the file, which needs no `Range`, and **walk
+   the top-level boxes** until `moov` or `mdat` is reached; do not test what
+   follows `ftyp`. Gate 1 measured ffmpeg 6.1.1's tail-`moov` layout as
+   `ftyp,free,mdat,moov` (gate 2: 6 of 6 sources, 50,241 B to 1,026,770 B),
+   while dl-99's fast-start `h264.mp4` is `ftyp,moov,free,mdat`, so `free` can
+   sit between `ftyp` and either. `readMp4Tracks` in
+   `resolvers/src/mp4-header.ts` already walks boxes and `bytes()` accepts a
+   `200` for a read from byte 0, so a walk works against this origin. Cost: more
+   code, and a wrong walk refuses a good file.
+2. **Where the probe lives.** `engine/src` has no HTTP client (the
+   `createEngine` notes in `engine/src/index.ts` say the engine does not
+   enforce SSRF and relies on the guarded egress proxy). Either the engine gets
+   new code that goes through `proxyUrl` with the same `tlsCaFile`, or the
+   probe moves to the api before `stream()`. Cost: new engine HTTP code and a
+   second place that must be SSRF-checked, or an api-side check that the
+   engine's own callers can bypass.
+3. **Every candidate.** The engine opens `variant.alternateUrls` on a
+   failover, so the probe repeats for each candidate, and the cost is one more
+   request per progressive stream per candidate, through the same egress proxy
+   and the same replayed headers.
+
+**The code.** Add a new non-retryable code to `@downloader/contract`, named in
+the build: in the `ERROR_CODES` list in `contract/src/errors.ts`, with a
+message in `DEFAULT_ERROR_MESSAGES` (the catalog's `satisfies` makes a missing
+message a compile error), and not in `RETRYABLE_CODES`. The visitor's copy
+says the source cannot be streamed. Check `contract/src/api.ts`'s code
+mapping and the web's error copy for the places that list codes. A code in the
+contract is a contract change, and the owner's answer of 2026-10-08 authorises
+it.
+
+The `stream.ts` header's "Why progressive sources go to ffmpeg as a URL too"
+has to say what happens when the origin does not honour `Range`.
+
+### Options not taken
+
+Each is considered and not taken on 2026-10-08; kept with its cost.
+
 - **B. Fetch the whole file first, then remux it.** When `Range` is not
   honoured and the index is at the end, read the body to a bounded buffer or a
   temporary file and hand ffmpeg that. It turns a refusal into a download.
@@ -329,11 +379,10 @@ What the fix must settle, as options with their real costs:
   is kept. A bounded in-memory buffer keeps the letter of the rule (nothing
   touches a disk); whether it keeps its reason, "no copy of one should be kept
   anywhere" in the `stream.ts` header, is the owner's call, since a whole-file
-  copy in RAM is arguably such a copy. It costs RAM per
-  concurrent job up to `maxFileSizeBytes`, whose default is 4096 MB
-  (`ENGINE_DEFAULTS.maxFileSizeMb`), so a buffer needs its own, smaller bound.
-  Time to first byte becomes the whole download. Needs the owner's
-  decision on both the rule and the bound.
+  copy in RAM is arguably such a copy. It costs RAM per concurrent job up to
+  `maxFileSizeBytes`, whose default is 4096 MB (`ENGINE_DEFAULTS.maxFileSizeMb`),
+  so a buffer needs its own, smaller bound. Time to first byte becomes the whole
+  download.
 - **C. Detect it after the fact, from ffmpeg's own words.** Treat `partial file`
   (from the mov demuxer), or a `Stream ends prematurely` whose reconnect then
   fails to find the index, as a loss. Cost: partly measured, by gate 1 on
@@ -346,53 +395,54 @@ What the fix must settle, as options with their real costs:
   `partial file` reached the engine's `onStderrLine` before `stream()` resolved,
   that is before the first byte reached the reader. stdout and stderr are
   separate pipes, so that is observed order, not a guarantee; if it held, C
-  could refuse before the first byte rather than cut a connection. Not
-  measured: other ffmpeg versions, and a healing case that is cut inside the
-  `moov` itself.
+  could refuse before the first byte rather than cut a connection (a typed error
+  before the first byte when `partial file` arrives first, otherwise the cut
+  connection and `done` rejecting). Not measured: other ffmpeg versions, and a
+  healing case that is cut inside the `moov` itself.
 - **D. Carry the probe-time fact forward.** The size probe sees an origin
   answer a later range with a `200` (see the dl-64 link above) but does not
   report it: `createFetchSizeProbe().bytes()` returns `undefined` for that, the
   same as for every other failure, so nothing downstream, dl-99 included, has
   the fact. A variant could carry it once it is reported, and the stream could
   refuse, or choose B, on it. Cost: a field on `MediaVariant`, which is
-  `@downloader/contract` and is not edited without the owner; **and a change to
-  `@downloader/resolvers`**, where `bytes()`'s return type (`RangedBytes |
-undefined`, on `SizeProbe` in `size-sample.ts`) must grow a way to say "the
-  origin ignored Range" and that has to be threaded through `readMp4Tracks` and
-  `describeProgressiveTracks` in `mp4-header.ts` and the resolver wrapper that
-  sets the field. It covers only tiers that run the probe; and
-  an origin can answer a probe differently from the ffmpeg request that follows
-  (a different path, headers, a signed URL), so it is a hint and not a check.
+  `@downloader/contract`; **and a change to `@downloader/resolvers`**, where
+  `bytes()`'s return type (`RangedBytes | undefined`, on `SizeProbe` in
+  `size-sample.ts`) must grow a way to say "the origin ignored Range" and that
+  has to be threaded through `readMp4Tracks` and `describeProgressiveTracks` in
+  `mp4-header.ts` and the callers that set the field: on `main` the only caller
+  of `describeProgressiveTracks` is `YtDlpResolver` in
+  `resolvers/src/resolvers/ytdlp.ts`, and dl-99's resolver wrapper (unmerged
+  when this was written) is a second once it lands. It covers only tiers that
+  run the probe; and an origin can answer a probe differently from the ffmpeg
+  request that follows (a different path, headers, a signed URL), so it is a hint
+  and not a check.
 - **E. Accept and document it.** Only if the owner judges the shape too rare.
   The cost is the current behaviour: a visitor gets a successful download that
   does not play, with nothing in the job row that says so. Dl-53's own gate
   called the silent equivalent for HLS a `high` finding.
 
-Whichever is chosen: the `stream.ts` header's "Why progressive sources go to
-ffmpeg as a URL too" has to say what happens when the origin does not honour
-`Range`.
-
 ## Done when
 
 1. A test in `engine/test/stream.test.ts` (new, last in the file) serves a
-   tail-`moov` MP4 above the threshold from an origin that ignores `Range`, and
-   it **fails on `main`** with the outcome in the Log: `done` resolves with a
-   file whose `ffprobe`/`ffmpeg` decode yields 0 of its frames.
-2. After the chosen fix, that test asserts the owner's outcome: a typed
-   `AppError` with the owner's code, before the first byte (A); or a received
-   file with the control's frame count, within the suite's `TOLERANCE_SEC` of
-   the control's duration (B); or the cut connection and `done` rejecting (C);
-   or, for D, a typed error before the first byte (as A) or B's outcome,
-   whichever the stream does on the carried fact. In no case does `done` resolve with a file that decodes 0 frames.
+   tail-`moov` MP4 of at least 91,053 B from an origin that ignores `Range`,
+   and it **fails on `main`** with the outcome in the Log: `done` resolves with
+   a file whose `ffprobe`/`ffmpeg` decode yields 0 of its frames.
+2. After the fix, that test asserts a typed `AppError` with the new code,
+   thrown from `stream()` before the first byte. The code is not retryable
+   (`RETRYABLE_CODES` does not hold it) and has a message in
+   `DEFAULT_ERROR_MESSAGES`. In no case does `done` resolve with a file that
+   decodes 0 frames.
 3. Two controls pass in the same file: the existing honouring-origin
    tail-`moov` case still completes whole, and a **fast-start** MP4 from the
    Range-ignoring origin still completes whole (today it does, so a fix that
-   refuses every Range-ignoring origin fails this one).
+   refuses every Range-ignoring origin fails this one). A tail-`moov` file
+   whose layout is `ftyp,free,mdat,moov` is among the refused cases, so a sniff
+   that tests only what follows `ftyp` fails it.
 4. The job row for the Range-ignoring case, in `api/test`, is `failed` with
-   the chosen code, or `completed` with a decodable file; never `completed`
-   with an undecodable one.
+   the new code and its message; never `completed` with an undecodable file.
 5. The `stream.ts` header states the Range-ignoring behaviour, and this ticket's
-   Log names the option taken, the owner's answer and the date.
+   Log names the code, where the probe lives, and how `alternateUrls` is
+   handled.
 6. `npm test -- --project downloader` and `npm run check` pass.
 
 ## Log
@@ -456,12 +506,15 @@ and recorded here as its numbers, not the builder's:
   (a tail-`moov` MP4 that decodes 100 of 100 frames) and 91,053 B (decodes 0 of
   100). The ticket's own bound is 59,622 B (fine) and 103,485 B (broken), so the
   gate narrowed it to 63,749 to 91,053 B; the exact value is still not found.
-- **The bad output is a constant size:** exactly 37,615 B for each of 4
-  sources from 91,053 B to 1,031,212 B. Its generated sources were
+- **The bad output is a constant size:** exactly 37,615 B for each of 5
+  sources from 91,053 B to 1,031,212 B (gate 1 reported 4; gate 2 corrected the
+  count to 5). Its generated sources were
   1,021,416 to 1,031,212 B rather than the ticket's 1,021,968 B (x264 output
   varies from run to run); every outcome matched.
-- Box order of every tail-`moov` file ffmpeg 6.1.1 wrote for gate 1:
-  `ftyp,free,mdat,moov` (4 of 4).
+- Box order of every tail-`moov` file ffmpeg 6.1.1 wrote for the gates:
+  `ftyp,free,mdat,moov`, 6 of 6 sources (50,241 B, 63,749 B, 91,053 B, 141,569 B,
+  1,021,416 B, 1,026,770 B); gate 1 reported 4 of 4, and gate 2 corrected the
+  count to 6.
 - Not measured by gate 1: the dl-99 fixture runs above (103,485 B / 1,292 B /
   37,607 B), whose files are in another agent's scratch directory.
 
@@ -477,3 +530,21 @@ D, each edit `@downloader/contract` and/or `@downloader/resolvers`, and
 `docs/01-TICKETS.md` rates a contract change `hard`. Re-rate `difficulty` in
 the commit that records the owner's answer; it was left unchanged here on
 purpose. The ticket recommends no option.
+
+**2026-10-08** — gate 2 (Opus 5.5) passed the round with no high finding.
+It raised N1 (Done when 2 did not carry C's pre-first-byte outcome) and N2 (D's
+cost named dl-99's unmerged wrapper, not `YtDlpResolver`); both were settled
+by the answer recorded next, N1 because Done when 2 now names only option A's outcome,
+and N2 by naming `YtDlpResolver` in D, which is kept as "not taken".
+
+**2026-10-08** — the owner answered the decision: option A, with a new,
+non-retryable contract code. Recorded in Decisions with the questions and the
+options put. `status` moved from `needs-decision` to `ready`; nothing is built.
+**`difficulty` re-rated `standard` to `hard`**, as gate 1's F8 said it would
+need to be: `docs/01-TICKETS.md` rates "a one-line change to a contract"
+`hard`, because difficulty is the judgement the work needs and not the size of
+the diff, and this ticket adds a code to `@downloader/contract`, decides where a
+new SSRF-sensitive request lives (engine or api), and writes a box walk that must
+not refuse a good file. The gate records for this filing are on PR #399's
+thread, not in a `## Review` section, because `scripts/status.mjs` rejects one
+on a `ready` ticket.
