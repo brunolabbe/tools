@@ -192,13 +192,17 @@ describe("the size probe behind the proxy that terminates its TLS (dl-101)", () 
  * refuses (`localhost`, a loopback address). It is the same server, so a request
  * that arrives with `Host: localhost` came around the guard.
  */
-describe("the size probe goes through the egress guard over plain HTTP (dl-101)", () => {
-  interface Seen {
-    method: string;
-    url: string;
-    host: string;
-  }
+interface Seen {
+  method: string;
+  url: string;
+  host: string;
+}
 
+function viaLocalhost(seen: Seen[]): Seen[] {
+  return seen.filter((request) => request.host.startsWith("localhost"));
+}
+
+describe("the size probe goes through the egress guard over plain HTTP (dl-101)", () => {
   async function run(allowHosts: string[]): Promise<Seen[]> {
     const seen: Seen[] = [];
     const server = http.createServer((request, response) => {
@@ -251,9 +255,6 @@ describe("the size probe goes through the egress guard over plain HTTP (dl-101)"
     }
     return seen;
   }
-
-  const viaLocalhost = (seen: Seen[]): Seen[] =>
-    seen.filter((request) => request.host.startsWith("localhost"));
 
   test(
     "a rendition on a host the guard refuses is never asked for",
