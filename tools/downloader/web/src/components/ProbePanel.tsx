@@ -50,7 +50,15 @@ export function ProbePanel({
   // longer in the list, and the same fallback is what is submitted.
   const selectedVariant = probe.variants.find((variant) => variant.id === variantId);
   const webmOffered = selectedVariant === undefined || canMakeWebm(selectedVariant, { audioOnly });
-  const offered = CONTAINERS.filter((value) => value !== "webm" || webmOffered);
+  // "keep source" is WebM for a WebM source (the engine's `resolveContainer`),
+  // so it is withheld with it: a WebM file with an undeclared separate audio
+  // stream cannot make WebM, and offering the option would only move the
+  // refusal one click later.
+  const sourceIsWebm =
+    selectedVariant?.container?.trim().toLowerCase().replace(/^\./u, "") === "webm";
+  const offered = CONTAINERS.filter(
+    (value) => webmOffered || (value !== "webm" && !(value === "source" && sourceIsWebm)),
+  );
   const chosenContainer = offered.includes(container) ? container : "mp4";
 
   function submit(): void {

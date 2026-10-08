@@ -449,3 +449,24 @@ test("a manifest variant is judged by the same rule: undeclared hides WebM, decl
   await pickRendition(user, "hls-vp9");
   expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
 });
+
+test("keep source is withheld with WebM for a WebM file whose separate audio is undeclared", async () => {
+  const user = userEvent.setup();
+  mount(
+    probe({
+      variants: [
+        file("webm-split", { container: "webm", audioUrl: "https://cdn.example.com/a.m4a" }),
+        file("mp4-bare"),
+        file("webm-whole", { container: "webm" }),
+      ],
+    }),
+  );
+
+  await pickRendition(user, "webm-split");
+  expect(containerOptions()).toEqual(["mp4", "mkv"]);
+  // An undeclared MP4 keeps "keep source": it resolves to MP4, which is fine.
+  await pickRendition(user, "mp4-bare");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "source"]);
+  await pickRendition(user, "webm-whole");
+  expect(containerOptions()).toEqual(["mp4", "mkv", "webm", "source"]);
+});

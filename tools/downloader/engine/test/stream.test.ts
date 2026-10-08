@@ -1394,6 +1394,30 @@ describe("dl-99: a manifest variant with undeclared codecs is not copied into We
     expect(probed.streams.map((stream) => stream.codec).toSorted()).toEqual(["opus", "vp9"]);
   }, 60_000);
 
+  test("keep source on a WebM file with undeclared separate audio is refused as WebM is", async () => {
+    const error = await engineWith()
+      .stream({
+        jobId: "dl-99-source",
+        variant: {
+          id: "dl-99-source",
+          protocol: "progressive",
+          url: `${origin.origin}/webm4/source.webm`,
+          audioUrl: `${origin.origin}/prog4/audio-only.m4a`,
+          container: "webm",
+          hasVideo: true,
+          hasAudio: true,
+          label: "dl-99-source",
+        },
+        requestContext: CONTEXT,
+        options: { container: "source" },
+      })
+      .then(
+        () => null,
+        (cause: unknown) => AppError.from(cause),
+      );
+    expect(error?.code).toBe("CONTAINER_UNSUPPORTED");
+  });
+
   test("a manifest variant declared as VP9 and Opus is not refused and is copied", () => {
     const variant = {
       ...hlsVariant("hls6", 6),

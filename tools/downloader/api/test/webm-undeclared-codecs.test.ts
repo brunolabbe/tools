@@ -13,14 +13,61 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { AppError, canMakeWebm } from "@downloader/contract";
-import type { MediaVariant, ProbeResult } from "@downloader/contract";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { AppError, canMakeWebm, ROUTES } from "@downloader/contract";
+import type { Job, JobResponse, MediaVariant, ProbeResult } from "@downloader/contract";
 import { createEngine, resolveFfmpegPath } from "@downloader/engine";
 import { DirectUrlResolver } from "@downloader/resolvers";
 import { loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
 import { buildRegistry } from "../src/resolvers.ts";
+import { createHarness, waitFor } from "./helpers.ts";
+import type { Harness } from "./helpers.ts";
+
+/**
+ * The browser tier needs Chromium, which this file is not about: it is
+ * replaced by a tier that reports what the real one does for a plain file it
+ * saw on the network — a size and a container, and no codec. Everything after
+ * that, the wrapper `buildRegistry` puts around it included, is real.
+ */
+const browserTier = vi.hoisted(() => ({ url: "" }));
+vi.mock("@downloader/resolvers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@downloader/resolvers")>();
+  class FakeBrowserTier {
+    readonly name = "browser";
+    readonly priority = 50;
+    readonly confirmsAge = false;
+    canHandle(): boolean {
+      return true;
+    }
+    resolve(): Promise<ProbeResult> {
+      return Promise.resolve({
+        sourceUrl: "https://page.example/watch",
+        resolver: "browser",
+        title: "a page",
+        variants: [
+          {
+            id: "browser-0",
+            protocol: "progressive",
+            url: browserTier.url,
+            hasVideo: true,
+            container: "mp4",
+            label: "MP4",
+          },
+        ],
+        subtitles: [],
+        requestContext: { headers: {} },
+        drm: { protected: false, systems: [] },
+        isLive: false,
+        probedAt: new Date().toISOString(),
+      });
+    }
+    dispose(): Promise<void> {
+      return Promise.resolve();
+    }
+  }
+  return { ...actual, BrowserResolver: FakeBrowserTier };
+});
 
 const FFMPEG = resolveFfmpegPath();
 const SLOW = 90_000;
@@ -30,6 +77,9 @@ let server: http.Server;
 let origin: string;
 /** Requests that carried a `Range` header, by path: what a header read looks like. */
 const ranged = new Map<string, number>();
+/** Header reads (ranged, not ffmpeg's), in order, and how many to refuse next. */
+const headerReads: string[] = [];
+let refuseHeaderReads = 0;
 
 function ffmpeg(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -97,6 +147,18 @@ beforeAll(async () => {
       const type = name.endsWith(".webm") ? "video/webm" : "video/mp4";
       const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
       if (range !== null) ranged.set(name, (ranged.get(name) ?? 0) + 1);
+      // A header read is a ranged request that is not ffmpeg's. The first
+      // `refuseHeaderReads` of them are answered 403: an origin that serves the
+      // read at one probe and not at the next.
+      const fromFfmpeg = (request.headers["user-agent"] ?? "").startsWith("Lavf");
+      if (range !== null && !fromFfmpeg) {
+        headerReads.push(name);
+        if (refuseHeaderReads > 0) {
+          refuseHeaderReads -= 1;
+          response.writeHead(403).end();
+          return;
+        }
+      }
       if (request.method === "HEAD") {
         response
           .writeHead(200, { "content-type": type, "content-length": String(body.length) })
@@ -229,6 +291,123 @@ describe("dl-99: an undeclared file chosen as WebM", () => {
         (cause: unknown) => AppError.from(cause),
       );
       expect(error?.code).toBe("CONTAINER_UNSUPPORTED");
+    },
+    SLOW,
+  );
+});
+
+describe("dl-99: the browser tier's variants are described through the registry", () => {
+  test(
+    "an undeclared MP4 the browser tier found gets its codecs from its header",
+    async () => {
+      browserTier.url = `${origin}/h264.mp4`;
+      const { registry } = buildRegistry({
+        config: loadApiConfig(
+          { enableYtdlpResolver: false, enableBrowserResolver: true, enableDirectResolver: false },
+          {},
+        ),
+        logger: createLogger({ level: "silent" }),
+        fetchImpl: globalThis.fetch,
+      });
+      const probe = await registry.resolve(new URL(`${origin}/watch/page`), {
+        timeoutMs: 20_000,
+        signal: AbortSignal.timeout(20_000),
+      });
+      const found = probe.variants[0] as MediaVariant;
+
+      expect(probe.resolver).toBe("browser");
+      expect(found.videoCodec).toBe("avc1");
+      expect(found.audioCodec).toBe("mp4a");
+      expect(canMakeWebm(found)).toBe(true);
+    },
+    SLOW,
+  );
+});
+
+describe("dl-99: a header read that leaves a variant undeclared says so", () => {
+  test("in the log, without the URL's credential", async () => {
+    const lines: string[] = [];
+    const { registry } = buildRegistry({
+      config: loadApiConfig(
+        { enableYtdlpResolver: false, enableBrowserResolver: false, enableDirectResolver: true },
+        {},
+      ),
+      logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+      fetchImpl: globalThis.fetch,
+    });
+    await registry.resolve(new URL(`${origin}/not-media.mp4?token=s3cr3t-signature`), {
+      timeoutMs: 20_000,
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    const entry = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((candidate) => String(candidate["msg"]).includes("still undeclared"));
+    expect(entry).toBeDefined();
+    expect(entry?.["resolver"]).toBe("direct");
+    expect(lines.join("\n")).not.toContain("s3cr3t-signature");
+  }, 30_000);
+});
+
+describe("dl-99: a header read that fails only at the job's probe", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+    refuseHeaderReads = 0;
+  });
+
+  async function runWebmJob(name: string): Promise<{ job: Job; file: string }> {
+    harness = await createHarness({ engine: createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 }) });
+    const created = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: `${origin}/${name}`, options: { container: "webm" } },
+    });
+    expect(created.statusCode).toBe(201);
+    const job = (created.json() as JobResponse).job;
+    const opened = await harness.app.server.inject({ method: "GET", url: job.link?.url ?? "" });
+    const file = path.join(dir, `job-${name}.webm`);
+    await fs.writeFile(file, opened.rawPayload);
+    const current = harness;
+    const finished = await waitFor(
+      () => current.app.context.store.get(job.id),
+      (candidate) => candidate.status === "completed" || candidate.status === "failed",
+      { timeoutMs: 60_000, label: `job ${job.id}` },
+    );
+    return { job: finished, file };
+  }
+
+  test(
+    "is read again once, and the job completes as VP9 and Opus",
+    async () => {
+      headerReads.length = 0;
+      refuseHeaderReads = 1;
+      const { job, file } = await runWebmJob("h264.mp4");
+
+      expect(job.status).toBe("completed");
+      expect(job.attempts).toBe(2);
+      // The refused read, then the re-probe's.
+      expect(headerReads.filter((name) => name === "h264.mp4").length).toBeGreaterThanOrEqual(2);
+      expect(await codecsOf(file)).toEqual(["opus", "vp9"]);
+    },
+    SLOW,
+  );
+
+  test(
+    "a variant that really is undeclared is refused after one re-probe, not looped",
+    async () => {
+      headerReads.length = 0;
+      const { job } = await runWebmJob("not-media.mp4");
+
+      expect(job.status).toBe("failed");
+      expect(job.error?.code).toBe("CONTAINER_UNSUPPORTED");
+      expect(job.error?.retryable).toBe(false);
+      expect(job.attempts).toBe(2);
+      const settled = headerReads.length;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(headerReads.length).toBe(settled);
     },
     SLOW,
   );

@@ -22,7 +22,7 @@
  * 90) and the registry sorts by them, so this function only decides membership.
  */
 
-import { AppError, redactUrl } from "@downloader/contract";
+import { AppError, canMakeWebm, redactUrl } from "@downloader/contract";
 import {
   BrowserResolver,
   createFetchSizeProbe,
@@ -192,7 +192,11 @@ export function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectio
  * ever adds what the file says, and the engine refuses WebM for what stays
  * undeclared.
  */
-export function describingProgressiveTracks(resolver: Resolver, fetchImpl: GuardedFetch): Resolver {
+export function describingProgressiveTracks(
+  resolver: Resolver,
+  fetchImpl: GuardedFetch,
+  logger?: AppLogger,
+): Resolver {
   return {
     name: resolver.name,
     priority: resolver.priority,
@@ -213,6 +217,26 @@ export function describingProgressiveTracks(resolver: Resolver, fetchImpl: Guard
       const variants = await describeProgressiveTracks(probe.variants, sizeProbe, {
         signal: options.signal,
       });
+      // The read swallows its own failures, so this is the only trace of one:
+      // a variant that could not make WebM before and still cannot, which is
+      // the case the picker then hides WebM for. Never a URL — a signed one
+      // carries its credential in the query.
+      for (const [index, described] of variants.entries()) {
+        const before = probe.variants[index];
+        if (
+          before !== undefined &&
+          before.protocol === "progressive" &&
+          !canMakeWebm(before) &&
+          !canMakeWebm(described)
+        ) {
+          logger?.debug("a progressive variant is still undeclared after its header read", {
+            resolver: resolver.name,
+            variantId: described.id,
+            container: described.container ?? null,
+            url: redactUrl(described.url),
+          });
+        }
+      }
       return { ...probe, variants };
     },
   };
@@ -269,7 +293,7 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
       logger,
       ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
     });
-    resolvers.push(describingProgressiveTracks(named(browser), options.fetchImpl));
+    resolvers.push(describingProgressiveTracks(named(browser), options.fetchImpl, logger));
   }
 
   if (config.enableDirectResolver) {
@@ -277,6 +301,7 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
       describingProgressiveTracks(
         new DirectUrlResolver({ fetch: options.fetchImpl }),
         options.fetchImpl,
+        logger,
       ),
     );
   }

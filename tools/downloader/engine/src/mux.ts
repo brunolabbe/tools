@@ -71,6 +71,13 @@ export function normalizeCodecName(codec: string | undefined): string | null {
     // transcode both for being unrecognised.
     "ac-3": "ac3",
     mp4v: "mpeg4",
+    // Dolby Vision's sample entries wrap an HEVC, AVC or AV1 stream the MP4
+    // muxer copies as it does the plain ones (the owner's decision, 2026-10-08).
+    dvh1: "hevc",
+    dvhe: "hevc",
+    dva1: "h264",
+    dvav: "h264",
+    dav1: "av1",
     "ec-3": "eac3",
     eac3: "eac3",
     flac: "flac",

@@ -124,7 +124,25 @@ export interface RunContext {
 }
 
 /** Codes where a *fresh probe* is a plausible fix, as opposed to plain retrying. */
-const REPROBE_WORTHY: ReadonlySet<string> = new Set(["VARIANT_GONE", "DOWNLOAD_FAILED"]);
+const REPROBE_WORTHY: ReadonlySet<string> = new Set([
+  "VARIANT_GONE",
+  "DOWNLOAD_FAILED",
+  "CONTAINER_UNSUPPORTED",
+]);
+
+/**
+ * Re-probed although the taxonomy does not call it retryable (dl-99).
+ *
+ * `CONTAINER_UNSUPPORTED` is final for the visitor's choice — the same source
+ * and the same container fail the same way — but the source's description comes
+ * from a header read at probe time, and that read can fail once for an origin
+ * that serves it on the next try. The picker offered WebM on the strength of
+ * the earlier read, so one fresh probe is owed before the job fails for good
+ * (the owner's decision of 2026-10-08). **Once, like every other re-probe**: a
+ * variant that really is undeclared is refused again and the job ends there.
+ * The error that ends it is still `retryable: false`.
+ */
+const REPROBE_DESPITE_NOT_RETRYABLE: ReadonlySet<string> = new Set(["CONTAINER_UNSUPPORTED"]);
 
 export class JobOrchestrator {
   readonly #options: OrchestratorOptions;
@@ -164,7 +182,8 @@ export class JobOrchestrator {
             attempt < MAX_REPROBE_RETRIES &&
             !signal.aborted &&
             REPROBE_WORTHY.has(appError.code) &&
-            RETRYABLE_CODES.has(appError.code);
+            (RETRYABLE_CODES.has(appError.code) ||
+              REPROBE_DESPITE_NOT_RETRYABLE.has(appError.code));
           if (!canRetry) throw appError;
 
           log.warn("retrying with a fresh probe", { code: appError.code, attempt: attempt + 1 });

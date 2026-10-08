@@ -823,3 +823,40 @@ describe("cancellation survives a restart (dl-59)", () => {
     }
   });
 });
+
+describe("CONTAINER_UNSUPPORTED is re-probed once although it is not retryable (dl-99)", () => {
+  test("a refusal that a fresh probe clears completes on the retry", async () => {
+    const resolver = new StubResolver(probeResult());
+    harness = await createHarness({
+      resolver,
+      engineOptions: {
+        failWith: (call) => (call === 0 ? new AppError("CONTAINER_UNSUPPORTED") : undefined),
+      },
+    });
+
+    const created = await createJob(harness);
+    const finished = await runToTerminal(harness, created.id);
+
+    expect(finished.status).toBe("completed");
+    expect(finished.attempts).toBe(2);
+    expect(harness.engine.calls).toBe(2);
+    expect(resolver.calls).toBe(2);
+  });
+
+  test("one that the fresh probe repeats ends the job, still not retryable", async () => {
+    const resolver = new StubResolver(probeResult());
+    harness = await createHarness({
+      resolver,
+      engineOptions: { failWith: () => new AppError("CONTAINER_UNSUPPORTED") },
+    });
+
+    const created = await createJob(harness);
+    const finished = await runToTerminal(harness, created.id);
+
+    expect(finished.status).toBe("failed");
+    expect(finished.error?.code).toBe("CONTAINER_UNSUPPORTED");
+    expect(finished.error?.retryable).toBe(false);
+    expect(finished.attempts).toBe(2);
+    expect(harness.engine.calls).toBe(2);
+  });
+});

@@ -172,6 +172,25 @@ describe("a header-read codec is not mistaken for an unsupported one (dl-99)", (
     }
   });
 
+  test.each([
+    ["dvh1", "hevc"],
+    ["dvhe", "hevc"],
+    ["dva1", "h264"],
+    ["dvav", "h264"],
+    ["dav1", "av1"],
+  ])("the Dolby Vision entry %s is %s and is copied into MP4", (fourcc, name) => {
+    expect(normalizeCodecName(fourcc)).toBe(name);
+    expect(containerSupports("mp4", "video", fourcc)).toBe(true);
+    const { args, transcodes } = buildOutputArgs({
+      container: "mp4",
+      maps: AV_MAPS,
+      videoCodec: fourcc,
+      audioCodec: "mp4a",
+    });
+    expect(transcodes).toEqual([]);
+    expect(args).not.toContain("-c:v");
+  });
+
   test("the contract's idea of a declared codec is the engine's", () => {
     for (const codec of [undefined, "", " ", "none", "unknown", "avc1.640028", "vp09", "Opus"]) {
       const declaredByEngine = normalizeCodecName(codec) !== null;

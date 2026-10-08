@@ -82,6 +82,32 @@ Taken by the owner after the first build, on the builder's two open decisions.
    undeclared codecs happen to be VP9/Opus loses WebM; a manifest variant with
    declared codecs is unchanged.
 
+### Additions, 2026-10-08
+
+Taken by the owner on the first gate's two open decisions.
+
+6. **A header read that fails only at the job's probe is tried once more.**
+   Question: when the origin served the ranged header read at probe time and
+   403s it at the job's re-probe, the visitor was offered WebM and the job
+   fails for good with the non-retryable `CONTAINER_UNSUPPORTED`, and nothing
+   logs why. What should happen? Options: (a) re-probe once on that error in the
+   orchestrator (the gate's recommendation); (b) accept it and record it under
+   decision 3. Chosen: **(a) re-probe once.** The job completes after one fresh
+   probe, or fails with the same non-retryable error and no loop; the failed
+   read is logged at debug level, with the URL redacted.
+7. **MP4 output changes for some sources, and that is accepted.** Question:
+   decision 3 says "MP4 and MKV are unchanged", but declaring codecs from a
+   header (and the `ac-3`/`mp4v` aliases) changes MP4 output for some sources.
+   Which way? Options: (a) keep the aliases, add the Dolby Vision ones
+   (`dvh1`/`dvhe` to `hevc`, `dva1`/`dvav` to `h264`, `dav1` to `av1`), and
+   record the MP4 change in the Log as an amendment to the owner's decision
+   (the gate's recommendation); (b) feed header-read codecs only to the WebM
+   decision, so MP4 and MKV are literally unchanged. Chosen: **(a)**. This
+   amends the sentence "MP4 and MKV are unchanged" above: a source whose codec
+   is now named, by a header or by an RFC 6381 string, is judged by
+   `containerSupports` for MP4 like any declared source, where an undeclared one
+   was always copied.
+
 ## Build
 
 Reproduce first, as a stream test in `engine/test/stream.test.ts`, appended at
@@ -171,3 +197,52 @@ then refusing and hiding WebM for everything else over transcoding it.
   is copied (arguments asserted: no `-c:v`, no `-c:a`). The copied case is
   asserted from the arguments, not by streaming, because no fixture here is a
   VP9/Opus manifest.
+
+**2026-10-08 (third round)** — the first gate returned CONCERNS (no high); the
+owner answered its two open decisions (Decisions 6 and 7). Dispositions:
+
+- **Browser tier's header read untested (med): fixed.**
+  `api/test/webm-undeclared-codecs.test.ts` › "an undeclared MP4 the browser
+  tier found gets its codecs from its header" puts a stand-in for the browser
+  tier (Chromium is not the subject) behind the real `buildRegistry`. With the
+  browser entry unwrapped in `resolvers.ts`, `npx vitest run tools/downloader/api`
+  gave 1 failed, 775 passed of 778 (it was 0 of 772 red before).
+- **Re-probe once on `CONTAINER_UNSUPPORTED` (med, Decision 6): built.**
+  `orchestrator.ts` re-probes once despite the code not being retryable.
+  Tests: `pipeline.test.ts` (stub engine, two cases) and the gate's
+  served-once-then-403 origin through the real engine
+  (`webm-undeclared-codecs.test.ts`: completes as VP9/Opus on attempt 2; a
+  really undeclared file fails after exactly one re-probe with `retryable:
+false` and no further header reads). With the exemption removed, 4 of 35
+  failed. The failed read is now logged (debug, `redactUrl`; a test asserts a
+  signature in the query never reaches the log).
+- **MP4 output changed (med, Decision 7): amended, aliases added.** The gate
+  measured, from `buildOutputArgs`, at base `mp4 avc1 + ac-3 => -c copy | -c:a
+aac` and `mp4 mp4v.20.9 + mp4a => -c copy | -c:v libx264`; at head both copy.
+  It also listed header-read fourccs outside the alias table that now transcode
+  for MP4 where an undeclared variant was copied: `dvh1`/`dvhe`/`dva1`/`dvav`/
+  `dav1` (now aliased, one `mux-args.test.ts` case each), and still `vp08`,
+  `s263`, `jpeg`/`mjpa`, `apcn`/`apch`, `ac-4`, `samr`, `sowt`/`twos`/`lpcm`,
+  `dtsc`, `mha1` (left, as the owner chose; these are the gate's measurement
+  from `fourccs.mjs` over 32 fourccs, not re-run here). Whether a base copy of
+  the Dolby Vision, MJPEG and DTS ones succeeds is unmeasured.
+- **Per-variant read bound (low): recorded, not fixed.** The Log's "two ranged
+  reads per undeclared MP4" above is the typical case. The bound is up to 4
+  reads per variant (`MAX_READS`), up to 64 KiB plus 16 MiB, on every probe and
+  every job re-probe, for as many variants as the interceptor kept (up to 400),
+  at concurrency 4 and 4 s a read. The gate measured 2, 20 and 100 requests for
+  1, 10 and 50 tail-`moov` variants. Capping the variants read is a decision
+  about which variants to skip and the finding does not state one.
+- **`nowebm` mock failed MP4 jobs (low): fixed.** `JobScript.failOnlyForContainer`;
+  `mock-api.test.ts` › "the nowebm scenario refuses WebM and nothing else".
+- **"keep source" offered for a WebM file with undeclared separate audio
+  (low): fixed.** `ProbePanel` withholds it with WebM; `stream.test.ts` shows
+  the engine refuses that choice, `probe-panel.test.tsx` the picker hides it.
+- **Dropped findings stay dropped.** One of them was left unmeasured at base,
+  and it reproduces there with ffmpeg alone, no dl-99 code: a moov-at-end MP4
+  copied through the engine's output arguments from an origin that ignores
+  `Range` comes out as 1,292 bytes, exit 0, from a 103,485-byte source
+  (`ffmpeg … "partial file"`, `Stream ends prematurely at 48`), against 103,115
+  from an origin that honours it. `stream.ts`'s header already records the
+  same `partial file` / exit 0 case (measured 2026-09-27). Script:
+  `scratchpad/dl-99/build/norange.mjs`.
