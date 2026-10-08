@@ -3,7 +3,7 @@ id: dl-99
 tool: downloader
 title: A variant with undeclared codecs, chosen as WebM, is copied as H.264 and refused
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -123,6 +123,61 @@ the end, with the undeclared variant above into WebM.
   fails, are refused for WebM with a typed error before ffmpeg starts, and the
   variant does not offer WebM in the UI.
 - Each case has a test that fails if its branch is removed.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-08 · `9dcf0f6f..912c1b97` · Opus 5.5, depth full
+
+| Done when                                                                                                                                              | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Undeclared H.264/AAC MP4 into WebM completes as VP9/Opus via the header read                                                                           | `api/test/webm-undeclared-codecs.test.ts` › "the reproduction: an H.264/AAC MP4 the tier did not describe completes as VP9 and Opus" ✓. It asserts that the bare direct tier has no `videoCodec`, that the registry's probe has `avc1`/`mp4a`, and that the streamed output's codecs are `["opus","vp9"]`. This covers the **direct tier only**: the browser tier's wrapping has no test (F1). Also checked on the real API over HTTP: a faststart and a tail-`moov` MP4 each completed as VP9 + Opus                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Undeclared `container: "webm"` into WebM is a copy, by its arguments, and completes                                                                    | `engine/test/stream.test.ts` › "an undeclared WebM source is copied into WebM, by its arguments and by its result" ✓ (`-c copy`, no `-c:v`/`-c:a`, output VP9 + Opus). Also `api/…` › "a WebM source is copied whole, and its header is never read" ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Unknown container, and an MP4 whose header read fails, are refused for WebM with a typed error before ffmpeg starts, and WebM is not offered in the UI | Unknown container: `stream.test.ts` › "so is a source whose container nobody named, and any other" ✓ (`CONTAINER_UNSUPPORTED`, origin request count unchanged). Header read fails: `api/…` › "an MP4 whose header cannot be read stays undeclared, is refused for WebM" ✓. That test covers only a body that is not an MP4. A read that _fails_ (403 on the ranged read, short ranged answers, a server that ignores `Range` on a tail `moov`) is **verified** on the real API: link answered 422 `CONTAINER_UNSUPPORTED`, `retryable:false`, `attempts:1`, no engine request at the origin. The same source as MP4 and MKV completed. UI: `web/test/probe-panel.test.tsx` › "WebM is not offered for a file nothing describes, and is for one that is declared" ✓; unknown container through `canMakeWebm`: `contract/test/can-make-webm.test.ts` › "a file nothing describes cannot, whatever its container" ✓ |
+| Each case has a test that fails if its branch is removed                                                                                               | **verified** by mutation, with `dist` rebuilt and grepped. Engine `assertContainerCanHold` call removed: 6 of 47 failed. Direct-tier wrapper removed: 1 of 3 failed. `wholeFileIsWebm` forced false: 4 of 95 failed. `ProbePanel` filter disabled: 3 of 23 failed. **Exception:** the browser-tier wrapper removed: 0 of 772 api tests failed (F1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+- **med** · Done when 1 and 4 depend on it · **The browser tier's header read is untested.** The brief's reproduction is the browser tier's variant shape ("A progressive variant the browser tier found"). Reproduction: in `api/src/resolvers.ts` › `buildRegistry`, replace `resolvers.push(describingProgressiveTracks(named(browser), options.fetchImpl));` with `resolvers.push(named(browser));`. Then `npx vitest run tools/downloader/api` gives `Tests 770 passed | 2 skipped (772)`, exit 0. No e2e spec mentions WebM either. Remedy: a test that goes red when the browser entry is unwrapped, either a `buildRegistry` seam the test can reach or an `e2e:sniffer` journey that picks WebM for an undeclared MP4 (that one is gate-only).
+- **med** · no Done when line depends on it · **open decision** · **WebM is offered, then refused for good, when only the re-probe's header read fails.** The premise is an origin whose bounded ranged read works once and then answers 403. My `/flaky/` mode does exactly that. Reproduction with the real API, `node drive.mjs http://127.0.0.1:47991/flaky/h264.mp4 webm`:
+  - The probe answers `videoCodec:"avc1"`, `audioCodec:"mp4a"`, label "H.264 + AAC", so WebM is offered.
+  - The link then answers `422 CONTAINER_UNSUPPORTED`, with `retryable:false` and `attempts:1`.
+  - The copy says "what it holds is not known to fit", which contradicts the label the visitor was shown.
+  - Nothing logs why the read failed: `describingProgressiveTracks` swallows the failure silently.
+
+  Options:
+  - **(a) Recommended: re-probe once on `CONTAINER_UNSUPPORTED` in the orchestrator** (`REPROBE_WORTHY`). The UI already hides WebM for a variant that really is undeclared, so the extra probe almost only runs in this flake or after a hand-built POST.
+  - **(b)** Accept it and record it under Decision 3.
+
+- **med** · no Done when line depends on it · **open decision** · **MP4 output changed, despite the Decision "MP4 and MKV are unchanged".**
+  - Before and after for _declared_ variants, from `buildOutputArgs`. At base (from base source): `mp4 avc1 + ac-3 => -c copy | -c:a aac` and `mp4 mp4v.20.9 + mp4a => -c copy | -c:v libx264`. At head: both give `-c copy`. MKV and WebM are unchanged. `ac-3` and `mp4v.20.x` are the standard RFC 6381 strings, so declared HLS, DASH and yt-dlp variants are affected too, not only header-read ones.
+  - Header-read fourccs not in the alias table now transcode for MP4 where the undeclared variant used to be copied: `dvh1`/`dvhe`/`dva1`/`dvav`/`dav1`, `vp08`, `s263`, `jpeg`/`mjpa`, `apcn`/`apch`, `ac-4`, `samr`, `sowt`/`twos`/`lpcm`, `dtsc`, `mha1`. This is from `containerSupports` over 32 fourccs (script `fourccs.mjs`).
+  - Some of these changes are improvements. An H.263 file served as MP4 now completes as H.264, while ffmpeg refused to write H.263 into `mp4` when the fixture was made ("Could not find tag for codec h263").
+  - Dolby Vision, MJPEG and DTS sources now transcode where a copy probably worked. Whether a base copy of those succeeds is **unmeasured**.
+  - `mux-args.test.ts` pins a sample of fourccs, not the whole set.
+
+  Options:
+  - **(a) Recommended:** keep the aliases, add the Dolby Vision ones (`dvh1`/`dvhe`→`hevc`, `dva1`/`dvav`→`h264`, `dav1`→`av1`), and record the MP4 change in the Log.
+  - **(b)** Use header-read codecs only for the WebM check, so MP4 is literally unchanged.
+
+- **low** · `nfr:performance` · **The wrapper does not bound how many variants it reads.** Measured with `hop-and-count.mjs` on tail-`moov` files: N=1/10/50 cost 2/20/100 requests. Per variant:
+  - a faststart file whose `moov` fits in 64 KiB takes 1 read;
+  - a tail `moov` takes 2 reads;
+  - short answers took 3 reads;
+  - `MAX_READS` caps it at 4, up to 64 KiB plus 16 MiB.
+
+  This repeats on every job re-probe. The only limits are the browser interceptor's `MAX_HITS` (400), a 4 s timeout per read at concurrency 4, and the probe deadline. The Log's "two ranged reads per undeclared MP4" is the typical case, not the bound.
+
+- **low** · no live call site · The mock scenario `nowebm` (`web/src/api/scenarios.ts`) fails every job, an MP4 job included, with "Not available as WebM". `mock.ts` applies `failWith` whatever container was chosen.
+- **low** · no live call site verified · `ProbePanel` hides only `webm`. "keep source" stays offered for a `container: "webm"` variant whose separate audio is undeclared, and `resolveContainer` maps that choice to WebM, which the engine refuses.
+- **dropped** · A `/forbidall/` MP4 job failed with `DOWNLOAD_FAILED`, because ffmpeg sends its own `Range: bytes=0-`. The engine's input is outside this diff.
+- **dropped** · A tail-`moov` MP4 copied from an origin that ignores `Range` came out at 37,635 bytes from a 103,485-byte source, with `durationSec` 3.99. ffmpeg's input path is outside this diff and was not measured at base. It may be worth its own reproduction.
+- **dropped** · `canMakeWebm` adds logic to `contract`, which the tool's `CLAUDE.md` describes as having none. Addition 5 names the function, and the Log gives the reason (`web` cannot import `engine`).
+- **dropped** · Replayed `Cookie` headers follow cross-origin redirect hops. That is a property of `createGuardedFetch` that the engine already had, not something new here.
+- **findings** · the hunt returned 10; 6 carried, 4 dropped.
+- NFR:
+  - **Security ✓.** Every hop goes through `createGuardedFetch`. A 302 to `169.254.169.254` was refused with `BLOCKED_TARGET` at the hop, with only the 302 reaching the socket. The wrapper logs nothing, and the error's `details` carry no URL or header.
+  - **Performance:** see the variant-count bullet above.
+  - **Reliability:** see the re-probe bullet above.
+  - **Maintainability:** see the browser-tier and MP4 bullets above.
+- CI on `912c1b97`: every check passed, `test (windows-latest, informational)` included (run 37704403499; `webm-undeclared-codecs.test.ts` ran 3 tests and `stream.test.ts` ran 44 with 4 skipped). Locally: `npm run check` exit 0, and `npm test -- --project downloader` gave 2157 passed | 2 skipped (2159).
 
 ## Log
 
