@@ -5,7 +5,7 @@ title: A progressive source throttled per connection downloads at one connection
 kind: work-package
 status: ready
 milestone: null
-depends_on: [dl-96]
+depends_on: [dl-96, dl-102]
 difficulty: hard
 ---
 
@@ -77,15 +77,18 @@ throttled range server used to reproduce dl-96 throttles per request, which is
 the right shape. Show a single-connection baseline, then the speed-up.
 
 **After dl-102.** Build this after [dl-102](./dl-102-a-range-ignoring-origin-finishes-a-tail-moov-mp4-undecodable.md)
-has merged (the owner's order, 2026-10-08; both rewrite the progressive input
-path in `engine/src/stream.ts`). dl-102's Done when 2 and 3 make `stream()`
+has merged (the owner's order, 2026-10-08, "so its fixtures can account for
+dl-102's refusal"; `depends_on` carries it). dl-102's Done when 2 and 3 make `stream()`
 refuse a tail-`moov` MP4 from an origin that ignores `Range`, with a new
 contract code, before the first byte. So the "200 to a range request" refusal
 test cannot serve a tail-`moov` file from an origin that answers `200` to every
 request: that job fails with dl-102's code and never reaches the fan-out. Use a
 fast-start MP4 from such an origin (dl-102's Done when 3 keeps it completing
-whole), or an origin that honours the ranges `stream()` and ffmpeg make and
-answers `200` only to the extra connections the fan-out opens.
+whole), or an origin that honours the first connection's ranges and answers
+`200` only to the extra connections the fan-out opens. Neither fixture has been
+tried. Once this is built, ffmpeg reads the loopback server, so the origin sees
+only the loopback's fetches and has to tell the first connection from the extra
+ones by order or by count.
 
 ## Done when
 
@@ -134,14 +137,41 @@ and remember it in SQLite with an expiry. They chose until restart (decision 5).
    (Recommended)" and "Done when as written". **The owner chose "Cover 403 and
    503 too"**, which was the recommended option (the orchestrator's
    recommendation). The Done when bullet now names all six kinds.
-2. **Deferred behind dl-102.** The owner deferred this ticket until
-   [dl-102](./dl-102-a-range-ignoring-origin-finishes-a-tail-moov-mp4-undecodable.md)
-   has merged, because both rewrite the progressive input path in
-   `engine/src/stream.ts`. Read on `origin/main` at `856a4e87`: dl-102's Done when
-   2 has `stream()` throw a typed `AppError` with a new code before the first
-   byte for a tail-`moov` MP4 from an origin that ignores `Range`, and its Done
-   when 3 keeps a fast-start MP4 from that origin completing whole. So the "200
-   to a range request" refusal test cannot use a tail-`moov` source from an
-   origin that ignores `Range` on every request; Build, "After dl-102", says so.
-   `status` stays `ready`: dl-102 is not in `depends_on`, and the owner's order
-   is recorded here and in Build.
+2. **Deferred behind dl-102.** The orchestrator (session tools-f1) put the
+   question: "dl-98 and dl-102 both rewrite how a progressive source reaches
+   ffmpeg in engine/src/stream.ts, and the concurrency rule says not to run them
+   side by side. dl-101 has no overlap with either, so it starts now regardless
+   of what you pick. How should dl-98 run?" The options were:
+   1. "dl-101 + dl-102 now; dl-98 later (Recommended)": "Build dl-101 and dl-102
+      in parallel now. dl-98 goes in a later batch, built from main once dl-102
+      has merged, so its fixtures can account for dl-102's refusal. Nothing
+      depends on dl-98, and it is the largest of the three: a new loopback range
+      server with no files named in its brief. No stacking or post-squash rebase
+      is needed."
+   2. "Stack dl-98 on dl-102": "Once dl-102 passes its gate, build dl-98 on
+      dl-102's branch as a draft PR against it, inside this batch. That keeps
+      all three in this batch but costs a rebase onto main with --onto after
+      dl-102 squash-merges. If dl-102 changes in a fix round, dl-98 reads a
+      moving base. This would also be the first trial of GitHub's native stacked
+      PRs, which concurrency.md says the next chain should run."
+   3. "dl-98 first, dl-102 after": "Build dl-101 and dl-98 now and hold dl-102
+      until dl-98 merges. dl-102's probe could then reuse dl-98's API-side
+      fetcher, which already does the SSRF check. The cost: a defect where a
+      broken file is reported as a success stays on main for longer, behind the
+      biggest ticket."
+
+   **The owner chose option 1**, which was the recommended option (the
+   orchestrator's recommendation). The owner's stated reason is the one in the
+   option: "so its fixtures can account for dl-102's refusal". The `stream.ts`
+   overlap in the question was the orchestrator's framing, taken from an intake
+   seam-mapper, not the owner's reason. As the recorder's observation, it is also
+   not total: dl-102's Build item 2 lets its probe live in the api before
+   `stream()`. Read on `origin/main` at `856a4e87`: dl-102's Done when 2 has
+   `stream()` throw a typed `AppError` with a new code before the first byte for
+   a tail-`moov` MP4 from an origin that ignores `Range`, and its Done when 3
+   keeps a fast-start MP4 from that origin completing whole. So the "200 to a
+   range request" refusal test cannot use a tail-`moov` source from an origin
+   that ignores `Range` on every request; Build, "After dl-102", says so.
+   `depends_on` now lists dl-102, so `npm run status -- --ready` withholds this
+   ticket until dl-102 is `done`, and the owner's order does not rest on prose.
+   `status` stays `ready`: nobody has started it, and it is only withheld.
