@@ -301,6 +301,97 @@ const MIGRATIONS: readonly string[] = [
   -- on import says about it. Written with the row, never after; NULL on a paste.
   ALTER TABLE statement_rows ADD COLUMN note TEXT;
   `,
+
+  // 6 — spending categories: the list, the map from Desjardins' own categories to
+  // it, a row's own override, and the column a rule and a period line gain (lg-15).
+  // "Category" alone is still Desjardins' text on a row; every name here says
+  // "spending" so the two are never read for each other.
+  `
+  -- The one list. A version is a name; a rename supersedes it and a retirement
+  -- is a version that supersedes it, so nothing is updated. Everything that
+  -- picks a category stores the id of its FIRST version (root_id, or id where
+  -- that is NULL), which a rename therefore never changes.
+  CREATE TABLE spending_categories (
+    id INTEGER PRIMARY KEY,
+    -- NULL on a category's first version, whose own id names the category.
+    root_id INTEGER REFERENCES spending_categories (id),
+    name TEXT NOT NULL,
+    supersedes INTEGER REFERENCES spending_categories (id),
+    -- 1 on a retirement: a copy of what it retires, no longer offered.
+    retired INTEGER NOT NULL DEFAULT 0 CHECK (retired IN (0, 1)),
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    CHECK ((supersedes IS NULL) = (root_id IS NULL))
+  );
+
+  CREATE UNIQUE INDEX spending_categories_supersedes
+    ON spending_categories (supersedes) WHERE supersedes IS NOT NULL;
+
+  -- Generic words, so unlike rules they may be seeded from the repository.
+  INSERT INTO spending_categories (name, created_at, created_by) VALUES
+    ('Groceries', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration'),
+    ('Alcohol', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration'),
+    ('Household', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration'),
+    ('Pharmacy', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration'),
+    ('Restaurant', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration'),
+    ('Other', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'migration');
+
+  -- Each category as it now stands, retired or not: category_id is what the rest
+  -- of the database stores, version_id the row it is read from.
+  CREATE VIEW current_spending_categories AS
+    SELECT coalesce(root_id, id) AS category_id, id AS version_id, name, retired, created_at, created_by
+    FROM spending_categories
+    WHERE NOT EXISTS (SELECT 1 FROM spending_categories newer WHERE newer.supersedes = spending_categories.id);
+
+  -- Desjardins' category text to a spending category. Nothing is seeded: the
+  -- texts are not all known. A version for a text supersedes the earlier ones by
+  -- being later; NULL is the entry cleared. desjardins_key is the text folded the
+  -- way the rules fold a category (books/src/classify.ts), desjardins_category
+  -- the text as the person saw it.
+  CREATE TABLE spending_category_map (
+    id INTEGER PRIMARY KEY,
+    desjardins_key TEXT NOT NULL,
+    desjardins_category TEXT NOT NULL,
+    spending_category_id INTEGER REFERENCES spending_categories (id),
+    entered_at TEXT NOT NULL,
+    entered_by TEXT NOT NULL
+  );
+
+  CREATE INDEX spending_category_map_key ON spending_category_map (desjardins_key, id);
+
+  CREATE VIEW current_spending_category_map AS
+    SELECT * FROM spending_category_map
+    WHERE id = (SELECT max(id) FROM spending_category_map later WHERE later.desjardins_key = spending_category_map.desjardins_key);
+
+  -- A row's own spending category, a record about the row and never a column on
+  -- it (like a classification). The latest stands; NULL withdraws the override.
+  CREATE TABLE spending_category_overrides (
+    id INTEGER PRIMARY KEY,
+    row_id INTEGER NOT NULL REFERENCES statement_rows (id),
+    spending_category_id INTEGER REFERENCES spending_categories (id),
+    set_at TEXT NOT NULL,
+    set_by TEXT NOT NULL
+  );
+
+  CREATE INDEX spending_category_overrides_row ON spending_category_overrides (row_id, id);
+
+  CREATE VIEW current_spending_category_overrides AS
+    SELECT * FROM spending_category_overrides
+    WHERE id = (SELECT max(id) FROM spending_category_overrides later WHERE later.row_id = spending_category_overrides.row_id);
+
+  -- A rule version may name a spending category, which then overrides the map for
+  -- every row it classifies. Rules stored before this name none.
+  ALTER TABLE rules ADD COLUMN spending_category_id INTEGER REFERENCES spending_categories (id);
+
+  -- A period line picks from the list. The free-text category column stays, and
+  -- lines already stored keep their text and name no spending category.
+  ALTER TABLE period_lines ADD COLUMN spending_category_id INTEGER REFERENCES spending_categories (id);
+
+  -- current_rules and current_period_lines are SELECT * views and are left as they
+  -- are: SQLite stores a view as text and expands the star on every use, so both
+  -- already show the two columns above (api/test/spending-categories.test.ts
+  -- reads them through the views on a database migration 5 left).
+  `,
 ];
 
 /**

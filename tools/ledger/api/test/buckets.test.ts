@@ -47,7 +47,14 @@ function rule(
   personId: string | null,
   bucket: RuleDraft["bucket"],
 ): RuleDraft {
-  return { descriptionPattern, category: null, amountCents: null, personId, bucket };
+  return {
+    descriptionPattern,
+    category: null,
+    amountCents: null,
+    personId,
+    bucket,
+    spendingCategoryId: null,
+  };
 }
 
 async function start(): Promise<App> {

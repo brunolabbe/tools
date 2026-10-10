@@ -48,6 +48,12 @@ const VERBS = {
   periodLineRetire: ["POST", ROUTES.periodLineRetire.replace(":id", "1")],
   recurring: ["POST", ROUTES.recurring],
   recurringItem: ["POST", ROUTES.recurringItem.replace(":id", "1")],
+  spendingCategories: ["GET", ROUTES.spendingCategories],
+  spendingCategory: ["POST", ROUTES.spendingCategory.replace(":id", "1")],
+  spendingCategoryRetire: ["POST", ROUTES.spendingCategoryRetire.replace(":id", "1")],
+  spendingCategoryMap: ["GET", ROUTES.spendingCategoryMap],
+  spendingCategoryOverrides: ["POST", ROUTES.spendingCategoryOverrides],
+  rows: ["GET", ROUTES.rows],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
@@ -213,6 +219,21 @@ describe("the routes that answer two verbs", () => {
 
     await target.server.inject({ method: "GET", url });
     const second = await target.server.inject({ method: "GET", url });
+
+    expect(second.statusCode).toBe(429);
+  });
+
+  // lg-15: the table walks one verb per route, so the other verb of a path two
+  // verbs share was never requested. These are the writes whose `GET` it walks.
+  test.each([
+    ["rules", ROUTES.rules],
+    ["spendingCategories", ROUTES.spendingCategories],
+    ["spendingCategoryMap", ROUTES.spendingCategoryMap],
+  ])("POST %s refuses the second request in a minute too", async (_name, url) => {
+    const target = await startTight();
+
+    await target.server.inject({ method: "POST", url, payload: {} });
+    const second = await target.server.inject({ method: "POST", url, payload: {} });
 
     expect(second.statusCode).toBe(429);
   });

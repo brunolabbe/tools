@@ -3,7 +3,8 @@
  * and no clock in it. Today that is the statement parser (lg-1), the rule
  * matching that files a row under a bucket (lg-4), and what each bucket holds and
  * whose it is, with the ratio derived from the salaries (lg-5); and periods of
- * personal-card spending, with the settlement closing one computes (lg-6).
+ * personal-card spending, with the settlement closing one computes (lg-6); and
+ * the spending category a bank row has (lg-15).
  */
 
 export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.ts";
@@ -34,6 +35,14 @@ export { CURRENT_FORMULA, settleStretches, settlement } from "./settlement.ts";
 export type { Charge, PersonCents, Settlement, Stretch } from "./settlement.ts";
 export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
+export { spendingCategory, spendingMap } from "./spending.ts";
+export type {
+  SpendingChoice,
+  SpendingMap,
+  SpendingMapVersion,
+  SpendingRule,
+  SpendingSource,
+} from "./spending.ts";
 export { fromHistory } from "./history.ts";
 export type { HistoryAnswer, HistorySuggestion } from "./history.ts";
 export { parseStatement } from "./statement.ts";

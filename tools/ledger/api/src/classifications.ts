@@ -30,6 +30,7 @@ import type {
 import type { Database } from "better-sqlite3";
 import { currentRules, requireKnownPerson } from "./rules.ts";
 import type { RuleContext } from "./rules.ts";
+import { spendingReader } from "./spending-categories.ts";
 
 interface RowColumns {
   id: number;
@@ -168,6 +169,7 @@ function answersByDescription(db: Database): Map<string, HistoryAnswer<Bucket>[]
 export function inbox(db: Database): InboxRow[] {
   const rules = currentRules(db);
   const answers = answersByDescription(db);
+  const spending = spendingReader(db);
   const rows = db
     .prepare(
       `SELECT id, date, category, description, amount_cents, balance_cents
@@ -190,16 +192,27 @@ export function inbox(db: Database): InboxRow[] {
       balanceCents: row.balance_cents,
     };
     const history = fromHistory(row, answers.get(normalizeDescription(row.description)) ?? []);
+    // The rule `classify` returned is the classifying one, filed yet or not
+    // (lg-15): a suggestion that is only nearest says nothing about the category.
+    const spendingCategory = spending.of(row, match.kind === "classified" ? match.rule : null);
     // A row can be here while a rule takes it exactly only if the rule came
     // after the paste, which is its own reason: the suggestion is a sure one.
     return match.kind === "classified"
-      ? { ...shown, reason: "matches", suggestion: match.rule, history, matching: [match.rule] }
+      ? {
+          ...shown,
+          reason: "matches",
+          suggestion: match.rule,
+          history,
+          matching: [match.rule],
+          spendingCategory,
+        }
       : {
           ...shown,
           reason: match.reason,
           suggestion: match.suggestion,
           history,
           matching: match.matching,
+          spendingCategory,
         };
   });
 }

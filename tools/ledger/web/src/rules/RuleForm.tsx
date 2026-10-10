@@ -12,8 +12,9 @@
 import { useId, useState } from "react";
 import { formatCents, parseTypedAmountCents } from "@ledger/books";
 import { AppError, BUCKETS } from "@ledger/contract";
-import type { Bucket, RuleDraft } from "@ledger/contract";
+import type { Bucket, RuleDraft, SpendingCategory } from "@ledger/contract";
 import { BUCKET_LABELS } from "../labels.ts";
+import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 
 /** What is shown in the fields to begin with. */
 export interface RuleFormValues {
@@ -22,11 +23,14 @@ export interface RuleFormValues {
   amountCents: number | null;
   personId: string | null;
   bucket: Bucket;
+  spendingCategoryId: number | null;
 }
 
 export interface RuleFormProps {
   initial: RuleFormValues;
   people: readonly string[];
+  /** The spending categories to pick from (lg-15), retired ones included. */
+  categories: readonly SpendingCategory[];
   submitLabel: string;
   /** Rejects with an `AppError` to put the server's own sentence in front of the person. */
   onSubmit: (draft: RuleDraft) => Promise<void>;
@@ -44,6 +48,7 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
   );
   const [person, setPerson] = useState(initial.personId ?? "");
   const [bucket, setBucket] = useState<Bucket>(initial.bucket);
+  const [spendingCategoryId, setSpendingCategoryId] = useState(initial.spendingCategoryId);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -67,6 +72,7 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
         amountCents,
         personId: person === "" ? null : person,
         bucket,
+        spendingCategoryId,
       })
       .catch((error: unknown) => {
         setProblem(AppError.from(error).message);
@@ -86,7 +92,7 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
       <p className="muted hint">
         The whole description, as the bank writes it. Use * for any run of characters.
       </p>
-      <label htmlFor={`${id}-category`}>Category</label>
+      <label htmlFor={`${id}-category`}>Bank category</label>
       <input
         id={`${id}-category`}
         value={category}
@@ -128,6 +134,17 @@ export function RuleForm(props: RuleFormProps): React.ReactElement {
           </option>
         ))}
       </select>
+      <label htmlFor={`${id}-spending`}>Spending category</label>
+      <SpendingCategoryPicker
+        id={`${id}-spending`}
+        categories={props.categories}
+        value={spendingCategoryId}
+        noneLabel="Use the bank category's"
+        onChange={setSpendingCategoryId}
+      />
+      <p className="muted hint">
+        For the spending charts only. Over the map, for every row this rule files.
+      </p>
       {problem !== null && (
         <p className="bad" role="alert">
           {problem}

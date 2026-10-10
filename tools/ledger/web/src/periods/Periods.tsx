@@ -17,8 +17,11 @@ import type {
   OpenPeriodResponse,
   RecurringItem,
   SettlementFigures,
+  SpendingCategory,
 } from "@ledger/contract";
 import { fetchPeople } from "../api/rules.ts";
+import { fetchSpendingCategories } from "../api/spending.ts";
+import { spendingNames } from "../spending/Picker.tsx";
 import {
   closePeriod,
   fetchMe,
@@ -32,6 +35,7 @@ import { Recurring } from "./Recurring.tsx";
 
 interface Loaded {
   people: string[];
+  categories: SpendingCategory[];
   me: string;
   open: OpenPeriodResponse;
   closed: ClosedPeriod[];
@@ -64,8 +68,14 @@ export function settlementSentence(settlement: SettlementFigures): {
   };
 }
 
-function lineLabel(line: OpenPeriodLine): string {
-  const what = [line.category, line.note].filter((part) => part !== null).join(" · ");
+/**
+ * A line is named by its spending category when it has one. One stored before the
+ * list, or imported from the workbook, shows its free text as it was.
+ */
+function lineLabel(line: OpenPeriodLine, names: ReadonlyMap<number, string>): string {
+  const spending =
+    line.spendingCategoryId === null ? undefined : names.get(line.spendingCategoryId);
+  const what = [spending ?? line.category, line.note].filter((part) => part !== null).join(" · ");
   const words = what === "" ? "Line" : what;
   const kind =
     line.recurringItemId !== null
@@ -89,14 +99,15 @@ export function Periods(): React.ReactElement {
   const refresh = useCallback(
     async (range: { start?: string | null; end?: string }, signal?: AbortSignal) => {
       try {
-        const [people, me, open, closed, recurring] = await Promise.all([
+        const [people, categories, me, open, closed, recurring] = await Promise.all([
           fetchPeople(signal),
+          fetchSpendingCategories(signal),
           fetchMe(signal),
           fetchOpenPeriod(range, signal),
           fetchPeriods(signal),
           fetchRecurring(signal),
         ]);
-        setLoad({ state: "ready", people, me, open, closed, recurring });
+        setLoad({ state: "ready", people, categories, me, open, closed, recurring });
         return open;
       } catch (error: unknown) {
         if (signal?.aborted !== true) {
@@ -127,7 +138,8 @@ export function Periods(): React.ReactElement {
     );
   }
 
-  const { people, me, open, closed, recurring } = load;
+  const { people, categories, me, open, closed, recurring } = load;
+  const names = spendingNames(categories);
   const range = (): { start?: string | null; end?: string } => ({
     ...(open.first && since !== "" ? { start: since } : {}),
     ...(end === null ? {} : { end }),
@@ -212,7 +224,7 @@ export function Periods(): React.ReactElement {
                   {lines.map((line) => (
                     <li key={`${String(line.lineId)}-${String(line.recurringItemId)}-${line.date}`}>
                       <span>
-                        {line.date} · {lineLabel(line)}
+                        {line.date} · {lineLabel(line, names)}
                       </span>
                       <span className="amount">
                         {formatCents(line.amountCents)}
@@ -221,7 +233,7 @@ export function Periods(): React.ReactElement {
                             type="button"
                             className="secondary small"
                             disabled={busy}
-                            aria-label={`Remove ${line.date} ${lineLabel(line)}`}
+                            aria-label={`Remove ${line.date} ${lineLabel(line, names)}`}
                             onClick={() => {
                               const lineId = line.lineId;
                               if (lineId === null) return;
@@ -242,7 +254,14 @@ export function Periods(): React.ReactElement {
             </div>
           );
         })}
-        <LineForm people={people} me={me} busy={busy} send={send} onProblem={setProblem} />
+        <LineForm
+          people={people}
+          categories={categories}
+          me={me}
+          busy={busy}
+          send={send}
+          onProblem={setProblem}
+        />
       </section>
 
       <section className="card" aria-labelledby={`${id}-close`}>

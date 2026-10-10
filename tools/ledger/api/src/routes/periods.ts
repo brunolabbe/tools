@@ -124,9 +124,9 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
   // route as no limit at all; the route is limited per person like every other
   // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
   // `api/src/routes/periods.ts`. Guarded by `api/test/route-limits.test.ts`:
-  // taking `{ onRequest: read }` off this route fails 1 of its 31 tests, "GET
+  // taking `{ onRequest: read }` off this route fails 1 of its 40 tests, "GET
   // recurring refuses the second request in a minute too" — that test, not this
-  // comment, is what holds it. Measured 2026-10-06 at 0862fd3.
+  // comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
   app.get(ROUTES.recurring, { onRequest: read }, async () => {
     const body: RecurringResponse = { items: currentRecurring(context.db) };

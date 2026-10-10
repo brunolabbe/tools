@@ -50,6 +50,8 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   RECURRING_ITEM_NOT_FOUND: 404,
   PERIOD_NOT_OPEN: 409,
   RATIO_NOT_IN_EFFECT: 422,
+  // lg-15: a spending category named that is not in the list (never was, or retired).
+  SPENDING_CATEGORY_NOT_FOUND: 404,
 };
 
 /**

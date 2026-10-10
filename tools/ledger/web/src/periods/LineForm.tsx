@@ -7,10 +7,14 @@
 
 import { useId, useState } from "react";
 import { parseTypedAmountCents } from "@ledger/books";
+import type { SpendingCategory } from "@ledger/contract";
 import { addLine } from "../api/periods.ts";
+import { SpendingCategoryPicker } from "../spending/Picker.tsx";
 
 interface Props {
   people: readonly string[];
+  /** The list a line's spending category is picked from (lg-15). */
+  categories: readonly SpendingCategory[];
   /** Who is signed in: the payer unless they choose another. */
   me: string;
   busy: boolean;
@@ -28,12 +32,19 @@ function today(): string {
   return `${String(now.getFullYear())}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-export function LineForm({ people, me, busy, send, onProblem }: Props): React.ReactElement {
+export function LineForm({
+  people,
+  categories,
+  me,
+  busy,
+  send,
+  onProblem,
+}: Props): React.ReactElement {
   const id = useId();
   const [payer, setPayer] = useState(people.includes(me) ? me : (people[0] ?? ""));
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("");
+  const [spendingCategoryId, setSpendingCategoryId] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [theirs, setTheirs] = useState(false);
 
@@ -59,12 +70,14 @@ export function LineForm({ people, me, busy, send, onProblem }: Props): React.Re
         personId: payer,
         date,
         amountCents,
-        category: category.trim() === "" ? null : category.trim(),
+        // The free text stays for the lines that have it; a new one picks from the list.
+        category: null,
+        spendingCategoryId,
         note: note.trim() === "" ? null : note.trim(),
         chargedTo: theirs ? other : null,
       });
       setAmount("");
-      setCategory("");
+      setSpendingCategoryId(null);
       setNote("");
       setTheirs(false);
       return theirs ? `Charged to ${other ?? ""}.` : "Line added.";
@@ -96,11 +109,13 @@ export function LineForm({ people, me, busy, send, onProblem }: Props): React.Re
         inputMode="decimal"
         onChange={(event) => setAmount(event.target.value)}
       />
-      <label htmlFor={`${id}-category`}>Category</label>
-      <input
-        id={`${id}-category`}
-        value={category}
-        onChange={(event) => setCategory(event.target.value)}
+      <label htmlFor={`${id}-spending`}>Spending category</label>
+      <SpendingCategoryPicker
+        id={`${id}-spending`}
+        categories={categories}
+        value={spendingCategoryId}
+        noneLabel="None"
+        onChange={setSpendingCategoryId}
       />
       <label htmlFor={`${id}-note`}>Note</label>
       <input id={`${id}-note`} value={note} onChange={(event) => setNote(event.target.value)} />

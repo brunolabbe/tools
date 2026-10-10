@@ -63,6 +63,7 @@ const WAITING: Omit<InboxRow, "id" | "description" | "amountCents"> = {
   reason: "no-rule",
   suggestion: null,
   history: null,
+  spendingCategory: null,
   matching: [],
 };
 
@@ -125,6 +126,24 @@ vi.mock("../src/api/periods.ts", () => ({
   fetchPeriods: vi.fn().mockResolvedValue([]),
   fetchRecurring: vi.fn().mockResolvedValue([]),
 }));
+
+// lg-15: the screens that pick a spending category read the list; the categories tab shows it.
+vi.mock("../src/api/spending.ts", () => ({
+  fetchSpendingCategories: vi.fn().mockResolvedValue([]),
+  fetchSpendingMap: vi.fn().mockResolvedValue([]),
+  fetchUncategorisedRows: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  setRowSpendingCategory: vi.fn(),
+}));
+
+test("the categories tab shows the spending categories screen", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+
+  expect(await screen.findByRole("heading", { name: "Spending categories" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
+});
 
 test("the period tab shows the period screen", async () => {
   vi.mocked(fetchInbox).mockResolvedValue([]);

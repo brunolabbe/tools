@@ -10,15 +10,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
-import type { Rule, RuleDraft } from "@ledger/contract";
+import type { Rule, RuleDraft, SpendingCategory } from "@ledger/contract";
 import { createRule, editRule, fetchPeople, fetchRules, retireRule } from "../api/rules.ts";
+import { fetchSpendingCategories } from "../api/spending.ts";
 import { BUCKET_LABELS, answerLabel, criteriaLabel } from "../labels.ts";
+import { spendingNames } from "../spending/Picker.tsx";
 import { RuleForm } from "./RuleForm.tsx";
 
 type Load =
   | { state: "loading" }
   | { state: "failed"; message: string }
-  | { state: "ready"; rules: Rule[]; people: string[] };
+  | { state: "ready"; rules: Rule[]; people: string[]; categories: SpendingCategory[] };
 
 /** Which form is open: a new rule, or the edit of one. */
 type Open = { kind: "none" } | { kind: "new" } | { kind: "edit"; id: number };
@@ -29,6 +31,7 @@ const BLANK = {
   amountCents: null,
   personId: null,
   bucket: "current-expenses",
+  spendingCategoryId: null,
 } as const;
 
 export function Rules(): React.ReactElement {
@@ -38,8 +41,12 @@ export function Rules(): React.ReactElement {
 
   const refresh = useCallback(async (signal?: AbortSignal): Promise<void> => {
     try {
-      const [rules, people] = await Promise.all([fetchRules(signal), fetchPeople(signal)]);
-      setLoad({ state: "ready", rules, people });
+      const [rules, people, categories] = await Promise.all([
+        fetchRules(signal),
+        fetchPeople(signal),
+        fetchSpendingCategories(signal),
+      ]);
+      setLoad({ state: "ready", rules, people, categories });
     } catch (error: unknown) {
       if (signal?.aborted === true) return;
       setLoad({ state: "failed", message: AppError.from(error).message });
@@ -61,7 +68,8 @@ export function Rules(): React.ReactElement {
     );
   }
 
-  const { rules, people } = load;
+  const { rules, people, categories } = load;
+  const names = spendingNames(categories);
 
   /**
    * Runs a change, then shows the list as it now is — also when the change was
@@ -103,6 +111,7 @@ export function Rules(): React.ReactElement {
               <RuleForm
                 initial={rule}
                 people={people}
+                categories={categories}
                 submitLabel="Save"
                 onSubmit={(draft: RuleDraft) => change(() => editRule(rule.id, draft))}
                 onCancel={() => setOpen({ kind: "none" })}
@@ -113,6 +122,11 @@ export function Rules(): React.ReactElement {
                 <p className="muted">
                   {criteriaLabel(rule)} → {answerLabel(rule)}
                 </p>
+                {rule.spendingCategoryId !== null && (
+                  <p className="muted">
+                    Spending category: {names.get(rule.spendingCategoryId) ?? "unknown"}
+                  </p>
+                )}
                 <div className="actions">
                   <button
                     type="button"
@@ -140,6 +154,7 @@ export function Rules(): React.ReactElement {
         <RuleForm
           initial={BLANK}
           people={people}
+          categories={categories}
           submitLabel="Add rule"
           onSubmit={(draft) => change(() => createRule(draft))}
           onCancel={() => setOpen({ kind: "none" })}

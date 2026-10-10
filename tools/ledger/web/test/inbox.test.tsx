@@ -10,13 +10,18 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
-import type { InboxRow, Rule } from "@ledger/contract";
+import type { InboxRow, Rule, SpendingCategory } from "@ledger/contract";
 import { classifyRow, fetchInbox } from "../src/api/inbox.ts";
 import { createRule, fetchPeople } from "../src/api/rules.ts";
+import { fetchSpendingCategories, setRowSpendingCategory } from "../src/api/spending.ts";
 import { Inbox } from "../src/inbox/Inbox.tsx";
 
 vi.mock("../src/api/inbox.ts", () => ({ fetchInbox: vi.fn(), classifyRow: vi.fn() }));
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn(), createRule: vi.fn() }));
+vi.mock("../src/api/spending.ts", () => ({
+  fetchSpendingCategories: vi.fn(),
+  setRowSpendingCategory: vi.fn(),
+}));
 
 const inbox = vi.mocked(fetchInbox);
 const classified = vi.mocked(classifyRow);
@@ -25,9 +30,22 @@ const created = vi.mocked(createRule);
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
 });
 
 afterEach(cleanup);
+
+function category(id: number, name: string): SpendingCategory {
+  return {
+    id,
+    name,
+    retired: false,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    createdBy: "migration",
+  };
+}
+
+const CATEGORIES = [category(1, "Groceries"), category(4, "Pharmacy")];
 
 const RULE: Rule = {
   id: 7,
@@ -36,6 +54,7 @@ const RULE: Rule = {
   amountCents: 40000,
   personId: "sam",
   bucket: "mortgage",
+  spendingCategoryId: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   createdBy: "alex",
 };
@@ -51,6 +70,7 @@ const ODD: InboxRow = {
   reason: "differs",
   suggestion: RULE,
   history: null,
+  spendingCategory: null,
   matching: [],
 };
 
@@ -65,6 +85,7 @@ const GROCERIES: InboxRow = {
   reason: "no-rule",
   suggestion: null,
   history: null,
+  spendingCategory: null,
   matching: [],
 };
 
@@ -149,7 +170,7 @@ test("answering with a person and a bucket, then taking the offer, creates a rul
   const offer = within(await screen.findByRole("group", { name: "Make a rule from this answer" }));
   // The form is filled in from the row, amount included.
   expect(offer.getByLabelText<HTMLInputElement>("Description").value).toBe(GROCERIES.description);
-  expect(offer.getByLabelText<HTMLInputElement>("Category").value).toBe("Épicerie");
+  expect(offer.getByLabelText<HTMLInputElement>("Bank category").value).toBe("Épicerie");
   expect(offer.getByLabelText<HTMLInputElement>("Exact amount").value).toBe("-123.45 $");
 
   inbox.mockResolvedValue([]);
@@ -162,6 +183,7 @@ test("answering with a person and a bucket, then taking the offer, creates a rul
     amountCents: -12345,
     personId: null,
     bucket: "current-expenses",
+    spendingCategoryId: null,
   });
   await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Rule added"));
   expect(screen.queryByRole("group", { name: "Make a rule from this answer" })).toBeNull();
@@ -199,6 +221,7 @@ test("the offered rule can be loosened before it is created", async () => {
     amountCents: null,
     personId: "alex",
     bucket: "mortgage",
+    spendingCategoryId: null,
   });
 });
 
@@ -334,4 +357,106 @@ test("a history answer that differs from the suggestion is offered beside it", a
   expect(row.getByText(/alex · Current expenses, last time/u)).toBeTruthy();
   expect(row.getByRole("button", { name: "Accept" })).toBeTruthy();
   expect(row.getByRole("button", { name: "Use this answer" })).toBeTruthy();
+});
+
+// A row's spending category (lg-15), shown where the row is and set there.
+test("a row shows its spending category and where it came from, and keeps its place", async () => {
+  inbox.mockResolvedValue([
+    { ...GROCERIES, spendingCategory: { id: 1, source: "map" } },
+    { ...ODD, spendingCategory: null },
+  ]);
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+
+  const groceries = within(rowOf(GROCERIES.description));
+  const select = groceries.getByLabelText<HTMLSelectElement>(
+    `Spending category for ${GROCERIES.description}`,
+  );
+  expect(select.value).toBe("1");
+  expect(groceries.getByText("from the bank's category")).toBeTruthy();
+  // A row with none says so, and a category never takes it out of the inbox.
+  const odd = within(rowOf(ODD.description));
+  expect(
+    odd.getByLabelText<HTMLSelectElement>(`Spending category for ${ODD.description}`).value,
+  ).toBe("");
+  expect(screen.getAllByRole("listitem").length).toBeGreaterThanOrEqual(2);
+});
+
+test("choosing another writes the row's own, and the row stays in the inbox", async () => {
+  inbox.mockResolvedValue([{ ...GROCERIES, spendingCategory: { id: 1, source: "map" } }]);
+  vi.mocked(setRowSpendingCategory).mockResolvedValue({
+    rowId: GROCERIES.id,
+    spendingCategory: { id: 4, source: "override" },
+  });
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+  const label = `Spending category for ${GROCERIES.description}`;
+
+  fireEvent.change(within(rowOf(GROCERIES.description)).getByLabelText(label), {
+    target: { value: "4" },
+  });
+
+  await waitFor(() => expect(setRowSpendingCategory).toHaveBeenCalledWith(GROCERIES.id, 4));
+  await waitFor(() =>
+    expect(
+      within(rowOf(GROCERIES.description)).getByLabelText<HTMLSelectElement>(label).value,
+    ).toBe("4"),
+  );
+  expect(within(rowOf(GROCERIES.description)).getByText("set on this row")).toBeTruthy();
+  expect(classified).not.toHaveBeenCalled();
+});
+
+test("withdrawing the row's own choice writes a null, and a row with none of its own writes nothing", async () => {
+  inbox.mockResolvedValue([
+    { ...GROCERIES, spendingCategory: { id: 4, source: "override" } },
+    { ...ODD, spendingCategory: { id: 1, source: "map" } },
+  ]);
+  vi.mocked(setRowSpendingCategory).mockResolvedValue({
+    rowId: GROCERIES.id,
+    spendingCategory: null,
+  });
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+
+  // Nothing of its own to withdraw on the mapped row: choosing "no choice" is a no-op.
+  fireEvent.change(
+    within(rowOf(ODD.description)).getByLabelText(`Spending category for ${ODD.description}`),
+    { target: { value: "" } },
+  );
+  expect(setRowSpendingCategory).not.toHaveBeenCalled();
+
+  fireEvent.change(
+    within(rowOf(GROCERIES.description)).getByLabelText(
+      `Spending category for ${GROCERIES.description}`,
+    ),
+    { target: { value: "" } },
+  );
+
+  await waitFor(() => expect(setRowSpendingCategory).toHaveBeenCalledWith(GROCERIES.id, null));
+});
+
+test("the rule offered from an answer can name a spending category", async () => {
+  inbox.mockResolvedValue([GROCERIES]);
+  classified.mockResolvedValue({
+    id: 2,
+    rowId: GROCERIES.id,
+    bucket: "current-expenses",
+    personId: null,
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-10-03T09:30:00.000Z",
+    classifiedBy: "alex",
+  });
+  created.mockResolvedValue({ ...RULE, id: 9 });
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+  fireEvent.click(within(rowOf(GROCERIES.description)).getByRole("button", { name: "Classify" }));
+  const offer = within(await screen.findByRole("group", { name: "Make a rule from this answer" }));
+
+  fireEvent.change(offer.getByLabelText("Spending category"), { target: { value: "1" } });
+  inbox.mockResolvedValue([]);
+  fireEvent.click(offer.getByRole("button", { name: "Create rule" }));
+
+  await waitFor(() => expect(created).toHaveBeenCalledTimes(1));
+  expect(created).toHaveBeenCalledWith(expect.objectContaining({ spendingCategoryId: 1 }));
 });

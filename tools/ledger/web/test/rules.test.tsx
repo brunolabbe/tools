@@ -8,8 +8,9 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
-import type { Rule } from "@ledger/contract";
+import type { Rule, SpendingCategory } from "@ledger/contract";
 import { createRule, editRule, fetchPeople, fetchRules, retireRule } from "../src/api/rules.ts";
+import { fetchSpendingCategories } from "../src/api/spending.ts";
 import { Rules } from "../src/rules/Rules.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({
@@ -22,12 +23,21 @@ vi.mock("../src/api/rules.ts", () => ({
 
 const rules = vi.mocked(fetchRules);
 
+vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
 });
 
 afterEach(cleanup);
+
+function category(id: number, name: string, retired = false): SpendingCategory {
+  return { id, name, retired, createdAt: "2026-10-01T00:00:00.000Z", createdBy: "migration" };
+}
+
+const CATEGORIES = [category(1, "Groceries"), category(4, "Pharmacy"), category(6, "Other", true)];
 
 const TRANSFER: Rule = {
   id: 7,
@@ -36,6 +46,7 @@ const TRANSFER: Rule = {
   amountCents: 40000,
   personId: "sam",
   bucket: "mortgage",
+  spendingCategoryId: null,
   createdAt: "2026-10-01T00:00:00.000Z",
   createdBy: "alex",
 };
@@ -91,6 +102,7 @@ test("adds a rule from the form, with an amount read the way it is typed", async
     amountCents: 40050,
     personId: "sam",
     bucket: "mortgage",
+    spendingCategoryId: null,
   });
   // The form closes and the list is the server's.
   await waitFor(() => expect(screen.queryByRole("button", { name: "Add rule" })).toBeNull());
@@ -130,6 +142,7 @@ test("editing a rule sends the new version for that rule's id", async () => {
     amountCents: 42000,
     personId: "sam",
     bucket: "mortgage",
+    spendingCategoryId: null,
   });
 });
 
@@ -164,4 +177,68 @@ test("a rule the other person already changed is refused in the server's words, 
   await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(message));
   expect(screen.getAllByRole("alert")).toHaveLength(1);
   expect(await screen.findByText(/Virements, 450.00 \$/u)).toBeTruthy();
+});
+
+// A rule's spending category (lg-15): optional, part of the version, and over the map.
+test("a new rule can name a spending category, and a retired one is not offered", async () => {
+  rules.mockResolvedValue([]);
+  vi.mocked(createRule).mockResolvedValue({ ...TRANSFER, spendingCategoryId: 4 });
+  render(<Rules />);
+  fireEvent.click(await screen.findByRole("button", { name: "Add a rule" }));
+  const picker = screen.getByLabelText<HTMLSelectElement>("Spending category");
+  expect(picker.value).toBe("");
+  expect([...picker.options].map((option) => option.text)).toEqual([
+    "Use the bank category's",
+    "Groceries",
+    "Pharmacy",
+  ]);
+
+  fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Pharmacie*" } });
+  fireEvent.change(picker, { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+
+  await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
+  expect(createRule).toHaveBeenCalledWith(
+    expect.objectContaining({ descriptionPattern: "Pharmacie*", spendingCategoryId: 4 }),
+  );
+});
+
+test("the list says which spending category a rule gives, and editing it sends the new version", async () => {
+  const pharmacy: Rule = { ...TRANSFER, spendingCategoryId: 4 };
+  rules.mockResolvedValue([pharmacy, TAXES]);
+  vi.mocked(editRule).mockResolvedValue({ ...pharmacy, id: 9, spendingCategoryId: 1 });
+  render(<Rules />);
+
+  const list = within(await screen.findByRole("list", { name: "Rules in force" }));
+  expect(list.getByText("Spending category: Pharmacy")).toBeTruthy();
+  // A rule naming none says nothing about it.
+  expect(list.getAllByText(/Spending category:/u)).toHaveLength(1);
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: `Edit ${TRANSFER.descriptionPattern}` }),
+  );
+  const picker = screen.getByLabelText<HTMLSelectElement>("Spending category");
+  expect(picker.value).toBe("4");
+  fireEvent.change(picker, { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(editRule).toHaveBeenCalledTimes(1));
+  expect(editRule).toHaveBeenCalledWith(
+    7,
+    expect.objectContaining({ spendingCategoryId: 1, bucket: "mortgage" }),
+  );
+});
+
+test("a rule that names a retired category still shows it while it is edited", async () => {
+  const other: Rule = { ...TRANSFER, spendingCategoryId: 6 };
+  rules.mockResolvedValue([other]);
+  render(<Rules />);
+
+  fireEvent.click(
+    await screen.findByRole("button", { name: `Edit ${TRANSFER.descriptionPattern}` }),
+  );
+
+  const picker = screen.getByLabelText<HTMLSelectElement>("Spending category");
+  expect(picker.value).toBe("6");
+  expect(picker.selectedOptions[0]?.text).toBe("Other (retired)");
 });

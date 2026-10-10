@@ -1,6 +1,12 @@
 /** Words for the things the books file a row under. */
 
-import type { Bucket, InboxHistory, InboxReason, Rule } from "@ledger/contract";
+import type {
+  Bucket,
+  InboxHistory,
+  InboxReason,
+  Rule,
+  SpendingCategorySource,
+} from "@ledger/contract";
 import { formatCents } from "@ledger/books";
 
 export const BUCKET_LABELS: Record<Bucket, string> = {
@@ -30,6 +36,13 @@ export function historyLabel(history: Pick<InboxHistory, "personId" | "bucket" |
   const when = history.times === 1 ? "last time" : `the last ${String(history.times)} times`;
   return `${answerLabel(history)}, ${when}`;
 }
+
+/** Where a row's spending category came from, in the words under the row. */
+export const SPENDING_SOURCE_LABELS: Record<SpendingCategorySource, string> = {
+  override: "set on this row",
+  rule: "from the rule",
+  map: "from the bank's category",
+};
 
 export const REASON_LABELS: Record<InboxReason, string> = {
   "no-rule": "No rule matches this.",

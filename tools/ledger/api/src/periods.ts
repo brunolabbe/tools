@@ -52,6 +52,7 @@ import type { Database } from "better-sqlite3";
 import { requireKnownPerson } from "./rules.ts";
 import type { RuleContext } from "./rules.ts";
 import { currentRatios } from "./salaries.ts";
+import { requireSpendingCategory } from "./spending-categories.ts";
 
 /** Who is acting and when, and who the household is: the same as a rule's. */
 export type PeriodContext = RuleContext;
@@ -62,6 +63,7 @@ interface LineColumns {
   date: string;
   amount_cents: number;
   category: string | null;
+  spending_category_id: number | null;
   note: string | null;
   source: PeriodLineSource;
   charged_to: string | null;
@@ -103,6 +105,7 @@ function toLine(columns: LineColumns): PeriodLine {
     date: columns.date,
     amountCents: columns.amount_cents,
     category: columns.category,
+    spendingCategoryId: columns.spending_category_id,
     note: columns.note,
     source: columns.source,
     chargedTo: columns.charged_to,
@@ -155,14 +158,15 @@ function insertLine(
 ): PeriodLine {
   const result = context.db
     .prepare(
-      `INSERT INTO period_lines (person_id, date, amount_cents, category, note, source, charged_to, supersedes, retired, entered_at, entered_by)
-       VALUES (?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)`,
+      `INSERT INTO period_lines (person_id, date, amount_cents, category, spending_category_id, note, source, charged_to, supersedes, retired, entered_at, entered_by)
+       VALUES (?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)`,
     )
     .run(
       draft.personId,
       draft.date,
       draft.amountCents,
       draft.category,
+      draft.spendingCategoryId,
       draft.note,
       draft.chargedTo,
       supersedes,
@@ -187,7 +191,12 @@ function standingLine(db: Database, id: number): PeriodLine {
 
 export function addLine(context: PeriodContext, draft: PeriodLineDraft): PeriodLine {
   requireLinePeople(context, draft);
-  return context.db.transaction(() => insertLine(context, draft, null, false)).immediate();
+  return context.db
+    .transaction(() => {
+      requireSpendingCategory(context.db, draft.spendingCategoryId);
+      return insertLine(context, draft, null, false);
+    })
+    .immediate();
 }
 
 /** The line as corrected: a new line, under a new id, that supersedes `id`. */
@@ -199,7 +208,9 @@ export function correctLine(
   requireLinePeople(context, draft);
   return context.db
     .transaction(() => {
-      standingLine(context.db, id);
+      const current = standingLine(context.db, id);
+      // The category it already has stays acceptable if it has since been retired.
+      requireSpendingCategory(context.db, draft.spendingCategoryId, current.spendingCategoryId);
       return insertLine(context, draft, id, false);
     })
     .immediate();
@@ -354,6 +365,7 @@ function linesThrough(
       amountCents: line.amountCents,
       chargedTo: line.chargedTo,
       category: line.category,
+      spendingCategoryId: line.spendingCategoryId,
       note: line.note,
       lineId: line.id,
       recurringItemId: null,
@@ -366,6 +378,7 @@ function linesThrough(
       amountCents: item.monthlyCents,
       chargedTo: null,
       category: item.label,
+      spendingCategoryId: null,
       note: null,
       lineId: null,
       recurringItemId: item.id,

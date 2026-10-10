@@ -29,7 +29,8 @@ e2e          Playwright specs — none yet; e2e/README.md says what earns the fi
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
 `classify`, which files a row under a rule only on an exact match, the most
 specific rule winning (lg-4, lg-16), `fromHistory`, which offers what a person
-answered before (lg-16), and
+answered before (lg-16), `spendingCategory`, which gives a row its spending
+category (lg-15), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
 period's deposit a paste has brought in (lg-6), and the reader of the old
@@ -118,6 +119,18 @@ lines and recurring items (lg-6, `current_period_lines` and
 recorded settlement is never recomputed, because the next close is cumulative.
 `api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
 a `DELETE`.
+
+**A spending category is not Desjardins' category** (lg-15). `category` on a
+row and on a rule is the bank's own text; a _spending_ category is the
+household's word from one list (`spending_categories`), for the stats only. Every
+table, column, type and screen for the second says "spending". The list, the map
+from the bank's text to it (`spending_category_map`), a rule's choice and a row's
+own override (`spending_category_overrides`) are all appended and never edited;
+a category is referred to by the id of its first version, so a rename keeps
+everything that picked it. A row's spending category is **computed on read**,
+never stored (`spendingCategory` in `books`: override, then the classifying
+rule's, then the map's, then none), and a row without one is filed as ever and
+never waits in the inbox for want of it.
 
 **People come from configuration, never the repository.** The `people` table
 (lg-5) is filled at boot from `ACCESS_PEOPLE`'s names, and a person's id is that

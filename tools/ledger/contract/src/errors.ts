@@ -19,8 +19,8 @@
  * arrived with pl-10 in the planner's catalog. The first four are the statement
  * parser's (lg-1) and the fifth arrived with the page's footer (lg-14); the two
  * after them are the store's (lg-2), the next two are the rules' and the
- * inbox's (lg-4), the next is the salaries' (lg-5), and the last four are the
- * periods' (lg-6).
+ * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
+ * periods' (lg-6), and the last is the spending categories' (lg-15).
  */
 
 import {
@@ -123,6 +123,13 @@ export const LEDGER_ERROR_CODES = [
    * settle the period at. A ratio is confirmed on the salaries screen first.
    */
   "RATIO_NOT_IN_EFFECT",
+  // --- Spending categories (lg-15) ---
+  /**
+   * The spending category named is not in the list: it never existed, or it has
+   * since been retired — which is what picking one the other person has just
+   * retired will meet. The caller reloads the list rather than retries.
+   */
+  "SPENDING_CATEGORY_NOT_FOUND",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -155,6 +162,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   PERIOD_NOT_OPEN: "That period is already closed. It may have been closed since it was loaded.",
   RATIO_NOT_IN_EFFECT:
     "No ratio is in effect on the period's last day. Confirm one on the salaries screen first.",
+  SPENDING_CATEGORY_NOT_FOUND:
+    "There is no such spending category in the list. It may have been retired since the list was loaded.",
 };
 
 /**
