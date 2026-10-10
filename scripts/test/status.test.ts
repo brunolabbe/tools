@@ -1628,18 +1628,49 @@ test("the ticket format documents the field and says who clears it", () => {
   expect(format).toMatch(/delete[sd]? the line/i);
 });
 
-// The real board, and the case the mechanism was built against: repo-16's
-// `Done when` 6 is genuinely outstanding — the dismissal step runs only on a
-// push to `main`, so there is no "after" until it merges, and `gh api` is
-// denied here besides. It is the first `awaiting` line in the repo, and this
-// test is what keeps it from being the last time anybody looked at it.
-test("the repo's own board surfaces at least one real outstanding obligation", () => {
-  // `typeof === "string"` rather than `!== null`: before the field existed the
-  // property was `undefined` on every ticket, which passes `!== null` for all of
-  // them and made this case green while proving nothing. It has to be able to
-  // fail first, and with the field absent it does.
-  const owed = readTickets(REPO).filter((t) => typeof t.awaiting === "string");
-  expect(owed.map((t) => t.id)).toContain("repo-16");
+// repo-97. This pair replaced a test that asked the real board whether repo-16
+// still carried an `awaiting` line. Closing that line is the field's intended
+// lifecycle, so the test failed the day #418 did exactly what the field exists
+// for — and CI skipped the unit matrix for an all-markdown change, so main went
+// red unseen. A test of the mechanism must not name a ticket whose job is to
+// stop being an example.
+//
+// `typeof === "string"` throughout, rather than `!== null`: before the field
+// existed the property was `undefined` on every ticket, which passes
+// `!== null` for all of them and made the first version of this case green
+// while proving nothing. Both cases have to be able to fail first, and with
+// the field's parsing removed they do.
+test("an awaiting line in a ticket file reaches the parsed ticket, and its absence is null", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the security tab, after the merge" }),
+    [at("pl-2")]: pl("pl-2"),
+  });
+  const owed = readTickets(root).filter((t) => typeof t.awaiting === "string");
+  expect(owed.map((t) => [t.id, t.awaiting])).toEqual([
+    ["pl-1", "the security tab, after the merge"],
+  ]);
+  expect(readTickets(root).find((t) => t.id === "pl-2")?.awaiting).toBe(null);
+});
+
+/** Whether a ticket file's own frontmatter, read without the parser, carries an `awaiting:` line. */
+const writtenAwaiting = (text: string) => {
+  const [, frontmatter = ""] = text.split(/^---\r?$/m);
+  return /^awaiting:/m.test(frontmatter);
+};
+
+// The real board, and the part of the old case that did need it: a line a
+// person actually wrote, in the shape people write it, is not silently dropped.
+// It asserts the *agreement* between the file and the parse, so it holds with
+// no `awaiting` anywhere on the board — and says so rather than going red.
+test("every awaiting line on the repo's own board is carried by the ticket it is written in", () => {
+  const disagree = readTickets(REPO)
+    .filter(
+      (t) =>
+        writtenAwaiting(fs.readFileSync(path.join(REPO, t.file), "utf8")) !==
+        (typeof t.awaiting === "string"),
+    )
+    .map((t) => t.id);
+  expect(disagree).toEqual([]);
 });
 
 // ---------------------------------------------------------------------------
