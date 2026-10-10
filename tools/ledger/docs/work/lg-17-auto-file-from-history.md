@@ -7,7 +7,6 @@ status: done
 milestone: P2
 depends_on: [lg-16]
 difficulty: hard
-awaiting: Done when 7 — after the push to `main` that runs `security.yml`'s dismissal step, the `js/missing-rate-limiting` alert on `GET /api/inbox/auto-filed` in `tools/ledger/api/src/routes/inbox.ts` reads dismissed, "Suppressed via SARIF"
 ---
 
 # lg-17 — File a row without a tap when its description has been answered the same way three times
@@ -359,3 +358,17 @@ AND differing = 0`) cannot be made to fail from a test without changing
   - _Recorded, not fixed (F4, F5):_ the four older register comments' "1 of its
     40" are dated measurements and only the new comment says 41; `amountFits`
     has a dead `Math.sign` clause.
+
+- 2026-10-10 — The `awaiting` line closed. Done when 7, "Gates green", waited
+  on the `js/missing-rate-limiting` alert on `GET /api/inbox/auto-filed` in
+  `tools/ledger/api/src/routes/inbox.ts` reading dismissed after the push to
+  `main` that runs `security.yml`'s dismissal step. It does: alert #44
+  (Missing rate limiting, `routes/inbox.ts:40`) reads closed as won't fix. The
+  line expected "Suppressed via SARIF" and the alert reads "closed as won't
+  fix" instead; the earlier excused alerts (#22, #23) read the same, so that is
+  how the dismissal step reports. The reading is the owner's, taken from the
+  repository's code-scanning page on `main` (`is:closed branch:main`) after
+  #408 (`7709411e`) merged, and given as a screenshot; it was not re-run here.
+  The alert's line is the route handler directly below its
+  `codeql[js/missing-rate-limiting]` comment in the current source (`grep -n`:
+  `inbox.ts:39`/`40`).

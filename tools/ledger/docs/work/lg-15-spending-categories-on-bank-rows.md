@@ -7,7 +7,6 @@ status: done
 milestone: P3
 depends_on: [lg-4, lg-6]
 difficulty: standard
-awaiting: Done when 6 — after the push to `main` that runs `security.yml`'s dismissal step, both `js/missing-rate-limiting` alerts on the `GET` handlers in `tools/ledger/api/src/routes/spending-categories.ts` read dismissed, "Suppressed via SARIF"
 ---
 
 # lg-15 — Give bank rows and period lines a spending category from one shared list
@@ -366,3 +365,17 @@ Rows 1–5 are untouched by this round. The `ledger` project now passes 668 of 6
   - **F6, F7.** lg-17's item 8 now names `listRows` as a second reader of
     `current_classifications`; the sentence above about `sameAnswer` now gives
     the 3 of 663 it measured.
+- 2026-10-10 — The `awaiting` line closed. Done when 6, "Gates green", waited
+  on both `js/missing-rate-limiting` alerts on the `GET` handlers in
+  `tools/ledger/api/src/routes/spending-categories.ts` reading dismissed after
+  the push to `main` that runs `security.yml`'s dismissal step. They do: alert
+  #42 (Missing rate limiting, `spending-categories.ts:82`) and alert #43
+  (Missing rate limiting, `spending-categories.ts:119`) both read closed as
+  won't fix. The line expected "Suppressed via SARIF" and the alerts read
+  "closed as won't fix" instead; the earlier excused alerts (#22, #23) read the
+  same, so that is how the dismissal step reports. The reading is the owner's,
+  taken from the repository's code-scanning page on `main`
+  (`is:closed branch:main`) after #408 (`7709411e`) merged, and given as a
+  screenshot; it was not re-run here. Each alert's line is the route handler
+  directly below its `codeql[js/missing-rate-limiting]` comment in the current
+  source (`grep -n`: `81`/`82` for the list, `118`/`119` for the map).
