@@ -48,6 +48,12 @@ const VERBS = {
   periodLineRetire: ["POST", ROUTES.periodLineRetire.replace(":id", "1")],
   recurring: ["POST", ROUTES.recurring],
   recurringItem: ["POST", ROUTES.recurringItem.replace(":id", "1")],
+  spendingCategories: ["GET", ROUTES.spendingCategories],
+  spendingCategory: ["POST", ROUTES.spendingCategory.replace(":id", "1")],
+  spendingCategoryRetire: ["POST", ROUTES.spendingCategoryRetire.replace(":id", "1")],
+  spendingCategoryMap: ["GET", ROUTES.spendingCategoryMap],
+  spendingCategoryOverrides: ["POST", ROUTES.spendingCategoryOverrides],
+  rows: ["GET", ROUTES.rows],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");

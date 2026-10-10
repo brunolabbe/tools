@@ -44,6 +44,14 @@ export const ROUTES = {
   periodLineRetire: `${API_PREFIX}/period-lines/:id/retire`,
   recurring: `${API_PREFIX}/recurring`,
   recurringItem: `${API_PREFIX}/recurring/:id`,
+  // lg-15: the one list of spending categories, the map from Desjardins' own
+  // categories to it, a row's own override, and the stored rows with theirs.
+  spendingCategories: `${API_PREFIX}/spending-categories`,
+  spendingCategory: `${API_PREFIX}/spending-categories/:id`,
+  spendingCategoryRetire: `${API_PREFIX}/spending-categories/:id/retire`,
+  spendingCategoryMap: `${API_PREFIX}/spending-category-map`,
+  spendingCategoryOverrides: `${API_PREFIX}/spending-category-overrides`,
+  rows: `${API_PREFIX}/rows`,
 } as const;
 
 /**
@@ -137,10 +145,17 @@ export type Bucket = (typeof BUCKETS)[number];
 export interface Rule {
   id: number;
   descriptionPattern: string;
+  /** Desjardins' own category for the row, not a spending category. */
   category: string | null;
   amountCents: number | null;
   personId: string | null;
   bucket: Bucket;
+  /**
+   * The spending category (lg-15) every row this rule files takes, over the map's;
+   * `null` leaves the row to the map. Part of the version: editing it supersedes
+   * the rule like any other field.
+   */
+  spendingCategoryId: number | null;
   createdAt: string;
   createdBy: string;
 }
@@ -152,6 +167,7 @@ export interface RuleDraft {
   amountCents: number | null;
   personId: string | null;
   bucket: Bucket;
+  spendingCategoryId: number | null;
 }
 
 export const ruleDraftSchema = z.object({
@@ -160,6 +176,7 @@ export const ruleDraftSchema = z.object({
   amountCents: z.number().int().nullable(),
   personId: z.string().min(1).max(100).nullable(),
   bucket: z.enum(BUCKETS),
+  spendingCategoryId: z.number().int().positive().nullable(),
 }) satisfies z.ZodType<RuleDraft>;
 
 /** `GET /api/rules`: the rules in force, oldest first. */
@@ -219,6 +236,13 @@ export interface InboxRow {
    * when the reason is `ambiguous`.
    */
   matching: Rule[];
+  /**
+   * The row's spending category (lg-15), or `null`, which never holds a row in
+   * the inbox. The rule that counts is the one `classify` returned, filed yet or
+   * not, so a row whose reason is `matches` already has its rule's; a rule that
+   * is only the nearest suggestion says nothing.
+   */
+  spendingCategory: RowSpendingCategory | null;
 }
 
 /** `GET /api/inbox`: the unclassified rows, newest first. */
@@ -427,7 +451,13 @@ export interface PeriodLine {
   date: string;
   /** Positive for a purchase; a refund on a shared purchase is negative. */
   amountCents: number;
+  /**
+   * Free text, from before the list (lg-6) or the workbook (lg-7). Kept as it was
+   * stored; a line charts by `spendingCategoryId`, and `null` there is uncategorised.
+   */
   category: string | null;
+  /** The spending category (lg-15) picked from the list, or `null`. */
+  spendingCategoryId: number | null;
   note: string | null;
   source: PeriodLineSource;
   chargedTo: string | null;
@@ -442,6 +472,7 @@ export interface PeriodLineDraft {
   date: string;
   amountCents: number;
   category: string | null;
+  spendingCategoryId: number | null;
   note: string | null;
   chargedTo: string | null;
 }
@@ -459,6 +490,7 @@ export const periodLineDraftSchema = z.strictObject({
     .max(MAX_CENTS)
     .refine((cents) => cents !== 0),
   category: z.string().trim().min(1).max(100).nullable(),
+  spendingCategoryId: z.number().int().positive().nullable(),
   note: z.string().trim().min(1).max(500).nullable(),
   chargedTo: z.string().min(1).max(100).nullable(),
 }) satisfies z.ZodType<PeriodLineDraft>;
@@ -552,8 +584,10 @@ export interface OpenPeriodLine {
   personId: string;
   amountCents: number;
   chargedTo: string | null;
-  /** The category, or the recurring item's label. */
+  /** The free-text category, or the recurring item's label. */
   category: string | null;
+  /** The line's spending category; `null` for a generated line, and for any stored before lg-15. */
+  spendingCategoryId: number | null;
   note: string | null;
   /** The stored line, or `null` for a generated one. */
   lineId: number | null;
@@ -623,4 +657,130 @@ export interface ClosedPeriod {
 /** `GET /api/periods`: the closed periods, newest first. */
 export interface PeriodsResponse {
   periods: ClosedPeriod[];
+}
+
+/**
+ * One spending category (lg-15): a word like groceries, from the one list that
+ * bank rows, rules, period lines and (lg-10) receipt items all pick from. Not
+ * Desjardins' own category, which is the `category` text on a row and a rule.
+ *
+ * `id` names the category for good: renaming files a new version and keeps the
+ * id, so everything that picked it still has. `retired` leaves it out of what a
+ * person can pick and keeps it on what already did.
+ */
+export interface SpendingCategory {
+  id: number;
+  name: string;
+  retired: boolean;
+  /** When and by whom the current version was filed. */
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface SpendingCategoryDraft {
+  name: string;
+}
+
+export const spendingCategoryDraftSchema = z.strictObject({
+  name: z.string().trim().min(1).max(60),
+}) satisfies z.ZodType<SpendingCategoryDraft>;
+
+/** `GET /api/spending-categories`: every category, retired ones too, oldest first. */
+export interface SpendingCategoriesResponse {
+  categories: SpendingCategory[];
+}
+
+/**
+ * Where a row's spending category came from, in the order the books try them
+ * (`spendingCategory` in `@ledger/books`): the row's own `override`, the
+ * classifying `rule`'s, the `map`'s entry for Desjardins' category.
+ */
+export const SPENDING_CATEGORY_SOURCES = ["override", "rule", "map"] as const;
+export type SpendingCategorySource = (typeof SPENDING_CATEGORY_SOURCES)[number];
+
+/** A row's spending category and why it has it. `null` where it is used means uncategorised. */
+export interface RowSpendingCategory {
+  id: number;
+  source: SpendingCategorySource;
+}
+
+/**
+ * One line of the map: what a spending category is for rows in a Desjardins
+ * category. `spendingCategoryId: null` is no entry. `rows` counts the stored
+ * rows in that category, however its case and accents were written.
+ */
+export interface SpendingCategoryMapEntry {
+  desjardinsCategory: string;
+  spendingCategoryId: number | null;
+  rows: number;
+}
+
+/** `GET /api/spending-category-map`: one entry per Desjardins category seen in stored rows. */
+export interface SpendingCategoryMapResponse {
+  entries: SpendingCategoryMapEntry[];
+}
+
+/** `POST /api/spending-category-map`: file a version of one entry. `null` clears it. */
+export interface SetSpendingCategoryMapRequest {
+  desjardinsCategory: string;
+  spendingCategoryId: number | null;
+}
+
+export const setSpendingCategoryMapRequestSchema = z.strictObject({
+  desjardinsCategory: z.string().trim().min(1).max(200),
+  spendingCategoryId: z.number().int().positive().nullable(),
+}) satisfies z.ZodType<SetSpendingCategoryMapRequest>;
+
+/**
+ * `POST /api/spending-category-overrides`: a row's own spending category, over
+ * its rule's and the map's. `null` withdraws the override, leaving the row to
+ * its rule and the map. Appended, with who and when; the latest stands.
+ */
+export interface SpendingCategoryOverrideRequest {
+  rowId: number;
+  spendingCategoryId: number | null;
+}
+
+export const spendingCategoryOverrideRequestSchema = z.strictObject({
+  rowId: z.number().int().positive(),
+  spendingCategoryId: z.number().int().positive().nullable(),
+}) satisfies z.ZodType<SpendingCategoryOverrideRequest>;
+
+/** What the override leaves the row with. */
+export interface SpendingCategoryOverrideResponse {
+  rowId: number;
+  spendingCategory: RowSpendingCategory | null;
+}
+
+/** A stored row, filed or not, with the spending category it now has. */
+export interface StoredRow {
+  id: number;
+  date: string;
+  /** Desjardins' own category. */
+  category: string;
+  description: string;
+  amountCents: number;
+  balanceCents: number;
+  /** The classification that stands, or `null` while the row is in the inbox. */
+  classification: {
+    bucket: Bucket;
+    personId: string | null;
+    source: ClassificationSource;
+  } | null;
+  spendingCategory: RowSpendingCategory | null;
+}
+
+/**
+ * `GET /api/rows`: stored rows, newest first. `spendingCategory=none` lists the
+ * uncategorised ones. `limit` caps the page (100 by default).
+ */
+export const rowsQuerySchema = z.strictObject({
+  spendingCategory: z.literal("none").optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+export interface RowsResponse {
+  rows: StoredRow[];
+  /** How many rows match, before the limit. */
+  total: number;
 }

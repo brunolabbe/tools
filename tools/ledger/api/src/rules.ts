@@ -14,6 +14,7 @@
 import { AppError } from "@ledger/contract";
 import type { Bucket, Rule, RuleDraft } from "@ledger/contract";
 import type { Database } from "better-sqlite3";
+import { requireSpendingCategory } from "./spending-categories.ts";
 
 export interface RuleContext {
   db: Database;
@@ -31,11 +32,12 @@ interface Columns {
   amount_cents: number | null;
   person_id: string | null;
   bucket: Bucket;
+  spending_category_id: number | null;
   created_at: string;
   created_by: string;
 }
 
-const SELECT = `SELECT id, description_pattern, category, amount_cents, person_id, bucket, created_at, created_by`;
+const SELECT = `SELECT id, description_pattern, category, amount_cents, person_id, bucket, spending_category_id, created_at, created_by`;
 
 function toRule(columns: Columns): Rule {
   return {
@@ -45,6 +47,7 @@ function toRule(columns: Columns): Rule {
     amountCents: columns.amount_cents,
     personId: columns.person_id,
     bucket: columns.bucket,
+    spendingCategoryId: columns.spending_category_id,
     createdAt: columns.created_at,
     createdBy: columns.created_by,
   };
@@ -78,8 +81,8 @@ function insert(
 ): number {
   const result = context.db
     .prepare(
-      `INSERT INTO rules (description_pattern, category, amount_cents, person_id, bucket, supersedes, retired, created_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO rules (description_pattern, category, amount_cents, person_id, bucket, spending_category_id, supersedes, retired, created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       draft.descriptionPattern,
@@ -87,6 +90,7 @@ function insert(
       draft.amountCents,
       draft.personId,
       draft.bucket,
+      draft.spendingCategoryId,
       supersedes,
       retired ? 1 : 0,
       context.now().toISOString(),
@@ -102,7 +106,10 @@ function read(db: Database, id: number): Rule {
 export function createRule(context: RuleContext, draft: RuleDraft): Rule {
   requireKnownPerson(context.people, draft.personId);
   return context.db
-    .transaction(() => read(context.db, insert(context, draft, null, false)))
+    .transaction(() => {
+      requireSpendingCategory(context.db, draft.spendingCategoryId);
+      return read(context.db, insert(context, draft, null, false));
+    })
     .immediate();
 }
 
@@ -111,7 +118,9 @@ export function editRule(context: RuleContext, id: number, draft: RuleDraft): Ru
   requireKnownPerson(context.people, draft.personId);
   return context.db
     .transaction(() => {
-      currentRule(context.db, id);
+      const current = currentRule(context.db, id);
+      // The category it already has stays acceptable if it has since been retired.
+      requireSpendingCategory(context.db, draft.spendingCategoryId, current.spendingCategoryId);
       return read(context.db, insert(context, draft, id, false));
     })
     .immediate();

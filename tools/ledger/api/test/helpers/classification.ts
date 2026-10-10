@@ -54,6 +54,7 @@ export const TRANSFER_RULE: RuleDraft = {
   amountCents: 40000,
   personId: "sam",
   bucket: "mortgage",
+  spendingCategoryId: null,
 };
 
 export const MORTGAGE_RULE: RuleDraft = {
@@ -62,6 +63,7 @@ export const MORTGAGE_RULE: RuleDraft = {
   amountCents: null,
   personId: null,
   bucket: "mortgage",
+  spendingCategoryId: null,
 };
 
 export async function addRule(target: App, draft: RuleDraft): Promise<Rule> {

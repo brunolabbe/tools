@@ -14,10 +14,16 @@
  * beside a narrow one with a fixed amount, and the narrow one takes its rows.
  *
  * - **One rule at the top rank, or several level there with the same answer**
- *   (person and bucket): the row takes it — the newest of them, by `id`.
+ *   (person, bucket and spending category): the row takes it — the newest of
+ *   them, by `id`.
  * - **Several level at the top with different answers:** the row takes none.
  *   That is two answers with no reason to prefer either, and taking the first of
  *   them is how a row ends up in the wrong bucket with nobody having been asked.
+ *   **A spending category is part of the answer** (lg-15): two rules that differ
+ *   only in it would otherwise be settled by `id` with nobody having chosen, and
+ *   "none" counts as a value, so a rule that names one and a level rule that
+ *   names none ask too. It costs a question only where two rules are exactly as
+ *   specific as each other and already disagree about the row.
  * - **A rule whose pattern and category match but whose fixed amount does not,
  *   and which would outrank the best exact match:** the row takes none
  *   (`differs`). A mortgage transfer at an unusual amount is a question, and a
@@ -55,10 +61,15 @@ export interface MatchableRule {
   category: string | null;
   /** An exact amount in cents, or `null` for any. */
   amountCents: number | null;
-  /** The bucket the rule files a row under; two rules agree when this and `personId` do. */
+  /**
+   * The bucket the rule files a row under; two rules agree when this,
+   * `personId` and `spendingCategoryId` do.
+   */
   bucket: string;
   /** Whose the filed row is, or `null` for the joint account. */
   personId: string | null;
+  /** The spending category the rule gives its rows; absent and `null` both mean none (lg-15). */
+  spendingCategoryId?: number | null;
 }
 
 /** The part of a stored row a rule is judged against. */
@@ -175,9 +186,17 @@ function narrower<R extends MatchableRule>(a: Scored<R>, b: Scored<R>): number {
   return b.named - a.named || b.literal - a.literal;
 }
 
-/** Two rules file a row the same way when they name the same person and bucket. */
+/**
+ * Two rules file a row the same way when they name the same person, bucket and
+ * spending category. The last is the one line to change if a rule's spending
+ * category should not be part of the answer (`classify.test.ts` pins it).
+ */
 function sameAnswer(a: MatchableRule, b: MatchableRule): boolean {
-  return a.bucket === b.bucket && a.personId === b.personId;
+  return (
+    a.bucket === b.bucket &&
+    a.personId === b.personId &&
+    (a.spendingCategoryId ?? null) === (b.spendingCategoryId ?? null)
+  );
 }
 
 export function classify<R extends MatchableRule>(

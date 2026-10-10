@@ -34,6 +34,14 @@ export { CURRENT_FORMULA, settleStretches, settlement } from "./settlement.ts";
 export type { Charge, PersonCents, Settlement, Stretch } from "./settlement.ts";
 export { classify, matchesPattern, normalize as normalizeDescription } from "./classify.ts";
 export type { ClassifiableRow, MatchableRule, RuleMatch } from "./classify.ts";
+export { spendingCategory, spendingMap } from "./spending.ts";
+export type {
+  SpendingChoice,
+  SpendingMap,
+  SpendingMapVersion,
+  SpendingRule,
+  SpendingSource,
+} from "./spending.ts";
 export { fromHistory } from "./history.ts";
 export type { HistoryAnswer, HistorySuggestion } from "./history.ts";
 export { parseStatement } from "./statement.ts";

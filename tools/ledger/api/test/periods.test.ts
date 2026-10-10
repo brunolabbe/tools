@@ -71,7 +71,16 @@ function draft(
   amountCents: number,
   more: Partial<PeriodLineDraft> = {},
 ): PeriodLineDraft {
-  return { personId, date, amountCents, category: null, note: null, chargedTo: null, ...more };
+  return {
+    personId,
+    date,
+    amountCents,
+    category: null,
+    spendingCategoryId: null,
+    note: null,
+    chargedTo: null,
+    ...more,
+  };
 }
 
 async function addLine(target: App, line: PeriodLineDraft): Promise<PeriodLine> {
@@ -114,6 +123,7 @@ async function withBufferRule(target: App): Promise<void> {
     amountCents: null,
     personId: "alex",
     bucket: "current-expenses",
+    spendingCategoryId: null,
   });
 }
 
@@ -588,6 +598,7 @@ describe("what is not a deposit into the buffer", () => {
       amountCents: null,
       personId: "alex",
       bucket: "mortgage",
+      spendingCategoryId: null,
     });
     await addRule(target, {
       descriptionPattern: "Taxes /Ville Exemple",
@@ -595,6 +606,7 @@ describe("what is not a deposit into the buffer", () => {
       amountCents: null,
       personId: null,
       bucket: "current-expenses",
+      spendingCategoryId: null,
     });
     await addLine(target, draft("sam", "2026-09-10", 10_000));
     await close(target, null, "2026-09-30");

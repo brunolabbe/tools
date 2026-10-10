@@ -223,6 +223,7 @@ describe("the most specific rule takes a row (lg-16)", () => {
     amountCents: null,
     personId: null,
     bucket: "current-expenses",
+    spendingCategoryId: null,
   };
 
   test("a narrower fixed-amount rule takes its row from a broad one, in either order", async () => {

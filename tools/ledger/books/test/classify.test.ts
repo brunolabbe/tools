@@ -380,3 +380,44 @@ describe("matchesPattern", () => {
     expect(matchesPattern(pattern, "a".repeat(2000))).toBe(false);
   });
 });
+
+// A rule's spending category (lg-15) is part of "the same answer". This block pins
+// that choice: the one line that flips it is `sameAnswer` in `src/classify.ts`, and
+// flipping it turns the first and third tests below into their opposites.
+describe("classify, with spending categories (lg-15)", () => {
+  test("two rules level at the top that differ only in their spending category ask", () => {
+    const groceries = rule(1, { spendingCategoryId: 10 });
+    const pharmacy = rule(2, { spendingCategoryId: 20 });
+
+    expect(classify(TRANSFER, [groceries, pharmacy])).toEqual({
+      kind: "inbox",
+      reason: "ambiguous",
+      suggestion: null,
+      matching: [groceries, pharmacy],
+    });
+  });
+
+  test("two rules level at the top with the same spending category take the newest", () => {
+    const older = rule(1, { spendingCategoryId: 10 });
+    const newer = rule(2, { spendingCategoryId: 10 });
+
+    expect(classify(TRANSFER, [older, newer])).toEqual({ kind: "classified", rule: newer });
+  });
+
+  test("a rule naming a spending category and a level one naming none ask too", () => {
+    const named = rule(1, { spendingCategoryId: 10 });
+    const bare = rule(2, { spendingCategoryId: null });
+    const absent = rule(3);
+
+    expect(classify(TRANSFER, [named, bare]).kind).toBe("inbox");
+    // Absent and null are the same: no spending category.
+    expect(classify(TRANSFER, [bare, absent])).toEqual({ kind: "classified", rule: absent });
+  });
+
+  test("a more specific rule wins whatever the spending categories say", () => {
+    const broad = rule(1, { spendingCategoryId: 10 });
+    const narrow = rule(2, { amountCents: 40000, spendingCategoryId: 20 });
+
+    expect(classify(TRANSFER, [broad, narrow])).toEqual({ kind: "classified", rule: narrow });
+  });
+});
