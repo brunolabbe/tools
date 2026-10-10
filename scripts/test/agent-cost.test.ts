@@ -360,7 +360,7 @@ test("the CLI over an unrated model refuses it and sets the missingRate exit bit
 
 test("every model this script actually rates has a positive rate in every column", () => {
   for (const [model, rate] of Object.entries(RATES)) {
-    for (const [field, value] of Object.entries(rate)) {
+    for (const [field, value] of Object.entries(rate).filter(([, v]) => typeof v === "number")) {
       expect(value, `${model}.${field}`).toBeGreaterThan(0);
     }
   }
@@ -614,7 +614,45 @@ test("a file with no timestamps counts no cold restarts, however large its write
   expect(sumUsage(content, "untimed.jsonl").coldRestarts).toBe(0);
 });
 
-test("Sonnet 5.5 is priced, at Sonnet 5's rates", () => {
+test("Sonnet 5.5 is priced at Sonnet 5's rates, except its cache read", () => {
   expect(normaliseModel("claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
-  expect(RATES["claude-sonnet-5-5"]).toEqual(RATES["claude-sonnet-5"]);
+  expect({ ...RATES["claude-sonnet-5-5"], cacheRead: 0.2 }).toEqual(RATES["claude-sonnet-5"]);
+  expect(RATES["claude-sonnet-5-5"].cacheRead).toBe(0.1);
+});
+
+// --- 2026-10-10: Haiku 5.5's two rate cards ----------------------------------
+
+test("a Haiku 5.5 response at 100,000 prompt tokens is billed on the base card", () => {
+  const content =
+    '{"type":"assistant","requestId":"a","message":{"model":"claude-haiku-5-5","usage":{"input_tokens":10000,"cache_creation_input_tokens":10000,"cache_read_input_tokens":80000,"output_tokens":1000000}}}';
+  const priced = priceFile(sumUsage(content, "short.jsonl"), "short.jsonl");
+  // (10000*0.1 + 10000*0.125 + 80000*0.01 + 1e6*0.5) / 1e6
+  expect(priced.dollars).toBeCloseTo(0.50305, 9);
+});
+
+test("one cached token over 100,000 moves the whole Haiku 5.5 response to the long card", () => {
+  const content =
+    '{"type":"assistant","requestId":"b","message":{"model":"claude-haiku-5-5","usage":{"input_tokens":10000,"cache_creation_input_tokens":10000,"cache_read_input_tokens":80001,"output_tokens":1000000}}}';
+  const priced = priceFile(sumUsage(content, "long.jsonl"), "long.jsonl");
+  // (10000*0.5 + 10000*0.625 + 80001*0.05 + 1e6*2.5) / 1e6
+  expect(priced.dollars).toBeCloseTo(2.51525005, 9);
+});
+
+test("each Haiku 5.5 response picks its own card", () => {
+  const content = [
+    '{"type":"assistant","requestId":"c","message":{"model":"claude-haiku-5-5","usage":{"input_tokens":1000,"output_tokens":0}}}',
+    '{"type":"assistant","requestId":"d","message":{"model":"claude-haiku-5-5","usage":{"input_tokens":200000,"output_tokens":0}}}',
+  ].join("\n");
+  const priced = priceFile(sumUsage(content, "mixed.jsonl"), "mixed.jsonl");
+  // 1000*0.1/1e6 + 200000*0.5/1e6
+  expect(priced.dollars).toBeCloseTo(0.1001, 9);
+});
+
+test("Haiku 5.5's long-prompt card is positive in every column and dearer than its base card", () => {
+  const { longPrompt, ...base } = RATES["claude-haiku-5-5"];
+  const { above, ...card } = longPrompt;
+  expect(above).toBe(100_000);
+  for (const [field, value] of Object.entries(card)) {
+    expect(value, field).toBeGreaterThan(base[field as keyof typeof base]);
+  }
 });
