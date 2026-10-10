@@ -194,27 +194,47 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
     in the build report's open decisions rather than here.
   - Item 7: the limits were workable as written; §3's amendment is unchanged.
 - 2026-10-10 — **Gate 1, round 1: the owner's decisions and the fixes.** The
-  owner decided five things on 2026-10-10. Where an option is not named below,
-  the fixer's dispatch did not carry it.
-  1. _When history files a row._ Chosen: on a paste only, never on a third
-     answer (an answer given after the paste files no row already waiting).
-     Built that way; the builder recommended it.
-  2. _How the review list is reached._ Chosen: a "Review N filed automatically"
-     button at the top of the inbox, opening a separate screen. Built that way;
-     the builder recommended it.
-  3. _The paste report._ Chosen: unchanged. Built that way; the builder
-     recommended it.
-  4. _An automatically filed row's spending category._ Chosen: its override,
-     then the map, never a rule its answers cited. Over: the latest answer's
-     cited rule first. The builder built this and pinned it in a test without
-     raising it as a decision; the orchestrator put it to the owner.
-  5. _Gate finding F1 (CodeQL `js/missing-rate-limiting` on
-     `GET /api/inbox/auto-filed`)._ Chosen: the alert is excused under
-     `docs/adr/005`, as gate 1 recommended. The route is limited (`{ onRequest:
+  owner decided six things on 2026-10-10, each put as the options below, and
+  every chosen option was the recommended one.
+  1. _When history files a row._ Options: (a) _only on a paste_, chosen, the
+     builder recommended it; (b) _also on the third answer_, where a person's
+     third matching answer files rows of that description already waiting,
+     which adds a hidden write to every tap. Built as (a): an answer given
+     after the paste files no row already waiting.
+  2. _How the review list is reached._ Options: (a) _a button atop the inbox_,
+     chosen, the builder recommended it; (b) _a section below the inbox_,
+     always shown, which costs phone screen space; (c) _a second count on the
+     Inbox tab_, easily confused with the inbox count. Built as (a): a
+     "Review N filed automatically" button at the top of the inbox, opening a
+     separate screen.
+  3. _What a paste reports._ Options: (a) _unchanged_, chosen, the builder
+     recommended it; (b) _add a count_, which is one contract field and a line
+     on the paste screen. Built as (a).
+  4. _An automatically filed row's spending category._ Options: (a) _its
+     override, then the map_, chosen; the builder built it and pinned it in a
+     test without raising it as a decision, and the orchestrator recommended
+     it; (b) _the latest answer's cited rule first_, then the map, which is one
+     more join. Built as (a), never a rule its answers cited.
+  5. _Gate 1 F1 (CodeQL `js/missing-rate-limiting` on
+     `GET /api/inbox/auto-filed`)._ Options: (a) _excuse under `docs/adr/005`_,
+     chosen, the gate recommended it; (b) _change the route_ so the pattern
+     does not match, for which no shape was found and five sibling routes take
+     the excusal. The route is limited (`{ onRequest:
 read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
      without it, "autoFiled refuses the second request in a minute, as
      RATE_LIMITED", reproduced on this head before the comment was written.
      The five-field comment is on the route in `api/src/routes/inbox.ts`.
+  6. _Gate 2's F6 remainder (nothing asserts that migration 7's copy proof
+     fires)._ Options: (a) _export the migrations and test a doctored
+     migration 7_; (b) _a source-reading test_; (c) _leave it, with the two
+     mutation runs as the evidence_, chosen, the gate recommended it.
+
+  Gate 2's G2-1 was not a decision of that kind: it was **fixed at landing by
+  owner choice on 2026-10-10, with no re-gate.** The test comment and the Log
+  line claimed that no paste can put an automatic row at the tail of a stretch
+  the workbook also holds, true of this fixture's newest row only. Both now say
+  the `UPDATE` to `auto` is a convenience of this fixture; the long-stretch case
+  was not built.
 
   Findings fixed in this round:
   - _F1:_ the register comment, above.
