@@ -188,3 +188,24 @@ scripts/test/status.test.ts`). **The brief did not say** that two tests in
   `deriveExtraCiCommands runs only what no other check already covers`); the
   first preflight of this round failed on both, and each gained one expected
   line.
+
+- 2026-10-10 — landing. Two edits made at landing by the owner's choice, with no
+  re-gate (both gate files are landed as handed; no other finding is open).
+
+  1. **Gate 2's new low, fixed at landing by owner choice.** `ci.yml`'s header
+     said no `.md` in the repository is a test fixture, which
+     `scripts/test/status.test.ts` contradicts: it reads every ticket file and
+     `docs/01-TICKETS.md`. Question: "Should the lander correct it, with no
+     re-gate?" Options: "Correct it at landing" (recommended; chosen) and
+     "Leave it recorded". The sentence now says almost none is, names that one
+     suite, and says that is why `check`, not the matrix, runs it (repo-97).
+     Comment only.
+  2. **Gate 2 attack 4, fixed at landing by owner choice.** `CLAUDE.md`'s
+     Testing section and `.claude/rules/testing.md` explained the unfiltered
+     `check` job by `oxfmt` alone, which is now incomplete. Question: whether to
+     amend them. Options: "Add one clause to both, in repo-97" (recommended;
+     chosen, the owner's direction), "You edit it yourself later" and "Leave
+     both as they are". Each file gained one clause in the sentence beginning
+     "`ci.yml`'s `check` job is filtered by nothing at all": the job also runs
+     `scripts/test/status.test.ts`, which reads ticket files (repo-97). Nothing
+     else in either file changed.
