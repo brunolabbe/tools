@@ -163,6 +163,107 @@ ends the batch, and this one keeps it moving.
   is true, and it is folded into the second low.
 - NFR: security n/a · performance n/a · reliability: the high and the gate-verdict med · maintainability: the lows above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-10 · `781587b4..9768f418` (round: `9768f418` only) · Opus 5.5, depth narrow
+
+| Done when                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `## Decisions` carries the rule, four conditions, the flag, the away signal                     | **verified**: read in `.claude/skills/orchestrate-tickets/SKILL.md` › _Decisions_, "While the owner is away, a reversible choice is taken, not held". PR #411 `check` passed on `9768f418`                                                                                                                                                                                                      |
+| 2. Log shows the 04:49 case passing; names an earlier held decision that fails, with the condition | **verified** against the bullet's wording. The facts in the Log are re-measured (two commits, 38 and 22 lines, test file only, gate records are ancestors) and `conditions.mjs`/`c3.mjs` pass both halves. repo-32 fails condition 3's "reserves to the owner" clause, which is now in the bullet's text. Against the owner's literal wording the 04:49 case fails: see the open decision below |
+
+**Gate 1's findings**
+
+- **high**, 04:49 fails as worded and the Log rests on false facts: **fixed**.
+  - Condition 1 is now "one revert on each unmerged branch it touched".
+  - Condition 2 is now a path test: no new path in any branch's
+    `git diff --name-only`. Re-run: `c2a=true c2b-diff=true` on `76113c54` and
+    `b5e45c72`.
+  - The Log now says two commits. `76113c54` has 32+6 lines and `b5e45c72`
+    has 19+3. The Log names the branches right: `76113c54` reaches dl-83 only
+    through the merge `fe4f6e40`.
+- **med**, repo-32 fails condition 4 on a refuted claim: **fixed**. The claim
+  is dropped. The "reserves to the owner" reading is in the bullet's own
+  condition 3: "takes no decision a ticket's `Done when` or Decision section
+  reserves to the owner". repo-32 fails it on two lines: `Done when` 1 ("answered
+  by the repo's owner") and 6's struck sentence ("put to the owner before the
+  parser is written").
+- **med**, absorbs a subagent's decision: **fixed**. The bullet names
+  _A subagent's open decision is yours to forward, not to absorb_ as the rule it
+  is an exception to. It also sends the answer down as "your choice under this
+  rule, not the owner's".
+- **med**, "no gate verdict" needs judgement: **not fixed in full**. See the
+  new med below.
+- **low**, allowlist names no file: **fixed**. It now names
+  `.devcontainer/allowed-domains.txt` and `.gitignore`'s `.claude/` allowlist.
+- **low**, root `CLAUDE.md` narrowed without naming it: **fixed**. The bullet
+  names the root `CLAUDE.md` "Decisions" rule and says how the choice stands at
+  close.
+
+**This round**
+
+- **open decision** · med · Done when 2 depends on it · **The bullet's
+  post-gate rule is not the owner's wording, and the 04:49 case passes only
+  the bullet's.**
+  - The owner chose: "a commit after a gate qualifies if it changes no line a
+    gate graded".
+  - The bullet says: "only if it changes no assertion and no code under test
+    that the gate graded".
+  - Read literally, both 04:49 commits change lines inside tests that a gate
+    record names. In dl-79's record: "a probe that saw only segments says so
+    in the error's reason". In dl-82's: "presses neither a pagination link nor
+    a vote button…". In dl-83's: "an Italian gate in a fixed layer, not told
+    to confirm…" and "a gate whose layer lives in an open shadow root is
+    recognised".
+  - `node c3.mjs <tree> … 76113c54 <dl-79, dl-82, dl-80 tickets>` →
+    `owner-literal(no graded line changed)=false bullet(no assertion, no src)=true`.
+    Same for `b5e45c72` against dl-83.
+  - The owner chose the option "to make the 04:49 case pass", so the literal
+    wording defeats the owner's stated purpose. The builder disclosed this in
+    the Log as its own reading.
+  - Per _An answer given on a premise a later measurement changed is
+    re-asked_, this goes back to the owner with the measurement. Options:
+    - (a) **Recommended.** Keep the bullet's wording and close the hole in the
+      next bullet: add "and no fixture, page or data a graded test reads". The
+      04:49 case still passes, since it changes a constructor option only.
+    - (b) Keep the bullet as it is.
+    - (c) Take the owner's literal wording. Then 04:49 does not qualify and
+      Done when 2 is not met.
+- **med** · no `Done when` line depends on it · **The post-gate rule admits a
+  commit that guts a graded test.** Planted on a scratch tree at `76113c54`,
+  in dl-82's graded "presses neither a pagination link nor a vote button…":
+  - P1 deletes one `expect(...).not.toContain(...)`. Result:
+    `bullet(no assertion, no src)=false`, so the bullet rejects it.
+  - P2 swaps `probeError("/consent-lookalikes.html", …)` for
+    `"/untyped-no-segments.html"`. No assertion changes and no source changes,
+    and the test's subject page is gone. Result:
+    `bullet(no assertion, no src)=true`. The bullet does not reject it.
+  - P2 is then held back only by "changes no gate verdict", which is the
+    judgement gate 1's med named. Remedy: option (a) above.
+- **low** · "For a commit made after a gate, name that gate's record" does not
+  say which gate.
+  - `76113c54` lands after dl-80's gate 2, `c49b327d`, which is the one the
+    Log names. The tests it changes were graded by dl-79's and dl-82's gates.
+  - Suggested wording: "the record of each gate that graded a line it
+    changes".
+- **low** · The Log's reproduction `git branch -r --contains` for `76113c54` and
+  `b5e45c72` now returns nothing. After this fetch, no ref contains either
+  commit (`git for-each-ref --contains <sha>` → empty): the dl-80 and dl-83
+  branches were deleted after merging. Cite the pull requests' head refs
+  instead.
+- **checked, no finding** · "A choice taken this way is a taken choice, not an
+  open decision at close" against root `CLAUDE.md` › _Handing back_. The root's
+  test is that the next move is the user's to choose ("each of those ends in
+  `AskUserQuestion`"). It already treats a pull request left for the owner as
+  done ("Whatever the user still owns goes _under_ the heading"). A flagged
+  choice the owner may overrule in one line belongs under the heading in the
+  same way. The two are consistent.
+- **findings** · gate 1's 6: 5 fixed, 1 not fixed in full. This round's hunt
+  returned 5: 4 carried (2 med, one of them the open decision; 2 low), 1
+  checked with no finding (_Handing back_).
+- NFR: security n/a · performance n/a · reliability: the post-gate med · maintainability: the lows.
+- No `high`.
+
 ## Log
 
 - 2026-10-06 — filed by tools-b2 from the owner's answer to "The overnight
