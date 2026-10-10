@@ -153,3 +153,11 @@ request is the owner's decision`). The hook fires before the deny list is
   is unobservable in a session until it reaches `main`, the same limit as the
   deny rule. Not widened: `gh extension exec`, an absolute path to gh and an
   alias stay with the ceiling the hook's header already states.
+
+- 2026-10-10 — lander, gate 1's F3. The owner chose to merge the guard alone
+  first, answering "Merge the guard alone first" over "owner adds the deny to
+  `~/.claude/settings.json`", "install now, accept the gap" and "drop the pilot".
+  #412 carries step 1's rule (and the hook extension above); its refusal is shown
+  on `main` in a session started after the merge, before step 2 is built on a new
+  branch. The earlier entry's "the next move is the owner's" is that question,
+  since answered. The ticket lands `in-flight`: steps 2 to 4 remain.

@@ -66,10 +66,11 @@
 #   - INDIRECTION DEFEATS IT. A PreToolUse hook is handed a command string. An
 #     agent that writes /tmp/x.sh and runs `bash /tmp/x.sh` presents a string
 #     this file cannot read through, and so can `$(echo Z2gg… | base64 -d)`, a
-#     shell alias, a `git` alias in a config the agent just wrote, or an `npm`
-#     script. This is the same ceiling CLAUDE.md already names for the deny list
-#     itself ("/bin/echo defeats a deny on echo"). Raising cost and making
-#     intent explicit is the whole benefit; closing the hole is not on offer.
+#     shell alias, a `git` alias in a config the agent just wrote, an `npm`
+#     script, or `gh extension exec stack merge`. This is
+#     the same ceiling CLAUDE.md already names for the deny list itself
+#     ("/bin/echo defeats a deny on echo"). Raising cost and making intent
+#     explicit is the whole benefit; closing the hole is not on offer.
 #
 #   - IT DOES NOT PROTECT ITSELF. This file is tracked, writable, and named by
 #     no deny rule — 0 of the 11 rules mention `.claude`, `settings` or `hooks`,
