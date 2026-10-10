@@ -1,7 +1,7 @@
 /**
  * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
  * the inbox and the rules (lg-4), the period (lg-6), and the spending
- * categories (lg-15).
+ * categories (lg-15) and the history's charts (lg-9).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
@@ -21,9 +21,10 @@ import { Periods } from "./periods/Periods.tsx";
 import { Rules } from "./rules/Rules.tsx";
 import { Salaries } from "./salaries/Salaries.tsx";
 import { Spending } from "./spending/Spending.tsx";
+import { Stats } from "./stats/Stats.tsx";
 import { StatementPaste } from "./statements/StatementPaste.tsx";
 
-type Tab = "home" | "period" | "paste" | "inbox" | "rules" | "spending" | "salaries";
+type Tab = "home" | "stats" | "period" | "paste" | "inbox" | "rules" | "spending" | "salaries";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
@@ -49,6 +50,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "home"} onClick={() => setTab("home")}>
           Home
         </button>
+        <button type="button" aria-pressed={tab === "stats"} onClick={() => setTab("stats")}>
+          Stats
+        </button>
         <button type="button" aria-pressed={tab === "period"} onClick={() => setTab("period")}>
           Period
         </button>
@@ -70,6 +74,7 @@ export function App(): React.ReactElement {
       </nav>
       <main>
         {tab === "home" && <Home />}
+        {tab === "stats" && <Stats />}
         {tab === "period" && <Periods />}
         {tab === "paste" && <StatementPaste />}
         {tab === "inbox" && <Inbox onCount={setWaiting} />}

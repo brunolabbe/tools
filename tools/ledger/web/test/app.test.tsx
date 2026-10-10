@@ -159,3 +159,34 @@ test("the period tab shows the period screen", async () => {
   expect(await screen.findByRole("heading", { name: "Open period" })).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
 });
+
+// lg-9: the stats tab. Its client is faked here like every other screen's, with a
+// bucket that never moved, so every chart says there is nothing in its range.
+vi.mock("../src/api/stats.ts", () => {
+  const none = { from: null, to: null };
+  return {
+    fetchMortgagePayments: vi.fn().mockResolvedValue({ range: none, payments: [] }),
+    fetchMortgageOwn: vi.fn().mockResolvedValue({ range: none, people: [], points: [] }),
+    fetchContributions: vi.fn().mockResolvedValue({ range: none, people: [], series: [] }),
+    fetchBufferStats: vi
+      .fn()
+      .mockResolvedValue({ range: none, minDropCents: 50000, points: [], drops: [] }),
+    fetchSalariesStats: vi.fn().mockResolvedValue({ range: none, years: [] }),
+    fetchSpendingStats: vi.fn().mockResolvedValue({ range: none, categories: [], periods: [] }),
+    fetchFixedItems: vi.fn().mockResolvedValue({ range: none, months: [], series: [] }),
+    fetchSettlementsStats: vi.fn().mockResolvedValue({ range: none, periods: [] }),
+  };
+});
+
+test("the stats tab shows the history, with its one range above the charts", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+
+  expect(await screen.findByRole("heading", { name: "History" })).toBeTruthy();
+  expect(
+    await screen.findByText("No payment came out of the mortgage bucket in this range."),
+  ).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
+});

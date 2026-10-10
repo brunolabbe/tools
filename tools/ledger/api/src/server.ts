@@ -33,6 +33,7 @@ import { registerPeriodRoutes } from "./routes/periods.ts";
 import { registerRuleRoutes } from "./routes/rules.ts";
 import { registerSalaryRoutes } from "./routes/salaries.ts";
 import { registerSpendingCategoryRoutes } from "./routes/spending-categories.ts";
+import { registerStatsRoutes } from "./routes/stats.ts";
 import { registerStatementRoutes } from "./routes/statements.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
@@ -127,6 +128,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerSalaryRoutes(server, context);
   registerPeriodRoutes(server, context);
   registerSpendingCategoryRoutes(server, context);
+  registerStatsRoutes(server, context);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
