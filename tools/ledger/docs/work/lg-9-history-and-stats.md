@@ -3,7 +3,7 @@ id: lg-9
 tool: ledger
 title: History and stats — the charts the owner asked for
 kind: work-package
-status: ready
+status: done
 milestone: P5
 depends_on: [lg-5, lg-6, lg-15]
 difficulty: standard
@@ -50,6 +50,73 @@ append-only records, so this ticket computes and draws. It stores nothing new.
    payment change and one spanning a ratio change.
 2. The stats screen renders each chart from fixture data. Web tests prove it.
 3. Gates green.
+
+## Review
+
+**Gate: FAIL** — 2026-10-10 · `7709411e..043d5df8` (lg-9's own diff read as `e97df6f7...043d5df8`, since the branch merged `main` at `e97df6f7`) · Opus 5.5, depth full
+
+| Done when                                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Each series has a unit test on a synthetic history, including one with a payment change and one spanning a ratio change | `books/test/stats.test.ts`: one `describe` per series, all eight. The payment change is in `mortgagePayments` › "lists the payments, marking the one that changed with the one before it". The ratio change is in `salariesByYear` › "a year holding a ratio change lists both, and ends on the later". Four mutations each turned the suite red: the change flag, the boundary of a drop, the date of the ratio at the year's end, and taking the rate-limit hook off ✓ |
+| 2. The stats screen renders each chart from fixture data. Web tests prove it                                               | **unproven** for one of eleven charts. `web/test/stats.test.tsx` › "draws every chart from its series…" draws ten of them. "Put into the buffer" has `points: []` in the fixture, so no web test ever draws it (see the med below). The other ten ✓                                                                                                                                                                                                                      |
+| 3. Gates green                                                                                                             | PR #416 at `043d5df8`: all 9 checks SUCCESS. That includes `CodeQL`, which reads "No new alerts in code changed by this pull request", and the Windows leg. Locally, `npm run check` exits 0 and `npm test -- --project ledger` passes 793 of 793 in 45 files ✓. This line is not `awaiting`, because the check is already green on this head                                                                                                                            |
+| Build 1, the receipt split (lg-8, lg-10)                                                                                   | **unproven (scope)**: removed from scope by the dispatch. It arrives with lg-10, and the comment on `spendingStats` says where the split goes                                                                                                                                                                                                                                                                                                                            |
+
+- **high** · no `Done when` line depends on it · **A fixed item changes colour when the range drops an earlier item.** Shipped text says it cannot, in three places:
+  - `tools/ledger/CLAUDE.md`: "a fixed item … keep[s] the colour their place in a list gives them whatever range is chosen, so the API sends the whole list".
+  - The comment on `fixedItemsByMonth` in `books/src/stats.ts`: "a range that leaves one out must not move the others".
+  - The Log: "a test holds each".
+
+  `fixedItemsByMonth` orders the labels over every item. But it returns only the lines that generated something inside the range, and `FixedBody` in `web/src/stats/Cards.tsx` calls `assignSlots` over `data.series`.
+
+  Reproduction: `node --import tsx <scratch>/history.mts <worktree>`. The fixture has Gym from 2025-01-05 to 2025-02-28 and Internet from 2025-02-05 with no end. It prints:
+  - `fixed items all: ["Gym","Internet"]`
+  - `fixed items from 2025-04-01: ["Internet"]`
+  - `FAIL fixed items: Internet keeps its place when the range drops Gym: 0 !== 1`
+
+  Chromium at 360px on the same data (`phone.mts`) shows `Internet=var(--series-2)` for "All of it", and its bars as `["var(--series-1)"]` from 2025-04-01.
+
+  The test `fixedItemsByMonth` › "the lines come in the order their labels started, whatever the range" passes because none of its three ranges drops a line. Its title claims more than its assertions check.
+
+  Fix, recommended: do what spending does. The response sends every label in the order they started, and `FixedBody` assigns slots over that list. A test then takes a range that drops an earlier item. The alternative is to strike the claim from all three places.
+
+- **med** · Done when 2 depends on it · The "Put into the buffer" chart is never drawn from fixture data. `CONTRIBUTIONS` in `web/test/stats.test.tsx` gives `current-expenses` no points, so the card only ever shows its empty message. The fix is one point in the fixture and one assertion on that card's readout.
+- **med** · no `Done when` line depends on it · Nothing guards Build 4, "Charts must work on a phone", at the layout level:
+  - The Log records that every chart was drawing 736px wide on a 360px page. That was fixed in `styles.css` (`.chart-card`, `.chart-box`), and no test would fail if the fix regressed. jsdom has no layout.
+  - "on a 360px phone a line chart is drawn 360px wide…" stubs `clientWidth` to 360 on every element. It does fail if a line chart sets a width other than the one measured: mutating `width={measured + 100}` made it red, 1 of 14. It cannot see CSS overflow. On a real 360px viewport the chart box is 294px, not 360px.
+  - Measured in Chromium at 360×780 with `phone.mts`: no horizontal page scroll (`docScroll 360 / 360`). On all ten chart cards the SVG ends at x=327, inside the card's right edge at 344. Only "Fixed items by month" scrolls, starting at the newest.
+
+  The candidate guard is the ledger's first e2e spec.
+
+- **low** · Salary and ratio colours are assigned over the people present in the years of the range (`SalaryBody`), not over the API's people list. If a range held a year with only sam's salary, sam would take alex's colour. No such case occurs today, because a salary entry carries both people.
+- **low** · `nfr:maintainability` · The doc comment on `spendingByPeriod` says that half a period "would be a different number from the one the settlement used". A line entered late is counted under its own date's closed period, while the settlement counted it at the next close. My history's 2025-03-20 line shows it: the closed period reads `cardCents` 7000, but the close saw 5000. The comment states a match the code does not keep. The behaviour itself is a fair choice.
+- **low** · A `minDropCents` that fails validation (`0`, `abc`, `1.5`) answers `BAD_REQUEST` with the copy "from and to are days, written yyyy-mm-dd, from first." The copy describes a different field.
+- **low** · The register comment in `api/src/routes/stats.ts` has all five of adr/005's fields:
+  - query `js/missing-rate-limiting`;
+  - file `api/src/routes/stats.ts`;
+  - date 2026-10-10;
+  - reasoning;
+  - test `api/test/route-limits.test.ts`. Its "8 of 49" re-measured exact: with the hook off, 8 failed and 41 passed out of 49, the eight `stats…` rows.
+
+  `printRoutes({ includeHooks: true })` shows `rateLimit()` on all 16 stats handlers, 8 GET and 8 HEAD.
+
+  There are two problems:
+  - **Rule 1 placement.** The `// codeql[…]` line covers exactly the next line, which is the `for`. The `app.get` call sits two lines below it.
+  - **Reasoning.** It repeats the other ledger routes' claim that the query does not model the `read` hook. adr/005's "What the merge showed" records that the query did read `{ onRequest: rateLimit }`.
+
+  The PR's `CodeQL` check raised nothing on this head. Whether that is because no alert was raised or because a suppressed one is not counted, I could not tell: the alert list for `pr:416` returned 404 to WebFetch. The owner's excusal stands; this bullet only grades the comment.
+
+- **low** · The Log says "CodeQL: pending the owner … has **not been given**". The owner excused it on 2026-10-10, and the Log should record that decision, its options and who gave it.
+- **low** · `nfr:performance` · Each range change sends 8 reads against a default budget of 120 per minute per person. That is 15 changes a minute before a 429, and superseded requests that were aborted still count against the budget.
+- **open decision** · What a "large drop" is. The brief does not define it. The branch chose a single buffer row of 500.00 $ or more out (`DEFAULT_LARGE_DROP_CENTS`, inclusive), overridable with `?minDropCents=`. It is pinned by `bufferSeries` › "a drop exactly the size asked for is listed" (mutating `<=` to `<` turned it red) and by `api/test/stats.test.ts` › "the buffer lists the rows behind its large drops…". The Log says it was not put to the owner. Options:
+  1. Keep the fixed 500.00 $ per row. Recommended: it can be changed later.
+  2. Make the threshold relative, for example a share of the balance before the drop.
+- **dropped** · The open period is cut at `to` and not held whole. Its span ends at `through` by construction and the Log states it, so it is consistent with itself.
+- **dropped** · The edit to the contract: Build 2's "one route per series" requires the routes in `ROUTES`, and the edit only adds.
+- **dropped** · "Today" is the UTC date in both api and web. That is the ledger's existing convention and not new here.
+- **findings** · the hunt returned 12: 9 carried (1 high, 2 med, 6 low), 3 dropped, plus 1 open decision.
+- Checked against the synthetic history the branch's tests do not use: the payment changes, the odd cent, every own-money point against `mortgageAsOf`, the contributions against `bufferAsOf`, a ratio change inside 2025, settlements against `/api/periods`, and 165 rows. The 150 joint rows beyond `listRows`' default of 100 are all counted. The only figure that failed is the fixed-items one above.
+- NFR: security ✓ (8 routes limited, the range refused as `BAD_REQUEST` from core) · performance — above · reliability ✓ (one read transaction per series, nothing written) · maintainability — above.
 
 ## Log
 
