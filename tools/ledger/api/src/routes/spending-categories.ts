@@ -58,7 +58,9 @@ interface Schema<T> {
 function parsed<T>(schema: Schema<T>, input: unknown, what: string): T {
   const result = schema.safeParse(input);
   if (!result.success) {
-    const fields = [...new Set(result.error.issues.map((issue) => String(issue.path[0] ?? "body")))];
+    const fields = [
+      ...new Set(result.error.issues.map((issue) => String(issue.path[0] ?? "body"))),
+    ];
     throw new AppError("BAD_REQUEST", `The ${what} is not valid: check ${fields.join(", ")}.`);
   }
   return result.data;

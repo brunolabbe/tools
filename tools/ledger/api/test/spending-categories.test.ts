@@ -144,9 +144,9 @@ describe("the list", () => {
     ]);
     // Rules are never seeded (the tool's CLAUDE.md); neither is the map.
     expect(target.context.db.prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 0 });
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM spending_category_map").get()).toEqual(
-      { n: 0 },
-    );
+    expect(
+      target.context.db.prepare("SELECT count(*) AS n FROM spending_category_map").get(),
+    ).toEqual({ n: 0 });
   });
 
   test("a new category joins it, recording who and when, and a duplicate name is refused", async () => {
@@ -184,11 +184,9 @@ describe("the list", () => {
         .all(groceries, groceries),
     ).toEqual([{ name: "Groceries" }, { name: "Food" }]);
     // The name another category has is taken.
-    const error = await refused(
-      target,
-      ROUTES.spendingCategory.replace(":id", String(groceries)),
-      { name: "pharmacy" },
-    );
+    const error = await refused(target, ROUTES.spendingCategory.replace(":id", String(groceries)), {
+      name: "pharmacy",
+    });
     expect(error.code).toBe("BAD_REQUEST");
   });
 
@@ -203,7 +201,9 @@ describe("the list", () => {
     );
 
     expect(retired).toMatchObject({ id: other, retired: true });
-    expect((await categories(target)).find((category) => category.id === other)?.retired).toBe(true);
+    expect((await categories(target)).find((category) => category.id === other)?.retired).toBe(
+      true,
+    );
     const error = await refused(target, ROUTES.spendingCategoryMap, {
       desjardinsCategory: "Divers",
       spendingCategoryId: other,
@@ -300,9 +300,9 @@ describe("the map", () => {
     const entry = await setMap(target, "Jamais vue", await idOf(target, "Other"));
 
     expect(entry).toMatchObject({ desjardinsCategory: "Jamais vue", rows: 0 });
-    expect((await get<SpendingCategoryMapResponse>(target, ROUTES.spendingCategoryMap)).entries).toEqual(
-      [],
-    );
+    expect(
+      (await get<SpendingCategoryMapResponse>(target, ROUTES.spendingCategoryMap)).entries,
+    ).toEqual([]);
   });
 });
 
@@ -334,7 +334,10 @@ describe("a rule's spending category, and a row's own", () => {
 
     const answered = await override(target, id, household);
 
-    expect(answered).toEqual({ rowId: id, spendingCategory: { id: household, source: "override" } });
+    expect(answered).toEqual({
+      rowId: id,
+      spendingCategory: { id: household, source: "override" },
+    });
     expect((await rowOf(target, GROCERIES, GROCERIES_AMOUNT)).spendingCategory).toEqual({
       id: household,
       source: "override",
@@ -370,12 +373,21 @@ describe("a rule's spending category, and a row's own", () => {
     await pasteStatement(target);
     const id = rowId(target, GROCERIES, GROCERIES_AMOUNT);
 
-    expect((await refused(target, ROUTES.spendingCategoryOverrides, { rowId: 9999, spendingCategoryId: null })).code).toBe(
-      "ROW_NOT_FOUND",
-    );
     expect(
-      (await refused(target, ROUTES.spendingCategoryOverrides, { rowId: id, spendingCategoryId: 9999 }))
-        .code,
+      (
+        await refused(target, ROUTES.spendingCategoryOverrides, {
+          rowId: 9999,
+          spendingCategoryId: null,
+        })
+      ).code,
+    ).toBe("ROW_NOT_FOUND");
+    expect(
+      (
+        await refused(target, ROUTES.spendingCategoryOverrides, {
+          rowId: id,
+          spendingCategoryId: 9999,
+        })
+      ).code,
     ).toBe("SPENDING_CATEGORY_NOT_FOUND");
   });
 
@@ -402,9 +414,9 @@ describe("a rule's spending category, and a row's own", () => {
 
     expect(second.spendingCategoryId).toBe(household);
     expect(second.id).not.toBe(first.id);
-    expect((await get<{ rules: Rule[] }>(target, ROUTES.rules)).rules.map((r) => r.spendingCategoryId)).toEqual(
-      [household],
-    );
+    expect(
+      (await get<{ rules: Rule[] }>(target, ROUTES.rules)).rules.map((r) => r.spendingCategoryId),
+    ).toEqual([household]);
     // The row was filed by the first version, which read pharmacy then.
     expect((await rowOf(target, GROCERIES, GROCERIES_AMOUNT)).spendingCategory).toEqual({
       id: pharmacy,
@@ -526,20 +538,20 @@ describe("a row with no spending category", () => {
   });
 });
 
-describe("a period line's spending category", () => {
-  function line(spendingCategoryId: number | null, more: Partial<PeriodLineDraft> = {}) {
-    return {
-      personId: "alex",
-      date: "2026-09-10",
-      amountCents: 4500,
-      category: null,
-      spendingCategoryId,
-      note: null,
-      chargedTo: null,
-      ...more,
-    } satisfies PeriodLineDraft;
-  }
+function line(spendingCategoryId: number | null, more: Partial<PeriodLineDraft> = {}) {
+  return {
+    personId: "alex",
+    date: "2026-09-10",
+    amountCents: 4500,
+    category: null,
+    spendingCategoryId,
+    note: null,
+    chargedTo: null,
+    ...more,
+  } satisfies PeriodLineDraft;
+}
 
+describe("a period line's spending category", () => {
   test("a new line takes one from the list, and the open period lists it", async () => {
     const target = await start();
     const groceries = await idOf(target, "Groceries");
@@ -621,7 +633,9 @@ describe("migration 6, on a database the earlier release left", () => {
 
     migrate(db);
 
-    // A view written as SELECT * would have gone on listing the old columns.
+    // The views are SELECT * and were not made again: SQLite expands the star on
+    // every use (measured: deleting the views' re-creation from the migration, as
+    // first written, changed no result), so this holds without one.
     expect(db.prepare("SELECT spending_category_id AS id FROM current_rules").all()).toEqual([
       { id: null },
     ]);

@@ -28,9 +28,9 @@ export function registerSalaryRoutes(app: FastifyInstance, context: AppContext):
   // route as no limit at all; the route is limited per person like every other
   // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
   // `api/src/routes/salaries.ts`. Guarded by `api/test/route-limits.test.ts`:
-  // taking `{ onRequest: read }` off this route fails 1 of its 22 tests, "GET
+  // taking `{ onRequest: read }` off this route fails 1 of its 37 tests, "GET
   // salaries refuses the second request in a minute too" — that test, not this
-  // comment, is what holds it. Measured 2026-10-05 at 4a7647b.
+  // comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
   app.get(ROUTES.salaries, { onRequest: read }, async () => {
     const body: SalariesResponse = { salaries: currentSalaries(context.db) };

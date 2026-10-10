@@ -387,20 +387,10 @@ const MIGRATIONS: readonly string[] = [
   -- lines already stored keep their text and name no spending category.
   ALTER TABLE period_lines ADD COLUMN spending_category_id INTEGER REFERENCES spending_categories (id);
 
-  -- A view written as SELECT * lists the columns the table had when it was
-  -- created, so the two columns above are invisible through these until they are
-  -- made again. Same definitions, byte for byte, as migrations 2 and 4.
-  DROP VIEW current_rules;
-  CREATE VIEW current_rules AS
-    SELECT * FROM rules
-    WHERE retired = 0
-      AND NOT EXISTS (SELECT 1 FROM rules newer WHERE newer.supersedes = rules.id);
-
-  DROP VIEW current_period_lines;
-  CREATE VIEW current_period_lines AS
-    SELECT * FROM period_lines
-    WHERE retired = 0
-      AND NOT EXISTS (SELECT 1 FROM period_lines newer WHERE newer.supersedes = period_lines.id);
+  -- current_rules and current_period_lines are SELECT * views and are left as they
+  -- are: SQLite stores a view as text and expands the star on every use, so both
+  -- already show the two columns above (api/test/spending-categories.test.ts
+  -- reads them through the views on a database migration 5 left).
   `,
 ];
 

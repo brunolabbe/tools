@@ -16,6 +16,7 @@ import type {
   SettlementFigures,
 } from "@ledger/contract";
 import { fetchPeople } from "../src/api/rules.ts";
+import { fetchSpendingCategories } from "../src/api/spending.ts";
 import {
   addLine,
   addRecurring,
@@ -30,6 +31,7 @@ import {
 import { Periods } from "../src/periods/Periods.tsx";
 
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn() }));
+vi.mock("../src/api/spending.ts", () => ({ fetchSpendingCategories: vi.fn() }));
 vi.mock("../src/api/periods.ts", () => ({
   fetchMe: vi.fn(),
   fetchOpenPeriod: vi.fn(),
@@ -68,6 +70,7 @@ const OPEN: OpenPeriodResponse = {
       amountCents: 8_000,
       chargedTo: null,
       category: "Internet",
+      spendingCategoryId: null,
       note: null,
       lineId: null,
       recurringItemId: 4,
@@ -79,6 +82,7 @@ const OPEN: OpenPeriodResponse = {
       amountCents: 12_345,
       chargedTo: null,
       category: "Épicerie",
+      spendingCategoryId: null,
       note: null,
       lineId: 7,
       recurringItemId: null,
@@ -90,6 +94,7 @@ const OPEN: OpenPeriodResponse = {
       amountCents: 2_000,
       chargedTo: "alex",
       category: null,
+      spendingCategoryId: null,
       note: "A book",
       lineId: 8,
       recurringItemId: null,
@@ -123,9 +128,15 @@ function closed(id: number, end: string, status: ClosedPeriod["deposit"]["status
   };
 }
 
+const SPENDING_CATEGORIES = [
+  { id: 1, name: "Groceries", retired: false, createdAt: "x", createdBy: "migration" },
+  { id: 4, name: "Pharmacy", retired: false, createdAt: "x", createdBy: "migration" },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
+  vi.mocked(fetchSpendingCategories).mockResolvedValue(SPENDING_CATEGORIES);
   vi.mocked(fetchMe).mockResolvedValue("sam");
   vi.mocked(fetchOpenPeriod).mockResolvedValue(OPEN);
   vi.mocked(fetchPeriods).mockResolvedValue([
@@ -223,7 +234,8 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
     personId: "sam",
     date: "2026-09-12",
     amountCents: 4_520,
-    category: "Pharmacie",
+    category: null,
+    spendingCategoryId: 4,
     note: null,
     source: "manual",
     chargedTo: "alex",
@@ -238,7 +250,7 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
   expect((within(form).getByLabelText("Paid by") as HTMLSelectElement).value).toBe("sam");
   fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2026-09-12" } });
   fireEvent.change(within(form).getByLabelText("Amount"), { target: { value: "45.20" } });
-  fireEvent.change(within(form).getByLabelText("Category"), { target: { value: "Pharmacie" } });
+  fireEvent.change(within(form).getByLabelText("Spending category"), { target: { value: "4" } });
   fireEvent.click(within(form).getByLabelText("This was alex's"));
   fireEvent.click(within(form).getByRole("button", { name: "Add the line" }));
 
@@ -247,7 +259,8 @@ test("a line entered by hand, ticked as the other person's, is a charge to them"
       personId: "sam",
       date: "2026-09-12",
       amountCents: 4_520,
-      category: "Pharmacie",
+      category: null,
+      spendingCategoryId: 4,
       note: null,
       chargedTo: "alex",
     }),
@@ -357,6 +370,7 @@ test("a line entered after its period closed is listed as late, and in its payer
         amountCents: 4_000,
         chargedTo: null,
         category: "Épicerie",
+        spendingCategoryId: null,
         note: null,
         lineId: 12,
         recurringItemId: null,
@@ -372,4 +386,78 @@ test("a line entered after its period closed is listed as late, and in its payer
     within(card).getByText("2026-06-20 · Épicerie, entered after its period closed"),
   ).toBeTruthy();
   expect(within(card).getByText("Paid by alex").nextSibling?.textContent).toBe("40.00 $");
+});
+
+// Spending categories on period lines (lg-15).
+test("a line is named by its spending category, and an older one shows its text as it was", async () => {
+  vi.mocked(fetchOpenPeriod).mockResolvedValue({
+    ...OPEN,
+    lines: [
+      {
+        date: "2026-08-02",
+        personId: "sam",
+        amountCents: 12_345,
+        chargedTo: null,
+        category: null,
+        spendingCategoryId: 1,
+        note: null,
+        lineId: 7,
+        recurringItemId: null,
+        late: false,
+      },
+      {
+        date: "2026-08-04",
+        personId: "sam",
+        amountCents: 2_500,
+        chargedTo: null,
+        category: "pharmacie du coin",
+        spendingCategoryId: null,
+        note: null,
+        lineId: 9,
+        recurringItemId: null,
+        late: false,
+      },
+    ],
+  });
+  render(<Periods />);
+
+  const open = await screen.findByRole("heading", { name: "Open period, since 2026-07-01" });
+  const card = open.closest("section") as HTMLElement;
+  expect(within(card).getByText("2026-08-02 · Groceries")).toBeTruthy();
+  expect(within(card).getByText("2026-08-04 · pharmacie du coin")).toBeTruthy();
+});
+
+test("the line form offers the list, and sends none when none is picked", async () => {
+  vi.mocked(addLine).mockResolvedValue({
+    id: 10,
+    personId: "sam",
+    date: "2026-09-12",
+    amountCents: 1_000,
+    category: null,
+    spendingCategoryId: null,
+    note: null,
+    source: "manual",
+    chargedTo: null,
+    supersedes: null,
+    enteredAt: "2026-09-12T12:00:00.000Z",
+    enteredBy: "sam",
+  });
+  render(<Periods />);
+  const form = await screen.findByRole("form", { name: "Add a line" });
+  const picker = within(form).getByLabelText<HTMLSelectElement>("Spending category");
+  expect([...picker.options].map((option) => option.text)).toEqual([
+    "None",
+    "Groceries",
+    "Pharmacy",
+  ]);
+
+  fireEvent.change(within(form).getByLabelText("Date"), { target: { value: "2026-09-12" } });
+  fireEvent.change(within(form).getByLabelText("Amount"), { target: { value: "10" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Add the line" }));
+
+  await waitFor(() =>
+    expect(addLine).toHaveBeenCalledWith(
+      expect.objectContaining({ category: null, spendingCategoryId: null }),
+    ),
+  );
 });

@@ -107,3 +107,66 @@ so the two can never be read for each other.
   was stated to the owner as the filer's default and not objected to. The
   per-row override and computing the category when read are the filer's own
   defaults, not put to the owner; a builder who finds either wrong says so.
+- 2026-10-10 — Built, on `lg-15-spending-categories` from `ad51f0b8`. Gate
+  pending; the status stays `ready`.
+  - **Storage.** Migration 6 (`api/src/db/schema.ts`): `spending_categories`
+    (versions; a rename or a retirement supersedes), `spending_category_map`,
+    `spending_category_overrides`, and a nullable `spending_category_id` on
+    `rules` and `period_lines`. Everything that picks a category stores the id
+    of its **first** version, because a rename files a new version and a
+    reference to the version id would go stale; `root_id` is `NULL` on a first
+    version and the id of the first on every later one (CHECK-tied to
+    `supersedes`). Six generic names are seeded; no rule and no map line is.
+  - **`books`.** `spendingCategory(row, classifyingRule, map, override)` and
+    `spendingMap(versions)` in `books/src/spending.ts`; the four-step order is
+    asserted in `books/test/spending.test.ts` (override over rule over map over
+    none). `api/src/rows.ts` lists stored rows with theirs (`GET /api/rows`,
+    `?spendingCategory=none` is the filter, capped by `limit`) and writes the
+    override; `inbox()` answers `InboxRow.spendingCategory`.
+  - **Item 7 was already written.** #380, which filed this ticket, wrote the
+    receipt-split and uncategorised notes into lg-9's Build; this change only
+    adds to that bullet where to read the category from. A short note on what
+    lg-15 touched was added to lg-17's item 8, since it shares the files.
+  - **What the brief had wrong.** Nothing in the design; two things about the
+    surroundings. (1) I first re-created `current_rules` and
+    `current_period_lines` in the migration on the belief that a `SELECT *`
+    view keeps the columns the table had when it was made. It does not in
+    SQLite: deleting those lines left every test green (45 of 45 in
+    `spending-categories.test.ts` and `rules.test.ts`), so they were taken out
+    and the test that reads the new column through the view stays as the
+    regression. (2) The "1 of its N tests" counts in the CodeQL comments in
+    `routes/periods.ts`, `routes/rules.ts` and `routes/salaries.ts` were stale
+    (22, 22, 31 against a file that had 31); six new routes make it 37, and
+    each was re-measured by taking `{ onRequest: read }` off its route and
+    running `route-limits.test.ts` (1 failure each, named as the comment says),
+    then restored. That is the fold-in exception: the comment says what to
+    measure, and adding the routes changed the number.
+  - **Words.** The rule form's "Category" label became "Bank category" and the
+    period-line form's free-text input became a "Spending category" select, so
+    the two are never read for each other. A new line sends `category: null`;
+    the free-text column and every stored line's text are untouched, and the
+    web lists a line by its spending category, else its text.
+  - **Open decisions, for the owner (not settled here).**
+    1. _Is a rule's spending category part of "the same answer" in `classify`?_
+       Built: **yes**, `sameAnswer` compares it (`null` counts as a value), so
+       two rules level at the top that differ only in it are `ambiguous` and the
+       row waits. Pinned by `books/test/classify.test.ts`, "classify, with
+       spending categories (lg-15)": changing the one line in `sameAnswer` to
+       ignore it fails 2 of 51 (the first and third tests), and nothing else.
+       The other choice classifies silently by the newest `id`. Cost of yes: a
+       row asks where two equally specific rules disagree on the category only.
+    2. _Does a filed row follow its rule's later edits?_ Built: **no**, a
+       classified row takes the category of the rule **version** its
+       classification cites (`rule_id`), as the brief said; editing a rule to
+       add a category leaves rows it already filed on the map's. Pinned by
+       `api/test/spending-categories.test.ts`, "editing a rule's category files
+       a version, and a row keeps the version it was filed by". The alternative
+       follows the rule's chain to its latest version, retirements included
+       (they copy the category), so past rows follow an edit as they follow a
+       map fix; about 15 lines of recursive SQL and the assertion above flips.
+    3. _The override's `null` withdraws it; it cannot say "none"._ A row whose
+       map or rule gives a category cannot be made uncategorised by hand.
+       Built so because a withdrawal has to be expressible and the brief lists
+       no third state; a separate "explicitly none" record is the alternative.
+  - **Not run.** No browser or end-to-end run: `e2e/README.md` says there is
+    still no spec, and the screens are covered by the web unit tests only.

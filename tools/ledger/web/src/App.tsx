@@ -1,6 +1,7 @@
 /**
  * The shell: the home screen and the salaries (lg-5), the paste screen (lg-2),
- * the inbox and the rules (lg-4), and the period (lg-6).
+ * the inbox and the rules (lg-4), the period (lg-6), and the spending
+ * categories (lg-15).
  *
  * The books arrive with their design — `docs/00-ANALYSIS.md` first, then the
  * tickets it produces — and a screen guessed at before its ticket is one more
@@ -19,9 +20,10 @@ import { Inbox } from "./inbox/Inbox.tsx";
 import { Periods } from "./periods/Periods.tsx";
 import { Rules } from "./rules/Rules.tsx";
 import { Salaries } from "./salaries/Salaries.tsx";
+import { Spending } from "./spending/Spending.tsx";
 import { StatementPaste } from "./statements/StatementPaste.tsx";
 
-type Tab = "home" | "period" | "paste" | "inbox" | "rules" | "salaries";
+type Tab = "home" | "period" | "paste" | "inbox" | "rules" | "spending" | "salaries";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
@@ -59,6 +61,9 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "rules"} onClick={() => setTab("rules")}>
           Rules
         </button>
+        <button type="button" aria-pressed={tab === "spending"} onClick={() => setTab("spending")}>
+          Categories
+        </button>
         <button type="button" aria-pressed={tab === "salaries"} onClick={() => setTab("salaries")}>
           Salaries
         </button>
@@ -69,6 +74,7 @@ export function App(): React.ReactElement {
         {tab === "paste" && <StatementPaste />}
         {tab === "inbox" && <Inbox onCount={setWaiting} />}
         {tab === "rules" && <Rules />}
+        {tab === "spending" && <Spending />}
         {tab === "salaries" && <Salaries />}
       </main>
       <Health />

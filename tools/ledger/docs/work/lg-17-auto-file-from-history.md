@@ -78,6 +78,16 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
      rule's "Accept" (storing `accepted` with the rule id), and there is no second
      control. An automatic filing is not offered there, since the row is no longer
      in the inbox.
+   - **What lg-15 added, for the same files.** Migration 6 is lg-15's, so yours
+     is 7. A row's spending category is computed on read from its standing
+     classification's rule (`rule_id`), its override and the map, and a
+     classification with no `rule_id` simply has no rule's category, so an
+     automatic filing needs nothing from it. `InboxRow` gained
+     `spendingCategory`; `inbox()` builds it from the rule `classify` returned.
+     `sameAnswer` in `books/src/classify.ts` now also compares a
+     rule's `spendingCategoryId`; it is about rules and `fromHistory` does not
+     call it, and neither `HistoryAnswer` nor `answersByDescription` was
+     touched.
 
 ## Done when
 

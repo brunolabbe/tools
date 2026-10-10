@@ -95,7 +95,8 @@ function requireFreeName(db: Database, name: string, except: number | null): voi
       category.id !== except &&
       normalizeDescription(category.name) === wanted,
   );
-  if (taken) throw new AppError("BAD_REQUEST", "There is already a spending category by that name.");
+  if (taken)
+    throw new AppError("BAD_REQUEST", "There is already a spending category by that name.");
 }
 
 function insertVersion(
@@ -206,7 +207,9 @@ function standingMap(db: Database): SpendingMap {
  */
 export function spendingCategoryMap(db: Database): SpendingCategoryMapEntry[] {
   const seen = db
-    .prepare("SELECT category, count(*) AS n FROM statement_rows GROUP BY category ORDER BY max(seq)")
+    .prepare(
+      "SELECT category, count(*) AS n FROM statement_rows GROUP BY category ORDER BY max(seq)",
+    )
     .all() as { category: string; n: number }[];
   const map = standingMap(db);
   const entries = new Map<string, SpendingCategoryMapEntry>();
@@ -273,7 +276,10 @@ export function setSpendingCategoryMap(
 export interface SpendingReader {
   /** The rule version a stored classification cites, as `spendingCategory` reads a rule. */
   citedRule: (ruleId: number | null) => SpendingRule | null;
-  of: (row: { id: number; category: string }, rule: SpendingRule | null) => RowSpendingCategory | null;
+  of: (
+    row: { id: number; category: string },
+    rule: SpendingRule | null,
+  ) => RowSpendingCategory | null;
 }
 
 export function spendingReader(db: Database): SpendingReader {
@@ -292,7 +298,9 @@ export function spendingReader(db: Database): SpendingReader {
   const ruleCategories = new Map(
     (
       db
-        .prepare("SELECT id, spending_category_id FROM rules WHERE spending_category_id IS NOT NULL")
+        .prepare(
+          "SELECT id, spending_category_id FROM rules WHERE spending_category_id IS NOT NULL",
+        )
         .all() as { id: number; spending_category_id: number }[]
     ).map((rule) => [rule.id, rule.spending_category_id]),
   );

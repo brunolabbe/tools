@@ -17,9 +17,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatCents } from "@ledger/books";
 import { AppError, BUCKETS } from "@ledger/contract";
-import type { Bucket, InboxRow } from "@ledger/contract";
+import type { Bucket, InboxRow, SpendingCategory } from "@ledger/contract";
 import { classifyRow, fetchInbox } from "../api/inbox.ts";
 import { createRule, fetchPeople } from "../api/rules.ts";
+import { fetchSpendingCategories, setRowSpendingCategory } from "../api/spending.ts";
 import {
   BUCKET_LABELS,
   REASON_LABELS,
@@ -29,11 +30,12 @@ import {
   personLabel,
 } from "../labels.ts";
 import { RuleForm } from "../rules/RuleForm.tsx";
+import { RowSpending } from "../spending/RowSpending.tsx";
 
 type Load =
   | { state: "loading" }
   | { state: "failed"; message: string }
-  | { state: "ready"; rows: InboxRow[]; people: string[] };
+  | { state: "ready"; rows: InboxRow[]; people: string[]; categories: SpendingCategory[] };
 
 /** An answer of the person's own, waiting to be offered as a rule. */
 interface Offer {
@@ -56,8 +58,12 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
   const refresh = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       try {
-        const [rows, people] = await Promise.all([fetchInbox(signal), fetchPeople(signal)]);
-        setLoad({ state: "ready", rows, people });
+        const [rows, people, categories] = await Promise.all([
+          fetchInbox(signal),
+          fetchPeople(signal),
+          fetchSpendingCategories(signal),
+        ]);
+        setLoad({ state: "ready", rows, people, categories });
         onCount?.(rows.length);
       } catch (error: unknown) {
         if (signal?.aborted === true) return;
@@ -82,12 +88,35 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     );
   }
 
-  const { rows, people } = load;
+  const { rows, people, categories } = load;
 
   const leave = (row: InboxRow): void => {
     const rest = rows.filter((other) => other.id !== row.id);
-    setLoad({ state: "ready", rows: rest, people });
+    setLoad({ state: "ready", rows: rest, people, categories });
     onCount?.(rest.length);
+  };
+
+  // The row stays where it is: a spending category never files it or moves it.
+  const setSpending = async (row: InboxRow, spendingCategoryId: number | null): Promise<void> => {
+    setProblem(null);
+    setNotice(null);
+    try {
+      const answered = await setRowSpendingCategory(row.id, spendingCategoryId);
+      setLoad({
+        state: "ready",
+        rows: rows.map((other) =>
+          other.id === row.id ? { ...other, spendingCategory: answered.spendingCategory } : other,
+        ),
+        people,
+        categories,
+      });
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+      // The category was retired by someone else: show the list as it is now.
+      if (error instanceof AppError && error.code === "SPENDING_CATEGORY_NOT_FOUND") {
+        await refresh();
+      }
+    }
   };
 
   const accept = async (row: InboxRow, ruleId: number): Promise<void> => {
@@ -139,8 +168,10 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
               amountCents: offer.row.amountCents,
               personId: offer.personId,
               bucket: offer.bucket,
+              spendingCategoryId: null,
             }}
             people={people}
+            categories={categories}
             submitLabel="Create rule"
             cancelLabel="No thanks"
             onSubmit={async (draft) => {
@@ -161,6 +192,8 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
             key={row.id}
             row={row}
             people={people}
+            categories={categories}
+            onSpending={(value) => void setSpending(row, value)}
             onAccept={(ruleId) => void accept(row, ruleId)}
             onAnswer={(personId, bucket) => void answer(row, personId, bucket)}
           />
@@ -173,11 +206,20 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
 interface InboxItemProps {
   row: InboxRow;
   people: readonly string[];
+  categories: readonly SpendingCategory[];
+  onSpending: (spendingCategoryId: number | null) => void;
   onAccept: (ruleId: number) => void;
   onAnswer: (personId: string | null, bucket: Bucket) => void;
 }
 
-function InboxItem({ row, people, onAccept, onAnswer }: InboxItemProps): React.ReactElement {
+function InboxItem({
+  row,
+  people,
+  categories,
+  onSpending,
+  onAccept,
+  onAnswer,
+}: InboxItemProps): React.ReactElement {
   const { suggestion, history } = row;
   const agrees =
     suggestion !== null &&
@@ -201,6 +243,12 @@ function InboxItem({ row, people, onAccept, onAnswer }: InboxItemProps): React.R
       <p className="muted">
         {row.category}. {REASON_LABELS[row.reason]}
       </p>
+      <RowSpending
+        description={row.description}
+        spending={row.spendingCategory}
+        categories={categories}
+        onSet={onSpending}
+      />
       {row.matching.length > 1 && (
         <ul className="matching" aria-label="Rules that match">
           {row.matching.map((rule) => (

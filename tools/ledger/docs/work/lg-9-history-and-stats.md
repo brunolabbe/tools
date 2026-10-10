@@ -33,7 +33,11 @@ append-only records, so this ticket computes and draws. It stores nothing new.
      [lg-10](./lg-10-receipt-items-exclusions-and-categories.md) lands, and its
      own category is then not counted. A row or line with no category charts
      as uncategorised; a period line stored before lg-15, or imported by lg-7,
-     shows its free text in the detail;
+     shows its free text in the detail. Read a row's category from what lg-15
+     built and do not recompute it: `listRows` in `api/src/rows.ts` answers it
+     per stored row (computed on read, with the step that gave it: the row's
+     own override, its rule's, or the map's), and a period line's is its
+     `spendingCategoryId`, with the free text left in `category`;
    - settlements, with their formula version.
 2. `api`: one route per series, each with a date range.
 3. `web`: a stats screen. Before choosing chart colours or marks, load the
