@@ -3,7 +3,7 @@ id: lg-15
 tool: ledger
 title: Give bank rows and period lines a spending category from one shared list
 kind: work-package
-status: ready
+status: done
 milestone: P3
 depends_on: [lg-4, lg-6]
 difficulty: standard
@@ -98,6 +98,104 @@ so the two can never be read for each other.
 5. Web tests cover setting a map entry, a rule's spending category, a row's
    override and a period line's.
 6. Gates green.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-10 · `ad51f0b8..2cd1f92e` · Opus 5.5, depth full
+
+| Done when                                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Mapped row gets the map's, rule's row the rule's, override the override's, in one `books` test over the four-step order | `books/test/spending.test.ts` › "spendingCategory, the four-step order" (override first; rule next; map next; none) ✓. Positive control: swapping steps 2 and 3 fails "the classifying rule's comes next, over the map's" and `api/test/spending-categories.test.ts` › "a row classified by a rule naming one gets the rule's, over the map's" (2 of 663)                                                                                                                       |
+| 2. A row with no spending category is classified and stays out of the inbox; API test                                      | `api/test/spending-categories.test.ts` › "is classified like any other and does not enter the inbox": the inbox does not hold the row, its classification is `source: "rule"`, and `spendingCategory` is `null` ✓                                                                                                                                                                                                                                                               |
+| 3. A map change recategorises stored rows; the earlier version stays stored                                                | `api/test/spending-categories.test.ts` › "changing an entry changes rows already stored, and the earlier version is still stored" ✓. Real input: a database migration 5 left, built with `ad51f0b8`'s code, opened with the head's code. Re-mapping `Épicerie` moved only the row the map answered. A row with an override, and a row filed by a rule that names a category, both kept theirs                                                                                   |
+| 4. A new period line takes a category from the list; a line stored before the migration keeps its text; API test           | `api/test/spending-categories.test.ts` › "a new line takes one from the list, and the open period lists it" and › "a line stored before the migration keeps its text and has no spending category" ✓. The second test reads through `currentLines`, not HTTP. Real input, over HTTP: `GET /api/periods/open` on the migrated database answered `["épicerie", null]` and `[null, null]`                                                                                          |
+| 5. Web tests: map entry, rule's category, row override, period line's                                                      | `web/test/spending.test.tsx` › "setting a map entry sends the bank category's text and the spending category"; `web/test/rules.test.tsx` › "a new rule can name a spending category, and a retired one is not offered"; `web/test/inbox.test.tsx` › "choosing another writes the row's own, and the row stays in the inbox"; `web/test/periods.test.tsx` › "a line entered by hand, ticked as the other person's, is a charge to them" (asserts `spendingCategoryId: 4` sent) ✓ |
+| 6. Gates green                                                                                                             | **unproven (gate)**: `npm run check` exits 0 and the `ledger` project passes 663 of 663 (597 at base), and every pull-request check on `2cd1f92e` passed except code-scanning `CodeQL`, which **failed** with two new alerts that nobody has excused (F1)                                                                                                                                                                                                                       |
+
+- **F1 · med** · Done when 6 depends on it · **open decision**. On `2cd1f92e`, code-scanning `CodeQL` fails with two
+  `js/missing-rate-limiting` alerts ("This route handler performs a database
+  access, but is not rate-limited"), both in
+  `api/src/routes/spending-categories.ts`, on the `GET` handlers of
+  `ROUTES.spendingCategories` and `ROUTES.spendingCategoryMap`. Each of those paths also has a `POST`, which is the same
+  shape as `GET` salaries, `GET` recurring and `GET` people. Both handlers are
+  limited: `printRoutes({ includeHooks: true })` shows `rateLimit()` on them, and taking `{ onRequest: read }` off the
+  map `GET` fails 1 of 37 in `route-limits.test.ts` ("spendingCategoryMap
+  refuses the second request in a minute, as RATE_LIMITED"). The Log does not
+  mention CodeQL. Options: (a) **recommended**, treat it as the earlier routes were treated. The owner excuses both under adr/005,
+  and each route gets the `// codeql[js/missing-rate-limiting]` comment that
+  names its guarding test, as `routes/salaries.ts` has. (b) Move each `GET` to a path that no `POST` shares. That is a contract change
+  and gives up the precedent. The owner has to grant an excusal; the gate cannot.
+- **F2 · med** · no `Done when` line depends on it · Two new routes have nothing that asserts their limit. `route-limits.test.ts`'s
+  `VERBS` table takes one verb per `ROUTES` key, so `POST /api/spending-categories`
+  and `POST /api/spending-category-map` are never requested. Reproduction: delete
+  `{ onRequest: write }` from both in `routes/spending-categories.ts`, then run
+  `npx vitest run tools/ledger/api`. Result: 343 of 343 pass. The table had this gap before the branch (`POST`
+  rules, for example). This branch adds two more instances. The fix is a test per second verb, or a walk over
+  `printRoutes`.
+- **F3 · med** · no `Done when` line depends on it · The branch for "a rule now matches a row filed before that rule existed" has
+  no proof, in either place it exists. In `inbox()` (`api/src/classifications.ts`), replace
+  `match.kind === "classified" ? match.rule : null` with `null`. Separately, in `listRows`
+  (`api/src/rows.ts`, a new file with no test file of its own), replace `rule = match.rule` with `rule = null`. Each change, run alone,
+  leaves the `ledger` project at 663 of 663. When that branch breaks, the inbox and
+  `GET /api/rows` give the same row different categories, and the
+  `?spendingCategory=none` filter lists it wrongly. Both are one mechanism.
+- **F4 · low** · **open decision** · A rule offered from a person's answer does
+  not give its category to the row it was offered from. That row's
+  classification is `manual` with no `rule_id`, so the category comes from the map or is none.
+  Reproduction (`startApp`, answer the first inbox row as `mortgage`, then create
+  the offered rule with `spendingCategoryId` = Household). The row answers
+  `{ source: "manual" }` with `spendingCategory: null`. This follows the brief's
+  order and the owner's decision 2, but the inbox form invites the opposite reading. Options:
+  (a) **recommended**, leave it and say on the offer form that the category applies to future rows. (b) Have the offer also append an override for that row.
+  (c) Store the answer as `accepted`, citing the new rule.
+- **F5 · low** · An inbox row whose nearest suggestion names a spending category
+  shows the map's category (`{ id: 1, source: "map" }`, reason `differs`).
+  Accepting the suggestion files it under the rule's category (`{ id: 4, source: "rule" }`), because the
+  classification cites that rule. This agrees with decision 2, and the display is accurate for the
+  moment. It is recorded because the category changes on Accept and nothing says so.
+- **F6 · low** · The note lg-15 added to lg-17's item 8 names `inbox()` but not
+  `listRows` (`api/src/rows.ts`). That is a second direct reader of
+  `current_classifications`. Under lg-17's sibling-record option, `listRows` would answer an
+  automatically filed row as `classification: null`. Nothing here would have to be undone for lg-17:
+  `HistoryAnswer` and `answersByDescription` are untouched, and migration 7 is free.
+  The note should add `listRows` to lg-17's Build.
+- **F7 · low** · The Log is false against the code. It says "changing the one line in `sameAnswer` to ignore it fails
+  2 of 51 … and nothing else". Measured: 3 of 663 fail in the `ledger` project, the
+  two `classify.test.ts` tests plus `api/test/spending-categories.test.ts` ›
+  "two rules level at the top differing only in their spending category ask, as
+  one answer".
+- **F8 · low** · `nfr:maintainability`. `routes/spending-categories.ts` copies
+  `idOf`, `Schema` and `bodyOf` from `routes/periods.ts` under the names `categoryId`,
+  `Schema` and `parsed`. That makes a second copy inside one package.
+- **F9 · low** · A filed row that has a category appears on no web screen. The web reads
+  `GET /api/rows` only with `?spendingCategory=none`. So a row the map or a rule
+  categorised wrongly cannot get an override from the web. "Shown wherever the
+  row is" holds only because no screen shows such a row. lg-9's detail is the
+  natural home for it.
+- **F10 · low** · `nfr:performance`. Every `GET /api/rows` reads every stored row
+  and runs `classify` on each unfiled one, and only then applies `limit`. At household scale this has no live cost.
+- **dropped** · I suspected the migration should re-create `current_rules` and
+  `current_period_lines`. On the migrated base database both views show
+  `spending_category_id` without that. Not a defect.
+- **dropped** · I questioned whether editing the contract and adding
+  `SPENDING_CATEGORY_NOT_FOUND` needed a separate decision. Item 6 of the Build requires the API surface, and the code means
+  nothing outside the ledger, so it belongs in the tool's own taxonomy. Not a defect.
+- **dropped** · I questioned `BAD_REQUEST` with a custom message for a duplicate
+  name. `salaries.ts` sets the same precedent. Not a defect.
+- **findings** · the hunt returned 13; 10 carried, 3 dropped.
+- Settled decisions, checked against the code. (1) `sameAnswer` compares
+  `spendingCategoryId ?? null`. Planting it to ignore that field fails 3 of 663. (2) The
+  category comes from the cited rule version (`citedRule` reads `rules` by id,
+  over every version), and the real-input run kept a row filed by rule version 1 on
+  the map after the edit. (3) An override of `null` withdraws, and the next lookup
+  falls back to the rule, then the map.
+- Inbox membership: an override on an inbox row left the inbox ids unchanged
+  (`[7,1]` before and after). A mapped category neither holds a row in the inbox
+  nor lets one out.
+- Invariants skipped as untouchable by this diff: shell use, process trees, redaction, SSRF,
+  progress, Dockerfile closure (no new workspace dependency).
+- NFR: security ✓ (strict schemas, refusals name fields and not values, every route is limited) ·
+  performance F10 · reliability F3 · maintainability F8.
 
 ## Log
 
