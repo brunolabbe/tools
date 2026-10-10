@@ -120,3 +120,38 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
   reading, not put to the owner: "transfers" is every credit plus every row in
   Desjardins' `Virements`, which errs towards asking; history applies only to
   `no-rule` rows; the ±20 % is measured against the latest of the three.
+- 2026-10-10 — **Storage: the table rebuild, not a sibling record** (item 4),
+  decided before migration 7 was written, by two measurements.
+  - _What a sibling record would have to change._ Item 8 names two direct
+    readers of the standing classification; there are ten read sites in six
+    files, and every one would have to union a second table and order the two
+    by something they do not share (a sibling's ids are not the
+    classifications' ids, so "the latest appended stands" stops being one
+    comparison). `grep -rnE "FROM classifications|JOIN current_classifications|FROM current_classifications" tools/ledger/api/src`,
+    less the schema: `rows.ts:54`, `periods.ts:414`, `buckets.ts:30`,
+    `buckets.ts:49`, `classifications.ts:144`, `:177`, `:226`,
+    `workbook-import.ts:109`, `:462`, `:482` (and the append's own re-read at
+    `classifications.ts:91`). `buckets.ts` and `periods.ts` are not in item 8's
+    list, and a sibling record would have left an automatically filed row out
+    of both buckets and out of the deposits a period matches. Under the rebuild
+    none of the ten changes: `current_classifications` stands on the new
+    record, the inbox and the "unclassified" counts drop it because a record
+    exists, and `answersByDescription`'s `source IN ('manual', 'accepted')`
+    leaves it out of history unwidened.
+  - _What the rebuild costs._ A prototype of migration 7 (new table, copy,
+    proof, drop the view and the old table, rename, index and view again) on a
+    database migrated to 6, `npx tsx <scratch>/lg17-measure.mts`:
+    `{"n":3000,"parent":"classifications_v7","ms":8}` and
+    `{"n":100000,"parent":"classifications_v7","ms":247}`, every row and every
+    standing classification still there, `foreign_key_check` empty. The copy
+    proof refuses a copy missing one row:
+    `broken copy refused: CHECK constraint failed: copied = kept AND differing = 0`,
+    and the same SQL runs inside a savepoint, the way the workbook import
+    migrates (`savepoint: {"n":10}`).
+  - _The trap the measurement found._ The new table's three "rests on" columns
+    first referenced `classifications`, the old table's name, and dropping the
+    old table then checked every row it held against the new table's three
+    unindexed columns: `{"n":3000,"parent":"classifications","ms":1190}`, and
+    100 000 rows ran past two minutes and were killed. Referencing the new
+    table's own name costs nothing, and `ALTER TABLE … RENAME` rewrites it to
+    `REFERENCES "classifications" (id)`, measured on the renamed table's SQL.
