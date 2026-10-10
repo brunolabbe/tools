@@ -29,9 +29,11 @@ grep -rn "ROUTES.rows\|fetchUncategorisedRows\|setRowSpendingCategory" tools/led
 
 prints one reader of `GET /api/rows`, `fetchUncategorisedRows` in
 `web/src/api/spending.ts:79`, which asks for `?spendingCategory=none&limit=50`; its
-one caller is the Categories screen, and the other writers of an override
-(`Inbox.tsx`) are on rows still in the inbox. Every row with a category, filed or
-not, is read by nothing on the web.
+one caller is the Categories screen, and the other writer of an override
+(`Inbox.tsx:134`, `setFiledSpending`) is on `AutoFiled.tsx`, which since lg-17 shows
+and edits the category of rows filed automatically and not yet reviewed. A row filed
+by a rule or by hand, and an auto-filed row once reviewed, is read by nothing on the
+web.
 
 ## Build
 
@@ -67,3 +69,7 @@ What nothing specifies yet, and the builder decides with the owner before buildi
   was asked what to do with lg-15's F9 and chose to file it as its own ticket over
   adding the drill-down to lg-9 and over leaving it. The cost named when it was
   asked: filters and paging that nothing specifies.
+- 2026-10-10 — Reproduction corrected at lg-9's landing, from gate 2's finding: the
+  first draft said no screen shows a row with a category, but `AutoFiled.tsx` (lg-17)
+  does for auto-filed rows not yet reviewed. The gap is the rest. Its Build should say
+  what becomes of that screen's existing editor.

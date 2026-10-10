@@ -89,7 +89,7 @@ export function registerStatsRoutes(app: FastifyInstance, context: AppContext): 
     // Guarded by `api/test/route-limits.test.ts`: taking `{ onRequest: read }` off
     // this call fails 8 of its 49 tests, the eight "stats… refuses the second
     // request in a minute, as RATE_LIMITED" rows of its table — those tests, not
-    // this comment, are what hold it. Measured 2026-10-10 on lg-9's first round, base 15adb4f7.
+    // this comment, are what hold it. Measured 2026-10-10 on lg-9's first round, base 043d5df8.
     // codeql[js/missing-rate-limiting]
     app.get(path, { onRequest: read }, async (request) => compute(request));
   }

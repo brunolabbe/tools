@@ -216,7 +216,9 @@ place when the range drops Gym: 0 !== 1`; after the fix, the same line reads
     years. The salaries response now carries `people` (everyone the books know) and
     the cards colour over it and draw only the people the range has. Test:
     `api/test/stats.test.ts` › "names everyone the books know, whatever years the
-    range holds", and the web fixture's colours.
+    range holds". No web test holds the colours: scoping them back to the range's
+    people leaves `web/test/stats.test.tsx` green, whose fixture has both people in
+    every year.
   - **Low: the `spendingByPeriod` comment** claimed a period's figure is the one its
     settlement used. It now says it is where the dates fall, and that a line entered
     after its period closed is here under its own date's period while the settlement
@@ -240,3 +242,14 @@ place when the range drops Gym: 0 !== 1`; after the fix, the same line reads
     one route would change the contract's "one route per series".
   - **Filed:** lg-18, above. Its id was reserved with `node scripts/next-id.mjs lg`
     and re-checked before the commit: `next free: lg-18`.
+- 2026-10-10 — Landing, after gate 2 (Opus 5.5) found `b388d30d` CONCERNS with no
+  high. Three of its findings were fixed at landing, by the owner's choice of "The
+  text fixes only" over "Text fixes plus a salary-colour test" and over "Land as
+  gated, all recorded": (1) lg-18's reproduction now says that auto-filed rows not
+  yet reviewed already show and edit their category in `AutoFiled.tsx` (since
+  lg-17), and that the gap is rows filed by a rule or by hand and auto-filed rows
+  once reviewed; (2) the register comment in `api/src/routes/stats.ts` says "base
+  043d5df8", the round's base, not `15adb4f7`; (3) the salary-colour entry above no
+  longer cites "the web fixture's colours" as a test. Recorded unfixed, as gate 2
+  lists them: the phone-layout med (the declaration test cannot see an override),
+  salary colours held by no test, and the 8-reads-per-range low.
