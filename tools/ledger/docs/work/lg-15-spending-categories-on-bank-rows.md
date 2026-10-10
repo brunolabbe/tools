@@ -197,6 +197,56 @@ so the two can never be read for each other.
 - NFR: security ✓ (strict schemas, refusals name fields and not values, every route is limited) ·
   performance F10 · reliability F3 · maintainability F8.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-10 · `2cd1f92e..2acb6aa5` · Opus 5.5, depth full
+
+| Done when      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6. Gates green | **unproven (gate)**. `test (ubuntu-latest)` and `test (windows-latest, informational)` were still running on `2acb6aa5` when this section was written. `check`, `docker`, `codeql`, `dependency-review` and `changes` passed. Code-scanning `CodeQL` failed with 2 new `js/missing-rate-limiting` alerts, both in `api/src/routes/spending-categories.ts`, on the `GET` handlers of the list and the map. That failure is expected under adr/005: `security.yml` dismisses only on a push to `main`, so an inline `// codeql[...]` comment never clears a pull request's check. The Log records the owner's excusal with its options (decision 4). Once the ubuntu leg passes on this head, the row becomes **awaiting**: the event is the push to `main` that runs `security.yml`'s dismissal step, and the reading is that both alerts read dismissed, "Suppressed via SARIF", on `main` afterwards |
+
+Rows 1–5 are untouched by this round. The `ledger` project now passes 668 of 668 (663 at `2cd1f92e`).
+
+- **F1 · fixed, as the owner chose (a).** Both new `GET` handlers carry
+  `// codeql[js/missing-rate-limiting]`, with the same excusal text as
+  `routes/salaries.ts`. Each comment names the test that guards that exact route. I removed `{ onRequest: read }` alone from each
+  and ran `route-limits.test.ts`:
+  - the list `GET` fails 1 of 40, "spendingCategories refuses the second request in a minute, as RATE_LIMITED";
+  - the map `GET` fails 1 of 40, "spendingCategoryMap refuses the second request in a minute, as RATE_LIMITED".
+
+  Both names match the comments. The three older comments' re-measured counts hold, each run alone:
+  - `GET` recurring fails 1 of 40, "GET recurring refuses the second request in a minute too";
+  - `GET` people fails 1 of 40, "people refuses the second request in a minute, as RATE_LIMITED";
+  - `GET` salaries fails 1 of 40, "GET salaries refuses the second request in a minute too".
+
+  The suppression itself can be read only after the merge (row 6). I did not check
+  that the comment's line matches the alert. The check-run page reports each alert three lines
+  below its comment, on the handler's last line, and the precedents put their comments in the same place.
+
+- **F2 · fixed.** Added `route-limits.test.ts` › "POST %s refuses the second
+  request in a minute too", for `rules`, `spendingCategories` and `spendingCategoryMap`.
+  - Removing `{ onRequest: write }` from both new `POST`s (the gate-1
+    reproduction) fails 2 of 348 in `tools/ledger/api`. Before the fix it was 0 of 343.
+  - Each `POST` alone fails 1 of 40, under its own name.
+- **F3 · fixed.** Added `spending-categories.test.ts` › "a rule that matches a
+  row filed before the rule existed" › "gives the unfiled row its category in
+  the inbox and in the rows list alike". It also asserts that the `none` filter
+  leaves the row out. The second test in that block covers a rule that is only
+  the nearest suggestion. Each gate-1 mutation, applied alone, fails that first test, 1 of 348:
+  - in `inbox()`, `null` in place of the matching rule;
+  - in `listRows`, `rule = null`.
+- **F6 · fixed.** lg-17's item 8 now names `listRows` as a second direct reader
+  of `current_classifications`, and says what the sibling-record option would do to it.
+- **F7 · fixed.** The Log now says 3 of 663 and names the api test. It keeps the
+  wrong first draft quoted as wrong.
+- **F4, F5, F8, F9, F10** · recorded at gate 1, unchanged by this round, as the owner directed.
+- **New in this round's lines:** none. The two new `POST` tests send `{}`, which
+  gets a 400 that still spends a token, so the second request's 429 depends only on the limit.
+  The mutations above prove it.
+- **findings** · 0 new; of the 5 gate-1 findings in the round, 5 fixed and 0 refuted.
+- **No high.** Nothing in this round is a `high`. The verdict stays CONCERNS only because row 6 is
+  waiting on the test legs that were still running.
+
 ## Log
 
 - 2026-10-06 — Filed from a conversation with the owner, who chose every design
