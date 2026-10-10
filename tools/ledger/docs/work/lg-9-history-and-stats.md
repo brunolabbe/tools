@@ -123,7 +123,7 @@ append-only records, so this ticket computes and draws. It stores nothing new.
     `web/test/stats.test.tsx` 14 of 14 and `stats-scale.test.ts` 17 of 17: every
     chart from fixture data, the table twin, the arrow keys, the range, the stale
     dimming, one chart failing alone, and a 360px width. `app.test.tsx` 7 of 7.
-    `npm test -- --project ledger`: 45 files, 792 tests passed. Eleven mutations,
+    `npm test -- --project ledger`: 45 files, 793 tests passed. Eleven mutations,
     each run against its spec, every one fails it: the change flag inverted, the
     odd cent split per day, the uncategorised detail dropped, a joint-only day made
     a contribution point, the first payment dropped, a person's deposit counted as
