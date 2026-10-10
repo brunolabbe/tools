@@ -29,7 +29,8 @@ e2e          Playwright specs — none yet; e2e/README.md says what earns the fi
 `books` holds the statement-paste parser and its running-balance proof (lg-1) and
 `classify`, which files a row under a rule only on an exact match, the most
 specific rule winning (lg-4, lg-16), `fromHistory`, which offers what a person
-answered before (lg-16), `spendingCategory`, which gives a row its spending
+answered before (lg-16), `autoFile`, which files a row no rule's pattern matches
+on its description's three latest answers, within amount limits (lg-17), `spendingCategory`, which gives a row its spending
 category (lg-15), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
@@ -119,6 +120,13 @@ lines and recurring items (lg-6, `current_period_lines` and
 recorded settlement is never recomputed, because the next close is cumulative.
 `api/test/classification-schema.test.ts` scans the API source for an `UPDATE` or
 a `DELETE`.
+
+**A classification history filed is `auto`, and is never an answer** (lg-17).
+It names the three person-given classifications it rests on and no person
+(`classified_by` is `NULL`), so it stands like any other record — the buckets,
+the periods and the stored rows read it — while `answersByDescription` reads only
+`manual` and `accepted`, which keeps history from feeding on its own filings. A
+person's answer appended after it supersedes it; nothing undoes it otherwise.
 
 **A spending category is not Desjardins' category** (lg-15). `category` on a
 row and on a rule is the bank's own text; a _spending_ category is the

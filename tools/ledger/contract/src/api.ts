@@ -28,6 +28,8 @@ export const ROUTES = {
   rule: `${API_PREFIX}/rules/:id`,
   ruleRetire: `${API_PREFIX}/rules/:id/retire`,
   inbox: `${API_PREFIX}/inbox`,
+  // lg-17: the rows history filed with nobody tapping, for a person to review.
+  autoFiled: `${API_PREFIX}/inbox/auto-filed`,
   classifications: `${API_PREFIX}/classifications`,
   people: `${API_PREFIX}/people`,
   // lg-5: what each bucket holds and whose it is, the salaries, and the ratio.
@@ -251,6 +253,50 @@ export interface InboxResponse {
 }
 
 /**
+ * One person-given answer an automatic filing rests on (lg-17): the record as it
+ * was appended, and the row it was about. A later answer to that row does not
+ * change what the filing rested on.
+ */
+export interface AutoFilingGround {
+  classificationId: number;
+  rowId: number;
+  date: string;
+  description: string;
+  amountCents: number;
+  bucket: Bucket;
+  personId: string | null;
+  source: "manual" | "accepted";
+  classifiedAt: string;
+  classifiedBy: string;
+}
+
+/**
+ * A row history filed with nobody tapping (lg-17), whose standing classification
+ * is still that filing: nobody has confirmed or changed it. Confirming is an
+ * ordinary `POST /api/classifications` with the same `personId` and `bucket`,
+ * which stores a `manual` answer; changing it is the same call with others.
+ */
+export interface AutoFiledRow {
+  id: number;
+  date: string;
+  category: string;
+  description: string;
+  amountCents: number;
+  balanceCents: number;
+  /** The automatic classification itself. */
+  classification: { id: number; bucket: Bucket; personId: string | null; classifiedAt: string };
+  /** The three answers it rests on, latest first. */
+  restsOn: AutoFilingGround[];
+  /** As every stored row has one: an automatic filing cites no rule, so override, then map. */
+  spendingCategory: RowSpendingCategory | null;
+}
+
+/** `GET /api/inbox/auto-filed`: the rows filed automatically and not yet reviewed, newest first. */
+export interface AutoFiledResponse {
+  rows: AutoFiledRow[];
+}
+
+/**
  * `POST /api/classifications`: classify a row, or classify it again.
  *
  * Either accept a rule (`ruleId`, which must be a rule in force) and take its
@@ -273,11 +319,17 @@ export const classifyRequestSchema = z.union([
 /**
  * How a classification came to be: `rule` is the paste applying a rule by itself,
  * `accepted` a person taking a suggested rule, `manual` a person's own answer.
+ * `auto` is the paste filing a row on the three latest person-given answers for
+ * its description (lg-17): no person made it, and it is never counted as an
+ * answer itself.
  */
-export const CLASSIFICATION_SOURCES = ["rule", "accepted", "manual"] as const;
+export const CLASSIFICATION_SOURCES = ["rule", "accepted", "manual", "auto"] as const;
 export type ClassificationSource = (typeof CLASSIFICATION_SOURCES)[number];
 
-/** One classification, as appended. The latest for a row is the one that stands. */
+/**
+ * One classification a request appended. The latest for a row is the one that
+ * stands. A request is always someone's, so it is never `auto`.
+ */
 export interface ClassificationRecord {
   id: number;
   rowId: number;
@@ -285,7 +337,7 @@ export interface ClassificationRecord {
   personId: string | null;
   /** The rule version applied or accepted; `null` for a person's own answer. */
   ruleId: number | null;
-  source: ClassificationSource;
+  source: Exclude<ClassificationSource, "auto">;
   classifiedAt: string;
   classifiedBy: string;
 }

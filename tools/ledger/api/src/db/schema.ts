@@ -392,6 +392,77 @@ const MIGRATIONS: readonly string[] = [
   -- already show the two columns above (api/test/spending-categories.test.ts
   -- reads them through the views on a database migration 5 left).
   `,
+
+  // 7 — a classification history files with nobody tapping (lg-17). SQLite cannot
+  // change a CHECK in place, so the table is rebuilt: every record is copied with
+  // its id, the copy is proved before the old table goes, and the index and the
+  // view are made again exactly as migration 2 made them. Why a rebuild and not a
+  // sibling record is in lg-17's Log: ten read sites stand on this one table.
+  `
+  CREATE TABLE classifications_v7 (
+    id INTEGER PRIMARY KEY,
+    row_id INTEGER NOT NULL REFERENCES statement_rows (id),
+    bucket TEXT NOT NULL CHECK (bucket IN ('mortgage', 'current-expenses')),
+    -- NULL is joint: a rebate, the sale of a shared thing, one half of an error pair.
+    person_id TEXT,
+    -- The rule version applied or accepted; NULL for a person's own answer and
+    -- for history's, which no rule gave.
+    rule_id INTEGER REFERENCES rules (id),
+    -- 'rule': the paste applied it. 'accepted': a person took a suggested rule.
+    -- 'manual': a person's own answer. 'auto': the paste filed it on the three
+    -- person-given answers below, with nobody tapping; it is never itself an
+    -- answer, so history cannot feed on its own filings.
+    source TEXT NOT NULL CHECK (source IN ('rule', 'accepted', 'manual', 'auto')),
+    classified_at TEXT NOT NULL,
+    -- The Access identity's configured name (Person.id), never an address; NULL
+    -- only on 'auto', which no person made.
+    classified_by TEXT,
+    -- On 'auto' only: the three classifications it rests on, latest first. They
+    -- name the new table, which the rename below makes this one: naming the old
+    -- table would have the drop check every old record against these columns.
+    rests_on_1 INTEGER REFERENCES classifications_v7 (id),
+    rests_on_2 INTEGER REFERENCES classifications_v7 (id),
+    rests_on_3 INTEGER REFERENCES classifications_v7 (id),
+    CHECK ((source IN ('manual', 'auto')) = (rule_id IS NULL)),
+    CHECK ((source = 'auto') = (classified_by IS NULL)),
+    CHECK (CASE WHEN source = 'auto'
+      THEN rests_on_1 IS NOT NULL AND rests_on_2 IS NOT NULL AND rests_on_3 IS NOT NULL
+        AND rests_on_1 <> rests_on_2 AND rests_on_1 <> rests_on_3 AND rests_on_2 <> rests_on_3
+      ELSE rests_on_1 IS NULL AND rests_on_2 IS NULL AND rests_on_3 IS NULL END)
+  );
+
+  INSERT INTO classifications_v7 (id, row_id, bucket, person_id, rule_id, source, classified_at, classified_by)
+    SELECT id, row_id, bucket, person_id, rule_id, source, classified_at, classified_by
+    FROM classifications;
+
+  -- The proof: as many records, and none that differs in any column. A failed
+  -- CHECK aborts the migration, which rolls back with the old table untouched.
+  CREATE TEMP TABLE migration_7_copy (
+    kept INTEGER NOT NULL,
+    copied INTEGER NOT NULL,
+    differing INTEGER NOT NULL,
+    CHECK (copied = kept AND differing = 0)
+  );
+  INSERT INTO migration_7_copy SELECT
+    (SELECT count(*) FROM classifications),
+    (SELECT count(*) FROM classifications_v7),
+    (SELECT count(*) FROM (
+      SELECT id, row_id, bucket, person_id, rule_id, source, classified_at, classified_by FROM classifications
+      EXCEPT
+      SELECT id, row_id, bucket, person_id, rule_id, source, classified_at, classified_by FROM classifications_v7
+    ));
+  DROP TABLE migration_7_copy;
+
+  DROP VIEW current_classifications;
+  DROP TABLE classifications;
+  ALTER TABLE classifications_v7 RENAME TO classifications;
+
+  CREATE INDEX classifications_row ON classifications (row_id, id);
+
+  CREATE VIEW current_classifications AS
+    SELECT * FROM classifications
+    WHERE id = (SELECT max(id) FROM classifications later WHERE later.row_id = classifications.row_id);
+  `,
 ];
 
 /**

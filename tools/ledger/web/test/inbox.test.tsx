@@ -10,13 +10,17 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
-import type { InboxRow, Rule, SpendingCategory } from "@ledger/contract";
-import { classifyRow, fetchInbox } from "../src/api/inbox.ts";
+import type { AutoFiledRow, InboxRow, Rule, SpendingCategory } from "@ledger/contract";
+import { classifyRow, fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { createRule, fetchPeople } from "../src/api/rules.ts";
 import { fetchSpendingCategories, setRowSpendingCategory } from "../src/api/spending.ts";
 import { Inbox } from "../src/inbox/Inbox.tsx";
 
-vi.mock("../src/api/inbox.ts", () => ({ fetchInbox: vi.fn(), classifyRow: vi.fn() }));
+vi.mock("../src/api/inbox.ts", () => ({
+  fetchInbox: vi.fn(),
+  fetchAutoFiled: vi.fn(),
+  classifyRow: vi.fn(),
+}));
 vi.mock("../src/api/rules.ts", () => ({ fetchPeople: vi.fn(), createRule: vi.fn() }));
 vi.mock("../src/api/spending.ts", () => ({
   fetchSpendingCategories: vi.fn(),
@@ -31,6 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
   vi.mocked(fetchSpendingCategories).mockResolvedValue(CATEGORIES);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([]);
 });
 
 afterEach(cleanup);
@@ -459,4 +464,139 @@ test("the rule offered from an answer can name a spending category", async () =>
 
   await waitFor(() => expect(created).toHaveBeenCalledTimes(1));
   expect(created).toHaveBeenCalledWith(expect.objectContaining({ spendingCategoryId: 1 }));
+});
+
+/** A row history filed (lg-17): sam's current expenses, on three answers sam gave. */
+const FILED: AutoFiledRow = {
+  id: 21,
+  date: "2026-09-25",
+  category: "Épicerie",
+  description: "Achat /Boulangerie Exemple",
+  amountCents: -1150,
+  balanceCents: 100000,
+  classification: {
+    id: 40,
+    bucket: "current-expenses",
+    personId: "sam",
+    classifiedAt: "2026-10-03T09:30:00.000Z",
+  },
+  restsOn: [3, 2, 1].map((n) => ({
+    classificationId: 30 + n,
+    rowId: n,
+    date: `2026-09-0${String(n)}`,
+    description: "Achat /Boulangerie Exemple",
+    amountCents: -1000 * n,
+    bucket: "current-expenses" as const,
+    personId: "sam",
+    source: "manual" as const,
+    classifiedAt: "2026-09-10T09:30:00.000Z",
+    classifiedBy: "alex",
+  })),
+  spendingCategory: { id: 1, source: "map" },
+};
+
+async function openReview(): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByRole("button", { name: "Review 1 filed automatically" }));
+  return screen.getByRole("list", { name: "Rows filed automatically" });
+}
+
+test("rows filed automatically are reached from the inbox, not counted in it, with the answers they rest on", async () => {
+  inbox.mockResolvedValue([GROCERIES]);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
+  const onCount = vi.fn();
+  render(<Inbox onCount={onCount} />);
+  await waitFor(() => rowOf(GROCERIES.description));
+
+  // The inbox holds the one waiting row, and its count says one.
+  expect(screen.queryByText(FILED.description)).toBeNull();
+  expect(onCount).toHaveBeenLastCalledWith(1);
+
+  const list = within(await openReview());
+  expect(list.getByText(FILED.description)).toBeTruthy();
+  expect(list.getByText("sam · Current expenses")).toBeTruthy();
+  const grounds = within(list.getByRole("list", { name: "Answers it rests on" })).getAllByRole(
+    "listitem",
+  );
+  expect(grounds.map((item) => item.textContent)).toEqual([
+    "2026-09-03 · -30.00 $ · sam · Current expenses — answered by alex",
+    "2026-09-02 · -20.00 $ · sam · Current expenses — answered by alex",
+    "2026-09-01 · -10.00 $ · sam · Current expenses — answered by alex",
+  ]);
+  expect(screen.queryByText(GROCERIES.description)).toBeNull();
+});
+
+test("an inbox with nothing filed automatically offers no review", async () => {
+  inbox.mockResolvedValue([GROCERIES]);
+  render(<Inbox />);
+  await waitFor(() => rowOf(GROCERIES.description));
+
+  expect(screen.queryByRole("button", { name: /filed automatically/u })).toBeNull();
+});
+
+test("confirming an automatic filing stores the same person and bucket, and the row leaves the list", async () => {
+  inbox.mockResolvedValue([]);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
+  classified.mockResolvedValue({
+    id: 41,
+    rowId: FILED.id,
+    bucket: "current-expenses",
+    personId: "sam",
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-10-04T09:30:00.000Z",
+    classifiedBy: "alex",
+  });
+  render(<Inbox />);
+  const list = within(await openReview());
+
+  fireEvent.click(list.getByRole("button", { name: "Confirm" }));
+
+  await waitFor(() => expect(screen.queryByText(FILED.description)).toBeNull());
+  expect(classified).toHaveBeenCalledTimes(1);
+  expect(classified).toHaveBeenCalledWith({
+    rowId: FILED.id,
+    personId: "sam",
+    bucket: "current-expenses",
+  });
+  expect(screen.getByText("Nothing filed automatically is waiting.")).toBeTruthy();
+});
+
+test("changing an automatic filing stores the person and bucket chosen instead", async () => {
+  inbox.mockResolvedValue([]);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
+  classified.mockResolvedValue({
+    id: 41,
+    rowId: FILED.id,
+    bucket: "mortgage",
+    personId: null,
+    ruleId: null,
+    source: "manual",
+    classifiedAt: "2026-10-04T09:30:00.000Z",
+    classifiedBy: "alex",
+  });
+  render(<Inbox />);
+  const list = within(await openReview());
+
+  fireEvent.change(list.getByLabelText("Belongs to"), { target: { value: "" } });
+  fireEvent.change(list.getByLabelText("Bucket"), { target: { value: "mortgage" } });
+  fireEvent.click(list.getByRole("button", { name: "Change" }));
+
+  await waitFor(() => expect(screen.queryByText(FILED.description)).toBeNull());
+  expect(classified).toHaveBeenCalledWith({ rowId: FILED.id, personId: null, bucket: "mortgage" });
+});
+
+test("a refused confirmation says what the server said and keeps the row for review", async () => {
+  inbox.mockResolvedValue([]);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([FILED]);
+  classified.mockRejectedValue(new AppError("ROW_NOT_FOUND", "That row is not stored."));
+  render(<Inbox />);
+  const list = within(await openReview());
+
+  fireEvent.click(list.getByRole("button", { name: "Confirm" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("That row is not stored.");
+  expect(screen.getByText(FILED.description)).toBeTruthy();
+  // And the way back leads to the inbox.
+  fireEvent.click(screen.getByRole("button", { name: "Back to the inbox" }));
+  expect(screen.getByRole("heading", { name: "Inbox" })).toBeTruthy();
 });
