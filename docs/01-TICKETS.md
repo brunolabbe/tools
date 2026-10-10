@@ -556,4 +556,7 @@ four tickets filed without difficulty in one batch defaulted to Opus, and one wa
 a ~20-line fix that cost $1.48 to build (repo-72). Finished and dropped tickets
 are exempt; about a hundred predate the field.
 See the `difficulty` field's explanation in the _Fields_ section above for the
-three ratings and when to use each.
+three ratings and when to use each. A `needs-decision` filing whose options
+differ in size rates its recommended option, and the commit that records the
+answer re-rates it: dl-102 was filed `standard` and became `hard` when the
+owner chose a contract change.

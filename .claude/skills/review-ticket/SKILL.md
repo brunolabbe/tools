@@ -27,7 +27,10 @@ under a heading of its own and `## Review` stays empty until something is built 
 `docs/01-TICKETS.md`, "The review gate". A brief has no work in it to check, and
 `repo-12`'s board check reads `status: ready` plus a `## Review` gate record as
 work that merged without its status being flipped. `dl-29` is the worked example:
-gated as a filing, recorded under `## The gate on this filing`.
+gated as a filing, recorded under `## The gate on this filing`. Under
+`orchestrate-tickets` the report goes on the pull request thread instead, and
+the gate's side of this case is on [gate.md](gate.md), the only page the gate
+agents read.
 
 **And when the branch has no ticket at all** — a skill correction, a records
 pass, anything the loop produces about itself — three of the steps below have no
@@ -36,7 +39,7 @@ has no `## Log` to commit above. The dispatcher supplies the acceptance lines in
 the prompt and names the commit message as the brief; the reviewer traces each
 supplied line as it would a ticket's; and the section goes on the pull request
 thread rather than into a file, per `orchestrate-tickets`' `records.md`. The
-severity table below then grades the prompt's lines exactly as it would a
+severity table in `gate.md` then grades the prompt's lines exactly as it would a
 ticket's — an unproven one is still FAIL, and a line only an event after the
 merge could prove is still `awaiting`, but no ticket's `awaiting` field exists
 to carry it past the merge, so the row says that nothing in the repo tracks it

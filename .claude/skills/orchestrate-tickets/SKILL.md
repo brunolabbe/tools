@@ -9,15 +9,20 @@ allowed-tools: Bash(npm run status*) Bash(gh pr list*) Bash(gh pr view*) Bash(gh
 
 You dispatch, you gate, you decide. **You do not build and you do not review.**
 Your context is the one thing that must survive the whole batch, so it holds the
-board and nothing else.
+board and nothing else. **Keep that board as `board.md` in your scratchpad as
+well** — every agent id, branch, head sha, gate verdict, owner answer and logged
+defect, rewritten at each change. A session that dies takes its agents with it,
+and the next session rebuilds the batch from that file (_If the session dies_).
 
 **This page is the current rule and nothing else.** Why a rule exists is in
 [adr/006](../../../docs/adr/006-gate-records-carry-no-citations.md) and in
 `reference/history.md`.
 
 **You never edit this skill, a role page, an agent definition, a rule under
-`.claude/rules/` or any `CLAUDE.md`, and you dispatch no agent to.** You log
-what went wrong (step 12), and the owner runs a review session over the log once
+`.claude/rules/` or any `CLAUDE.md`, and you dispatch no agent to.** That binds
+your own initiative: a `repo-` ticket the owner selects at step 2 whose Build
+edits one of those pages is the owner's edit, dispatched like any other and built
+and gated under the page on `main`. You log what went wrong (step 12), and the owner runs a review session over the log once
 in a while that changes the rules in one pass. An orchestrator that edits its own
 rules adds one each time it is bitten and never removes any: 81 of 203 finished
 tickets were process tickets by 2026-10-03 (adr/006). If a rule is so wrong that
@@ -43,7 +48,11 @@ the batch cannot proceed, put it to the user at once.
    you run it in, and `git fetch` does not move it — compare
    `git log --oneline -1 HEAD` with `origin/main`, and if they differ read ticket
    state with `git show origin/main:<path>`. Never reset the shared checkout
-   while `ListAgents` shows a live peer.
+   while `ListAgents` shows a live peer. Then
+   `node .claude/scripts/check-farm-freshness.mjs /workspaces/tools`: a shared
+   checkout missing a package the lockfile declares stops every builder at the
+   farm, and only `npm install` there, when no peer is live, repairs it
+   ([reference/worktree-hygiene.md](reference/worktree-hygiene.md)).
 
 2. **Map the seams, then ask which batch.** Dispatch `seam-mapper` over the
    candidate ids rather than reading the tickets yourself. Put the batch to the
@@ -88,7 +97,12 @@ the batch cannot proceed, put it to the user at once.
    a `Done when` line depends on, is fixed. Every other finding is fixed in that
    same round only if a round is already open and the fix is fully stated by the
    finding; otherwise it stays in the record as written. A round is never opened
-   for lows alone.
+   for lows alone. **Below the floor, a finding whose fix is fully stated may
+   still be applied by the lander, with no re-gate, when the owner says so**:
+   put the recorded-unfixed list to the owner at the checkpoint with that
+   option, and the record keeps each finding as the gate wrote it, marked
+   _fixed at landing_. The owner took that path on seven tickets in five
+   batches.
 
    After sending to a running or resumed agent, confirm delivery with
    `ListAgents` and with the artefact the message should produce.
@@ -102,12 +116,14 @@ the batch cannot proceed, put it to the user at once.
 
 8. **Re-gate once, scoped to the round.** Wake the same gate with `SendMessage`:
    the sha it gated, the new head, its own findings as it wrote them, and any
-   refutation as a command and its output. It reviews
-   `git diff <gated sha>..<new sha>` only and returns one new `### Gate 2`
+   refutation as a command and its output. It reviews the round's own commits
+   only — `git log --no-merges <gated sha>..<new sha>`; a merge from `main`
+   inside the range is not the round — and returns one new `### Gate 2`
    section.
 
    **Two gates is the default, and a third runs only when gate 2 itself raises a
-   `high`.** Anything less from gate 2 is handled by the floor in step 6 and
+   `high`, or when the owner asks for one** — then the owner's answer names its
+   depth and scope, and the dispatch carries them. Anything less from gate 2 is handled by the floor in step 6 and
    checked by preflight and CI, not by another gate. If a third gate raises
    another `high`, stop and put the state to the user. Across 253 recorded gate
    sections, the 47 past gate 2 found no high (adr/006).
@@ -117,8 +133,11 @@ the batch cannot proceed, put it to the user at once.
    or a direct message from you. If a gate's table has an `awaiting` row, the
    lander first commits the ticket's `awaiting:` line. Then one command per
    ticket ([reference/records.md](reference/records.md)):
-   `node scripts/review-record.mjs --land <ticket> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
-   Then it posts each gate's full report to the PR thread, names every model in
+   `node scripts/review-record.mjs --land <ticket-path> <gate files…> --base origin/<base> --status done --title "<PR title>" --branch <branch>`.
+   **A gate verdict conditional on a CI leg is read before the lander pushes**:
+   the landing push cancels the gated sha's run. When the landing changed only
+   the ticket file, the landing head's run stands for it, named in the thread
+   comment. Then it posts each gate's full report to the PR thread, names every model in
    the PR body, and marks the PR ready — unless you are holding it as a draft
    for merge order, in which case you say so in a PR comment.
 
@@ -178,10 +197,10 @@ gh pr view <n> --json headRefOid,statusCheckRollup
 
 Not `gh run list`, which hides a `continue-on-error` leg, a `skipped` matrix
 that reads `success`, and any check that is not an Actions workflow. Name the
-sha in whatever you conclude. A default-setup `CodeQL` failure cannot be read
-from this container: give the owner the check's `detailsUrl` from
-`statusCheckRollup` and say the annotations are there. Never run `gh api`, alone
-or inside a compound command.
+sha in whatever you conclude. A default-setup `CodeQL` failure is read with
+`WebFetch` on the check's `detailsUrl` from `statusCheckRollup`: the page lists
+each alert's rule, file and line, where `gh pr checks` prints only `fail`
+(verified 2026-10-10). Never run `gh api`, alone or inside a compound command.
 
 **After the merge**:
 `gh run list --branch main --limit 10 --json databaseId,event,conclusion,headSha`,
@@ -206,6 +225,10 @@ work. How to ask is the root `CLAUDE.md` rule. What is specific to a batch:
   first.
 - **When two gates disagree, relay the disagreement** with both readings and no
   verdict; concluding that both are wrong is an available answer.
+- **An answer given on a premise a later measurement changed is re-asked, with
+  the measurement.** lg-6's buffer answer, dl-91's "at most two inflations" and
+  dl-97's excusal were each given on a builder's example and overturned by a
+  gate's numbers; the owner re-chose each time.
 - **An acceptance line that says "every" is reworded to an enumerable scope
   before dispatch**, or the gate can always find one more shape (dl-58).
 
@@ -225,6 +248,17 @@ receiving agent needed in full.
 - An agent's claim about itself — tools, model, lifecycle — is checked from
   outside: call the tool, `agent-cost.mjs`, `git worktree list`.
 
+## If the session dies
+
+Two of the five batches of 2026-10-06 to 2026-10-08 lost their session
+mid-batch — once the orchestrator, once the host. Its subagents die with it and
+cannot be messaged, and a worktree an agent left clean is reclaimed. The next
+session reads `board.md` and the transcript, then for each remaining worktree
+`git log <last known sha>..HEAD` and `git status --short`, before it decides
+anything: local commits a builder never pushed are handed to a fresh agent by
+name, not rebuilt; a gate that died is dispatched fresh for the round it was in,
+and the gate files already in the scratch directory stand.
+
 ## Reporting to the user
 
 Lead with what changed and what needs them. Name the finding that matters and
@@ -240,7 +274,8 @@ repaired ends in a question instead.
 | PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 
-One row per agent, from `node scripts/agent-cost.mjs --agent <id> …`, with the
+One row per agent, from `node scripts/agent-cost.mjs --agent <id> --agent <id> …`
+— one id per flag; a bare second id is read as a file path — with the
 rate date it prints and its `orchestrator` row as a floor. Status comes from
 `gh pr list --json number,mergeable,statusCheckRollup`, not memory. Never
 convert `subagent_tokens` into dollars: it excludes cache reads, which are most

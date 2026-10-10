@@ -12,6 +12,16 @@ numbering is shared with it.
 names the commit message as the brief: trace each supplied line as you would a
 ticket's, and say in the section that the acceptance came from the prompt.
 
+**When the pull request only files a ticket, or only records a decision on
+one**, no `Done when` line was built and none is traced. The dispatch supplies
+the checks — the ticket format, the id's freedom, the reproduction's fidelity to
+what was measured, and whether `status` and `difficulty` are honest for the work
+as filed — and you trace those as acceptance, saying they came from the prompt.
+A ticket the branch files beside its own work is checked the same way, as one
+finding block. The section goes on the pull request thread, not into the file
+(`orchestrate-tickets`' `records.md`, _When there is no ticket_); the lander's
+side is in [SKILL.md](SKILL.md).
+
 ## Steps
 
 1. **Read the ticket** — `tools/<tool>/docs/work/<id>-*.md`, or `docs/work/` for
@@ -36,7 +46,9 @@ ticket's, and say in the section that the acceptance came from the prompt.
    `api/test/runs.test.ts › "a run over HTTP leaves a PlanDetail"`, never
    "covered". **No line numbers anywhere in the section, and no commit pins**:
    the header names the sha you read, and a line number is true only of that sha
-   (adr/006). Name code by file and symbol.
+   (adr/006). Name code by file and symbol. That governs what you write; a
+   tool's printed output quoted in a reproduction stands as printed,
+   `file:line:col` included.
 
    - **Read the assertion, not the test's name.** A test whose name covers half
      the clause proves half the clause. Say which assertion carries the line.
@@ -47,10 +59,13 @@ ticket's, and say in the section that the acceptance came from the prompt.
      output.** A test that a string never appears passes on a function that
      returns nothing.
 
-   Five verdicts:
+   Six verdicts:
 
    - **proven** — a test asserts it, and it runs in `npm test`.
    - **unproven** — nothing asserts it.
+   - **not met** — you measured the line and it is false. That is a `high`
+     ("an acceptance line is wrong rather than merely untested"), never
+     `unproven` with a note.
    - **unproven (gate)** — asserted only by something the local gates do not
      run: a tool's `e2e` suite, its container build, the Windows leg. When the
      pull request's CI has run that leg green on the head you are gating, say so
@@ -72,8 +87,9 @@ ticket's, and say in the section that the acceptance came from the prompt.
      the merge, and the row says so.
    - **verified** — nothing asserts it, but you re-ran it: the gates pass, the
      suite count went up, no existing test changed meaning. **Give the numbers
-     you got, not the ones the Log claims** — run the suite at the base too, and
-     read the diff of the test files for deletions and reworded assertions.
+     you got, not the ones the Log claims** — read the diff of the test files
+     for deletions and reworded assertions, and run the suite at the base only
+     when that diff cannot settle it: the downloader project runs nine minutes.
 
    **Then look for what has no proof at all.** A source file the diff adds a
    branch to, with no test file of its own, is a finding in its own right. It
@@ -124,16 +140,23 @@ sections, in the same pull request as the fix. Name them in the finding.
 
 | Severity | Means |
 | --- | --- |
-| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that is false against the code |
+| **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested — including a test that passes when the thing it claims to prove is broken, and shipped text that is false against the code, a comment stating a bound the code does not keep included |
 | **med** | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
 | **low** | Style, a missing fixture, a comment that will mislead the next reader, a defect with no live call site |
 
+**"The thing it claims to prove" is the test's assertion, not its title.** A
+test whose title claims more than its body asserts leaves the line `unproven`,
+a `med`; a test that passes while the claim it asserts is broken is `high`.
+
 **Say for each `med` whether a `Done when` line depends on it.** Only a `high`,
 or a `med` an acceptance line depends on, opens a fix round; everything else is
-recorded and may land unfixed. So a severity is a cost you are assigning: grade a
+recorded and may land unfixed — or fixed at the landing with no re-gate, when
+its fix is fully stated and the owner chooses that (`orchestrate-tickets`, step
+6). So a severity is a cost you are assigning: grade a
 hypothetical with no caller as `low`, and say "no live call site" in the bullet.
 
-- **FAIL** — any high, or any acceptance line **unproven**.
+- **FAIL** — any high, any acceptance line **not met**, or any acceptance line
+  **unproven**.
 - **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
 - **unproven (scope)** — a line the dispatch removed from the branch's scope,
   with the row naming who scoped it and where the work lands instead. It does

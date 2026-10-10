@@ -10,7 +10,9 @@ re-read its whole transcript on every turn.
 
 1. `git checkout --detach origin/<branch>` — the builder's worktree holds the
    branch name. **Never create, reset or rename the branch.**
-2. Farm and build, per `common.md`.
+2. Farm and build, per `common.md`, even for a docs-only landing: preflight's
+   `npm run check` typechecks every workspace, and a fresh tree without `dist`
+   fails it in files you never touched.
 
 ## The work
 
@@ -22,7 +24,10 @@ re-read its whole transcript on every turn.
   report it. The orchestrator sends it to the builder.
 - **Before you narrow or delete a test, name what it asserted and where each
   assertion went.**
-- Run the checks your fixes touch, narrowest first, then
+- Run the checks your fixes touch, narrowest first, then `git fetch origin` —
+  if `origin/<base>` has moved past the build base, `git merge origin/<base>`,
+  never a rebase, which cannot reach `origin` without the force-push forbidden
+  below — then
   `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`.
 - Commit with `git commit -F <file>`, a conventional subject under 100
   characters, then `git push origin HEAD:refs/heads/<branch>`. A push rejected
@@ -44,6 +49,9 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
   frontmatter, so the line is the only marker the obligation has.
 - **Never change a gate section's words.** You commit each file as you were
   handed it. If `--land` refuses one, stop and report its output.
+- **`--land` refuses a tree that is not clean**: commit your fixes first. And
+  re-read the pull request body before `gh pr ready`: a Summary written before
+  the round may still say "open decision" or "gate pending".
 - `--status in-flight` when the work lands partial, as your dispatch says.
 - Then post each gate's full report to the pull request thread
   (`gh pr comment <n> --body-file <f>`), make sure the body's Summary describes
@@ -54,5 +62,6 @@ node scripts/review-record.mjs --land <ticket-path> <gate-1 file> [<gate-2 file>
 
 Per finding: fixed, with the command that failed before and passes after, or the
 evidence the finding gave; not reproduced, with the command and output; or handed
-back for judgement, with the reason. Then the new head sha, and `common.md`'s
-report rules.
+back for judgement, with the reason. Then the new head sha from
+`git rev-parse HEAD`, confirmed by `git ls-remote --heads origin <branch>` —
+never padded out from a short one — and `common.md`'s report rules.
