@@ -106,3 +106,35 @@ link <A> <B>`, then `gh pr view <B> --json baseRefName`);
   stall reading comes from tools-79's transcript.
   Rated `hard`: step 3 has to happen inside a live batch, and its result
   decides how the builder roles handle `main`.
+- 2026-10-10 — builder, branch `repo-95-pilot-gh-stack-extension` off `7709411e`.
+  **Stopped after step 1, before any install: the deny rule this branch adds
+  does not bind for anyone until it merges.** Build step 1 asks to watch
+  `gh stack merge --help` be refused on the branch that adds the rule, and that
+  cannot happen. A session loads its permission rules and hooks from the shared
+  checkout's `.claude/settings.json`, which is on `main`, and not from its
+  worktree. The same thing was recorded for hooks in
+  `.claude/skills/orchestrate-tickets/reference/history.md` (repo-22) and in
+  `check-main-writes.sh`'s header (repo-42). Measured in one session, with
+  `Bash(gh stack merge*)` added to this worktree's `.claude/settings.json`:
+  - `gh stack merge --help` was **not refused by the harness**. It reached gh,
+    which printed its own message for an extension that is not installed, and
+    exited 1:
+    `gh stack is available as an official extension. To install it, run: gh extension install github/gh-stack`.
+  - Control: `gh api --help`, held by `main`'s `Bash(gh api *)`, printed
+    `Permission to use Bash with command gh api --help has been denied.`
+    So deny rules do bind in this session, but only the ones on `main`.
+  - `gh pr merge --help` was refused by the shared checkout's
+    `check-main-writes.sh` hook (`PreToolUse:Bash hook error: … Merging a pull
+request is the owner's decision`). The hook fires before the deny list is
+    consulted, so this probe cannot tell the two layers apart.
+
+  So nothing stands between `gh stack merge` and a merge until the rule reaches
+  `main`. The extension is the only thing that does, by being absent:
+  `gh extension list` printed nothing. Step 2 (install, `Dockerfile`,
+  allowlist) is therefore not done, and the next move is the owner's. Steps 3
+  and 4 are `unproven (scope)`.
+
+  Also wrong in the brief: v0.1.1 is no longer the current tag. The releases page
+  (github.com/github/gh-stack/releases, read 2026-10-10) lists v0.2.1
+  (2026-10-09) and v0.2.0 (2026-10-02) above it, and v0.2.1 has a
+  `linux-amd64` asset. gh here is 2.101.0.
