@@ -212,6 +212,18 @@ describe("GET /api/stats/salaries", () => {
     expect(years[0]?.ratio?.effectiveFrom).toBe("2025-01-01");
     expect(years[1]?.ratio?.effectiveFrom).toBe("2026-03-01");
   });
+
+  test("names everyone the books know, whatever years the range holds", async () => {
+    const target = await start();
+
+    const body = await get<SalariesStatsResponse>(
+      target,
+      `${ROUTES.statsSalaries}?from=2026-01-01`,
+    );
+
+    expect(body.years.map((year) => year.year)).toEqual([2026]);
+    expect(body.people).toEqual(["alex", "sam"]);
+  });
 });
 
 describe("the buckets over time", () => {
@@ -252,15 +264,33 @@ describe("the buckets over time", () => {
     expect(small.drops.map((drop) => drop.amountCents)).toEqual([-12345, -80000]);
   });
 
-  test("a rejected drop size is BAD_REQUEST", async () => {
+  test.each(["0", "abc", "1.5"])(
+    "a drop size of %s is BAD_REQUEST, and says it is the size",
+    async (size) => {
+      const target = await start();
+
+      const response = await target.server.inject({
+        method: "GET",
+        url: `${ROUTES.statsBuffer}?minDropCents=${size}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const { error } = response.json<ErrorResponse>();
+      expect(error.code).toBe("BAD_REQUEST");
+      expect(error.message).toContain("minDropCents");
+      expect(error.message).not.toContain("yyyy-mm-dd");
+    },
+  );
+
+  test("a bad day on the buffer's route still says it is the day", async () => {
     const target = await start();
 
     const response = await target.server.inject({
       method: "GET",
-      url: `${ROUTES.statsBuffer}?minDropCents=0`,
+      url: `${ROUTES.statsBuffer}?from=yesterday`,
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.json<ErrorResponse>().error.message).toContain("yyyy-mm-dd");
   });
 });
 

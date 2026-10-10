@@ -133,15 +133,14 @@ append-only records, so this ticket computes and draws. It stores nothing new.
     resolves `@ledger/contract` through `dist` and the mutation was in `src`;
     rebuilt with `npx tsc --build tools/ledger/contract` it fails "refuses from
     after to as BAD_REQUEST".
-  - **CodeQL: pending the owner.** The eight routes are registered at one call in
+  - **CodeQL.** The eight routes are registered at one call in
     `api/src/routes/stats.ts` (a loop over the series), each taking
     `{ onRequest: read }`, with the register comment `docs/adr/005` asks for above
     it and `// codeql[js/missing-rate-limiting]`. Taking the hook off that call
     fails 8 of the 49 tests in `api/test/route-limits.test.ts` — the eight "stats…
     refuses the second request in a minute, as RATE_LIMITED" rows (measured
-    2026-10-10, base `7709411e`). Whether the owner excuses the alert is the
-    owner's to give, and has **not been given**; if it is refused the comment goes
-    and the routes are what they were.
+    2026-10-10, base `7709411e`). Whether to excuse the alert was put to the owner;
+    the answer is in the round-1 entry below.
   - **What the brief had wrong.** (1) "Read a row's category from what lg-15
     built": `listRows` returns 100 rows unless told otherwise, so reading every row
     needs an explicit limit (`Number.MAX_SAFE_INTEGER` here; the route's own cap is
@@ -155,7 +154,89 @@ append-only records, so this ticket computes and draws. It stores nothing new.
   - **Not folded in.** The gate's F9 on lg-15 (a filed row that has a category
     appears on no web screen, so a wrongly mapped one cannot get an override) names
     this screen as its natural home. It is not small and not specified: it is a
-    list of rows under a period with its own filters and paging, so it is left as
-    an open decision in the report. The two items lg-17 recorded and did not fix
-    (the older register comments' dated counts, `amountFits`' dead `Math.sign`
-    clause) are not made free by this work.
+    list of rows under a period with its own filters and paging, so it was put to
+    the owner; the answer is in the round-1 entry below. The two items lg-17
+    recorded and did not fix (the older register comments' dated counts,
+    `amountFits`' dead `Math.sign` clause) are not made free by this work.
+- 2026-10-10 — Round 1, after gate 1 (Opus 5.5) failed `043d5df8`: one high, two
+  med, several low, one open decision. Fixed on the same branch.
+  - **Owner answers, 2026-10-10**, each asked with its options:
+    1. _"Do you excuse the CodeQL alert on the stats routes?"_ — "Excuse it, as for
+       the other ledger routes" (chosen, the builder's recommendation) over "Refuse
+       it". The gate read PR #416's `CodeQL` check as SUCCESS, "No new alerts in code
+       changed by this pull request", on `043d5df8`, and could not tell whether no
+       alert was raised or a suppressed one is not counted; so the comment may be
+       excusing nothing, and says so. The register comment stays.
+    2. _"What to do with lg-15's F9 (a filed row's category is on no web screen)?"_ —
+       "File it as its own ledger ticket" (chosen, the builder's recommendation) over
+       "Add the drill-down to lg-9 now" and "Leave it". Filed in this branch as
+       [lg-18](./lg-18-show-a-filed-rows-spending-category-where-it-can-be-changed.md),
+       with F9 as its reproduction.
+    3. _"What should a large drop be?"_ — "500.00 $ per row, overridable" (chosen;
+       the builder's and the gate's recommendation) over "Relative to the balance".
+       No code change.
+    4. _"Texture fills and direct end-labels?"_ — "Leave them unbuilt, noted in the
+       Log" (chosen, the builder's recommendation) over "File a ledger ticket" and
+       "Build them in this round". Both stay unbuilt, as the entry above says.
+    5. _"A one-off larger payment is marked changed twice: keep that?"_ — "Keep it"
+       (chosen) over "Mark only lasting changes". No code change.
+  - **High: a fixed item changed colour when the range dropped an earlier one.**
+    Reproduced with the gate's `history.mts`: `FAIL fixed items: Internet keeps its
+place when the range drops Gym: 0 !== 1`; after the fix, the same line reads
+    `ok   fixed items: Internet keeps its place when the range drops Gym`.
+    `fixedItemsByMonth` now returns a line for every label (zeros where the range
+    holds none of it), in the order the labels first started, and `FixedBody` assigns
+    slots over that whole list and draws only the lines with an amount. The claim in
+    three places (the ledger `CLAUDE.md`, the comment on `fixedItemsByMonth`, the Log)
+    now holds. Tests: `books/test/stats.test.ts` › "a range that drops an earlier item
+    keeps its line, of zeros, so the later ones keep their place" and
+    `web/test/stats.test.tsx` › "an item the range drops keeps its place, so the ones
+    after it keep their colour". Mutated back to the old behaviour, the first fails 4
+    of 29 and the second 2 of 15 (slots over only what is drawn). The earlier test's
+    title claimed more than it checked, and the claim was mine.
+  - **Med: "Put into the buffer" was never drawn from fixture data.** The fixture now
+    has a point and `stats.test.tsx` › "draws every chart…" reads that card's
+    readout (`2026-02-10`, `1000.00 $`, `300.00 $`); the empty message has its own
+    test with the buffer emptied.
+  - **Med: nothing guards the phone layout.** Chosen: a test that holds the two
+    declarations, and a measured statement of what it cannot hold — not the e2e spec.
+    `web/test/stats-layout.test.ts` (3 of 3) reads `styles.css` and asserts
+    `grid-template-columns: minmax(0, 1fr)` and `min-width: 0` on `.chart-card` and
+    `min-width: 0` on `.chart-box`; with either removed it fails (checked: each
+    removal fails 1 of 3). jsdom cannot hold more: its `getComputedStyle` answers an
+    empty string for these properties (tried first, abandoned), and the test runner
+    turns a `?raw` import of the stylesheet into an empty string, so the file is
+    read with `node:fs`. It guards the declarations and not the layout, which was
+    measured once, in Chromium at 360px (every chart 294px, none 736px, no sideways
+    scroll, re-run this round on the rebuilt bundle). A standing layout guard is the
+    ledger's first e2e spec, which `e2e/README.md` says wants its own job in
+    `ledger.yml`: that is a CI change, not a fix to this branch, and no Done when
+    line depends on it.
+  - **Low: salary and ratio colours** were assigned over the people in the range's
+    years. The salaries response now carries `people` (everyone the books know) and
+    the cards colour over it and draw only the people the range has. Test:
+    `api/test/stats.test.ts` › "names everyone the books know, whatever years the
+    range holds", and the web fixture's colours.
+  - **Low: the `spendingByPeriod` comment** claimed a period's figure is the one its
+    settlement used. It now says it is where the dates fall, and that a line entered
+    after its period closed is here under its own date's period while the settlement
+    counted it at the next close.
+  - **Low: `minDropCents` error copy.** A size that fails validation now answers
+    "minDropCents is a whole number of cents, 1 or more." and a bad day on the same
+    route still says it is the day. Tests: `api/test/stats.test.ts` › the three sizes
+    `0`, `abc`, `1.5`, and "a bad day on the buffer's route still says it is the day".
+  - **Low: the register comment** — the `codeql[…]` line covers exactly the next
+    line, which was the `for`; the comment now sits inside the loop directly above
+    `app.get`. Its reasoning no longer states as fact that the query ignores the
+    `read` hook: adr/005's "What the merge showed" records that it did read
+    `{ onRequest: rateLimit }`, and the gate's reading of the PR check is that
+    nothing was raised on this head. The "8 of 49" was re-measured on this round's
+    tree: with the hook off, 8 failed (`statsBuffer`, `statsContributions`,
+    `statsFixedItems`, `statsMortgageOwn`, `statsMortgagePayments`, `statsSalaries`,
+    `statsSettlements`, `statsSpending`) and 41 passed.
+  - **Low: each range change sends 8 reads against 120 a minute per person.** Not
+    changed: the gate states no fix. Fifteen changes in a minute is more than a
+    person makes, and the aborted ones still count; a shared fetch of all eight in
+    one route would change the contract's "one route per series".
+  - **Filed:** lg-18, above. Its id was reserved with `node scripts/next-id.mjs lg`
+    and re-checked before the commit: `next free: lg-18`.

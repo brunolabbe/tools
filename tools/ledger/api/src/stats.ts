@@ -80,6 +80,7 @@ export function mortgagePaymentsStats(db: Database, range: StatsRange): Mortgage
 export function salariesStats(db: Database, range: StatsRange): SalariesStatsResponse {
   return db.transaction(() => ({
     range,
+    people: knownPeople(db),
     years: salariesByYear(currentSalaries(db), currentRatios(db), range),
   }))();
 }

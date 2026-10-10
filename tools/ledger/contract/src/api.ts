@@ -917,9 +917,14 @@ export interface SalaryYear {
   changes: RatioChange[];
 }
 
-/** `GET /api/stats/salaries`: the years that overlap the range, oldest first. */
+/**
+ * `GET /api/stats/salaries`: the years that overlap the range, oldest first.
+ * `people` is everyone the books know, whatever the range holds, so a chart can
+ * colour a person by their place in it.
+ */
 export interface SalariesStatsResponse {
   range: StatsRange;
+  people: string[];
   years: SalaryYear[];
 }
 

@@ -344,15 +344,20 @@ function ratioWords(shares: readonly { personId: string; partsPerMillion: number
     .join(", ");
 }
 
-function SalaryBody(props: { years: SalaryYear[]; stale: boolean }): React.ReactElement {
+function SalaryBody(props: {
+  years: SalaryYear[];
+  everyone: readonly string[];
+  stale: boolean;
+}): React.ReactElement {
   const { years, stale } = props;
-  const people = [
-    ...new Set([
-      ...years.flatMap((year) => year.salaries.map((salary) => salary.personId)),
-      ...years.flatMap((year) => year.ratio?.shares.map((share) => share.personId) ?? []),
-    ]),
-  ].toSorted();
-  const colors = personColors(people);
+  // Coloured by place in everyone the books know, whatever the range holds; drawn
+  // only for the people the range has a salary or a share for.
+  const colors = personColors(props.everyone);
+  const named = new Set([
+    ...years.flatMap((year) => year.salaries.map((salary) => salary.personId)),
+    ...years.flatMap((year) => year.ratio?.shares.map((share) => share.personId) ?? []),
+  ]);
+  const people = props.everyone.filter((person) => named.has(person));
   const categories = years.map((year) => ({
     key: String(year.year),
     label: String(year.year),
@@ -449,7 +454,7 @@ export function SalaryCards({ range }: { range: StatsRange }): React.ReactElemen
   const series = useSeries(fetchSalariesStats, range);
   return (
     <Loaded title="Salaries and the ratio" series={series}>
-      {({ years }, stale) => <SalaryBody years={years} stale={stale} />}
+      {({ years, people }, stale) => <SalaryBody years={years} everyone={people} stale={stale} />}
     </Loaded>
   );
 }
@@ -563,13 +568,15 @@ export function SpendingCard({ range }: { range: StatsRange }): React.ReactEleme
 
 function FixedBody(props: { data: FixedItemsResponse; stale: boolean }): React.ReactElement {
   const { data, stale } = props;
-  // The API sends the lines in the order their labels first started, whatever the
-  // range, so a new item takes the next colour and never repaints the ones before it.
-  const ordered = data.series;
+  // The API sends every label, in the order they first started, whatever the range
+  // (a label with nothing in it is a line of zeros). Slots are by place in that
+  // whole list, so a range that drops an earlier item does not move the later ones
+  // up a colour, and a new item takes the next one; only lines with an amount are drawn.
   const { slotOf, folded } = assignSlots(
-    ordered.map((item) => item.label),
+    data.series.map((item) => item.label),
     SLOTS,
   );
+  const ordered = data.series.filter((item) => item.cents.some((cents) => cents !== 0));
   const lines: ColumnSeries[] = [
     ...ordered
       .filter((item) => !folded.includes(item.label))
@@ -579,7 +586,7 @@ function FixedBody(props: { data: FixedItemsResponse; stale: boolean }): React.R
         color: slotColor(slotOf.get(item.label) ?? SLOTS),
         values: item.cents,
       })),
-    ...(folded.length > 0
+    ...(ordered.some((item) => folded.includes(item.label))
       ? [
           {
             key: "more",

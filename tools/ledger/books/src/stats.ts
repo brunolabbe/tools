@@ -313,8 +313,10 @@ function overlaps(span: PeriodSpan, range: StatsRange): boolean {
  * the open one, oldest first; an entry belongs to the period `periodIndexOf`
  * puts its date in, so each is counted once, and one dated outside every period
  * is not counted. A period is returned when it overlaps the range, holding
- * everything dated inside it — a period is the unit, and half of one would be
- * a different number from the one the settlement used.
+ * everything dated inside it rather than trimmed at the range's edge. Its figure
+ * is where the dates fall and not what its settlement counted: a line entered
+ * after its period closed is here under its own date's period, while the
+ * settlement counted it at the next close.
  *
  * Uncategorised carries its detail: what each amount was called where it came
  * from, because a line stored before lg-15 or imported by lg-7 has only that.
@@ -399,8 +401,9 @@ function monthsBetween(first: string, last: string): string[] {
  * What the recurring items generated, month by month, through `through` (the
  * range's end, or today). Versions of an item that share a label are one line,
  * so a payment that changed from some month on reads as a step in one series
- * rather than as two that never meet. The lines come in the order their labels
- * first started, whatever the range.
+ * rather than as two that never meet. Every label has a line, in the order the
+ * labels first started, whatever the range: a label with nothing in the range is
+ * a line of zeros, and a range with nothing at all is no months and no lines.
  */
 export function fixedItemsByMonth(
   items: readonly FixedItemInput[],
@@ -439,15 +442,19 @@ export function fixedItemsByMonth(
     through.slice(0, 7),
   );
   const position = new Map(months.map((month, index) => [month, index]));
-  const lines = new Map<string, FixedItemSeries>();
+  // Every label has a line, all zeros where the range holds nothing of it, so the
+  // caller colours a line by its place in this whole list and a range that drops
+  // an earlier item does not move the later ones up.
+  const lines = new Map<string, FixedItemSeries>(
+    [...labels.entries()].map(([key, held]) => [
+      key,
+      { label: held.label, cents: months.map(() => 0) },
+    ]),
+  );
   for (const one of generated) {
-    const line = lines.get(one.key) ?? {
-      label: labels.get(one.key)?.label ?? one.key,
-      cents: months.map(() => 0),
-    };
+    const line = lines.get(one.key);
     const at = position.get(one.month);
-    if (at !== undefined) line.cents[at] = (line.cents[at] ?? 0) + one.cents;
-    lines.set(one.key, line);
+    if (line !== undefined && at !== undefined) line.cents[at] = (line.cents[at] ?? 0) + one.cents;
   }
   return {
     months,

@@ -439,6 +439,24 @@ describe("fixedItemsByMonth", () => {
   test("nothing generated is no months and no series", () => {
     expect(fixedItemsByMonth([], "2026-05-20", ALL)).toEqual({ months: [], series: [] });
   });
+
+  test("a range that drops an earlier item keeps its line, of zeros, so the later ones keep their place", () => {
+    // Gym ended in February; Internet started in it and runs on.
+    const items = [
+      item("Gym", 4000, "2026-01-05", "2026-02-28"),
+      item("Internet", 7000, "2026-02-05", null),
+    ];
+
+    const all = fixedItemsByMonth(items, "2026-05-20", ALL);
+    const later = fixedItemsByMonth(items, "2026-05-20", { from: "2026-04-01", to: null });
+
+    expect(all.series.map((line) => line.label)).toEqual(["Gym", "Internet"]);
+    expect(later.months).toEqual(["2026-04", "2026-05"]);
+    expect(later.series).toEqual([
+      { label: "Gym", cents: [0, 0] },
+      { label: "Internet", cents: [7000, 7000] },
+    ]);
+  });
 });
 
 describe("settlementsInRange", () => {

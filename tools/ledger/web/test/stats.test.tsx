@@ -93,7 +93,18 @@ const CONTRIBUTIONS: ContributionsResponse = {
         },
       ],
     },
-    { bucket: "current-expenses", points: [] },
+    {
+      bucket: "current-expenses",
+      points: [
+        {
+          date: "2026-02-10",
+          contributions: [
+            { personId: "alex", contributedCents: 30000 },
+            { personId: "sam", contributedCents: 100000 },
+          ],
+        },
+      ],
+    },
   ],
 };
 
@@ -117,6 +128,7 @@ const BUFFER: BufferStatsResponse = {
 
 const SALARIES: SalariesStatsResponse = {
   range: NONE,
+  people: ["alex", "sam"],
   years: [
     {
       year: 2025,
@@ -317,6 +329,12 @@ test("draws every chart from its series, each with the figures for the latest da
   const mortgagePutIn = await card("Put into the mortgage");
   expect(mortgagePutIn.getByText("500.00 $")).toBeTruthy();
 
+  const bufferPutIn = await card("Put into the buffer");
+  // The date is on the axis (one point) and heads the readout.
+  expect(bufferPutIn.getAllByText("2026-02-10")).toHaveLength(2);
+  expect(bufferPutIn.getByText("1000.00 $")).toBeTruthy();
+  expect(bufferPutIn.getByText("300.00 $")).toBeTruthy();
+
   const buffer = await card("Buffer balance");
   expect(buffer.getByText("1076.55 $")).toBeTruthy();
   expect(buffer.getByText("Achat /Entrepreneur Exemple: -800.00 $")).toBeTruthy();
@@ -340,7 +358,13 @@ test("draws every chart from its series, each with the figures for the latest da
   expect(settlements.getByText("Formula v3: the tool's formula.")).toBeTruthy();
 });
 
-test("a nothing-in-this-range bucket says so instead of drawing an empty frame", async () => {
+test("a bucket nothing was filed to in this range says so instead of drawing an empty frame", async () => {
+  vi.mocked(fetchContributions).mockResolvedValue({
+    ...CONTRIBUTIONS,
+    series: CONTRIBUTIONS.series.map((one) =>
+      one.bucket === "current-expenses" ? { ...one, points: [] } : one,
+    ),
+  });
   render(<Stats />);
 
   await card("Put into the mortgage");
@@ -466,6 +490,27 @@ test("a category keeps its colour whatever the others in the range are", async (
 
   expect(swatches).toHaveLength(2);
   expect((swatches[0] as HTMLElement).style.background).toBe("var(--series-4)");
+});
+
+test("an item the range drops keeps its place, so the ones after it keep their colour", async () => {
+  vi.mocked(fetchFixedItems).mockResolvedValue({
+    range: NONE,
+    months: ["2026-04", "2026-05"],
+    // Gym ended in February and has nothing in this range; Internet is the list's second.
+    series: [
+      { label: "Gym", cents: [0, 0] },
+      { label: "Internet", cents: [7000, 7000] },
+    ],
+  });
+  render(<Stats />);
+  const fixed = await card("Fixed items by month");
+
+  // One line drawn, so no legend box; its bars carry its own slot.
+  const bars = slider(fixed).querySelectorAll("path[style], rect[style]");
+  const fills = [...bars].map((bar) => (bar as SVGElement).style.fill);
+  expect(fills).toContain("var(--series-2)");
+  expect(fills).not.toContain("var(--series-1)");
+  expect(fixed.queryByText("Gym")).toBeNull();
 });
 
 test("a range is chosen once, above the charts, and every chart is asked for it", async () => {

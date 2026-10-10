@@ -126,6 +126,7 @@ transcribing by hand.
 
 ## Phase 5 — History and stats
 
-| Ticket                                   | What                           |
-| ---------------------------------------- | ------------------------------ |
-| [lg-9](./work/lg-9-history-and-stats.md) | the charts, over every history |
+| Ticket                                                                               | What                                            |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| [lg-9](./work/lg-9-history-and-stats.md)                                             | the charts, over every history                  |
+| [lg-18](./work/lg-18-show-a-filed-rows-spending-category-where-it-can-be-changed.md) | a filed row's category, where it can be changed |

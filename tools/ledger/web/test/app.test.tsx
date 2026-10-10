@@ -171,7 +171,7 @@ vi.mock("../src/api/stats.ts", () => {
     fetchBufferStats: vi
       .fn()
       .mockResolvedValue({ range: none, minDropCents: 50000, points: [], drops: [] }),
-    fetchSalariesStats: vi.fn().mockResolvedValue({ range: none, years: [] }),
+    fetchSalariesStats: vi.fn().mockResolvedValue({ range: none, people: [], years: [] }),
     fetchSpendingStats: vi.fn().mockResolvedValue({ range: none, categories: [], periods: [] }),
     fetchFixedItems: vi.fn().mockResolvedValue({ range: none, months: [], series: [] }),
     fetchSettlementsStats: vi.fn().mockResolvedValue({ range: none, periods: [] }),
