@@ -133,6 +133,16 @@ export function initSegment(): Uint8Array {
 }
 
 /**
+ * dl-90: a whole movie written as fragmented MP4 (`ffmpeg -movflags
+ * frag_keyframe+empty_moov`, measured by gate 1 as `ftyp moov[mvhd,trak,trak,
+ * mvex,udta] moof`): the init segment's `moov` with its `mvex`, then fragments in
+ * the same file. Self-contained, so it is offered.
+ */
+export function fragmentedMovie(mdatBytes = 1024): Uint8Array {
+  return concat(initSegment(), mediaSegment(mdatBytes));
+}
+
+/**
  * dl-90: one media segment, `styp` `sidx` `moof` `mdat` (measured by gate 1 as
  * `styp(24) sidx(52) moof(1300) mdat(23459)`). Its `mdat` is zeros: the sniff
  * reads box headers.

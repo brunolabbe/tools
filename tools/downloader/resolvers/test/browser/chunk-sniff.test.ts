@@ -21,6 +21,7 @@ import {
   boxDeclaring,
   concat,
   faststartMp4,
+  fragmentedMovie,
   initSegment,
   mediaSegment,
   tailMoovMp4,
@@ -48,6 +49,27 @@ describe("what a head of bytes says (dl-90)", () => {
     // The premise of the rule: there is no `moof` anywhere in it.
     expect(Buffer.from(init).includes("moof")).toBe(false);
     expect(sniffHead(init)).toBe("fragment");
+  });
+
+  // The three shapes the owner's 2026-10-10 answer separates.
+  test("a whole movie written as fragmented MP4 (ftyp, moov with mvex, then moof) is not a chunk", () => {
+    expect(sniffHead(head(fragmentedMovie(1_000_000)))).toBe("unknown");
+    // Small enough that every byte of the head is a parsed box: only the moof
+    // after the mvex moov tells it from an init segment.
+    expect(sniffHead(fragmentedMovie(1024))).toBe("unknown");
+  });
+
+  test("an init segment, which ends after its moov, is still a fragment", () => {
+    expect(sniffHead(initSegment())).toBe("fragment");
+  });
+
+  test("a media segment, which has no moov, is still a fragment", () => {
+    expect(Buffer.from(mediaSegment()).includes("moov")).toBe(false);
+    expect(sniffHead(head(mediaSegment(1_000_000)))).toBe("fragment");
+  });
+
+  test("an mvex moov followed by bytes that are not a box is not proof: the fragment may not fit the head", () => {
+    expect(sniffHead(concat(initSegment(), zeros(3)))).toBe("unknown");
   });
 
   test("a faststart file is not: its moov has no mvex", () => {
@@ -161,6 +183,66 @@ describe("the bounded walk over candidates (dl-90)", () => {
 
     expect(await withoutFragments(files, read, FAR)).toEqual(files);
     expect(read.reads).toEqual([]);
+  });
+
+  test("a file read and found whole is kept when a fragment beside it is proven later", async () => {
+    const whole = faststartMp4({ brands: ["isom"], tracks: TRACKS, mdatBytes: 1024 });
+    const wholeBeside = hit(`${dir}7.mp4`);
+    const read = reader({ [wholeBeside.url]: whole, [chunk(1)]: mediaSegment() });
+
+    // The whole file shares the chunks' directory, and is read first.
+    const kept = await withoutFragments([wholeBeside, hit(chunk(1)), hit(chunk(2))], read, FAR);
+
+    expect(read.reads).toEqual([wholeBeside.url, chunk(1)]);
+    expect(kept).toEqual([wholeBeside]);
+  });
+
+  test("a file in a proven directory that was never read is dropped, whole or not", async () => {
+    const whole = faststartMp4({ brands: ["isom"], tracks: TRACKS, mdatBytes: 1024 });
+    const unreadWhole = hit(`${dir}7.mp4`);
+    const read = reader({ [chunk(1)]: mediaSegment(), [unreadWhole.url]: whole });
+
+    expect(await withoutFragments([hit(chunk(1)), unreadWhole], read, FAR)).toEqual([]);
+    expect(read.reads).toEqual([chunk(1)]);
+  });
+
+  test("a fragment on one host proves nothing about the same path on another", async () => {
+    const ads = hit("https://ads.example.com/media/1.mp4");
+    const cdn = hit("https://cdn.site.example/media/2.mp4");
+    const whole = faststartMp4({ brands: ["isom"], tracks: TRACKS, mdatBytes: 1024 });
+    const read = reader({ [ads.url]: mediaSegment(), [cdn.url]: whole });
+
+    expect(await withoutFragments([ads, cdn], read, FAR)).toEqual([cdn]);
+    expect(read.reads).toEqual([ads.url, cdn.url]);
+  });
+
+  test("an abort starts no further read", async () => {
+    const files = [hit(chunk(1)), hit(chunk(2))];
+    const read = reader({});
+    const controller = new AbortController();
+    controller.abort();
+
+    await withoutFragments(files, read, FAR, controller.signal);
+
+    expect(read.reads).toEqual([]);
+  });
+
+  test("an abort abandons the read in flight instead of waiting out its budget", async () => {
+    const files = [hit(chunk(1)), hit(chunk(2))];
+    const controller = new AbortController();
+    const reads: string[] = [];
+    // Never settles: a server that took the request and went quiet.
+    const hung: HeadReader = async (candidate) => {
+      reads.push(candidate.url);
+      controller.abort();
+      return await new Promise<undefined>(() => {});
+    };
+
+    const startedAt = Date.now();
+    await withoutFragments(files, hung, FAR, controller.signal);
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(reads).toEqual([chunk(1)]);
   });
 
   test("no budget left reads nothing and offers everything", async () => {

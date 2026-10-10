@@ -488,7 +488,10 @@ export class BrowserResolver implements Resolver {
       ranked.filter((hit) => hit.kind === "progressive"),
       async (hit, timeoutMs) => await this.#readHead(context, hit, timeoutMs, options.proxyUrl),
       deadline,
+      options.signal,
     );
+    // A sniff stopped by a cancel returns what it had; the caller asked for no answer.
+    throwIfAborted(options.signal);
 
     for (const hit of manifests.slice(0, MAX_MANIFEST_ATTEMPTS)) {
       // Sequential on purpose: the first manifest that parses wins, and probing

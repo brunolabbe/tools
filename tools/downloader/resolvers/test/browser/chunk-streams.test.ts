@@ -156,3 +156,85 @@ describe("numbered whole files are still offered (dl-90)", () => {
     },
   );
 });
+
+describe("a whole movie written as fragmented MP4 is offered (dl-90, owner 2026-10-10)", () => {
+  test(
+    "a lone numbered file with moov, mvex and then moof is offered, not dropped as a chunk",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const result = await probe("/lonefrag.html");
+
+      expect(urls(result)).toEqual([files.url("/lf/839201.mp4")]);
+      // The sniff read it and let it go, rather than not looking.
+      expect(files.headReads()).toHaveLength(1);
+    },
+  );
+
+  test(
+    "beside two whole files in one directory, all three are offered",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const result = await probe("/wholefrag.html");
+
+      expect(urls(result).toSorted()).toEqual([
+        files.url("/wf/1.mp4"),
+        files.url("/wf/2.mp4"),
+        files.url("/wf/3.mp4"),
+      ]);
+    },
+  );
+});
+
+describe("a file the sniff read and found whole is kept beside a fragment (dl-90)", () => {
+  test(
+    "the whole file, read first, survives the init and media segments that follow it",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const result = await probe("/mixed.html");
+
+      expect(urls(result)).toEqual([files.url("/mx/1.mp4")]);
+      // It was read, which is what makes keeping it a decision and not an accident:
+      // the media segment settled the directory only afterwards.
+      expect(files.headReads().map((entry) => entry.pathname)).toContain("/mx/1.mp4");
+    },
+  );
+});
+
+describe("a cancelled probe stops sniffing (dl-90)", () => {
+  test(
+    "aborting while a head read is outstanding rejects with the abort, promptly, and reads no more",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const controller = new AbortController();
+      let abortedAt = 0;
+      let readsAtAbort = 0;
+      files.onSlowHead = () => {
+        if (abortedAt !== 0) return;
+        abortedAt = Date.now();
+        readsAtAbort = files.headReads().length;
+        controller.abort();
+      };
+      files.requests.length = 0;
+
+      let caught: unknown;
+      try {
+        await resolver().resolve(new URL(files.url("/slow.html")), {
+          timeoutMs: 25_000,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        caught = error;
+      } finally {
+        files.onSlowHead = undefined;
+      }
+      const settledAfterMs = Date.now() - abortedAt;
+
+      expect(abortedAt).not.toBe(0);
+      expect(caught).toBeInstanceOf(AppError);
+      expect((caught as AppError).code).toBe("CANCELED");
+      // Not the 3 s the read was allowed, and not the 6 s of the whole sniff.
+      expect(settledAfterMs).toBeLessThan(2000);
+      expect(files.headReads()).toHaveLength(readsAtAbort);
+    },
+  );
+});

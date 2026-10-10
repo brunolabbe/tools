@@ -8,13 +8,21 @@
  * downloads: one fMP4 fragment with no `moov`, labelled as a whole video. The
  * evidence the capture cannot give is in the file, so this reads it.
  *
- * **Only positive evidence drops a file.** A candidate is dropped when its head
- * shows a `moof` (a media segment) or a `moov` holding an `mvex` (an init
- * segment: the movie declares that its samples live in fragments). A head that
- * shows anything else, cannot be read, is not an MP4, or ends before either box
- * appears is **offered**, so a failed or inconclusive sniff never costs the user
- * a file. In particular a whole file written without faststart has its `moov`
- * after `mdat`, past any head, and is read as "unknown", never as "chunk".
+ * **Only positive evidence drops a file you read.** A file is dropped when its
+ * own head shows
+ *
+ * - a `moof` with no `moov` before it: a media segment; or
+ * - a `moov` holding an `mvex` and then no `moof`, the head ending on a box
+ *   boundary: an init segment. The movie declares that its samples live in
+ *   fragments and carries none.
+ *
+ * A head that shows anything else is offered, and so is a file that could not be
+ * read: not an MP4, all zeros, a `moov` after `mdat` (a whole file written
+ * without faststart has it past any head), or a head that ends before either
+ * box. A `moov` holding an `mvex` **followed by a `moof`** is a whole movie
+ * written as fragmented MP4 (`ffmpeg -movflags frag_keyframe+empty_moov`) and is
+ * offered too (owner, 2026-10-10; the Decision section of the ticket). The cost
+ * the owner accepted: a single-file DASH rendition has the same head.
  *
  * **Why `mvex` and not "no `moof`".** An init segment has a `moov` and no `moof`,
  * so a rule that looked only for `moof` would leave `00000.mp4` offered. `mvex`
@@ -22,9 +30,15 @@
  * the same thing a `moof` is, not an inference from an absence.
  *
  * **Bounded.** A capture can hold hundreds of numbered chunks. One proven
- * fragment makes its directory a segmented stream, so every other numbered
- * candidate beside it is dropped unread; and reads are capped in count, in time
- * and in bytes whatever the capture holds.
+ * fragment makes its directory a segmented stream, so the numbered files beside
+ * it **that were never read** are dropped without a request. A file that was
+ * read and found whole is kept whatever its neighbours turned out to be, so what
+ * survives depends on the order the reads happened in: the cost of bounding them.
+ * Reads are capped in count, in time and in bytes whatever the capture holds, and
+ * stop when the probe is cancelled.
+ *
+ * A directory is a host **and** a path: a fragment on one host proves nothing
+ * about numbered files under the same path on another.
  */
 
 import { childrenOf, HEAD_WINDOW_BYTES, isPrintable } from "../mp4-header.ts";
@@ -48,17 +62,35 @@ export type HeadVerdict = "fragment" | "unknown";
 
 /** What the first bytes of a file say, and nothing the file does not say. */
 export function sniffHead(head: Uint8Array): HeadVerdict {
-  for (const box of childrenOf(head, 0, head.length)) {
+  const boxes = childrenOf(head, 0, head.length);
+  for (const [index, box] of boxes.entries()) {
     // Past the first non-box, nothing here is a layout we know how to read.
     if (!isPrintable(box.type)) return "unknown";
     if (box.type === "moof") return "fragment";
     if (box.type === "mdat") return "unknown";
     if (box.type === "moov") {
       const inside = childrenOf(head, box.body, box.end);
-      return inside.some((child) => child.type === "mvex") ? "fragment" : "unknown";
+      if (!inside.some((child) => child.type === "mvex")) return "unknown";
+      // A movie that goes on to carry fragments is a whole file.
+      if (boxes.slice(index + 1).some((later) => later.type === "moof")) return "unknown";
+      // An init segment holds no `moof`, and every byte of it is a box. Bytes the
+      // walk could not read as one after the `moov` may be a fragment too big for
+      // the head: not proof.
+      const lastEnd = boxes.at(-1)?.end ?? 0;
+      return lastEnd === head.length ? "fragment" : "unknown";
     }
   }
   return "unknown";
+}
+
+/** `origin + directory`: the same path on another host is another directory. */
+function directoryOf(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)}`;
+  } catch {
+    return raw.slice(0, raw.lastIndexOf("/") + 1);
+  }
 }
 
 function pathOf(raw: string): string {
@@ -67,11 +99,6 @@ function pathOf(raw: string): string {
   } catch {
     return raw;
   }
-}
-
-function directoryOf(raw: string): string {
-  const path = pathOf(raw);
-  return path.slice(0, path.lastIndexOf("/") + 1);
 }
 
 /** Whether the sniff has anything to say about this hit at all. */
@@ -85,35 +112,70 @@ export function isSniffCandidate(hit: NetworkHit): boolean {
  */
 export type HeadReader = (hit: NetworkHit, timeoutMs: number) => Promise<Uint8Array | undefined>;
 
+/** Settles with `work`, or with `undefined` the moment `signal` aborts; the read is abandoned. */
+async function unlessAborted<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T | undefined> {
+  if (signal === undefined) return await work;
+  if (signal.aborted) return undefined;
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<undefined>((resolve) => {
+    onAbort = () => resolve(undefined);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([work, aborted]);
+  } finally {
+    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
+  }
+}
+
 /**
- * `files` without the numbered ones proven to be fragments, in their order.
+ * `files` without the numbered ones proven to be fragments, and without the
+ * numbered ones beside a proven fragment that were never read, in their order.
  * `deadline` is the probe's; the sniff spends at most `SNIFF_TOTAL_BUDGET_MS` of
- * it and never reads past it.
+ * it and never reads past it. Once `signal` aborts no further read is started
+ * and the one in flight is abandoned; the caller then throws the abort, so what
+ * this returns after one does not matter.
  */
 export async function withoutFragments(
   files: readonly NetworkHit[],
   readHead: HeadReader,
   deadline: number,
+  signal?: AbortSignal,
 ): Promise<NetworkHit[]> {
   const sniffEnd = Math.min(deadline, Date.now() + SNIFF_TOTAL_BUDGET_MS);
   const segmented = new Set<string>();
+  const read = new Set<NetworkHit>();
+  const fragments = new Set<NetworkHit>();
   let reads = 0;
 
   for (const hit of files) {
+    if (signal?.aborted === true) break;
     if (!isSniffCandidate(hit) || segmented.has(directoryOf(hit.url))) continue;
     const left = sniffEnd - Date.now();
     if (reads >= MAX_SNIFF_READS || left <= MIN_USEFUL_BUDGET_MS) break;
     reads += 1;
+    read.add(hit);
     try {
       // Sequential on purpose: each read can settle the directory, and the rest of
       // its candidates are then not requested at all.
       // oxlint-disable-next-line no-await-in-loop
-      const head = await readHead(hit, Math.min(SNIFF_READ_BUDGET_MS, left));
-      if (head !== undefined && sniffHead(head) === "fragment") segmented.add(directoryOf(hit.url));
+      const head = await unlessAborted(readHead(hit, Math.min(SNIFF_READ_BUDGET_MS, left)), signal);
+      if (head !== undefined && sniffHead(head) === "fragment") {
+        fragments.add(hit);
+        segmented.add(directoryOf(hit.url));
+      }
     } catch {
       // Unreadable: offered, as it was before the sniff.
     }
   }
 
-  return files.filter((hit) => !(isSniffCandidate(hit) && segmented.has(directoryOf(hit.url))));
+  return files.filter((hit) => {
+    if (fragments.has(hit)) return false;
+    // A candidate that was read and found whole stays; one never read, beside a
+    // proven fragment, is taken to be one of its chunks.
+    return !(isSniffCandidate(hit) && !read.has(hit) && segmented.has(directoryOf(hit.url)));
+  });
 }

@@ -20,6 +20,7 @@ import {
   box,
   concat,
   faststartMp4,
+  fragmentedMovie,
   initSegment,
   mediaSegment,
   tailMoovMp4,
@@ -34,7 +35,11 @@ interface Served {
   body: Uint8Array;
   /** Send no `Content-Length`, as a chunked response does. */
   chunked?: boolean;
+  /** Answer the sniff's head range never: the page gets the file, the sniff waits. */
+  slowHead?: boolean;
 }
+
+const HEAD_RANGE = "bytes=0-65535";
 
 const wholeFaststart = (): Uint8Array =>
   faststartMp4({ brands: ["isom", "mp41"], tracks: TRACKS, mdatBytes: MB });
@@ -67,6 +72,21 @@ const FILES = new Map<string, Served>([
   ["/zero/2.mp4", { body: zeros(MB) }],
   ["/other/1.mp4", { body: concat(box("free", ascii("not a movie")), zeros(MB)) }],
   ["/other/2.mp4", { body: concat(box("free", ascii("not a movie")), zeros(MB)) }],
+  // A whole movie written as fragmented MP4, alone and beside whole files.
+  ["/lf/839201.mp4", { body: fragmentedMovie(MB) }],
+  ["/wf/1.mp4", { body: wholeFaststart() }],
+  ["/wf/2.mp4", { body: wholeTailMoov() }],
+  ["/wf/3.mp4", { body: fragmentedMovie(MB) }],
+  // One directory, three kinds: the whole file is the biggest, so it is read first
+  // (rank orders by size), proves nothing, and must survive the fragments after it.
+  ["/mx/1.mp4", { body: faststartMp4({ brands: ["isom"], tracks: TRACKS, mdatBytes: 4 * MB }) }],
+  ["/mx/2.mp4", { body: initSegment(), chunked: true }],
+  ["/mx/3.mp4", { body: mediaSegment(2 * MB - 100_000) }],
+  // Sniff reads that never finish.
+  ...Array.from({ length: 8 }, (_, index): [string, Served] => [
+    `/slow/${String(index + 1)}.mp4`,
+    { body: wholeFaststart(), slowHead: true },
+  ]),
   // More whole files than the sniff will read.
   ...Array.from({ length: 12 }, (_, index): [string, Served] => [
     `/many-whole/${String(index + 1).padStart(2, "0")}.mp4`,
@@ -84,6 +104,10 @@ const PAGES: Record<string, string[]> = {
   "/resolutions.html": ["/res/clip-720.mp4", "/res/clip-1080.mp4"],
   "/zero.html": ["/zero/1.mp4", "/zero/2.mp4"],
   "/other.html": ["/other/1.mp4", "/other/2.mp4"],
+  "/lonefrag.html": ["/lf/839201.mp4"],
+  "/wholefrag.html": ["/wf/1.mp4", "/wf/2.mp4", "/wf/3.mp4"],
+  "/mixed.html": ["/mx/1.mp4", "/mx/2.mp4", "/mx/3.mp4"],
+  "/slow.html": Array.from({ length: 8 }, (_, index) => `/slow/${String(index + 1)}.mp4`),
   "/manywhole.html": Array.from(
     { length: 12 },
     (_, index) => `/many-whole/${String(index + 1).padStart(2, "0")}.mp4`,
@@ -97,6 +121,8 @@ export interface ChunkServer {
   requests: Array<{ pathname: string; range: string | undefined }>;
   /** The requests that asked for exactly the sniff's head range. */
   headReads(): Array<{ pathname: string; range: string | undefined }>;
+  /** Called with the path of each head read of a `slowHead` file as it arrives. */
+  onSlowHead: ((pathname: string) => void) | undefined;
   close(): Promise<void>;
 }
 
@@ -178,6 +204,11 @@ export async function startChunkServer(): Promise<ChunkServer> {
     const served = FILES.get(url.pathname);
     if (served !== undefined) {
       requests.push({ pathname: url.pathname, range: request.headers.range });
+      if (served.slowHead === true && request.headers.range === HEAD_RANGE) {
+        // Never answered: the connection is closed when the server is.
+        handle.onSlowHead?.(url.pathname);
+        return;
+      }
       serveFile(served, request, response, {
         "content-type": "video/mp4",
         "accept-ranges": "bytes",
@@ -193,11 +224,12 @@ export async function startChunkServer(): Promise<ChunkServer> {
   });
   const origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
 
-  return {
+  const handle: ChunkServer = {
     origin,
     requests,
+    onSlowHead: undefined,
     url: (pathname: string) => new URL(pathname, origin).toString(),
-    headReads: () => requests.filter((entry) => entry.range === "bytes=0-65535"),
+    headReads: () => requests.filter((entry) => entry.range === HEAD_RANGE),
     close: async () => {
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) => {
@@ -208,4 +240,5 @@ export async function startChunkServer(): Promise<ChunkServer> {
       });
     },
   };
+  return handle;
 }

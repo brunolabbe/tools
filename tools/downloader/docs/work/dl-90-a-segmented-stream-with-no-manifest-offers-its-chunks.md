@@ -154,6 +154,30 @@ Question put to the owner: how should `Done when` be reworded?
 `moov`. The owner had seen the "Known misses" and "Accurate for fMP4" wording of
 the first question when answering it.
 
+### Owner answer, 2026-10-10: a whole movie written as fragmented MP4
+
+Raised by gate 1 of the first build (`020b5dfc`), which built the Decision to the
+letter: the evidence is a `moof`. ffmpeg `-movflags frag_keyframe+empty_moov` (12
+s, video and audio, confirmed by `ffprobe`) writes a whole, playable movie whose
+head is `ftyp moov[mvhd,trak,trak,mvex,udta] moof`. The first build stopped at the
+`moov` that holds an `mvex`, so a page whose only video was such a file (one
+`/lf/839201.mp4`) gave `NO_MEDIA_FOUND`, and with the filter neutralised, one
+variant. The Decision had never weighed a fragmented whole file.
+
+Question put to the owner: "What should happen?"
+
+- (A) **Offer a head-then-fragment file as whole.** A head showing a `moov` with
+  an `mvex` _followed by_ a `moof` is a self-contained movie and is offered. An
+  init segment ends after its `moov` and a media segment has no `moov`, so both
+  are still dropped. The gate's recommendation.
+- (B) Decide by the file's total size: read the `Content-Range` total, so only a
+  small body ending after `moov` counts as an init segment.
+- (C) Accept the loss and record it here.
+
+**Chosen: (A)**, by the owner, 2026-10-10. **Accepted cost:** a single-file DASH
+on-demand rendition has the same head (`moov` with `mvex`, then `moof`), so it is
+offered too, as a file that is not a chunk of anything.
+
 ## Build
 
 Steps 2 to 4 below are **superseded by the Decision above**; they are kept
@@ -363,7 +387,8 @@ return false;`. The ticket's own harness answers with
   hits to `withoutFragments` (`resolvers/src/browser/chunk-sniff.ts`), which reads
   the first 64 KiB of each numbered `.mp4`/`.m4v`/`.m4a` (`isNumberedName`) and
   drops it only on positive evidence of a fragment: a top-level `moof`, or a
-  `moov` holding an `mvex`. The second is how the init segment is caught (gate
+  `moov` holding an `mvex` (**round 1: and then no `moof`; see the owner answer
+  under Decision**). The second is how the init segment is caught (gate
   1's first starting point): it has a `moov` and no `moof`. Everything else is
   offered: an all-zero body, a body that is not boxes, a head that ends before
   either box, and a `moov` after `mdat` (the walk stops at `mdat`, so a tail
@@ -375,10 +400,14 @@ return false;`. The ticket's own harness answers with
   - _Bounded reads._ At most 8 candidates are read per probe, 3 s each and 6 s in
     all, taken from the probe's deadline. Past the cap an unproven candidate is
     offered, as before the sniff.
-  - _One proven fragment settles its directory._ The rest of that directory's
-    numbered files are dropped unread (gate 1's second starting point). The cost:
-    a directory mixing a fragmented file with whole numbered files loses the
-    whole ones. Not run against a real page; I judged it pathological. Twelve
+  - _One proven fragment settles its directory._ **Corrected in round 1: this
+    entry first said the directory's numbered files were "dropped unread". The
+    code dropped every numbered file in the directory, including ones it had
+    read and found whole (gate 1 measured it).** Now the numbered files beside a
+    proven fragment that were **never read** are dropped (gate 1's second
+    starting point); a file whose own head was read and was not a fragment is
+    kept. The cost, accepted: what survives depends on read order, so a whole
+    file ranked after the first fragment is never read and is dropped. Twelve
     chunks cost one read, not twelve (`chunk-streams.test.ts`).
   - _The read._ `fetchPrefix` in `resolvers/src/browser/manifest-fetch.ts`, the
     dl-97 client, so it has the proxy, the jar, redirects and the root CA. It
@@ -415,3 +444,68 @@ return false;`. The ticket's own harness answers with
   implement `bytes()` over `fetchPrefix`, which would let the browser tier
   describe progressive codecs (dl-64). It is not free: it changes what the tier
   returns, needs a ranged-window read rather than a prefix, and has no ticket.
+
+- 2026-10-10, round 1: gate 1 failed `020b5dfc` (one high, two med, one low; all
+  six `Done when` lines held). Fixed on the same branch; `main` taken at
+  `15adb4f7` by merge.
+
+  **High, fixed: the filter dropped files the sniff had read and found whole.**
+  Reproduced by the gate's `capture.mts` shapes and by two new tests, both red on
+  the old filter (`sed 's/!read.has(hit) && segmented/segmented/'` on
+  `chunk-sniff.ts`): `chunk-sniff.test.ts` "a file read and found whole is kept
+  when a fragment beside it is proven later" and `chunk-streams.test.ts` "the
+  whole file, read first, survives the init and media segments that follow it"
+  (2 failed, 11 passed). `withoutFragments` now drops the proven fragments and
+  the numbered siblings in a proven directory that were never read, and nothing
+  else. The header comment of `chunk-sniff.ts` and the "dropped unread" line in
+  the entry above were false of the first build and are corrected in both
+  places. Known cost, in the comment and above: survival depends on read order,
+  which is rank order (bigger first).
+
+  **Med, owner decision recorded: a whole movie written as fragmented MP4.**
+  The owner chose (A) on 2026-10-10; the question, options, choice and accepted
+  cost are under Decision. `sniffHead` now reads a `moov` with an `mvex` as an
+  init segment only when no `moof` follows it and every byte of the head parsed
+  as a box. A `moov`+`mvex` followed by a `moof` is a whole movie and is offered.
+  A `moov`+`mvex` followed by bytes the walk could not read as a box (a fragment
+  too big for the head) is also offered: not proof. One test per shape in
+  `chunk-sniff.test.ts` (whole fragmented movie: unknown; init segment: fragment;
+  media segment, which has no `moov`: fragment), and in a real Chromium
+  `chunk-streams.test.ts` "a lone numbered file with moov, mvex and then moof is
+  offered" (red on `020b5dfc`'s `chunk-sniff.ts`: `AppError: No downloadable
+video stream was found on that page.`) and "beside two whole files in one
+  directory, all three are offered". The small-body unit case is what pins the
+  `moof` clause: with that clause deleted only `fragmentedMovie(1024)` fails,
+  because a large `mdat` already leaves unparsed bytes after the head.
+
+  **Med, fixed: the sniff ignored cancellation.** `withoutFragments` takes the
+  probe's `signal`, starts no read once it is aborted, races each read against
+  it, and `#buildOutcome` calls `throwIfAborted` after it. `fetchPrefix` takes no
+  signal: an abandoned request runs to its own timeout (at most 3 s) and is then
+  closed, which costs a socket and no answer. Test: `chunk-streams.test.ts`
+  "aborting while a head read is outstanding rejects with the abort, promptly, and
+  reads no more" (a `/slow.html` of 8 files whose head reads are never answered;
+  aborts when the first arrives; expects `CANCELED`, under 2 s, and no further
+  head read). With the signal not passed it fails `expected 6009 to be less than
+2000`, the gate's 6012 ms. Unit: "an abort starts no further read" and "an
+  abort abandons the read in flight instead of waiting out its budget".
+
+  **Low, fixed in the sniff, found real in `rank.ts`.** The sniff's directory is
+  now `origin + path`; test "a fragment on one host proves nothing about the same
+  path on another". The gate's `crosshost.mts` on the old tree printed
+  `reads: https://ads.example.com/media/1.mp4` and `kept: []`; on this tree
+  `reads: https://ads.example.com/media/1.mp4, https://cdn.site.example/media/2.mp4`
+  and `kept: ["https://cdn.site.example/media/2.mp4"]`. **`rank.ts` has the same
+  shape and it deserves its own ticket.** `directoryOf` there ignores the host,
+  and it is a defect today, not an idea: with
+  `https://ads.example.com/media/init.mp4` and `https://cdn.site.example/media/5.mp4`
+  captured, `rankHits` returns `["https://ads.example.com/media/init.mp4"]`, so a
+  whole numbered file is dropped for a chunk-named file on an unrelated host
+  (`node --import tsx rank-crosshost.mts <tree>`, kept in the builder's scratch,
+  not committed). Left alone here as instructed (outside this branch's range); the
+  fix is the same one line the sniff now has, and a ticket should carry the
+  reproduction above. Filing is the orchestrator's call.
+
+  **Dropped by the gate, no action:** the manifest-budget claim, the noisy-page
+  `TIMEOUT` claim, and the `readBody` refactor claim (a 21-body differential
+  matched).
