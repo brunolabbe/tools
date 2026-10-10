@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse hook: refuse the commands that put code on `main` without a human —
-# `gh pr merge` in any spelling, and the `git push` spellings that name `main`
+# `gh pr merge` and `gh stack merge` in any spelling, and the `git push` spellings that name `main`
 # explicitly and get past the deny list's globs. A push that names no
 # destination at all is out of scope on purpose; see repo-42, below.
 #
@@ -251,7 +251,12 @@ block_merge=0
 block_push=""
 
 while IFS= read -r segment; do
-  if printf '%s' "$segment" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'; then
+  # `gh stack merge` is the gh-stack extension's merge (repo-95): the same act
+  # through a second command, held by the deny rule `Bash(gh stack merge*)` and
+  # by this line. Only the exact spellings are matched, like `gh pr merge`;
+  # `gh extension exec`, an absolute path to gh and an alias are the ceiling of
+  # a command-string hook, stated in the header.
+  if printf '%s' "$segment" | grep -qE '^[[:space:]]*gh[[:space:]]+(pr|stack)[[:space:]]+merge([[:space:]]|$)'; then
     block_merge=1
     continue
   fi

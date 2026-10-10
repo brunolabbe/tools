@@ -138,3 +138,18 @@ request is the owner's decision`). The hook fires before the deny list is
   (github.com/github/gh-stack/releases, read 2026-10-10) lists v0.2.1
   (2026-10-09) and v0.2.0 (2026-10-02) above it, and v0.2.1 has a
   `linux-amd64` asset. gh here is 2.101.0.
+
+- 2026-10-10 — fixer, gate 1's F1. The owner answered "Should the step-2 builder
+  also extend the hook, and when?" with "Extend the hook, in this slice before
+  merge", over "in step 2's branch" and "deny rule alone, as the brief says". So
+  `.claude/hooks/check-main-writes.sh`'s merge match is now `gh (pr|stack) merge`,
+  with a case in `scripts/test/hooks.test.ts`, and it lands in #412 before
+  anything is installed. A PreToolUse payload fed to the hook, before and after
+  (`bash <hook> < payload`): `gh stack merge -y` exit 0 then exit 2;
+  `gh pr merge -y` exit 2 then exit 2; the control `gh stack view` exit 0 then
+  exit 0. The new test failed with the hook reverted
+  (`gh stack merge: expected +0 to be 2`, 1 of 34) and passes with it
+  (34 of 34, `npx vitest run scripts/test/hooks.test.ts`). The hook's own refusal
+  is unobservable in a session until it reaches `main`, the same limit as the
+  deny rule. Not widened: `gh extension exec`, an absolute path to gh and an
+  alias stay with the ceiling the hook's header already states.
