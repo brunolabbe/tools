@@ -35,8 +35,11 @@
  *    into a final refusal. Two costs, both measured by dl-102's gate. An
  *    origin that fails the probe and then serves ffmpeg the whole body is not
  *    checked here, and used to yield a file of which no frame decodes; dl-103
- *    catches it behind the probe, from ffmpeg's own `partial file` (see
- *    `PARTIAL_FILE` in `stream.ts`). And it is **not quite** ffmpeg running as it did
+ *    catches it behind the probe, from ffmpeg's own `partial file` and the
+ *    early end at its offset (see `PARTIAL_FILE` in `stream.ts`): as
+ *    `SOURCE_NOT_SEEKABLE` when the origin declares where its body ends, and
+ *    as `DOWNLOAD_FAILED` when it sends the body chunked, since that logs no
+ *    early end. And it is **not quite** ffmpeg running as it did
  *    before: the probe is now the first request the origin sees, so a fault
  *    that hits only the first request (one `429` or `500`, one refused
  *    `CONNECT`) is spent on the probe. From an origin that honours `Range`

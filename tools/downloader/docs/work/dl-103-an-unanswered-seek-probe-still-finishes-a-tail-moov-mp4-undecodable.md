@@ -389,3 +389,45 @@ connection ends early at the failing sample's offset.
 past the retry budget") already describes a segment, not a progressive loss,
 and did so before this ticket; the owner's answers authorise no edit to it,
 so it is untouched. The visitor copy of both codes is unchanged.
+
+**2026-10-10** — round 2, on gate 2's findings at `cf56efcf` (Opus 5.5,
+builder).
+
+**The owner's answer, 2026-10-10.** Asked "What happens to them?" for G2-1
+and G2-2, with the options "Builder fixes G2-1 and G2-2, gate checks
+narrowly" (the orchestrator's recommendation), "Lander applies both, no
+re-gate", and "Leave both recorded; file G2-1 as dl-106". **Chosen: the
+builder fixes G2-1 and G2-2, and the gate checks narrowly.** G2-3 (a short
+primary no longer fails over to a whole mirror) stays recorded in gate 2's
+section, with no change.
+
+**G2-1, fixed: whatever ends ffmpeg inside the hold keeps its code.** When
+ffmpeg exited while the first byte was held, round 1 called
+`decide(shortSource())` and threw that, over the `JOB_CANCELED` or `TIMEOUT`
+that had killed it. Now the throw after the hold is `completion`'s own
+rejection whenever there is one (`terminate` is first-wins, so a verdict
+that ended ffmpeg arrives the same way), and the short-source verdict is
+thrown only after a clean exit. Red first, with the four new cases at the end
+of `stream.test.ts` ("… while the first byte is held for a verdict keeps its
+code, …"):
+`npx vitest run tools/downloader/engine/test/stream.test.ts -t "while the first byte is held"`
+gave `Tests 3 failed | 1 passed | 71 skipped (75)`, with
+`expected 'DOWNLOAD_FAILED' to be 'JOB_CANCELED'` and
+`expected 'DOWNLOAD_FAILED' to be 'TIMEOUT'`; the crash case passed. After the
+fix: 4 of 4. Gate 2's `gate2-hold.test.ts`, copied in and then removed:
+`Tests 9 passed (9)`. The case "a cancel whose kill outlasts the hold" (the
+stand-in ignores SIGTERM, so the 2 s timer fires mid-kill) pins the
+`completion`-first throw: with that throw reverted to the verdict,
+`3 failed | 16 passed`, that case included.
+
+**G2-2, wording only, reproduced.** Gate 2's `run4.mts`, on 6.1.1 against
+this tree: `blindchunk:moov-end.mp4` (probe `403`, every other answer the
+whole file, chunked) gave `stream()` rejected `DOWNLOAD_FAILED`, with
+`offset 0x30: partial file` and no early end; the control
+`blindclose:moov-end.mp4` (no length, connection closed) logged
+`Stream ends prematurely at 48, should be 18446744073709551615` and was
+refused `SOURCE_NOT_SEEKABLE`. The `PARTIAL_FILE` docblock, the `stream.ts`
+header, the `seek-probe.ts` header and the `SOURCE_NOT_SEEKABLE` doc comment
+(comment-only, under Decision 1) now say the early end comes only from an
+origin that declares where its body ends, and that a chunked one is
+`DOWNLOAD_FAILED`.

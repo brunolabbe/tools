@@ -51,7 +51,9 @@
  * origin is the cause (`PARTIAL_FILE` below). That is the same
  * `SOURCE_NOT_SEEKABLE`, before the first byte when the verdict comes first
  * and as a cut stream when it does not; a `partial file` without it is a
- * short source, and `DOWNLOAD_FAILED`.
+ * short source, and `DOWNLOAD_FAILED`. Only an origin that declares where its
+ * body ends logs that early end: one that ignores `Range` and sends a chunked
+ * body cannot be told from a short source, and is `DOWNLOAD_FAILED` too.
  * The probe goes through ffmpeg's proxy, with the same `tlsVerify` and
  * `tlsCaFile`, and never around it.
  *
@@ -231,6 +233,17 @@ export const WILL_RECONNECT = /Will reconnect at/iu;
  * `DOWNLOAD_FAILED`, wherever it shows (the owner's answer of 2026-10-10).
  * Read for progressive sources only: an HLS or DASH segment is demuxed by
  * ffmpeg in its own right, and its holes have their codes already.
+ *
+ * **The early end comes only from an origin that declares where its body
+ * ends**: by `Content-Length`, or by closing the connection (a close-delimited
+ * body logged `Stream ends prematurely at 48, should be
+ * 18446744073709551615`, measured by dl-103's gate 2 and its builder). An
+ * origin that ignores `Range` **and** sends its body chunked logs
+ * `partial file` and no early end at all, which is what a chunked short
+ * source logs too; when its probe went unanswered it is `DOWNLOAD_FAILED`
+ * (gate 2's G2-2, on 6.1.1 and 7.0.2). That fails closed, a failed download
+ * rather than a file that does not decode, and the log holds nothing that
+ * would tell the two apart.
  */
 export const PARTIAL_FILE = /offset 0x([0-9a-f]+): partial file/iu;
 /** An early end and the byte it ended at, to set against `PARTIAL_FILE`'s offset. */
@@ -810,9 +823,17 @@ async function attempt(
     // Decided while the first chunk was on its way: nothing has reached the
     // reader, so this is still a failure before the first byte. Drained so
     // the killed process can close.
+    const decided: AppError = verdict;
     ffmpeg.stdout.resume();
     await exited;
-    throw verdict;
+    // Whatever ended ffmpeg first keeps its code (`terminate` is first-wins):
+    // a cancel, a stage timeout or a crash inside the hold is not a short
+    // source, and a verdict that ended it arrives the same way. Only a clean
+    // exit leaves the verdict to say what happened (dl-103's gate 2, G2-1).
+    throw await ffmpeg.completion.then(
+      () => decided,
+      (error: unknown) => AppError.from(error),
+    );
   }
   handedOver = true;
 

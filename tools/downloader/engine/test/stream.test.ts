@@ -2173,4 +2173,64 @@ describe("dl-103: an unanswered seek probe", () => {
     },
     30_000,
   );
+  /**
+   * dl-103's gate 2, G2-1: whatever ends ffmpeg while the first byte is held
+   * keeps its own code. The first round read every exit inside the hold as a
+   * short source, so a cancel at 400 ms came out `DOWNLOAD_FAILED` after
+   * 404 ms and a 500 ms stage timeout after 506 ms; a job is recorded
+   * canceled only on `JOB_CANCELED`. Each stand-in logs `partial file`, writes
+   * its first chunk 50 ms later, and would live 15 s.
+   */
+  const held = [say(P), later(50, OUT), later(15_000, "process.exit(0);")];
+  const endsInTheHold: readonly {
+    name: string;
+    statements: readonly string[];
+    abortAfterMs?: number;
+    stageTimeoutMs?: number;
+    code: string;
+  }[] = [
+    { name: "a cancel", statements: held, abortAfterMs: 400, code: "JOB_CANCELED" },
+    { name: "a stage timeout", statements: held, stageTimeoutMs: 500, code: "TIMEOUT" },
+    {
+      // SIGTERM ignored: the kill takes its 3 s grace, so the hold's own 2 s
+      // runs out while the cancel is still killing ffmpeg.
+      name: "a cancel whose kill outlasts the hold",
+      statements: ['process.on("SIGTERM", () => undefined);', ...held],
+      abortAfterMs: 400,
+      code: "JOB_CANCELED",
+    },
+    {
+      name: "a crash",
+      statements: [say(P), later(50, OUT), later(500, 'process.kill(process.pid, "SIGKILL");')],
+      code: "DOWNLOAD_FAILED",
+    },
+  ];
+
+  for (const end of endsInTheHold) {
+    test.skipIf(process.platform === "win32")(
+      `${end.name} while the first byte is held for a verdict keeps its code, ${end.code}`,
+      async () => {
+        const controller = new AbortController();
+        if (end.abortAfterMs !== undefined) {
+          setTimeout(() => controller.abort(), end.abortAfterMs);
+        }
+        const error = await engineWith({
+          ffmpegPath: await standIn103(end.statements),
+          ...(end.stageTimeoutMs === undefined ? {} : { stageTimeoutMs: end.stageTimeoutMs }),
+        })
+          .stream({
+            jobId: "dl-103-hold-end",
+            variant: large(`${origin.origin}/large-103/moov-end.mp4`),
+            requestContext: CONTEXT,
+            signal: controller.signal,
+          })
+          .then(
+            () => null,
+            (cause: unknown) => AppError.from(cause),
+          );
+        expect(error?.code).toBe(end.code);
+      },
+      30_000,
+    );
+  }
 });
