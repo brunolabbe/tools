@@ -131,14 +131,14 @@ export const USAGE = "usage: node scripts/agent-cost.mjs [--agent <id>]... [<out
  * The date these rates were read, printed beside every dollar figure this
  * prints so a stale table is visible rather than silently assumed current.
  *
- * Read from the `claude-api` skill's cached pricing table and
- * `shared/prompt-caching.md`'s Economics section (cache write is 1.25× the
- * input rate at the default 5-minute TTL and 2× at the 1-hour one; cache read
- * is 0.1× the input rate, except Claude Fable 5.1's documented flat
- * $0.25/MTok and Claude Opus 5.5's $0.20/MTok, which is 0.05× its input and
- * the same figure as Sonnet 5's and Sonnet 5.5's).
+ * Read from the live pricing page, platform.claude.com/docs/en/about-claude/pricing
+ * (cache write is 1.25× the input rate at the default 5-minute TTL and 2× at
+ * the 1-hour one; cache read is 0.1× the input rate, except Claude Fable 5.1's
+ * 0.025× and Claude Opus 5.5's and Claude Sonnet 5.5's 0.05×). Sonnet 5.5's
+ * cache read was $0.20 here until 2026-10-10, copied from Sonnet 5's; the page
+ * says $0.10, so Sonnet 5.5 figures printed before then overstate cache reads.
  */
-export const RATES_READ_ON = "2026-09-30";
+export const RATES_READ_ON = "2026-10-10";
 
 /**
  * Per-million-token rates, keyed by the model id `normaliseModel` returns.
@@ -146,6 +146,12 @@ export const RATES_READ_ON = "2026-09-30";
  * A model id with no entry here fails loudly (`EXIT.missingRate`) rather than
  * pricing at zero — see the module doc comment. Add a model here the same day
  * its rate is read, and move `RATES_READ_ON` forward with it.
+ *
+ * A `longPrompt` card replaces the whole rate for a response whose prompt is
+ * over `above` tokens. Claude Haiku 5.5 is the only model priced that way: the
+ * page counts every input token toward the threshold, cache reads and writes
+ * included, and prices each request on its own. A builder past 100K tokens of
+ * context pays five times its first turns' rate on every later turn.
  */
 export const RATES = /** @type {const} */ ({
   "claude-opus-5-5": {
@@ -166,7 +172,7 @@ export const RATES = /** @type {const} */ ({
     input: 2.0,
     cacheWrite: 2.5,
     cacheWrite1h: 4.0,
-    cacheRead: 0.2,
+    cacheRead: 0.1,
     output: 10.0,
   },
   "claude-sonnet-5": {
@@ -175,6 +181,21 @@ export const RATES = /** @type {const} */ ({
     cacheWrite1h: 4.0,
     cacheRead: 0.2,
     output: 10.0,
+  },
+  "claude-haiku-5-5": {
+    input: 0.1,
+    cacheWrite: 0.125,
+    cacheWrite1h: 0.2,
+    cacheRead: 0.01,
+    output: 0.5,
+    longPrompt: {
+      above: 100_000,
+      input: 0.5,
+      cacheWrite: 0.625,
+      cacheWrite1h: 1.0,
+      cacheRead: 0.05,
+      output: 2.5,
+    },
   },
   "claude-haiku-4-5": {
     input: 1.0,
@@ -455,7 +476,7 @@ export function priceFile(totals, file) {
   }
   let dollars = 0;
   for (const r of totals.responses) {
-    const rate = RATES[/** @type {keyof typeof RATES} */ (r.model)];
+    const rate = rateFor(RATES[/** @type {keyof typeof RATES} */ (r.model)], r);
     dollars +=
       (r.input / 1_000_000) * rate.input +
       ((r.cacheWrite - r.cacheWrite1h) / 1_000_000) * rate.cacheWrite +
@@ -464,6 +485,20 @@ export function priceFile(totals, file) {
       (r.output / 1_000_000) * rate.output;
   }
   return { ...totals, dollars };
+}
+
+/**
+ * The card one response is billed on: the long-prompt card when the model has
+ * one and this response's prompt — uncached input plus every cache write and
+ * read — is over its threshold, the base rate otherwise.
+ *
+ * @param {(typeof RATES)[keyof typeof RATES]} rate
+ * @param {Response} r
+ */
+function rateFor(rate, r) {
+  if (!("longPrompt" in rate)) return rate;
+  const prompt = r.input + r.cacheWrite + r.cacheRead;
+  return prompt > rate.longPrompt.above ? rate.longPrompt : rate;
 }
 
 /** `$` plus four decimal places — enough to distinguish files costing cents from files costing tenths of a cent. */
