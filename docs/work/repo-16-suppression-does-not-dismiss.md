@@ -7,7 +7,6 @@ status: done
 milestone: null
 depends_on: [repo-13]
 difficulty: hard
-awaiting: Done when 6 — the security tab shows alert 2 dismissed, after a push to main
 ---
 
 # repo-16 — Inline suppression does not dismiss; decide what carries it
@@ -395,7 +394,7 @@ security tab rather than inferred.
    reviewer. Verified programmatically that exactly one of the 29 gate-table
    rows changed in content; command in the Log.
 
-6. **Not done, and not doable from here.** The state of alert 2 after the chosen
+6. ~~**Not done, and not doable from here.** The state of alert 2 after the chosen
    change cannot be recorded yet by anyone: the dismissal step runs only on a
    push to `main`, so there is no "after" until this merges. Nor could the
    _current_ state be re-read — `gh api` is denied and the security tab is not
@@ -403,7 +402,7 @@ security tab rather than inferred.
    is still the 2026-09-01 relayed reading and nothing on this branch upgrades
    it. **This line is the ticket's outstanding acceptance**, and the first look
    after the merge is what closes it: the alert should read _dismissed_ with the
-   comment `Suppressed via SARIF`.
+   comment `Suppressed via SARIF`.~~ **Done 2026-10-10** — see the Log.
 7. ~~`npm run check` passes and `npm run format` has been run, since this
    ticket's work is `.md` and `.yml`.~~ **Done 2026-09-07** — see the Log.
 
@@ -847,3 +846,14 @@ reason this ticket is 16 rather than 14.
   halves in one commit** — strike `Done when` 6 with the date, and delete the
   `awaiting` line. A field nobody clears is the second projection adr/003
   rejected, so the deletion is not optional bookkeeping.
+
+- 2026-10-10 — Done when 6 met and the `awaiting` line closed. Alert 2
+  (Server-side request forgery, `js/request-forgery`, Critical,
+  `tools/downloader/api/src/egress-proxy.ts:513`, affected branch `main`)
+  reads **Dismissed, Sep 7**. #184, which added the dismissal step, merged on
+  2026-09-07 at 15:28 -0400, so the dismissal came after the first push to
+  `main` that ran it. The reading is the owner's, from the alert's page, given
+  as a screenshot; it was not re-run here. The screenshot shows the state and
+  date but not the dismissal comment, so the expected `Suppressed via SARIF`
+  wording is not confirmed. Line 513 is the `http.request(` call directly below
+  its `codeql[js/request-forgery]` comment.
