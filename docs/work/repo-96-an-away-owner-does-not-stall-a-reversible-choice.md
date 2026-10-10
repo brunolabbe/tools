@@ -3,7 +3,7 @@ id: repo-96
 tool: repo
 title: While the owner is away, the orchestrator proceeds on its recommended option for a reversible choice
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -65,6 +65,103 @@ ends the batch, and this one keeps it moving.
 2. This ticket's Log shows the 04:49 dl-83 case passing the conditions, and
    names one earlier held decision that fails them, with the condition it
    fails.
+
+## Review
+
+**Gate: FAIL** — 2026-10-10 · `7709411e..781587b4` · Opus 5.5, depth narrow
+
+| Done when                                                                                                | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `## Decisions` carries the rule, four conditions, the flag, the away signal                           | **verified**: read in `.claude/skills/orchestrate-tickets/SKILL.md` › _Decisions_, "While the owner is away, a reversible choice is taken, not held". All four conditions, the flag (PR comment and return report, in `AskUserQuestion` form, with the commit to revert) and the away signal (the owner says so; silence and cache expiry are not) are there. PR #411 `check` passed on `781587b4`. Docs-only, so no test is possible |
+| 2. Log shows the 04:49 dl-83 case passing; names an earlier held decision that fails, with the condition | **not met**: see F1 and F2. The showing for condition 1 rests on a fact that git contradicts. For condition 2 the Log itself says the text "does not settle" the case, and read literally the text fails it                                                                                                                                                                                                                           |
+
+- **high** · Done when 2 depends on it · **The 04:49 case does not pass the
+  bullet as written, and the Log's showing rests on two claims that git
+  contradicts.** The fix as built is two commits on two branches:
+  `76113c54` on `origin/dl-80-quiet-floor` (dl-79's and dl-82's tests) and
+  `b5e45c72` on `origin/dl-83-age-gate-phrasings` (dl-83's). Both edit only
+  `tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
+  (`git show --stat 76113c54 b5e45c72`; `git branch -a --contains` for each).
+  - Condition 1, "reversible by **one revert** of a commit": the Log says
+    "The fix was one commit". It took two reverts, one on each branch.
+  - Condition 2b, "widens no branch into a file its Build did not name": the
+    Log argues from "dl-79, dl-82 and dl-83 each already had a no-media test".
+    The edits did not land on dl-79's or dl-82's branches. Neither dl-80's
+    nor dl-83's Build names the test file, so the case fails the clause read
+    literally. It passes only on a path reading: the file was already in each
+    branch's own commits (dl-80: `d956a450`, `4c194fd9`; dl-83: `3fc1968f`
+    and five more).
+  - The clause's parenthetical points to `reference/concurrency.md`'s seam
+    re-check. That re-check starts from the same Build-relative wording and
+    "guarantees nothing", so it cannot decide pass or fail.
+  - Verdict on attack 1: **the bullet is worded wrong**, not the ticket
+    self-contradictory. The wording is inherited word for word from the
+    brief's Build step 1, whose own parenthetical intends the path reading.
+  - Reproduction: `node conditions.mjs <tree> "04:49 on dl-80" 056aab75 dl-80 <dl-80 ticket> 76113c54`
+    → `c2b-literal(Build names file)=false c2b-diff(no new path)=true`. The
+    same result for `b5e45c72` against dl-83. **Open decision:**
+    - (a) **Recommended.** Reword 2b to "adds no path to any branch's
+      `git diff --name-only` against its base". Reword 1 to "one revert on
+      each unmerged branch it touched". Rewrite the Log's condition 1 and 2
+      paragraphs from the two commits.
+    - (b) Keep the brief's wording, and record that 04:49 does not qualify.
+      That contradicts Done when 2 and the owner's 2026-10-06 choice.
+- **med** · Done when 2 depends on it · **The named held decision fails
+  condition 4 only on a claim its own cited source refutes.** The decision is
+  as the Log says: repo-32's meaning of `awaiting`, A/B/C, owner chose A
+  (`reference/history.md`, "Fifteenth session — 2026-09-09", item 2;
+  repo-32 `Done when` 6, struck sentence).
+  - Condition 4: repo-32's Log, entry "2026-09-09, later", says "**A matches
+    the builder's recommendation, so it overrode nobody.**" The 2026-09-07
+    "classification is disputed" passage the Log cites is about which
+    instances fit, not about which reading to recommend.
+  - Condition 3: it fails only if "changes no `Done when` line" is read as
+    "takes no decision a `Done when` line reserves to the owner". Taking A
+    unasked would leave 6b ("put to the owner") unmet. It would not edit the
+    line.
+  - Remedy: drop the condition-4 claim. Either say condition 3 is met on that
+    reading and make the bullet say it ("no decision a ticket's `Done when`
+    or Decision reserves to the owner"), or name a held decision that plainly
+    fails a path or gate condition.
+- **med** · no `Done when` line depends on it · **The bullet lets the
+  orchestrator absorb a subagent's open decision.** That contradicts the bullet
+  above it in the same section, "A subagent's open decision is yours to
+  forward, not to absorb", and it gives no reason. The 04:49 decision was a
+  fixer's. Nor does the bullet say the answer goes back down labelled as
+  _your_ choice rather than the owner's, which that bullet's provenance rule
+  requires. A builder's Log could record an owner's answer that never happened.
+- **med** · no `Done when` line depends on it · **Condition 3's "no gate
+  verdict" needs judgement the bullet does not admit.** Both 04:49 commits land
+  after committed gate records (dl-80 gate 2 `c49b327d`; dl-83 gates 1–3
+  `a6f3b474`..`2a2b8907`), which is exactly why it was held. Whether editing a
+  gated head "changes a verdict" is not said. The Log's answer ("flag the choice
+  and offer a re-gate") is not in the bullet.
+- **low** · "allowlist" names no file. Candidates:
+  `.devcontainer/allowed-domains.txt` (the egress allowlist, per
+  `.devcontainer/README.md`) and `.gitignore`'s `.claude/` allowlist.
+  `.claude/settings.json` is already named.
+- **low** · Root `CLAUDE.md` › _Decisions_ says "ask, with `AskUserQuestion`"
+  with no carve-out, and _Handing back_ withholds `# Done` from "a branch
+  carrying an open decision". The bullet narrows the first without naming it.
+  It does not say whether a flagged-but-taken choice is open at close. The
+  "signed off becomes a ticket" rule it contrasts with is stated nowhere else
+  in the repo (`grep -rn -i "signed off\|sign-off" .claude/skills CLAUDE.md docs/01-TICKETS.md`
+  matches only this bullet).
+- **positive control** · The same `conditions.mjs` on `beb0289b` (dl-73's
+  owner-decided rewording of `Done when` 2) gives
+  `c2a(no forbidden path)=false c2b-diff(no new path)=false c3(no Done-when edit)=false`:
+  it touches `.github/workflows/downloader.yml`, adds
+  `resolvers/test/ytdlp.test.ts` and edits `## Done when`. The bullet as
+  written rejects it on conditions 2 and 3. A choice made against a gate's
+  verdict is rejected by condition 4's text ("does not override … a gate's
+  recommendation"). That needs no command.
+- **unmeasured** · the 04:49 and 12:10 timings, and whether the orchestrator
+  dry-ran the fix. Both are tools-79's transcript, and no history row exists
+  for that batch.
+- **findings** · the hunt returned 7; 6 carried (1 high, 3 med, 2 low), 1
+  dropped. Dropped: the Log's "no page in the skill states" the sign-off rule
+  is true, and it is folded into the second low.
+- NFR: security n/a · performance n/a · reliability: the high and the gate-verdict med · maintainability: the lows above.
 
 ## Log
 
