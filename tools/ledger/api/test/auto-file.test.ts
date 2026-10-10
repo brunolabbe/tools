@@ -713,9 +713,10 @@ describe("every reader of the standing classification answers an automatic filin
     /**
      * The workbook's last three rows pasted and filed, the newest filed
      * `thirdBucket`, then that row's record rewritten to history's own (same
-     * bucket and person, no author, three grounds): the app never rewrites a
-     * record, but no paste can put an automatic row at the tail of a stretch
-     * the workbook also holds. Then the workbook is imported with `--write`.
+     * bucket and person, no author, three grounds). The rewrite is a convenience
+     * of this fixture, not a necessity: it saves building a longer stretch of
+     * rows the workbook also holds, and the app itself never rewrites a record.
+     * Then the workbook is imported with `--write`.
      */
     async function importOver(
       thirdBucket: "current-expenses" | "mortgage",

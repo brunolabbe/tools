@@ -228,8 +228,9 @@ read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
     not say the row is waiting (`storedRows`, the unclassified count). Each of
     the four readers, given `source <> 'auto'`, fails at least one of them.
     The import tests rewrite the third stored record to history's own shape in
-    SQL: no paste can put an automatic row at the tail of a stretch the
-    workbook also holds, and the app never rewrites a record.
+    SQL. The rewrite is a convenience of this fixture, not a necessity: it
+    saves building a longer stretch of rows the workbook also holds, and the
+    app itself never rewrites a record.
   - _F3:_ "six files" above is five; the build added an eleventh reader.
   - _F6:_ three damaged release 6 databases (a record naming a row that does
     not exist; one naming a rule that does not exist; a value release 6's own
