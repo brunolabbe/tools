@@ -466,6 +466,14 @@ export const SCENARIOS: readonly Scenario[] = [
     job: { failWith: "CONTAINER_UNSUPPORTED", failAt: "probing", failOnlyForContainer: "webm" },
   },
   {
+    keyword: "norange",
+    title: "Source cannot be seeked",
+    description:
+      "An MP4 with its index at the end, from a source that ignores Range (dl-102), refused before any bytes move. Not retryable.",
+    probeDelayMs: 1_000,
+    job: { failWith: "SOURCE_NOT_SEEKABLE", failAt: "probing" },
+  },
+  {
     keyword: "toobig",
     title: "Cut at the size cap",
     description:

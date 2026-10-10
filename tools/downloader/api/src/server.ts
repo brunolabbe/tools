@@ -391,9 +391,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       maxFileSizeBytes: config.maxFileSizeBytes,
       stageTimeoutMs: config.stageTimeoutMs,
       logger,
-      // Every fetch the engine makes is ffmpeg's since dl-53 — progressive
-      // files and subtitle tracks included — so every one goes out through the
-      // guarded proxy below, which checks each connection it is asked for.
+      // Every media fetch is ffmpeg's since dl-53, and dl-102's Range probe, the
+      // engine's one request of its own, takes ffmpeg's proxy: every one goes out
+      // through the guarded proxy below, which checks each connection, hops included.
       ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
       tlsVerify: !config.ffmpegAllowUnverifiedTls,
       // **Both halves come from `ffmpegEgress` and neither is read from

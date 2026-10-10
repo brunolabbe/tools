@@ -22,6 +22,38 @@
  * same egress proxy and with the same replayed headers as every manifest, so
  * both layouts work and there is one code path for every protocol.
  *
+ * ## An origin that ignores Range
+ *
+ * That holds only while the origin honours `Range`. One that answers every
+ * request with `200` and the whole body leaves ffmpeg no way to reach an index
+ * at the end, and a tail-`moov` MP4 from it used to finish as a clean response
+ * of which no frame decodes (dl-102: about 1 MB in, 37,615 bytes out, 0 of
+ * 100 frames, `done` resolved). ffmpeg's stderr does not say so reliably — its
+ * `Stream ends prematurely` is followed by a reconnect from the same
+ * connection, which clears `STREAM_ENDED_EARLY` — so the question is asked
+ * before ffmpeg starts, of the **origin**: `download/seek-probe.ts` sends
+ * `Range: bytes=1-1` to each progressive input's own URL, the candidate the
+ * resolver produced, and never to whatever URL ffmpeg is then handed. A `206`
+ * is fine. A `200` is walked for its top-level boxes: `moov` before `mdat` is a
+ * fast-start file ffmpeg reads front to back, and it streams as before;
+ * `mdat` first is refused with `SOURCE_NOT_SEEKABLE`, before the first byte,
+ * and the next mirror is tried if there is one. Anything the probe cannot
+ * decide lets ffmpeg run, so that ffmpeg's own failures keep their codes (the
+ * owner's choice, 2026-10-08). That is **not** quite ffmpeg running as it did
+ * before: the probe is now the first request the origin sees, so a fault that
+ * hits only the first request — one `429` or `500`, one refused `CONNECT` —
+ * is spent on the probe. From an origin that honours `Range` that heals; from
+ * one that ignores it, it turns what was a `DOWNLOAD_FAILED` into the
+ * undecodable file this section is about. That, and every other way a probe
+ * can go unanswered while the origin still ignores `Range`, is dl-103's
+ * second line of defence. The probe goes through ffmpeg's proxy, with the same
+ * `tlsVerify` and `tlsCaFile`, and never around it.
+ *
+ * A small tail-`moov` file from such an origin is refused too, though ffmpeg
+ * can read one whole without seeking (gate 1 measured 63,749 B decoding and
+ * 91,053 B not, on ffmpeg 6.1.1): the threshold is ffmpeg's internal buffering,
+ * not something to depend on, and a video that small is not worth the risk.
+ *
  * ## What can be retried
  *
  * Only what happens **before the first byte**. Mirror failover (dl-45) and the
@@ -48,6 +80,8 @@ import type {
 } from "@downloader/contract";
 import type { EngineConfig } from "./config.ts";
 import { downloadCandidates, isHostFailure } from "./download/failover.ts";
+import type { SeekVerdict } from "./download/seek-probe.ts";
+import { probeSeek, SeekProbeCanceled } from "./download/seek-probe.ts";
 import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
 import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./ffmpeg/args.ts";
 import { durationFromInfoLine, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
@@ -419,9 +453,24 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
   let subtitles = selectSubtitles(request, logger);
   let index = 0;
 
+  // dl-102: every progressive input ffmpeg will open is asked, at its origin,
+  // whether ffmpeg can reach the index. See "an origin that ignores Range" above.
+  const progressive = variant.protocol === "progressive";
+  const separateAudio = typeof variant.audioUrl === "string" && variant.audioUrl.length > 0;
+  if (progressive && separateAudio) {
+    await refuseUnseekable(variant.audioUrl as string, "audio", request, deps);
+  }
+  const opensVideo = !(audioOnly && separateAudio);
+  let probedIndex = -1;
+
   for (;;) {
     const url = candidates[index] as string;
     try {
+      if (progressive && opensVideo && probedIndex !== index) {
+        probedIndex = index;
+        // oxlint-disable-next-line no-await-in-loop
+        await refuseUnseekable(url, "video", request, deps);
+      }
       // oxlint-disable-next-line no-await-in-loop
       const started = await attempt(request, deps, {
         url,
@@ -436,7 +485,10 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
       const appError = AppError.from(error);
       if (appError.code === "JOB_CANCELED" || request.signal?.aborted === true) throw appError;
 
-      if (subtitles.length > 0 && appError.code !== "SIZE_LIMIT_EXCEEDED") {
+      // A refused origin is the probe's verdict, not ffmpeg's: no subtitle
+      // track caused it, and a retry without them would skip the probe.
+      const unseekable = appError.code === "SOURCE_NOT_SEEKABLE";
+      if (subtitles.length > 0 && appError.code !== "SIZE_LIMIT_EXCEEDED" && !unseekable) {
         logger.warn("the stream would not open with subtitles attached; retrying without them", {
           jobId,
           code: appError.code,
@@ -447,7 +499,10 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
       }
 
       const another = index + 1 < candidates.length;
-      if (!another || !isHostFailure(appError)) throw appError;
+      // `Range` is the host's behaviour, not the file's, so a mirror may well
+      // honour it (dl-102). Kept out of `isHostFailure`, which reads ffmpeg's
+      // failures; this one is decided before ffmpeg starts.
+      if (!another || !(isHostFailure(appError) || unseekable)) throw appError;
       logger.warn("the host would not serve this rendition; trying the next mirror", {
         jobId,
         variantId: variant.id,
@@ -459,6 +514,44 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
       index += 1;
     }
   }
+}
+
+/**
+ * Throws `SOURCE_NOT_SEEKABLE` when `url`'s origin ignores `Range` and the
+ * file's index is at the end (dl-102); returns for every other verdict,
+ * unknown included, so that ffmpeg reports what it always has. `url` is the
+ * origin's — the candidate itself, never a URL ffmpeg is handed in its place.
+ */
+async function refuseUnseekable(
+  url: string,
+  input: "video" | "audio",
+  request: StreamRequest,
+  deps: StreamDeps,
+): Promise<void> {
+  const { config, logger } = deps;
+  let verdict: SeekVerdict;
+  try {
+    verdict = await probeSeek(url, {
+      requestContext: request.requestContext,
+      proxyUrl: config.proxyUrl,
+      tlsVerify: config.tlsVerify,
+      tlsCaFile: config.tlsCaFile,
+      signal: request.signal,
+    });
+  } catch (error: unknown) {
+    if (error instanceof SeekProbeCanceled) throw new AppError("JOB_CANCELED");
+    throw error;
+  }
+  logger.debug("origin seek probe", {
+    jobId: request.jobId,
+    input,
+    url: redactUrl(url),
+    ...verdict,
+  });
+  if (verdict.kind !== "unseekable") return;
+  throw new AppError("SOURCE_NOT_SEEKABLE", undefined, {
+    details: { jobId: request.jobId, variantId: request.variant.id, input, url: redactUrl(url) },
+  });
 }
 
 /**
