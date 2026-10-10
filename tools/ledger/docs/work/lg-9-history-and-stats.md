@@ -118,6 +118,63 @@ append-only records, so this ticket computes and draws. It stores nothing new.
 - Checked against the synthetic history the branch's tests do not use: the payment changes, the odd cent, every own-money point against `mortgageAsOf`, the contributions against `bufferAsOf`, a ratio change inside 2025, settlements against `/api/periods`, and 165 rows. The 150 joint rows beyond `listRows`' default of 100 are all counted. The only figure that failed is the fixed-items one above.
 - NFR: security ✓ (8 routes limited, the range refused as `BAD_REQUEST` from core) · performance — above · reliability ✓ (one read transaction per series, nothing written) · maintainability — above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-10 · `043d5df8..b388d30d`, the round being `3d649edc` (`15adb4f7` is `main`'s #414, brought in by the merge `b388d30d`, and is not the round) · Opus 5.5, depth full
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each series has a unit test on a synthetic history, including a payment change and a ratio change | `books/test/stats.test.ts`, unchanged in meaning, plus "a range that drops an earlier item keeps its line, of zeros, so the later ones keep their place" ✓                                                                                                                                                                                                      |
+| 2. The stats screen renders each chart from fixture data. Web tests prove it                         | `web/test/stats.test.tsx` › "draws every chart from its series…" now also reads the "Put into the buffer" readout (`2026-02-10`, `1000.00 $`, `300.00 $`). All eleven charts ✓                                                                                                                                                                                  |
+| 3. Gates green                                                                                       | **unproven (gate)**. On `b388d30d`, `test (ubuntu-latest)` and `test (windows-latest, informational)` were still pending when read. The other seven checks are SUCCESS, including `CodeQL`, which reads "No new alerts in code changed by this pull request". Locally, `npm run check` exits 0 and `npm test -- --project ledger` passes 802 of 802 in 46 files |
+| Build 1, the receipt split (lg-8, lg-10)                                                             | **unproven (scope)**: removed by the dispatch; it arrives with lg-10                                                                                                                                                                                                                                                                                            |
+
+**Gate 1's findings**
+
+- **high, a fixed item's colour across ranges · fixed.**
+  - The gate-1 `history.mts`, re-run on this head: `fixed items from 2025-04-01: ["Gym","Internet"]` and `ok   fixed items: Internet keeps its place when the range drops Gym`.
+  - Chromium at 360px: Internet's bars are `var(--series-2)` from 2025-04-01, as they are for "All of it".
+  - Restoring `books/src/stats.ts` and `web/src/stats/Cards.tsx` from `043d5df8` fails both new tests, 2 of 44 across the two files.
+- **med, "Put into the buffer" never drawn · fixed.** The fixture has a point and the test reads the card's readout. The empty state has its own test.
+- **med, the phone layout unguarded · not fixed as a layout guard.** Recorded, and no `Done when` line depends on it.
+  - `web/test/stats-layout.test.ts` holds the declarations as written. It reads the first rule whose selector is exactly `.chart-card` or `.chart-box`, so it cannot see a later or more specific rule that undoes them.
+  - Reproduction: append `.card > .chart-box { min-width: auto; }` and `.card.chart-card { min-width: auto; grid-template-columns: none; }` to `web/src/styles.css`. `npx vitest run tools/ledger/web/test/stats-layout.test.ts` still passes 3 of 3. After `npm run build -w @ledger/web`, `phone.mts` at 360px measures `"docScroll": 419`, cards ending at 419 and SVGs 369 wide: the page scrolls sideways.
+  - So the test fails when a declaration is deleted, which the Log says was checked and I did not re-run. It does not fail when a chart is drawn wider than its card.
+  - The test's header and the Log both say this, accurately. A layout guard remains the ledger's first e2e spec.
+- **low, salary colours by the range's people · fixed in code, not held by a test.**
+  - Mutating `SalaryBody` back to colour over only the people with a salary in range leaves `web/test/stats.test.tsx` at 15 of 15. The fixture has both people in every year.
+  - The API test does assert the `people` list.
+  - The Log's "and the web fixture's colours" claims a guard that does not exist (new low below).
+- **low, the `spendingByPeriod` comment · fixed.** It now says a late line sits under its own date's period while the settlement counted it at the next close.
+- **low, `minDropCents` copy · fixed.** `api/test/stats.test.ts` › "a drop size of %s is BAD_REQUEST, and says it is the size" covers `0`, `abc` and `1.5`. The day message on the same route is kept by "a bad day on the buffer's route still says it is the day".
+- **low, the register comment · fixed.**
+  - `// codeql[js/missing-rate-limiting]` is now the line directly above `app.get`.
+  - The reasoning no longer asserts that the query ignores the hook, and says the comment may be excusing nothing.
+  - On this head `printRoutes` was not re-run, but the route body is unchanged apart from the buffer's error branch. `route-limits.test.ts` passes inside the 802.
+- **low, the Log stale on CodeQL · fixed.** The round-1 entry records all five owner answers, each with its options and the chosen one: the CodeQL excusal, lg-15's F9 filed as lg-18, a large drop at 500.00 $ per row, texture and end-labels left unbuilt, and a one-off payment marked twice.
+- **low, 8 reads per range change · not fixed, reason recorded** in the Log. It stays recorded.
+- **open decision, a large drop · answered by the owner**: 500.00 $ per row, overridable. It is recorded in the Log.
+
+**New in this round**
+
+- **med** · no `Done when` line of lg-9 depends on it · **lg-18's reproduction misreads its own grep at the time of filing.**
+  - The grep prints `Inbox.tsx:134`, which is `setFiledSpending` on an `AutoFiledRow`. `web/src/inbox/AutoFiled.tsx` renders `RowSpending` for every row filed automatically and not yet reviewed (`autoFiled` in `api/src/classifications.ts`, `WHERE c.source = 'auto'`).
+  - So this sentence is false against the code: "the other writers of an override (`Inbox.tsx`) are on rows still in the inbox. Every row with a category, filed or not, is read by nothing on the web".
+  - It was true "on `main` as of lg-15" (`git cat-file -e d55a1f42:tools/ledger/web/src/inbox/AutoFiled.tsx` reports it absent). lg-17 added the screen, and lg-17 is in lg-9's base `7709411e`.
+  - The gap that remains is rows filed by a rule or by hand, and auto-filed rows once reviewed.
+  - Fix: reword the reproduction's two sentences to name that population, and let lg-18's Build say what happens to the auto-filed screen's existing editor.
+- **low** · The register comment says "Measured 2026-10-10 on lg-9's first round, base 15adb4f7". `15adb4f7` is not an ancestor of the round's commit: `git merge-base --is-ancestor 15adb4f7 3d649edc` fails, and it entered with the later merge. The round's base is `043d5df8`.
+- **low** · The Log's salary-colour entry cites "the web fixture's colours" as a test. As above, no web test fails when the colours are scoped to the range again.
+- **lg-18 as filed:**
+  - The frontmatter parses: `npm run status -- --show lg-18` prints the fields and "blocked by lg-9 (ready)", and `npm run status -- --json` exits 0.
+  - The id is free: not on `origin/main`, and `gh pr list --search lg-18` returns `[]`.
+  - `depends_on: [lg-9, lg-15]` blocks it for the right reason: lg-18 opens from lg-9's spending chart, so it waits for lg-9's merge, and lg-15 is done.
+  - `status: ready` and `difficulty: standard` are honest for a ticket whose Build leaves three choices to the owner.
+  - The roadmap row is added. Its `web/src/api/spending.ts:79` citation resolves to `fetchUncategorisedRows` on this head.
+- **Contract:** `people: string[]` is a required field on `SalariesStatsResponse`. That type is new in lg-9 and unmerged, and its only consumers are lg-9's own: `api/src/stats.ts`, `web/src/api/stats.ts`, `Cards.tsx`, and the fixtures in `api/test/stats.test.ts`, `web/test/stats.test.tsx` and `web/test/app.test.tsx`, all updated. `SalaryYear` is untouched, and no other ledger package or test names the type.
+- **findings** · gate 1's 9 findings and 1 open decision graded: 6 fixed, 1 fixed in code but not held by a test, 1 med not fixed as a layout guard (recorded), 1 low not fixed with its reason recorded, and the decision answered. 3 new: 1 med, 2 low. None dropped. **None is a high.**
+- NFR: security ✓ · performance — the recorded low · reliability ✓ · maintainability — the lows above.
+
 ## Log
 
 - 2026-10-10 — Built, on `lg-9-history-and-stats-charts` from `7709411e`. Gate
