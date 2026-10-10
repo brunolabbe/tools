@@ -1758,3 +1758,282 @@ describe("dl-102: an origin that ignores Range", () => {
     }
   }, 60_000);
 });
+
+/**
+ * How dl-103's origin answers a request: by itself, returning true, or false to
+ * serve the whole file with a `200`. `count` is this test's request count, from 1.
+ */
+type BlindAnswer = (
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  count: number,
+  body: Buffer,
+) => boolean;
+
+/** The code that stopped it, before the first byte or after; never a resolved `done`. */
+function stoppedWith(outcome: Outcome): string | number {
+  return "refused" in outcome ? outcome.refused : outcome.done;
+}
+
+/**
+ * dl-103. dl-102's probe lets ffmpeg run when it gets no answer, so that
+ * ffmpeg's own failures keep their codes; and on an origin that ignores
+ * `Range`, eight of the ways a probe goes unanswered still ended in a `done`
+ * that resolved with a file of which no frame decodes. Rows 3 and 13 of
+ * dl-102's gate 1 were `DOWNLOAD_FAILED` before the probe existed: the one
+ * fault the origin had was spent on the probe. This is the second line of
+ * defence, read off ffmpeg's own `partial file`.
+ *
+ * Imported here rather than at the top so this block moves no line above it.
+ */
+describe("dl-103: an unanswered seek probe", () => {
+  let generateLargeProgressive: (dir: string) => Promise<void>;
+  let decodedVideoFrames: (file: string) => Promise<{ frames: number }>;
+  /** Byte offset of the tail-`moov` fixture's `moov` box. */
+  let moovAt: number;
+  /**
+   * An origin that ignores `Range`, except where a test's `answer` says
+   * otherwise. Gated like `origin`.
+   */
+  let blind: FixtureServer;
+  let answer: BlindAnswer | null = null;
+  let blindCount = 0;
+
+  beforeAll(async () => {
+    ({ generateLargeProgressive, decodedVideoFrames } = await import("./helpers/media.ts"));
+    const dir = path.join(fixtureRoot, "large-103");
+    await generateLargeProgressive(dir);
+    const tail = await fs.readFile(path.join(dir, "moov-end.mp4"));
+    for (let at = 0; at < tail.length; at += tail.readUInt32BE(at)) {
+      if (tail.toString("latin1", at + 4, at + 8) === "moov") moovAt = at;
+    }
+    blind = await startFixtureServer(async (request, response) => {
+      if (
+        request.headers.referer !== CONTEXT.headers["Referer"] ||
+        request.headers.cookie !== CONTEXT.headers["Cookie"]
+      ) {
+        response.writeHead(403).end("forbidden");
+        return;
+      }
+      const pathname = new URL(request.url ?? "/", "http://x").pathname;
+      const file = path.join(fixtureRoot, ...pathname.split("/").filter((part) => part !== ".."));
+      const body = await fs.readFile(file).catch(() => null);
+      if (body === null) {
+        response.writeHead(404).end();
+        return;
+      }
+      blindCount += 1;
+      if (answer?.(request, response, blindCount, body) === true) return;
+      response.writeHead(200, {
+        "content-type": "video/mp4",
+        "content-length": String(body.length),
+      });
+      response.end(body);
+    });
+  }, 120_000);
+
+  afterEach(() => {
+    answer = null;
+    blindCount = 0;
+  });
+
+  afterAll(async () => {
+    await blind?.close();
+  });
+
+  async function outcomeOf(label: string, variant: MediaVariant): Promise<Outcome> {
+    return engineWith()
+      .stream({ jobId: label, variant, requestContext: CONTEXT })
+      .then(
+        async (media): Promise<Outcome> => {
+          const chunks: Buffer[] = [];
+          media.body.on("data", (chunk: Buffer) => chunks.push(chunk));
+          const done = await media.done.then(
+            (outcome) => outcome.bytes,
+            (error: unknown) => AppError.from(error).code,
+          );
+          const file = path.join(outputDir, `${label}.mp4`);
+          await fs.writeFile(file, Buffer.concat(chunks));
+          const decoded = await decodedVideoFrames(file);
+          return { streamed: Buffer.concat(chunks).length, done, decodedFrames: decoded.frames };
+        },
+        (error: unknown): Outcome => {
+          const appError = AppError.from(error);
+          return {
+            refused: appError.code,
+            retryable: appError.retryable,
+            message: appError.message,
+          };
+        },
+      );
+  }
+
+  const rows: readonly [string, BlindAnswer][] = [
+    [
+      "row 2: a 403 for the probe's bytes=1-1 only",
+      (request, response) => {
+        if (request.headers.range !== "bytes=1-1") return false;
+        response.writeHead(403).end();
+        return true;
+      },
+    ],
+    [
+      "row 3: a 500 on the first request only",
+      (_request, response, count) => {
+        if (count !== 1) return false;
+        response.writeHead(500).end();
+        return true;
+      },
+    ],
+    [
+      "row 5: the first request's connection reset",
+      (request, _response, count) => {
+        if (count !== 1) return false;
+        request.socket.destroy();
+        return true;
+      },
+    ],
+    [
+      "the ninth case: bounded ranges honoured, an open-ended one answered whole",
+      (request, response, _count, body) => {
+        const range = /^bytes=(\d+)-(\d+)$/u.exec(request.headers.range ?? "");
+        if (range === null) return false;
+        const start = Number(range[1]);
+        const end = Math.min(Number(range[2]), body.length - 1);
+        response.writeHead(206, {
+          "content-range": `bytes ${start}-${end}/${body.length}`,
+          "content-length": String(end - start + 1),
+        });
+        response.end(body.subarray(start, end + 1));
+        return true;
+      },
+    ],
+  ];
+
+  for (const [name, fault103] of rows) {
+    test(`${name}, from an origin that ignores Range, is SOURCE_NOT_SEEKABLE`, async () => {
+      answer = fault103;
+      const outcome = await outcomeOf(
+        `dl-103-${name.slice(0, 6).replace(/\W/gu, "")}`,
+        large(`${blind.origin}/large-103/moov-end.mp4`),
+      );
+      // Before the fix: `done` resolved with about 35 KB of which 0 of 100
+      // frames decode.
+      expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("SOURCE_NOT_SEEKABLE");
+      // The fault was reached, so the probe went unanswered and ffmpeg ran.
+      expect(blindCount).toBeGreaterThanOrEqual(2);
+    }, 60_000);
+  }
+
+  test("a refusal from ffmpeg's own words tries the next mirror, as the probe's does", async () => {
+    answer = rows[0]?.[1] ?? null;
+    expectWhole(
+      await outcomeOf(
+        "dl-103-mirror",
+        large(`${blind.origin}/large-103/moov-end.mp4`, {
+          alternateUrls: [`${origin.origin}/large-103/moov-end.mp4`],
+        }),
+      ),
+    );
+    expect(blindCount).toBeGreaterThanOrEqual(2);
+  }, 60_000);
+
+  test("control: a body cut inside the moov and healed on reconnect completes whole", async () => {
+    // The open question C's text left: a heal whose cut falls in the index
+    // itself. Served by `origin`, which honours Range; ffmpeg's read of the
+    // tail starts at the `moov` and stops half-way through it.
+    let cut = false;
+    fault = (pathname, _count, request, response, body) => {
+      if (!pathname.endsWith("/large-103/moov-end.mp4") || cut) return false;
+      if (request.headers.range !== `bytes=${moovAt}-`) return false;
+      cut = true;
+      cutShort(request, response, body, 0.5);
+      return true;
+    };
+    expect(moovAt).toBeGreaterThan(0);
+    expectWhole(
+      await outcomeOf("dl-103-heal-moov", large(`${origin.origin}/large-103/moov-end.mp4`)),
+    );
+    expect(cut).toBe(true);
+  }, 60_000);
+
+  /**
+   * Which side of the first byte `partial file` lands on is the order of two
+   * pipes, not a guarantee, so each branch is pinned with ffmpeg stood in for.
+   * The probe asks `origin`, which honours Range, and lets the stand-in run.
+   *
+   * With `stderrFirst` the stand-in ignores SIGTERM, so the kill takes its 3 s
+   * grace and the first chunk arrives while ffmpeg is still being killed: the
+   * window in which a refusal has been decided and `firstChunk` has not seen
+   * the process exit. Real ffmpeg dies at once and reaches the same refusal
+   * through `firstChunk` rejecting; this is the other way in.
+   */
+  async function standIn103(stderrFirst: boolean): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-103-"));
+    const script = path.join(dir, "ffmpeg");
+    const line = JSON.stringify(
+      "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55b9913a5340] stream 1, offset 0x30: partial file",
+    );
+    const stdout = "process.stdout.write(Buffer.alloc(4096, 1));";
+    const stderr = `process.stderr.write(${line} + "\\n");`;
+    await fs.writeFile(
+      script,
+      [
+        `#!${process.execPath}`,
+        stderrFirst ? 'process.on("SIGTERM", () => undefined);' : "",
+        stderrFirst ? stderr : stdout,
+        "setTimeout(() => {",
+        `  ${stderrFirst ? stdout : stderr}`,
+        "  setTimeout(() => process.exit(0), 5000);",
+        `}, ${stderrFirst ? 100 : 300});`,
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    return script;
+  }
+
+  test.skipIf(process.platform === "win32")(
+    "`partial file` before the first byte refuses the stream, and after it cuts the stream",
+    async () => {
+      const variant = large(`${origin.origin}/large-103/moov-end.mp4`);
+      const before = await engineWith({ ffmpegPath: await standIn103(true) })
+        .stream({ jobId: "dl-103-before", variant, requestContext: CONTEXT })
+        .then(
+          () => null,
+          (error: unknown) => AppError.from(error),
+        );
+      expect(before?.code).toBe("SOURCE_NOT_SEEKABLE");
+      expect(before?.details).toMatchObject({ afterFirstByte: false });
+
+      const media = await engineWith({ ffmpegPath: await standIn103(false) }).stream({
+        jobId: "dl-103-after",
+        variant,
+        requestContext: CONTEXT,
+      });
+      media.body.resume();
+      await expect(media.done).rejects.toMatchObject({
+        code: "SOURCE_NOT_SEEKABLE",
+        details: { afterFirstByte: true },
+      });
+      expect(media.body.destroyed).toBe(true);
+    },
+    30_000,
+  );
+
+  test.skipIf(process.platform === "win32")(
+    "control: the same line from an HLS stream is not read as an unseekable origin",
+    async () => {
+      // A segment's demuxer is ffmpeg's to report: the probe never asked an
+      // HLS origin anything, and its holes have their own codes (dl-53).
+      const media = await engineWith({ ffmpegPath: await standIn103(false) }).stream({
+        jobId: "dl-103-hls",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      media.body.resume();
+      await expect(media.done).resolves.toBeDefined();
+    },
+    30_000,
+  );
+});

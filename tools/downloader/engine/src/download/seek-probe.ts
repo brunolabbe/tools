@@ -34,8 +34,9 @@
  *    mirror), and a probe that refused on them would turn every flaky origin
  *    into a final refusal. Two costs, both measured by dl-102's gate. An
  *    origin that fails the probe and then serves ffmpeg the whole body is not
- *    checked, and still yields a file of which no frame decodes (dl-103 is the
- *    second line of defence). And it is **not quite** ffmpeg running as it did
+ *    checked here, and used to yield a file of which no frame decodes; dl-103
+ *    catches it behind the probe, from ffmpeg's own `partial file` (see
+ *    `PARTIAL_FILE` in `stream.ts`). And it is **not quite** ffmpeg running as it did
  *    before: the probe is now the first request the origin sees, so a fault
  *    that hits only the first request (one `429` or `500`, one refused
  *    `CONNECT`) is spent on the probe. From an origin that honours `Range`

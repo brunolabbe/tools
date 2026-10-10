@@ -45,9 +45,12 @@
  * is spent on the probe. From an origin that honours `Range` that heals; from
  * one that ignores it, it turns what was a `DOWNLOAD_FAILED` into the
  * undecodable file this section is about. That, and every other way a probe
- * can go unanswered while the origin still ignores `Range`, is dl-103's
- * second line of defence. The probe goes through ffmpeg's proxy, with the same
- * `tlsVerify` and `tlsCaFile`, and never around it.
+ * can go unanswered while the origin still ignores `Range`, is caught behind
+ * it by dl-103: ffmpeg says `partial file` when it cannot reach the samples
+ * (`PARTIAL_FILE` below), and that is the same `SOURCE_NOT_SEEKABLE`, before
+ * the first byte when it arrives first and as a cut stream when it does not.
+ * The probe goes through ffmpeg's proxy, with the same `tlsVerify` and
+ * `tlsCaFile`, and never around it.
  *
  * A small tail-`moov` file from such an origin is refused too, though ffmpeg
  * can read one whole without seeking (gate 1 measured 63,749 B decoding and
@@ -195,6 +198,31 @@ export const FRAGMENT_LOST = /Failed to open fragment of playlist/iu;
  */
 export const STREAM_ENDED_EARLY = /Stream ends prematurely/iu;
 export const WILL_RECONNECT = /Will reconnect at/iu;
+
+/**
+ * The mov demuxer's word for a sample it could not seek to (dl-103): what a
+ * tail-`moov` MP4 from an origin that ignores `Range` produces when dl-102's
+ * probe got no answer and ffmpeg ran anyway. The `Stream ends prematurely`
+ * beside it is answered by a reconnect, so `STREAM_ENDED_EARLY` alone let
+ * such a file finish as a clean response that decodes 0 of 100 frames.
+ *
+ * Measured on ffmpeg 6.1.1 and 7.0.2 (dl-103's Log): exactly one line, in each
+ * of the eleven unanswered-probe shapes tried, each time before `stream()`
+ * resolved; and in none of the healing controls, a body cut mid-`mdat` or
+ * inside the `moov` itself and resumed on reconnect. Before the first byte it
+ * is the probe's refusal by other means — the next mirror is tried, and no
+ * subtitle retry — and after it the stream is cut and `done` rejects. Read for
+ * progressive sources only: an HLS or DASH segment is demuxed by ffmpeg in its
+ * own right, and its holes have their codes already.
+ *
+ * **Only while no early end is unanswered.** A body cut and never served again
+ * logs it too, as the last word of a reconnect that failed (`Stream ends
+ * prematurely`, `Will reconnect`, a `404`, a last `Stream ends prematurely`,
+ * then `partial file`): that is a loss in transfer and stays
+ * `DOWNLOAD_FAILED`. From the unseekable origin `partial file` came first,
+ * before any early end, in all 22 runs measured.
+ */
+export const PARTIAL_FILE = /offset 0x[0-9a-f]+: partial file/iu;
 
 /**
  * The connection a line came from: the address in ffmpeg's `[http @ …]` prefix,
@@ -637,6 +665,10 @@ async function attempt(
   // Connections that ended early and have not reconnected since. See
   // `STREAM_ENDED_EARLY`; anything left here when ffmpeg exits is a hole.
   const endedEarly = new Set<string>();
+  // `PARTIAL_FILE`'s refusal, and whether a byte had reached the reader yet.
+  const progressive = request.variant.protocol === "progressive";
+  let unseekable: AppError | null = null;
+  let handedOver = false;
 
   const ffmpeg: FfmpegStream = streamFfmpeg({
     ffmpegPath: config.ffmpegPath,
@@ -676,6 +708,20 @@ async function attempt(
       if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
       if (STREAM_ENDED_EARLY.test(line)) endedEarly.add(connectionOf(line) ?? line);
       else if (WILL_RECONNECT.test(line)) endedEarly.delete(connectionOf(line) ?? line);
+      // With an early end still unanswered, `partial file` is that cut's
+      // consequence and `DOWNLOAD_FAILED`'s to report, not the origin's.
+      if (progressive && unseekable === null && endedEarly.size === 0 && PARTIAL_FILE.test(line)) {
+        unseekable = new AppError("SOURCE_NOT_SEEKABLE", undefined, {
+          details: {
+            jobId: request.jobId,
+            variantId: request.variant.id,
+            url: redactUrl(context.url),
+            afterFirstByte: handedOver,
+            stderr: stderrTail,
+          },
+        });
+        ffmpeg.terminate(unseekable);
+      }
       if (losesSourceData(line)) {
         // A segment refused on its certificate is skipped the same way, and
         // says so first: that is a certificate failure, which is not retried
@@ -704,6 +750,15 @@ async function attempt(
       details: { jobId: request.jobId },
     });
   }
+  if (unseekable !== null) {
+    // Refused while the first chunk was on its way: nothing has reached the
+    // reader, so this is still a refusal before the first byte. Drained so
+    // the killed process can close.
+    ffmpeg.stdout.resume();
+    await ffmpeg.completion.catch(() => undefined);
+    throw unseekable;
+  }
+  handedOver = true;
 
   const limit = config.maxFileSizeBytes;
   let ended = false;
