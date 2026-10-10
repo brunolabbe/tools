@@ -7,6 +7,7 @@ status: ready
 milestone: P3
 depends_on: [lg-4, lg-6]
 difficulty: standard
+awaiting: Done when 6 — after the push to `main` that runs `security.yml`'s dismissal step, both `js/missing-rate-limiting` alerts on the `GET` handlers in `tools/ledger/api/src/routes/spending-categories.ts` read dismissed, "Suppressed via SARIF"
 ---
 
 # lg-15 — Give bank rows and period lines a spending category from one shared list
