@@ -152,7 +152,11 @@ so the two can never be read for each other.
        two rules level at the top that differ only in it are `ambiguous` and the
        row waits. Pinned by `books/test/classify.test.ts`, "classify, with
        spending categories (lg-15)": changing the one line in `sameAnswer` to
-       ignore it fails 2 of 51 (the first and third tests), and nothing else.
+       ignore it fails 3 of 663 in the `ledger` project (the first and third
+       tests there, and `api/test/spending-categories.test.ts` › "two rules
+       level at the top differing only in their spending category ask, as one
+       answer"). The first draft of this entry said "2 of 51 … and nothing
+       else", which measured only the `books` file.
        The other choice classifies silently by the newest `id`. Cost of yes: a
        row asks where two equally specific rules disagree on the category only.
     2. _Does a filed row follow its rule's later edits?_ Built: **no**, a
@@ -170,3 +174,46 @@ so the two can never be read for each other.
        no third state; a separate "explicitly none" record is the alternative.
   - **Not run.** No browser or end-to-end run: `e2e/README.md` says there is
     still no spec, and the screens are covered by the web unit tests only.
+- 2026-10-10 — Gate 1 round: the owner's answers, and what was fixed.
+  - **Owner decisions, 2026-10-10.**
+    1. A rule's spending category is part of "the same answer": **yes, as
+       built.** Options were yes (rules that differ only in it ask) or no
+       (newest `id` wins silently). The builder recommended yes.
+    2. A filed row follows its rule's later edits: **no, as built.** Options
+       were the cited version (a row keeps the rule version it was filed by) or
+       the rule's chain to its latest version. The builder leaned to the chain;
+       the orchestrator recommended the cited version, which was also the
+       brief's default. The owner chose the cited version.
+    3. An override can mean "explicitly none": **no, as built.** Options were
+       `null` withdraws (built) or a separate "explicitly none" record. The
+       builder recommended `null` withdraws.
+    4. CodeQL `js/missing-rate-limiting` on the two new `GET` handlers (the
+       list and the map): **excused under `docs/adr/005`.** Options were that,
+       or moving each `GET` to a path no `POST` shares (a contract change that
+       gives up the precedent of salaries, recurring and people). The gate
+       recommended the excusal. Each route now carries the
+       `// codeql[js/missing-rate-limiting]` comment naming its guarding test,
+       and all five such comments were re-measured together: taking
+       `{ onRequest: read }` off all five fails exactly 5 of 40 in
+       `route-limits.test.ts`, one each, by the name each comment cites.
+    5. Gate F4: left as recorded, including the form wording. F5, F8, F9 and
+       F10 stay in the gate record and the code is unchanged for them.
+  - **F2.** `route-limits.test.ts` walks one verb per route, so the `POST` of a
+    path that also answers a `GET` was never requested. Reproduced as the gate
+    described. Added `POST %s refuses the second request in a minute too` for
+    `rules` (an earlier gap of the same shape), `spendingCategories` and
+    `spendingCategoryMap`. Mutation: taking `{ onRequest: write }` off both new
+    `POST`s fails 2 of 348 in `tools/ledger/api` (both new tests), where it was
+    343 of 343 before. A walk over `printRoutes` was the other option; the
+    per-verb test was chosen because it is the shape the file already uses.
+  - **F3.** Added `a rule that matches a row filed before the rule existed`
+    (two tests, `api/test/spending-categories.test.ts`): the inbox and
+    `GET /api/rows` give the unfiled row its matching rule's category, the
+    filter does not list it, and a rule that is only the nearest suggestion
+    gives neither a category. Mutations, each alone, over `tools/ledger`:
+    `inbox()` passing `null` for the rule fails 1 of 668; `listRows` setting
+    `rule = null` fails 1 of 668 (the first new test both times), where each
+    left 663 of 663 before.
+  - **F6, F7.** lg-17's item 8 now names `listRows` as a second reader of
+    `current_classifications`; the sentence above about `sameAnswer` now gives
+    the 3 of 663 it measured.

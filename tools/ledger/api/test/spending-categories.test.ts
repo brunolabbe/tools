@@ -679,3 +679,40 @@ describe("migration 6, on a database the earlier release left", () => {
     db.close();
   });
 });
+
+// A rule added after the paste matches rows that are already stored and unfiled.
+// Two readers answer such a row, the inbox and the rows list, and they must agree.
+describe("a rule that matches a row filed before the rule existed", () => {
+  test("gives the unfiled row its category in the inbox and in the rows list alike", async () => {
+    const target = await start();
+    const pharmacy = await idOf(target, "Pharmacy");
+    await pasteStatement(target);
+    const added = await addRule(target, ruleFor(pharmacy));
+
+    const inboxRow = (await readInbox(target)).find((row) => row.description === GROCERIES);
+    const listed = await rowOf(target, GROCERIES, GROCERIES_AMOUNT);
+
+    expect(inboxRow).toMatchObject({ reason: "matches", suggestion: { id: added.id } });
+    expect(inboxRow?.spendingCategory).toEqual({ id: pharmacy, source: "rule" });
+    expect(listed.classification).toBeNull();
+    expect(listed.spendingCategory).toEqual({ id: pharmacy, source: "rule" });
+    // So the filter does not list it as uncategorised.
+    const none = await rows(target, "?spendingCategory=none");
+    expect(none.rows.map((row) => row.id)).not.toContain(listed.id);
+  });
+
+  test("a rule that is only the nearest suggestion says nothing about the category", async () => {
+    const target = await start();
+    const pharmacy = await idOf(target, "Pharmacy");
+    await pasteStatement(target);
+    // Matches the description, not the amount: a suggestion, not the classifying rule.
+    await addRule(target, ruleFor(pharmacy, { amountCents: 1 }));
+
+    const inboxRow = (await readInbox(target)).find((row) => row.description === GROCERIES);
+    const listed = await rowOf(target, GROCERIES, GROCERIES_AMOUNT);
+
+    expect(inboxRow).toMatchObject({ reason: "differs" });
+    expect(inboxRow?.spendingCategory).toBeNull();
+    expect(listed.spendingCategory).toBeNull();
+  });
+});

@@ -222,4 +222,19 @@ describe("the routes that answer two verbs", () => {
 
     expect(second.statusCode).toBe(429);
   });
+
+  // lg-15: the table walks one verb per route, so the other verb of a path two
+  // verbs share was never requested. These are the writes whose `GET` it walks.
+  test.each([
+    ["rules", ROUTES.rules],
+    ["spendingCategories", ROUTES.spendingCategories],
+    ["spendingCategoryMap", ROUTES.spendingCategoryMap],
+  ])("POST %s refuses the second request in a minute too", async (_name, url) => {
+    const target = await startTight();
+
+    await target.server.inject({ method: "POST", url, payload: {} });
+    const second = await target.server.inject({ method: "POST", url, payload: {} });
+
+    expect(second.statusCode).toBe(429);
+  });
 });

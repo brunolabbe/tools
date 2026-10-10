@@ -84,7 +84,13 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
      classification with no `rule_id` simply has no rule's category, so an
      automatic filing needs nothing from it. `InboxRow` gained
      `spendingCategory`; `inbox()` builds it from the rule `classify` returned.
-     `sameAnswer` in `books/src/classify.ts` now also compares a
+     **`listRows` in `api/src/rows.ts` is a second direct reader of
+     `current_classifications`** (`GET /api/rows`, and the answer to a row's
+     spending-category override), beside `answersByDescription`. Under the
+     sibling-record option it would answer an automatically filed row as
+     `classification: null` unless it reads what the standing-classification
+     read reads, so give it the same treatment and a test; migration 7 is free
+     for the table either way. `sameAnswer` in `books/src/classify.ts` now also compares a
      rule's `spendingCategoryId`; it is about rules and `fromHistory` does not
      call it, and neither `HistoryAnswer` nor `answersByDescription` was
      touched.

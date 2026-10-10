@@ -60,7 +60,7 @@ export function registerRuleRoutes(app: FastifyInstance, context: AppContext): v
   // route as no limit at all; the route is limited per person like every other
   // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
   // `api/src/routes/rules.ts`. Guarded by `api/test/route-limits.test.ts`:
-  // taking `{ onRequest: read }` off this route fails 1 of its 37 tests, "people
+  // taking `{ onRequest: read }` off this route fails 1 of its 40 tests, "people
   // refuses the second request in a minute, as RATE_LIMITED" — that test, not
   // this comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]

@@ -69,6 +69,16 @@ function parsed<T>(schema: Schema<T>, input: unknown, what: string): T {
 export function registerSpendingCategoryRoutes(app: FastifyInstance, context: AppContext): void {
   const { read, write } = rateLimitsFor(context);
 
+  // CodeQL's `js/missing-rate-limiting` models express-rate-limit and its kin,
+  // not `@webtools/core`'s `RateLimiter`, so it reads the `read` hook on this
+  // route as no limit at all; the route is limited per person like every other
+  // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
+  // `api/src/routes/spending-categories.ts`. Guarded by
+  // `api/test/route-limits.test.ts`: taking `{ onRequest: read }` off this route
+  // fails 1 of its 40 tests, "spendingCategories refuses the second request in a
+  // minute, as RATE_LIMITED" — that test, not this comment, is what holds it.
+  // Measured 2026-10-10 on lg-15, base ad51f0b8.
+  // codeql[js/missing-rate-limiting]
   app.get(ROUTES.spendingCategories, { onRequest: read }, async () => {
     const body: SpendingCategoriesResponse = { categories: spendingCategories(context.db) };
     return body;
@@ -101,6 +111,11 @@ export function registerSpendingCategoryRoutes(app: FastifyInstance, context: Ap
     return category;
   });
 
+  // The same excusal and the same reading as the route above: the limit is on
+  // the route, and a test removes it. Taking `{ onRequest: read }` off this one
+  // fails 1 of the 40 tests, "spendingCategoryMap refuses the second request in a
+  // minute, as RATE_LIMITED". Measured 2026-10-10 on lg-15, base ad51f0b8.
+  // codeql[js/missing-rate-limiting]
   app.get(ROUTES.spendingCategoryMap, { onRequest: read }, async () => {
     const body: SpendingCategoryMapResponse = { entries: spendingCategoryMap(context.db) };
     return body;
