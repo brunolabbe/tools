@@ -3,6 +3,7 @@ name: builder-mechanical
 description: Builds one ticket rated `mechanical`, or one maintenance dispatch, to a pushed branch in its own worktree. Dispatched only by the orchestrate-tickets skill; never choose it for other work.
 tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch, TodoWrite
 model: claude-haiku-5-5
+effort: high
 isolation: worktree
 experimental:
   cacheTtl: 1h
