@@ -181,4 +181,10 @@ scripts/test/status.test.ts`, then restored) and the exact step command:
   On this branch the same command is green (135 of 135, see the report on the
   pull request). `scripts/preflight.mjs` derives `ci.yml`'s `check`-job
   commands and spawns any that are not `npm ci` or `npm run check`, so it
-  runs the new step too (its `ciCommands` section lists it).
+  runs the new step too (its `ciCommands` section lists `ok    npx vitest run
+scripts/test/status.test.ts`). **The brief did not say** that two tests in
+  `scripts/test/preflight.test.ts` pin the real `ci.yml` check-job command list
+  (`extractCheckJobCommands reads this repo's own ci.yml check job, in order` and
+  `deriveExtraCiCommands runs only what no other check already covers`); the
+  first preflight of this round failed on both, and each gained one expected
+  line.
