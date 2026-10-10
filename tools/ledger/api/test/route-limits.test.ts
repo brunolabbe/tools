@@ -35,6 +35,7 @@ const VERBS = {
   rule: ["POST", ROUTES.rule.replace(":id", "1")],
   ruleRetire: ["POST", ROUTES.ruleRetire.replace(":id", "1")],
   inbox: ["GET", ROUTES.inbox],
+  autoFiled: ["GET", ROUTES.autoFiled],
   classifications: ["POST", ROUTES.classifications],
   people: ["GET", ROUTES.people],
   buckets: ["GET", ROUTES.buckets],

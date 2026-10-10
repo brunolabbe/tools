@@ -155,3 +155,41 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
     100 000 rows ran past two minutes and were killed. Referencing the new
     table's own name costs nothing, and `ALTER TABLE … RENAME` rewrites it to
     `REFERENCES "classifications" (id)`, measured on the renamed table's SQL.
+- 2026-10-10 — Built, on lg-15's branch. `autoFile` in `books/src/history.ts`
+  shares `fromHistory`'s folding through one `latestFirst`; `HistoryAnswer`
+  gained `amountCents`, and `answersByDescription` gained the column and kept
+  its `source IN ('manual', 'accepted')`. Migration 7 is the rebuild above:
+  `source` gains `auto`, `classified_by` is `NULL` exactly on `auto`, and
+  `rests_on_1..3` are set, distinct, exactly on `auto`. `classifyAdded` files
+  on history only where `classify` says `no-rule`. `GET /api/inbox/auto-filed`
+  is the review list; confirming or changing is the ordinary
+  `POST /api/classifications`, storing `manual`. The inbox shows a "Review N
+  filed automatically" button, only when there are some, and its count leaves
+  them out because a record exists for them.
+  - Every `Done when` has a test: `books/test/history.test.ts` (`autoFile
+(lg-17)`) and `api/test/auto-file.test.ts` for 1 to 5, `web/test/inbox.test.tsx`
+    for 6. Each API test was made to fail first by breaking what it guards:
+    counting `auto` in `answersByDescription` failed "two automatic filings and
+    one answer do not make three"; letting `differs` and `ambiguous` reach
+    `autoFile` failed both "whatever its history says" tests; leaving `auto`
+    rows in `inbox()`'s query failed "the inbox leaves it out"; dropping `auto`
+    from `listRows`'s join, or reading an `auto` row's spending category as an
+    unfiled row's, failed "the stored rows answer it as filed automatically";
+    `<` for `≤` failed the 20 % line test.
+  - _What the brief had wrong, or left out._ `classifyAdded` returned before
+    reading a row when no rule existed, which would have kept history from ever
+    filing in a household with no rules; it now always reads. Done when 3's "two
+    automatic filings and one answer" cannot be reached by tapping — once three
+    rows of a description carry a person's answer they always will — so its API
+    test seeds the two `auto` records as a paste stores them. `inboxCount` in
+    `classifications.ts` has no caller in `api/src`; the new test reads it, and
+    it was left in place. No float failure exists at the 20 % line for these
+    forms: `(a−b)/b ≤ 0.2`, `a/b ≤ 1.2`, `a/b − 1 ≤ 0.2` and `a−b ≤ b × 0.2`
+    all judged `a = b + b/5` inside the line, as the integer rule does, for every
+    `b` a multiple of 5 cents up to 2 000 000 cents (one `node -e` loop; only
+    that side of the line was measured), so the integer rule stays as the brief asks and no test claims
+    otherwise.
+  - _Fold-in._ Nothing already specified became free. A paste report saying
+    how many rows history filed would be new, owner-visible behaviour, so it is
+    in the build report's open decisions rather than here.
+  - Item 7: the limits were workable as written; §3's amendment is unchanged.

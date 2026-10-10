@@ -10,20 +10,27 @@
  *   rules in force, in the same transaction that stored it. A row the most
  *   specific matching rules agree on is classified by them; every other row has
  *   no record, and *no record is what the inbox is*.
+ * - **On paste, history files** a row no rule's pattern matches, when the
+ *   latest three person-given answers for its description agree and its amount
+ *   fits theirs (`autoFile`, lg-17). That record is `auto`, names the three it
+ *   rests on and no person, and leaves the row out of the inbox and in the
+ *   review list (`autoFiled`) until a person's answer supersedes it.
  * - **A person** accepts a suggested rule or answers with a person and a bucket.
  *   Either is a new record, for any row, classified or not.
  *
  * Nothing here reclassifies a row on its own after the paste: a rule added later
- * is offered as a suggestion on the rows it now matches, and a person takes it.
+ * is offered as a suggestion on the rows it now matches, and a person takes it,
+ * and an answer given later files no row that is already waiting.
  */
 
-import { classify, fromHistory, normalizeDescription } from "@ledger/books";
-import type { HistoryAnswer } from "@ledger/books";
+import { autoFile, classify, fromHistory, normalizeDescription } from "@ledger/books";
+import type { AutoFiling, HistoryAnswer } from "@ledger/books";
 import { AppError } from "@ledger/contract";
 import type {
+  AutoFiledRow,
+  AutoFilingGround,
   Bucket,
   ClassificationRecord,
-  ClassificationSource,
   ClassifyRequest,
   InboxRow,
 } from "@ledger/contract";
@@ -47,7 +54,8 @@ interface RecordColumns {
   bucket: Bucket;
   person_id: string | null;
   rule_id: number | null;
-  source: ClassificationSource;
+  /** Only ever a person's: `append` is the only writer this type reads back. */
+  source: ClassificationRecord["source"];
   classified_at: string;
   classified_by: string;
 }
@@ -65,12 +73,15 @@ function toRecord(columns: RecordColumns): ClassificationRecord {
   };
 }
 
-/** Appends one record. The only write to `classifications` in this tool. */
+/**
+ * Appends one record by a person or by a rule. With `appendAutomatic`, the only
+ * writes to `classifications` in this tool.
+ */
 function append(
   context: Pick<RuleContext, "db" | "personId" | "now">,
   rowId: number,
   answer: { bucket: Bucket; personId: string | null; ruleId: number | null },
-  source: ClassificationSource,
+  source: ClassificationRecord["source"],
 ): ClassificationRecord {
   const result = context.db
     .prepare(
@@ -93,6 +104,26 @@ function append(
   );
 }
 
+/**
+ * Appends history's own filing (lg-17): no rule, no person as its author, and the
+ * three answers it rests on. The database refuses an `auto` record without all
+ * three, or with a person named as having made it.
+ */
+function appendAutomatic(
+  context: Pick<RuleContext, "db" | "now">,
+  rowId: number,
+  filing: Extract<AutoFiling<Bucket>, { kind: "filed" }>,
+): void {
+  const [first, second, third] = filing.restsOn;
+  context.db
+    .prepare(
+      `INSERT INTO classifications
+         (row_id, bucket, person_id, rule_id, source, classified_at, classified_by, rests_on_1, rests_on_2, rests_on_3)
+       VALUES (?, ?, ?, NULL, 'auto', ?, NULL, ?, ?, ?)`,
+    )
+    .run(rowId, filing.bucket, filing.personId, context.now().toISOString(), first, second, third);
+}
+
 /** The highest stored row id, or 0 for an empty history. Taken before a paste stores. */
 export function lastRowId(db: Database): number {
   return (
@@ -102,15 +133,22 @@ export function lastRowId(db: Database): number {
 
 /**
  * Classifies the rows stored after `afterRowId` — a paste's own — by the rules in
- * force, taking a rule only on an exact match. Runs inside the paste's
- * transaction. Returns how many rows took a rule; the rest are the inbox.
+ * force, taking a rule only on an exact match, and files by history the rows no
+ * rule's pattern matches, within `autoFile`'s limits. Runs inside the paste's
+ * transaction. Returns how many rows were filed either way; the rest are the
+ * inbox.
+ *
+ * A row a rule matches but does not take (`differs`, `ambiguous`) is a question
+ * a rule asked, and history does not answer it. History is read once, before
+ * any of the paste's rows is filed, and never holds an `auto` record, so a paste
+ * cannot file a row on another it has just filed.
  */
 export function classifyAdded(
   context: Pick<RuleContext, "db" | "personId" | "now">,
   afterRowId: number,
 ): number {
   const rules = currentRules(context.db);
-  if (rules.length === 0) return 0;
+  const answers = answersByDescription(context.db);
   const rows = context.db
     .prepare(
       "SELECT id, category, description, amount_cents FROM statement_rows WHERE id > ? ORDER BY seq",
@@ -122,10 +160,19 @@ export function classifyAdded(
       { category: row.category, description: row.description, amountCents: row.amount_cents },
       rules,
     );
-    if (match.kind !== "classified") continue;
-    const { bucket, personId, id } = match.rule;
-    append(context, row.id, { bucket, personId, ruleId: id }, "rule");
-    classified += 1;
+    if (match.kind === "classified") {
+      const { bucket, personId, id } = match.rule;
+      append(context, row.id, { bucket, personId, ruleId: id }, "rule");
+      classified += 1;
+    } else if (match.reason === "no-rule") {
+      const filing = autoFile(
+        { category: row.category, description: row.description, amountCents: row.amount_cents },
+        answers.get(normalizeDescription(row.description)) ?? [],
+      );
+      if (filing.kind !== "filed") continue;
+      appendAutomatic(context, row.id, filing);
+      classified += 1;
+    }
   }
   return classified;
 }
@@ -133,19 +180,27 @@ export function classifyAdded(
 /**
  * What people have answered, by description. Only the classification that stands
  * for each row, and only a person's — `manual` or `accepted`, never `rule`: a
- * rule's own answer is already the rule's suggestion. Grouped by the folded
- * description so the inbox looks each one up rather than folding them all again
- * for every waiting row.
+ * rule's own answer is already the rule's suggestion, and never `auto`
+ * (lg-17): history's own filing is not an answer, so it cannot reinforce
+ * itself, and a row it filed counts again only once a person has answered it.
+ * Grouped by the folded description so the inbox looks each one up rather than
+ * folding them all again for every waiting row.
  */
 function answersByDescription(db: Database): Map<string, HistoryAnswer<Bucket>[]> {
   const answered = db
     .prepare(
-      `SELECT c.id, r.description, c.bucket, c.person_id
+      `SELECT c.id, r.description, r.amount_cents, c.bucket, c.person_id
        FROM current_classifications c
        JOIN statement_rows r ON r.id = c.row_id
        WHERE c.source IN ('manual', 'accepted')`,
     )
-    .all() as { id: number; description: string; bucket: Bucket; person_id: string | null }[];
+    .all() as {
+    id: number;
+    description: string;
+    amount_cents: number;
+    bucket: Bucket;
+    person_id: string | null;
+  }[];
   const grouped = new Map<string, HistoryAnswer<Bucket>[]>();
   for (const found of answered) {
     const key = normalizeDescription(found.description);
@@ -154,6 +209,7 @@ function answersByDescription(db: Database): Map<string, HistoryAnswer<Bucket>[]
       description: found.description,
       bucket: found.bucket,
       personId: found.person_id,
+      amountCents: found.amount_cents,
     };
     const list = grouped.get(key);
     if (list === undefined) grouped.set(key, [answer]);
@@ -227,6 +283,88 @@ export function inboxCount(db: Database): number {
       )
       .get() as { n: number }
   ).n;
+}
+
+interface AutoFiledColumns extends RowColumns {
+  classification_id: number;
+  bucket: Bucket;
+  person_id: string | null;
+  classified_at: string;
+  rests_on_1: number;
+  rests_on_2: number;
+  rests_on_3: number;
+}
+
+interface GroundColumns {
+  id: number;
+  row_id: number;
+  date: string;
+  description: string;
+  amount_cents: number;
+  bucket: Bucket;
+  person_id: string | null;
+  source: AutoFilingGround["source"];
+  classified_at: string;
+  classified_by: string;
+}
+
+/**
+ * The rows history filed and nobody has answered since (lg-17), newest first,
+ * each with the three answers it rests on. A person's answer appended after the
+ * filing stands instead, so confirming or changing a row takes it off this list.
+ */
+export function autoFiled(db: Database): AutoFiledRow[] {
+  const spending = spendingReader(db);
+  const ground = db.prepare(
+    `SELECT c.id, c.row_id, r.date, r.description, r.amount_cents, c.bucket, c.person_id,
+            c.source, c.classified_at, c.classified_by
+     FROM classifications c
+     JOIN statement_rows r ON r.id = c.row_id
+     WHERE c.id = ?`,
+  );
+  const rows = db
+    .prepare(
+      `SELECT r.id, r.date, r.category, r.description, r.amount_cents, r.balance_cents,
+              c.id AS classification_id, c.bucket, c.person_id, c.classified_at,
+              c.rests_on_1, c.rests_on_2, c.rests_on_3
+       FROM statement_rows r
+       JOIN current_classifications c ON c.row_id = r.id
+       WHERE c.source = 'auto'
+       ORDER BY r.seq DESC`,
+    )
+    .all() as AutoFiledColumns[];
+  return rows.map((row): AutoFiledRow => ({
+    id: row.id,
+    date: row.date,
+    category: row.category,
+    description: row.description,
+    amountCents: row.amount_cents,
+    balanceCents: row.balance_cents,
+    classification: {
+      id: row.classification_id,
+      bucket: row.bucket,
+      personId: row.person_id,
+      classifiedAt: row.classified_at,
+    },
+    restsOn: [row.rests_on_1, row.rests_on_2, row.rests_on_3].map((id): AutoFilingGround => {
+      const found = ground.get(id) as GroundColumns;
+      return {
+        classificationId: found.id,
+        rowId: found.row_id,
+        date: found.date,
+        description: found.description,
+        amountCents: found.amount_cents,
+        bucket: found.bucket,
+        personId: found.person_id,
+        source: found.source,
+        classifiedAt: found.classified_at,
+        classifiedBy: found.classified_by,
+      };
+    }),
+    // No rule gave it, so its category is the row's override or the map's
+    // (lg-15's order with the rule's step empty), as on every other reader.
+    spendingCategory: spending.of(row, null),
+  }));
 }
 
 /** A person's answer: classify a row, or classify it again. */

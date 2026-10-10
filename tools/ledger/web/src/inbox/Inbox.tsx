@@ -12,13 +12,17 @@
  * with the form filled in from the row. The amount is filled in too, on purpose:
  * a rule that names the usual amount asks about a different one, where a rule
  * that does not would classify it without a word.
+ *
+ * The rows history filed with nobody tapping (lg-17) are not here and not in the
+ * count: they are filed. The inbox links to them, for review, while any are
+ * still standing as history filed them.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { formatCents } from "@ledger/books";
 import { AppError, BUCKETS } from "@ledger/contract";
-import type { Bucket, InboxRow, SpendingCategory } from "@ledger/contract";
-import { classifyRow, fetchInbox } from "../api/inbox.ts";
+import type { AutoFiledRow, Bucket, InboxRow, SpendingCategory } from "@ledger/contract";
+import { classifyRow, fetchAutoFiled, fetchInbox } from "../api/inbox.ts";
 import { createRule, fetchPeople } from "../api/rules.ts";
 import { fetchSpendingCategories, setRowSpendingCategory } from "../api/spending.ts";
 import {
@@ -31,11 +35,17 @@ import {
 } from "../labels.ts";
 import { RuleForm } from "../rules/RuleForm.tsx";
 import { RowSpending } from "../spending/RowSpending.tsx";
+import { AutoFiled } from "./AutoFiled.tsx";
 
-type Load =
-  | { state: "loading" }
-  | { state: "failed"; message: string }
-  | { state: "ready"; rows: InboxRow[]; people: string[]; categories: SpendingCategory[] };
+interface Ready {
+  state: "ready";
+  rows: InboxRow[];
+  autoFiled: AutoFiledRow[];
+  people: string[];
+  categories: SpendingCategory[];
+}
+
+type Load = { state: "loading" } | { state: "failed"; message: string } | Ready;
 
 /** An answer of the person's own, waiting to be offered as a rule. */
 interface Offer {
@@ -54,16 +64,18 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
   const [problem, setProblem] = useState<string | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
 
   const refresh = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       try {
-        const [rows, people, categories] = await Promise.all([
+        const [rows, autoFiled, people, categories] = await Promise.all([
           fetchInbox(signal),
+          fetchAutoFiled(signal),
           fetchPeople(signal),
           fetchSpendingCategories(signal),
         ]);
-        setLoad({ state: "ready", rows, people, categories });
+        setLoad({ state: "ready", rows, autoFiled, people, categories });
         onCount?.(rows.length);
       } catch (error: unknown) {
         if (signal?.aborted === true) return;
@@ -88,13 +100,77 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     );
   }
 
-  const { rows, people, categories } = load;
+  const { rows, autoFiled, people, categories } = load;
 
   const leave = (row: InboxRow): void => {
     const rest = rows.filter((other) => other.id !== row.id);
-    setLoad({ state: "ready", rows: rest, people, categories });
+    setLoad({ ...load, rows: rest });
     onCount?.(rest.length);
   };
+
+  // Confirming and changing are both a person's answer, and either ends the review.
+  const answerFiled = async (
+    row: AutoFiledRow,
+    personId: string | null,
+    bucket: Bucket,
+  ): Promise<void> => {
+    setProblem(null);
+    setNotice(null);
+    try {
+      await classifyRow({ rowId: row.id, personId, bucket });
+      setLoad({ ...load, autoFiled: autoFiled.filter((other) => other.id !== row.id) });
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+    }
+  };
+
+  const setFiledSpending = async (
+    row: AutoFiledRow,
+    spendingCategoryId: number | null,
+  ): Promise<void> => {
+    setProblem(null);
+    setNotice(null);
+    try {
+      const answered = await setRowSpendingCategory(row.id, spendingCategoryId);
+      setLoad({
+        ...load,
+        autoFiled: autoFiled.map((other) =>
+          other.id === row.id ? { ...other, spendingCategory: answered.spendingCategory } : other,
+        ),
+      });
+    } catch (error: unknown) {
+      setProblem(AppError.from(error).message);
+      if (error instanceof AppError && error.code === "SPENDING_CATEGORY_NOT_FOUND") {
+        await refresh();
+      }
+    }
+  };
+
+  if (reviewing) {
+    return (
+      <section className="card" aria-labelledby="auto-filed-title">
+        <h2 id="auto-filed-title">Filed automatically</h2>
+        <p className="muted">
+          Each was filed on the three latest answers for its description. Confirm it, or change it.
+        </p>
+        {problem !== null && (
+          <p className="bad" role="alert">
+            {problem}
+          </p>
+        )}
+        <button type="button" className="secondary" onClick={() => setReviewing(false)}>
+          Back to the inbox
+        </button>
+        <AutoFiled
+          rows={autoFiled}
+          people={people}
+          categories={categories}
+          onAnswer={(row, personId, bucket) => void answerFiled(row, personId, bucket)}
+          onSpending={(row, value) => void setFiledSpending(row, value)}
+        />
+      </section>
+    );
+  }
 
   // The row stays where it is: a spending category never files it or moves it.
   const setSpending = async (row: InboxRow, spendingCategoryId: number | null): Promise<void> => {
@@ -103,12 +179,10 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
     try {
       const answered = await setRowSpendingCategory(row.id, spendingCategoryId);
       setLoad({
-        state: "ready",
+        ...load,
         rows: rows.map((other) =>
           other.id === row.id ? { ...other, spendingCategory: answered.spendingCategory } : other,
         ),
-        people,
-        categories,
       });
     } catch (error: unknown) {
       setProblem(AppError.from(error).message);
@@ -147,6 +221,11 @@ export function Inbox({ onCount }: InboxProps): React.ReactElement {
   return (
     <section className="card" aria-labelledby="inbox-title">
       <h2 id="inbox-title">Inbox</h2>
+      {autoFiled.length > 0 && (
+        <button type="button" className="secondary" onClick={() => setReviewing(true)}>
+          Review {autoFiled.length} filed automatically
+        </button>
+      )}
       {problem !== null && (
         <p className="bad" role="alert">
           {problem}

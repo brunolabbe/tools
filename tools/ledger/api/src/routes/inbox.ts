@@ -5,13 +5,17 @@
  * suggestion. `POST /api/classifications` appends an answer — a suggested rule
  * taken, or a person and a bucket — for any stored row, so the same call is how a
  * row is classified again. What was said before is never changed.
+ *
+ * `GET /api/inbox/auto-filed` is the rows history filed with nobody tapping
+ * (lg-17) that no person has answered since. Confirming or changing one is the
+ * same `POST /api/classifications`.
  */
 
 import { AppError, ROUTES, classifyRequestSchema } from "@ledger/contract";
-import type { ClassificationRecord, InboxResponse } from "@ledger/contract";
+import type { AutoFiledResponse, ClassificationRecord, InboxResponse } from "@ledger/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
-import { classifyRow, inbox } from "../classifications.ts";
+import { autoFiled, classifyRow, inbox } from "../classifications.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { ruleContext } from "./rules.ts";
 
@@ -20,6 +24,11 @@ export function registerInboxRoutes(app: FastifyInstance, context: AppContext): 
 
   app.get(ROUTES.inbox, { onRequest: read }, async () => {
     const body: InboxResponse = { rows: inbox(context.db) };
+    return body;
+  });
+
+  app.get(ROUTES.autoFiled, { onRequest: read }, async () => {
+    const body: AutoFiledResponse = { rows: autoFiled(context.db) };
     return body;
   });
 

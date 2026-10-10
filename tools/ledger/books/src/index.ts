@@ -4,7 +4,8 @@
  * matching that files a row under a bucket (lg-4), and what each bucket holds and
  * whose it is, with the ratio derived from the salaries (lg-5); and periods of
  * personal-card spending, with the settlement closing one computes (lg-6); and
- * the spending category a bank row has (lg-15).
+ * the spending category a bank row has (lg-15); and what a person answered
+ * before, offered (lg-16) or filed on (lg-17).
  */
 
 export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.ts";
@@ -43,8 +44,14 @@ export type {
   SpendingRule,
   SpendingSource,
 } from "./spending.ts";
-export { fromHistory } from "./history.ts";
-export type { HistoryAnswer, HistorySuggestion } from "./history.ts";
+export { autoFile, fromHistory } from "./history.ts";
+export type {
+  AutoFilableRow,
+  AutoFileRefusal,
+  AutoFiling,
+  HistoryAnswer,
+  HistorySuggestion,
+} from "./history.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {

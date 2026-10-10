@@ -11,7 +11,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
 import { fetchHealth } from "../src/api/health.ts";
-import { fetchInbox } from "../src/api/inbox.ts";
+import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
 import { fetchPeople, fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
@@ -24,7 +24,11 @@ vi.mock("../src/api/salaries.ts", () => ({
   enterSalaries: vi.fn(),
   confirmRatio: vi.fn(),
 }));
-vi.mock("../src/api/inbox.ts", () => ({ fetchInbox: vi.fn(), classifyRow: vi.fn() }));
+vi.mock("../src/api/inbox.ts", () => ({
+  fetchInbox: vi.fn(),
+  fetchAutoFiled: vi.fn(),
+  classifyRow: vi.fn(),
+}));
 vi.mock("../src/api/rules.ts", () => ({
   fetchRules: vi.fn(),
   fetchPeople: vi.fn(),
@@ -43,6 +47,7 @@ beforeEach(() => {
     database: { open: true },
   });
   vi.mocked(fetchRules).mockResolvedValue([]);
+  vi.mocked(fetchAutoFiled).mockResolvedValue([]);
   vi.mocked(fetchPeople).mockResolvedValue(["alex", "sam"]);
   vi.mocked(fetchBuckets).mockResolvedValue({
     asOf: "2026-10-03",
