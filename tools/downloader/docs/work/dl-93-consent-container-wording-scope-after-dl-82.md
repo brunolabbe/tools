@@ -3,7 +3,7 @@ id: dl-93
 tool: downloader
 title: A consent container's wording scope presses two layers it should not and misses six it should
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-82]
 difficulty: standard
@@ -168,6 +168,54 @@ its earlier head; it is not a regression and not a gain.
 - a1 and a2 either press nothing, or the Log records the signal that was tried and
   why it failed.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: FAIL** — 2026-10-10 · `7709411e..a7f47bd2` · Opus 5.5, depth full
+
+| Done when                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every row of both tables has a test with its stated outcome; r3, r3b, r4, r5, r6, r9 and dl-82's a3, a3b, a3c, a4, a5 pass unchanged | `resolvers/test/browser/consent-scope.test.ts` › "%s (%s) is pressed and its stream found" (r1, r1b, r2b, r3..r9) and "%s (%s) is not pressed" (r2, r5b) ✓. The r rows also pass with `provoke.ts` at base (11 of 16; the 5 red are r1, r1b, r2b, r7, r8), so their outcome is unchanged. `git diff 7709411e a7f47bd2 --name-only` touches neither `browser-resolver.test.ts` nor a dl-82 fixture, and `-t consent` there runs 38 of 38 green ✓ |
+| r7 and r8 pressed, `SILENT` rows still silent                                                                                        | `consent-scope.test.ts` › "r7 (…) is pressed and its stream found", "r8 (…)"; `provoke.test.ts` › "does not speak of consent: %j" ✓. Positive control: base `CONSENT_WORDING` alone turns r7 and r8 red (2 failed of 8 run)                                                                                                                                                                                                                     |
+| r1, r1b, r2b and r5b pressed, or the Log says why not in a measured sentence                                                         | `consent-scope.test.ts` › r1, r1b, r2b pressed; r5b › "is not pressed", with the Log's sentence ✓ as written. The signal that presses them also presses eight layers base did not (finding 1)                                                                                                                                                                                                                                                   |
+| a1 and a2 press nothing, or the Log records the signal tried and why it failed                                                       | **unproven (open decision)**: Build step 4 says to stop and file the options when a signal needs the owner's choice; this line has no arm for a signal that works at a cost. No test on the branch asserts the opposite: dl-82's a1 and a2 tests assert a press, which contradicts the first arm only. Measurement of the options below                                                                                                         |
+| `npm run check` and `npm test -- --project downloader` pass                                                                          | CI `check` and `test (ubuntu-latest)` green on `a7f47bd2`; local `npm run check` exit 0 ✓                                                                                                                                                                                                                                                                                                                                                       |
+
+- **high** · the link-in-a-sentence signal in `MARK_CONSENT_ZONES_SCRIPT` (`sentenceLink`, `prose`) makes a layer a container whenever the link's parent holds two words of text and any visible non-submit control. The layer is what gets marked, so the press can land on any widened label in it, a submit included. It also makes this paragraph of `clickConsentText`'s JSDoc false: "a docked checkout bar whose prose says nothing of consent is not a container, so its … 'Agree and continue' [is] not pressed, even when it links a cookie policy". Pages of the gate's own, through the real `BrowserResolver`, counting a `/beacon/bad` press per run (two passes):
+
+  | Page (fixed or sticky layer)                                                                                                                           | base | head |
+  | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | ---- |
+  | c1 SPA checkout, no form: "By placing your order you agree to our `<a>`terms`</a>` and `<a>`cookie policy`</a>`." + `type=button` "Agree and continue" | 0    | 2    |
+  | c2 `<form>` bar: "By ordering you accept our terms and `<a>`cookie policy`</a>`." + `type=button` "Back" + **submit** "Agree and continue"             | 0    | 2    |
+  | c4 newsletter popup, no dialog role: "Iscriviti alla newsletter. Leggi la `<a>`cookie policy`</a>`." + "Ho capito"                                     | 0    | 2    |
+  | c5 footer: "© 2026 Acme Inc. All rights reserved. `<a>`Privacy`</a>` · `<a>`Cookie settings`</a>`" + "Back to top", and a notice div "… Ho capito"     | 0    | 2    |
+  | c7 sticky header `<nav>`: "Quick links: `<a>`Home`</a>` · `<a>`Shop`</a>` · `<a>`Cookie settings`</a>`" + "Search", and a notice "… Ho capito"         | 0    | 2    |
+  | c10 the c1 sentence + a **submit** bound by `form="f"` to a form elsewhere                                                                             | 0    | 2    |
+  | c3 (control) c2 without "Back", the submit untyped                                                                                                     | 0    | 0    |
+  | c6 (control) c5 with the links in a `<ul>`                                                                                                             | 0    | 0    |
+
+  c2, c5, c7 and c10 press a label other than the control beside the link; c2 and c10 press a submit. c1 and c4 have r1's shape, so no local signal separates them from r1 and r1b. **Open decision**: (a) **recommended**: withdraw the link signal, keep r1, r1b and r2b as lost, and record c1 and c4 as the measured reason under Done when 3's second arm. That is dl-82's stated rule: a missed consent layer costs nothing, a pressed submit costs. (b) Narrow the signal: the pressed control must be a child of the link's own parent, and that parent holds no form-associated control (`button.form`). That would remove c2, c5, c7 and c10 (unmeasured) but keeps c1 and c4 as costs for the owner to accept, and the JSDoc paragraph would need rewriting.
+
+- **med** · no `Done when` line depends on it (the `SILENT` rows stay silent) · `CONSENT_WORDING`'s new JSDoc says "no ordinary word contains" "cookie". That is false: "Schokocookies", "Haferflockencookies", Dutch "chocoladecookies", Swedish "Chokladcookies", "Supercookie", "#sugarcookie" and "thecookiejar" all match at head and not at base (12 deltas in 39 strings, `regex.mts`). On a page: c8, a fixed app root titled "Schokocookies backen" with a newsletter "Ich stimme zu", is pressed 0 → 2. c9, a docked cart bar "3 Schokocookies im Warenkorb." with a **submit** "Zustimmen und weiter", is pressed 0 → 2. The premise is the brief's own (Build step 2). **Open decision**: (a) **recommended**: keep the word start and add the consent compounds by name, for example `(?:statistik|marketing|tracking|analyse|funktions|drittanbieter|werbe)?cookie`, to keep r7 and silence food compounds, at the cost of unlisted compounds; or (b) keep the substring, correct the comment and the brief, and pin c9's shape as an accepted cost the way a2 is.
+- **med** · Done when 4 depends on it · the open decision on a1 and a2, measured. Each option was applied to `tier()` exactly as the Log describes, then run against `consent-scope.test.ts` and `provoke.test.ts` (230 of 230 under every option), `browser-resolver.test.ts -t consent`, and four pages of the gate's own:
+
+  |                                                                                      | opt 1 (head) | opt 2 landmarks | opt 3 form | opt 4 both |
+  | ------------------------------------------------------------------------------------ | ------------ | --------------- | ---------- | ---------- |
+  | dl-82 tests flipped (of 38)                                                          | 0            | a1              | a2         | a1, a2     |
+  | c11 a2 with the `<form>` inside the fixed div: submit pressed                        | yes          | yes             | **yes**    | **yes**    |
+  | c12 a1 with an `h2` and no `h1`: newsletter pressed                                  | yes          | **yes**         | yes        | **yes**    |
+  | c13 a consent notice in the flow of a fixed root that holds an `h1`: consent pressed | yes          | **no**          | yes        | **no**     |
+  | c14 a fixed consent bar that is itself a `<form>`: consent pressed                   | yes          | yes             | **no**     | **no**     |
+
+  The Log's test flips are confirmed. Its stated costs and fixes are not whole. Option 3 fixes a2's exact shape only (c11 still presses a submit), and option 2 fixes a1 only when the root holds a landmark (c12). Option 2's cost is wider than "a consent layer with an `h1` title": a consent notice in the flow of any fixed or sticky root holding content loses its dl-82 phrasings (c13). This goes to the owner with the question.
+
+- **low** · the Log calls `ciasteczk` and `ciasteczek` redundant because "the first is a prefix of the second". It is not: `ciasteczk` vs `ciasteczek` differ at the ninth letter. "ciasteczek" (genitive plural) matches only through its own alternative, so the next reader would lose recall acting on it.
+- **low** · the Log's r5b sentence calls counting hidden text "a3b's regression (a hidden menu)". a3b is `display:none`; r5b is `visibility:hidden`. Whether that distinction separates them is unmeasured: a reading, not a measurement.
+- **dropped** · `SENTENCE_WORD` is compiled with `g`, which suggested a `lastIndex` leak. The script uses it only through `String.prototype.match`, which resets `lastIndex`. Not a defect.
+- **findings** · the hunt returned 6; 5 carried, 1 dropped.
+- Merge with `origin/dl-90-sniff-moov-for-chunk-streams` (`020b5dfc`): `git merge-tree --write-tree` is clean (exit 0). PR #413 CI: every check passes on `a7f47bd2`.
+- Invariants: none touched. No cross-tool import, no new error code, no spawn, no URL logging, no contract edit. The new spec is under the registered `resolvers` package. Style checked.
+- NFR: security n/a · performance ✓ (one extra pass over a layer's consent-worded links) · reliability: findings 1 and 2 · maintainability: finding 1's JSDoc paragraph is now false.
 
 ## Log
 
