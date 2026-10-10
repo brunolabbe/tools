@@ -1775,6 +1775,31 @@ function stoppedWith(outcome: Outcome): string | number {
   return "refused" in outcome ? outcome.refused : outcome.done;
 }
 
+/** dl-103's row 2, named because its mirror case reuses it. */
+const row2: BlindAnswer = (request, response) => {
+  if (request.headers.range !== "bytes=1-1") return false;
+  response.writeHead(403).end();
+  return true;
+};
+
+/**
+ * dl-103's stand-in lines: `P` is `partial file` at offset 0x30 (48), `E(n)`
+ * an early end at byte `n`, `R(n)` its reconnect.
+ */
+const P = JSON.stringify(
+  "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55b9913a5340] stream 1, offset 0x30: partial file",
+);
+const E = (at: number): string =>
+  JSON.stringify(`[http @ 0x55b99139cb00] Stream ends prematurely at ${at}, should be 1018927`);
+const R = (at: number): string =>
+  JSON.stringify(
+    `[http @ 0x55b99139cb00] Will reconnect at ${at} in 0 second(s), error=Input/output error.`,
+  );
+const say = (line: string): string => `process.stderr.write(${line} + "\\n");`;
+const OUT = "process.stdout.write(Buffer.alloc(4096, 1));";
+const later = (ms: number, ...statements: string[]): string =>
+  `setTimeout(() => { ${statements.join(" ")} }, ${ms});`;
+
 /**
  * dl-103. dl-102's probe lets ffmpeg run when it gets no answer, so that
  * ffmpeg's own failures keep their codes; and on an origin that ignores
@@ -1869,14 +1894,7 @@ describe("dl-103: an unanswered seek probe", () => {
   }
 
   const rows: readonly [string, BlindAnswer][] = [
-    [
-      "row 2: a 403 for the probe's bytes=1-1 only",
-      (request, response) => {
-        if (request.headers.range !== "bytes=1-1") return false;
-        response.writeHead(403).end();
-        return true;
-      },
-    ],
+    ["row 2: a 403 for the probe's bytes=1-1 only", row2],
     [
       "row 3: a 500 on the first request only",
       (_request, response, count) => {
@@ -1926,7 +1944,7 @@ describe("dl-103: an unanswered seek probe", () => {
   }
 
   test("a refusal from ffmpeg's own words tries the next mirror, as the probe's does", async () => {
-    answer = rows[0]?.[1] ?? null;
+    answer = row2;
     expectWhole(
       await outcomeOf(
         "dl-103-mirror",
@@ -1958,75 +1976,194 @@ describe("dl-103: an unanswered seek probe", () => {
   }, 60_000);
 
   /**
-   * Which side of the first byte `partial file` lands on is the order of two
-   * pipes, not a guarantee, so each branch is pinned with ffmpeg stood in for.
-   * The probe asks `origin`, which honours Range, and lets the stand-in run.
-   *
-   * With `stderrFirst` the stand-in ignores SIGTERM, so the kill takes its 3 s
-   * grace and the first chunk arrives while ffmpeg is still being killed: the
-   * window in which a refusal has been decided and `firstChunk` has not seen
-   * the process exit. Real ffmpeg dies at once and reaches the same refusal
-   * through `firstChunk` rejecting; this is the other way in.
+   * dl-103's gate 1, F1: a fast-start file stored truncated at its origin. Its
+   * index is first and its origin honours `Range`; ffmpeg still says
+   * `partial file` where the bytes run out. On `main` `done` resolved with the
+   * frames missing; on the first build it was `SOURCE_NOT_SEEKABLE`, whose copy
+   * is false for it. The owner's answer of 2026-10-10: a failed download,
+   * wherever the shortness shows. 5% is short enough to show before the first
+   * byte on some runs, 60% after it.
    */
-  async function standIn103(stderrFirst: boolean): Promise<string> {
+  for (const percent of [5, 60]) {
+    test(`a fast-start file stored at ${percent}% of itself is DOWNLOAD_FAILED`, async () => {
+      answer = (request, response, _count, whole) => {
+        const stored = whole.subarray(0, Math.floor((whole.length * percent) / 100));
+        const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
+        const start = range === null ? 0 : Number(range[1]);
+        const end =
+          range === null || range[2] === ""
+            ? stored.length - 1
+            : Math.min(Number(range[2]), stored.length - 1);
+        response.writeHead(range === null ? 200 : 206, {
+          ...(range === null ? {} : { "content-range": `bytes ${start}-${end}/${stored.length}` }),
+          "content-length": String(end - start + 1),
+        });
+        response.end(stored.subarray(start, end + 1));
+        return true;
+      };
+      const outcome = await outcomeOf(
+        `dl-103-short-${percent}`,
+        large(`${blind.origin}/large-103/faststart.mp4`),
+      );
+      expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("DOWNLOAD_FAILED");
+    }, 60_000);
+  }
+
+  /**
+   * Stand-ins for ffmpeg, for the orders a real run does not choose on demand.
+   * Each is a script of statements; the probe asks `origin`, which honours
+   * Range, and lets it run. The lines are `P`, `E` and `R`, above.
+   */
+  async function standIn103(statements: readonly string[]): Promise<string> {
     const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-103-"));
     const script = path.join(dir, "ffmpeg");
-    const line = JSON.stringify(
-      "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55b9913a5340] stream 1, offset 0x30: partial file",
-    );
-    const stdout = "process.stdout.write(Buffer.alloc(4096, 1));";
-    const stderr = `process.stderr.write(${line} + "\\n");`;
-    await fs.writeFile(
-      script,
-      [
-        `#!${process.execPath}`,
-        stderrFirst ? 'process.on("SIGTERM", () => undefined);' : "",
-        stderrFirst ? stderr : stdout,
-        "setTimeout(() => {",
-        `  ${stderrFirst ? stdout : stderr}`,
-        "  setTimeout(() => process.exit(0), 5000);",
-        `}, ${stderrFirst ? 100 : 300});`,
-        "",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
+    await fs.writeFile(script, [`#!${process.execPath}`, ...statements, ""].join("\n"), {
+      mode: 0o755,
+    });
     return script;
   }
 
-  test.skipIf(process.platform === "win32")(
-    "`partial file` before the first byte refuses the stream, and after it cuts the stream",
-    async () => {
-      const variant = large(`${origin.origin}/large-103/moov-end.mp4`);
-      const before = await engineWith({ ffmpegPath: await standIn103(true) })
-        .stream({ jobId: "dl-103-before", variant, requestContext: CONTEXT })
-        .then(
-          () => null,
-          (error: unknown) => AppError.from(error),
-        );
-      expect(before?.code).toBe("SOURCE_NOT_SEEKABLE");
-      expect(before?.details).toMatchObject({ afterFirstByte: false });
+  interface StandInCase {
+    name: string;
+    statements: readonly string[];
+    /** Where it stops: `stream()` before the first byte, or `done` after it. */
+    stops: "stream" | "done";
+    code: string;
+    /** For the timer: the verdict must not wait for ffmpeg to exit. */
+    withinMs?: number;
+  }
 
-      const media = await engineWith({ ffmpegPath: await standIn103(false) }).stream({
-        jobId: "dl-103-after",
-        variant,
-        requestContext: CONTEXT,
-      });
-      media.body.resume();
-      await expect(media.done).rejects.toMatchObject({
-        code: "SOURCE_NOT_SEEKABLE",
-        details: { afterFirstByte: true },
-      });
-      expect(media.body.destroyed).toBe(true);
+  const standIns: readonly StandInCase[] = [
+    {
+      // The kill takes its 3 s grace (SIGTERM ignored), so the first chunk
+      // arrives after the verdict and before the process is gone.
+      name: "an early end at the same offset, decided while the first chunk is on its way",
+      statements: [
+        'process.on("SIGTERM", () => undefined);',
+        say(P),
+        say(E(48)),
+        later(100, OUT, later(5000, "process.exit(0);")),
+      ],
+      stops: "stream",
+      code: "SOURCE_NOT_SEEKABLE",
     },
-    30_000,
-  );
+    {
+      // `partial file` first, the first chunk 50 ms later, its early end 250 ms
+      // later: the first byte is held for the verdict.
+      name: "an early end at the same offset that comes after the first chunk, which was held for it",
+      statements: [
+        say(P),
+        later(50, OUT),
+        later(250, say(E(48)), say(R(48))),
+        later(5000, "process.exit(0);"),
+      ],
+      stops: "stream",
+      code: "SOURCE_NOT_SEEKABLE",
+    },
+    {
+      name: "an early end at the same offset after the first byte has gone",
+      statements: [
+        OUT,
+        later(300, say(P), say(E(48)), say(R(48))),
+        later(5000, "process.exit(0);"),
+      ],
+      stops: "done",
+      code: "SOURCE_NOT_SEEKABLE",
+    },
+    {
+      // A short source whose ffmpeg keeps running: the held first byte is
+      // released as a failure by the timer, not by ffmpeg's exit.
+      name: "no early end at all, with ffmpeg still running",
+      statements: [say(P), later(50, OUT), later(15_000, "process.exit(0);")],
+      stops: "stream",
+      code: "DOWNLOAD_FAILED",
+      withinMs: 6_000,
+    },
+    {
+      name: "an early end at another offset",
+      statements: [
+        say(P),
+        later(50, OUT),
+        later(250, say(E(49)), say(R(49))),
+        later(500, "process.exit(0);"),
+      ],
+      stops: "stream",
+      code: "DOWNLOAD_FAILED",
+    },
+    {
+      // dl-103's gate 1, F2: the tail of a real 6.1.1 run, an origin that cut
+      // the read of the `moov` and then dropped every connection. Each
+      // `Will reconnect` clears its early end, so the first build read the
+      // `partial file` that followed as unseekable; no early end at its offset
+      // follows it, so it is a loss.
+      name: "reconnect waits after a cut index read, then `partial file`, then exit 0 (gate 1 F2)",
+      statements: [
+        OUT,
+        later(
+          100,
+          ...[
+            "[http @ 0x5645de53d540] Stream ends prematurely at 1016964, should be 1018927",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 0 second(s), error=Input/output error.",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 0 second(s).",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 1 second(s).",
+            "[http @ 0x5645de53d540] Stream ends prematurely at 1016964, should be 18446744073709551615",
+            "[http @ 0x5645de53d540] Will reconnect at 328 in 0 second(s).",
+            "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5645de584240] stream 0, offset 0x148: partial file",
+          ].map((line) => say(JSON.stringify(line))),
+          later(300, "process.exit(0);"),
+        ),
+      ],
+      stops: "done",
+      code: "DOWNLOAD_FAILED",
+    },
+  ];
+
+  for (const standIn of standIns) {
+    test.skipIf(process.platform === "win32")(
+      `stand-in: ${standIn.name} is ${standIn.code}`,
+      async () => {
+        const started = performance.now();
+        const engine = engineWith({ ffmpegPath: await standIn103(standIn.statements) });
+        const variant = large(`${origin.origin}/large-103/moov-end.mp4`);
+        const stopped = await engine
+          .stream({ jobId: "dl-103-stand-in", variant, requestContext: CONTEXT })
+          .then(
+            async (media) => {
+              media.body.resume();
+              const error = await media.done.then(
+                () => null,
+                (cause: unknown) => AppError.from(cause),
+              );
+              expect(media.body.destroyed).toBe(true);
+              return { stage: "done", error };
+            },
+            (cause: unknown) => ({ stage: "stream", error: AppError.from(cause) }),
+          );
+        expect({ stage: stopped.stage, code: stopped.error?.code }).toEqual({
+          stage: standIn.stops,
+          code: standIn.code,
+        });
+        expect(stopped.error?.details).toMatchObject({ afterFirstByte: standIn.stops === "done" });
+        if (standIn.withinMs !== undefined) {
+          expect(performance.now() - started).toBeLessThan(standIn.withinMs);
+        }
+      },
+      30_000,
+    );
+  }
 
   test.skipIf(process.platform === "win32")(
-    "control: the same line from an HLS stream is not read as an unseekable origin",
+    "control: the same lines from an HLS stream are not read as an unseekable origin",
     async () => {
       // A segment's demuxer is ffmpeg's to report: the probe never asked an
       // HLS origin anything, and its holes have their own codes (dl-53).
-      const media = await engineWith({ ffmpegPath: await standIn103(false) }).stream({
+      const media = await engineWith({
+        ffmpegPath: await standIn103([
+          OUT,
+          later(300, say(P), say(E(48)), say(R(48))),
+          later(1000, "process.exit(0);"),
+        ]),
+      }).stream({
         jobId: "dl-103-hls",
         variant: hlsVariant("hls6", 6),
         requestContext: CONTEXT,

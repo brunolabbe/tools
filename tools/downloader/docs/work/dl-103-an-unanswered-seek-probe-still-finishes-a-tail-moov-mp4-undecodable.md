@@ -73,7 +73,7 @@ ffmpeg-static 7.0.2 only. Not sampled: ffmpeg 6.1.1, and the other four rows.
 
 ## Decisions
 
-Taken by the owner on 2026-10-08.
+Taken by the owner on 2026-10-08 (1) and 2026-10-10 (2).
 
 1. **Which error code the build raises: `SOURCE_NOT_SEEKABLE`.**
    - Question: dl-103, filed on the dl-102 branch, will spot ffmpeg's
@@ -90,6 +90,28 @@ Taken by the owner on 2026-10-08.
      dl-102's gate 2 (N5) and of the orchestrator. The comment-only widening of
      its doc comment in `@downloader/contract` is part of this ticket's build
      and is pre-authorised by this answer.
+
+2. **What a short source gets: a failed download, wherever the shortness
+   shows.** The owner's answer of 2026-10-10, asked by the orchestrator after
+   gate 1 at `42d0fb1f`.
+   - Question: "What should a short source get?" Gate 1 (F1) measured a
+     fast-start file stored truncated at its origin, at 5% to 99.9%, and a
+     fragmented one at 60%: the first build failed each with
+     `SOURCE_NOT_SEEKABLE`, after the whole body was handed over or before the
+     first byte, under copy that is false for it; `main` resolved `done` with
+     the frames missing.
+   - Options put: "A failed download, wherever the shortness shows" (the
+     orchestrator's recommendation): only a proven unseekable source gets
+     `SOURCE_NOT_SEEKABLE`, a short one `DOWNLOAD_FAILED`, before or after the
+     first byte; the builder finds and measures a signal that separates the
+     two, and stops with the measurement if none does. "Builder's split: after
+     the first byte = failed download" (the builder's recommendation in its
+     report on `42d0fb1f`), which leaves the 5% and fragmented files wrong.
+     "Ship as built, file a follow-up".
+   - **Chosen: a failed download, wherever the shortness shows.** It overrode
+     the builder's recommendation. Any comment change to `SOURCE_NOT_SEEKABLE`
+     stays under answer 1's pre-authorisation; no other contract change is
+     authorised.
 
 ## Build
 
@@ -264,3 +286,106 @@ the order of `partial file` against the first byte on Windows is unmeasured.
 
 **Fold-in.** None was free: no other open ticket names `partial file`, and the
 roadmap and architecture docs do not mention `SOURCE_NOT_SEEKABLE`.
+
+**2026-10-10** — round 1, on gate 1's findings at `42d0fb1f` (Opus 5.5,
+builder), after merging `origin/main` at `15adb4f7`. The owner's answer to F1
+is Decision 2 above.
+
+**Both findings reproduced first.** F1, with gate 1's harness (`run2.mts`)
+against this worktree at `42d0fb1f`: `serve:faststart.mp4:60:range` gave
+`done` rejected `SOURCE_NOT_SEEKABLE`, 60 frames, on 6.1.1 and 7.0.2;
+`serve:faststart.mp4:5:range` gave the same on 6.1.1, and `stream()` refused
+`SOURCE_NOT_SEEKABLE` on 7.0.2. F2, with the gate's stand-in
+`gate-fp.test.ts` copied into the suite:
+`expected 'done rejected SOURCE_NOT_SEEKABLE' to match /DOWNLOAD_FAILED$/u`.
+
+**The separator: an early end at the offset of the `partial file`, after
+it.** On an origin that ignores `Range`, ffmpeg seeks to the first sample,
+gets byte 0 again, logs `offset 0x30: partial file`, and then its connection
+logs `Stream ends prematurely at 48`, the same offset in decimal (row 8's
+chain: `0x180030` and `1572912`). A short source logs `partial file` where its
+bytes run out, and no early end at that offset follows. Measured over every
+run that logged `partial file` in gate 1's outputs (its `main` and head trees,
+both binaries) and in mine, with `separate.cjs` in the build's scratch
+directory:
+
+| Shape                                                                                   | Gate 1's runs | This builder's runs | Early end at that offset after it        |
+| --------------------------------------------------------------------------------------- | ------------- | ------------------- | ---------------------------------------- |
+| Unseekable: rows 2 to 13 and the ninth case; the gate's blind faults and six redirects  | 24            | 32                  | 56 of 56, 0 to 2 ms after it where timed |
+| Short: fast-start stored at 5% to 99.9%, unranged, chunked                              | 58            | 24                  | 0 of 82                                  |
+| Short: fragmented, stored at 60%                                                        | 2             | 2                   | 0 of 4                                   |
+| Cut and never served again (`404` to `503`, reset, `200`-whole, gone), index or samples | 39            | 15                  | 0 of 54 (F2's shapes included)           |
+
+Each run is one `engine.stream()` that logged `partial file`, on `main`, on
+`42d0fb1f` or on this round, on 6.1.1 or 7.0.2. The offset was 48 in every
+unseekable run but row 8's (`0x180030`, `1572912`), and wherever the bytes ran
+out in the others. Counted by `count.cjs` over gate 1's outputs and this
+builder's `sweep-*.txt`, and `separate-mine.cjs` over its `measure-*.json`.
+
+The build reads it so (`PARTIAL_FILE`, `SAME_OFFSET_ENDS_EARLY` in
+`engine/src/stream.ts`): on a progressive source, `partial file` records its
+offset and waits up to 2 s (`PARTIAL_VERDICT_MS`). An early end at that
+offset is `SOURCE_NOT_SEEKABLE`. No such end before the 2 s, or before ffmpeg
+exits, is `DOWNLOAD_FAILED` ("The source ended before the whole video
+arrived."), retryable. A first byte that arrives while a `partial file` waits
+is held for the verdict, so an unseekable origin is still refused before the
+first byte; without the hold, the mirror case fails (below), because on a real
+row the first chunk lands between the two lines. The first build's guard
+(`partial file` only while no early end is unanswered) is gone: the separator
+covers the cut it was for, and F2 was the hole in it.
+
+**After, gate 1's harness on this tree, both binaries, 52 runs.** Every
+unseekable row (r2, r3, r5, ninth, six redirects): `stream()` refuses
+`SOURCE_NOT_SEEKABLE`. Fast-start stored at 5% to 99.9%, unranged 60%,
+chunked 60%, fragmented 60%: `DOWNLOAD_FAILED` (60% and up after the first
+byte, `done`; the fragmented file and 5% on 7.0.2 before it, `stream()`; 5%
+on 6.1.1 after it). Whole fast-start, tail-`moov` and fragmented files, and
+the index-read and `mdat` heals: whole, 100 of 100 frames. Cuts followed by
+`404` in the index read and in the samples, a reset after the samples' cut,
+RST replies: `DOWNLOAD_FAILED`. F2's two shapes (`cut:moov-end.mp4:2:0.5:reset:*`
+and `…:down:1`), 4 runs: `stream()` refuses `DOWNLOAD_FAILED`, retryable,
+where the first build said `SOURCE_NOT_SEEKABLE`. My own harness, both
+binaries: rows 2 to 13 and the ninth case refused `SOURCE_NOT_SEEKABLE`, 22 of
+22; a fast-start file stored at 60% (from `Range`-honouring and ignoring
+origins) `DOWNLOAD_FAILED` after the first byte, 4 of 4; the never-healed cut
+`DOWNLOAD_FAILED`; the moov heal whole.
+
+**Tests, at the end of `stream.test.ts`.** New: "a fast-start file stored at
+5% of itself is DOWNLOAD_FAILED" and "… at 60% …" (real ffmpeg); six stand-in
+cases, named "stand-in: … is <code>": the verdict decided while the first
+chunk is on its way, the verdict after a held first chunk, the verdict after
+the first byte, no early end with ffmpeg still running (the timer, within
+6 s), an early end at another offset, and gate 1's F2 tail (its
+`gate-fp.test.ts`, folded in); the HLS control now sends the matching early
+end too. F4: the mirror case uses a named `row2`. Against `42d0fb1f`'s
+`stream.ts`: `5 failed | 10 passed` — both short-source cases, the timer case,
+the other-offset case and F2. Mutations of this round's `stream.ts`, each
+restored byte-identical: no hold, `4 failed` (the mirror case among them);
+the timer at 600 s, `1 failed` (15,057 ms); offset equality removed, `1
+failed`; the progressive guard removed, `1 failed` (the HLS control); the
+exit-time check removed, `2 failed` (60% and F2); the after-first-chunk
+verdict check removed, `5 failed`.
+
+**F3, what the Windows leg proves.** `test (windows-latest)` runs
+ffmpeg-static's Windows build (the distro step is Linux-only). There the four
+real rows, the mirror case, the moov heal and the two short-source cases run:
+a Windows ffmpeg that did not log the early end at the `partial file` offset
+fails the rows (`DOWNLOAD_FAILED`), and one that logged it for a short file
+fails the short cases. They accept either side of the first byte, so the leg
+does not say which side `partial file` lands on there, and the seven stand-in
+cases (the orderings, the timer, the offset mismatch, F2's tail, the HLS
+scoping) are skipped on win32, as dl-53's are. Unmeasured: the order of
+`partial file` against the first byte with the Windows binary.
+
+**For dl-98, the shapes gate 1 named, now:** the refusal before the first
+byte still leaves `attempt()` by `throw` after awaiting `completion` only, and
+may now hold the first chunk for up to 2 s first; `terminate` is still
+first-wins, and the verdict goes through it; `details.url` is still
+`context.url`, what ffmpeg is handed. New: a short answer from whatever feeds
+ffmpeg is `DOWNLOAD_FAILED` now, not `SOURCE_NOT_SEEKABLE`, unless its
+connection ends early at the failing sample's offset.
+
+**Not changed.** `DOWNLOAD_FAILED`'s doc comment ("Segment fetching failed
+past the retry budget") already describes a segment, not a progressive loss,
+and did so before this ticket; the owner's answers authorise no edit to it,
+so it is untouched. The visitor copy of both codes is unchanged.
