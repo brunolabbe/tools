@@ -43,7 +43,8 @@ import {
 } from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
-import { createRequestSizeProbe } from "../browser/size-probe.ts";
+import { createRequestSizeProbe, createSizeRequest } from "../browser/size-probe.ts";
+import type { SizeClientOptions } from "../browser/size-probe.ts";
 import type { NetworkHit } from "../browser/types.ts";
 import { opaqueManifestVariant, progressiveVariants } from "../browser/variants.ts";
 import { parseDash } from "../manifest/dash.ts";
@@ -512,7 +513,11 @@ export class BrowserResolver implements Resolver {
       // oxlint-disable-next-line no-await-in-loop
       const variants = await measureVariantSizes(
         parsed.variants,
-        createRequestSizeProbe(context.request, replayHeaders(hit), deadline),
+        createRequestSizeProbe(
+          createSizeRequest(this.#clientOptions(context, options.proxyUrl)),
+          replayHeaders(hit),
+          deadline,
+        ),
         {
           isLive: parsed.isLive,
           durationSec: parsed.durationSec,
@@ -556,6 +561,22 @@ export class BrowserResolver implements Resolver {
   }
 
   /**
+   * What the tier's own HTTP client needs that is not per request: the egress
+   * proxy, the context's jar and the proxy's root. The manifest re-fetch and the
+   * size probe (dl-101) are both built from it, so neither can reach an origin
+   * the other cannot.
+   */
+  #clientOptions(context: BrowserContext, proxyUrl: string | undefined): SizeClientOptions {
+    return {
+      cookieFor: async (url) => jarCookieHeader(await context.cookies(url.href)),
+      storeCookies: async (url, setCookie) => await storeSetCookies(context, url, setCookie),
+      proxyUrl,
+      proxyRootCaPem: this.#proxyRootCaPem,
+      maxRedirects: MAX_MANIFEST_REDIRECTS,
+    };
+  }
+
+  /**
    * Re-fetches the manifest with the captured headers replayed, which is both
    * how the parsers get their input and a live check that the context we are
    * about to hand the engine actually works. Falls back to the body captured at
@@ -577,13 +598,9 @@ export class BrowserResolver implements Resolver {
     if (timeout > 500) {
       try {
         const result = await fetchManifest(hit.url, {
+          ...this.#clientOptions(context, proxyUrl),
           headers: replayHeaders(hit),
-          cookieFor: async (url) => jarCookieHeader(await context.cookies(url.href)),
-          storeCookies: async (url, setCookie) => await storeSetCookies(context, url, setCookie),
-          proxyUrl,
-          proxyRootCaPem: this.#proxyRootCaPem,
           maxBodyBytes: MAX_CAPTURED_BODY_BYTES,
-          maxRedirects: MAX_MANIFEST_REDIRECTS,
           timeoutMs: timeout,
         });
         if (result.outcome === "ok" && result.text.trim().length > 0) return result.text;

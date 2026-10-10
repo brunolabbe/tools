@@ -41,7 +41,7 @@ import { listMediaSegments } from "./manifest/hls.ts";
 
 /**
  * The whole network dependency, so that the three resolvers can each supply the
- * fetch they already have — a `GuardedFetch`, a Playwright request context —
+ * fetch they already have — a `GuardedFetch`, the browser tier's own client —
  * and the suite can supply neither.
  */
 export interface SizeProbe {
@@ -60,10 +60,10 @@ export interface SizeProbe {
    * first. Used by `mp4-header.ts` to read a progressive file's sample entries
    * (dl-64).
    *
-   * **Optional**, because only the fetch-backed probe can honour it safely: it
-   * has to stop reading when a server ignores `Range` and sends the whole file,
-   * and Playwright's `APIResponse` only hands over a body already read in full.
-   * A probe without it leaves codecs as the tier reported them.
+   * **Optional**, because only the fetch-backed probe implements it. It has to
+   * stop reading when a server ignores `Range` and sends the whole file; the
+   * browser tier's client can now do that too (dl-101), but nothing there asks
+   * for it yet. A probe without it leaves codecs as the tier reported them.
    */
   bytes?(url: string, start: number, endInclusive: number): Promise<RangedBytes | undefined>;
 }

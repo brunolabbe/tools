@@ -30,6 +30,11 @@
  *   way ffmpeg is handed `rootCaPath`. An earlier cut of dl-97 took the SPKI pin
  *   instead and checked the chain by hand behind `rejectUnauthorized: false`;
  *   that version and why it was replaced are in the ticket's Log.
+ *
+ * The size probe (dl-101) is the second caller. It needs a `HEAD`, and a ranged
+ * `GET` whose body is never wanted, so {@link fetchHeaders} runs the same hops,
+ * cookies and trust and hands back the final response's headers with its body
+ * unread; its playlist read is {@link fetchManifest} again.
  */
 
 import http from "node:http";
@@ -91,9 +96,13 @@ interface Closable {
   on(event: "error", listener: (error: Error) => void): unknown;
 }
 
-type Hop =
-  | { kind: "response"; response: http.IncomingMessage }
-  | { kind: "result"; result: ManifestFetchResult };
+/** The answers any entry point can give before it has read a byte of a body. */
+type Stop = Extract<ManifestFetchResult, { outcome: "status" | "refused" }>;
+
+type Hop = { kind: "response"; response: http.IncomingMessage } | { kind: "result"; result: Stop };
+
+/** Turns the final 2xx response into the entry point's own answer. */
+type Finish<T> = (response: http.IncomingMessage, open: Set<Closable>) => Promise<T>;
 
 /**
  * One `GET`, redirects followed, body capped. Resolves with an outcome for every
@@ -103,6 +112,49 @@ export async function fetchManifest(
   url: string,
   options: ManifestFetchOptions,
 ): Promise<ManifestFetchResult> {
+  return await run(url, options, "GET", async (response, open) => {
+    return await readCapped(response, options.maxBodyBytes, open);
+  });
+}
+
+/** What {@link fetchHeaders} is asked: the client's options, minus any body to read. */
+export type HeadersFetchOptions = Omit<ManifestFetchOptions, "maxBodyBytes"> & {
+  /** `HEAD` asks for no body at all; `GET` is for a ranged read whose body is never wanted. */
+  method?: "GET" | "HEAD";
+};
+
+export type HeadersFetchResult =
+  /** A final 2xx. `headers` are lower-cased, repeated ones joined with `, `. */
+  { outcome: "headers"; status: number; headers: Record<string, string> } | Stop;
+
+/**
+ * One `HEAD` (or a `GET` whose body is thrown away), redirects followed, and the
+ * final response's headers returned **without reading its body** (dl-101). A
+ * server that ignores `Range` answers a one-byte probe with the whole resource;
+ * the response is closed as soon as its headers are in, so what crosses the wire
+ * is whatever the socket had already buffered, never the resource.
+ */
+export async function fetchHeaders(
+  url: string,
+  options: HeadersFetchOptions,
+): Promise<HeadersFetchResult> {
+  return await run(url, options, options.method ?? "HEAD", (response) => {
+    const headers: Record<string, string> = {};
+    for (const [name, value] of Object.entries(response.headers)) {
+      if (value !== undefined) headers[name] = Array.isArray(value) ? value.join(", ") : value;
+    }
+    const status = response.statusCode ?? 0;
+    response.destroy();
+    return Promise.resolve<HeadersFetchResult>({ outcome: "headers", status, headers });
+  });
+}
+
+async function run<T>(
+  url: string,
+  options: Omit<ManifestFetchOptions, "maxBodyBytes">,
+  method: "GET" | "HEAD",
+  finish: Finish<T>,
+): Promise<Stop | T> {
   const open = new Set<Closable>();
   let timer: NodeJS.Timeout | undefined;
   // The race, not a destroy-with-error, is what ends the call on time: a wait the
@@ -110,22 +162,24 @@ export async function fetchManifest(
   // must not be able to outlive it.
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new AppError("TIMEOUT", "The manifest re-fetch exceeded its time budget."));
+      reject(new AppError("TIMEOUT", "The request exceeded its time budget."));
     }, options.timeoutMs);
   });
   try {
-    return await Promise.race([follow(new URL(url), options, open), deadline]);
+    return await Promise.race([follow(new URL(url), options, method, finish, open), deadline]);
   } finally {
     clearTimeout(timer);
     for (const resource of open) resource.destroy();
   }
 }
 
-async function follow(
+async function follow<T>(
   start: URL,
-  options: ManifestFetchOptions,
+  options: Omit<ManifestFetchOptions, "maxBodyBytes">,
+  method: "GET" | "HEAD",
+  finish: Finish<T>,
   open: Set<Closable>,
-): Promise<ManifestFetchResult> {
+): Promise<Stop | T> {
   let proxy: URL | undefined;
   if (options.proxyUrl !== undefined && options.proxyUrl !== "") {
     proxy = new URL(options.proxyUrl);
@@ -159,7 +213,7 @@ async function follow(
     headers["connection"] = "close";
 
     // oxlint-disable-next-line no-await-in-loop
-    const answer = await request(current, headers, proxy, options, open);
+    const answer = await request(current, method, headers, proxy, options, open);
     if (answer.kind === "result") return answer.result;
     const { response } = answer;
 
@@ -187,16 +241,17 @@ async function follow(
       return { outcome: "status", status };
     }
     // oxlint-disable-next-line no-await-in-loop
-    return await readCapped(response, options.maxBodyBytes, open);
+    return await finish(response, open);
   }
 }
 
 /** Sends one request, through the proxy when there is one. */
 async function request(
   target: URL,
+  method: "GET" | "HEAD",
   headers: Record<string, string>,
   proxy: URL | undefined,
-  options: ManifestFetchOptions,
+  options: Omit<ManifestFetchOptions, "maxBodyBytes">,
   open: Set<Closable>,
 ): Promise<Hop> {
   let socket: Duplex;
@@ -228,7 +283,7 @@ async function request(
 
   return await new Promise<Hop>((resolve, reject) => {
     const outgoing = http.request({
-      method: "GET",
+      method,
       path,
       headers,
       createConnection: () => socket,

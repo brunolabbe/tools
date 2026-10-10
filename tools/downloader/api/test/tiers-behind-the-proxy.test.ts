@@ -14,9 +14,8 @@
 
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { BrowserResolver } from "@downloader/resolvers";
+import { BrowserResolver, fetchHeaders, fetchManifest } from "@downloader/resolvers";
 import type { ProbeResult } from "@downloader/contract";
-import { chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
@@ -160,27 +159,36 @@ describe("the browser tier behind the proxy", () => {
   );
 
   test(
-    "the size probe's context.request is proxied too",
+    "the size probe's client routes a length and a playlist through the proxy it is given",
     async () => {
-      // `createRequestSizeProbe` weighs renditions with `context.request`, from
-      // this process rather than from the page — attacker-influenced URLs out of
-      // a manifest. It inherits the context's proxy, which is the only reason
-      // those fetches are checked at all, so it is worth pinning against
-      // Playwright itself rather than against our wrapper. The manifest re-fetch
-      // used to be the other caller; since dl-97 it is its own client, routed
-      // through the proxy by hand, and `manifest-refetch.test.ts` pins that.
-      const browser = await chromium.launch({ headless: true, proxy: { server: proxy.url } });
-      try {
-        const context = await browser.newContext();
-        const response = await context.request.get("http://internal.test/master.m3u8", {
-          timeout: 10_000,
-          failOnStatusCode: false,
-        });
+      // `createRequestSizeProbe` weighs renditions from this process rather than
+      // from the page — attacker-influenced URLs out of a manifest — with the
+      // browser tier's own client, `fetchHeaders` for a length and `fetchManifest`
+      // for a playlist (dl-101). Both route every hop through the proxy by hand,
+      // which is the only reason those fetches are checked at all, so it is
+      // pinned here against the real guard. That the probe is *given* the proxy
+      // is not pinned here, because this hands it over itself:
+      // `size-probe-behind-the-proxy.test.ts` drives a real `BrowserResolver`
+      // for that. Until dl-101 this pinned Playwright's `context.request`, which
+      // the probe no longer uses; the manifest re-fetch's own routing is pinned
+      // in `manifest-refetch.test.ts`.
+      const client = {
+        cookieFor: async () => undefined,
+        storeCookies: async () => {},
+        proxyUrl: proxy.url,
+        maxRedirects: 20,
+        headers: {},
+        timeoutMs: 10_000,
+      };
 
-        expect(response.status()).toBe(403);
-      } finally {
-        await browser.close();
-      }
+      const length = await fetchHeaders("http://internal.test/seg.m4s", client);
+      const body = await fetchManifest("http://internal.test/media.m3u8", {
+        ...client,
+        maxBodyBytes: 1024,
+      });
+
+      expect(length).toEqual({ outcome: "status", status: 403 });
+      expect(body).toEqual({ outcome: "status", status: 403 });
     },
     TEST_TIMEOUT_MS,
   );
