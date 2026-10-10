@@ -295,8 +295,9 @@ coordinator:**
 
 **Finding 1 (high), reproduced and fixed by withdrawing the signal.** The gate's
 pages through the real `BrowserResolver`, a press counted as `/beacon/bad`:
-`GATE head c1: bad=2`, `c2`, `c4`, `c5`, `c7`, `c10` all `bad=2` at `a7f47bd2`
-(`gate-1/cases-head.log`), 0 at base. Reproduced on the pushed head: against the
+`GATE head c1: bad=2`, `c2`, `c4`, `c5`, `c7`, `c10` all `bad=2` at `a7f47bd2`,
+0 at base (gate 1's report table: c1, c2, c4, c5, c7 and c10 are 0 on base and 2
+on head, the controls c3 and c6 are 0 and 0; "10 of 10 run each time"). Reproduced on the pushed head: against the
 old `provoke.ts` the new spec fails `× c1 … presses nothing`, `c2`, `c4`, `c5`,
 `c7`, `c10` (and `c8`, `c9`, below). With the signal taken out all of them press
 nothing, `c3` and `c6` still do (the controls). `clickConsentText`'s JSDoc paragraph
@@ -318,8 +319,9 @@ this paragraph. The gate's c1 to c10 pages are `consent-scope-cases.html`
 (`?case=`), tested in `consent-scope.test.ts` as "layers that base left alone are
 still left alone": each presses nothing.
 
-**Finding 2 (med), reproduced and fixed.** `regex.mts` in the gate's directory
-showed 12 deltas in 39 strings. Reproduced as `provoke.test.ts` `SILENT` rows
+**Finding 2 (med), reproduced and fixed.** Gate 1's comparison of the base and
+head constants reported "12 of 39 sample strings differ between base and head",
+among them "Schokocookies", "chocoladecookies" and "Chokladcookies". Reproduced as `provoke.test.ts` `SILENT` rows
 "Schokocookies backen…", "Haferflockencookies…", "chocoladecookies",
 "Chokladcookies", "Supercookie", "#sugarcookie", "thecookiejar" and "3
 Schokocookies im Warenkorb.", which fail at `a7f47bd2` and pass now; c8 and c9 are
@@ -355,3 +357,39 @@ entry is withdrawn and both stay. The r5b wording is corrected above.
 
 **Dropped by the gate:** `SENTENCE_WORD`'s `g` flag was never a defect, and the
 constant is gone with the signal.
+
+2026-10-10, **fixed at landing, by the owner's choice** (asked: "What should the
+lander do, with no re-gate?"; chosen: "Add the nine prefixes and inline the Log's
+evidence"). Gate 2 passed `b24e9cd0`, recorded two new lows and dropped one attack as a cost
+the owner had chosen; this landing pays down the dropped attack and the second low,
+and leaves the first low recorded.
+
+1. _The named list missed consent compounds that `a7f47bd2` matched_ (gate 2's
+   dropped attack: it called this the cost the owner chose, and the owner chose
+   to pay it down). `präferenz`, `komfort`, `sitzungs`, `leistungs`,
+   `performance`, `targeting`, `session`, `erstanbieter` and `advertentie` are
+   added to the prefix list in `CONSENT_WORDING`, with one `SPEAKS` row each at
+   the end of the compound rows in `provoke.test.ts`. The regex's comment names
+   no list, only "one more name here", so it needed no edit. Before the regex
+   change, `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts`:
+   `Tests  9 failed | 222 passed (231)`, the nine new rows (`× speaks of consent:
+"Wir nutzen Präferenzcookies."` … `"Wij plaatsen advertentiecookies."`).
+   After it: `Test Files  1 passed (1)`, `Tests  231 passed (231)`, which
+   includes all 26 `SILENT` rows. Gate 2's regex comparison, run from this
+   worktree against the new constant: every one of the nine strings reads
+   `head=1` (`base=0 g1=1 head=1`), the 23 `S` rows and the three food rows
+   "Schokocookies backen: das beste Rezept.", "Supercookie Box, 12 pieces" and
+   "Recept voor chocoladecookies." read `head=0`: 26 of 26 silent. Not covered,
+   as before: Dutch "analytischecookies" (`g1=1 head=0`) and Swedish
+   "spårningskakor" (`g1=0 head=0`).
+2. _The Log cited the gate's scratch files_ (gate 2's second new low). The two
+   citations, to gate 1's `cases-head.log` and `regex.mts`, are replaced above by the
+   gate 1 report's own quoted lines. The builder's `proto.mts (scratch)` in the
+   build entry is unchanged: it is marked as scratch there, and the gate did not
+   cite it.
+
+**Recorded, not fixed** (gate 2's first new low, accepted as a cost): promotional
+"Werbecookies mit Ihrem Logo bedrucken lassen." and "Marketingcookies als
+Give-away, 100 Stück" match the named list (gate 2's regex comparison, run here: `base=0 g1=1 head=1` for both). A
+bakery's give-away copy that uses those two words as a compound is read as a
+consent layer, on the regex alone; no page was measured.

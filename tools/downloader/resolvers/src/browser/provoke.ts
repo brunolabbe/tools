@@ -1128,7 +1128,7 @@ const ZONE_DIALOG = "dialog";
  * "sockerkakorna" stay silent.
  */
 export const CONSENT_WORDING =
-  /(?<!\p{L})(?:(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter)?cookie|ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+  /(?<!\p{L})(?:(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter|präferenz|komfort|sitzungs|leistungs|performance|targeting|session|erstanbieter|advertentie)?cookie|ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
 
 /**
  * What a layer holds only when it is the page rather than a banner over it

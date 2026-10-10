@@ -386,6 +386,17 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Wir verwenden Statistikcookies und Marketingcookies.",
     "Läs mer om kakorna på sajten.",
     "Vi använder kakorn.",
+    // dl-93, at landing (gate 2): the compounds a7f47bd2's bare "cookie" matched
+    // and the first named list did not.
+    "Wir nutzen Präferenzcookies.",
+    "Komfortcookies erlauben",
+    "Wir verwenden nur Sitzungscookies.",
+    "Leistungscookies zulassen",
+    "Performancecookies zulassen",
+    "Targetingcookies zulassen",
+    "Wir nutzen Sessioncookies.",
+    "Erstanbietercookies",
+    "Wij plaatsen advertentiecookies.",
   ];
 
   // What a docked bar, a header notice or a form says instead. These are the
