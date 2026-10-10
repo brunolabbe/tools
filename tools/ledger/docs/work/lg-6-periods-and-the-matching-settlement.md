@@ -7,7 +7,6 @@ status: done
 milestone: P3
 depends_on: [lg-5]
 difficulty: hard
-awaiting: Done when 6 — the CodeQL alert on GET /api/recurring in routes/periods.ts reads dismissed or suppressed on the security tab after the push to main that runs security.yml's dismissal step
 ---
 
 # lg-6 — Periods of personal-card spending, closed with the matching rule
@@ -462,3 +461,14 @@ passed (16)`.
     repo-88's first decision: a recorded adr/005 excusal makes the line
     awaiting the push to `main` that runs `security.yml`'s dismissal step,
     and the alert's state read after it.
+
+- 2026-10-10 — The `awaiting` line closed. Done when 6, "Gates green", waited
+  on the CodeQL alert on `GET /api/recurring` in `routes/periods.ts` reading
+  dismissed or suppressed after the push to `main` that runs `security.yml`'s
+  dismissal step. It does: alert #29 (Missing rate limiting,
+  `routes/periods.ts:131`) reads closed as false positive. The reading is the
+  owner's, taken from the repository's code-scanning page on `main`
+  (`is:closed branch:main`) after #408 (`7709411e`) merged, and given as a
+  screenshot; it was not re-run here. The alert's line is the route handler
+  directly below its `codeql[js/missing-rate-limiting]` comment in the current
+  source (`grep -n`: `periods.ts:130`/`131`).
