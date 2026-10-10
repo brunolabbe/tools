@@ -4924,3 +4924,41 @@ No narrative, no proposed rule text, and no item without a reproduction: a
 defect nobody can re-run is an opinion, and the review will drop it. An item
 about a refused shell shape, or about a rule the orchestrator itself broke, is
 not a defect in a page: the 2026-10-10 review dropped twelve of those.
+
+### Batch 2026-10-10 (tools-4a, lg-15 and lg-17 stacked) — base ad51f0b
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over ten ready ids | 54s / 54s | 0 | $0.2425 |
+| #406 | open, ready | Sonnet 5.5 / high | builder-standard | lg-15 build and round 1 | 23m05s / 50m11s | 0 | $10.0878 |
+| #406 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | lg-15 gates 1 and 2 | 14m52s / 30m41s | 0 | $5.5272 |
+| #406 | open, ready | Sonnet 5.5 / high | fixer | lg-15 landing | 2m18s / 10m16s | 0 | $0.4524 |
+| #408 | open, draft (stacked) | Opus 5.5 / high | builder-hard | lg-17 build | 20m23s / 20m15s | 0 | $7.1330 |
+| #408 | open, draft (stacked) | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-17 gates 1 and 2 | 28m28s / 51m27s | 0 | $8.8926 |
+| #408 | open, draft (stacked) | Sonnet 5.5 / high | fixer | lg-17 round 1 | 4m44s / 4m39s | 0 | $1.2311 |
+| #408 | open, draft (stacked) | Sonnet 5.5 / high | fixer | lg-17 landing | 2m23s / 2m19s | 0 | $0.5342 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 33m03s / 3h01m58s | 0 | $3.9776 |
+
+Total $38.0785, active 2h10m10s (rates read 2026-09-30).
+
+**Tickets:**
+
+- lg-15 → #406: gate 1 CONCERNS (F1 med CodeQL, owner excused under adr/005; F2, F3 med; F4–F10 low, F4 owner left recorded), gate 2 CONCERNS (no high); F4, F5, F8 (owner declined fixing at landing), F9, F10 recorded; `awaiting` CodeQL dismissal on push to main.
+- lg-17 → #408, stacked on lg-15's landed head 2d821a4b, held as a draft until #406 merges: gate 1 CONCERNS (F1 med CodeQL, owner excused; F2 med four of eleven readers untested; F3–F6 low), gate 2 CONCERNS (nothing above low; F6 remainder owner chose (c) leave; G2-1 low fixed at landing by owner choice); F4, F5 recorded; `awaiting` CodeQL dismissal on push to main.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md`, the bullet under _What makes a gate worth its cost_ that sets up the scratch tree — says "a scratch `git worktree` is refused". It is not, at least in this harness. Reproduction (lg-17 gate 1): `git worktree add --detach <scratch>/lg-17-base 2d821a4b…` → `Preparing worktree (detached HEAD 2d821a4b)`, then the farm built 402 entries in it and the base's own code built a v6 database.
+2. `roles/reviewer.md`, _When you are woken to re-gate_ — offers three verdicts per finding (fixed, not fixed, refuted), and a finding fixed in half fits none. Reproduction: lg-17 gate 2's F6, where the refusal at boot was tested and the migration's copy proof was not (`git show origin/lg-17-auto-file-from-history:tools/ledger/docs/work/lg-17-auto-file-from-history.md | grep -n 'partly fixed'` → the gate had to invent the verdict).
+3. `roles/reviewer.md`, _When you are woken to re-gate_ — says nothing on how long a gate waits for a CI leg still running, or what it grades when it stops. Both re-gates in this batch found the ubuntu leg running; lg-15's gate polled with a background `sleep 30; gh pr checks` loop until the orchestrator's dispatch said "do not wait more than a few minutes". Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n -i 'wait'` → no line bounds the wait.
+4. `review-ticket/gate.md`, _Worked cases_, "An excused check: lg-5's Done when 4" — ends "a red leg nobody excused is a finding" and does not say its severity. The severity table can read it as an unmet acceptance line, which is a `high`. lg-17 gate 1 graded it `med` because the lg-5 precedent did. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n 'nobody excused'` → line 226, no severity on it.
+5. `review-ticket/gate.md`, the same worked case — names "the alerts' state on `main` afterwards" as the reading but no channel that can take it from this container. Reproduction (lg-15 gate 2): WebFetch of `https://github.com/brunolabbe/tools/security/code-scanning?query=is%3Aclosed+rule%3Ajs%2Fmissing-rate-limiting` → HTTP 404; `gh api` is denied. So both tickets' `awaiting:` lines have no stated way to be closed.
+6. `SKILL.md`, _After a merge_ — says WebFetch on a `CodeQL` `detailsUrl` "lists each alert's rule, file and line". WebFetch returns a model's summary of the page, not the page. Reproduction (lg-17 gate 1): the summary reported the alert's line, and the gate could not check that line against the page itself, only against the source. It kept line numbers out of the record for that reason.
+7. `roles/fixer.md`, _The work_ — "if `origin/<base>` has moved past the build base, `git merge origin/<base>`". In a landing-only dispatch pinned to a gated head, that merge moves the head after the gate and restarts CI. Reproduction: at lg-15's landing `git log --oneline ad51f0b8..origin/main` → `f9d4d3b9 … (#407)`, touching no ledger path. The fixer followed the dispatch and did not merge, against the page.
+
+**Worked, and worth keeping:**
+
+- The stacked chain (lg-17 cut from lg-15's gated, landed head, draft PR against lg-15's branch) needed no rebase during build or gating, because the parent was finished before the child was dispatched.
+- Reading a build report for behaviour pinned in a test but not raised as a decision: lg-17's spending category for an automatic filing was put to the owner that way.
+- A gate building its database with the base's own code, in a detached base worktree, and migrating it with the head's code (both tickets).
+- The owner-chosen "fixed at landing" path from #407 (lg-17 G2-1), with no re-gate.
