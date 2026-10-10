@@ -74,3 +74,62 @@ ends the batch, and this one keeps it moving.
   recommended option (chosen). The timings come from tools-79's transcript.
   Companion to [repo-95](./repo-95-pilot-gh-stack-then-adopt-it.md), which
   covers the other half of that night's wait.
+- 2026-10-10 — built. One bullet added to `## Decisions` in
+  `.claude/skills/orchestrate-tickets/SKILL.md`, after the "every" bullet: the
+  away signal, the four conditions, the flag, and how it sits beside the
+  sign-off rule. No other page edited; the one cross-reference into repo-95's
+  files is a prose pointer to `reference/concurrency.md`'s "Re-check the seams
+  whenever an owner decision widens a branch", made from `SKILL.md` only.
+
+  **Step 4, the 04:49 dl-83 case, against the four conditions.** The facts are
+  the Why's, from tools-79's transcript, which this build did not re-measure
+  (the 9 s floor, 23.3 s against 25 s, 04:49 and 12:10 are relayed). What
+  could be read on `main`: dl-80's Build step 3 says the floor is "overridable
+  through the resolver's options as `quietMs` already is, so unit tests that
+  expect `NO_MEDIA_FOUND` don't each pay the floor"
+  (`tools/downloader/docs/work/dl-80-the-probe-gives-up-before-a-late-player-starts.md`).
+  1. Reversible by one revert: passes. The fix was one commit passing the
+     existing override to three no-media tests, on stacked branches not merged.
+  2. No contract, taxonomy, settings, workflow, `Dockerfile` or allowlist:
+     passes, since test files only. Widens no branch into a file its Build did
+     not name: passes in the sense that matters, because dl-79, dl-82 and dl-83
+     each already had a no-media test, though the edit lands in a file those
+     branches' Builds did not list; the conditions as written do not settle
+     that, and the seam re-check would have been the test.
+  3. No `Done when` line and no gate verdict: passes. The gates' records stand
+     as written. The orchestrator held it because it edited tests after their
+     gates, which is a reason to flag the choice and offer a re-gate, not a
+     verdict changed.
+  4. Dry-run, and no builder's or gate's recommendation overridden: passes as
+     the Why describes it. The fixer found the override use, and it was the
+     recommended option when asked.
+     So it qualifies, with the one soft spot in condition 2 named above. I did not
+     tighten the wording to remove it: the ticket's Build gives the four conditions
+     and the Done-when asks for them as written.
+
+  **An earlier held decision that fails them:** `reference/history.md`,
+  "Fifteenth session — 2026-09-09", item 2 under "What the skill got wrong",
+  and `docs/work/repo-32-*.md` `Done when` 6b: what `awaiting` means (three
+  readings; the owner chose A, "waiting on an event that will happen"). It was
+  held, with `status: in-flight`, until answered. It fails **condition 3**: the
+  question is a `Done when` line of repo-32 itself, "the meaning of `awaiting`
+  … is put to the owner before the parser is written, and the answer recorded
+  here". It fails **condition 4** as well: the gate and the orchestrator read
+  the instances one way and the builder another (repo-32's Log, the 2026-09-07
+  entry "Answered by the owner: option A", under "The classification is
+  disputed"), so no one recommendation could be taken over a builder's or a gate's. Run
+  with `grep -n "Fifteenth session" .claude/skills/orchestrate-tickets/reference/history.md`
+  → line 1946; `sed -n 1974,1998p` of the same file for the item. History has
+  no row saying the owner was away for it, so it fails on the conditions alone,
+  with or without an away signal.
+
+  **How the two rules coexist,** as the bullet words it: the standing rule
+  (a decision arriving after the owner has signed off becomes a ticket and the
+  turn ends in `# Done`) closes a batch; this one keeps an unfinished batch
+  moving while the owner says they are away. A sign-off, not an away signal, is
+  what moves a decision from this bullet to that rule. That standing rule is
+  the owner's practice (the Why calls it "the standing rule"); no page in the
+  skill states it, so the bullet describes it rather than linking to it.
+
+  **Fold-in.** Nothing else was made free, and I could have looked for more
+  only in `roles/` and `reference/concurrency.md`, which are repo-95's seam.

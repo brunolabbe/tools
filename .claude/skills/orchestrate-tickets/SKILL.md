@@ -231,6 +231,28 @@ work. How to ask is the root `CLAUDE.md` rule. What is specific to a batch:
   gate's numbers; the owner re-chose each time.
 - **An acceptance line that says "every" is reworded to an enumerable scope
   before dispatch**, or the gate can always find one more shape (dl-58).
+- **While the owner is away, a reversible choice is taken, not held.** An away
+  signal is the owner saying so; silence is not one, and neither is a cache
+  expiry. Then a decision that meets **every** condition is taken on your
+  recommended option without asking:
+  - it is reversible by **one revert** of a commit this batch made, on a branch
+    not yet merged;
+  - it touches no contract, error taxonomy, `.claude/settings.json`, workflow,
+    `Dockerfile` or allowlist, and widens no branch into a file its Build did
+    not name (_Re-check the seams whenever an owner decision widens a branch_ in
+    `reference/concurrency.md`);
+  - it changes no `Done when` line and no gate verdict;
+  - you dry-ran it (_Dry-run before you name it_), and the choice does not
+    override a builder's or a gate's recommendation.
+
+  Anything else is still held, or filed as a ticket at close. **Flag each choice
+  taken this way** in a comment on the pull request and in the report the owner
+  reads on return, in the form `AskUserQuestion` would have used: the question,
+  the options, the one taken, and the commit to revert, so the owner can
+  overrule it in one line. This is narrower than the rule that a decision
+  arriving after the owner has signed off becomes a ticket and the turn ends:
+  that rule closes a batch, this one keeps an unfinished batch moving, and a
+  sign-off, not an away signal, is what moves a decision from here to there.
 
 ### Relaying
 
