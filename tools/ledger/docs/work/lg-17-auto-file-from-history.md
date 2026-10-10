@@ -123,8 +123,8 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
 - 2026-10-10 — **Storage: the table rebuild, not a sibling record** (item 4),
   decided before migration 7 was written, by two measurements.
   - _What a sibling record would have to change._ Item 8 names two direct
-    readers of the standing classification; there are ten read sites in six
-    files, and every one would have to union a second table and order the two
+    readers of the standing classification; there are ten read sites in five
+    files (the build added an eleventh, `autoFiled`), and every one would have to union a second table and order the two
     by something they do not share (a sibling's ids are not the
     classifications' ids, so "the latest appended stands" stops being one
     comparison). `grep -rnE "FROM classifications|JOIN current_classifications|FROM current_classifications" tools/ledger/api/src`,
@@ -193,3 +193,52 @@ NULL`. SQLite cannot change a `CHECK` without rebuilding the table, and
     how many rows history filed would be new, owner-visible behaviour, so it is
     in the build report's open decisions rather than here.
   - Item 7: the limits were workable as written; §3's amendment is unchanged.
+- 2026-10-10 — **Gate 1, round 1: the owner's decisions and the fixes.** The
+  owner decided five things on 2026-10-10. Where an option is not named below,
+  the fixer's dispatch did not carry it.
+  1. _When history files a row._ Chosen: on a paste only, never on a third
+     answer (an answer given after the paste files no row already waiting).
+     Built that way; the builder recommended it.
+  2. _How the review list is reached._ Chosen: a "Review N filed automatically"
+     button at the top of the inbox, opening a separate screen. Built that way;
+     the builder recommended it.
+  3. _The paste report._ Chosen: unchanged. Built that way; the builder
+     recommended it.
+  4. _An automatically filed row's spending category._ Chosen: its override,
+     then the map, never a rule its answers cited. Over: the latest answer's
+     cited rule first. The builder built this and pinned it in a test without
+     raising it as a decision; the orchestrator put it to the owner.
+  5. _Gate finding F1 (CodeQL `js/missing-rate-limiting` on
+     `GET /api/inbox/auto-filed`)._ Chosen: the alert is excused under
+     `docs/adr/005`, as gate 1 recommended. The route is limited (`{ onRequest:
+read }`); `api/test/route-limits.test.ts` fails 1 of its 41 tests
+     without it, "autoFiled refuses the second request in a minute, as
+     RATE_LIMITED", reproduced on this head before the comment was written.
+     The five-field comment is on the route in `api/src/routes/inbox.ts`.
+
+  Findings fixed in this round:
+  - _F1:_ the register comment, above.
+  - _F2:_ four readers of the standing classification had no test. Added
+    beside the three that exist, in `api/test/auto-file.test.ts`: "a closed
+    period's expected deposit is matched by a row history filed" (`periods.ts`
+    `bufferRows`) and two workbook-import tests that run the import over a
+    stored tail whose newest row is an `auto` record, one where the workbook
+    files it the same way (`storedRows`, the figures query) and one where it
+    files it another way, so the import must refuse naming the row and must
+    not say the row is waiting (`storedRows`, the unclassified count). Each of
+    the four readers, given `source <> 'auto'`, fails at least one of them.
+    The import tests rewrite the third stored record to history's own shape in
+    SQL: no paste can put an automatic row at the tail of a stretch the
+    workbook also holds, and the app never rewrites a record.
+  - _F3:_ "six files" above is five; the build added an eleventh reader.
+  - _F6:_ three damaged release 6 databases (a record naming a row that does
+    not exist; one naming a rule that does not exist; a value release 6's own
+    check forbids) are refused at boot and stay at `user_version` 6 with every
+    classification intact and no `classifications_v7` or `rests_on` object.
+    Only the refusal at boot is covered: migration 7's own proof (`copied = kept
+AND differing = 0`) cannot be made to fail from a test without changing
+    `schema.ts`, since a copy that differs needs the migration itself to be
+    wrong, and the prototype measurement above remains its only firing.
+  - _Recorded, not fixed (F4, F5):_ the four older register comments' "1 of its
+    40" are dated measurements and only the new comment says 41; `amountFits`
+    has a dead `Math.sign` clause.

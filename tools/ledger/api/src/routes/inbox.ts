@@ -27,6 +27,16 @@ export function registerInboxRoutes(app: FastifyInstance, context: AppContext): 
     return body;
   });
 
+  // CodeQL's `js/missing-rate-limiting` models express-rate-limit and its kin,
+  // not `@webtools/core`'s `RateLimiter`, so it reads the `read` hook on this
+  // route as no limit at all; the route is limited per person like every other
+  // (`rate-limit.ts`). Excused under `docs/adr/005`, here in
+  // `api/src/routes/inbox.ts`. Guarded by `api/test/route-limits.test.ts`:
+  // taking `{ onRequest: read }` off this route fails 1 of its 41 tests,
+  // "autoFiled refuses the second request in a minute, as RATE_LIMITED" — that
+  // test, not this comment, is what holds it. Measured 2026-10-10 on lg-17,
+  // head 7dcaa89c.
+  // codeql[js/missing-rate-limiting]
   app.get(ROUTES.autoFiled, { onRequest: read }, async () => {
     const body: AutoFiledResponse = { rows: autoFiled(context.db) };
     return body;
