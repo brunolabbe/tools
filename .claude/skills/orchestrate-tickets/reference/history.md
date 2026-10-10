@@ -4874,3 +4874,49 @@ Total $99.5301, active 6h47m39s (rates read 2026-09-30).
 - Gating a filing before putting its options to the owner caught a false mechanism in one option (dl-102 gate 1 F1).
 - Resuming disconnected builders from their local commits lost no work: each finished from its own transcript.
 - Peer sessions split `dl-` ids by message (tools-dd took dl-100; this batch held dl-101–103, lg-18) with no collision.
+
+### Batch 2026-10-08 (tools-f1, dl-101, dl-102 and dl-98's record) — base 856a4e8
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | claude-sonnet-5-5 / medium | seam-mapper | intake seam map, 3 tickets | 43s / 43s | 0 | $0.1564 |
+| #404 | — | claude-opus-5-5 / high | builder-hard | dl-102 first build, stopped at the farm's stale-checkout warning, built nothing | 1m09s / 1m09s | 0 | $0.4714 |
+| #404 | ready, CI pending at writing | claude-opus-5-5 / high | builder-hard | dl-102 build, round 1, files dl-103 | 33m46s / 2h08m12s | 1 | $15.7626 |
+| #404 | ready, CI pending at writing | claude-sonnet-5-5 / xhigh | ticket-reviewer-sonnet | dl-102 gates 1–2 | 38m35s / 1h48m06s | 0 | $12.4590 |
+| #404 | ready, CI pending at writing | claude-sonnet-5-5 / high | fixer | dl-102 N1–N4 and dl-103's decision, landing | 3m21s / 12m49s | 0 | $0.7637 |
+| #403 | ready, all checks green | claude-sonnet-5-5 / high | builder-standard | dl-101 build, round 1, landing | 27m35s / 2h31m43s | 1 | $5.3929 |
+| #403 | ready, all checks green | claude-opus-5-5 / high | ticket-reviewer-opus | dl-101 gates 1–2 | 19m35s / 1h46m30s | 1 | $5.0376 |
+| #402 | ready, all checks green | claude-sonnet-5-5 / high | builder-standard | dl-98 record (owner answers), docs only | 2m22s / 11m42s | 0 | $0.4465 |
+| #402 | ready, all checks green | claude-opus-5-5 / high | ticket-reviewer-opus | dl-98 record gate 1, narrow | 2m48s / 2m48s | 0 | $0.9243 |
+| #402 | ready, all checks green | claude-sonnet-5-5 / high | fixer | dl-98 F1, F2, L2, landing | 2m40s / 12m09s | 0 | $0.5200 |
+| — | — | claude-opus-5-5 / high | orchestrator | dispatch, gate, decide (floor; read before this entry) | 1h25m55s / 3h07m54s | 0 | $4.6085 |
+
+Total $46.5428, active 3h38m29s (rates read 2026-09-30), from `node scripts/agent-cost.mjs --agent … ` with one id per flag; the fixer that appends this entry is not in it.
+
+**Tickets:**
+
+- dl-98 → #402 (records only: the owner's 403/503 answer and its deferral behind dl-102; dl-98 itself not built): gate 1 FAIL (F1 med `depends_on` lacked dl-102, F2 med Log lacked the question's provenance), fixed at landing without a second gate; no gate record in the ticket, which stays `ready` — the report is a PR comment.
+- dl-101 → #403: gate 1 FAIL (F1 high a replaced test no longer pinned the size probe's proxy wiring, owner chose a resolver-level test; F2 high a 64 MiB bound passed a 32 MiB reader), gate 2 PASS; G2-1 low recorded.
+- dl-102 → #404: gate 1 CONCERNS (F1 open decision measured as a 13-row table, owner chose fail-open plus dl-103; F2 med redirect hops unpinned; F3 med five CodeQL alerts), gate 2 CONCERNS (N5 med: dl-103's code is a contract question; owner chose reuse `SOURCE_NOT_SEEKABLE`); F4, F5, F9 and gate 2's lows left recorded or fixed at landing as written. dl-103 filed.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, step 1 "Intake" — it checks ticket state against `origin/main` but not the shared checkout's `node_modules` against `package-lock.json`, so a batch dispatched after a dependency-adding merge (#396) sends every builder into the farm's stale-checkout stop. Reproduction: `grep -c -i "npm install" .claude/skills/orchestrate-tickets/SKILL.md` → `0`; the first dl-102 builder's `bash .claude/scripts/worktree-farm.sh` → `warning: /workspaces/tools is missing 148 package(s) that /workspaces/tools/package-lock.json declares`, one builder start lost ($0.47).
+2. `roles/common.md`, "Your worktree" — "If the farm warns that the shared checkout is stale, stop and report it" names a remedy (`npm install` in the shared checkout) no dispatched agent may apply, and gives no recovery path; three agents hit it and one stopped. Reproduction: `grep -n -i stale .claude/skills/orchestrate-tickets/roles/common.md` → `23:     If the farm warns that the shared checkout is stale, stop and report it.`; farm output ends `remedy: run npm install in the shared checkout (/workspaces/tools), then re-run the farm.`
+3. `roles/builder.md`, "Set up", steps 1–2 — step 1 creates the branch before step 2 farms, so a builder stopping on the farm warning leaves a ref that the re-dispatch's step 1 must refuse. Reproduction (dl-102's first builder): after `git checkout -b dl-102-refuse-range-ignoring-tail-moov origin/main` the farm warned; `git branch -D dl-102-refuse-range-ignoring-tail-moov` → `Deleted branch dl-102-refuse-range-ignoring-tail-moov (was 856a4e87).`
+4. `reference/records.md`, "Landing" — no route for a gate on a records-only branch whose ticket must stay `ready`: `--land` takes only `done|in-flight`, and "No commit carries a record on a `ready` ticket". dl-98's gate went to a PR comment only, by the orchestrator's choice. Reproduction: `node scripts/review-record.mjs --help` → `--status done|in-flight`; `grep -n "ready. ticket" .claude/skills/orchestrate-tickets/reference/records.md` → `47:  record on a \`ready\` ticket: \`status.mjs\` fails one.`
+5. `review-ticket/gate.md`, "Steps", step 4 — none of the verdicts is for an acceptance line measured as not met; dl-98's gate used `unproven` with "measured not met". Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -i "not met\|disproven"` → nothing.
+6. `review-ticket/gate.md` and `roles/reviewer.md` — silent on gating a second ticket the branch files (dl-103: format, id, reproduction fidelity, whether `ready` is honest); the checks came from the dispatch. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -i "needs-decision\|follow-up\|filed"` → nothing.
+7. `roles/reviewer.md`, finding with two remedies — "give both with a recommendation" conflicts with an orchestrator dispatch that asks the gate to measure an open decision's premise without choosing; the page does not say which wins. Reproduction: `grep -n recommendation .claude/skills/orchestrate-tickets/roles/reviewer.md` → line 74; dl-102 gate 1 followed the dispatch.
+8. `roles/builder.md`, "Before you report" and "When you are resumed with findings" — preflight prints `ok` lines without counts, while `common.md` "Your report" asks for every count with its denominator, so the counts need a separate ~9-minute suite run. Reproduction (dl-102 builder): `grep -nE "Test Files|Tests  " <scratch>/build/preflight.log` → nothing, beside `ok    npm test -- --project downloader`.
+9. `reference/dispatching.md`, "A builder prompt carries", "The narrowest thing that can fail" — my dispatch named `npx vitest run tools/downloader/resolvers`, which is not narrow and exceeds a foreground call. Reproduction (dl-101 builder): `Duration 556.88s`, 947 tests.
+10. `roles/common.md`, "Populate and build before you measure anything" — no recipe for a second tree (a base copy or a mutation copy): the farm fails outside a git repo, and a scratch `git worktree` is refused. Reproduction (dl-102 gate): `bash /workspaces/tools/.claude/scripts/worktree-farm.sh` in a `git archive` copy → `fatal: not a git repository (or any of the parent directories): .git`; `git archive <rev> | tar -x` plus `cp -a node_modules` worked.
+11. `roles/fixer.md`, "Set up" — a docs-only landing still needs the farm and `npm run build`, since preflight's `npm run check` typechecks every workspace. Reproduction (dl-98 fixer): first preflight → 31 TS errors in untouched files, e.g. `tools/ledger/api/src/xlsx.ts(13,32): error TS2305: Module '"@ledger/books"' has no exported member 'Sheet'.`; after the farm and build, exit 0.
+12. `review-ticket/gate.md`, step 4 "verified" — asks for the suite at base too, ~9 minutes for the downloader project, with no cheaper alternative such as counting deletions in the test-file diff. Reproduction (dl-101 gate 1): the downloader suite ran 553 s at the head; the base run was skipped and said so.
+13. `roles/common.md`, "The sandbox refuses some ordinary shell shapes" — still incomplete; one refused shape takes the whole chained command with it. Reproductions: `npx vitest run … > <file> 2>&1; echo exit=$?; grep -E "Tests " <file>; git add -A` → "names git in a form too complex", nothing ran; `$(node -p 'require("ffmpeg-static")') -hide_banner …` → "runs a command whose name is computed at runtime"; `timeout 110 bash -c "until [ -s $D/preflight.exit ]; do sleep 3; done"` → "runs bash in a plain command"; `n=$(grep … | cut …)` then `sed -i "$((n-1)),\$d"` → "evaluates n arithmetically"; `bash <script> > file 2>&1; echo $? > file; tail …` (no git) → "too complex to verify".
+
+**Worked, and worth keeping:**
+
+- Sending a builder's open decision to the gate to measure before asking: dl-102's 13-row no-answer table turned a three-option guess into a choice with counts (8 garbage paths, 9 working cells option B would break), and the owner answered in one question.
+- Telling running builders to hold while the orchestrator ran `npm install` kept two of three builds alive instead of re-dispatching them.
+- A peer's released ids (tools-f0: dl-103, lg-18) claimed by message before a builder filed dl-103.
