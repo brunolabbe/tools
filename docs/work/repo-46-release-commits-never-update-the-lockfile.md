@@ -7,7 +7,6 @@ status: done
 difficulty: standard
 milestone: null
 depends_on: []
-awaiting: Done when 1 and 3 — the first release commit after #328 changes package-lock.json with its check job green, and npm install --package-lock-only then leaves the lockfile unchanged
 ---
 
 # repo-46 — Release commits never update `package-lock.json`
@@ -760,3 +759,15 @@ lockfile on release and catch drift in CI (repo-46)"` at `d7a9b22`:
 --grep='^chore(.*): release'` printed nothing today, so no release has
   happened since #328 and both lines are still owed. Whoever reads the first
   release commit deletes the line.
+
+- 2026-10-10 — The `awaiting` line closed. Done when 1 and 3 waited on the
+  first release commit after #328 (`c07f984c`). That is `b0cb014b`,
+  `chore(downloader): release 0.8.0 (#284)`, the oldest commit printed by
+  `git log --reverse --grep='^chore(.*): release' c07f984c..origin/main`.
+  **1:** `git show --stat b0cb014b` lists `package-lock.json`; #284's head
+  (`1fa0ef17`) contains `c07f984c` (`git merge-base --is-ancestor`), and its
+  CI run's `check` job ran `node scripts/check-lockfile-sync.mjs` with
+  conclusion `success` (`gh run view 37148143142 --json jobs`). **3:** in a
+  detached scratch worktree at `b0cb014b`, `npm install --package-lock-only
+--ignore-scripts` exited 0 and `git diff --stat` printed nothing. All four
+  later release commits (#294, #337, #369, #360) also touch the lockfile.
