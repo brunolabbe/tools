@@ -7,7 +7,6 @@ status: done
 milestone: M5
 depends_on: [dl-51]
 difficulty: standard
-awaiting: the owner's two steps after merge — redeploy the host, then either create the dashboard rate limiting rule (Free plan, path starts with /api/, 20 per 10 s) or decide to create none, and fill in the allowances table in docs/02-DEPLOYMENT.md from the rule form
 ---
 
 # dl-52 — Limits for anonymous traffic
@@ -343,3 +342,24 @@ Acceptance, re-run on `261dc65`:
   - Not changed: the 60 per 60 s and 20 per 10 s thresholds. The gate found them
     sound for the downloader (about 19 `/api/` requests a minute at the in-process
     ceiling).
+
+- 2026-10-10 — The edge rule exists and blocks; the `awaiting` line now
+  carries only the redeploy. A rule the owner made on the dashboard let 30
+  requests to `downloader.oludoi.com/api/files/rate-limit-probe` through in
+  1.7 s (30 × `404`). The owner then replaced it through the Rulesets API: a
+  `PUT` on the zone's `http_ratelimit` entrypoint, with `ip.src` and
+  `cf.colo.id` as characteristics, 20 requests per 10 s, and Block for 10 s. The
+  script sent `starts_with(http.request.uri.path, "/api/")` first and would have
+  fallen back to `http.request.uri.path wildcard "/api/*"` if refused. Which one
+  landed was not relayed. Measured by the owner from their own address after
+  60 s: the same 30 requests gave 20 × `404` and 10 × `429`, and one more 12 s
+  later gave `404`. Since the form was never read, the allowances table in
+  `docs/02-DEPLOYMENT.md` keeps its published figures, with the measured rule
+  in its last row. Whether the host has been redeployed was not reported, so
+  that stays owed.
+
+- 2026-10-10 — The `awaiting` line closed: the host runs this ticket's
+  values. On the host, `docker compose exec downloader printenv
+MAX_JOBS_PER_CLIENT` printed `2`, the value #362 set in
+  `compose.downloader.prod.yaml`. The reading is the owner's, relayed as the
+  command and its output.
