@@ -509,3 +509,21 @@ video stream was found on that page.`) and "beside two whole files in one
   **Dropped by the gate, no action:** the manifest-budget claim, the noisy-page
   `TIMEOUT` claim, and the `readBody` refactor claim (a 21-body differential
   matched).
+
+- 2026-10-10, owner answer on gate 2's read-order cost. Gate 2 measured that a
+  whole movie ranked after a larger fragment in its directory is never read, and
+  is dropped (its `/whole-after.html` gives `NO_MEDIA_FOUND`). The cost was
+  already recorded in the round 1 entry above ("what survives depends on read
+  order"); gate 2 priced it. Question put to the owner, with the options:
+  - **Accept it as recorded, and land.** The recommended option. **Chosen.**
+  - Land, and file it as dl-106.
+  - Fix before landing.
+
+  Gate 2's lows are recorded unfixed, as the record carries them. Two defects
+  found alongside are filed in this pull request:
+  [dl-104](./dl-104-a-chunk-named-file-on-another-host-drops-a-whole-numbered-file.md)
+  (`rank.ts`'s `directoryOf` ignores the host, the shape the sniff's own
+  directory key was fixed for here) and
+  [dl-105](./dl-105-the-empty-floor-test-measures-below-its-own-floor-in-a-full-suite.md)
+  (dl-80's empty-floor test read 8577 ms against its 9000 ms floor in this
+  ticket's first preflight; passes alone).
