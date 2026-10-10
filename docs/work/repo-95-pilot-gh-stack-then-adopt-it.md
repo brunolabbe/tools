@@ -271,6 +271,136 @@ stack merge`, and it is the glob matcher whose measured escapes the hook was
   imports, errors, URLs, spawns, tests or workspaces are touched. Not run: `npm
 test` (no code changed; CI's `test` legs were still running on this head).
 
+### Gate 2
+
+**Gate: PASS** (for the slice the dispatch scoped) — 2026-10-10 · `13b707b5..714a8796` · Sonnet 5.5, depth narrow
+
+The round is one commit, `714a8796`, touching `.claude/hooks/check-main-writes.sh`,
+`scripts/test/hooks.test.ts` and the ticket's Log. Gate 1's rows are unchanged:
+Done when 1's rule half is now held by two layers (the deny rule and the hook),
+its refusal half and Done when 2, 3 and 4 stay `unproven (scope)` on the owner's
+2026-10-10 decision. Nothing in this round is a `high`.
+
+**Gate 1's findings.**
+
+- **F1: fixed.** The hook's merge match is now `gh (pr|stack) merge`. Driven with
+  the same payload gate 1 used (`bash .claude/hooks/check-main-writes.sh < <file>`
+  with a `gh stack merge -y` PreToolUse payload): exit 0 at `13b707b5`, exit 2 at
+  this head, with the refusal text unchanged ("Merging a pull request is the
+  owner's decision, not an agent's…").
+- **F2: not fixed, recorded** — the owner's choice on 2026-10-10.
+- **F3: not in this round.** The owner chose "apply F3 at landing"; the lander
+  does it, so it is not graded as unfixed here.
+
+**Attack 1: the hook.** `drive.mts` in the scratch directory feeds 59 payloads to a
+hook and compares its exit code with the expected one; run on this head's hook it
+reports **59 of 59 as expected, 0 mismatches**.
+
+- Refused (exit 2), 13 `gh stack merge` shapes: bare, `-y`, `--squash 12`,
+  `--merge-method squash --yes 3`, `--help`, after `&&`, after a pipe, after `;`,
+  inside `( )`, on a second line, with doubled spaces, with tabs, with leading
+  spaces.
+- Still refused, the 5 `gh pr merge` spellings `hooks.test.ts` covers
+  (`129 --squash`, `129 --auto --squash`, bare, `--repo owner/other 7`,
+  `cd /tmp && … 129`).
+- Silent (exit 0), 20 other `gh stack` subcommands and flag shapes (`view`,
+  `sync`, `sync --prune`, `submit --open`, `push`, `link a b --open`, `unstack`,
+  `rebase`, `checkout 3`, `init`, `add -A -m x`, `up`, `down`, `top`, `bottom`,
+  `trunk`, `switch`, `alias`, `feedback`, `view --json`), and 21 routine or
+  near-miss commands: `git merge origin/main`, `git merge --no-edit origin/main`,
+  `git merge --abort`, `gh pr view 5 --json mergeable`, `… mergeable,mergeStateStatus,mergedAt`,
+  `gh pr checks 412`, `gh pr list --search is:merged`, `gh pr ready 412`,
+  `gh stack sync && git merge origin/main`, `gh stack view | grep merge`, the
+  command inside an `echo`, double quotes and single quotes, in a one-line
+  `git commit -m "…"`, in `grep -rn "…" docs`, in `git log --grep='…'`,
+  `gh stack mergefoo`, `gh stack merged`, `gh extension list`,
+  `gh extension install github/gh-stack` (step 2's own command) and
+  `npm run status -- --show repo-95`.
+- **Positive control.** The same 59 payloads against the hook as it stood at
+  `13b707b5` (saved to the scratch directory): **13 mismatches**, exactly the 13
+  `gh stack merge` shapes now exit 0; the `gh pr merge` rows and every silent row
+  are unchanged. The driver can fail.
+- **No false positive on a routine command.** One routine shape does refuse, with
+  exact parity to `gh pr merge` (`parity.mts`): a heredoc or `$(cat <<'EOF' …)`
+  commit message whose body has a **line that starts with** `gh stack merge`
+  exits 2 for it and for `gh pr merge` alike, because the hook splits on newlines
+  after stripping only single-line quoted spans. The same text mid-line, or in a
+  one-line `-m "…"`, exits 0 for both. This is the existing, documented
+  line-start behaviour and the test file's `STACK_MERGE` constant is spelled in
+  pieces for the same reason. It matters for step 3's Log and any commit body
+  written through a heredoc, so a line there should not begin with the command.
+  Not a finding: it is the hook's established ceiling, not something this round
+  introduced.
+
+**Attack 2: the new test.** `scripts/test/hooks.test.ts`, "check-main-writes
+refuses a stacked-pull-request merge as it refuses a pull request merge".
+
+- At this head: `npx vitest run scripts/test/hooks.test.ts` → `Tests 34 passed (34)`.
+- With the hook reverted (`git checkout 13b707b5… -- .claude/hooks/check-main-writes.sh`):
+  `Tests 1 failed | 33 passed (34)`, `AssertionError: gh stack merge: expected +0 to
+be 2`. The fixer's "1 failed | 33 passed" reproduces. A hook that does nothing
+  fails the refuse half, so the "contains no X" companion rule is met.
+- The silent half can fail too. Mutation A (regex widened to any `gh (pr|stack)`
+  subcommand): the new test fails on `gh stack view: expected false to be true`
+  (and `check-main-writes stays out of the way of commands that cannot push`
+  fails on `gh pr list --state open`). Mutation B (the `^[[:space:]]*` anchor
+  dropped): the new test fails on `echo gh stack merge: expected false to be
+true`. Each mutation made 1 or 2 tests red; I restored the hook with `git
+checkout 714a8796… -- .claude/hooks/check-main-writes.sh` after each and
+  `git status --short` is empty.
+- The test is the last `test(` in the file and the file ends with its closing
+  brace. The round also adds one line, `const STACK_MERGE`, beside `MERGE` and
+  `PUSH` above the tests; it moves every later line by one. Three tickets' records
+  cite `hooks.test.ts` by line (repo-15, repo-22, repo-42), but the citation
+  checker is retired (adr/006), so nothing reads them; not a finding.
+
+**Attack 3: the Log entry.** Each command in it reproduces.
+
+- `gh stack merge -y` exit 0 then 2, `gh pr merge -y` exit 2 then 2, control
+  `gh stack view` exit 0 then 0: `check3.mts` against the saved `13b707b5` hook
+  and this head's, same three values.
+- "Failed with the hook reverted (`gh stack merge: expected +0 to be 2`, 1 of
+  34), passes with it (34 of 34)": reproduced as above.
+- "The hook's own refusal is unobservable in a session until it reaches `main`":
+  `gh stack merge --help` in this gate's session, with the branch's hook in the
+  worktree, printed `gh stack is available as an official extension…` and exited
+  1; the hook did not fire. Holds.
+- The entry changes no earlier Log line (the commit's only change to the file is
+  15 added lines).
+
+**CI.** On head `714a8796`: `check` (both), `codeql`, `CodeQL`,
+`dependency-review` and `changes` are green; `test (ubuntu-latest)` and `test
+(windows-latest, informational)` were `IN_PROGRESS` when read. No row depends on
+them; I ran the hooks suite myself (34 of 34).
+
+### Findings
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it · F4: the
+  new comment in the hook's merge loop says `gh extension exec`, an absolute path
+  to gh and an alias "are the ceiling of a command-string hook, stated in the
+  header", and the Log says "the ceiling the hook's header already states". The
+  header's INDIRECTION bullet names a shell alias and, through CLAUDE.md's
+  "`/bin/echo` defeats a deny on `echo`", an absolute path; it never mentions
+  `gh extension exec` (grep for "extension exec" in the file finds only the new comment).
+  The header's first line also now reads "`gh pr merge` and `gh stack merge` in
+  any spelling", which the comment beside the code contradicts ("Only the exact
+  spellings are matched"). Fixable at the landing with no re-gate: add
+  `gh extension exec stack merge` to the INDIRECTION bullet, one clause. The
+  other remedy is to reword the code comment to "the INDIRECTION limit in the
+  header"; I recommend the header edit, since the next editor reads the header.
+  No live call site until step 2 installs the extension.
+- **dropped** · the heredoc line-start refusal above as a regression: it is
+  identical for `gh pr merge` before this round and is the documented ceiling.
+- **dropped** · the new line in the file above the tests moving later lines: no
+  reader of those line numbers remains.
+- **findings** · the round returned 3 candidates; 1 carried (F4), 2 dropped.
+- NFR: security ✓ (two layers now; the slips from gate 1 remain inert until the
+  install) · performance n/a · reliability ✓ (59 of 59 payloads, 13 of 13
+  flipped) · maintainability — F4.
+- Not run: the full `npm test` (the other legs belong to CI), and the hook's
+  refusal in a live session, which cannot happen before the merge.
+- **Is anything here a `high`?** No.
+
 ## Log
 
 - 2026-10-06 — filed by tools-b2 from the owner's answer to "How should
