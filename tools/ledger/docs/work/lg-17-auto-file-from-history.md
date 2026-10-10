@@ -7,6 +7,7 @@ status: ready
 milestone: P2
 depends_on: [lg-16]
 difficulty: hard
+awaiting: Done when 7 — after the push to `main` that runs `security.yml`'s dismissal step, the `js/missing-rate-limiting` alert on `GET /api/inbox/auto-filed` in `tools/ledger/api/src/routes/inbox.ts` reads dismissed, "Suppressed via SARIF"
 ---
 
 # lg-17 — File a row without a tap when its description has been answered the same way three times
