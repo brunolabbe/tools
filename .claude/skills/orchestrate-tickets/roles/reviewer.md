@@ -5,7 +5,8 @@ your findings in full, to whoever dispatched you**. You never commit to the
 branch, never push, never open or edit a pull request, never message the builder
 and never spawn an agent. The procedure — the steps, the severity table, the
 section's shape — is `review-ticket`'s `gate.md`, read in the same `git show` as
-this page. This page is how a dispatched gate runs it.
+this page. This page is how a dispatched gate runs it. You have `Write` for
+your scratch directory and no `Edit`.
 
 ## Get the branch under review before you measure anything
 
@@ -41,7 +42,13 @@ confirm it. So read in this order:
 - **Plant a positive control before you believe a negative**: prove your harness
   can produce the failure you are looking for, and say so in the section.
 - **Reproduce, do not assess.** Revert the fix and watch the test go red. Start
-  a fix from a state its own tests never began from.
+  a fix from a state its own tests never began from. Mutate in place on your
+  detached tree — it is disposable — restore with
+  `git checkout <head sha> -- <path>`, and rebuild. When you need a second tree,
+  `git archive <sha> | tar -x` into your scratch directory and `cp -a` the
+  worktree's `node_modules` into it: the farm wants a git repository, and a
+  scratch `git worktree` is refused. A script you hand back takes the tree and
+  the output directory as arguments, so a builder can run it on its own tree.
 - **Enumerate, never sample**, and report the population you covered against the
   population that exists.
 - **Read the pull request's CI** when your dispatch names one:
@@ -52,12 +59,18 @@ confirm it. So read in this order:
   that leg has run green on this head. A line only an event after the merge can
   prove is `awaiting`, and its row names the event and the reading in one
   sentence, because the lander copies it into the ticket's `awaiting:` line;
-  `gate.md` has the test and says what is not `awaiting`.
+  `gate.md` has the test and says what is not `awaiting`. A default-setup
+  `CodeQL` failure is read with `WebFetch` on the check's `detailsUrl` from
+  `statusCheckRollup`: the page lists each alert's rule, file and line, where
+  `gh pr checks` prints only `fail` and `gh api` is denied.
 - **Check the ticket's premise, not only its code.** If the ticket rests on a
   workflow, a cron, a hook or an external service, read its run logs and say
   whether the machinery has ever run.
 - **Set a private `TMPDIR`, `TEMP` and `TMP` for mutation runs**, so concurrent
-  sessions do not race on the shared temp directory.
+  sessions do not race on the shared temp directory. Make it short and make it
+  first — `mkdir -p /tmp/claude-1000/<ticket id>` — and run TypeScript with
+  `node --import tsx`: the `tsx` CLI's socket path overflows under the scratch
+  directory, and ffmpeg fails on a directory that does not exist yet.
 
 ## Returning the gate
 
@@ -71,7 +84,9 @@ confirm it. So read in this order:
   output, and the premises as premises, so whoever fixes it can run it rather
   than implement your reading of it.
 - **A finding with two possible remedies is a decision, not a verdict.** Give
-  both with a recommendation and label it open. When the open decision is an
+  both with a recommendation and label it open — unless your dispatch asks you
+  to measure an open decision's premise without choosing; then the dispatch
+  wins, and you return the measurement and no recommendation. When the open decision is an
   acceptance line the build cannot meet (the build does what the brief's
   Decision says, and the line asks for something that Decision cannot deliver),
   `gate.md` grades it by whether a test on the branch asserts the opposite of
@@ -85,8 +100,12 @@ The orchestrator wakes you after a round of fixes with the sha you gated, the ne
 head sha, your findings as you wrote them, and any refutation as a command and
 its output.
 
-- `git fetch origin`, `git checkout --detach <new sha>`, rebuild, and review
-  **only `git diff <gated sha>..<new sha>`**. For a rebased stacked branch use
+- `git fetch origin`, `git checkout --detach <new sha>`, and review **only the
+  round's own commits: `git log --no-merges <gated sha>..<new sha>`**, each by
+  `git show`. A merge from `main` inside the range is not the round: lg-6's
+  two-dot diff carried 29 files for a 15-file round. Rebuild when the round
+  touches a package another consumes through `dist`; a round in `api` source,
+  tests and docs needs none. For a rebased stacked branch use
   `git range-diff` over the branch's commits before and after.
 - Give **each named finding** a verdict: fixed, with how you verified it; not
   fixed; or refuted, where you re-ran the refutation and it held.
@@ -95,5 +114,6 @@ its output.
 - Return **one new `### Gate <n>` file**. Earlier sections are not yours to
   re-issue or edit: each names the sha it gated and stays as written.
 - **Say plainly whether anything you found is a `high`.** A third gate runs only
-  for one. A `med` that a `Done when` line depends on is still fixed, without
+  for one, or when the owner asks for one — then your dispatch names its depth
+  and scope. A `med` that a `Done when` line depends on is still fixed, without
   another gate; anything less is recorded and the ticket lands.
