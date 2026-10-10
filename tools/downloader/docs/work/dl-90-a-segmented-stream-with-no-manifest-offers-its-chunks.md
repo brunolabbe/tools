@@ -354,3 +354,64 @@ return false;`. The ticket's own harness answers with
   layouts recorded under Build, and noted that `difficulty: standard` has no
   stated basis (the author's call; reassess once dl-97 merges). It is left as it
   is on the owner's instruction.
+- 2026-10-10, built by a builder on origin/main `7709411e` (branch
+  `dl-90-sniff-moov-for-chunk-streams`; `status` and `difficulty` left as they
+  were).
+
+  **Design, inside the Decision.** `rankHits` is unchanged. After ranking,
+  `#buildOutcome` in `resolvers/src/resolvers/browser.ts` hands the progressive
+  hits to `withoutFragments` (`resolvers/src/browser/chunk-sniff.ts`), which reads
+  the first 64 KiB of each numbered `.mp4`/`.m4v`/`.m4a` (`isNumberedName`) and
+  drops it only on positive evidence of a fragment: a top-level `moof`, or a
+  `moov` holding an `mvex`. The second is how the init segment is caught (gate
+  1's first starting point): it has a `moov` and no `moof`. Everything else is
+  offered: an all-zero body, a body that is not boxes, a head that ends before
+  either box, and a `moov` after `mdat` (the walk stops at `mdat`, so a tail
+  `moov` is never read as "no moov yet, so a chunk"). `classifyMedia` and its
+  kinds are untouched.
+
+  **Choices the Decision did not spell out, none changing behaviour between the
+  options it named.**
+  - _Bounded reads._ At most 8 candidates are read per probe, 3 s each and 6 s in
+    all, taken from the probe's deadline. Past the cap an unproven candidate is
+    offered, as before the sniff.
+  - _One proven fragment settles its directory._ The rest of that directory's
+    numbered files are dropped unread (gate 1's second starting point). The cost:
+    a directory mixing a fragmented file with whole numbered files loses the
+    whole ones. Not run against a real page; I judged it pathological. Twelve
+    chunks cost one read, not twelve (`chunk-streams.test.ts`).
+  - _The read._ `fetchPrefix` in `resolvers/src/browser/manifest-fetch.ts`, the
+    dl-97 client, so it has the proxy, the jar, redirects and the root CA. It
+    sends `Range: bytes=0-65535` and `accept-encoding: identity`, replays the
+    captured headers except `Range`, `If-Range`, `If-None-Match` and
+    `If-Modified-Since`, and stops at 64 KiB when a server ignores `Range`.
+    `readCapped` became `readBody` with a `refuse`/`truncate` overflow mode;
+    `fetchManifest` is unchanged in behaviour. It is not routed through
+    `SizeProbe.bytes`: that interface is for `describeProgressiveTracks`, which
+    the browser tier does not call, and wiring it would change what the tier
+    returns for codecs.
+  - _SSRF._ Same guard as the manifest re-fetch: the egress proxy vets every hop.
+    `api/test/chunk-sniff-guard.test.ts` proves a sniff redirected to a refused
+    loopback address never makes the hop and the file is still offered. With no
+    proxy configured the client dials the origin directly, exactly as the
+    re-fetch and the size probe do; that is dl-97's boundary, not widened here.
+
+  **Fixtures.** Real boxes, built in `resolvers/test/helpers/mp4.ts`
+  (`initSegment`, `mediaSegment`, plus the existing `faststartMp4` and
+  `tailMoovMp4`). dl-78's own fixtures are unchanged: `BODY` stays zeros, which
+  the unparseable-body line keeps green (`-t dl-78`: 2 of 162 selected, both
+  pass). The init segment in `chunk-server.ts` is served chunked: with a declared
+  length under 512 KiB `demoteChunks` already classes it a `segment`, and the test
+  must reach the `mvex` rule.
+
+  **Brief corrections.** The reproduction's `/nomanifest.html` still resolved to
+  three chunks on `origin/main` once its bodies were real fMP4 (the spec is red
+  there). A page with no media left now fails `NO_MEDIA_FOUND`, dl-78's honest
+  failure. The Build note that the Playwright-backed probe leaves ranged reads out
+  is stale since dl-101: the doc on `SizeProbe.bytes` in `size-sample.ts` is
+  updated.
+
+  **Fold-in considered and not taken.** `createRequestSizeProbe` could now
+  implement `bytes()` over `fetchPrefix`, which would let the browser tier
+  describe progressive codecs (dl-64). It is not free: it changes what the tier
+  returns, needs a ranged-window read rather than a prefix, and has no ticket.

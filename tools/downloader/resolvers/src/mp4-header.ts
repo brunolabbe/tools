@@ -82,7 +82,7 @@ function fourcc(bytes: Uint8Array, at: number): string {
 }
 
 /** Top-level box types are printable ASCII; anything else is not an MP4. */
-function isPrintable(type: string): boolean {
+export function isPrintable(type: string): boolean {
   return /^[ -~]{4}$/u.test(type);
 }
 
@@ -102,14 +102,14 @@ function readHeader(bytes: Uint8Array, at: number): Header {
   return size32 < 8 ? { kind: "malformed" } : { kind: "box", type, headerBytes: 8, size: size32 };
 }
 
-interface Child {
+export interface Child {
   type: string;
   body: number;
   end: number;
 }
 
 /** The boxes directly inside `start`..`end`, stopping at the first that does not fit. */
-function childrenOf(bytes: Uint8Array, start: number, end: number): Child[] {
+export function childrenOf(bytes: Uint8Array, start: number, end: number): Child[] {
   const bounded = bytes.subarray(0, end);
   const found: Child[] = [];
   let at = start;

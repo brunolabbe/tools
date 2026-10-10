@@ -62,8 +62,9 @@ export interface SizeProbe {
    *
    * **Optional**, because only the fetch-backed probe implements it. It has to
    * stop reading when a server ignores `Range` and sends the whole file; the
-   * browser tier's client can now do that too (dl-101), but nothing there asks
-   * for it yet. A probe without it leaves codecs as the tier reported them.
+   * browser tier's client can now do that too (dl-101, `fetchPrefix` for dl-90's
+   * chunk sniff), but its size probe does not implement this method. A probe
+   * without it leaves codecs as the tier reported them.
    */
   bytes?(url: string, start: number, endInclusive: number): Promise<RangedBytes | undefined>;
 }

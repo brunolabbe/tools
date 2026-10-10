@@ -11,8 +11,8 @@ import type { AddressInfo, Socket } from "node:net";
 import zlib from "node:zlib";
 import { AppError } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
-import { fetchManifest } from "../../src/browser/manifest-fetch.ts";
-import type { ManifestFetchOptions } from "../../src/browser/manifest-fetch.ts";
+import { fetchManifest, fetchPrefix } from "../../src/browser/manifest-fetch.ts";
+import type { ManifestFetchOptions, PrefixFetchOptions } from "../../src/browser/manifest-fetch.ts";
 
 const CAP = 4 * 1024 * 1024;
 const MANIFEST = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow.m3u8\n";
@@ -346,5 +346,97 @@ describe("the manifest re-fetch goes through the proxy (dl-97)", () => {
 
     expect(result).toEqual({ outcome: "refused", reason: "unsupported-proxy" });
     expect(origin.seen).toEqual([]);
+  });
+});
+
+describe("a prefix read keeps the front of a body and abandons the rest (dl-90)", () => {
+  const PREFIX = 64 * 1024;
+  /** Every byte differs from its neighbour's, so a prefix cut at the wrong place is visible. */
+  const BODY = Uint8Array.from({ length: 3 * 1024 * 1024 }, (_, index) => (index * 7) % 251);
+
+  function prefixOptions(overrides: Partial<PrefixFetchOptions> = {}): PrefixFetchOptions {
+    const { maxBodyBytes: _unused, ...rest } = options();
+    return { ...rest, prefixBytes: PREFIX, ...overrides };
+  }
+
+  test("a server that ignores Range and sends the whole file yields exactly the prefix", async () => {
+    const origin = await serve((_request, response) => {
+      response.writeHead(200, { "content-length": String(BODY.length) }).end(BODY);
+    });
+
+    const result = await fetchPrefix(`${origin.origin}/n/1.mp4`, prefixOptions());
+
+    expect(result.outcome).toBe("bytes");
+    if (result.outcome !== "bytes") return;
+    expect(result.status).toBe(200);
+    expect(result.bytes.length).toBe(PREFIX);
+    expect(Buffer.from(result.bytes).equals(Buffer.from(BODY.subarray(0, PREFIX)))).toBe(true);
+  });
+
+  test("a server that honours Range answers a 206 and the whole of it is kept", async () => {
+    const origin = await serve((request, response) => {
+      const [start, end] = (/^bytes=(\d+)-(\d+)$/.exec(request.headers.range ?? "") ?? []).slice(1);
+      const slice = BODY.subarray(Number(start), Number(end) + 1);
+      response
+        .writeHead(206, { "content-range": `bytes ${start}-${end}/${BODY.length}` })
+        .end(slice);
+    });
+
+    const result = await fetchPrefix(
+      `${origin.origin}/n/1.mp4`,
+      prefixOptions({ headers: { Range: `bytes=0-${String(PREFIX - 1)}` } }),
+    );
+
+    expect(result.outcome).toBe("bytes");
+    if (result.outcome !== "bytes") return;
+    expect(result.status).toBe(206);
+    expect(Buffer.from(result.bytes).equals(Buffer.from(BODY.subarray(0, PREFIX)))).toBe(true);
+    expect(origin.seen[0]?.headers.range).toBe(`bytes=0-${String(PREFIX - 1)}`);
+  });
+
+  test("a body shorter than the prefix comes back whole", async () => {
+    const origin = await serve((_request, response) => {
+      response.writeHead(200).end(BODY.subarray(0, 100));
+    });
+
+    const result = await fetchPrefix(`${origin.origin}/n/1.mp4`, prefixOptions());
+
+    expect(result.outcome === "bytes" ? result.bytes.length : -1).toBe(100);
+  });
+
+  test("a compressed body is inflated before it is cut", async () => {
+    const origin = await serve((_request, response) => {
+      response.writeHead(200, { "content-encoding": "gzip" }).end(zlib.gzipSync(BODY));
+    });
+
+    const result = await fetchPrefix(`${origin.origin}/n/1.mp4`, prefixOptions());
+
+    expect(result.outcome).toBe("bytes");
+    if (result.outcome !== "bytes") return;
+    expect(result.bytes.length).toBe(PREFIX);
+    expect(Buffer.from(result.bytes).equals(Buffer.from(BODY.subarray(0, PREFIX)))).toBe(true);
+  });
+
+  test("an answer outside 2xx is its status, with no bytes", async () => {
+    const origin = await serve((_request, response) => {
+      response.writeHead(416).end();
+    });
+
+    expect(await fetchPrefix(`${origin.origin}/n/1.mp4`, prefixOptions())).toEqual({
+      outcome: "status",
+      status: 416,
+    });
+  });
+
+  test("a redirect is followed, and refused past the limit, as for a manifest", async () => {
+    const origin = await serve((request, response) => {
+      const hop = Number(request.url?.split("/").at(-1));
+      response.writeHead(302, { location: `/r/${String(hop + 1)}` }).end();
+    });
+
+    expect(await fetchPrefix(`${origin.origin}/r/0`, prefixOptions({ maxRedirects: 2 }))).toEqual({
+      outcome: "refused",
+      reason: "too-many-redirects",
+    });
   });
 });

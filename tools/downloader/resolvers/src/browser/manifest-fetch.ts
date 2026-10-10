@@ -113,7 +113,46 @@ export async function fetchManifest(
   options: ManifestFetchOptions,
 ): Promise<ManifestFetchResult> {
   return await run(url, options, "GET", async (response, open) => {
-    return await readCapped(response, options.maxBodyBytes, open);
+    const read = await readBody(response, options.maxBodyBytes, open, "refuse");
+    return read.outcome === "bytes"
+      ? ({ outcome: "ok", text: read.bytes.toString("utf8") } as const)
+      : read;
+  });
+}
+
+/** What {@link fetchPrefix} is asked: the client's options, and how much of the body to keep. */
+export type PrefixFetchOptions = Omit<ManifestFetchOptions, "maxBodyBytes"> & {
+  /** Inflated bytes kept from the front of the body; the rest is never read. */
+  prefixBytes: number;
+};
+
+export type PrefixFetchResult =
+  /** A final 2xx. `bytes` holds at most `prefixBytes`, fewer when the body ended first. */
+  { outcome: "bytes"; status: number; bytes: Uint8Array } | Stop;
+
+/**
+ * One `GET`, redirects followed, and only the first `prefixBytes` of the final
+ * body kept (dl-90). The caller asks for those bytes with a `Range`, but a
+ * server is free to ignore it and send the whole resource: the response is
+ * closed as soon as the prefix is in, so what crosses the wire is the prefix and
+ * whatever the socket had already buffered, never the file. Unlike
+ * {@link fetchManifest}, a body longer than the limit is the expected case and
+ * not a refusal, and the bytes come back as bytes, not decoded text.
+ */
+export async function fetchPrefix(
+  url: string,
+  options: PrefixFetchOptions,
+): Promise<PrefixFetchResult> {
+  return await run(url, options, "GET", async (response, open) => {
+    const read = await readBody(response, options.prefixBytes, open, "truncate");
+    if (read.outcome === "bytes") {
+      return { outcome: "bytes", status: response.statusCode ?? 0, bytes: read.bytes } as const;
+    }
+    // `truncate` never answers `too-large`; the type cannot say so on its own.
+    if (read.outcome === "too-large") {
+      throw new AppError("INTERNAL", "A prefix read reported its body as too large.");
+    }
+    return read;
   });
 }
 
@@ -402,16 +441,25 @@ const CERTIFICATE_CODES: ReadonlySet<string> = new Set([
   "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
 ]);
 
+type BodyRead =
+  | { outcome: "bytes"; bytes: Buffer }
+  | Extract<ManifestFetchResult, { outcome: "too-large" | "refused" }>;
+
 /**
  * Reads the body through its decoder and stops at `limit` inflated bytes. The
  * decoder runs a chunk at a time, so what is held is the cap plus one chunk,
  * whatever the body would have inflated to.
+ *
+ * `overflow` is what passing the limit means: `refuse` answers `too-large` and
+ * keeps nothing (a manifest that big is not one); `truncate` keeps the first
+ * `limit` bytes and answers `bytes` (a prefix read, dl-90).
  */
-async function readCapped(
+async function readBody(
   response: http.IncomingMessage,
   limit: number,
   open: Set<Closable>,
-): Promise<ManifestFetchResult> {
+  overflow: "refuse" | "truncate",
+): Promise<BodyRead> {
   const encoding = (response.headers["content-encoding"] ?? "identity").trim().toLowerCase();
   let decoder: zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress | undefined;
   if (encoding === "gzip" || encoding === "x-gzip") {
@@ -426,7 +474,7 @@ async function readCapped(
   }
   if (decoder === undefined) {
     const declared = Number(response.headers["content-length"]);
-    if (Number.isFinite(declared) && declared > limit) {
+    if (overflow === "refuse" && Number.isFinite(declared) && declared > limit) {
       response.destroy();
       return { outcome: "too-large", limitBytes: limit, readBytes: 0 };
     }
@@ -434,7 +482,7 @@ async function readCapped(
     track(decoder, open);
   }
 
-  return await new Promise<ManifestFetchResult>((resolve, reject) => {
+  return await new Promise<BodyRead>((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
     let settled = false;
@@ -455,7 +503,12 @@ async function readCapped(
         // is inflated.
         decoder?.destroy();
         response.destroy();
-        resolve({ outcome: "too-large", limitBytes: limit, readBytes: total });
+        if (overflow === "truncate") {
+          chunks.push(chunk.subarray(0, limit - (total - chunk.length)));
+          resolve({ outcome: "bytes", bytes: Buffer.concat(chunks) });
+        } else {
+          resolve({ outcome: "too-large", limitBytes: limit, readBytes: total });
+        }
         return;
       }
       chunks.push(chunk);
@@ -463,7 +516,7 @@ async function readCapped(
     body.once("end", () => {
       if (settled) return;
       settled = true;
-      resolve({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") });
+      resolve({ outcome: "bytes", bytes: Buffer.concat(chunks) });
     });
   });
 }
