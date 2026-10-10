@@ -7,7 +7,6 @@ status: done
 milestone: P2
 depends_on: [lg-4]
 difficulty: hard
-awaiting: Done when 4 — the two CodeQL alerts on routes/rules.ts and routes/salaries.ts read dismissed or suppressed on the security tab after the push to main that runs security.yml's dismissal step
 ---
 
 # lg-5 — People, salaries and ratios over time, and what each bucket owes whom
@@ -316,3 +315,14 @@ tools/ledger/api/test/schema.test.ts tools/ledger/api/test/people.test.ts` →
   `main` that runs the dismissal step. The reading has not been taken: the
   alerts' state needs the security tab, and `gh api` is denied here. Whoever
   reads it deletes the line, beside `repo-16`'s own.
+- 2026-10-10 — The `awaiting` line closed. Done when 4, "Gates green", waited
+  on the two CodeQL alerts on `routes/rules.ts` and `routes/salaries.ts`
+  reading dismissed or suppressed after the push to `main` that runs
+  `security.yml`'s dismissal step. They do: alert #23 (Missing rate limiting,
+  `routes/rules.ts:67`) and alert #22 (Missing rate limiting,
+  `routes/salaries.ts:35`) both read closed as won't fix. The reading is the
+  owner's, taken from the repository's code-scanning page on `main`
+  (`is:closed branch:main`) after #408 (`7709411e`) merged, and given as a
+  screenshot; it was not re-run here. Each alert's line is the route handler
+  directly below its `codeql[js/missing-rate-limiting]` comment in the current
+  source (`grep -n`: `rules.ts:66`/`67`, `salaries.ts:34`/`35`).
