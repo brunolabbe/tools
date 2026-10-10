@@ -1115,9 +1115,21 @@ const ZONE_DIALOG = "dialog";
  * or "fichiers témoins". "cookie", "ciasteczk" and the other roots with no
  * unrelated continuation stay open at the end, so "cookies" and
  * "Cookie-Einstellungen" match.
+ *
+ * **"cookie" alone needs no word start** (dl-93): no ordinary word contains it,
+ * and German and Swedish compound it ("Statistikcookies", "Marketingcookies"),
+ * so a lookbehind lost those. "kakor" takes the Swedish definite forms
+ * ("kakorna", "kakorn") at its end, and keeps its word start, so "pannkakor" and
+ * "sockerkakorna" stay silent.
  */
 export const CONSENT_WORDING =
-  /(?<!\p{L})(?:cookie|ciasteczk|ciasteczek|kakor(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+  /cookie|(?<!\p{L})(?:ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+
+/**
+ * A word of the prose round a consent link (dl-93): two letters or more. Kept
+ * out of the script's template string, where a `\p` would lose its backslash.
+ */
+const SENTENCE_WORD = /\p{L}{2,}/gu;
 
 /**
  * Marks the nearest consent container of every link and button: an ancestor
@@ -1141,26 +1153,54 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   // and anything not rendered, such as a hidden menu, a script or a style.
   // textContent keeps all of those, and innerText drops the unrendered ones but
   // keeps the links.
+  //
+  // One link is read back in (dl-93): a link whose text speaks of consent AND
+  // that sits in a sentence beside a button, "We use <a>cookies</a> to improve
+  // the site. [Ho capito]". A nav link has neither the words round it nor a
+  // button beside it, and a submit button is no consent button.
+  var words = new RegExp(${JSON.stringify(SENTENCE_WORD.source)}, 'gu');
+  var sentenceLink = function (link) {
+    var host = link.parentElement;
+    if (!host) return false;
+    var count = 0;
+    var control = false;
+    for (var c = host.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType === 3) {
+        count += (c.nodeValue.match(words) || []).length;
+      } else if (c !== link && c.nodeType === 1 && c.matches('button, [role="button"], input[type="button"]')) {
+        var submits = c.matches('button') && c.getAttribute('type') !== 'button' && c.closest('form');
+        if (!submits && c.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true })) control = true;
+      }
+    }
+    return control && count >= 2;
+  };
   var prose = function (layer) {
     var seen = new Map();
     var parts = [];
+    var linkText = new Map();
     var walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
     for (var t = walker.nextNode(); t; t = walker.nextNode()) {
       var p = t.parentElement;
       if (!p) continue;
       if (!seen.has(p)) {
-        var inLink = false;
+        var link = null;
         for (var a = p; a; a = a.parentElement) {
           if (a.matches('a, [role="link"]')) {
-            inLink = true;
+            link = a;
             break;
           }
           if (a === layer) break;
         }
-        seen.set(p, !inLink && p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }));
+        var shown = p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true });
+        seen.set(p, shown ? link || true : false);
       }
-      if (seen.get(p)) parts.push(t.nodeValue);
+      var kind = seen.get(p);
+      if (kind === true) parts.push(t.nodeValue);
+      else if (kind) linkText.set(kind, (linkText.get(kind) || '') + t.nodeValue);
     }
+    linkText.forEach(function (text, link) {
+      if (wording.test(text) && sentenceLink(link)) parts.push(text);
+    });
     return parts.join(' ');
   };
   // The mark a layer earns, or null when it is not a consent container.
@@ -1234,6 +1274,11 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * script in a frame that allows it and by dialog semantics alone in one that
  * does not. A layer that speaks of consent is tried before a dialog that does
  * not, so a consent layer wins over an earlier newsletter dialog.
+ *
+ * A link's text counts only as a sentence's link (dl-93): "We use <a>cookies</a>
+ * to improve the site." beside a non-submit button is consent prose, a "Cookie
+ * policy" link in a nav list is not. Wording that is hidden through every pass
+ * (a sentence shown after six seconds) is not read at all.
  *
  * A sticky header or a docked checkout bar whose prose says nothing of consent
  * is not a container, so its "Ho capito" and "Agree and continue" are not

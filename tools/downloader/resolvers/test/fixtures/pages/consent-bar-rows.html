@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consent bar</title>
+  </head>
+  <body>
+    <!-- dl-93: one fixed bottom bar, whose inner HTML is the row named by ?row=.
+         The row's button is labelled with a phrasing dl-82 added, so only the
+         consent-container rule can press it; pressing it removes the bar and
+         mounts the player. The rows are the ticket's recall table: the ones that
+         must keep resolving (r3..r9) and the ones whose wording sits in a link, a
+         hidden node or a compound word (r1, r1b, r2b, r5b, r7, r8). -->
+    <h1>Consent bar</h1>
+    <div id="player"></div>
+    <div
+      id="bar"
+      style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 12px; background: #eee"
+    ></div>
+    <script>
+      var BUTTON =
+        '<button type="button" onclick="fetch(\'/beacon/consent-accepted\');document.getElementById(\'bar\').remove();mountPlayer()">';
+      var ROWS = {
+        r1: 'Read our <a href="#c">cookie policy</a>. ' + BUTTON + "Ho capito</button>",
+        r1b:
+          'We use <a href="#c">cookies</a> to improve the site. ' +
+          BUTTON +
+          "Accetto e continua</button>",
+        r2: "Your choices matter to us. " + BUTTON + "Ho capito</button>",
+        r2b:
+          'Leggi la <span role="link" tabindex="0">cookie policy</span>. ' +
+          BUTTON +
+          "Ho capito</button>",
+        r3: "Cookie-Einstellungen " + BUTTON + "Ich stimme zu</button>",
+        r3b: "We use cookies. " + BUTTON + "Ho capito</button>",
+        r4: "Ta strona używa plików cookie. " + BUTTON + "Akceptuję</button>",
+        r5: "We use cookies. " + BUTTON + "Ho capito</button>",
+        r5b:
+          '<span id="t" style="visibility: hidden">We use cookies.</span> ' +
+          BUTTON +
+          "Ho capito</button>",
+        r6: "Wir verwenden Cookies. " + BUTTON + "Ich stimme zu</button>",
+        r7:
+          "Wir verwenden Statistikcookies und Marketingcookies. " + BUTTON + "Ich stimme zu</button>",
+        r8: "Läs mer om kakorna på sajten. " + BUTTON + "Jag godkänner</button>",
+        // Not consent rows: a link's words must not make the bar a container
+        // unless the link sits in a sentence beside a (non-submit) button.
+        // n1: a checkout form's submit beside a sentence that links a cookie policy.
+        n1:
+          '<form onsubmit="event.preventDefault()">By ordering you accept our terms and ' +
+          '<a href="#c">cookie policy</a>. ' +
+          BUTTON.replace('type="button"', 'type="submit"') +
+          "Agree and continue</button></form>",
+        // n2: a nav link, in a block of its own, ahead of a notice.
+        n2:
+          '<nav><a href="#c">Cookie policy</a></nav>' +
+          "<div>Nuove condizioni di spedizione. " +
+          BUTTON +
+          "Ho capito</button></div>",
+        // n3: the link's sentence in one block and the button in another.
+        n3:
+          '<p>Please read our <a href="#c">cookie policy</a> now.</p>' +
+          "<div>" +
+          BUTTON +
+          "Ho capito</button></div>",
+        r9:
+          '<div class="text"><p>We use cookies to personalise content.</p></div>' +
+          '<div class="buttons"><div class="row">' +
+          BUTTON +
+          "Ho capito</button></div></div>",
+      };
+
+      var params = new URLSearchParams(location.search);
+      var row = params.get("row");
+      var bar = document.getElementById("bar");
+      bar.innerHTML = ROWS[row];
+      if (row === "r2") bar.setAttribute("aria-label", "Cookie consent");
+      // r5: the whole bar is hidden until after the first provocation pass.
+      if (row === "r5") {
+        bar.style.visibility = "hidden";
+        setTimeout(function () {
+          bar.style.visibility = "visible";
+        }, 1200);
+      }
+      // r5b: the sentence is shown only after both provocation passes.
+      if (row === "r5b") {
+        setTimeout(function () {
+          document.getElementById("t").style.visibility = "visible";
+        }, 6000);
+      }
+
+      function mountPlayer() {
+        fetch("/media/mse/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/mse/v1080.m3u8");
+          })
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return Promise.all(
+              ["/media/mse/init.mp4", "/media/mse/seg-00001.m4s", "/media/mse/seg-00002.m4s"].map(
+                function (u) {
+                  return fetch(u);
+                },
+              ),
+            );
+          })
+          .catch(function () {});
+        var video = document.createElement("video");
+        video.muted = true;
+        video.setAttribute("playsinline", "");
+        video.width = 640;
+        video.height = 360;
+        video.src = URL.createObjectURL(new MediaSource());
+        document.getElementById("player").replaceChildren(video);
+      }
+    </script>
+  </body>
+</html>
