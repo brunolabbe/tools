@@ -16,13 +16,14 @@ instead.
 
 ## Set up
 
-1. Confirm the branch name you were given is free — `git branch --list <branch>`
+1. Farm and build, per `common.md`. A farm warning stops you here, before any
+   branch exists for a re-dispatch to refuse.
+2. Confirm the branch name you were given is free — `git branch --list <branch>`
    and `git ls-remote --heads origin <branch>` both print nothing — then
    `git checkout -b <branch> origin/<base>`. **Never `-B`, and never reuse or
    rename an existing branch**: refs are shared across every worktree. If the
    name exists, stop and report. When the base was never pushed, branch off the
    named local ref and say which you used.
-2. Farm and build, per `common.md`.
 
 ## Scope
 
@@ -39,11 +40,25 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   own gate record lands.
 - **You have no `Skill` tool.** When the Build names a procedure a skill owns,
   read its `SKILL.md` and follow it.
+- **Stopping on the ticket's own stop condition** — a Build step that says to
+  stop for an answer — you commit the Log entry that says where you stopped,
+  and push it. A worktree with nothing committed is reclaimed when you finish,
+  and a resume then lands in the shared checkout with no tree of its own.
 
 ## Before you report
 
 - `npm run format` after touching any `.md`. Fix lint by hand; never
   `npm run lint:fix`, which rewrites files outside the branch.
+- `npx oxlint <the packages you touched>` before preflight: seconds, against a
+  twelve-minute preflight that stops on one lint line.
+- `git fetch origin` before preflight: `--base origin/<base>` reads the ref this
+  worktree holds, and `main` moves during a batch. **A moved `main` is taken by
+  `git merge origin/<base>`, never by a rebase**: a rebased branch cannot reach
+  `origin` without a force-push, and a merge of the same sha gives the same tree
+  (dl-81).
+- A new dependency: `npm audit --package-lock-only` before the push. CI's
+  `dependency-review` job is not in preflight and goes red on a moderate
+  advisory (lg-7).
 - `node scripts/preflight.mjs --base origin/<base> --title "<the pull request title>"`,
   exit 0. It runs `npm run check`, the suite of every tool the diff touches
   (and `core` and `repo` when `scripts/` moved),
@@ -52,8 +67,12 @@ Implement the ticket's Build section. Do not widen it and do not narrow it.
   every other open pull request head. Run full `npm test` yourself if shared
   config moved.
 - **Exit 16 alone is a conflict with another open pull request's head, not a
-  fault in your branch.** Report the other pull request's number and the paths,
-  and stop: the merge order is the orchestrator's to set.
+  fault in your branch.** Push, open the draft, report the other pull request's
+  number and the paths, and stop there: the merge order is the orchestrator's to
+  set. A sibling that conflicts with `main` itself reports as a conflict with
+  your HEAD, because HEAD carries `main`; that is the sibling's merge to make.
+  A head preflight says "this checkout does not have" is a `git fetch origin`,
+  not a conflict.
 - A new `scripts/*.mjs` needs an `include` line in `scripts/test/tsconfig.json`.
 - **A commit subject is under 100 characters**; the hook rejects longer, and
   ticket titles often exceed it.

@@ -57,6 +57,11 @@ Gate yield tracks prompt specificity, not gate count or runtime.
 - **Nothing from the build**: the ticket id and path, the base sha, the head
   sha, the pull request number, the scratch directory. Never the builder's
   report or a summary of it.
+- **Where the section goes**:
+  `<scratch>/<id>/gate-<n>/gate-<n>@<short head sha>.md`, first line
+  `## Review` for gate 1 and `### Gate <n>` after — the names `roles/reviewer.md`
+  and `records.md` use. A prompt that says `gate-1.md` made every gate in three
+  batches flag the conflict, and some wrote both.
 - **What to attack**: the riskiest decision, the seam with the longest reach,
   the claim you least believe. Name the real input to run first.
 - **Which failure the positive control must plant.**

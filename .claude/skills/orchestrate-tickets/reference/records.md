@@ -36,15 +36,23 @@ It validates every splice in a scratch clone first, then commits one gate per
 commit, sets `status` in the first, pushes `HEAD` to the branch, verifies each
 committed section against its file, and runs preflight. `--branch` is required
 from a detached HEAD, which is where a fixer works. Any step that fails prints
-what it found; a failure after the commits prints the reset command and rolls
-nothing back.
+what it found and rolls nothing back. Before the push it prints the reset
+command. After the push the records are on the branch: a preflight failure ends
+"Nothing to undo — fix what it names" and still exits 1 — a merge-tree exit 16
+against a sibling included, so read the output, never the code alone; a verify
+failure names the force-push only the owner can make; and a `cleanup` line about
+the scratch clone is a warning, not a failure (repo-94).
 
 - **Gate 1's file starts `## Review`; a later gate's starts `### Gate <n>`.**
   The script reads the gate number off that line.
 - **The lander changes no word of a section.** A difference between a file and
   what landed goes back to the gate, never into the record.
 - **`done`, or `in-flight` for work that lands partial.** No commit carries a
-  record on a `ready` ticket: `status.mjs` fails one.
+  record on a `ready` ticket: `status.mjs` fails one. So a pull request that
+  only records a decision on a ticket, or only files one, and leaves it `ready`
+  or `needs-decision`, gets no `--land`: its gate's full report goes on the pull
+  request thread as _When there is no ticket_ says, the body says so, and the
+  ticket's Log names the thread (dl-90, dl-98, dl-102).
 - **An `awaiting` row means an `awaiting:` line, committed before `--land`.**
   `gate.md` grades a line whose only proof is an event after the merge
   `awaiting`, and a gate never edits frontmatter, so the lander writes the
