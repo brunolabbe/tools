@@ -217,6 +217,36 @@ its earlier head; it is not a regression and not a gain.
 - Invariants: none touched. No cross-tool import, no new error code, no spawn, no URL logging, no contract edit. The new spec is under the registered `resolvers` package. Style checked.
 - NFR: security n/a · performance ✓ (one extra pass over a layer's consent-worded links) · reliability: findings 1 and 2 · maintainability: finding 1's JSDoc paragraph is now false.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-10 · `a7f47bd2..b24e9cd0` (the round is one commit, `b8e0b000`; the merge brings main's #410 and #414) · Opus 5.5, re-gate
+
+| Done when                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every row of both tables has a test with its stated outcome; r3, r3b, r4, r5, r6, r9 and dl-82's a3, a3b, a3c, a4, a5 pass unchanged | `consent-scope.test.ts` › "%s (%s) is pressed and its stream found" (r3..r9) and "… stays lost (dl-93)" › "%s (%s) is not pressed" (r1, r1b, r2, r2b, r5b) ✓. `git diff a7f47bd2 b8e0b000 -- browser-resolver.test.ts` touches only the a1 and a2 tests; `-t consent` there gives 38 of 38 ✓                                                                              |
+| r7 and r8 pressed, `SILENT` rows still silent                                                                                        | `consent-scope.test.ts` › r7, r8 pressed; `provoke.test.ts` › "does not speak of consent: %j", now with the eight food and URL compounds ✓. Those eight match under `a7f47bd2`'s regex, so the rows can fail                                                                                                                                                              |
+| r1, r1b, r2b and r5b pressed, or the Log says why not in a measured sentence                                                         | the four are "not pressed" in `consent-scope.test.ts`; the Log's measured reason is c1 and c4, both r1-shaped and pinned by "c1 (…) presses nothing" and "c4 (…) presses nothing". r5b's hidden-sentence reason is now marked unmeasured ✓                                                                                                                                |
+| a1 and a2 press nothing, or the Log records the signal tried and why it failed                                                       | `browser-resolver.test.ts` › "a fixed app root whose footer says 'cookie' holds an h1, … (flipped from dl-82's a1)" and "… is itself a form, … (flipped from dl-82's a2)" ✓, flipped by the owner's decision of 2026-10-10, which the Log records. Positive control: with the `content` guard removed from `tier()`, those two and c13 and c14 go red (4 failed of 4 run) |
+| `npm run check` and `npm test -- --project downloader` pass                                                                          | CI `check` and `test (ubuntu-latest)` green on `b24e9cd0` ✓; `test (windows-latest, informational)` still running at read                                                                                                                                                                                                                                                 |
+
+Gate 1's findings:
+
+- **high** (link-in-a-sentence signal) · **fixed**. The signal is withdrawn. c1, c2, c4, c5, c7 and c10 press nothing on `b24e9cd0` (each was 2 at `a7f47bd2`), and the controls c3 and c6 stay at 0. The committed `consent-scope-cases.html` matches the gate's pages case for case. `clickConsentText`'s JSDoc paragraph is true again: c2 is that paragraph's checkout bar, and it presses nothing.
+- **med** (cookie inside any word) · **fixed**. The word start is back, and `(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter)?cookie` names the compounds. c8 and c9 press nothing. The false comment is replaced.
+- **med** (Done when 4, open decision) · **fixed by the owner's decision**. Option 4 is built as chosen: in `tier()`, a fixed or sticky layer that holds `PAGE_CONTENT` or is itself a `<form>` earns only the dialog tier. c11 to c14 are pinned as the Log's table states them, and the Log records the three answers.
+- **low** (ciasteczk) · **fixed**. The Log withdraws the sentence, and both alternatives stay.
+- **low** (r5b sentence) · **fixed**. The Log marks the `visibility`/`display` distinction unmeasured.
+
+New in the round's lines:
+
+- **low** · `werbe` and `marketing` in the compound list also catch German give-away food: "Werbecookies mit Ihrem Logo bedrucken lassen." and "Marketingcookies als Give-away, 100 Stück" match (`regex2.mts`). Measured on the regex only, never on a page.
+- **low** · the round's Log cites the gate's scratch files (`gate-1/cases-head.log`, `regex.mts` "in the gate's directory"). Nothing in the repo holds them, so the next reader cannot open them. The pages they describe are committed as `consent-scope-cases.html`.
+- **dropped** · compounds the named list misses that `a7f47bd2` matched: "Präferenzcookies", "Komfortcookies", "Sitzungscookies", "Leistungscookies", "Performancecookies", "Targetingcookies", "Sessioncookies", "Erstanbietercookies", Dutch "advertentiecookies". This is the cost the owner chose ("a missed layer, one more name"), not a defect. No compound base matched is lost: the head's `cookie` alternative is a superset of base's.
+- **dropped** · the c1 to c10, c13 and c14 tests assert a count of 0, which an empty probe would also pass. Refuted for c13 and c14 by the guard-removal control above, and for c1 to c10 by gate 1's `bad=2` at `a7f47bd2` on identical pages.
+- **findings** · the round's hunt returned 4; 2 carried, 2 dropped. Nothing is a `high`.
+- Every `SILENT` row re-checked against the head's constant: 26 of 26 silent (`regex2.mts`), and `provoke.test.ts` runs them green in the 249 of 249. `git merge-tree --write-tree origin/dl-93-consent-wording-scope origin/dl-90-sniff-moov-for-chunk-streams` (`3a4ba11e`) is clean, exit 0.
+- NFR: security n/a · performance ✓ (one `querySelector` per fixed layer, memoised) · reliability ✓ · maintainability — the scratch-path low above.
+
 ## Log
 
 2026-10-06, filed with dl-82's landing, from gate 4's measurements: dl-82's Log
