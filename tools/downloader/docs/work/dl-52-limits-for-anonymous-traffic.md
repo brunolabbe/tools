@@ -7,7 +7,6 @@ status: done
 milestone: M5
 depends_on: [dl-51]
 difficulty: standard
-awaiting: the owner's redeploy after merge — on the host, after git pull and docker compose up -d, docker compose exec downloader printenv MAX_JOBS_PER_CLIENT prints 2 (the values ride compose.downloader.prod.yaml from #362, not the image)
 ---
 
 # dl-52 — Limits for anonymous traffic
@@ -358,3 +357,9 @@ Acceptance, re-run on `261dc65`:
   `docs/02-DEPLOYMENT.md` keeps its published figures, with the measured rule
   in its last row. Whether the host has been redeployed was not reported, so
   that stays owed.
+
+- 2026-10-10 — The `awaiting` line closed: the host runs this ticket's
+  values. On the host, `docker compose exec downloader printenv
+MAX_JOBS_PER_CLIENT` printed `2`, the value #362 set in
+  `compose.downloader.prod.yaml`. The reading is the owner's, relayed as the
+  command and its output.
