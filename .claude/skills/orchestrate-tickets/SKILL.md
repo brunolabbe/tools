@@ -243,8 +243,8 @@ work. How to ask is the root `CLAUDE.md` rule. What is specific to a batch:
     base;
   - it changes no `Done when` line, takes no decision a ticket's `Done when` or
     Decision section reserves to the owner, and changes no gate verdict. A
-    commit made after a gate qualifies only if it changes no assertion and no
-    code under test that the gate graded;
+    commit made after a gate qualifies only if it changes no assertion, no code
+    under test, and no fixture, page or data a graded test reads;
   - you dry-ran it (_Dry-run before you name it_), and the choice does not
     override a builder's or a gate's recommendation.
 

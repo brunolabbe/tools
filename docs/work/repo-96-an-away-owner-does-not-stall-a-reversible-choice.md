@@ -85,12 +85,12 @@ ends the batch, and this one keeps it moving.
   (below).** The Why's timings (the 9 s floor, 23.3 s against 25 s, 04:49 and
   12:10) are tools-79's transcript, which this build did not re-measure. What
   git shows: the fix is **two commits on two branches**, not one. `76113c54`
-  (12:20 UTC on 2026-10-06, 38 lines) is on `origin/dl-80-quiet-floor` and on
-  `origin/dl-83-age-gate-phrasings`, and carries dl-79's and dl-82's no-media
-  tests. `b5e45c72` (12:43 UTC, 22 lines) is on `origin/dl-83-age-gate-phrasings`
+  (12:20 UTC on 2026-10-06, 38 lines) is in the head of pull request #372 (dl-80)
+  and of #374 (dl-83), and carries dl-79's and dl-82's no-media
+  tests. `b5e45c72` (12:43 UTC, 22 lines) is in the head of #374 (dl-83)
   only. Each touches only
   `tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
-  (`git show --stat 76113c54 b5e45c72`; `git branch -r --contains` for each),
+  (`git show --stat 76113c54 b5e45c72`; the pull requests' head refs, below),
   and each adds `emptyMinWaitMs: NO_EMPTY_FLOOR_MS` to `new BrowserResolver({…})`
   calls, the override dl-80's Build step 3 asks for ("overridable through the
   resolver's options as `quietMs` already is, so unit tests that expect
@@ -182,3 +182,58 @@ c2b-diff(no new path)=true`, and `… 5ad7f739 dl-83 <ticket> b5e45c72` →
     inside tests the gates graded. The bullet words it "no assertion and no
     code under test that the gate graded", which lets 04:49 pass; that is my
     reading of what the owner meant.
+
+- 2026-10-10, later still — **round 2: gate 2 CONCERNS `9768f418`** (no high;
+  one open decision, one med, two low). The coordinator re-asked the owner two
+  questions the same day, the first with gate 2's measurement. Both answers are
+  recorded here as given.
+  1. **Question:** "Read literally, your rule 'a post-gate commit qualifies if it
+     changes no line a gate graded' excludes the 04:49 case… Which wording?"
+     **Options:** (a) "No assertion, no code under test, no fixture a graded
+     test reads" (gate 2's (a); recommended by the gate and the coordinator);
+     (b) "Keep the builder's wording as is"; (c) "Your literal wording".
+     **Chosen: (a)**, on 2026-10-10. The bullet's post-gate condition now reads
+     "changes no assertion, no code under test, and no fixture, page or data a
+     graded test reads". It is the recommended option, so it overrode no one's.
+  2. **Question:** "repo-96's bullet says a choice taken under the away rule 'is
+     a taken choice, not an open decision at close'… Keep that sentence?"
+     **Options:** "Keep it" (recommended by the builder; gate 2 found it
+     consistent with root `CLAUDE.md` › _Handing back_); "Drop it".
+     **Chosen: keep it**, on 2026-10-10. No text change.
+
+  **Done when 2 against the new wording.** Gate 2's `c3.mjs`, extended as
+  `c4.mjs` with one more test: no non-test file in the diff, and no changed line
+  naming a page or data file (`"…\.(html|json|m3u8|mpd|xml|txt)"` or
+  `"…fixtures/…"`) in the test. The script is in the lander's scratch, not the
+  repo. Run on `76113c54` and `b5e45c72` as committed, and on the planted fixture
+  swap P2 from gate 2 (a scratch tree at `76113c54`, line 1054 of
+  `browser-resolver.test.ts`, `probeError("/consent-lookalikes.html", resolver)`
+  changed to `probeError("/untyped-no-segments.html", resolver)`):
+  - `76113c54` →
+    `RESULT old(no assertion, no src)=true NEW(no assertion, no src, no fixture/page/data)=true`
+  - `b5e45c72` → the same line, `NEW(…)=true`.
+  - P2 →
+    `fixture/page/data line changed: +      const error = await probeError("/untyped-no-segments.html", resolver);`
+    and `RESULT old(no assertion, no src)=true NEW(no assertion, no src, no fixture/page/data)=false [assertionChanged=false srcChanged=false fixtureChanged=true]`.
+
+  So 04:49 passes the new wording and the swap that the old wording admitted is
+  now rejected. This does not decide the case where the swapped fixture is
+  referenced by a name the pattern does not match (a constant, a computed path);
+  the script reads literals only.
+
+  **Gate 2's finding that the `git branch -r --contains` reproduction returns
+  nothing:** confirmed, the dl-80 and dl-83 branches are deleted. The pull
+  requests' head refs reproduce it:
+
+  ```
+  git fetch origin refs/pull/372/head:refs/remotes/pr/372 refs/pull/374/head:refs/remotes/pr/374
+  git for-each-ref --contains 76113c54 refs/remotes/pr
+  5ad7f739e873ed03e43ed0f51c43deed9f95a778 commit	refs/remotes/pr/372
+  c9a2c45fc6134e9f05972804bd09648692aba976 commit	refs/remotes/pr/374
+  git for-each-ref --contains b5e45c72 refs/remotes/pr
+  c9a2c45fc6134e9f05972804bd09648692aba976 commit	refs/remotes/pr/374
+  ```
+
+  **Left unfixed, recorded by the severity floor:** gate 2's first low, that the
+  bullet's "name that gate's record" does not say which gate (suggested: "the
+  record of each gate that graded a line it changes").
