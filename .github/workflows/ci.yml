@@ -141,6 +141,14 @@ jobs:
       # needs no build and no dependencies, for the same reason
       # `commit-message.mjs` does not, so it costs this job seconds.
       - run: node scripts/status.mjs --json > /dev/null
+      # The suite that reads the same tickets for what `--json` does not look at:
+      # the tool set, where a ticket file lives, a returned status page, the
+      # format document's own wording and `--tool` against the real board. It
+      # sits here because the `test` matrix is skipped for a change that is all
+      # `.md`, which is exactly what a ticket edit is — a test that goes red on
+      # one merged green and failed main unseen (repo-97, and repo-8 before it).
+      # One file, seconds, no build.
+      - run: npx vitest run scripts/test/status.test.ts
 
   # Which files this change actually touches, because **Actions has no per-job
   # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way

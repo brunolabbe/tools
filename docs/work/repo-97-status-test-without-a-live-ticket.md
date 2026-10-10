@@ -36,13 +36,13 @@ the first time anyone used the field as designed.
 `1a044437`). Every branch that then merges `main` fails `test (ubuntu-latest)`
 and `test (windows-latest, informational)`. Found by a gate on dl-103.
 
-Two defects, one fix and one decision:
+Two defects, both fixed here:
 
 1. **The test depends on a ticket's lifecycle state.** Fixed here.
 2. **A markdown-only change can break a unit test while CI skips the unit
-   tests.** Not fixed here, by the owner's instruction (`ci.yml` and the
-   `changes` filter are out of scope). The Log lists every other test that
-   reads live ticket state, and puts the question to the owner as options.
+   tests.** Fixed by the owner's answer of 2026-10-10 (Log): the `check` job
+   runs `scripts/test/status.test.ts` on every change. The `changes` filter
+   and the unit matrix are untouched.
 
 ## Build
 
@@ -56,6 +56,9 @@ Two defects, one fix and one decision:
      all, so closing the last one stays legal.
 2. Show both fail with the field's parsing removed, and that deleting the one
    real `awaiting` line left on the board (dl-73's) leaves the suite green.
+3. Add one step to `ci.yml`'s unfiltered `check` job, after the existing
+   ones: `npx vitest run scripts/test/status.test.ts`, with a comment saying
+   why. Show it red against `1a044437`'s copy of the test and green here.
 
 ## Done when
 
@@ -64,8 +67,11 @@ Two defects, one fix and one decision:
 2. Both new tests fail with the field's parsing removed (`ticket.awaiting =
 null` in `readTickets`, and separately the `FIELDS` entry deleted).
 3. Deleting every real `awaiting:` line leaves `status.test.ts` green.
-4. The Log names every other test that reads live ticket state, and the open
-   decision about the markdown-only gap is stated as options.
+4. The Log names every other test that reads live ticket state, and states
+   the markdown-only gap as options with the owner's answer recorded.
+5. `ci.yml`'s `check` job runs `npx vitest run scripts/test/status.test.ts`
+   on a change that is all `.md`, and that command is red on `1a044437`'s copy
+   of the test and green on this branch.
 
 ## Log
 
@@ -111,33 +117,68 @@ null` in `readTickets`, and separately the `FIELDS` entry deleted).
   a ticket file inside a string, and `cloudflare-setup`'s `readdirSync` reads
   compose files.
 
-  | Test                                                               | Reads                                           | Fails on                                                                            |
-  | ------------------------------------------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-  | `every ticket in the repo parses, and its dependencies resolve`    | every ticket, and the tool set against `tools/` | a malformed ticket, a dangling dependency, a tool directory the board does not know |
-  | `no ticket on the board is ready with a gate record already on it` | every ticket                                    | a ready ticket carrying `## Review`                                                 |
-  | `repo-wide tickets live in docs/work`                              | every `repo` ticket path                        | a repo ticket filed elsewhere                                                       |
-  | `no tool keeps a status page, and neither does the repo`           | `docs/` and `tools/*/docs`                      | a returned `03-STATUS.md`                                                           |
-  | `the ticket format states the rule the parser enforces`            | `docs/01-TICKETS.md`                            | the quoting paragraph rewritten away                                                |
-  | `the ticket format documents the field and says who clears it`     | `docs/01-TICKETS.md`                            | the `awaiting` row or its "deletes the line" sentence rewritten away                |
-  | the new cross-check                                                | every ticket file                               | the parse dropping a written `awaiting` line                                        |
+  | Test                                                                   | Reads                                           | Fails on                                                                            |
+  | ---------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+  | `every ticket in the repo parses, and its dependencies resolve`        | every ticket, and the tool set against `tools/` | a malformed ticket, a dangling dependency, a tool directory the board does not know |
+  | `no ticket on the board is ready with a gate record already on it`     | every ticket                                    | a ready ticket carrying `## Review`                                                 |
+  | `repo-wide tickets live in docs/work`                                  | every `repo` ticket path                        | a repo ticket filed elsewhere                                                       |
+  | `no tool keeps a status page, and neither does the repo`               | `docs/` and `tools/*/docs`                      | a returned `03-STATUS.md`                                                           |
+  | `the ticket format states the rule the parser enforces`                | `docs/01-TICKETS.md`                            | the quoting paragraph rewritten away                                                |
+  | `the ticket format documents the field and says who clears it`         | `docs/01-TICKETS.md`                            | the `awaiting` row or its "deletes the line" sentence rewritten away                |
+  | `--tool with a name no tool has is a named failure, not an empty view` | the real board, through a rootless `run([...])` | a malformed ticket (the CLI fails first), or a tool called `sniffer`                |
+  | the new cross-check                                                    | every ticket file                               | the parse dropping a written `awaiting` line                                        |
 
   None of them fails on a ticket doing what the format intends; each fails only
-  on a defect, which is the difference from the repo-16 case. Two of them
-  (`parses` and `ready with a gate record`) are also covered on an all-markdown
-  change by `ci.yml`'s `node scripts/status.mjs --json` step in `check`. The
-  other four read the repo for something `--json` does not look at, so **a
-  markdown-only change can break them and CI will not run them** (the header
-  above them in the file says so for the first group already).
+  on a defect, which is the difference from the repo-16 case. The gate set
+  every open ticket to `done`, then to `dropped`, then deleted dl-73's line:
+  each 135 of 135. Two of them (`parses` and `ready with a gate record`) are
+  also covered, for a malformed ticket, on an all-markdown change by `ci.yml`'s
+  `node scripts/status.mjs --json` step in `check`. The other five read the
+  repo for something `--json` does not look at (`repo-wide tickets live in
+docs/work`, `no tool keeps a status page`, the two format-document tests and
+  `--tool … no tool has`, whose tool-name failure `--json` never reaches), as
+  do the cross-check and the tool-set clause of `parses`. So **a markdown-only
+  change can break them and, before the step below, CI would not run them.**
+  `--tool … no tool has` was missing from this list in the first draft; the
+  gate (round 1) found it by adding `bogus: x` to one real ticket, which
+  failed five tests including that one.
 
-  **Open decision, for the owner, not settled here.** Should a markdown-only
-  change still run the tests that read markdown?
-  1. **Leave it** (recommended). Each remaining test guards a defect, not a
-     lifecycle, so a late red is a correct signal; the cost was one case, now
-     removed, and the next one would be a real regression.
-  2. **Run `npx vitest run scripts/test/status.test.ts` in `check`.** Measured
-     at 3.9 s for 135 tests here. Closes the gap for the four uncovered tests,
-     changes `ci.yml`, and puts a vitest run in a job that has none.
-  3. **Let the `changes` filter treat `docs/**` and `docs/work/` as code for
-     the `repo` project only.** Closes it without a new step, but widens a
-     filter whose width is argued in `ci.yml`'s header, and runs the whole
-     `repo` project (minutes, not seconds) on every ticket flip.
+  **Earlier case.** This is the second time the gap has produced a red test on
+  a markdown change. [repo-8](./repo-8-tests-bound-to-real-tickets.md) fixed
+  two tests in this same file that went red when downloader tickets finished,
+  and did not close the gap. The first draft of this entry called the cost
+  "one case", which was wrong.
+
+  **Owner answer, 2026-10-10**, to "should a markdown-only change still run the
+  unit tests that read live tickets?". Options: (1) _Run `status.test.ts` in
+  the `check` job_ — one vitest step, about 3.9 s, in a job that runs on every
+  change including markdown; **chosen**, and recommended by the coordinator.
+  (2) _Leave CI as is_ — **my recommendation, overridden**: I argued each
+  remaining test guards a defect, so a late red is a correct signal, and had
+  counted one earlier case where there were two. (3) _Run the `repo` project
+  when `docs/**` changes_ — closes the gap without a new step but widens the
+  `changes` filter, and runs 488 tests on every ticket flip (48.3 s locally,
+  measured by the gate; CI unmeasured; the first draft said "minutes", which
+  was unmeasured). Built as Build step 3.
+
+  **2026-10-10, round 1 (gate 1, Opus 5.5, failed `bf7842eb` on one high and
+  three lows).** F1: the `--tool` row above. Lows: the cross-check's comment
+  no longer says it "says so" on an empty board (it passes, trivially); the
+  repo-8 case is named; option 3's cost is the measured one. The step was added
+  to `ci.yml`'s `check` job after `node scripts/status.mjs --json`.
+
+  **The step catches the defect**, measured with `1a044437`'s
+  `status.test.ts` put back over this branch's (`git checkout 1a044437 --
+scripts/test/status.test.ts`, then restored) and the exact step command:
+
+  ```
+  $ npx vitest run scripts/test/status.test.ts      # exit 1
+   × the repo's own board surfaces at least one real outstanding obligation
+  AssertionError: expected [ 'dl-73' ] to include 'repo-16'
+   Tests  1 failed | 133 passed (134)
+  ```
+
+  On this branch the same command is green (135 of 135, see the report on the
+  pull request). `scripts/preflight.mjs` derives `ci.yml`'s `check`-job
+  commands and spawns any that are not `npm ci` or `npm run check`, so it
+  runs the new step too (its `ciCommands` section lists it).

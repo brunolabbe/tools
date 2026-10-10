@@ -1660,8 +1660,9 @@ const writtenAwaiting = (text: string) => {
 
 // The real board, and the part of the old case that did need it: a line a
 // person actually wrote, in the shape people write it, is not silently dropped.
-// It asserts the *agreement* between the file and the parse, so it holds with
-// no `awaiting` anywhere on the board — and says so rather than going red.
+// It asserts the *agreement* between the file and the parse, so on a board with
+// no `awaiting` anywhere it passes, trivially — the synthetic case above is what
+// proves the mechanism, and this one only proves the real files agree with it.
 test("every awaiting line on the repo's own board is carried by the ticket it is written in", () => {
   const disagree = readTickets(REPO)
     .filter(
