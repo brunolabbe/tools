@@ -1116,20 +1116,26 @@ const ZONE_DIALOG = "dialog";
  * unrelated continuation stay open at the end, so "cookies" and
  * "Cookie-Einstellungen" match.
  *
- * **"cookie" alone needs no word start** (dl-93): no ordinary word contains it,
- * and German and Swedish compound it ("Statistikcookies", "Marketingcookies"),
- * so a lookbehind lost those. "kakor" takes the Swedish definite forms
+ * **"cookie" takes a named prefix** (dl-93): German compounds it ("Statistikcookies",
+ * "Marketingcookies"), and the word start alone loses those. The prefix is a
+ * list, not a wildcard, because "cookie" does sit inside ordinary words:
+ * "Schokocookies", "Supercookie", "thecookiejar", "#sugarcookie" are food, a
+ * product and a URL, and a bakery's cart bar says "3 Schokocookies im
+ * Warenkorb". A consent compound nobody listed is a missed layer, which costs
+ * nothing; a food compound taken for consent is a pressed submit, which does. So
+ * a new compound is one more name here. "kakor" takes the Swedish definite forms
  * ("kakorna", "kakorn") at its end, and keeps its word start, so "pannkakor" and
  * "sockerkakorna" stay silent.
  */
 export const CONSENT_WORDING =
-  /cookie|(?<!\p{L})(?:ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+  /(?<!\p{L})(?:(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter)?cookie|ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
 
 /**
- * A word of the prose round a consent link (dl-93): two letters or more. Kept
- * out of the script's template string, where a `\p` would lose its backslash.
+ * What a layer holds only when it is the page rather than a banner over it
+ * (dl-93): a heading, the main region, an article or a media element. A fixed
+ * layer holding one of these is not a consent container through its wording.
  */
-const SENTENCE_WORD = /\p{L}{2,}/gu;
+const PAGE_CONTENT = 'h1, main, article, video, audio, [role="main"]';
 
 /**
  * Marks the nearest consent container of every link and button: an ancestor
@@ -1153,59 +1159,36 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   // and anything not rendered, such as a hidden menu, a script or a style.
   // textContent keeps all of those, and innerText drops the unrendered ones but
   // keeps the links.
-  //
-  // One link is read back in (dl-93): a link whose text speaks of consent AND
-  // that sits in a sentence beside a button, "We use <a>cookies</a> to improve
-  // the site. [Ho capito]". A nav link has neither the words round it nor a
-  // button beside it, and a submit button is no consent button.
-  var words = new RegExp(${JSON.stringify(SENTENCE_WORD.source)}, 'gu');
-  var sentenceLink = function (link) {
-    var host = link.parentElement;
-    if (!host) return false;
-    var count = 0;
-    var control = false;
-    for (var c = host.firstChild; c; c = c.nextSibling) {
-      if (c.nodeType === 3) {
-        count += (c.nodeValue.match(words) || []).length;
-      } else if (c !== link && c.nodeType === 1 && c.matches('button, [role="button"], input[type="button"]')) {
-        var submits = c.matches('button') && c.getAttribute('type') !== 'button' && c.closest('form');
-        if (!submits && c.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true })) control = true;
-      }
-    }
-    return control && count >= 2;
-  };
   var prose = function (layer) {
     var seen = new Map();
     var parts = [];
-    var linkText = new Map();
     var walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
     for (var t = walker.nextNode(); t; t = walker.nextNode()) {
       var p = t.parentElement;
       if (!p) continue;
       if (!seen.has(p)) {
-        var link = null;
+        var inLink = false;
         for (var a = p; a; a = a.parentElement) {
           if (a.matches('a, [role="link"]')) {
-            link = a;
+            inLink = true;
             break;
           }
           if (a === layer) break;
         }
-        var shown = p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true });
-        seen.set(p, shown ? link || true : false);
+        seen.set(p, !inLink && p.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }));
       }
-      var kind = seen.get(p);
-      if (kind === true) parts.push(t.nodeValue);
-      else if (kind) linkText.set(kind, (linkText.get(kind) || '') + t.nodeValue);
+      if (seen.get(p)) parts.push(t.nodeValue);
     }
-    linkText.forEach(function (text, link) {
-      if (wording.test(text) && sentenceLink(link)) parts.push(text);
-    });
     return parts.join(' ');
   };
   // The mark a layer earns, or null when it is not a consent container.
   var tier = function (n) {
-    if (wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
+    // A layer that holds the page's own content, or is itself a form, is not a
+    // consent container through its wording (dl-93, the owner's decision of
+    // 2026-10-10): a fixed app root with a footer that says "cookie", and a
+    // docked checkout form that does. A dialog is still a dialog.
+    var content = n.matches('form') || n.querySelector(${JSON.stringify(PAGE_CONTENT)}) !== null;
+    if (!content && wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
     return n.matches(semantic) ? ${JSON.stringify(ZONE_DIALOG)} : null;
   };
   var find = function (el) {
@@ -1275,18 +1258,20 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * does not. A layer that speaks of consent is tried before a dialog that does
  * not, so a consent layer wins over an earlier newsletter dialog.
  *
- * A link's text counts only as a sentence's link (dl-93): "We use <a>cookies</a>
- * to improve the site." beside a non-submit button is consent prose, a "Cookie
- * policy" link in a nav list is not. Wording that is hidden through every pass
- * (a sentence shown after six seconds) is not read at all.
- *
  * A sticky header or a docked checkout bar whose prose says nothing of consent
  * is not a container, so its "Ho capito" and "Agree and continue" are not
  * pressed, even when it links a cookie policy. One whose prose does speak of it
- * is a container, and is believed: a checkout bar that says "Your cart is kept
- * in a cookie" has its submit pressed, and so does the first widened label in a
- * fixed app root whose footer says it uses cookies. Both differ from before
- * dl-82 and are pinned in the tests as accepted.
+ * is a container, and is believed, **unless it is the page rather than a
+ * banner over it** (dl-93): a fixed layer that holds an `h1`, `main`, `article`,
+ * `video`, `audio` or `[role="main"]`, or that is itself a `<form>`, is no
+ * container through its wording, so a fixed app root whose footer says it uses
+ * cookies, and a checkout form that says "Your cart is kept in a cookie", press
+ * nothing. A dialog is still a container whatever it holds. What that gives up,
+ * by the owner's choice of 2026-10-10 and pinned in the tests: a consent notice
+ * in the flow of a fixed root that holds an `h1`, and a consent bar that is
+ * itself a `<form>`, fall to the old pattern. What it does not reach, also
+ * pinned: a fixed root with an `h2` and no landmark, and a checkout `<form>`
+ * nested inside the fixed layer rather than being it.
  *
  * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
  * searched for before this change. A widened phrasing outside a container is
@@ -1300,7 +1285,8 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * nothing of cookies), labelled with a phrasing newer than this change, is not
  * pressed; it falls through to the old pattern, which is where it stood before.
  * Likewise a layer that does speak of consent is believed: a docked checkout bar
- * that mentions cookies would have its "Agree and continue" pressed. Another
+ * that mentions cookies, and is not itself a form, would have its "Agree and
+ * continue" pressed. Another
  * language's wording is one more `CONSENT_WORDING` alternative; a label the old
  * pattern never knew is one more `CONSENT_PHRASES` entry, not a wider reach.
  */

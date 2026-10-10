@@ -10,7 +10,8 @@
          consent-container rule can press it; pressing it removes the bar and
          mounts the player. The rows are the ticket's recall table: the ones that
          must keep resolving (r3..r9) and the ones whose wording sits in a link, a
-         hidden node or a compound word (r1, r1b, r2b, r5b, r7, r8). -->
+         hidden node (r1, r1b, r2, r2b, r5b: lost, see dl-93's Log) or a compound
+         word (r7, r8). -->
     <h1>Consent bar</h1>
     <div id="player"></div>
     <div
@@ -43,26 +44,6 @@
         r7:
           "Wir verwenden Statistikcookies und Marketingcookies. " + BUTTON + "Ich stimme zu</button>",
         r8: "Läs mer om kakorna på sajten. " + BUTTON + "Jag godkänner</button>",
-        // Not consent rows: a link's words must not make the bar a container
-        // unless the link sits in a sentence beside a (non-submit) button.
-        // n1: a checkout form's submit beside a sentence that links a cookie policy.
-        n1:
-          '<form onsubmit="event.preventDefault()">By ordering you accept our terms and ' +
-          '<a href="#c">cookie policy</a>. ' +
-          BUTTON.replace('type="button"', 'type="submit"') +
-          "Agree and continue</button></form>",
-        // n2: a nav link, in a block of its own, ahead of a notice.
-        n2:
-          '<nav><a href="#c">Cookie policy</a></nav>' +
-          "<div>Nuove condizioni di spedizione. " +
-          BUTTON +
-          "Ho capito</button></div>",
-        // n3: the link's sentence in one block and the button in another.
-        n3:
-          '<p>Please read our <a href="#c">cookie policy</a> now.</p>' +
-          "<div>" +
-          BUTTON +
-          "Ho capito</button></div>",
         r9:
           '<div class="text"><p>We use cookies to personalise content.</p></div>' +
           '<div class="buttons"><div class="row">' +

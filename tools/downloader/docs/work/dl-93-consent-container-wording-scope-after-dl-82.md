@@ -273,3 +273,85 @@ What the brief had wrong: nothing in the tables; every column reproduced. The
 "Done when" line "a1 and a2 either press nothing, or the Log records the signal
 that was tried and why it failed" has a third case here: the signal works, and
 what it costs is the owner's to weigh, so neither arm is met yet.
+
+2026-10-10, **gate 1 round and the owner's answers** (gate 1 failed `a7f47bd2`:
+one high, two med, two low). The entry above is superseded where it says the link
+signal is built, that "cookie" needs no word start, that `ciasteczk` is redundant
+and that step 4 is open.
+
+**Owner answers, 2026-10-10, each relayed by the
+coordinator:**
+
+1. _What happens to the link-in-a-sentence rule?_ Options: "Withdraw it; r1, r1b
+   and r2b stay lost" (the gate's (a), recommended by the gate); "Narrow it" (the
+   gate's (b), unmeasured). **Chosen: withdraw.**
+2. _How should the wording match?_ Options: "Keep the word start; list consent
+   compounds by name" (the gate's (a), recommended); "Match inside words; accept
+   the cost". **Chosen: keep the word start and list the compounds.**
+3. _Which rule for a1 and a2?_ Options: both rules (the builder's recommendation);
+   leave both as accepted costs; the `h1`/`main` rule only; the form rule only,
+   with the gate's measurement of each. **Chosen: both rules**, knowingly over the
+   gate's wider costs.
+
+**Finding 1 (high), reproduced and fixed by withdrawing the signal.** The gate's
+pages through the real `BrowserResolver`, a press counted as `/beacon/bad`:
+`GATE head c1: bad=2`, `c2`, `c4`, `c5`, `c7`, `c10` all `bad=2` at `a7f47bd2`
+(`gate-1/cases-head.log`), 0 at base. Reproduced on the pushed head: against the
+old `provoke.ts` the new spec fails `× c1 … presses nothing`, `c2`, `c4`, `c5`,
+`c7`, `c10` (and `c8`, `c9`, below). With the signal taken out all of them press
+nothing, `c3` and `c6` still do (the controls). `clickConsentText`'s JSDoc paragraph
+the gate showed false is true again ("not pressed, even when it links a cookie
+policy"); the paragraph I had added about links is gone. **r1, r1b and r2b are
+lost**, and the measured reason is the gate's **c1** (an SPA checkout bar, "By
+placing your order you agree to our `<a>`terms`</a>` and `<a>`cookie policy`</a>`."
+beside a `type=button` "Agree and continue") and **c4** (a newsletter popup,
+"Iscriviti alla newsletter. Leggi la `<a>`cookie policy`</a>`." beside "Ho
+capito"): both have r1's exact shape and both went 0 to 2 presses of a wrong
+control, so no local signal separates them from r1 and r1b. **r5b** is lost
+because its sentence is `visibility:hidden` through both provocation passes and is
+shown at 6 s, so nothing readable at probe time says "cookies". The earlier
+sentence that this is "a3b's regression" was a reading: a3b is `display:none` and
+r5b is `visibility:hidden`, and whether that difference would separate them is
+**unmeasured**. **r2** (wording only in `aria-label`) is `NO_MEDIA_FOUND` at base
+and still. Done when 3's second arm is therefore met for r1, r1b, r2b and r5b by
+this paragraph. The gate's c1 to c10 pages are `consent-scope-cases.html`
+(`?case=`), tested in `consent-scope.test.ts` as "layers that base left alone are
+still left alone": each presses nothing.
+
+**Finding 2 (med), reproduced and fixed.** `regex.mts` in the gate's directory
+showed 12 deltas in 39 strings. Reproduced as `provoke.test.ts` `SILENT` rows
+"Schokocookies backen…", "Haferflockencookies…", "chocoladecookies",
+"Chokladcookies", "Supercookie", "#sugarcookie", "thecookiejar" and "3
+Schokocookies im Warenkorb.", which fail at `a7f47bd2` and pass now; c8 and c9 are
+`bad=2` at the old head and 0 now. The word start is back and the consent
+compounds are named: `(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter)?cookie`.
+r7 ("Statistikcookies", "Marketingcookies") and r8 ("kakorna") still press. The
+cost, as the gate said: a consent compound nobody listed ("Komfortcookies") is a
+missed layer, fixed by one more name. The comment that said no ordinary word
+contains "cookie" is replaced by one that says what the list is for.
+
+**Finding 3 (Build step 4), option 4 built.** In `tier()`, a fixed or sticky layer
+that holds `h1, main, article, video, audio, [role="main"]`, or that is itself a
+`<form>`, is a container only if it is a semantic dialog. dl-82's a1 and a2 tests
+in `browser-resolver.test.ts` are **flipped by the owner's decision** to assert
+that nothing is pressed (named "flipped from dl-82's a1" and "a2" in each test
+and commented there). Pinned in `consent-scope.test.ts`, with the gate's pages:
+
+| Case                                                    | What option 4 does       | Status                        |
+| ------------------------------------------------------- | ------------------------ | ----------------------------- |
+| c11 a2 with the `<form>` inside the fixed div           | submit still pressed     | accepted cost: not reached    |
+| c12 a1 with an `h2` and no `h1`                         | newsletter still pressed | accepted cost: not reached    |
+| c13 a consent notice in a fixed root that holds an `h1` | no longer pressed        | accepted cost: a consent miss |
+| c14 a fixed consent bar that is itself a `<form>`       | no longer pressed        | accepted cost: a consent miss |
+
+A missed consent layer costs nothing in the sense dl-82 uses (the old pattern
+still reaches "Accept" and the rest); c11 and c12 are the presses the rule does
+not stop.
+
+**Lows.** `ciasteczk` and `ciasteczek` are **not** redundant, as the gate said:
+they differ at the ninth letter, and "ciasteczek" (genitive plural) matches only
+through its own alternative. The sentence calling them redundant in the earlier
+entry is withdrawn and both stay. The r5b wording is corrected above.
+
+**Dropped by the gate:** `SENTENCE_WORD`'s `g` flag was never a defect, and the
+constant is gone with the signal.

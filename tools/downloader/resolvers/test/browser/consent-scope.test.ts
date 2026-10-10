@@ -76,36 +76,18 @@ describe("a fixed bar whose cookie wording is a compound word or a kept word (dl
   });
 });
 
-describe("a fixed bar whose cookie wording sits in a link or a hidden node (dl-93)", () => {
-  // A link inside a sentence, beside the button: "We use <a>cookies</a> ...".
+describe("a fixed bar whose cookie wording sits in a link or a hidden node stays lost (dl-93)", () => {
+  // The owner's decision of 2026-10-10: the link-in-a-sentence signal is
+  // withdrawn. r1, r1b and r2b have the shape of c1 and c4 below, a checkout bar
+  // and a newsletter popup that link a cookie policy, and no local signal tells
+  // them apart; so a link's text is not prose, and these stay lost. r2's only
+  // wording is an aria-label, and r5b's sentence is visibility:hidden through
+  // both provocation passes.
   test.each([
     ["r1", "Read our <a>cookie policy</a>. [Ho capito]"],
     ["r1b", "We use <a>cookies</a> to improve the site. [Accetto e continua]"],
-    ["r2b", "Leggi la <span role=link>cookie policy</span>. [Ho capito]"],
-  ])("%s (%s) is pressed and its stream found", { timeout: TEST_TIMEOUT_MS }, async (row) => {
-    const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`);
-
-    expect(requests).toContain("/beacon/consent-accepted");
-    expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
-  });
-
-  // What the link rule must not take in: a submit beside the sentence, a nav
-  // link in a block of its own, and a sentence apart from the button.
-  test.each([
-    ["n1", "a checkout form's submit beside a cookie-policy link"],
-    ["n2", "a nav link ahead of a notice"],
-    ["n3", "the link's sentence and the button in separate blocks"],
-  ])("%s (%s) is not pressed", { timeout: TEST_TIMEOUT_MS }, async (row) => {
-    const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`);
-
-    expect(requests).not.toContain("/beacon/consent-accepted");
-    expect((outcome as AppError).code).toBe("NO_MEDIA_FOUND");
-  });
-
-  // Still lost, and measured: r2's only wording is an aria-label, which is not
-  // prose; r5b's sentence is hidden through both provocation passes.
-  test.each([
     ["r2", "wording only in aria-label"],
+    ["r2b", "Leggi la <span role=link>cookie policy</span>. [Ho capito]"],
     ["r5b", "the sentence shown at 6 s"],
   ])("%s (%s) is not pressed", { timeout: TEST_TIMEOUT_MS }, async (row) => {
     const { outcome, requests } = await visit(`/consent-bar-rows.html?row=${row}`);
@@ -113,4 +95,67 @@ describe("a fixed bar whose cookie wording sits in a link or a hidden node (dl-9
     expect(requests).not.toContain("/beacon/consent-accepted");
     expect((outcome as AppError).code).toBe("NO_MEDIA_FOUND");
   });
+});
+
+/** How many times the page beaconed `name` during one probe of case `c`. */
+async function presses(c: string, name: "bad" | "other"): Promise<number> {
+  const { requests } = await visit(`/consent-scope-cases.html?case=${c}`);
+  return requests.filter((r) => r === `/beacon/${name}`).length;
+}
+
+describe("layers that base left alone are still left alone (dl-93 gate 1)", () => {
+  // Every one of these was 0 presses at base. The first six went to 2 when a
+  // link in a sentence made a layer a container, and c8 and c9 when "cookie"
+  // matched inside any word; the controls c3 and c6 never moved.
+  test.each([
+    ["c1", "an SPA checkout bar that links a cookie policy, a type=button order button"],
+    ["c2", "a form bar: a link, a Back button, and a submit"],
+    ["c3", "control: c2 without Back, the submit untyped"],
+    ["c4", "a newsletter popup that links a cookie policy"],
+    ["c5", "a footer line with a Back-to-top button, and a notice"],
+    ["c6", "control: c5 with its links in a list"],
+    ["c7", "a sticky header's flat nav with a Search button, and a notice"],
+    ["c8", "a fixed app root titled Schokocookies, with a newsletter"],
+    ["c9", "a cart bar: 3 Schokocookies, a submit"],
+    ["c10", "a submit bound by form= from outside its form"],
+  ])("%s (%s) presses nothing", { timeout: TEST_TIMEOUT_MS }, async (c) => {
+    expect(await presses(c, "bad")).toBe(0);
+  });
+});
+
+describe("what the form and page-content rule does to the cases it was weighed on (dl-93, the owner's decision of 2026-10-10)", () => {
+  // The rule: a fixed layer that holds an h1, main, article, video, audio or
+  // [role=main], or is itself a <form>, is no consent container through its
+  // wording. Pinned both ways, with its costs named as accepted in the ticket.
+  test(
+    "c11, accepted: a checkout <form> nested inside the fixed layer still has its submit pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      expect(await presses("c11", "bad")).toBeGreaterThan(0);
+    },
+  );
+
+  test(
+    "c12, accepted: a fixed app root with an h2 and no landmark still has its newsletter pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      expect(await presses("c12", "bad")).toBeGreaterThan(0);
+    },
+  );
+
+  test(
+    "c13, accepted cost: a consent notice in the flow of a fixed root that holds an h1 is no longer pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      expect(await presses("c13", "other")).toBe(0);
+    },
+  );
+
+  test(
+    "c14, accepted cost: a consent bar that is itself a <form> is no longer pressed",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      expect(await presses("c14", "other")).toBe(0);
+    },
+  );
 });

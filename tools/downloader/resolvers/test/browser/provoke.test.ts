@@ -404,6 +404,15 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "I partner consentono l'ordine.",
     "Veckans recept: pannkakor.",
     "Sockerkakor till kaffet.",
+    // dl-93 gate 1: "cookie" inside an ordinary word is food, a product or a URL.
+    "Schokocookies backen: das beste Rezept.",
+    "Haferflockencookies ohne Zucker",
+    "Recept voor chocoladecookies.",
+    "Chokladcookies med havre.",
+    "Supercookie Box, 12 pieces",
+    "#sugarcookie season",
+    "Visit thecookiejar.example",
+    "3 Schokocookies im Warenkorb.",
     // dl-93: the Swedish definite forms keep the word start.
     "Pannkakorna är klara.",
     "Sockerkakorna står på bordet.",
