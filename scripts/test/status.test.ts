@@ -153,28 +153,18 @@ const WITHHELD_REPO9 = `${atRepo("repo-9")}: withheld from --ready — waits on 
 // The real tickets
 // ---------------------------------------------------------------------------
 
-// **The three tests below are the ones a documentation-only pull request needs
-// most, and CI runs at most one of them.** `ci.yml`'s `test` matrix is skipped
-// for a change that is all `.md` — which is exactly what filing a ticket or
-// flipping one to `done` is — so what runs on such a pull request is the
-// unfiltered `check` job, and the only thing it knows about tickets is
-// `node scripts/status.mjs --json`. That step had a workflow of its own
-// (`status.yml`) until repo-2 folded it in.
-//
-// So, precisely:
-//
-// - **Covered by `check`:** the parse and `depends_on` resolution the first
-//   test asserts. `--json` walks every ticket through the same reader, so a
-//   drifted field, a status outside the taxonomy or a dangling dependency fails
-//   there by file and line whether or not vitest runs.
-// - **Not covered, on any all-`.md` pull request:** the tool-set assertion in
-//   the first test, and both tests after it. The second is only ever violated
-//   by a misplaced file; the third — `no tool keeps a status page` — is the
-//   regression guard repo-2 added, and a pull request that re-adds a
-//   `03-STATUS.md` is by construction all markdown, so it is the one change the
-//   guard exists for and the one CI will not run it on. Pre-existing and not
-//   worth a second workflow: the fix is to run the matrix, and that trade is
-//   argued in `ci.yml`'s header.
+// **The tests below are the ones a documentation-only pull request needs most,
+// and they run on one because `ci.yml`'s unfiltered `check` job runs this
+// file** (repo-97). `ci.yml`'s `test` matrix is skipped for a change that is
+// all `.md` — which is exactly what filing a ticket or flipping one to `done`
+// is — and until repo-97 the only thing that ran on such a pull request was
+// `node scripts/status.mjs --json`, which parses every ticket and resolves
+// `depends_on` but does not look at the tool set, where a ticket file lives, a
+// returned `03-STATUS.md`, the format document or `--tool`. A test here that
+// went red on a markdown-only change merged green and failed `main` unseen
+// (repo-8, then repo-97), so the `check` job now runs this one file: seconds,
+// no build. The matrix is still skipped for `.md`, and every other suite is
+// still not run on one.
 //
 // The point of the strict parser is that the first test is the one that fails,
 // by name and by line, when a ticket's frontmatter drifts.

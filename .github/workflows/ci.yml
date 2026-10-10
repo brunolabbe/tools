@@ -124,7 +124,8 @@ jobs:
       # understand — an unknown field, a status outside the taxonomy, an id that
       # disagrees with its filename, a `depends_on` pointing at nothing, a
       # ticket still `ready` with a gate record already on it. Nothing else in
-      # CI reads them.
+      # this job reads them but the status suite below, and the `test`
+      # matrix, which a markdown-only change skips.
       #
       # **It reads the checkout, not the history**, which is why repo-12's check
       # reads the ticket's own body rather than its commits. That used to be
