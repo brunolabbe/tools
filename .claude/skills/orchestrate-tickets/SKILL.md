@@ -167,7 +167,7 @@ files together.
 
 | `difficulty` | Builder | Gate |
 | --- | --- | --- |
-| `mechanical` — code only | `builder-mechanical` (Haiku 4.5) | `ticket-reviewer-sonnet`, narrow: named attacks only |
+| `mechanical` — code only | `builder-mechanical` (Haiku 5.5) | `ticket-reviewer-sonnet`, narrow: named attacks only |
 | `standard` | `builder-standard` (Sonnet 5.5, high) | `ticket-reviewer-opus` (Opus 5.5, high) |
 | `hard` | `builder-hard` (Opus 5.5, high) | `ticket-reviewer-sonnet` (Sonnet 5.5, xhigh) |
 | maintenance — a rebase, a merge from `main`, one Log edit, a filing whose reproduction is in hand | `builder-mechanical`, prompt saying "maintenance" | none, or `ticket-reviewer-sonnet` where one runs |

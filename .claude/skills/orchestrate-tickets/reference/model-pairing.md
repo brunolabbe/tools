@@ -7,6 +7,23 @@ had been lines 11 to 151 of a 296-line file loaded into every builder — narrat
 that no builder needs to build, on the page that costs every dispatch. Nothing
 below is an instruction; the table is the instruction.
 
+## 2026-10-10: Haiku 5.5 replaces Haiku 4.5
+
+**`builder-mechanical` is pinned to `claude-haiku-5-5`**, at the owner's
+request. Every Haiku measurement on this page ran on Haiku 4.5; none has run on
+5.5, so the rules below carry over unmeasured, as Sonnet 5.5's effort did on
+2026-09-30. Three things differ that a reading of the history should allow for:
+
+- **Two rate cards.** $0.10 / $0.50 per million tokens while a request's whole
+  prompt, cache reads included, is 100,000 tokens or fewer, and $0.50 / $2.50
+  above that. A builder's later turns are past that line, so a build is cheaper
+  than on 4.5 by less than its first turns suggest. `agent-cost.mjs` prices
+  each response on its own card.
+- **Effort exists.** Haiku 4.5 took none. Haiku 5.5 takes `low` to `max`, and
+  its API default is `medium`. The definition pins none.
+- **A newer tokenizer** counts the same text as about 30% more tokens, so token
+  counts in history rows before this date do not compare one for one.
+
 ## 2026-10-03: what the history says about Haiku and about gate rounds
 
 **Haiku stays the `mechanical` builder, behind a gate, for code only.** Both
@@ -59,8 +76,8 @@ Fable, which this page forbids. A definition cannot inherit its dispatcher's
 model and also pin one, and the pin is the point.
 
 **Effort is set per definition, and not measured.** Sonnet 5.5 builds at `high`
-and gates at `xhigh`; Opus 5.5 builds and gates at `high`; Haiku 4.5 takes no
-effort setting. Those are the sentinelle repository's values for the same models
+and gates at `xhigh`; Opus 5.5 builds and gates at `high`; Haiku 4.5 took no
+effort setting, and its successor Haiku 5.5 has none pinned (2026-10-10, above). Those are the sentinelle repository's values for the same models
 — Opus 5.5's own API default is `medium` — and nothing here compared them.
 `agent-cost.mjs` prints the effort each agent ran at since this date, so the
 first history rows under the new lineup are the trial. Sonnet 5.5 replaced
