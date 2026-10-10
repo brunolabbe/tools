@@ -297,6 +297,56 @@ evidence of a fragment.
   - reliability: the cancellation finding above.
   - maintainability: the false header comment above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-10 · `020b5dfc..3a4ba11e` (the round is commit `3a4ba11e`; the merge from `main` is not reviewed) · Opus 5.5, depth full
+
+The gate 1 Done-when traces still hold:
+
+- `chunk-sniff`, `chunk-streams`, `manifest-fetch` and `chunk-sniff-guard`: 65 of 65 pass.
+- `npm run check` exits 0.
+- PR #415 is green on `3a4ba11e` for every check, including `test (ubuntu-latest)`, both e2e legs and `docker`.
+
+The round's own tests each go red under a mutant of the line they guard:
+
+| Mutant                                                      | Test that goes red                                                                                                                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A file read and found whole is dropped again                | "a file read and found whole is kept when a fragment beside it is proven later"; "the whole file, read first, survives the init and media segments that follow it" |
+| No "`moof` after the `mvex` `moov`" clause                  | "a whole movie written as fragmented MP4 … is not a chunk"                                                                                                         |
+| No "head parses to its end" clause                          | "an mvex moov followed by bytes that are not a box is not proof"                                                                                                   |
+| `signal` not passed, or no `throwIfAborted` after the sniff | "aborting while a head read is outstanding rejects with the abort, promptly, and reads no more"                                                                    |
+| Directory without origin                                    | "a fragment on one host proves nothing about the same path on another"                                                                                             |
+
+**Gate 1 findings:**
+
+- **high (filter dropped files read and found whole): fixed.** A real Chromium on `3a4ba11e`:
+  - `/mixed-wholefirst.html` gives 3 variants (was `NO_MEDIA_FOUND`).
+  - `/mixed.html` gives 3 variants.
+  - `/hls-and-whole.html` gives `/mx/7.mp4`: the whole file, read first, is kept. The media segment is proven and the init segment, never read, is dropped.
+  - The `chunk-sniff.ts` header and the Log now match the code.
+- **med, open decision (a whole movie written as fragmented MP4): fixed as the owner chose (A).** The owner's answer is recorded under the ticket's Decision, with the options and the accepted cost. Real ffmpeg layouts were run through `sniffHead`:
+  - Offered: `frag_keyframe+empty_moov`, `empty_moov`, `+default_base_moof`, `-movflags dash`, `-movflags cmaf`, HLS `single_file`, and a 240 s `global_sidx` file whose `sidx` outgrows the head.
+  - Dropped: the ffmpeg HLS and DASH init segments, and every media segment.
+- **med (cancellation ignored): fixed.**
+  - `/cancel-hang.html` throws `CANCELED` 5–8 ms after the abort, with 0 sniff requests after it (was 6012 ms and 8 variants).
+  - Redirect chains with 20 ms and 300 ms hops throw `CANCELED` and make 0 requests after the abort in 4 runs. The next hop asks the closed context's jar for cookies and rejects: `browserContext.cookies: Target page, context or browser has been closed`, measured 306 ms after the read started.
+- **low (cross-host directory): fixed in the sniff.** `crosshost.mts` reads both hosts and gives `kept: ["https://cdn.site.example/media/2.mp4"]`. The same shape in `directoryOf` in `rank.ts` is outside this range. The Log reproduces it there and leaves filing to the orchestrator.
+
+**In the round's lines:**
+
+- **low** · an init segment followed by 1 to 7 bytes that are not a box is offered. The real ffmpeg init plus `\n`, 3 zeros or 4 zeros reads `unknown`; plus 8 or more zeros, a `free`, `styp` or `sidx` box, it reads `fragment`.
+  - Measured: `/init-lf.html` serves an init with one trailing LF and its two segments, all chunked, so they are read in arrival order. It offers `/il/00000.mp4`, 1385 B, as the only variant.
+  - It needs an init with no `Content-Length`, because a declared length under 512 KiB is demoted first.
+  - A body shorter than `SNIFF_HEAD_BYTES` has ended, so its trailing bytes cannot hide a fragment. The parse-to-end clause could exempt such a body.
+- **low** · a whole movie with one fragment and no `moof` is still dropped. ffmpeg `-movflags frag_keyframe` at 0.88 s writes `ftyp moov[…mvex…] mdat mfra`, 9.6 KB, and it decodes. `/tinyfrag.html`, served chunked, gives `NO_MEDIA_FOUND`. With a declared length, the 512 KiB demotion drops it before the sniff anyway.
+- **low** · whether a whole file survives depends on read order; this is recorded in the code comment and the Log. `/whole-after.html` holds two 1.5 MB media segments and a 759 KB faststart 2 s movie in one directory. The segment is read first, the movie is never read, and the page gives `NO_MEDIA_FOUND`. This is the cost of the remedy gate 1 proposed. The owner was not asked about it.
+- **low** · an abandoned read keeps its socket until its own timeout. The origin saw the hung read's socket close 2986, 2993 and 3005 ms after the probe answered, in 3 of 4 runs. One run measured 269 ms, which I could not explain. The Log states this cost.
+- **dropped** · "an abandoned read reaches the network after the abort". There were 0 such requests in 4 redirect-chain runs, because later hops fail on the closed context's jar. The window between an abort and the context closing was not probed below 20 ms.
+- **dropped** · "`unlessAborted` returns early without attaching to `work`, so a rejection could go unhandled". The signal cannot change between the loop's own check and that synchronous call, so there is no live call site.
+- **findings** · the gate 1 findings: 4, all fixed. The round's hunt returned 6: 4 carried (all low), 2 dropped.
+- Merge check: `git merge-tree --write-tree` of `3a4ba11e` with `origin/dl-93-consent-wording-scope` (`b24e9cd0`) is clean (tree `9f5e2f4a`).
+- No finding is a `high`.
+
 ## Log
 
 - 2026-10-06, filed from the dl-78 gate's `med` finding. The owner chose to file
