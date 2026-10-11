@@ -306,3 +306,36 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
   - The series' head was the final head plus the probe workflow, which is deleted
     in the final commit. `git diff 60001f1d <final head> -- tools/downloader/engine`
     prints nothing.
+- 2026-10-11, gate 2's high applied, and the owner's answer on the held-bytes
+  residual recorded.
+  - **Owner's answer, 2026-10-11** (asked by the orchestrator through
+    AskUserQuestion; the owner's choice, not an agent's), on the builder's open
+    decision about the held-bytes test's 1 in 25 Windows residual (`expected
+'fallen-back' to be 'parallel'`, above). Options: "Leave it at 50
+    (Recommended)" (the builder's recommendation; gate 2 gave none), "Raise
+    measureMs to 100" and "speedupFloor: 0". Chosen: **Leave it at 50.** Gate 2's
+    measured numbers for it, under a 15.6 ms tick model of the judge's window:
+    the split-to-single rate ratio has median 3.16 and minimum 2.89 at
+    `measureMs` 50, and 3.50 and 3.41 at 100, against a floor of 1.5. The residual
+    stays attributed to runner stalls, as above, and is not proved.
+  - **Gate 2's finding (high): the two feeder stop tests took the count after
+    the stop.** The feeder cancel test read `originRequests` after `abort()`,
+    which runs `RangeFeeder.close()` synchronously, and the size-cap test read it
+    from `feeder.stats()` after `readLoopback` resolved, after `#fatal` had closed
+    the feeder; a request that `close()` itself began through `#begin` was in the
+    count it was compared against. Gate 2's mutation `begin-at-stop-sync` passed
+    all three stop tests at `4563c082`. Fixed in `parallel-ranges.test.ts`, and
+    only there: the cancel test reads `requestsAtStop` on the line before
+    `controller.abort()`, and the size-cap test passes `feederFor` an `onFatal`
+    that records `feeder.stats().originRequests` (`#fatal` calls `onFatal` before
+    `close()`) and then pushes the error, and hands that number to
+    `expectNothingOpenedSince`. The helper's comment now says where the count
+    must be read. The size cap's time check stays.
+  - **Measured on Linux after the change.** `begin-at-stop-sync` planted in a
+    scratch copy of the tree, the two feeder tests, `-t`: the cancel test fails
+    `expected 5 to be 4` and the size cap `expected 6 to be 5`, 2 of 2 runs. The
+    whole file is 38 of 38 on one run, and 37 of 38 on another in which the
+    untouched F9 test failed (`expected 'parallel' to be 'single'`); F9 alone,
+    8 of 8 passes. The one F9 failure is unexplained and not chased: no Windows
+    series was run on this change, which is a test-file edit in two tests, so the
+    24-of-25 series above is of the file before it.

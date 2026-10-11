@@ -342,7 +342,9 @@ async function until(condition: () => boolean, ms: number, explain: () => string
 
 /**
  * "Opens no more", counted and not timed (dl-106). `requestsAtStop` is what the
- * feeder had begun when it stopped. A fetch it had written to a socket in the
+ * feeder had begun when it stopped, read before the stop closes it (ahead of
+ * `abort()`, or in `onFatal`, which runs ahead of `close()`), so a request the
+ * stop itself begins is counted against it. A fetch it had written to a socket in the
  * turn that stopped it reaches the origin a few ms later (3 ms, 1 run in 20 on
  * Linux) and is among that count; one opened afterwards, whenever it arrives, is
  * not, and neither the origin's tally nor the feeder's may exceed it. Call it
@@ -848,7 +850,17 @@ describe("dl-98: the feeder's own limits", () => {
     async () => {
       behaviour.perConnectionBps = 4_000_000;
       const limit = 1024 * 1024;
-      const { feeder, fatal } = await feederFor("moov-end.mp4", { maxBytes: limit });
+      const fatal: AppError[] = [];
+      let requestsAtStop = -1;
+      let running: RangeFeeder | null = null;
+      const { feeder } = await feederFor("moov-end.mp4", {
+        maxBytes: limit,
+        onFatal: (error) => {
+          requestsAtStop = running?.stats().originRequests ?? -1;
+          fatal.push(error);
+        },
+      });
+      running = feeder;
       const read = await readLoopback(feeder.url);
       const stats = feeder.stats();
       const measuredFrom = performance.now() + 100;
@@ -862,7 +874,7 @@ describe("dl-98: the feeder's own limits", () => {
       expect(stats.mode).toBe("parallel");
       expect(stats.deliveredBytes).toBeGreaterThan(limit);
       expect(open).toBe(0);
-      expectNothingOpenedSince(feeder, stats.originRequests);
+      expectNothingOpenedSince(feeder, requestsAtStop);
       // The feeder began 5 and the origin saw 4: one was aborted before it
       // connected, so a count cannot tell a late request from that slack. This
       // test also looks in time, from 100 ms after the stop (dl-106).
@@ -887,8 +899,10 @@ describe("dl-98: the feeder's own limits", () => {
         10_000,
         () => JSON.stringify({ open, stats: feeder.stats() }),
       );
-      controller.abort();
+      // Read before the abort: close() runs inside it, and a request it began
+      // would otherwise be in the count it is compared against.
       const requestsAtStop = feeder.stats().originRequests;
+      controller.abort();
       const read = await reading;
       await sleep(300);
 
