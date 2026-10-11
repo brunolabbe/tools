@@ -626,6 +626,13 @@ describe("dl-98: cancelling a split job", () => {
       await expect(media.done).rejects.toMatchObject({ code: "JOB_CANCELED" });
       await sleep(500);
       expect(open).toBe(0);
+      if (process.env["DL106"] !== undefined) {
+        // DL106-PROBE (temporary)
+        const late = seen.filter((entry) => entry.at > canceledAt);
+        process.stderr.write(
+          `DL106 CANCEL late=${JSON.stringify(late.map((entry) => [entry.range, Math.round(entry.at - canceledAt)]))} total=${seen.length}\n`,
+        );
+      }
       expect(seen.filter((entry) => entry.at > canceledAt)).toEqual([]);
     },
     SLOW,
