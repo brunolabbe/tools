@@ -428,3 +428,79 @@ export async function decodedVideoFrames(
   const counts = [...ran.stdout.matchAll(/frame=(\d+)/gu)].map((match) => Number(match[1]));
   return { frames: counts.at(-1) ?? 0, exit: ran.code };
 }
+
+/**
+ * dl-98: a progressive MP4 of a chosen length and bitrate, in both layouts:
+ * `moov-end.mp4` (ffmpeg's default, `ftyp,free,mdat,moov`) and
+ * `faststart.mp4`, the same samples with the index first. Large enough to be
+ * split into several ranged chunks; a constant bitrate so its size is known
+ * in advance to within the container's boxes.
+ */
+export async function generateBitrateProgressive(
+  dir: string,
+  seconds: number,
+  videoBitrate: string,
+): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+  const muxed = path.join(dir, "moov-end.mp4");
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    `testsrc2=size=640x480:rate=25:duration=${seconds}`,
+    "-f",
+    "lavfi",
+    "-i",
+    `sine=frequency=440:sample_rate=44100:duration=${seconds}`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-pix_fmt",
+    "yuv420p",
+    "-b:v",
+    videoBitrate,
+    "-minrate",
+    videoBitrate,
+    "-maxrate",
+    videoBitrate,
+    "-bufsize",
+    videoBitrate,
+    ...AAC,
+    "-shortest",
+    muxed,
+  ]);
+  await ffmpeg([
+    "-i",
+    muxed,
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    path.join(dir, "faststart.mp4"),
+  ]);
+}
+
+/**
+ * One line per packet of every stream in `file`, with an MD5 of its bytes:
+ * "identical in media" without depending on the container's own boxes (dl-98).
+ */
+export async function packetDigests(file: string): Promise<string[]> {
+  const ran = await run(FFMPEG, [
+    "-hide_banner",
+    "-nostdin",
+    "-v",
+    "error",
+    "-i",
+    file,
+    "-map",
+    "0",
+    "-c",
+    "copy",
+    "-f",
+    "framemd5",
+    "-",
+  ]);
+  if (ran.code !== 0) throw new Error(`framemd5 exited ${ran.code}: ${ran.stderr.slice(-2000)}`);
+  return ran.stdout.split("\n").filter((line) => line !== "" && !line.startsWith("#"));
+}

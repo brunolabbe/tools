@@ -10,6 +10,8 @@
 
 import { createRequire } from "node:module";
 import { AppError } from "@downloader/contract";
+import type { ParallelRangeSettings } from "./download/parallel-ranges.ts";
+import { PARALLEL_RANGE_DEFAULTS } from "./download/parallel-ranges.ts";
 import type { Logger } from "./logger.ts";
 import { NOOP_LOGGER } from "./logger.ts";
 
@@ -49,10 +51,21 @@ export interface EngineConfig {
    * supplies this explicitly on the path where it can differ.
    */
   tlsCaFile: string | undefined;
+  /**
+   * Hosts whose progressive files are always read on one connection (dl-98,
+   * Decision 4): an origin whose terms or anti-bot layer object to more. Each
+   * entry covers its subdomains too. `SINGLE_CONNECTION_HOSTS`, comma-separated.
+   */
+  singleConnectionHosts: readonly string[];
+  /** How a slow progressive source is split (dl-98). The defaults are the owner's. */
+  parallelRanges: ParallelRangeSettings;
   logger: Logger;
 }
 
-export type EngineConfigInput = Partial<EngineConfig>;
+export type EngineConfigInput = Partial<Omit<EngineConfig, "parallelRanges">> & {
+  /** Any subset; the rest are `PARALLEL_RANGE_DEFAULTS`. Tests shrink the chunk and the window. */
+  parallelRanges?: Partial<ParallelRangeSettings> | undefined;
+};
 
 /**
  * Path to the bundled ffmpeg. Resolved through `createRequire` rather than an
@@ -98,6 +111,13 @@ function boolean(raw: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+function hostList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+}
+
 export const ENGINE_DEFAULTS = {
   maxFileSizeMb: 4096,
   stageTimeoutMs: 3_600_000,
@@ -120,6 +140,8 @@ export function loadEngineConfig(
     proxyUrl: input.proxyUrl ?? env["PROXY_URL"] ?? undefined,
     tlsVerify: input.tlsVerify ?? !boolean(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
     tlsCaFile: input.tlsCaFile ?? env["EGRESS_CA_FILE"] ?? env["FFMPEG_CA_FILE"] ?? undefined,
+    singleConnectionHosts: input.singleConnectionHosts ?? hostList(env["SINGLE_CONNECTION_HOSTS"]),
+    parallelRanges: { ...PARALLEL_RANGE_DEFAULTS, ...input.parallelRanges },
     logger: input.logger ?? NOOP_LOGGER,
   };
 }

@@ -208,14 +208,18 @@ export class SeekProbeCanceled extends Error {
   }
 }
 
+/** How a request of the engine's own leaves: straight to the origin, or through ffmpeg's proxy. */
+export type EgressRoute = { kind: "direct" } | { kind: "proxy"; url: URL };
+
 /**
  * The proxy ffmpeg would use, by the runner's rule: `proxyUrl` when set, and
  * otherwise whatever `http_proxy` ffmpeg inherits. ffmpeg's http and tls
- * protocols both read `http_proxy`, and only an `http://` one.
+ * protocols both read `http_proxy`, and only an `http://` one. Shared with
+ * `parallel-ranges.ts` (dl-98), whose fetches take the same route.
  */
-function egressProxy(
-  options: SeekProbeOptions,
-): { kind: "direct" } | { kind: "proxy"; url: URL } | { kind: "unusable" } {
+export function egressProxy(
+  options: Pick<SeekProbeOptions, "proxyUrl" | "env">,
+): EgressRoute | { kind: "unusable" } {
   const env = options.env ?? process.env;
   const raw =
     options.proxyUrl !== undefined && options.proxyUrl.length > 0
@@ -244,6 +248,23 @@ function awaitResponse(request: http.ClientRequest): Promise<IncomingMessage> {
   });
 }
 
+/**
+ * The proxy answered a `CONNECT` with something other than `200`. Its status
+ * line is kept because it is the verdict: the guarded proxy refuses an origin
+ * whose certificate fails with `502 TLS certificate verification failed
+ * (<code>)` (dl-27), and `parallel-ranges.ts` hands that line on to ffmpeg.
+ */
+export class TunnelRefused extends Error {
+  readonly status: number;
+  readonly statusMessage: string;
+  constructor(status: number, statusMessage: string) {
+    super(`the proxy refused the tunnel with ${status}`);
+    this.name = "TunnelRefused";
+    this.status = status;
+    this.statusMessage = statusMessage;
+  }
+}
+
 /** A `CONNECT` tunnel through `proxy` to `target`'s host and port. */
 function openTunnel(proxy: URL, target: URL, signal: AbortSignal): Promise<net.Socket> {
   const authority = `${target.hostname}:${target.port === "" ? "443" : target.port}`;
@@ -260,7 +281,7 @@ function openTunnel(proxy: URL, target: URL, signal: AbortSignal): Promise<net.S
       socket.on("error", () => undefined);
       if (response.statusCode !== 200) {
         socket.destroy();
-        reject(new Error(`the proxy refused the tunnel with ${response.statusCode ?? 0}`));
+        reject(new TunnelRefused(response.statusCode ?? 0, response.statusMessage ?? ""));
         return;
       }
       if (head.length > 0) socket.unshift(head);
@@ -271,10 +292,14 @@ function openTunnel(proxy: URL, target: URL, signal: AbortSignal): Promise<net.S
   });
 }
 
-async function get(
+/**
+ * One request for `target`, on `route`, with `headers` as given. Exported for
+ * `parallel-ranges.ts` (dl-98), whose ranged fetches go out the same way.
+ */
+export async function get(
   target: URL,
   headers: Record<string, string>,
-  route: { kind: "direct" } | { kind: "proxy"; url: URL },
+  route: EgressRoute,
   tlsSettings: { rejectUnauthorized: boolean; ca: Buffer | undefined },
   signal: AbortSignal,
 ): Promise<IncomingMessage> {
