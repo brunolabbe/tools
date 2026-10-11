@@ -1737,15 +1737,17 @@ describe("the wording that makes a layer a consent container is read from its vi
     },
   );
 
-  // What visible prose does not close, pinned as accepted. Both differ from base,
-  // which pressed neither widened label.
+  // dl-82 pinned these two as accepted costs: a1 and a2 pressed a widened label
+  // that base left alone. dl-93 flipped both to "press nothing" by the owner's
+  // decision of 2026-10-10 (a fixed layer that holds page content or is a form is
+  // no consent container through its wording), so base's behaviour is back.
   test(
-    "a fixed app root whose footer says 'cookie' is a container, so its first widened label is pressed",
+    "a fixed app root whose footer says 'cookie' holds an h1, so it is no container and its first widened label is not pressed (dl-93, flipped from dl-82's a1)",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const { requests } = await visit("/consent-approot.html");
 
-      expect(requests).toContain("/beacon/newsletter-hocapito");
+      expect(requests).not.toContain("/beacon/newsletter-hocapito");
     },
   );
 
@@ -1760,13 +1762,13 @@ describe("the wording that makes a layer a consent container is read from its vi
   );
 
   test(
-    "a docked checkout bar whose prose says 'cookie' is a container, so its submit is pressed",
+    "a docked checkout bar whose prose says 'cookie' is itself a form, so it is no container and its submit is not pressed (dl-93, flipped from dl-82's a2)",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const text = encodeURIComponent("Your cart is kept in a cookie.");
       const { requests } = await visit(`/consent-checkout-docked.html?text=${text}`);
 
-      expect(requests).toContain("/beacon/checkout-submit");
+      expect(requests).not.toContain("/beacon/checkout-submit");
     },
   );
 });

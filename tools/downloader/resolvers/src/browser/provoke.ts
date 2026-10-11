@@ -1115,9 +1115,27 @@ const ZONE_DIALOG = "dialog";
  * or "fichiers témoins". "cookie", "ciasteczk" and the other roots with no
  * unrelated continuation stay open at the end, so "cookies" and
  * "Cookie-Einstellungen" match.
+ *
+ * **"cookie" takes a named prefix** (dl-93): German compounds it ("Statistikcookies",
+ * "Marketingcookies"), and the word start alone loses those. The prefix is a
+ * list, not a wildcard, because "cookie" does sit inside ordinary words:
+ * "Schokocookies", "Supercookie", "thecookiejar", "#sugarcookie" are food, a
+ * product and a URL, and a bakery's cart bar says "3 Schokocookies im
+ * Warenkorb". A consent compound nobody listed is a missed layer, which costs
+ * nothing; a food compound taken for consent is a pressed submit, which does. So
+ * a new compound is one more name here. "kakor" takes the Swedish definite forms
+ * ("kakorna", "kakorn") at its end, and keeps its word start, so "pannkakor" and
+ * "sockerkakorna" stay silent.
  */
 export const CONSENT_WORDING =
-  /(?<!\p{L})(?:cookie|ciasteczk|ciasteczek|kakor(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+  /(?<!\p{L})(?:(?:statistik|marketing|tracking|analyse|funktions|werbe|drittanbieter|präferenz|komfort|sitzungs|leistungs|performance|targeting|session|erstanbieter|advertentie)?cookie|ciasteczk|ciasteczek|kakor(?:na|n)?(?!\p{L})|(?:fichiers? )?témoins? de (?:connexion|navigation|suivi)|fichiers? témoins?|consent(?:ement|imiento|imento)?s?(?!\p{L})|consenso|einwilligung|toestemming|samtycke|zgod[ęy] na|куки(?!\p{L})|согласи[ея] на|gdpr(?!\p{L})|rodo(?!\p{L}))/iu;
+
+/**
+ * What a layer holds only when it is the page rather than a banner over it
+ * (dl-93): a heading, the main region, an article or a media element. A fixed
+ * layer holding one of these is not a consent container through its wording.
+ */
+const PAGE_CONTENT = 'h1, main, article, video, audio, [role="main"]';
 
 /**
  * Marks the nearest consent container of every link and button: an ancestor
@@ -1165,7 +1183,12 @@ const MARK_CONSENT_ZONES_SCRIPT = `(() => {
   };
   // The mark a layer earns, or null when it is not a consent container.
   var tier = function (n) {
-    if (wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
+    // A layer that holds the page's own content, or is itself a form, is not a
+    // consent container through its wording (dl-93, the owner's decision of
+    // 2026-10-10): a fixed app root with a footer that says "cookie", and a
+    // docked checkout form that does. A dialog is still a dialog.
+    var content = n.matches('form') || n.querySelector(${JSON.stringify(PAGE_CONTENT)}) !== null;
+    if (!content && wording.test(prose(n))) return ${JSON.stringify(ZONE_CONSENT)};
     return n.matches(semantic) ? ${JSON.stringify(ZONE_DIALOG)} : null;
   };
   var find = function (el) {
@@ -1238,10 +1261,17 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * A sticky header or a docked checkout bar whose prose says nothing of consent
  * is not a container, so its "Ho capito" and "Agree and continue" are not
  * pressed, even when it links a cookie policy. One whose prose does speak of it
- * is a container, and is believed: a checkout bar that says "Your cart is kept
- * in a cookie" has its submit pressed, and so does the first widened label in a
- * fixed app root whose footer says it uses cookies. Both differ from before
- * dl-82 and are pinned in the tests as accepted.
+ * is a container, and is believed, **unless it is the page rather than a
+ * banner over it** (dl-93): a fixed layer that holds an `h1`, `main`, `article`,
+ * `video`, `audio` or `[role="main"]`, or that is itself a `<form>`, is no
+ * container through its wording, so a fixed app root whose footer says it uses
+ * cookies, and a checkout form that says "Your cart is kept in a cookie", press
+ * nothing. A dialog is still a container whatever it holds. What that gives up,
+ * by the owner's choice of 2026-10-10 and pinned in the tests: a consent notice
+ * in the flow of a fixed root that holds an `h1`, and a consent bar that is
+ * itself a `<form>`, fall to the old pattern. What it does not reach, also
+ * pinned: a fixed root with an `h2` and no landmark, and a checkout `<form>`
+ * nested inside the fixed layer rather than being it.
  *
  * **Anywhere in the frame, only `CONSENT_TEXT_ANYWHERE`**, what the frame was
  * searched for before this change. A widened phrasing outside a container is
@@ -1255,7 +1285,8 @@ async function clickByTextIn(scope: Locator, pattern: RegExp, timeoutMs: number)
  * nothing of cookies), labelled with a phrasing newer than this change, is not
  * pressed; it falls through to the old pattern, which is where it stood before.
  * Likewise a layer that does speak of consent is believed: a docked checkout bar
- * that mentions cookies would have its "Agree and continue" pressed. Another
+ * that mentions cookies, and is not itself a form, would have its "Agree and
+ * continue" pressed. Another
  * language's wording is one more `CONSENT_WORDING` alternative; a label the old
  * pattern never knew is one more `CONSENT_PHRASES` entry, not a wider reach.
  */

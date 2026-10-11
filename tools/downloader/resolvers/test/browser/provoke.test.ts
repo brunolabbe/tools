@@ -382,6 +382,21 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Nous utilisons des fichiers témoins de connexion.",
     "Kakor",
     "Использует куки!",
+    // dl-93: "cookie" needs no word start, because German and Swedish compound it.
+    "Wir verwenden Statistikcookies und Marketingcookies.",
+    "Läs mer om kakorna på sajten.",
+    "Vi använder kakorn.",
+    // dl-93, at landing (gate 2): the compounds a7f47bd2's bare "cookie" matched
+    // and the first named list did not.
+    "Wir nutzen Präferenzcookies.",
+    "Komfortcookies erlauben",
+    "Wir verwenden nur Sitzungscookies.",
+    "Leistungscookies zulassen",
+    "Performancecookies zulassen",
+    "Targetingcookies zulassen",
+    "Wir nutzen Sessioncookies.",
+    "Erstanbietercookies",
+    "Wij plaatsen advertentiecookies.",
   ];
 
   // What a docked bar, a header notice or a form says instead. These are the
@@ -400,6 +415,18 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "I partner consentono l'ordine.",
     "Veckans recept: pannkakor.",
     "Sockerkakor till kaffet.",
+    // dl-93 gate 1: "cookie" inside an ordinary word is food, a product or a URL.
+    "Schokocookies backen: das beste Rezept.",
+    "Haferflockencookies ohne Zucker",
+    "Recept voor chocoladecookies.",
+    "Chokladcookies med havre.",
+    "Supercookie Box, 12 pieces",
+    "#sugarcookie season",
+    "Visit thecookiejar.example",
+    "3 Schokocookies im Warenkorb.",
+    // dl-93: the Swedish definite forms keep the word start.
+    "Pannkakorna är klara.",
+    "Sockerkakorna står på bordet.",
     "Les témoins de l'accident.",
     "Кукиш",
     // Accepted, not wished for: a bare privacy notice is not recognised, so its

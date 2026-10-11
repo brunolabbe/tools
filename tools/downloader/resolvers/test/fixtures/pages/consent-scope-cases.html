@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consent scope cases</title>
+  </head>
+  <body>
+    <!-- dl-93 gate 1: one fixed or sticky layer per ?case=, from the gate's own
+         pages (c1..c14). A press of the layer's widened label beacons
+         /beacon/bad, a press of a control that is not the one under test
+         /beacon/other. The spec says per case which of them must be silent. -->
+    <h1>Gate page</h1>
+    <div id="player"></div>
+    <div style="height: 400px"></div>
+    <div id="host"></div>
+    <div style="height: 2000px"></div>
+    <script>
+      var BAD = "fetch('/beacon/bad')";
+      var OTHER = "fetch('/beacon/other')";
+      var FIXED = "position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 8px; background: #ddd";
+      var STICKY = "position: sticky; top: 0; background: #fff";
+      var CASES = {
+        // c1: an SPA checkout bar, no form, its order button type=button.
+        c1:
+          '<div style="' + FIXED + '">By placing your order you agree to our <a href="#t">terms</a> and <a href="#c">cookie policy</a>. ' +
+          '<button type="button" onclick="' + BAD + '">Agree and continue</button></div>',
+        // c2: a form checkout bar with a Back button beside its submit.
+        c2:
+          '<form onsubmit="event.preventDefault()" style="' + FIXED + '">By ordering you accept our terms and <a href="#c">cookie policy</a>. ' +
+          '<button type="button" onclick="' + OTHER + '">Back</button> ' +
+          '<button type="submit" onclick="' + BAD + '">Agree and continue</button></form>',
+        // c3: a form checkout bar whose submit has no type attribute (n1's control).
+        c3:
+          '<form onsubmit="event.preventDefault()" style="' + FIXED + '">By ordering you accept our terms and <a href="#c">cookie policy</a>. ' +
+          '<button onclick="' + BAD + '">Agree and continue</button></form>',
+        // c4: a fixed newsletter popup (no dialog role) that links a cookie policy.
+        c4:
+          '<div style="' + FIXED + '">Iscriviti alla newsletter. Leggi la <a href="#c">cookie policy</a>. ' +
+          '<button type="button" onclick="' + BAD + '">Ho capito</button></div>',
+        // c5: a sticky footer line with a Back-to-top button, and a notice.
+        c5:
+          '<footer style="' + FIXED + '">© 2026 Acme Inc. All rights reserved. <a href="#p">Privacy</a> · <a href="#c">Cookie settings</a> ' +
+          '<button type="button" onclick="' + OTHER + '">Back to top</button>' +
+          '<div class="notice">Nuove condizioni di spedizione. <button type="button" onclick="' + BAD + '">Ho capito</button></div></footer>',
+        // c6: a sticky footer whose cookie link is in a list (control: expect no press).
+        c6:
+          '<footer style="' + FIXED + '"><ul><li><a href="#p">Privacy</a></li><li><a href="#c">Cookie settings</a></li></ul>' +
+          '<div class="notice">Nuove condizioni di spedizione. <button type="button" onclick="' + BAD + '">Ho capito</button></div></footer>',
+        // c7: a sticky header's flat nav with a label and a Search button, then a notice.
+        c7:
+          '<header style="' + STICKY + '"><nav>Quick links: <a href="#h">Home</a> · <a href="#s">Shop</a> · <a href="#c">Cookie settings</a> ' +
+          '<button type="button" onclick="' + OTHER + '">Search</button></nav>' +
+          '<div class="notice">Nuove condizioni di spedizione. <button type="button" onclick="' + BAD + '">Ho capito</button></div></header>',
+        // c8: a fixed app root on a German recipe page; a newsletter's widened label.
+        c8:
+          '<div style="position: fixed; inset: 0; overflow: auto; background: #fff"><h2>Schokocookies backen</h2>' +
+          '<div class="newsletter">Rezepte per E-Mail? <button type="button" onclick="' + BAD + '">Ich stimme zu</button></div></div>',
+        // c9: a cookie bakery's docked cart bar; a compound noun and a submit.
+        c9:
+          '<form onsubmit="event.preventDefault()" style="' + FIXED + '">3 Schokocookies im Warenkorb. ' +
+          '<button type="submit" onclick="' + BAD + '">Zustimmen und weiter</button></form>',
+        // c10: a submit associated by form= from outside the form.
+        c10:
+          '<form id="f" onsubmit="event.preventDefault()"></form><div style="' + FIXED + '">By ordering you accept our terms and <a href="#c">cookie policy</a>. ' +
+          '<button form="f" onclick="' + BAD + '">Agree and continue</button></div>',
+        // c11: a2 with the form inside the fixed layer rather than being it.
+        c11:
+          '<div style="' + FIXED + '">Your cart is kept in a cookie. <form onsubmit="event.preventDefault()" style="display:inline">' +
+          '<button type="submit" onclick="' + BAD + '">Agree and continue</button></form></div>',
+        // c12: a1 with an h2 title and no h1.
+        c12:
+          '<div style="position: fixed; inset: 0; overflow: auto; background: #fff"><h2>A</h2>' +
+          '<div class="newsletter">Iscriviti! <button type="button" onclick="' + BAD + '">Ho capito</button></div>' +
+          '<footer>Questo sito usa i cookie tecnici.</footer></div>',
+        // c13: a consent notice in the flow of a fixed app root that holds an h1.
+        c13:
+          '<div style="position: fixed; inset: 0; overflow: auto; background: #fff"><h1>A</h1><p>Article.</p>' +
+          '<div class="consent">We use cookies. <button type="button" onclick="' + OTHER + '">Ho capito</button></div></div>',
+        // c14: a consent bar that is itself a form.
+        c14:
+          '<form onsubmit="event.preventDefault()" style="' + FIXED + '">We use cookies. ' +
+          '<button type="button" onclick="' + OTHER + '">Ho capito</button></form>',
+      };
+      var c = new URLSearchParams(location.search).get("case");
+      document.getElementById("host").innerHTML = CASES[c];
+    </script>
+  </body>
+</html>
