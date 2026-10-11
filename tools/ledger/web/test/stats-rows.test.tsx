@@ -287,3 +287,33 @@ test("choosing a category in the list asks for it, and closing puts the list awa
   fireEvent.click(screen.getByRole("button", { name: "Close the rows" }));
   expect(screen.queryByRole("list", { name: "Rows in this period" })).toBeNull();
 });
+
+test("More categories opens the whole period, not a category", async () => {
+  // Nine categories: seven get a colour of their own and the last two share the eighth,
+  // drawn as one "More categories" line that has no category id to ask for.
+  const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  vi.mocked(fetchSpendingStats).mockResolvedValue({
+    range: NONE,
+    categories: ids.map((id) => ({ id, name: `Category ${String(id)}`, retired: false })),
+    periods: [
+      {
+        start: "2026-02-01",
+        end: "2026-02-28",
+        open: true,
+        totalCents: 9000,
+        cardCents: 0,
+        accountCents: 9000,
+        categories: ids.map((id) => ({ categoryId: id, cents: 1000 })),
+      },
+    ],
+  });
+  await chart();
+
+  fireEvent.click(screen.getByRole("button", { name: "Show the rows for More categories" }));
+
+  await screen.findByRole("list", { name: "Rows in this period" });
+  expect(fetchSpendingRows).toHaveBeenLastCalledWith(
+    { from: "2026-02-01", to: "2026-02-28", category: null, offset: 0, limit: 25 },
+    expect.anything(),
+  );
+});
