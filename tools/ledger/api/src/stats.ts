@@ -140,10 +140,7 @@ export function spendingStats(
 ): SpendingStatsResponse {
   return db.transaction(() => {
     const entries: SpendingEntry[] = [];
-    for (const row of listRows(db, { limit: Number.MAX_SAFE_INTEGER }).rows) {
-      const filed = row.classification;
-      if (filed === null || filed.bucket !== "current-expenses" || filed.personId !== null)
-        continue;
+    for (const row of listRows(db, { spendingOnly: true, limit: Number.MAX_SAFE_INTEGER }).rows) {
       entries.push({
         date: row.date,
         amountCents: -row.amountCents,

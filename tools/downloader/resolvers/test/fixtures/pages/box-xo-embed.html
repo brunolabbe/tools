@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A player box that is a wrapper around a cross-site embed with its own Play button</title>
+  </head>
+  <body style="margin: 0">
+    <!-- dl-100: the case that keeps the "a press in any frame holds back the box
+         click" rule. The embed's own Play press starts its stream 1.5 s later; a
+         centre click on the wrapper would land on the embed's surface. -->
+    <div class="player-embed" style="width: 640px; height: 360px">
+      <iframe src="{{SECONDARY}}/embed-inner.html" width="640" height="360" style="border: 0"></iframe>
+    </div>
+  </body>
+</html>

@@ -11,12 +11,14 @@
  * what has no spending category is the neutral grey.
  */
 
+import { useState } from "react";
 import { formatCents } from "@ledger/books";
 import type {
   BufferStatsResponse,
   ClosedPeriod,
   FixedItemsResponse,
   SalaryYear,
+  SpendingPeriod,
   SpendingStatsResponse,
   StatsRange,
 } from "@ledger/contract";
@@ -33,6 +35,7 @@ import {
 import { formatShare, personLabel } from "../labels.ts";
 import { ChartCard, ColumnChart, LineChart } from "./Chart.tsx";
 import type { ColumnSeries, LegendItem, LineSeries, TableData } from "./Chart.tsx";
+import { PeriodRows } from "./PeriodRows.tsx";
 import { assignSlots, formatAxisCents } from "./scale.ts";
 import { useSeries } from "./useSeries.ts";
 import type { Series } from "./useSeries.ts";
@@ -461,9 +464,25 @@ export function SalaryCards({ range }: { range: StatsRange }): React.ReactElemen
 
 // --- Spending ---
 
-function SpendingBody(props: { data: SpendingStatsResponse; stale: boolean }): React.ReactElement {
+function nameOf(period: SpendingPeriod): string {
+  return `${period.start ?? "the beginning"} to ${period.end}${period.open ? " (open)" : ""}`;
+}
+
+function SpendingBody(props: {
+  data: SpendingStatsResponse;
+  stale: boolean;
+  /** A row's category was written, so the series is out of date. */
+  onChanged: () => void;
+}): React.ReactElement {
   const { data, stale } = props;
   const { periods, categories } = data;
+  // The period whose rows are open below the chart, by its end. `id` makes opening
+  // another category of the same period start the list again on it.
+  const [opened, setOpened] = useState<{
+    id: number;
+    end: string;
+    category: number | "none" | null;
+  } | null>(null);
   // Slots are by place in the whole list, which the API sends whatever the range,
   // so a range that leaves a category out does not move the others up a colour.
   const { slotOf, folded } = assignSlots(
@@ -500,66 +519,94 @@ function SpendingBody(props: { data: SpendingStatsResponse; stale: boolean }): R
 
   const periodName = (index: number): string => {
     const period = periods[index];
-    if (period === undefined) return "";
-    return `${period.start ?? "the beginning"} to ${period.end}${period.open ? " (open)" : ""}`;
+    return period === undefined ? "" : nameOf(period);
   };
+  const shown = opened === null ? undefined : periods.find((period) => period.end === opened.end);
 
   return (
-    <ChartCard
-      title="Spending by period"
-      caption="What the cards paid toward the household and what left the buffer, per period and per spending category. Fixed items are charted below."
-      legend={legendOf(lines)}
-      table={{
-        head: ["Period", "Cards", "Account", "Total", ...lines.map((line) => line.label)],
-        rows: periods.map((period, index) => [
-          periodName(index),
-          formatCents(period.cardCents),
-          formatCents(period.accountCents),
-          formatCents(period.totalCents),
-          ...lines.map((line) => formatCents(line.values[index] ?? 0)),
-        ]),
-      }}
-      empty={periods.length === 0 ? "No period overlaps this range." : null}
-      stale={stale}
-    >
-      <ColumnChart
-        name="Spending per period, by spending category"
-        categories={periods.map((period, index) => ({
-          key: period.end,
-          label: shortMonth(period.end),
-          heading: periodName(index),
-        }))}
-        series={lines}
-        mode="stacked"
-        total
-        formatValue={formatCents}
-        formatAxis={formatAxisCents}
-        minStep={10000}
-        notes={(index) => {
-          const period = periods[index];
-          const none = period?.categories.find((one) => one.categoryId === null);
-          const refunds = (period?.categories ?? []).some((one) => one.cents < 0);
-          return [
-            `Cards ${formatCents(period?.cardCents ?? 0)}, account ${formatCents(period?.accountCents ?? 0)}.`,
-            ...(none?.detail?.map(
-              (detail) =>
-                `Uncategorised: ${detail.label ?? "no text"}, ${formatCents(detail.cents)}`,
-            ) ?? []),
-            ...(refunds
-              ? ["A category with refunds past its purchases is in the table, not drawn."]
-              : []),
-          ];
+    <>
+      <ChartCard
+        title="Spending by period"
+        caption="What the cards paid toward the household and what left the buffer, per period and per spending category. Fixed items are charted below."
+        legend={legendOf(lines)}
+        table={{
+          head: ["Period", "Cards", "Account", "Total", ...lines.map((line) => line.label)],
+          rows: periods.map((period, index) => [
+            periodName(index),
+            formatCents(period.cardCents),
+            formatCents(period.accountCents),
+            formatCents(period.totalCents),
+            ...lines.map((line) => formatCents(line.values[index] ?? 0)),
+          ]),
         }}
-      />
-    </ChartCard>
+        empty={periods.length === 0 ? "No period overlaps this range." : null}
+        stale={stale}
+      >
+        <ColumnChart
+          name="Spending per period, by spending category"
+          categories={periods.map((period, index) => ({
+            key: period.end,
+            label: shortMonth(period.end),
+            heading: periodName(index),
+          }))}
+          series={lines}
+          mode="stacked"
+          total
+          formatValue={formatCents}
+          formatAxis={formatAxisCents}
+          minStep={10000}
+          onOpen={(index, key) => {
+            const period = periods[index];
+            if (period === undefined) return;
+            // "More categories" is several at once, so it opens the whole period.
+            const category =
+              key === null || key === "more" ? null : key === "none" ? "none" : Number(key);
+            setOpened({ id: (opened?.id ?? 0) + 1, end: period.end, category });
+          }}
+          notes={(index) => {
+            const period = periods[index];
+            const none = period?.categories.find((one) => one.categoryId === null);
+            const refunds = (period?.categories ?? []).some((one) => one.cents < 0);
+            return [
+              `Cards ${formatCents(period?.cardCents ?? 0)}, account ${formatCents(period?.accountCents ?? 0)}.`,
+              ...(none?.detail?.map(
+                (detail) =>
+                  `Uncategorised: ${detail.label ?? "no text"}, ${formatCents(detail.cents)}`,
+              ) ?? []),
+              ...(refunds
+                ? ["A category with refunds past its purchases is in the table, not drawn."]
+                : []),
+            ];
+          }}
+        />
+      </ChartCard>
+      {opened !== null && shown !== undefined && (
+        <PeriodRows
+          key={opened.id}
+          period={{
+            name: nameOf(shown),
+            start: shown.start,
+            end: shown.end,
+            cardCents: shown.cardCents,
+          }}
+          category={opened.category}
+          onChanged={props.onChanged}
+          onClose={() => setOpened(null)}
+        />
+      )}
+    </>
   );
 }
 
 export function SpendingCard({ range }: { range: StatsRange }): React.ReactElement {
-  const series = useSeries(fetchSpendingStats, range);
+  // Bumped when a row's category is written under the chart, so it is drawn again.
+  const [reload, setReload] = useState(0);
+  const series = useSeries(fetchSpendingStats, range, reload);
   return (
     <Loaded title="Spending by period" series={series}>
-      {(data, stale) => <SpendingBody data={data} stale={stale} />}
+      {(data, stale) => (
+        <SpendingBody data={data} stale={stale} onChanged={() => setReload((n) => n + 1)} />
+      )}
     </Loaded>
   );
 }

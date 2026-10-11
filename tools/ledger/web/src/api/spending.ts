@@ -75,6 +75,33 @@ export async function setRowSpendingCategory(
   });
 }
 
+/** What a list of the rows behind one period of the spending chart asks for. */
+export interface SpendingRowsQuery {
+  /** The period's own days, as the chart drew it; `null` is from the beginning. */
+  from: string | null;
+  to: string;
+  /** One category by id, `"none"` for the uncategorised, `null` for all. */
+  category: number | "none" | null;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * The bank rows the spending chart counted in a period, newest first. Card lines
+ * are not rows and are not here.
+ */
+export async function fetchSpendingRows(
+  query: SpendingRowsQuery,
+  signal?: AbortSignal,
+): Promise<RowsResponse> {
+  const params = new URLSearchParams({ scope: "spending", to: query.to });
+  if (query.from !== null) params.set("from", query.from);
+  if (query.category !== null) params.set("spendingCategory", String(query.category));
+  params.set("offset", String(query.offset));
+  params.set("limit", String(query.limit));
+  return await requestJson<RowsResponse>(`${ROUTES.rows}?${params.toString()}`, { signal });
+}
+
 /** The stored rows no spending category has been found for, newest first. */
 export async function fetchUncategorisedRows(signal?: AbortSignal): Promise<RowsResponse> {
   return await requestJson<RowsResponse>(`${ROUTES.rows}?spendingCategory=none&limit=50`, {
