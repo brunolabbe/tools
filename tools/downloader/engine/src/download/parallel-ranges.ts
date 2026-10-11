@@ -114,6 +114,12 @@ export const PARALLEL_RANGE_DEFAULTS: Readonly<ParallelRangeSettings> = {
   idleMs: 20_000,
 };
 
+// DL106-PROBE (temporary)
+function dbg(text: string): void {
+  if (process.env["DL106"] !== undefined)
+    process.stderr.write(`DL106 ${Math.round(performance.now())} ${text}\n`);
+}
+
 /** Decision 5's refusals, by what the fixture or the origin did. */
 export type RefusalKind = "status" | "reset" | "range-ignored" | "no-speedup";
 
@@ -926,6 +932,9 @@ export class RangeFeeder {
     if (this.#mode === "parallel") {
       if (this.#splitJudged) return;
       const rate = this.#meter.rate();
+      dbg(
+        `judge-split rate=${Math.round(rate)} single=${Math.round(this.#singleRate)} floor=${speedupFloor} activeMs=${Math.round(this.#meter.activeMs)} bytes=${this.#meter.bytes}`,
+      );
       if (rate < this.#singleRate * speedupFloor) {
         this.#fallBack({
           refusal: "no-speedup",
@@ -948,6 +957,9 @@ export class RangeFeeder {
 
     const rate = this.#meter.rate();
     const bitrate = this.#bitrate();
+    dbg(
+      `judge-single rate=${Math.round(rate)} bitrate=${Math.round(bitrate ?? -1)} activeMs=${Math.round(this.#meter.activeMs)} bytes=${this.#meter.bytes} size=${this.#size}`,
+    );
     if (bitrate === null) {
       // Perhaps ffmpeg has not said the duration yet; measure again.
       this.#meter.reset();
@@ -1059,6 +1071,9 @@ export class RangeFeeder {
   #fallBack(failure: FetchFailure): void {
     if (this.#mode !== "parallel") return;
     this.#mode = "fallen-back";
+    dbg(
+      `fallBack kind=${failure.refusal} detail=${failure.detail} stats=${JSON.stringify(this.stats())}`,
+    );
     this.#meter.reset();
     const remembered = failure.refusal !== null;
     if (remembered)

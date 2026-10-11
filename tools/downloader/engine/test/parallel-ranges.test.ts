@@ -353,7 +353,11 @@ async function afterStop(): Promise<number> {
   return performance.now();
 }
 
-afterEach(() => {
+afterEach(({ task }) => {
+  // DL106-PROBE (temporary)
+  process.stderr.write(
+    `DL106 TEST ${task.name.slice(0, 60)} seen=${JSON.stringify(seen.map((entry) => [entry.range, Math.round(entry.at)]))}\n`,
+  );
   for (const feeder of liveFeeders.splice(0)) feeder.close();
   for (const response of stalled.splice(0)) response.destroy();
   behaviour = { ...DEFAULT_BEHAVIOUR };
@@ -1390,9 +1394,13 @@ describe("dl-98 round 2: a request that goes away is no longer measured", () => 
           }
         });
       });
+      const marks: number[] = [];
+      const sampler = setInterval(() => marks.push(bBytes), 1_000);
       await sleep(12_000);
+      clearInterval(sampler);
       const stats = feeder.stats();
       b.destroy();
+      process.stderr.write(`DL106 F9R2 marks=${JSON.stringify(marks)} bBytes=${bBytes}\n`);
       expect(stats.mode, JSON.stringify(stats)).toBe("single");
       expect(bBytes).toBeGreaterThan(10_000_000);
     },
