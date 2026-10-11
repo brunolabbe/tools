@@ -285,6 +285,13 @@ export interface ApiConfig {
    */
   trustProxy: boolean | string;
 
+  /**
+   * Hosts whose progressive files are always read on one connection, never
+   * split into parallel ranges (dl-98, Decision 4): for an origin whose terms
+   * or anti-bot layer object. Each entry covers its subdomains.
+   */
+  singleConnectionHosts: readonly string[];
+
   /** See `SsrfGuardOptions`. Both are escape hatches for local development. */
   ssrfAllowHosts: readonly string[];
   ssrfAllowPrivateAddresses: boolean;
@@ -586,6 +593,7 @@ export function loadApiConfig(
         min: 0,
       }),
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
+    singleConnectionHosts: overrides.singleConnectionHosts ?? list(env["SINGLE_CONNECTION_HOSTS"]),
     ssrfAllowHosts: overrides.ssrfAllowHosts ?? list(env["SSRF_ALLOW_HOSTS"]),
     ssrfAllowPrivateAddresses:
       overrides.ssrfAllowPrivateAddresses ?? bool(env["SSRF_ALLOW_PRIVATE_ADDRESSES"], false),

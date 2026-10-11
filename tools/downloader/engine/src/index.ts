@@ -54,6 +54,13 @@
  *    directly. Its reach is a subset of ffmpeg's, not the same: it ignores
  *    `no_proxy` and stays on the proxy, and where ffmpeg would ignore a proxy
  *    that is not `http://` and go direct, it sends nothing.
+ *  - **Since dl-98, a ranging progressive origin is read by the engine too**,
+ *    not by ffmpeg: ffmpeg reads a loopback range server on 127.0.0.1, with
+ *    `-http_proxy ""` for that input alone, and the server's fetches to the
+ *    origin take the probe's route — the same proxy, the same TLS settings,
+ *    each redirect hop through it, the replayed `RequestContext` on each. A
+ *    slow origin is read over 4 connections; `singleConnectionHosts` opts a
+ *    host out, and a host that refuses is kept on one until restart.
  */
 
 import type { EngineConfig, EngineConfigInput } from "./config.ts";
@@ -72,13 +79,23 @@ export interface DownloadEngine {
 
 class Engine implements DownloadEngine {
   readonly config: EngineConfig;
+  /**
+   * Hosts that refused parallel ranges (dl-98, Decision 5): one connection for
+   * every later job to them, until this process restarts and each gets one
+   * new try. In memory on purpose.
+   */
+  readonly #refusedHosts = new Set<string>();
 
   constructor(input: EngineConfigInput = {}) {
     this.config = loadEngineConfig(input);
   }
 
   async stream(request: StreamRequest): Promise<MediaStream> {
-    return openStream(request, { config: this.config, logger: this.config.logger });
+    return openStream(request, {
+      config: this.config,
+      logger: this.config.logger,
+      refusedHosts: this.#refusedHosts,
+    });
   }
 }
 
@@ -134,6 +151,13 @@ export {
 } from "./ffmpeg/preview-frame.ts";
 
 export { downloadCandidates, isHostFailure } from "./download/failover.ts";
+export type {
+  FeederStats,
+  ParallelRangeSettings,
+  RangeFeederOptions,
+  RefusalKind,
+} from "./download/parallel-ranges.ts";
+export { hostListed, PARALLEL_RANGE_DEFAULTS, RangeFeeder } from "./download/parallel-ranges.ts";
 export type { IndexPlacement, SeekProbeOptions, SeekVerdict } from "./download/seek-probe.ts";
 export {
   indexPlacement,

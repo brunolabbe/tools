@@ -178,6 +178,51 @@ export function buildNetworkInputArgs(url: string, options: NetworkInputOptions 
   return args;
 }
 
+/**
+ * What ffmpeg may open behind `parallel-ranges.ts`'s loopback server (dl-98):
+ * plain HTTP to it, and nothing else. The loopback never redirects.
+ */
+export const LOOPBACK_PROTOCOL_WHITELIST = "http,tcp";
+
+/**
+ * A progressive input read through the engine's own loopback range server
+ * (dl-98) rather than from its origin.
+ *
+ * **`-http_proxy ""` is what keeps the loopback off the egress proxy**, and it
+ * is per input: the runner exports the guarded proxy as `http_proxy`, which
+ * would send this request to the proxy, which refuses a loopback address. An
+ * empty value overrides the variable for this input alone, measured on ffmpeg
+ * 6.1.1 and 7.0.2 (an inherited proxy saw the request without it, and none
+ * with it); `no_proxy` would have been process-wide, and so would have let any
+ * other input that names a loopback address go around the guard.
+ *
+ * No `-headers` and no `-user_agent`: the replayed context is the feeder's to
+ * send to the origin, and the loopback has no use for a cookie. Reconnect stays
+ * on, because a cut the feeder passes on is healed the way an origin's is.
+ */
+export function buildLoopbackInputArgs(
+  url: string,
+  readTimeoutMs = DEFAULT_READ_TIMEOUT_MS,
+): string[] {
+  return [
+    "-protocol_whitelist",
+    LOOPBACK_PROTOCOL_WHITELIST,
+    "-http_proxy",
+    "",
+    "-reconnect",
+    "1",
+    "-reconnect_streamed",
+    "1",
+    "-reconnect_on_network_error",
+    "1",
+    "-reconnect_delay_max",
+    "10",
+    ...(readTimeoutMs > 0 ? ["-rw_timeout", String(readTimeoutMs * 1000)] : []),
+    "-i",
+    url,
+  ];
+}
+
 /** Local input, used by the concat-demuxer fallback path. */
 export function buildLocalInputArgs(filePath: string, extraArgs: readonly string[] = []): string[] {
   return ["-protocol_whitelist", LOCAL_PROTOCOL_WHITELIST, ...extraArgs, "-i", filePath];
