@@ -137,8 +137,9 @@ you open a test, a fixture or a tsconfig.
 
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
-runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only
-change can break it, and used to merge green because CI skipped `**.md` entirely.
+runs `oxfmt --check` and oxfmt formats markdown here, and the job also runs
+`scripts/test/status.test.ts`, which reads ticket files (repo-97) — a
+documentation-only change can break it, and used to merge green because CI skipped `**.md` entirely.
 The unit matrix still skips an all-`.md` change, through a `changes` job rather
 than a trigger filter. A tool's slow gates (e2e, container build) live in
 `.github/workflows/<tool>.yml`, path-filtered so work on one tool does not pay for

@@ -867,19 +867,23 @@ case [dl-77](../tools/downloader/docs/work/dl-77-a-refused-download-says-nothing
 is open on. **The budget is per address**, so a household or office behind one
 router shares it, as it shares `MAX_JOBS_PER_CLIENT`.
 
-**The dashboard's other allowances: unconfirmed.** The Free plan's figures above
-are Cloudflare's published ones, not read from this zone's dashboard, and no agent
-can read it. The owner fills in this table once, from the rule form:
+**The rule is live; the dashboard's other allowances stay unconfirmed.** The
+owner created it on 2026-10-10 through the Rulesets API (`PUT` on the zone's
+`http_ratelimit` entrypoint, with a token holding Zone WAF Edit only, deleted
+afterwards), after a rule made on the dashboard blocked nothing. Because of that,
+the rule form was never read, and the Free plan's figures below are still
+Cloudflare's published ones. The last row is measured: 30 requests from one
+address to `/api/files/<bad token>` in under 2 seconds.
 
-| Allowance                                              | Published for Free | Read from this zone's dashboard |
-| ------------------------------------------------------ | ------------------ | ------------------------------- |
-| Rate limiting rules allowed                            | 1                  | unconfirmed                     |
-| Fields allowed in the expression                       | Path, Verified Bot | unconfirmed                     |
-| Operators on Path (is the `starts with` form offered?) | not published      | unconfirmed                     |
-| Periods offered                                        | 10 s               | unconfirmed                     |
-| Block durations offered                                | 10 s               | unconfirmed                     |
-| Actions offered                                        | Block              | unconfirmed                     |
-| The rule created, with its threshold and period        | not created yet    | not created yet                 |
+| Allowance                                              | Published for Free | Read from this zone's dashboard                                                                                   |
+| ------------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Rate limiting rules allowed                            | 1                  | unconfirmed                                                                                                       |
+| Fields allowed in the expression                       | Path, Verified Bot | unconfirmed                                                                                                       |
+| Operators on Path (is the `starts with` form offered?) | not published      | unconfirmed                                                                                                       |
+| Periods offered                                        | 10 s               | unconfirmed                                                                                                       |
+| Block durations offered                                | 10 s               | unconfirmed                                                                                                       |
+| Actions offered                                        | Block              | unconfirmed                                                                                                       |
+| The rule created, with its threshold and period        | not created yet    | 2026-10-10: `/api/`, per IP, 20 per 10 s, Block 10 s; measured 20 × `404` then 10 × `429`, `404` again after 12 s |
 
 ### On the LAN as well
 

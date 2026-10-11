@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse hook: refuse the commands that put code on `main` without a human —
-# `gh pr merge` in any spelling, and the `git push` spellings that name `main`
+# `gh pr merge` and `gh stack merge` in any spelling, and the `git push` spellings that name `main`
 # explicitly and get past the deny list's globs. A push that names no
 # destination at all is out of scope on purpose; see repo-42, below.
 #
@@ -66,10 +66,11 @@
 #   - INDIRECTION DEFEATS IT. A PreToolUse hook is handed a command string. An
 #     agent that writes /tmp/x.sh and runs `bash /tmp/x.sh` presents a string
 #     this file cannot read through, and so can `$(echo Z2gg… | base64 -d)`, a
-#     shell alias, a `git` alias in a config the agent just wrote, or an `npm`
-#     script. This is the same ceiling CLAUDE.md already names for the deny list
-#     itself ("/bin/echo defeats a deny on echo"). Raising cost and making
-#     intent explicit is the whole benefit; closing the hole is not on offer.
+#     shell alias, a `git` alias in a config the agent just wrote, an `npm`
+#     script, or `gh extension exec stack merge`. This is
+#     the same ceiling CLAUDE.md already names for the deny list itself
+#     ("/bin/echo defeats a deny on echo"). Raising cost and making intent
+#     explicit is the whole benefit; closing the hole is not on offer.
 #
 #   - IT DOES NOT PROTECT ITSELF. This file is tracked, writable, and named by
 #     no deny rule — 0 of the 11 rules mention `.claude`, `settings` or `hooks`,
@@ -251,7 +252,12 @@ block_merge=0
 block_push=""
 
 while IFS= read -r segment; do
-  if printf '%s' "$segment" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'; then
+  # `gh stack merge` is the gh-stack extension's merge (repo-95): the same act
+  # through a second command, held by the deny rule `Bash(gh stack merge*)` and
+  # by this line. Only the exact spellings are matched, like `gh pr merge`;
+  # `gh extension exec`, an absolute path to gh and an alias are the ceiling of
+  # a command-string hook, stated in the header.
+  if printf '%s' "$segment" | grep -qE '^[[:space:]]*gh[[:space:]]+(pr|stack)[[:space:]]+merge([[:space:]]|$)'; then
     block_merge=1
     continue
   fi
