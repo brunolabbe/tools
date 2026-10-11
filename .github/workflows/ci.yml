@@ -28,10 +28,14 @@ name: CI
 # a minute, and `check` is what markdown can break. The triggers no longer
 # filter, `check` runs on every event, and the matrix is gated instead by the
 # `changes` job below — which reproduces the old `**.md` rule as a diff rather
-# than as a trigger filter, because Actions has no per-job `paths`. No `.md` in
-# this repository is a test fixture — every one is prose — so nothing the matrix
-# runs can depend on one, which is what makes gating the matrix and not `check`
-# the right split.
+# than as a trigger filter, because Actions has no per-job `paths`. Almost no
+# `.md` in this repository is a test fixture — they are prose — but one suite
+# reads them: `scripts/test/status.test.ts` reads every ticket file and
+# `docs/01-TICKETS.md`, so a markdown-only change can break it. That is why
+# `check`, which runs on every change, runs that suite itself instead of
+# leaving it to the matrix (repo-97). Nothing else the matrix runs can depend on
+# a `.md`, which is what makes gating the matrix and not `check` the right
+# split.
 #
 # **`push` loses the filter too, and that is a choice rather than symmetry for
 # its own sake.** The `main` push is the run that records the merged state, and
@@ -124,7 +128,8 @@ jobs:
       # understand — an unknown field, a status outside the taxonomy, an id that
       # disagrees with its filename, a `depends_on` pointing at nothing, a
       # ticket still `ready` with a gate record already on it. Nothing else in
-      # CI reads them.
+      # this job reads them but the status suite below, and the `test`
+      # matrix, which a markdown-only change skips.
       #
       # **It reads the checkout, not the history**, which is why repo-12's check
       # reads the ticket's own body rather than its commits. That used to be
@@ -141,6 +146,14 @@ jobs:
       # needs no build and no dependencies, for the same reason
       # `commit-message.mjs` does not, so it costs this job seconds.
       - run: node scripts/status.mjs --json > /dev/null
+      # The suite that reads the same tickets for what `--json` does not look at:
+      # the tool set, where a ticket file lives, a returned status page, the
+      # format document's own wording and `--tool` against the real board. It
+      # sits here because the `test` matrix is skipped for a change that is all
+      # `.md`, which is exactly what a ticket edit is — a test that goes red on
+      # one merged green and failed main unseen (repo-97, and repo-8 before it).
+      # One file, seconds, no build.
+      - run: npx vitest run scripts/test/status.test.ts
 
   # Which files this change actually touches, because **Actions has no per-job
   # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way

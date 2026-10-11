@@ -153,28 +153,18 @@ const WITHHELD_REPO9 = `${atRepo("repo-9")}: withheld from --ready — waits on 
 // The real tickets
 // ---------------------------------------------------------------------------
 
-// **The three tests below are the ones a documentation-only pull request needs
-// most, and CI runs at most one of them.** `ci.yml`'s `test` matrix is skipped
-// for a change that is all `.md` — which is exactly what filing a ticket or
-// flipping one to `done` is — so what runs on such a pull request is the
-// unfiltered `check` job, and the only thing it knows about tickets is
-// `node scripts/status.mjs --json`. That step had a workflow of its own
-// (`status.yml`) until repo-2 folded it in.
-//
-// So, precisely:
-//
-// - **Covered by `check`:** the parse and `depends_on` resolution the first
-//   test asserts. `--json` walks every ticket through the same reader, so a
-//   drifted field, a status outside the taxonomy or a dangling dependency fails
-//   there by file and line whether or not vitest runs.
-// - **Not covered, on any all-`.md` pull request:** the tool-set assertion in
-//   the first test, and both tests after it. The second is only ever violated
-//   by a misplaced file; the third — `no tool keeps a status page` — is the
-//   regression guard repo-2 added, and a pull request that re-adds a
-//   `03-STATUS.md` is by construction all markdown, so it is the one change the
-//   guard exists for and the one CI will not run it on. Pre-existing and not
-//   worth a second workflow: the fix is to run the matrix, and that trade is
-//   argued in `ci.yml`'s header.
+// **The tests below are the ones a documentation-only pull request needs most,
+// and they run on one because `ci.yml`'s unfiltered `check` job runs this
+// file** (repo-97). `ci.yml`'s `test` matrix is skipped for a change that is
+// all `.md` — which is exactly what filing a ticket or flipping one to `done`
+// is — and until repo-97 the only thing that ran on such a pull request was
+// `node scripts/status.mjs --json`, which parses every ticket and resolves
+// `depends_on` but does not look at the tool set, where a ticket file lives, a
+// returned `03-STATUS.md`, the format document or `--tool`. A test here that
+// went red on a markdown-only change merged green and failed `main` unseen
+// (repo-8, then repo-97), so the `check` job now runs this one file: seconds,
+// no build. The matrix is still skipped for `.md`, and every other suite is
+// still not run on one.
 //
 // The point of the strict parser is that the first test is the one that fails,
 // by name and by line, when a ticket's frontmatter drifts.
@@ -1628,18 +1618,50 @@ test("the ticket format documents the field and says who clears it", () => {
   expect(format).toMatch(/delete[sd]? the line/i);
 });
 
-// The real board, and the case the mechanism was built against: repo-16's
-// `Done when` 6 is genuinely outstanding — the dismissal step runs only on a
-// push to `main`, so there is no "after" until it merges, and `gh api` is
-// denied here besides. It is the first `awaiting` line in the repo, and this
-// test is what keeps it from being the last time anybody looked at it.
-test("the repo's own board surfaces at least one real outstanding obligation", () => {
-  // `typeof === "string"` rather than `!== null`: before the field existed the
-  // property was `undefined` on every ticket, which passes `!== null` for all of
-  // them and made this case green while proving nothing. It has to be able to
-  // fail first, and with the field absent it does.
-  const owed = readTickets(REPO).filter((t) => typeof t.awaiting === "string");
-  expect(owed.map((t) => t.id)).toContain("repo-16");
+// repo-97. This pair replaced a test that asked the real board whether repo-16
+// still carried an `awaiting` line. Closing that line is the field's intended
+// lifecycle, so the test failed the day #418 did exactly what the field exists
+// for — and CI skipped the unit matrix for an all-markdown change, so main went
+// red unseen. A test of the mechanism must not name a ticket whose job is to
+// stop being an example.
+//
+// `typeof === "string"` throughout, rather than `!== null`: before the field
+// existed the property was `undefined` on every ticket, which passes
+// `!== null` for all of them and made the first version of this case green
+// while proving nothing. Both cases have to be able to fail first, and with
+// the field's parsing removed they do.
+test("an awaiting line in a ticket file reaches the parsed ticket, and its absence is null", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the security tab, after the merge" }),
+    [at("pl-2")]: pl("pl-2"),
+  });
+  const owed = readTickets(root).filter((t) => typeof t.awaiting === "string");
+  expect(owed.map((t) => [t.id, t.awaiting])).toEqual([
+    ["pl-1", "the security tab, after the merge"],
+  ]);
+  expect(readTickets(root).find((t) => t.id === "pl-2")?.awaiting).toBe(null);
+});
+
+/** Whether a ticket file's own frontmatter, read without the parser, carries an `awaiting:` line. */
+const writtenAwaiting = (text: string) => {
+  const [, frontmatter = ""] = text.split(/^---\r?$/m);
+  return /^awaiting:/m.test(frontmatter);
+};
+
+// The real board, and the part of the old case that did need it: a line a
+// person actually wrote, in the shape people write it, is not silently dropped.
+// It asserts the *agreement* between the file and the parse, so on a board with
+// no `awaiting` anywhere it passes, trivially — the synthetic case above is what
+// proves the mechanism, and this one only proves the real files agree with it.
+test("every awaiting line on the repo's own board is carried by the ticket it is written in", () => {
+  const disagree = readTickets(REPO)
+    .filter(
+      (t) =>
+        writtenAwaiting(fs.readFileSync(path.join(REPO, t.file), "utf8")) !==
+        (typeof t.awaiting === "string"),
+    )
+    .map((t) => t.id);
+  expect(disagree).toEqual([]);
 });
 
 // ---------------------------------------------------------------------------

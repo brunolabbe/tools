@@ -849,6 +849,7 @@ test("extractCheckJobCommands reads this repo's own ci.yml check job, in order",
     "node scripts/check-lockfile-sync.mjs",
     "npm run check",
     "node scripts/status.mjs --json > /dev/null",
+    "npx vitest run scripts/test/status.test.ts",
   ]);
 });
 
@@ -891,6 +892,7 @@ test("deriveExtraCiCommands runs only what no other check already covers", () =>
   expect(deriveExtraCiCommands(REAL_CI_YAML)).toEqual([
     ["node", ["scripts/check-lockfile-sync.mjs"]],
     ["node", ["scripts/status.mjs", "--json"]],
+    ["npx", ["vitest", "run", "scripts/test/status.test.ts"]],
   ]);
 });
 
