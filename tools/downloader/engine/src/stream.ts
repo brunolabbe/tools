@@ -88,10 +88,16 @@ import type {
 } from "@downloader/contract";
 import type { EngineConfig } from "./config.ts";
 import { downloadCandidates, isHostFailure } from "./download/failover.ts";
+import { hostListed, RangeFeeder } from "./download/parallel-ranges.ts";
 import type { SeekVerdict } from "./download/seek-probe.ts";
-import { probeSeek, SeekProbeCanceled } from "./download/seek-probe.ts";
+import { egressProxy, probeSeek, SeekProbeCanceled } from "./download/seek-probe.ts";
 import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
-import { buildNetworkInputArgs, GLOBAL_ARGS, STREAM_PROGRESS_ARGS } from "./ffmpeg/args.ts";
+import {
+  buildLoopbackInputArgs,
+  buildNetworkInputArgs,
+  GLOBAL_ARGS,
+  STREAM_PROGRESS_ARGS,
+} from "./ffmpeg/args.ts";
 import { durationFromInfoLine, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 import type { FfmpegStream } from "./ffmpeg/runner.ts";
 import { isTlsVerificationFailure, streamFfmpeg } from "./ffmpeg/runner.ts";
@@ -330,6 +336,11 @@ export function selectSubtitles(
 
 export interface StreamArgsOptions {
   url: string;
+  /**
+   * The loopback range server ffmpeg reads the main input from instead of
+   * `url` (dl-98). The audio rendition and the subtitles still go to their own.
+   */
+  loopbackUrl?: string | undefined;
   variant: MediaVariant;
   requestContext: RequestContext;
   container: OutputContainer;
@@ -364,11 +375,13 @@ export function buildStreamArgs(options: StreamArgsOptions): {
   // the video at all — it would be fetched only to be discarded.
   if (!(options.audioOnly && separateAudio)) {
     args.push(
-      ...buildNetworkInputArgs(options.url, {
-        requestContext: options.requestContext,
-        hlsAllowAllExtensions: hls,
-        ...tls,
-      }),
+      ...(options.loopbackUrl === undefined
+        ? buildNetworkInputArgs(options.url, {
+            requestContext: options.requestContext,
+            hlsAllowAllExtensions: hls,
+            ...tls,
+          })
+        : buildLoopbackInputArgs(options.loopbackUrl)),
     );
     if (variant.hasVideo && !options.audioOnly) {
       maps.push({ inputIndex, kind: "video", streamIndex: 0, optional: true });
@@ -468,6 +481,11 @@ function firstChunk(stdout: Readable, completion: Promise<unknown>): Promise<Buf
 export interface StreamDeps {
   config: EngineConfig;
   logger: Logger;
+  /**
+   * Hosts that refused parallel ranges, kept by the engine until restart
+   * (dl-98, Decision 5). Absent, nothing is remembered between jobs.
+   */
+  refusedHosts?: Set<string> | undefined;
 }
 
 /**
@@ -522,14 +540,18 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
   }
   const opensVideo = !(audioOnly && separateAudio);
   let probedIndex = -1;
+  // The probe's `206`: the origin ranges a request, so it can be split (dl-98).
+  let seekable = false;
 
   for (;;) {
     const url = candidates[index] as string;
     try {
       if (progressive && opensVideo && probedIndex !== index) {
         probedIndex = index;
+        seekable = false;
         // oxlint-disable-next-line no-await-in-loop
-        await refuseUnseekable(url, "video", request, deps);
+        const verdict = await refuseUnseekable(url, "video", request, deps);
+        seekable = verdict.kind === "seekable";
       }
       // oxlint-disable-next-line no-await-in-loop
       const started = await attempt(request, deps, {
@@ -539,6 +561,7 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
         subtitles,
         durationSec,
         liveDurationSec,
+        seekable: seekable && probedIndex === index,
       });
       return { ...started, filename, container, contentType: contentTypeFor(container, audioOnly) };
     } catch (error: unknown) {
@@ -578,16 +601,16 @@ export async function openStream(request: StreamRequest, deps: StreamDeps): Prom
 
 /**
  * Throws `SOURCE_NOT_SEEKABLE` when `url`'s origin ignores `Range` and the
- * file's index is at the end (dl-102); returns for every other verdict,
- * unknown included, so that ffmpeg reports what it always has. `url` is the
- * origin's — the candidate itself, never a URL ffmpeg is handed in its place.
+ * file's index is at the end (dl-102); returns every other verdict, unknown
+ * included, so that ffmpeg reports what it always has. `url` is the origin's —
+ * the candidate itself, never a URL ffmpeg is handed in its place.
  */
 async function refuseUnseekable(
   url: string,
   input: "video" | "audio",
   request: StreamRequest,
   deps: StreamDeps,
-): Promise<void> {
+): Promise<SeekVerdict> {
   const { config, logger } = deps;
   let verdict: SeekVerdict;
   try {
@@ -608,7 +631,7 @@ async function refuseUnseekable(
     url: redactUrl(url),
     ...verdict,
   });
-  if (verdict.kind !== "unseekable") return;
+  if (verdict.kind !== "unseekable") return verdict;
   throw new AppError("SOURCE_NOT_SEEKABLE", undefined, {
     details: { jobId: request.jobId, variantId: request.variant.id, input, url: redactUrl(url) },
   });
@@ -642,21 +665,90 @@ export function expectedOutputBytes(
   return bytes !== undefined && Number.isFinite(bytes) && bytes > 0 ? bytes : null;
 }
 
+interface AttemptContext {
+  url: string;
+  container: OutputContainer;
+  audioOnly: boolean;
+  subtitles: readonly SubtitleTrack[];
+  durationSec: number | null;
+  liveDurationSec: number | null;
+  /** The seek probe answered `206` for this candidate. */
+  seekable: boolean;
+}
+
+/**
+ * Whether this attempt's input goes through a loopback range server that can
+ * split it into parallel ranges once one connection measures slow (dl-98).
+ *
+ * Only a progressive file read as one input whose origin answered the seek
+ * probe with a `206`: a file that cannot be ranged cannot be split, and
+ * leaving it to ffmpeg keeps dl-102's and dl-103's verdicts on it exactly as
+ * they were. Not a live capture, not a separate audio rendition (two inputs
+ * would share a bitrate), not an opted-out host (Decision 4), not a host that
+ * refused before (Decision 5), and not when ffmpeg would ignore the proxy and
+ * go direct, where the feeder could not follow it.
+ */
+function splittable(request: StreamRequest, deps: StreamDeps, context: AttemptContext): boolean {
+  const { variant } = request;
+  if (deps.config.parallelRanges.connections < 2) return false;
+  if (variant.protocol !== "progressive" || !context.seekable) return false;
+  if (typeof variant.audioUrl === "string" && variant.audioUrl.length > 0) return false;
+  if (context.liveDurationSec !== null) return false;
+  let host: string;
+  try {
+    const parsed = new URL(context.url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    host = parsed.hostname;
+  } catch {
+    return false;
+  }
+  if (hostListed(host, deps.config.singleConnectionHosts)) return false;
+  if (deps.refusedHosts?.has(host.toLowerCase()) === true) return false;
+  return egressProxy({ proxyUrl: deps.config.proxyUrl }).kind !== "unusable";
+}
+
 async function attempt(
   request: StreamRequest,
   deps: StreamDeps,
-  context: {
-    url: string;
-    container: OutputContainer;
-    audioOnly: boolean;
-    subtitles: readonly SubtitleTrack[];
-    durationSec: number | null;
-    liveDurationSec: number | null;
-  },
+  context: AttemptContext,
 ): Promise<Pick<MediaStream, "body" | "transcodes" | "done">> {
   const { config, logger } = deps;
+
+  // A live capture's duration is the caller's limit; a VOD's is the manifest's.
+  const mediaDurationSec = context.liveDurationSec ?? context.durationSec;
+  // When the probe could not time the source, ffmpeg can: it reads the
+  // duration before its first output byte and says so at info level (dl-96).
+  // Until then the percent stays null, as it must.
+  let learnedDurationSec: number | null = null;
+
+  let feeder: RangeFeeder | null = null;
+  if (splittable(request, deps, context)) {
+    const route = egressProxy({ proxyUrl: config.proxyUrl });
+    feeder = await RangeFeeder.start({
+      url: context.url,
+      requestContext: request.requestContext,
+      route: route.kind === "unusable" ? { kind: "direct" } : route,
+      tlsVerify: config.tlsVerify,
+      tlsCaFile: config.tlsCaFile,
+      settings: config.parallelRanges,
+      sizeHint:
+        request.variant.filesizeIsEstimate === true
+          ? null
+          : (request.variant.filesizeBytes ?? null),
+      durationSec: () => mediaDurationSec ?? learnedDurationSec,
+      maxBytes: config.maxFileSizeBytes,
+      signal: request.signal,
+      logger,
+      jobId: request.jobId,
+      onRefused: (host) => deps.refusedHosts?.add(host.toLowerCase()),
+      // Read only once ffmpeg asks the loopback for bytes, so after it exists.
+      onFatal: (error) => ffmpeg.terminate(error),
+    });
+  }
+
   const { args, transcodes } = buildStreamArgs({
     url: context.url,
+    loopbackUrl: feeder?.url,
     variant: request.variant,
     requestContext: request.requestContext,
     container: context.container,
@@ -678,12 +770,6 @@ async function attempt(
     });
   }
 
-  // A live capture's duration is the caller's limit; a VOD's is the manifest's.
-  const mediaDurationSec = context.liveDurationSec ?? context.durationSec;
-  // When the probe could not time the source, ffmpeg can: it reads the
-  // duration before its first output byte and says so at info level (dl-96).
-  // Until then the percent stays null, as it must.
-  let learnedDurationSec: number | null = null;
   const totalBytes = expectedOutputBytes(request.variant, {
     audioOnly: context.audioOnly,
     transcoded: transcodes.length > 0,
@@ -797,6 +883,9 @@ async function attempt(
     () => undefined,
   );
   void exited.then(() => clearTimeout(verdictTimer));
+  // Released from `completion`, not from the body: a refusal before the first
+  // byte leaves this function by a throw, and no body ever exists (dl-103).
+  void exited.then(() => feeder?.close());
 
   const first = await firstChunk(ffmpeg.stdout, ffmpeg.completion);
   if (first === null) {
@@ -894,7 +983,11 @@ async function attempt(
         throw new AppError("JOB_CANCELED");
       });
       const observedUs = result.lastSnapshot?.outTimeUs ?? null;
-      logger.info("engine stream complete", { jobId: request.jobId, bytes: sent });
+      logger.info("engine stream complete", {
+        jobId: request.jobId,
+        bytes: sent,
+        ...(feeder === null ? {} : { rangeFeeder: feeder.stats() }),
+      });
       return {
         bytes: sent,
         durationSec:
