@@ -115,7 +115,7 @@ that returns early.
     at the test's start and end and at the wait's entry and exits; temporary,
     reverted), one whole-file run passed 181 of 181 in 614.55 s, with the floor
     test at `elapsed=10535 perfElapsed=10536` and the wait at `waitedFor=9023
-perfWaited=9023`. A monitor sampling `Date.now()` against
+perfWaited=9023`. [WITHDRAWN — do not cite this sentence or the next one; see the correction entry of 2026-10-11 below] A monitor sampling `Date.now()` against
     `performance.now()` once a second saw no step across 26 minutes, which
     took in that run and the preflight's downloader project (which passed). It
     saw the wall clock gain a steady 55 ms per 30 s (0.18 percent), which over
@@ -125,7 +125,7 @@ perfWaited=9023`. A monitor sampling `Date.now()` against
   - **Reproduced on demand, instead.** The new last test in
     `browser-resolver.test.ts`, "a wall clock stepped back before the wait does
     not read as a floor that returned early", spies `Date.now` and steps it
-    back 5 s from the resolver's own `network-quiet` stage callback, which runs
+    back 5 s from the resolver's own `network-quiet` stage callback (superseded: the step now lands at `page-load`, see the correction entry of 2026-10-11 below), which runs
     after the test took its start and before the wait takes its own. Before the
     fix, asserting the old measurement, it failed with `AssertionError:
 expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
@@ -135,7 +135,7 @@ expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
   - **The fix** is `startStopwatch` (a `performance.now()` reader, at the end of
     the file) in place of `Date.now() - startTime` in dl-80's floor test, the
     only assertion on elapsed time in that block that is a lower bound. The
-    ceilings in the other four tests keep `Date.now()`: a step back can only
+    ceilings in the other four tests keep `Date.now()`: [WITHDRAWN — do not cite this sentence; see the correction entry of 2026-10-11 below] a step back can only
     shorten what they read, and a ceiling that reads short still held.
   - **Why the bar is not ten consecutive runs.** The whole file takes 614 s
     alone, so ten runs of it and ten of the project are about three hours,
@@ -146,9 +146,74 @@ expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
   - **Production was left alone.** `waitForQuiet`, the collector's
     `lastActivityAt` and every deadline in the resolver also read
     `Date.now()`, so a step forward inside the wait shortens the floor by the
-    step. That was not seen and is not what failed; it is not filed because
+    step. [WITHDRAWN — do not cite this sentence; see the correction entry of 2026-10-11 below] That was not seen and is not what failed; it is not filed because
     nothing reproduces it.
   - **What the brief had wrong:** it asked for the reproduction in a full-suite
     run, and the full run was never needed to name the cause, since the
     filing's own log held the two clocks side by side. It also put the
     suspicion on `emptyMinWaitMs` and a pooled browser; neither is involved.
+
+- 2026-10-11, correction and landing (the lander; Sonnet 5.5, fixer). Gate 1
+  (Opus 5.5) returned CONCERNS with two meds and a low; the owner chose to fix
+  both meds at landing without a re-gate. Their text is in the gate's section
+  above, as the gate wrote it. The low (dl-80's floor test starts timing before
+  page load, so a floor cut short by less than about 1.6 s still passes) stays
+  recorded and unfixed.
+  - **Correction of the clock-monitor sentences above (the builder's; found
+    false by gate 1).** The builder wrote that the monitor "saw no step across
+    26 minutes" and saw the wall clock "gain a steady 55 ms per 30 s". Gate 1
+    sampled `Date.now()` against `performance.timeOrigin + performance.now()`
+    every 20 ms for 1500 s (`gate-1/clockmon.mjs`, in the orchestrator's
+    scratch, not committed): 50 jumps, every one forward, 57.9 to 70.9 ms each,
+    one every 30.0 s, and the offset flat to under 1 ms between them. The
+    divergence is steps, not a rate; slewing moves `CLOCK_MONOTONIC` with
+    `CLOCK_REALTIME`, so a rate could not produce it. No
+    backward step was seen (0 of 50; the largest backward move was 0.92 ms),
+    which still leaves the filing's 2029 ms loss inferred from its two numbers.
+  - **Correction of "a step back can only shorten what they read".** True of
+    the four ceilings that keep `Date.now()`, and incomplete: a forward step,
+    which happens here every 30 s, lengthens what they read by up to 71 ms. The
+    same holds for production's `Date.now()` readers (`waitForQuiet`, the
+    collector's `lastActivityAt`, the browser deadlines): a forward step inside
+    the wait shortens the floor by the step. Gate 1's instrumented floor runs
+    took one, 58 ms between `page-load` and `provoke-playback` in one and 61 ms
+    inside the wait in the other (wall span `network-quiet` to `settle-requests`
+    9090 ms, monotonic 9029). "That was not seen" in the production sentence is
+    withdrawn for the same reason. The size of these steps explains none of the
+    2029 ms.
+  - **Fixed at landing (gate 1, first med): the new test stepped the clock where
+    the wait could stall, not where it could return early.** At
+    `network-quiet` the collector's `lastActivityAt` was stamped before the
+    step, so `idleFor` in `waitForQuiet` stayed negative for the 5 s step and
+    the wait ran about 5000 + 1200 ms whatever the floor was: with the floor
+    deleted the test still passed (6394 ms, gate 1). The step now lands at
+    `page-load`, before navigation. `browser-resolver.test.ts`, the last test,
+    with its comment saying why. Three runs of dl-80's floor test and this one
+    together (one per state), `npx vitest run --project downloader
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t
+"respects the empty floor and the deadline|wall clock stepped back"`
+    (at 97a59990; 2 of 182 selected each run):
+    - at head: `Tests  2 passed | 180 skipped (182)`, the new test at 4584 ms.
+    - stopwatch back on `Date.now` (`datenow`): the new test fails,
+      `AssertionError: expected -325 to be greater than or equal to 3000`;
+      dl-80's floor test passes (10667 ms), as it did at the base.
+    - the floor deleted in `waitForQuiet` (`nofloor`, production ignores
+      `emptyMinWaitMs`): both fail, `expected 2865.43 to be greater than or
+equal to 9000` (dl-80's) and `expected 2793.65 to be greater than or
+equal to 3000` (the new test).
+  - **Fixed at landing (gate 1, second med): the two sentences above.** The
+    corrections are the two entries before this one, and the withdrawn
+    sentences stand with their marks.
+  - **The owner's two answers, 2026-10-11 (asked by the orchestrator through
+    AskUserQuestion; the owner's, not an agent's).**
+    1. The builder's open decision on production's wall clock. Question: what
+       to do about `waitForQuiet`, the collector's `lastActivityAt` and the
+       browser deadlines reading `Date.now()`, given gate 1 measured this
+       container's wall clock stepping forward 58 to 71 ms every 30 s and none
+       backward. Options: "Leave it (Recommended)", the builder's
+       recommendation, the gate gave numbers only; "Floor start only, now";
+       "File a ticket", to convert the browser tier to a monotonic clock.
+       **Chosen: Leave it.** No production change, no ticket.
+    2. Gate 1's two meds. Options: "Fix at landing (Recommended)" and "Leave
+       recorded". **Chosen: Fix at landing**, applied with no re-gate; the
+       record keeps each finding as the gate wrote it.
