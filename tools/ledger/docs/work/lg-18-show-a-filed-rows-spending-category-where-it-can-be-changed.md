@@ -73,3 +73,14 @@ What nothing specifies yet, and the builder decides with the owner before buildi
   first draft said no screen shows a row with a category, but `AutoFiled.tsx` (lg-17)
   does for auto-filed rows not yet reviewed. The gap is the rest. Its Build should say
   what becomes of that screen's existing editor.
+- 2026-10-11 — Builder stopped before building, on the Build's own stop condition: the
+  list, which rows, and where it opens from are put to the owner. Measured by reading,
+  not by running: `listRows` (`api/src/rows.ts`) reads every row and applies
+  `spendingCategory=none` and `limit` in JavaScript, with no date, category id or
+  offset; `spendingStats` (`api/src/stats.ts`) counts only rows filed to
+  `current-expenses` with no person, so a list that filtered by date and category
+  alone would also show deposits and unfiled rows the slice never counted. There is no
+  read route for a closed period's lines (`openPeriod` takes its start from the last
+  close), and the web has no wrapper for `POST /api/period-lines/:id`, which already
+  keeps a corrected line's first-entered time, so a category correction cannot move a
+  line into the next close. Nothing is built.
