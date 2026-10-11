@@ -341,16 +341,16 @@ async function until(condition: () => boolean, ms: number, explain: () => string
 }
 
 /**
- * Waits for a stopped job's last requests to land, and returns the moment after
- * which none may. A fetch the feeder wrote to its socket in the turn that stopped
- * it still reaches the origin a few ms later (3 ms, 1 run in 20 on Linux, dl-106):
- * the job opened it, and it is closed on arrival. "Opens no more" is a claim
- * about what is opened once the stop has landed, so it is measured from here, and
- * not from the instant the stop was asked for.
+ * "Opens no more", counted and not timed (dl-106). `requestsAtStop` is what the
+ * feeder had begun when it stopped. A fetch it had written to a socket in the
+ * turn that stopped it reaches the origin a few ms later (3 ms, 1 run in 20 on
+ * Linux) and is among that count; one opened afterwards, whenever it arrives, is
+ * not, and neither the origin's tally nor the feeder's may exceed it. Call it
+ * after the test has waited long enough for a late request to have landed.
  */
-async function afterStop(): Promise<number> {
-  await sleep(100);
-  return performance.now();
+function expectNothingOpenedSince(feeder: RangeFeeder, requestsAtStop: number): void {
+  expect(feeder.stats().originRequests).toBe(requestsAtStop);
+  expect(seen.length).toBeLessThanOrEqual(requestsAtStop);
 }
 
 afterEach(() => {
@@ -633,12 +633,16 @@ describe("dl-98: cancelling a split job", () => {
       await sleep(700);
       expect(maxOpen).toBe(4);
       controller.abort();
+      // This test has no feeder to count requests on, so it measures in time: from
+      // 100 ms after the abort, taken now and not after `media.done`, which
+      // settles about 3 s later and would blind everything before it (dl-106). A
+      // fetch the feeder had written to a socket in the turn of the abort reaches
+      // the origin a few ms later (3 ms on Linux) and is closed on arrival.
+      const measuredFrom = performance.now() + 100;
       await expect(media.done).rejects.toMatchObject({ code: "JOB_CANCELED" });
-      // The window is longer than the 262 ms one fetch takes at this rate.
-      const settledAt = await afterStop();
       await sleep(500);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > settledAt)).toEqual([]);
+      expect(seen.filter((entry) => entry.at > measuredFrom)).toEqual([]);
     },
     SLOW,
   );
@@ -847,8 +851,8 @@ describe("dl-98: the feeder's own limits", () => {
       const { feeder, fatal } = await feederFor("moov-end.mp4", { maxBytes: limit });
       const read = await readLoopback(feeder.url);
       const stats = feeder.stats();
-      const settledAt = await afterStop();
-      await sleep(300);
+      const measuredFrom = performance.now() + 100;
+      await sleep(400);
 
       expect(fatal).toHaveLength(1);
       expect(fatal[0]?.code).toBe("SIZE_LIMIT_EXCEEDED");
@@ -858,7 +862,11 @@ describe("dl-98: the feeder's own limits", () => {
       expect(stats.mode).toBe("parallel");
       expect(stats.deliveredBytes).toBeGreaterThan(limit);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > settledAt)).toEqual([]);
+      expectNothingOpenedSince(feeder, stats.originRequests);
+      // The feeder began 5 and the origin saw 4: one was aborted before it
+      // connected, so a count cannot tell a late request from that slack. This
+      // test also looks in time, from 100 ms after the stop (dl-106).
+      expect(seen.filter((entry) => entry.at > measuredFrom)).toEqual([]);
     },
     SLOW,
   );
@@ -880,13 +888,13 @@ describe("dl-98: the feeder's own limits", () => {
         () => JSON.stringify({ open, stats: feeder.stats() }),
       );
       controller.abort();
+      const requestsAtStop = feeder.stats().originRequests;
       const read = await reading;
-      const settledAt = await afterStop();
       await sleep(300);
 
       expect(read.complete).toBe(false);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > settledAt)).toEqual([]);
+      expectNothingOpenedSince(feeder, requestsAtStop);
     },
     SLOW,
   );

@@ -195,13 +195,20 @@ expected [ { …(7) }, ... ] to deeply equal []` on Windows (run
     38160856396, 1 of 10) and, with a late request 3 ms after the abort, on Linux
     on both fixtures (old pacing 1 of 30, bucket 1 of 20 before the fix; on
     Windows that test alone was 0 of 25 on each, run 38162765663; the
-    old-pacing log reads `"range": "bytes=1572864-1703935"`). `afterStop()` now
-    waits 100 ms before the measuring point, in the three tests that use the
-    pattern; the window after it stays longer than one fetch. A mutation
-    (`close()` made a no-op) still fails two of the three, the third does not
-    depend on `close()` and did not before.
+    old-pacing log reads `"range": "bytes=1572864-1703935"`). The
+    first fix for it, `afterStop()` (head `ba4fb1ec`), is **superseded by the
+    entry at the end of this Log**: it took the measuring point after `await
+media.done`, which in the engine test is about 3.1 s after the abort, not 100
+    ms, so it left that test and the others blind to a request opened in that
+    span, and gate 1 failed it. The Log sentence that said it "waits 100 ms
+    before the measuring point" was true of the two feeder tests only.
   - **After the fix**, same file, `windows-latest`: head `8f282c87` (the
-    fixture and the test changes, plus the probe files): `PASS` in runs 1 to 10
+    fixture and the test changes, **plus the probe code that stayed in two
+    files**: a `dbg()` writing to stderr while `DL106` was set, in the feeder
+    source; and, in the test file, an `afterEach` print of `seen` and a 1 s
+    sampler in F9. None of it changes a decision, by reading, but that series
+    did not run the file that landed at `ba4fb1ec`, and neither run the file
+    that lands now; the series after the last entry does): `PASS` in runs 1 to 10
     and 12 to 25, `FAIL` in run 11, 24 of 25 (run 38168166619). Run 11 failed
     two tests that share a runner stall visible in the same log: the proxy test
     (`expected 3 to be greater than 4`, a fallback `no-speedup 1635457 B/s split
@@ -227,4 +234,5 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
     rates was what showed A's 1.77x. The brief also expected one cause or
     several: it is one in the fixture and two it exposed.
   - Fold-in decision: the 3 tests' shared "opens no more" pattern is fixed in all
-    three places it occurs (`afterStop()`); nothing else was folded or left.
+    three places it occurs (see the last entry for how); nothing else was folded
+    or left.
