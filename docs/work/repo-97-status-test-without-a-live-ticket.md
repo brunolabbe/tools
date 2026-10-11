@@ -3,7 +3,7 @@ id: repo-97
 tool: repo
 title: A status test asked the live board for a ticket whose awaiting line was meant to be deleted
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -72,6 +72,28 @@ null` in `readTickets`, and separately the `FIELDS` entry deleted).
 5. `ci.yml`'s `check` job runs `npx vitest run scripts/test/status.test.ts`
    on a change that is all `.md`, and that command is red on `1a044437`'s copy
    of the test and green on this branch.
+
+## Review
+
+**Gate: FAIL** — 2026-10-10 · `1a044437..bf7842eb` · Opus 5.5, depth narrow (the dispatch's five attacks and the acceptance table only)
+
+| Done when                                                                                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `status.test.ts` passes here, and failed on `origin/main` at `1a044437`                                    | `scripts/test/status.test.ts`, 135 of 135 at `bf7842eb` ✓. **verified** for the base half: 1 failed, 133 passed of 134 at `1a044437`, `the repo's own board surfaces at least one real outstanding obligation`, `expected [ 'dl-73' ] to include 'repo-16'`                                                                                                                                                                                                |
+| 2. Both new tests fail with the field's parsing removed, both ways                                            | **verified** by the gate. `ticket.awaiting = null`: `an awaiting line in a ticket file reaches the parsed ticket, and its absence is null` red (`expected [] to deeply equal [ [ 'pl-1', …(1) ] ]`) and `every awaiting line on the repo's own board is carried by the ticket it is written in` red (`expected [ 'dl-73' ] to deeply equal []`). The `FIELDS` entry deleted: both red, `"awaiting" is not a ticket field` for `pl-1-slug.md` and for dl-73 |
+| 3. Deleting every real `awaiting:` line leaves `status.test.ts` green                                         | **verified**: one file on the board carries the line (dl-73, `grep -rlE "^awaiting:"`); deleted, 135 of 135                                                                                                                                                                                                                                                                                                                                                |
+| 4. The Log names every other test reading live ticket state, and states the markdown-only decision as options | **not met** on its first clause: the table omits `--tool with a name no tool has is a named failure, not an empty view`, which reads the live board (F1). Second clause met: three options, one recommended                                                                                                                                                                                                                                                |
+
+- **high** · F1 · Done when 4 depends on it · the Log's table of tests that read live ticket state lists seven and the true count is eight. `--tool with a name no tool has is a named failure, not an empty view` runs the CLI rootless (`run(["--tool", "sniffer"])`), so it reads the real board. Reproduction: add an unknown field to one real ticket (`bogus: x` under `difficulty:` in the repo-97 file), then `npx vitest run scripts/test/status.test.ts` → `5 failed | 130 passed (135)`, and the five are `every ticket in the repo parses…`, `no ticket on the board is ready with a gate record…`, `repo-wide tickets live in docs/work`, **`--tool with a name no tool has…`**, and the new cross-check. `node scripts/status.mjs --json` covers its malformed-ticket failure but not its tool-name one, so the Log's "the other four" that CI does not run on a markdown-only change are five. It does **not** change the premise: this test stayed green with every open ticket set to `done` and again to `dropped`. Fix: one table row and "four" to "five".
+- **low** · the comment above the cross-check says it "holds with no `awaiting` anywhere on the board — and says so rather than going red". Nothing says so: on an empty board the test passes silently. "Passes" is accurate; "says so" misleads.
+- **low** · the Log's case for option 1 reads "the cost was one case, now removed". It is the second case. `docs/work/repo-8-tests-bound-to-real-tickets.md` (done) fixed two tests in this file that "fail because the project succeeded", and repo-97 does not mention it. The owner should see the earlier case before choosing option 1.
+- **low** · option 3 costs the `repo` project at "minutes, not seconds". Measured here: `npx vitest run --project repo`, 13 of 13 files, 488 of 488 tests, 48.3 s locally. A CI runner may differ; this gate did not measure CI.
+- **dropped** · "the new cross-check only checks presence, so a parser that mangles the text passes it." True: truncating the value to 10 characters leaves the cross-check green. But the synthetic test goes red (`expected [ [ 'pl-1', 'the securi' ] ] …`), and so do 8 other existing tests. The old test did not check the value either. Not a regression.
+- **dropped** · "something the old test caught is now uncaught." Under both mutations the old test's mechanism half, (a), is also caught by 8 to 18 existing synthetic tests (10 and 19 tests red). The real-format half, (b), is kept by the cross-check while any line exists. Only (c) is lost: "this particular ticket still owes something". Losing (c) is the fix.
+- **findings** · the hunt returned 6; 4 carried (1 high, 3 low), 2 dropped.
+- PR #420 at `bf7842eb`: `check` ×2, `changes`, `codeql`, `CodeQL`, `dependency-review` green; `test (ubuntu-latest)` and `test (windows-latest, informational)` still in progress when read. No acceptance line depends on them.
+- Invariants: the diff is one test file and one ticket, so only test registration and style apply. The file is existing and already registered, and it uses no `any` and no `console`. All others skipped as not touchable.
+- NFR: security n/a · performance n/a · reliability ✓ (no test now depends on a ticket's lifecycle: every open ticket set to `done`, then to `dropped`, then dl-73's line deleted, each 135 of 135) · maintainability — the three lows.
 
 ## Log
 
