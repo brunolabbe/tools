@@ -116,7 +116,8 @@ that returns early.
     reverted), one whole-file run passed 181 of 181 in 614.55 s, with the floor
     test at `elapsed=10535 perfElapsed=10536` and the wait at `waitedFor=9023
 perfWaited=9023`. A monitor sampling `Date.now()` against
-    `performance.now()` once a second across 13 minutes of it saw no step. It
+    `performance.now()` once a second saw no step across 26 minutes, which
+    took in that run and the preflight's downloader project (which passed). It
     saw the wall clock gain a steady 55 ms per 30 s (0.18 percent), which over
     10 s is 18 ms and explains nothing. A second whole-file run was killed
     part-way to keep the spend sane. So the step is inferred from the two
@@ -139,7 +140,7 @@ expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
   - **Why the bar is not ten consecutive runs.** The whole file takes 614 s
     alone, so ten runs of it and ten of the project are about three hours,
     for an event that has happened twice in the project's history and was not
-    seen in 13 minutes here. A pass count would not discriminate between a
+    seen in 26 minutes here. A pass count would not discriminate between a
     fixed test and one that has not met a step. The deterministic test does,
     and it fails without the fix.
   - **Production was left alone.** `waitForQuiet`, the collector's
