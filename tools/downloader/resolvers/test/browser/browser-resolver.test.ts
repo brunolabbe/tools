@@ -2353,6 +2353,11 @@ describe("the empty floor is measured on a clock the system cannot step (dl-105)
       // system clock, which this sandbox steps; the wait did what it should.
       // The step is made here instead of waited for, at the one point that
       // matters: after the test took its start, before the wait takes its own.
+      // That is the `page-load` stage, before navigation. Stepping at
+      // `network-quiet` instead would land after the page's last request, so
+      // the collector's activity stamp would sit ahead of the stepped clock and
+      // the wait would stall on its quiet gate for the step plus quietMs,
+      // passing the floor assertion with the floor deleted (gate 1 of dl-105).
       const floorMs = 3000;
       const stepBackMs = 5000;
       const realNow = Date.now.bind(Date);
@@ -2377,7 +2382,7 @@ describe("the empty floor is measured on a clock the system cannot step (dl-105)
             options({
               timeoutMs: 20_000,
               onStage: (event) => {
-                if (event.stage === "network-quiet") skewMs = -stepBackMs;
+                if (event.stage === "page-load") skewMs = -stepBackMs;
               },
             }),
           );
