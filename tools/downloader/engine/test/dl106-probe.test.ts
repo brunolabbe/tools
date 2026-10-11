@@ -73,15 +73,17 @@ async function measure(
   const port = (server.address() as AddressInfo).port;
   const started = performance.now();
   const rates = await Promise.all(
-    Array.from({ length: connections }, () =>
-      new Promise<number>((resolve) => {
-        const t0 = performance.now();
-        let got = 0;
-        http.get(`http://127.0.0.1:${port}/`, { agent: false }, (response) => {
-          response.on("data", (chunk: Buffer) => (got += chunk.length));
-          response.on("end", () => resolve((got * 1000) / (performance.now() - t0)));
-        });
-      }),
+    Array.from(
+      { length: connections },
+      () =>
+        new Promise<number>((resolve) => {
+          const t0 = performance.now();
+          let got = 0;
+          http.get(`http://127.0.0.1:${port}/`, { agent: false }, (response) => {
+            response.on("data", (chunk: Buffer) => (got += chunk.length));
+            response.on("end", () => resolve((got * 1000) / (performance.now() - t0)));
+          });
+        }),
     ),
   );
   server.closeAllConnections();

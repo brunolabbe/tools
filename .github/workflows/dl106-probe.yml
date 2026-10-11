@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 90
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      DL106: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -26,29 +25,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: The cancel test, 25 times on the old pacing
+      - name: The file as the pull request has it, ten times
         shell: bash
         run: |
-          git checkout bba22382 -- tools/downloader/engine/test/parallel-ranges.test.ts
-          # the old file has no CANCEL print; the assertion is what is read
+          git log -1 --format="head %H"
           fails=0
-          for i in $(seq 1 25); do
-            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts -t "a cancel after the first byte" > "old-$i.log" 2>&1; then :; else
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "final-$i.log" 2>&1; then
+              echo "final $i: PASS"
+            else
+              echo "final $i: FAIL"
               fails=$((fails + 1))
-              sed "s/\x1b\[[0-9;]*m//g" "old-$i.log" | grep -aE "( FAIL |AssertionError)" | cut -c1-300 | head -5 || true
             fi
+            sed "s/\x1b\[[0-9;]*m//g" "final-$i.log" | grep -aE "( FAIL |AssertionError|Tests  |Test Files)" | cut -c1-300 | head -40 || true
           done
-          echo "old pacing, cancel test: $fails of 25 failed"
-          git checkout HEAD -- tools/downloader/engine/test/parallel-ranges.test.ts
-      - name: The cancel test, 25 times on the bucket
-        shell: bash
-        run: |
-          fails=0
-          for i in $(seq 1 25); do
-            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts -t "a cancel after the first byte" > "new-$i.log" 2>&1; then :; else
-              fails=$((fails + 1))
-              sed "s/\x1b\[[0-9;]*m//g" "new-$i.log" | grep -aE "( FAIL |AssertionError)" | cut -c1-300 | head -5 || true
-            fi
-            grep -a "DL106 CANCEL" "new-$i.log" | cut -c1-600 || true
-          done
-          echo "bucket pacing, cancel test: $fails of 25 failed"
+          echo "failed runs: $fails of 10"
