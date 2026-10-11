@@ -1,0 +1,47 @@
+# TEMPORARY (dl-106): runs one test file on windows-latest N times. Deleted before the pull request is ready.
+name: dl106-probe
+
+on:
+  push:
+    branches: [dl-106-parallel-ranges-windows]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      DL106: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Timer and pacing probe
+        shell: bash
+        run: npx vitest run tools/downloader/engine/test/dl106-probe.test.ts 2>&1 | grep -E "DL106|Tests |FAIL" || true
+      - name: The file, ten times
+        shell: bash
+        run: |
+          fails=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "=== run $i ==="
+            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "run-$i.log" 2>&1; then
+              echo "run $i: PASS"
+            else
+              echo "run $i: FAIL"
+              fails=$((fails + 1))
+              grep -E "FAIL|AssertionError|DL106" "run-$i.log" | head -80
+            fi
+            grep -E "DL106" "run-$i.log" | head -400 > "dl106-$i.txt" || true
+          done
+          echo "failed runs: $fails of 10"
+          echo "--- decisions of run 1 ---"
+          cat dl106-1.txt | head -150

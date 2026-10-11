@@ -316,7 +316,13 @@ async function until(condition: () => boolean, ms: number, explain: () => string
   }
 }
 
-afterEach(() => {
+afterEach(({ task }) => {
+  // DL106-PROBE (temporary)
+  if (process.env["DL106"] !== undefined) {
+    process.stderr.write(
+      `DL106 TEST ${task.name.slice(0, 60)} seen=${JSON.stringify(seen.map((entry) => [entry.range, Math.round(entry.at)]))}\n`,
+    );
+  }
   for (const feeder of liveFeeders.splice(0)) feeder.close();
   for (const response of stalled.splice(0)) response.destroy();
   behaviour = { ...DEFAULT_BEHAVIOUR };
