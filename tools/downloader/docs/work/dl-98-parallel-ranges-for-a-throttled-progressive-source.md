@@ -275,7 +275,7 @@ feeder's.
   dl-96's and dl-103's `large-103` cases. On 7.0.2 it is 61 of 75. The 14
   failures are HLS sources (11 on `hls6` or `hls11`, `midfail`, and the two `HLS`
   rows), the same count dl-103's gate 3 recorded on `main`. Their names were not
-  compared with a `main` run. The dl-98 specs pass 24 of 24 on 7.0.2.
+  compared with a `main` run. The dl-98 specs pass 25 of 25 on 7.0.2 (23 engine, 2 api).
 
 **What the brief had wrong, or did not say.**
 
@@ -317,6 +317,13 @@ not found`.
    on the API test before the fix: the first case hung to its 120 s timeout, and
    the second ended `DOWNLOAD_FAILED` ("The source cut part of the video
    short"). Every fetch now starts from the candidate.
+7. **A second defect, found by re-reading before the pull request:** a
+   fallback aborted every read in progress, a second ffmpeg connection's relay
+   included. A relayed `200` has no known end, so no continuation could resume
+   it, and its response ended clean and short. "a second read relaying a
+   whole-file 200 is left to finish when the split falls back" was red before
+   the fix (`first.complete` false) and is green after it. A healthy relay is
+   now left alone, since it is one connection already.
 
 dl-103's handover items: (1) composed answers declare `Content-Length`, and a
 failed fetch is passed on as a cut connection, which ffmpeg reconnects from.

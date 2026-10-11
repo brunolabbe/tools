@@ -647,10 +647,17 @@ interface Read {
  */
 function readLoopback(
   url: string,
-  options: { pauseAt?: number; pauseMs?: number; onPaused?: () => void } = {},
+  options: {
+    pauseAt?: number;
+    pauseMs?: number;
+    onPaused?: () => void;
+    range?: string | null;
+  } = {},
 ): Promise<Read> {
+  const range = options.range === undefined ? "bytes=0-" : options.range;
+  const headers = range === null ? {} : { range };
   return new Promise((resolve, reject) => {
-    const request = http.get(url, { headers: { range: "bytes=0-" }, agent: false }, (response) => {
+    const request = http.get(url, { headers, agent: false }, (response) => {
       const chunks: Buffer[] = [];
       let received = 0;
       let paused = false;
@@ -857,6 +864,33 @@ describe("dl-98: ffmpeg reads the loopback, and only the feeder meets the proxy"
       } finally {
         await proxy.close();
       }
+    },
+    SLOW,
+  );
+});
+
+describe("dl-98: a fallback and a relay it cannot resume", () => {
+  test(
+    "a second read relaying a whole-file 200 is left to finish when the split falls back",
+    async () => {
+      // ffmpeg can hold two loopback connections at once (a seek opens the new
+      // one before it closes the old). Here the second asked for no range, so
+      // its relay is a `200` of unknown end, which no continuation could resume.
+      behaviour.perConnectionBps = 2_000_000;
+      behaviour.refuse = "429";
+      const { feeder } = await feederFor("moov-end.mp4");
+      const whole = readLoopback(feeder.url, { range: null });
+      const ranged = readLoopback(feeder.url);
+      const [first, second] = await Promise.all([whole, ranged]);
+      const stats = feeder.stats();
+      feeder.close();
+
+      expect(stats.refusal?.kind).toBe("status");
+      expect(first.status).toBe(200);
+      expect(first.complete).toBe(true);
+      expect(first.body.equals(files["moov-end.mp4"] as Buffer)).toBe(true);
+      expect(second.complete).toBe(true);
+      expect(second.body.equals(files["moov-end.mp4"] as Buffer)).toBe(true);
     },
     SLOW,
   );

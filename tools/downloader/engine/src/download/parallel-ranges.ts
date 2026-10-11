@@ -908,6 +908,9 @@ export class RangeFeeder {
     for (const serve of this.#serves) {
       if (serve.finished) continue;
       const head = serve.fetches[0];
+      // A healthy relay is one connection already, and one whose end is
+      // unknown (a `200`) could not be resumed by a continuation anyway.
+      if (head !== undefined && head.end === null && head.failure === null) continue;
       const resumeAt = head === undefined ? serve.position : head.start + head.received;
       const dropped = serve.fetches.splice(head === undefined ? 0 : 1);
       for (const fetch of dropped) {
