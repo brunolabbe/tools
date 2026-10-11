@@ -17,6 +17,7 @@ import type {
   FixedItemsResponse,
   MortgageOwnResponse,
   MortgagePaymentsResponse,
+  RowsResponse,
   RuleDraft,
   SalariesStatsResponse,
   SalaryEntryResponse,
@@ -408,4 +409,124 @@ test("nothing here writes: the books are the same after every series is read", a
   }
 
   expect(count()).toEqual(before);
+});
+
+describe("GET /api/rows, as the spending chart opens a period (lg-18)", () => {
+  /** The open period of the fixture, as the chart names it. */
+  const OPEN = "from=2026-02-01&to=2026-10-03";
+
+  test("scope=spending lists what the chart counted in the period, and nothing else", async () => {
+    const target = await start();
+
+    const { rows, total } = await get<RowsResponse>(
+      target,
+      `${ROUTES.rows}?scope=spending&${OPEN}`,
+    );
+    const { periods } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+
+    // The renovation, the shop and the groceries; not the mortgage payments of the same days.
+    expect(rows.map((row) => row.description)).toEqual([SHOP, RENOVATION, GROCERIES]);
+    expect(total).toBe(3);
+    expect(-rows.reduce((sum, row) => sum + row.amountCents, 0)).toBe(periods[1]?.accountCents);
+    // Without the scope the same days also hold the mortgage payment.
+    const all = await get<RowsResponse>(target, `${ROUTES.rows}?${OPEN}`);
+    expect(all.rows.map((row) => row.description)).toContain(PAYMENT);
+  });
+
+  test("a category's list sums to its slice of the chart, for every category and for none", async () => {
+    const target = await start();
+    const { periods, categories } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+    const open = periods[1];
+    if (open === undefined) throw new Error("no open period");
+
+    for (const slice of open.categories) {
+      const id = slice.categoryId === null ? "none" : String(slice.categoryId);
+      const { rows } = await get<RowsResponse>(
+        target,
+        `${ROUTES.rows}?scope=spending&spendingCategory=${id}&${OPEN}`,
+      );
+      // The card lines are not bank rows; the slice holds them too.
+      const cardCents = slice.categoryId === null ? 4000 : 0;
+      expect(-rows.reduce((sum, row) => sum + row.amountCents, 0) + cardCents).toBe(slice.cents);
+    }
+    expect(categories.length).toBeGreaterThan(1);
+  });
+
+  test("a row given its own category moves from one list to the other", async () => {
+    const target = await start();
+    const household = await categoryId(target, "Household");
+    const none = await get<RowsResponse>(
+      target,
+      `${ROUTES.rows}?scope=spending&spendingCategory=none&${OPEN}`,
+    );
+    const renovation = none.rows.find((row) => row.description === RENOVATION);
+    if (renovation === undefined) throw new Error("the renovation is not uncategorised");
+
+    await post(target, ROUTES.spendingCategoryOverrides, {
+      rowId: renovation.id,
+      spendingCategoryId: household,
+    });
+
+    const after = await get<RowsResponse>(
+      target,
+      `${ROUTES.rows}?scope=spending&spendingCategory=none&${OPEN}`,
+    );
+    const kept = await get<RowsResponse>(
+      target,
+      `${ROUTES.rows}?scope=spending&spendingCategory=${String(household)}&${OPEN}`,
+    );
+    expect(after.rows.map((row) => row.description)).toEqual([SHOP]);
+    expect(kept.rows.map((row) => row.id)).toEqual([renovation.id]);
+    // And the chart counts it under the new one.
+    const { periods } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+    expect(periods[1]?.categories.find((slice) => slice.categoryId === household)?.cents).toBe(
+      80000,
+    );
+  });
+
+  test("days narrow the list, both ends inclusive", async () => {
+    const target = await start();
+
+    const feb = await get<RowsResponse>(
+      target,
+      `${ROUTES.rows}?scope=spending&from=2026-02-03&to=2026-02-20`,
+    );
+    const jan = await get<RowsResponse>(target, `${ROUTES.rows}?to=2026-01-15`);
+
+    expect(feb.rows.map((row) => row.description)).toEqual([RENOVATION, GROCERIES]);
+    expect(jan.rows.map((row) => row.date)).toEqual(["2026-01-15", "2026-01-10", "2026-01-05"]);
+  });
+
+  test("offset and limit page the list, and the total does not move", async () => {
+    const target = await start();
+    const url = `${ROUTES.rows}?scope=spending&${OPEN}`;
+
+    const first = await get<RowsResponse>(target, `${url}&limit=2`);
+    const second = await get<RowsResponse>(target, `${url}&limit=2&offset=2`);
+    const past = await get<RowsResponse>(target, `${url}&limit=2&offset=3`);
+
+    expect(first.rows.map((row) => row.description)).toEqual([SHOP, RENOVATION]);
+    expect(second.rows.map((row) => row.description)).toEqual([GROCERIES]);
+    expect(past.rows).toEqual([]);
+    expect([first.total, second.total, past.total]).toEqual([3, 3, 3]);
+  });
+
+  test("a category that is not an id, a day that is not a day, and days the wrong way round are refused", async () => {
+    const target = await start();
+
+    for (const query of [
+      "spendingCategory=groceries",
+      "spendingCategory=0",
+      "from=yesterday",
+      "from=2026-03-01&to=2026-02-01",
+      "offset=-1",
+      "scope=everything",
+    ]) {
+      const response = await target.server.inject({
+        method: "GET",
+        url: `${ROUTES.rows}?${query}`,
+      });
+      expect(response.statusCode, query).toBe(400);
+    }
+  });
 });

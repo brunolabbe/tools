@@ -832,13 +832,26 @@ export interface StoredRow {
 }
 
 /**
- * `GET /api/rows`: stored rows, newest first. `spendingCategory=none` lists the
- * uncategorised ones. `limit` caps the page (100 by default).
+ * `GET /api/rows`: stored rows, newest first. `spendingCategory` keeps the
+ * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
+ * inclusive. `scope=spending` keeps the rows the spending chart counts: filed
+ * to the current expenses and to nobody, so a list opened from the chart sums to
+ * the slice it was opened from. `offset` and `limit` page the result (100 by
+ * default); `total` is how many match before either.
  */
-export const rowsQuerySchema = z.strictObject({
-  spendingCategory: z.literal("none").optional(),
-  limit: z.coerce.number().int().min(1).max(500).optional(),
-});
+export const rowsQuerySchema = z
+  .strictObject({
+    spendingCategory: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+    scope: z.literal("spending").optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+    limit: z.coerce.number().int().min(1).max(500).optional(),
+  })
+  .refine((query) => query.from === undefined || query.to === undefined || query.from <= query.to, {
+    message: "from is after to",
+    path: ["from"],
+  });
 
 export interface RowsResponse {
   rows: StoredRow[];

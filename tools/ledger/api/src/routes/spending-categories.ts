@@ -141,6 +141,13 @@ export function registerSpendingCategoryRoutes(app: FastifyInstance, context: Ap
     const query = parsed(rowsQuerySchema, request.query, "query");
     const body: RowsResponse = listRows(context.db, {
       ...(query.spendingCategory === "none" ? { uncategorised: true } : {}),
+      ...(typeof query.spendingCategory === "number"
+        ? { spendingCategoryId: query.spendingCategory }
+        : {}),
+      ...(query.from === undefined ? {} : { from: query.from }),
+      ...(query.to === undefined ? {} : { to: query.to }),
+      ...(query.scope === "spending" ? { spendingOnly: true } : {}),
+      ...(query.offset === undefined ? {} : { offset: query.offset }),
       ...(query.limit === undefined ? {} : { limit: query.limit }),
     });
     return body;

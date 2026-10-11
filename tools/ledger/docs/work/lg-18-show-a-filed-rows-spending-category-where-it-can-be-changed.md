@@ -84,3 +84,41 @@ What nothing specifies yet, and the builder decides with the owner before buildi
   close), and the web has no wrapper for `POST /api/period-lines/:id`, which already
   keeps a corrected line's first-entered time, so a category correction cannot move a
   line into the next close. Nothing is built.
+- 2026-10-11 — The owner answered all four, relayed by the orchestrator through
+  `AskUserQuestion`, each the builder's recommended option. Asked, the options, the
+  choice:
+  1. **The list API.** Extend `/api/rows` / a new stats route / date and category
+     only. **Chosen: extend `/api/rows`** with optional `from`, `to`,
+     `spendingCategory=<id>|none`, `offset` and `scope=spending`, `RowsResponse`
+     unchanged, one predicate shared with `spendingStats`. This is the owner's approval
+     of the additive change to `@ledger/contract`.
+  2. **Which rows.** Bank rows only / bank rows and card lines / an override table for
+     lines. **Chosen: bank rows only**, with a notice on the list that the cards' lines
+     are in the totals and not in it; the follow-up is [lg-19](./lg-19-correct-a-closed-periods-card-line-spending-category.md).
+  3. **Where it opens from.** Button and per-category / one button / the table twin
+     only. **Chosen: button and per-category**: "Show the rows" under the readout of
+     the selected column, and a "Rows" button on each category of it.
+  4. **`AutoFiled.tsx`'s editor.** Keep it / remove it. **Chosen: keep it**: it
+     confirms a filing, this lists a period, and both write the same override.
+- 2026-10-11 — Built. The list is `PeriodRows` under the spending chart, over the
+  period's own days (the range only chooses which periods are drawn, so the list is
+  not cut by it), fed by `GET /api/rows?scope=spending&from&to[&spendingCategory]
+[&offset&limit]`. `countsAsSpending` in `api/src/rows.ts` is the one definition of
+  "the chart counts this row"; `spendingStats` now asks `listRows` for
+  `spendingOnly` instead of repeating it. The days narrow in SQL, so a period's list
+  reads that period's rows; the category and the scope still narrow after each row has
+  been read, so a list is not yet cheap on a very long account (lg-15's F10 is
+  narrowed, not closed). `useSeries` takes a `reload` that `SpendingCard` bumps after a
+  write, so the chart is read again. "More categories" opens the whole period, since
+  it is several at once. The table twin has no way in; the chart's readout is the way
+  in.
+  - Proof: `npm test -- --project ledger` (`816 passed (816)`, 47 files, exit 0); the
+    new API tests are the `GET /api/rows, as the spending chart opens a period (lg-18)`
+    describe in `api/test/stats.test.ts`, the web ones are `web/test/stats-rows.test.tsx`.
+    Made to fail first: with `countsAsSpending` returning `true` the scope tests and
+    the two existing spending-stats tests fail (6 of the file); with `reload` out of
+    `useSeries`'s dependencies `a row given a category of its own is written, and the
+chart counts it under the new one` fails.
+  - The brief had nothing wrong that mattered, but it did not say the chart's slice
+    and a plain `spendingCategory=none` list would disagree (deposits and unfiled rows
+    are uncategorised too); `scope=spending` is what the owner chose to close that.
