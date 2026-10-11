@@ -34,7 +34,8 @@
  *    `TIMEOUT`, `TLS_VERIFICATION_FAILED`, `LIVE_STREAM_UNSUPPORTED`,
  *    `CONTAINER_UNSUPPORTED` (not retryable; dl-99), `SOURCE_NOT_SEEKABLE` (not
  *    retryable; dl-102: a tail-`moov` file from an origin that ignores
- *    `Range`). After it, the same codes arrive on `done`, and a retry is no
+ *    `Range`, and dl-103 when only ffmpeg could tell). After it, the same
+ *    codes arrive on `done`, and a retry is no
  *    longer possible.
  *  - The engine does not re-probe. Signed URLs expire in 30–300 s (analysis §5),
  *    so the caller must hand in a *fresh* variant.

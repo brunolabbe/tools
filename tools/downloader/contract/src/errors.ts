@@ -75,7 +75,15 @@ export const DOWNLOADER_ERROR_CODES = [
    * (dl-102). ffmpeg has to seek to that index before it can write a frame,
    * and from such an origin it cannot: it used to finish a clean response of
    * which no frame decodes. Raised before the first byte, from a probe of the
-   * origin itself, and not retryable — the same origin answers the same way.
+   * origin itself; and where the probe did not catch it, from ffmpeg's own
+   * words (dl-103): a `partial file` followed by an early end at the same
+   * offset, which such an origin produces when it declares where its body
+   * ends (a `Content-Length`, or closing the connection) and a source that is
+   * merely short does not. Such an origin that sends its body chunked, with
+   * no length, logs no early end, cannot be told from a short source, and is
+   * `DOWNLOAD_FAILED` instead. Before the first byte when that verdict comes
+   * first, and otherwise by cutting the stream and rejecting its `done`. Not
+   * retryable — the same origin answers the same way.
    * Not `DOWNLOAD_FAILED`: that code's copy tells the visitor to try again.
    */
   "SOURCE_NOT_SEEKABLE",

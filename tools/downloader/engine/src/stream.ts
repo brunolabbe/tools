@@ -45,9 +45,17 @@
  * is spent on the probe. From an origin that honours `Range` that heals; from
  * one that ignores it, it turns what was a `DOWNLOAD_FAILED` into the
  * undecodable file this section is about. That, and every other way a probe
- * can go unanswered while the origin still ignores `Range`, is dl-103's
- * second line of defence. The probe goes through ffmpeg's proxy, with the same
- * `tlsVerify` and `tlsCaFile`, and never around it.
+ * can go unanswered (or be misled) while the origin still ignores `Range`, is
+ * caught behind it by dl-103: ffmpeg says `partial file` when it cannot read a
+ * sample, and when its connection then ends early at that same offset the
+ * origin is the cause (`PARTIAL_FILE` below). That is the same
+ * `SOURCE_NOT_SEEKABLE`, before the first byte when the verdict comes first
+ * and as a cut stream when it does not; a `partial file` without it is a
+ * short source, and `DOWNLOAD_FAILED`. Only an origin that declares where its
+ * body ends logs that early end: one that ignores `Range` and sends a chunked
+ * body cannot be told from a short source, and is `DOWNLOAD_FAILED` too.
+ * The probe goes through ffmpeg's proxy, with the same `tlsVerify` and
+ * `tlsCaFile`, and never around it.
  *
  * A small tail-`moov` file from such an origin is refused too, though ffmpeg
  * can read one whole without seeking (gate 1 measured 63,749 B decoding and
@@ -195,6 +203,58 @@ export const FRAGMENT_LOST = /Failed to open fragment of playlist/iu;
  */
 export const STREAM_ENDED_EARLY = /Stream ends prematurely/iu;
 export const WILL_RECONNECT = /Will reconnect at/iu;
+
+/**
+ * The mov demuxer's word for a sample it could not read in full (dl-103), and
+ * the offset of that sample.
+ *
+ * It says so for two different sources, and only one of them is unseekable:
+ *
+ *  - **an origin that ignores `Range`**, a tail-`moov` MP4, when dl-102's
+ *    probe got no answer or a misleading one: ffmpeg seeks to the first sample,
+ *    is handed byte 0 again, logs `partial file` at that sample's offset, and
+ *    then **its connection ends early at the very same offset**
+ *    (`Stream ends prematurely at 48`, beside `offset 0x30`). Left alone it
+ *    finished as a clean response that decodes 0 of 100 frames.
+ *  - **a source that is merely short**: a file stored truncated at its
+ *    origin, a transfer cut and never served again, an origin that went away
+ *    while ffmpeg read the index. `partial file` comes at the sample where the
+ *    bytes ran out, and no early end at that offset follows it.
+ *
+ * So `partial file` alone decides nothing; `SAME_OFFSET_ENDS_EARLY` does.
+ * Measured on ffmpeg 6.1.1 and 7.0.2 (dl-103's Log, with dl-103's gate 1's
+ * harness): the early end at the same offset followed `partial file`, 0 to 2
+ * ms later, in every unseekable run, and in none of the short ones — fast-start
+ * files stored at 5 to 99.9%, a fragmented one at 60%, a chunked one, cuts at
+ * the index and in the samples followed by every error code, a reset or the
+ * origin going away. An unseekable source is `SOURCE_NOT_SEEKABLE`, before the
+ * first byte when the verdict comes first (the next mirror is tried, and no
+ * subtitle retry) and as a cut stream otherwise; a short one is
+ * `DOWNLOAD_FAILED`, wherever it shows (the owner's answer of 2026-10-10).
+ * Read for progressive sources only: an HLS or DASH segment is demuxed by
+ * ffmpeg in its own right, and its holes have their codes already.
+ *
+ * **The early end comes only from an origin that declares where its body
+ * ends**: by `Content-Length`, or by closing the connection (a close-delimited
+ * body logged `Stream ends prematurely at 48, should be
+ * 18446744073709551615`, measured by dl-103's gate 2 and its builder). An
+ * origin that ignores `Range` **and** sends its body chunked logs
+ * `partial file` and no early end at all, which is what a chunked short
+ * source logs too; when its probe went unanswered it is `DOWNLOAD_FAILED`
+ * (gate 2's G2-2, on 6.1.1 and 7.0.2). That fails closed, a failed download
+ * rather than a file that does not decode, and the log holds nothing that
+ * would tell the two apart.
+ */
+export const PARTIAL_FILE = /offset 0x([0-9a-f]+): partial file/iu;
+/** An early end and the byte it ended at, to set against `PARTIAL_FILE`'s offset. */
+export const SAME_OFFSET_ENDS_EARLY = /Stream ends prematurely at (\d+)/iu;
+
+/**
+ * How long a `partial file` waits for its early end before it is read as a
+ * short source. Measured at 0 to 2 ms; the margin is for a loaded machine. The
+ * first byte is held for this long at most, and only after `partial file`.
+ */
+const PARTIAL_VERDICT_MS = 2_000;
 
 /**
  * The connection a line came from: the address in ffmpeg's `[http @ …]` prefix,
@@ -637,6 +697,33 @@ async function attempt(
   // Connections that ended early and have not reconnected since. See
   // `STREAM_ENDED_EARLY`; anything left here when ffmpeg exits is a hole.
   const endedEarly = new Set<string>();
+  // `PARTIAL_FILE`: the offset awaiting its verdict, the verdict once there
+  // is one, and whether a byte had reached the reader yet.
+  const progressive = request.variant.protocol === "progressive";
+  let partialAt: number | null = null;
+  let verdict: AppError | null = null;
+  let verdictTimer: NodeJS.Timeout | undefined;
+  let onVerdict: (() => void) | null = null;
+  let handedOver = false;
+  const partialDetails = (): Record<string, unknown> => ({
+    jobId: request.jobId,
+    variantId: request.variant.id,
+    url: redactUrl(context.url),
+    afterFirstByte: handedOver,
+    stderr: stderrTail,
+  });
+  const shortSource = (): AppError =>
+    new AppError("DOWNLOAD_FAILED", "The source ended before the whole video arrived.", {
+      details: partialDetails(),
+    });
+  const decide = (error: AppError): void => {
+    if (verdict !== null) return;
+    verdict = error;
+    partialAt = null;
+    clearTimeout(verdictTimer);
+    ffmpeg.terminate(error);
+    onVerdict?.();
+  };
 
   const ffmpeg: FfmpegStream = streamFfmpeg({
     ffmpegPath: config.ffmpegPath,
@@ -676,6 +763,17 @@ async function attempt(
       if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
       if (STREAM_ENDED_EARLY.test(line)) endedEarly.add(connectionOf(line) ?? line);
       else if (WILL_RECONNECT.test(line)) endedEarly.delete(connectionOf(line) ?? line);
+      if (progressive && verdict === null) {
+        const endedAt = SAME_OFFSET_ENDS_EARLY.exec(line)?.[1];
+        const partial = PARTIAL_FILE.exec(line)?.[1];
+        if (partialAt !== null && endedAt !== undefined && Number(endedAt) === partialAt) {
+          decide(new AppError("SOURCE_NOT_SEEKABLE", undefined, { details: partialDetails() }));
+        } else if (partialAt === null && partial !== undefined) {
+          partialAt = Number.parseInt(partial, 16);
+          verdictTimer = setTimeout(() => decide(shortSource()), PARTIAL_VERDICT_MS);
+          verdictTimer.unref?.();
+        }
+      }
       if (losesSourceData(line)) {
         // A segment refused on its certificate is skipped the same way, and
         // says so first: that is a certificate failure, which is not retried
@@ -694,6 +792,11 @@ async function attempt(
   });
   // Observed here so a rejection before anyone awaits `done` is never unhandled.
   ffmpeg.completion.catch(() => undefined);
+  const exited = ffmpeg.completion.then(
+    () => undefined,
+    () => undefined,
+  );
+  void exited.then(() => clearTimeout(verdictTimer));
 
   const first = await firstChunk(ffmpeg.stdout, ffmpeg.completion);
   if (first === null) {
@@ -704,6 +807,35 @@ async function attempt(
       details: { jobId: request.jobId },
     });
   }
+  if (partialAt !== null && verdict === null) {
+    // `partial file` came before the first byte: hold it until the verdict,
+    // which is a line or two away, so that an unseekable source is refused
+    // before anything reaches the reader.
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        onVerdict = resolve;
+      }),
+      exited,
+    ]);
+    if (verdict === null && partialAt !== null) decide(shortSource());
+  }
+  if (verdict !== null) {
+    // Decided while the first chunk was on its way: nothing has reached the
+    // reader, so this is still a failure before the first byte. Drained so
+    // the killed process can close.
+    const decided: AppError = verdict;
+    ffmpeg.stdout.resume();
+    await exited;
+    // Whatever ended ffmpeg first keeps its code (`terminate` is first-wins):
+    // a cancel, a stage timeout or a crash inside the hold is not a short
+    // source, and a verdict that ended it arrives the same way. Only a clean
+    // exit leaves the verdict to say what happened (dl-103's gate 2, G2-1).
+    throw await ffmpeg.completion.then(
+      () => decided,
+      (error: unknown) => AppError.from(error),
+    );
+  }
+  handedOver = true;
 
   const limit = config.maxFileSizeBytes;
   let ended = false;
@@ -751,6 +883,9 @@ async function attempt(
           details: { stderr: stderrTail, connections: endedEarly.size },
         });
       }
+      // A `partial file` with no early end at its offset by the time ffmpeg
+      // finished: the source was short (`PARTIAL_FILE`).
+      if (partialAt !== null) throw shortSource();
       body.end();
       // Every chunk through the counter, not merely out of ffmpeg: a slow
       // reader leaves the last few queued on the writable side. A reader that

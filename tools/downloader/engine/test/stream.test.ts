@@ -1758,3 +1758,479 @@ describe("dl-102: an origin that ignores Range", () => {
     }
   }, 60_000);
 });
+
+/**
+ * How dl-103's origin answers a request: by itself, returning true, or false to
+ * serve the whole file with a `200`. `count` is this test's request count, from 1.
+ */
+type BlindAnswer = (
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  count: number,
+  body: Buffer,
+) => boolean;
+
+/** The code that stopped it, before the first byte or after; never a resolved `done`. */
+function stoppedWith(outcome: Outcome): string | number {
+  return "refused" in outcome ? outcome.refused : outcome.done;
+}
+
+/** dl-103's row 2, named because its mirror case reuses it. */
+const row2: BlindAnswer = (request, response) => {
+  if (request.headers.range !== "bytes=1-1") return false;
+  response.writeHead(403).end();
+  return true;
+};
+
+/**
+ * dl-103's stand-in lines: `P` is `partial file` at offset 0x30 (48), `E(n)`
+ * an early end at byte `n`, `R(n)` its reconnect.
+ */
+const P = JSON.stringify(
+  "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55b9913a5340] stream 1, offset 0x30: partial file",
+);
+const E = (at: number): string =>
+  JSON.stringify(`[http @ 0x55b99139cb00] Stream ends prematurely at ${at}, should be 1018927`);
+const R = (at: number): string =>
+  JSON.stringify(
+    `[http @ 0x55b99139cb00] Will reconnect at ${at} in 0 second(s), error=Input/output error.`,
+  );
+const say = (line: string): string => `process.stderr.write(${line} + "\\n");`;
+const OUT = "process.stdout.write(Buffer.alloc(4096, 1));";
+const later = (ms: number, ...statements: string[]): string =>
+  `setTimeout(() => { ${statements.join(" ")} }, ${ms});`;
+
+/**
+ * dl-103. dl-102's probe lets ffmpeg run when it gets no answer, so that
+ * ffmpeg's own failures keep their codes; and on an origin that ignores
+ * `Range`, eight of the ways a probe goes unanswered still ended in a `done`
+ * that resolved with a file of which no frame decodes. Rows 3 and 13 of
+ * dl-102's gate 1 were `DOWNLOAD_FAILED` before the probe existed: the one
+ * fault the origin had was spent on the probe. This is the second line of
+ * defence, read off ffmpeg's own `partial file`.
+ *
+ * Imported here rather than at the top so this block moves no line above it.
+ */
+describe("dl-103: an unanswered seek probe", () => {
+  let generateLargeProgressive: (dir: string) => Promise<void>;
+  let decodedVideoFrames: (file: string) => Promise<{ frames: number }>;
+  /** Byte offset of the tail-`moov` fixture's `moov` box. */
+  let moovAt: number;
+  /**
+   * An origin that ignores `Range`, except where a test's `answer` says
+   * otherwise. Gated like `origin`.
+   */
+  let blind: FixtureServer;
+  let answer: BlindAnswer | null = null;
+  let blindCount = 0;
+
+  beforeAll(async () => {
+    ({ generateLargeProgressive, decodedVideoFrames } = await import("./helpers/media.ts"));
+    const dir = path.join(fixtureRoot, "large-103");
+    await generateLargeProgressive(dir);
+    const tail = await fs.readFile(path.join(dir, "moov-end.mp4"));
+    for (let at = 0; at < tail.length; at += tail.readUInt32BE(at)) {
+      if (tail.toString("latin1", at + 4, at + 8) === "moov") moovAt = at;
+    }
+    blind = await startFixtureServer(async (request, response) => {
+      if (
+        request.headers.referer !== CONTEXT.headers["Referer"] ||
+        request.headers.cookie !== CONTEXT.headers["Cookie"]
+      ) {
+        response.writeHead(403).end("forbidden");
+        return;
+      }
+      const pathname = new URL(request.url ?? "/", "http://x").pathname;
+      const file = path.join(fixtureRoot, ...pathname.split("/").filter((part) => part !== ".."));
+      const body = await fs.readFile(file).catch(() => null);
+      if (body === null) {
+        response.writeHead(404).end();
+        return;
+      }
+      blindCount += 1;
+      if (answer?.(request, response, blindCount, body) === true) return;
+      response.writeHead(200, {
+        "content-type": "video/mp4",
+        "content-length": String(body.length),
+      });
+      response.end(body);
+    });
+  }, 120_000);
+
+  afterEach(() => {
+    answer = null;
+    blindCount = 0;
+  });
+
+  afterAll(async () => {
+    await blind?.close();
+  });
+
+  async function outcomeOf(label: string, variant: MediaVariant): Promise<Outcome> {
+    return engineWith()
+      .stream({ jobId: label, variant, requestContext: CONTEXT })
+      .then(
+        async (media): Promise<Outcome> => {
+          const chunks: Buffer[] = [];
+          media.body.on("data", (chunk: Buffer) => chunks.push(chunk));
+          const done = await media.done.then(
+            (outcome) => outcome.bytes,
+            (error: unknown) => AppError.from(error).code,
+          );
+          const file = path.join(outputDir, `${label}.mp4`);
+          await fs.writeFile(file, Buffer.concat(chunks));
+          const decoded = await decodedVideoFrames(file);
+          return { streamed: Buffer.concat(chunks).length, done, decodedFrames: decoded.frames };
+        },
+        (error: unknown): Outcome => {
+          const appError = AppError.from(error);
+          return {
+            refused: appError.code,
+            retryable: appError.retryable,
+            message: appError.message,
+          };
+        },
+      );
+  }
+
+  const rows: readonly [string, BlindAnswer][] = [
+    ["row 2: a 403 for the probe's bytes=1-1 only", row2],
+    [
+      "row 3: a 500 on the first request only",
+      (_request, response, count) => {
+        if (count !== 1) return false;
+        response.writeHead(500).end();
+        return true;
+      },
+    ],
+    [
+      "row 5: the first request's connection reset",
+      (request, _response, count) => {
+        if (count !== 1) return false;
+        request.socket.destroy();
+        return true;
+      },
+    ],
+    [
+      "the ninth case: bounded ranges honoured, an open-ended one answered whole",
+      (request, response, _count, body) => {
+        const range = /^bytes=(\d+)-(\d+)$/u.exec(request.headers.range ?? "");
+        if (range === null) return false;
+        const start = Number(range[1]);
+        const end = Math.min(Number(range[2]), body.length - 1);
+        response.writeHead(206, {
+          "content-range": `bytes ${start}-${end}/${body.length}`,
+          "content-length": String(end - start + 1),
+        });
+        response.end(body.subarray(start, end + 1));
+        return true;
+      },
+    ],
+  ];
+
+  for (const [name, fault103] of rows) {
+    test(`${name}, from an origin that ignores Range, is SOURCE_NOT_SEEKABLE`, async () => {
+      answer = fault103;
+      const outcome = await outcomeOf(
+        `dl-103-${name.slice(0, 6).replace(/\W/gu, "")}`,
+        large(`${blind.origin}/large-103/moov-end.mp4`),
+      );
+      // Before the fix: `done` resolved with about 35 KB of which 0 of 100
+      // frames decode.
+      expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("SOURCE_NOT_SEEKABLE");
+      // The fault was reached, so the probe went unanswered and ffmpeg ran.
+      expect(blindCount).toBeGreaterThanOrEqual(2);
+    }, 60_000);
+  }
+
+  test("a refusal from ffmpeg's own words tries the next mirror, as the probe's does", async () => {
+    answer = row2;
+    expectWhole(
+      await outcomeOf(
+        "dl-103-mirror",
+        large(`${blind.origin}/large-103/moov-end.mp4`, {
+          alternateUrls: [`${origin.origin}/large-103/moov-end.mp4`],
+        }),
+      ),
+    );
+    expect(blindCount).toBeGreaterThanOrEqual(2);
+  }, 60_000);
+
+  test("control: a body cut inside the moov and healed on reconnect completes whole", async () => {
+    // The open question C's text left: a heal whose cut falls in the index
+    // itself. Served by `origin`, which honours Range; ffmpeg's read of the
+    // tail starts at the `moov` and stops half-way through it.
+    let cut = false;
+    fault = (pathname, _count, request, response, body) => {
+      if (!pathname.endsWith("/large-103/moov-end.mp4") || cut) return false;
+      if (request.headers.range !== `bytes=${moovAt}-`) return false;
+      cut = true;
+      cutShort(request, response, body, 0.5);
+      return true;
+    };
+    expect(moovAt).toBeGreaterThan(0);
+    expectWhole(
+      await outcomeOf("dl-103-heal-moov", large(`${origin.origin}/large-103/moov-end.mp4`)),
+    );
+    expect(cut).toBe(true);
+  }, 60_000);
+
+  /**
+   * dl-103's gate 1, F1: a fast-start file stored truncated at its origin. Its
+   * index is first and its origin honours `Range`; ffmpeg still says
+   * `partial file` where the bytes run out. On `main` `done` resolved with the
+   * frames missing; on the first build it was `SOURCE_NOT_SEEKABLE`, whose copy
+   * is false for it. The owner's answer of 2026-10-10: a failed download,
+   * wherever the shortness shows. 5% is short enough to show before the first
+   * byte on some runs, 60% after it.
+   */
+  for (const percent of [5, 60]) {
+    test(`a fast-start file stored at ${percent}% of itself is DOWNLOAD_FAILED`, async () => {
+      answer = (request, response, _count, whole) => {
+        const stored = whole.subarray(0, Math.floor((whole.length * percent) / 100));
+        const range = /^bytes=(\d+)-(\d*)$/u.exec(request.headers.range ?? "");
+        const start = range === null ? 0 : Number(range[1]);
+        const end =
+          range === null || range[2] === ""
+            ? stored.length - 1
+            : Math.min(Number(range[2]), stored.length - 1);
+        response.writeHead(range === null ? 200 : 206, {
+          ...(range === null ? {} : { "content-range": `bytes ${start}-${end}/${stored.length}` }),
+          "content-length": String(end - start + 1),
+        });
+        response.end(stored.subarray(start, end + 1));
+        return true;
+      };
+      const outcome = await outcomeOf(
+        `dl-103-short-${percent}`,
+        large(`${blind.origin}/large-103/faststart.mp4`),
+      );
+      expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("DOWNLOAD_FAILED");
+    }, 60_000);
+  }
+
+  /**
+   * Stand-ins for ffmpeg, for the orders a real run does not choose on demand.
+   * Each is a script of statements; the probe asks `origin`, which honours
+   * Range, and lets it run. The lines are `P`, `E` and `R`, above.
+   */
+  async function standIn103(statements: readonly string[]): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-103-"));
+    const script = path.join(dir, "ffmpeg");
+    await fs.writeFile(script, [`#!${process.execPath}`, ...statements, ""].join("\n"), {
+      mode: 0o755,
+    });
+    return script;
+  }
+
+  interface StandInCase {
+    name: string;
+    statements: readonly string[];
+    /** Where it stops: `stream()` before the first byte, or `done` after it. */
+    stops: "stream" | "done";
+    code: string;
+    /** For the timer: the verdict must not wait for ffmpeg to exit. */
+    withinMs?: number;
+  }
+
+  const standIns: readonly StandInCase[] = [
+    {
+      // The kill takes its 3 s grace (SIGTERM ignored), so the first chunk
+      // arrives after the verdict and before the process is gone.
+      name: "an early end at the same offset, decided while the first chunk is on its way",
+      statements: [
+        'process.on("SIGTERM", () => undefined);',
+        say(P),
+        say(E(48)),
+        later(100, OUT, later(5000, "process.exit(0);")),
+      ],
+      stops: "stream",
+      code: "SOURCE_NOT_SEEKABLE",
+    },
+    {
+      // `partial file` first, the first chunk 50 ms later, its early end 250 ms
+      // later: the first byte is held for the verdict.
+      name: "an early end at the same offset that comes after the first chunk, which was held for it",
+      statements: [
+        say(P),
+        later(50, OUT),
+        later(250, say(E(48)), say(R(48))),
+        later(5000, "process.exit(0);"),
+      ],
+      stops: "stream",
+      code: "SOURCE_NOT_SEEKABLE",
+    },
+    {
+      name: "an early end at the same offset after the first byte has gone",
+      statements: [
+        OUT,
+        later(300, say(P), say(E(48)), say(R(48))),
+        later(5000, "process.exit(0);"),
+      ],
+      stops: "done",
+      code: "SOURCE_NOT_SEEKABLE",
+    },
+    {
+      // A short source whose ffmpeg keeps running: the held first byte is
+      // released as a failure by the timer, not by ffmpeg's exit.
+      name: "no early end at all, with ffmpeg still running",
+      statements: [say(P), later(50, OUT), later(15_000, "process.exit(0);")],
+      stops: "stream",
+      code: "DOWNLOAD_FAILED",
+      withinMs: 6_000,
+    },
+    {
+      name: "an early end at another offset",
+      statements: [
+        say(P),
+        later(50, OUT),
+        later(250, say(E(49)), say(R(49))),
+        later(500, "process.exit(0);"),
+      ],
+      stops: "stream",
+      code: "DOWNLOAD_FAILED",
+    },
+    {
+      // dl-103's gate 1, F2: the tail of a real 6.1.1 run, an origin that cut
+      // the read of the `moov` and then dropped every connection. Each
+      // `Will reconnect` clears its early end, so the first build read the
+      // `partial file` that followed as unseekable; no early end at its offset
+      // follows it, so it is a loss.
+      name: "reconnect waits after a cut index read, then `partial file`, then exit 0 (gate 1 F2)",
+      statements: [
+        OUT,
+        later(
+          100,
+          ...[
+            "[http @ 0x5645de53d540] Stream ends prematurely at 1016964, should be 1018927",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 0 second(s), error=Input/output error.",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 0 second(s).",
+            "[http @ 0x5645de53d540] Will reconnect at 1016964 in 1 second(s).",
+            "[http @ 0x5645de53d540] Stream ends prematurely at 1016964, should be 18446744073709551615",
+            "[http @ 0x5645de53d540] Will reconnect at 328 in 0 second(s).",
+            "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5645de584240] stream 0, offset 0x148: partial file",
+          ].map((line) => say(JSON.stringify(line))),
+          later(300, "process.exit(0);"),
+        ),
+      ],
+      stops: "done",
+      code: "DOWNLOAD_FAILED",
+    },
+  ];
+
+  for (const standIn of standIns) {
+    test.skipIf(process.platform === "win32")(
+      `stand-in: ${standIn.name} is ${standIn.code}`,
+      async () => {
+        const started = performance.now();
+        const engine = engineWith({ ffmpegPath: await standIn103(standIn.statements) });
+        const variant = large(`${origin.origin}/large-103/moov-end.mp4`);
+        const stopped = await engine
+          .stream({ jobId: "dl-103-stand-in", variant, requestContext: CONTEXT })
+          .then(
+            async (media) => {
+              media.body.resume();
+              const error = await media.done.then(
+                () => null,
+                (cause: unknown) => AppError.from(cause),
+              );
+              expect(media.body.destroyed).toBe(true);
+              return { stage: "done", error };
+            },
+            (cause: unknown) => ({ stage: "stream", error: AppError.from(cause) }),
+          );
+        expect({ stage: stopped.stage, code: stopped.error?.code }).toEqual({
+          stage: standIn.stops,
+          code: standIn.code,
+        });
+        expect(stopped.error?.details).toMatchObject({ afterFirstByte: standIn.stops === "done" });
+        if (standIn.withinMs !== undefined) {
+          expect(performance.now() - started).toBeLessThan(standIn.withinMs);
+        }
+      },
+      30_000,
+    );
+  }
+
+  test.skipIf(process.platform === "win32")(
+    "control: the same lines from an HLS stream are not read as an unseekable origin",
+    async () => {
+      // A segment's demuxer is ffmpeg's to report: the probe never asked an
+      // HLS origin anything, and its holes have their own codes (dl-53).
+      const media = await engineWith({
+        ffmpegPath: await standIn103([
+          OUT,
+          later(300, say(P), say(E(48)), say(R(48))),
+          later(1000, "process.exit(0);"),
+        ]),
+      }).stream({
+        jobId: "dl-103-hls",
+        variant: hlsVariant("hls6", 6),
+        requestContext: CONTEXT,
+      });
+      media.body.resume();
+      await expect(media.done).resolves.toBeDefined();
+    },
+    30_000,
+  );
+  /**
+   * dl-103's gate 2, G2-1: whatever ends ffmpeg while the first byte is held
+   * keeps its own code. The first round read every exit inside the hold as a
+   * short source, so a cancel at 400 ms came out `DOWNLOAD_FAILED` after
+   * 404 ms and a 500 ms stage timeout after 506 ms; a job is recorded
+   * canceled only on `JOB_CANCELED`. Each stand-in logs `partial file`, writes
+   * its first chunk 50 ms later, and would live 15 s.
+   */
+  const held = [say(P), later(50, OUT), later(15_000, "process.exit(0);")];
+  const endsInTheHold: readonly {
+    name: string;
+    statements: readonly string[];
+    abortAfterMs?: number;
+    stageTimeoutMs?: number;
+    code: string;
+  }[] = [
+    { name: "a cancel", statements: held, abortAfterMs: 400, code: "JOB_CANCELED" },
+    { name: "a stage timeout", statements: held, stageTimeoutMs: 500, code: "TIMEOUT" },
+    {
+      // SIGTERM ignored: the kill takes its 3 s grace, so the hold's own 2 s
+      // runs out while the cancel is still killing ffmpeg.
+      name: "a cancel whose kill outlasts the hold",
+      statements: ['process.on("SIGTERM", () => undefined);', ...held],
+      abortAfterMs: 400,
+      code: "JOB_CANCELED",
+    },
+    {
+      name: "a crash",
+      statements: [say(P), later(50, OUT), later(500, 'process.kill(process.pid, "SIGKILL");')],
+      code: "DOWNLOAD_FAILED",
+    },
+  ];
+
+  for (const end of endsInTheHold) {
+    test.skipIf(process.platform === "win32")(
+      `${end.name} while the first byte is held for a verdict keeps its code, ${end.code}`,
+      async () => {
+        const controller = new AbortController();
+        if (end.abortAfterMs !== undefined) {
+          setTimeout(() => controller.abort(), end.abortAfterMs);
+        }
+        const error = await engineWith({
+          ffmpegPath: await standIn103(end.statements),
+          ...(end.stageTimeoutMs === undefined ? {} : { stageTimeoutMs: end.stageTimeoutMs }),
+        })
+          .stream({
+            jobId: "dl-103-hold-end",
+            variant: large(`${origin.origin}/large-103/moov-end.mp4`),
+            requestContext: CONTEXT,
+            signal: controller.signal,
+          })
+          .then(
+            () => null,
+            (cause: unknown) => AppError.from(cause),
+          );
+        expect(error?.code).toBe(end.code);
+      },
+      30_000,
+    );
+  }
+});
