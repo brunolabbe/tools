@@ -30,7 +30,8 @@ import {
 } from "../browser/classify.ts";
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
 import { HitCollector, MAX_CAPTURED_BODY_BYTES } from "../browser/intercept.ts";
-import { fetchManifest } from "../browser/manifest-fetch.ts";
+import { SNIFF_HEAD_BYTES, withoutFragments } from "../browser/chunk-sniff.ts";
+import { fetchManifest, fetchPrefix } from "../browser/manifest-fetch.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
 import {
@@ -481,7 +482,16 @@ export class BrowserResolver implements Resolver {
     options: ResolveOptions,
   ): Promise<ProbeOutcome | undefined> {
     const manifests = ranked.filter((hit) => hit.kind === "hls" || hit.kind === "dash");
-    const files = ranked.filter((hit) => hit.kind === "progressive");
+    // dl-90: a numbered file that survived ranking had no manifest to prove it a
+    // chunk; its own first bytes may.
+    const files = await withoutFragments(
+      ranked.filter((hit) => hit.kind === "progressive"),
+      async (hit, timeoutMs) => await this.#readHead(context, hit, timeoutMs, options.proxyUrl),
+      deadline,
+      options.signal,
+    );
+    // A sniff stopped by a cancel returns what it had; the caller asked for no answer.
+    throwIfAborted(options.signal);
 
     for (const hit of manifests.slice(0, MAX_MANIFEST_ATTEMPTS)) {
       // Sequential on purpose: the first manifest that parses wins, and probing
@@ -616,6 +626,38 @@ export class BrowserResolver implements Resolver {
       }
     }
     return collector.bodyFor(hit.key);
+  }
+
+  /**
+   * The first `SNIFF_HEAD_BYTES` of a captured file, for the chunk sniff (dl-90).
+   * Replays the captured headers, which is what authorises a signed CDN, but not
+   * the browser's own `Range`: the sniff asks for the head whatever the player
+   * asked for. Goes through the same client as the manifest re-fetch, so the
+   * egress proxy vets every hop and the jar supplies each hop's cookies. Answers
+   * `undefined` on every failure; the file is then offered.
+   */
+  async #readHead(
+    context: BrowserContext,
+    hit: NetworkHit,
+    timeoutMs: number,
+    proxyUrl: string | undefined,
+  ): Promise<Uint8Array | undefined> {
+    const headers = Object.fromEntries(
+      Object.entries(replayHeaders(hit)).filter(
+        ([name]) => !CONDITIONAL_OR_RANGE_HEADERS.has(name.toLowerCase()),
+      ),
+    );
+    const result = await fetchPrefix(hit.url, {
+      ...this.#clientOptions(context, proxyUrl),
+      headers: {
+        ...headers,
+        range: `bytes=0-${String(SNIFF_HEAD_BYTES - 1)}`,
+        "accept-encoding": "identity",
+      },
+      prefixBytes: SNIFF_HEAD_BYTES,
+      timeoutMs,
+    });
+    return result.outcome === "bytes" ? result.bytes : undefined;
   }
 
   #parseManifest(hit: NetworkHit, text: string): ParsedManifest | undefined {
@@ -844,6 +886,14 @@ async function storeSetCookies(
     // A cookie Chromium will not take is one the next hop goes without.
   }
 }
+
+/** Headers that would turn a head read into something else: the player's own range, or a 304. */
+const CONDITIONAL_OR_RANGE_HEADERS: ReadonlySet<string> = new Set([
+  "range",
+  "if-range",
+  "if-none-match",
+  "if-modified-since",
+]);
 
 function replayHeaders(hit: NetworkHit): Record<string, string> {
   const headers: Record<string, string> = {};

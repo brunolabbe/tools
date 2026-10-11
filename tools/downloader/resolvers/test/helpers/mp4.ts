@@ -119,6 +119,43 @@ export function tailMoovMp4(shape: Mp4Shape): Uint8Array {
   );
 }
 
+/**
+ * dl-90: the init segment of a fragmented stream, laid out as ffmpeg writes it
+ * (measured by dl-90's gate 1: `ftyp(28) moov(799)` with `mvex` inside `moov`).
+ * It has a `moov` and **no `moof`**, which is why a sniff for `moof` alone would
+ * leave it offered.
+ */
+export function initSegment(): Uint8Array {
+  return concat(
+    ftyp(["iso5", "iso6", "mp41"]),
+    box("moov", box("mvhd", zeros(100)), trak("vide", "avc1"), box("mvex", box("trex", zeros(24)))),
+  );
+}
+
+/**
+ * dl-90: a whole movie written as fragmented MP4 (`ffmpeg -movflags
+ * frag_keyframe+empty_moov`, measured by gate 1 as `ftyp moov[mvhd,trak,trak,
+ * mvex,udta] moof`): the init segment's `moov` with its `mvex`, then fragments in
+ * the same file. Self-contained, so it is offered.
+ */
+export function fragmentedMovie(mdatBytes = 1024): Uint8Array {
+  return concat(initSegment(), mediaSegment(mdatBytes));
+}
+
+/**
+ * dl-90: one media segment, `styp` `sidx` `moof` `mdat` (measured by gate 1 as
+ * `styp(24) sidx(52) moof(1300) mdat(23459)`). Its `mdat` is zeros: the sniff
+ * reads box headers.
+ */
+export function mediaSegment(mdatBytes = 1024): Uint8Array {
+  return concat(
+    box("styp", ascii("msdh"), u32(0), ascii("msdhmsix")),
+    box("sidx", zeros(44)),
+    box("moof", box("mfhd", zeros(8)), box("traf", box("tfhd", zeros(12)))),
+    box("mdat", zeros(mdatBytes)),
+  );
+}
+
 /** A range reader over bytes in memory, recording every read it was asked for. */
 export function memoryReader(file: Uint8Array): {
   read: (start: number, endInclusive: number) => Promise<RangedBytes | undefined>;
