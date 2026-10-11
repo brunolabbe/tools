@@ -68,15 +68,24 @@ export function scoreHit(hit: NetworkHit, pageUrl: string): number {
   return score;
 }
 
+/**
+ * `origin + directory`: the same path on another host is another directory, so an
+ * ad host's `/media/init.mp4` does not vouch for the page CDN's `/media/5.mp4`
+ * (dl-104). The same key `chunk-sniff.ts` uses since dl-90.
+ */
 function directoryOf(raw: string): string {
-  const path = pathOf(raw);
-  return path.slice(0, path.lastIndexOf("/") + 1);
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)}`;
+  } catch {
+    return raw.slice(0, raw.lastIndexOf("/") + 1);
+  }
 }
 
 /**
  * A numbered `.mp4` (`00003.mp4`) is a chunk only next to proof that playback is
  * segmented: a manifest anywhere in the capture, or a chunk-named neighbour in
- * its own directory (`init.mp4`, `seg-1.m4s`). Alone it is a numeric id or a
+ * its own directory on its own origin (`init.mp4`, `seg-1.m4s`). Alone it is a numeric id or a
  * resolution suffix — `839201.mp4`, `clip-720.mp4` — and a whole file (dl-78).
  *
  * Two numbered names side by side are deliberately not evidence: `clip-720.mp4`
