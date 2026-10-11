@@ -973,3 +973,32 @@ describe("rankHits among manifests: arrival order wins, the name breaks a tie (d
     expect(ranked[0]?.kind).toBe("hls");
   });
 });
+
+describe("rankHits keys a chunk's directory by origin as well as path (dl-104)", () => {
+  const page = "https://site.example/watch";
+
+  test("keeps a numbered file whose chunk-named neighbour is on another host under the same path", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: "https://ads.example.com/media/init.mp4", kind: "progressive", seq: 0 }),
+        hit({ url: "https://cdn.site.example/media/5.mp4", kind: "progressive", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked.map((entry) => entry.url).toSorted()).toEqual([
+      "https://ads.example.com/media/init.mp4",
+      "https://cdn.site.example/media/5.mp4",
+    ]);
+  });
+
+  test("still drops a numbered file beside a chunk-named neighbour under one origin and path", () => {
+    const ranked = rankHits(
+      [
+        hit({ url: "https://cdn.site.example/media/init.mp4", kind: "progressive", seq: 0 }),
+        hit({ url: "https://cdn.site.example/media/5.mp4", kind: "progressive", seq: 1 }),
+      ],
+      page,
+    );
+    expect(ranked.map((entry) => entry.url)).toEqual(["https://cdn.site.example/media/init.mp4"]);
+  });
+});

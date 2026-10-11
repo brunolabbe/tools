@@ -98,3 +98,24 @@ the Log.
   chose to file it as a downloader ticket, over leaving it and over folding it
   into dl-90. `difficulty: standard`: the fix is one line, but the sharded-CDN
   case in Build is a judgement the builder has to make and record.
+- 2026-10-11, built. `directoryOf` in `resolvers/src/browser/rank.ts` now returns
+  origin plus directory (raw-prefix fallback when the URL does not parse), the key
+  `chunk-sniff.ts` uses. Tests are a new `describe` at the end of
+  `resolvers/test/browser/capture-rules.test.ts` (there is no `rank.test.ts`; the
+  `rankHits` suites live there): "keeps a numbered file whose chunk-named
+  neighbour is on another host under the same path" failed before the fix
+  (`expected [ Array(1) ] to deeply equal [ …(2) ]`, 1 failed | 159 passed of 160) and passes after; "still drops a numbered file beside a chunk-named
+  neighbour under one origin and path" passes on both sides. After:
+  `npx vitest run tools/downloader/resolvers` gave 1049 passed of 1049 (24 files).
+  - **Sharded-CDN choice: the origin key.** `cdn1/seg/init.mp4` no longer vouches
+    for `cdn2/seg/5.mp4`. What that loses is a segmented stream with no manifest
+    request in the capture whose chunk-named file and numbered chunks sit on
+    different hosts; every stream with a manifest still drops the numbered file
+    through the manifest proof (which ignores the directory), and dl-90's byte
+    sniff in `chunk-sniff.ts` reads a numbered file's own head and decides on its
+    bytes. What it protects is a whole video ranked away by an unrelated host, a
+    wrong answer with no error. Measured nowhere: no capture in the repo has the
+    sharded manifest-less layout, so the loss is reasoned, not observed.
+  - **Not folded in:** the two `directoryOf` copies (here and in
+    `chunk-sniff.ts`) could share one export, but that edits dl-90's merged file
+    for a saving of eight lines and a comment; left as two.
