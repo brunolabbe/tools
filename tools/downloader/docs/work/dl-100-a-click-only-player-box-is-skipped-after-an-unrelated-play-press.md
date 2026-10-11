@@ -3,7 +3,7 @@ id: dl-100
 tool: downloader
 title: An unrelated play-ish press, in any frame, keeps the browser tier from clicking a click-only player box
 kind: fix
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [dl-81]
 difficulty: standard
@@ -187,11 +187,14 @@ fixtures are.
 
 ## Decision
 
-Open. The owner was asked on 2026-10-07 whether to narrow the flag in dl-81 and
-chose to file it instead, so nothing here is decided. Gate 3's option A is the
-candidate remedy:
+**Decided 2026-10-11 by the owner: option A**, chosen from the two options below
+(a third, "hold it", was also offered). The owner did not settle the three
+residual rows A leaves (`Play slideshow`, the bare `Watch` link, the cross-site
+`Watch now` button); this section reserves them to the builder, who records the
+reasoning in the Log. Before that, on 2026-10-07, the owner was asked whether to
+narrow the flag in dl-81 and chose to file it instead. The options as put:
 
-- **A, the candidate.** Count a press only when its label starts a word with
+- **A, chosen.** Count a press only when its label starts a word with
   "play", or matches `PLAY_TEXT`. That drops `autoplay` and `display`, and
   `box-with-control.html` pins it. The cross-frame OR stays, because an embedded
   player's own Play press still has to hold back the main frame's box click.
@@ -232,3 +235,8 @@ not press a related-video card.
   copied from its report; none was re-run here. `difficulty` is rated because
   `docs/01-TICKETS.md` requires it until `done`: `standard`, for the work once
   the decision is answered.
+- 2026-10-11 — **Decision recorded** (builder, Sonnet 5.5, from the dispatch). The
+  owner chose option A on 2026-10-11, out of "A: count a press only when its
+  label starts a word with 'play' or matches `PLAY_TEXT`", "Leave it: accept the
+  cost and correct dl-81's Log" and "Hold it". `status` moves `needs-decision` to
+  `ready`. The three residual rows are left to the builder.
