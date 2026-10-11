@@ -836,8 +836,9 @@ export interface StoredRow {
  * uncategorised (`none`) or one category's by id. `from` and `to` are days, both
  * inclusive. `scope=spending` keeps the rows the spending chart counts: filed
  * to the current expenses and to nobody, so a list opened from the chart sums to
- * the slice it was opened from. `offset` and `limit` page the result (100 by
- * default); `total` is how many match before either.
+ * the slice it was opened from less the card lines in that slice, which are not
+ * rows. `offset` and `limit` page the result (100 by default); `total` is how
+ * many match before either.
  */
 export const rowsQuerySchema = z
   .strictObject({

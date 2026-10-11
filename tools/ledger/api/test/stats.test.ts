@@ -433,7 +433,7 @@ describe("GET /api/rows, as the spending chart opens a period (lg-18)", () => {
     expect(all.rows.map((row) => row.description)).toContain(PAYMENT);
   });
 
-  test("a category's list sums to its slice of the chart, for every category and for none", async () => {
+  test("a category's list sums to its slice of the chart less the card lines, for every category and for none", async () => {
     const target = await start();
     const { periods, categories } = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
     const open = periods[1];
