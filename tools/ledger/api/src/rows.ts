@@ -36,13 +36,36 @@ interface StoredRowColumns {
 }
 
 /**
+ * Whether the spending chart counts this row: filed to the current expenses and
+ * to nobody, so a joint row that took money out of the buffer. One definition for
+ * the chart's sums and for the list opened from them, so the two cannot drift.
+ */
+export function countsAsSpending(row: StoredRow): boolean {
+  const filed = row.classification;
+  return filed !== null && filed.bucket === "current-expenses" && filed.personId === null;
+}
+
+/**
  * Stored rows, newest first, each with the classification that stands and the
  * spending category it now has. A row nobody has filed is read as the inbox
  * reads it: under the rule `classify` would file it by, if one does.
+ *
+ * The days are narrowed in SQL, so a list of one period reads that period's rows
+ * and not the whole account; the category is only known once each row has been
+ * read, so it narrows after.
  */
 export function listRows(
   db: Database,
-  query: { uncategorised?: boolean; limit?: number; rowId?: number },
+  query: {
+    uncategorised?: boolean;
+    spendingCategoryId?: number;
+    from?: string;
+    to?: string;
+    spendingOnly?: boolean;
+    offset?: number;
+    limit?: number;
+    rowId?: number;
+  },
 ): RowsResponse {
   const reader = spendingReader(db);
   const rules = currentRules(db);
@@ -52,10 +75,19 @@ export function listRows(
               c.bucket, c.person_id, c.rule_id, c.source
        FROM statement_rows r
        LEFT JOIN current_classifications c ON c.row_id = r.id
-       WHERE ? IS NULL OR r.id = ?
+       WHERE (? IS NULL OR r.id = ?)
+         AND (? IS NULL OR r.date >= ?)
+         AND (? IS NULL OR r.date <= ?)
        ORDER BY r.seq DESC`,
     )
-    .all(query.rowId ?? null, query.rowId ?? null) as StoredRowColumns[];
+    .all(
+      query.rowId ?? null,
+      query.rowId ?? null,
+      query.from ?? null,
+      query.from ?? null,
+      query.to ?? null,
+      query.to ?? null,
+    ) as StoredRowColumns[];
   const rows = found.map((row): StoredRow => {
     const classification =
       row.bucket === null || row.source === null
@@ -82,9 +114,16 @@ export function listRows(
       spendingCategory: reader.of(row, rule),
     };
   });
-  const matching =
-    query.uncategorised === true ? rows.filter((row) => row.spendingCategory === null) : rows;
-  return { rows: matching.slice(0, query.limit ?? 100), total: matching.length };
+  const matching = rows
+    .filter((row) => query.spendingOnly !== true || countsAsSpending(row))
+    .filter((row) => query.uncategorised !== true || row.spendingCategory === null)
+    .filter(
+      (row) =>
+        query.spendingCategoryId === undefined ||
+        row.spendingCategory?.id === query.spendingCategoryId,
+    );
+  const first = query.offset ?? 0;
+  return { rows: matching.slice(first, first + (query.limit ?? 100)), total: matching.length };
 }
 
 /** Appends a row's own spending category; `null` withdraws it. */

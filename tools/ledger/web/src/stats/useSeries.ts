@@ -15,7 +15,12 @@ export type Series<T> =
  * not jump; the first load, and a failure with nothing to hold, are their own
  * states. A request superseded by a newer range is cancelled and never lands.
  */
-export function useSeries<T>(fetcher: SeriesFetch<T>, range: StatsRange): Series<T> {
+export function useSeries<T>(
+  fetcher: SeriesFetch<T>,
+  range: StatsRange,
+  /** Changing it reads the series again over the same range, after a write beneath it. */
+  reload = 0,
+): Series<T> {
   const [held, setHeld] = useState<{ data: T } | null>(null);
   const [settled, setSettled] = useState<{ range: StatsRange; failure: string | null } | null>(
     null,
@@ -35,7 +40,7 @@ export function useSeries<T>(fetcher: SeriesFetch<T>, range: StatsRange): Series
       }
     })();
     return () => controller.abort();
-  }, [fetcher, from, to]);
+  }, [fetcher, from, to, reload]);
 
   const answered = settled !== null && settled.range.from === from && settled.range.to === to;
   if (answered && settled.failure !== null) {

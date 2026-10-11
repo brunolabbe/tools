@@ -49,6 +49,8 @@ export interface ReadoutRow {
   label: string;
   value: string;
   color?: string;
+  /** Opens what lies behind this figure; a chart that has nothing behind it leaves it out. */
+  onOpen?: () => void;
 }
 
 /** What the chart says about the selected position. */
@@ -56,6 +58,8 @@ export interface Readout {
   heading: string;
   rows: ReadoutRow[];
   notes?: string[];
+  /** Opens what lies behind the whole position, not one row of it. */
+  onOpen?: () => void;
 }
 
 function useWidth(): [React.RefCallback<HTMLDivElement>, number] {
@@ -184,6 +188,11 @@ function ReadoutView({ readout }: { readout: Readout | null }): React.ReactEleme
       {readout !== null && (
         <>
           <p className="readout-heading">{readout.heading}</p>
+          {readout.onOpen !== undefined && (
+            <button type="button" className="secondary small" onClick={readout.onOpen}>
+              Show the rows
+            </button>
+          )}
           <ul className="readout-rows">
             {readout.rows.map((row) => (
               <li key={row.key}>
@@ -192,6 +201,16 @@ function ReadoutView({ readout }: { readout: Readout | null }): React.ReactEleme
                 )}
                 <span className="muted">{row.label}</span>
                 <strong>{row.value}</strong>
+                {row.onOpen !== undefined && (
+                  <button
+                    type="button"
+                    className="secondary small"
+                    aria-label={`Show the rows for ${row.label}`}
+                    onClick={row.onOpen}
+                  >
+                    Rows
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -426,8 +445,14 @@ export function ColumnChart(props: {
   /** A total line in the readout. */
   total?: boolean;
   notes?: (index: number) => string[];
+  /**
+   * What lies behind a column, or behind one series of it (`key`). A series with
+   * nothing in the selected column offers nothing to open.
+   */
+  onOpen?: (index: number, key: string | null) => void;
 }): React.ReactElement {
   const { name, categories, series, mode, formatValue, formatAxis, minStep, fixedAxis } = props;
+  const { onOpen } = props;
   const [box, measured] = useWidth();
   const scroller = useRef<HTMLDivElement | null>(null);
   const height = 210;
@@ -464,12 +489,16 @@ export function ColumnChart(props: {
       ? null
       : {
           heading: selected.heading,
+          ...(onOpen === undefined ? {} : { onOpen: () => onOpen(index, null) }),
           rows: [
             ...series.map((one) => ({
               key: one.key,
               label: one.label,
               value: formatValue(one.values[index] ?? 0),
               color: one.color,
+              ...(onOpen === undefined || (one.values[index] ?? 0) === 0
+                ? {}
+                : { onOpen: () => onOpen(index, one.key) }),
             })),
             ...(props.total === true
               ? [
