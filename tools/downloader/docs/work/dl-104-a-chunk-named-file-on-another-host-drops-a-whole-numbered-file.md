@@ -3,7 +3,7 @@ id: dl-104
 tool: downloader
 title: A chunk-named file on one host drops a whole numbered file on another host under the same path
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-78]
 difficulty: standard
@@ -90,6 +90,27 @@ the Log.
 - The same-host case still drops the numbered file: `init.mp4` and `5.mp4` under
   one origin and path give only `init.mp4`.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: PASS** — 2026-10-11 · `55214e67..54d37652` · Opus 5.5, depth full
+
+| Done when                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test with the reproduction's two hits returns both URLs, and fails on the tree before the fix | `resolvers/test/browser/capture-rules.test.ts` › "keeps a numbered file whose chunk-named neighbour is on another host under the same path" ✓. The assertion is a sorted `toEqual` of both URLs. The "fails before" clause is **verified**: with `rank.ts` reverted to the base, the same test fails with `expected [ Array(1) ] to deeply equal [ …(2) ]` (1 failed, 1 passed, filtered to the two dl-104 tests). There is no `rank.test.ts`. The `rankHits` suites live in `capture-rules.test.ts`, and the Log says so. |
+| The same-host case still drops the numbered file                                                | `capture-rules.test.ts` › "still drops a numbered file beside a chunk-named neighbour under one origin and path" ✓. The assertion is an exact `toEqual(["https://cdn.site.example/media/init.mp4"])`. It also passed against the reverted `rank.ts`, so it is a true control.                                                                                                                                                                                                                                              |
+| `npm run check` and `npm test -- --project downloader` pass                                     | **verified**. `npm run check` exit 0, and `npm test -- --project downloader` exit 0: 2439 passed, 2 skipped of 2441, in 113 files plus 1 skipped. PR #423 on `54d37652` also passed `check` and `test (ubuntu-latest)`.                                                                                                                                                                                                                                                                                                    |
+
+- **low** · `nfr:maintainability` · no `Done when` line depends on it. `directoryOf` now exists twice, in `rank.ts` and in `chunk-sniff.ts`, and the two bodies are byte-identical (`diff` of the two function bodies exits 0). The comment in `rank.ts` says "The same key `chunk-sniff.ts` uses since dl-90", but no test makes the two agree, so an edit to one copy leaves that comment false without any failure. The Log chose not to fold them, and the reason it gives is real. Either export the function from `media-match.ts` or add one test that runs both keys on the same URL.
+- **dropped** · the sharded-CDN trade-off, as a defect. It is the judgement Build asked for, and the Log records it. Measured with `sharded.mts`: an init on `cdn1`, N numbered fMP4 chunks on `cdn2`, run through `rankHits` and then `withoutFragments`, as `browser.ts`'s `#buildOutcome` does. The base offers 0 of N. The head with readable heads offers 0 of N, after 1 read for both N=3 and N=20. The head with heads that cannot be read offers all 20 of 20, after 8 reads. The only real loss is a sharded stream with no manifest whose chunks cannot be read. The Log calls the loss "reasoned, not observed", and this measurement makes it observed. No fixture or capture in the repo has the layout: `git grep` for `cdn[0-9]` and `shard` under `tools/downloader` finds nothing outside the ticket. Every chunk-named fixture is a `.mpd` or `.m3u8` manifest, which the manifest proof covers whatever the directory.
+- **dropped** · key edge cases, all intended origin semantics. A differing host case, an explicit default port, userinfo and query strings (a `/` inside the query included) all still share a directory. A non-default port, a scheme change and a trailing-dot host are now separate directories, where the base merged them. Each of those three is a different origin to the browser too.
+- **dropped** · `blob:`, `data:`, protocol-relative, unparseable and non-special-scheme URLs, which all have the opaque origin `null`. Only those last ones could collide across hosts. No live call site: `sniff.ts` rejects every candidate with `isDeniedUrl`, which refuses anything that does not parse or is not `http:`/`https:`, before a hit exists. The fallback for an unparseable URL gives the same output as the base (`protocol-relative` and `unparseable-same` match on both trees).
+- **dropped** · out of range. `test (windows-latest, informational)` is red on `54d37652`: 3 failures, all in `engine/test/parallel-ranges.test.ts` (dl-98). `engine` does not import `resolvers`, and this diff touches only `resolvers`. Whether `main` is red there too is unmeasured: the Windows leg at `72b47fe1` was cancelled, and at `55214e67` it was skipped.
+- **dropped** · Done when 1 names `rank.test.ts`, which does not exist. That is an error in the brief, not the build. The Log records where the tests are.
+- **findings** · the hunt returned 6. 1 carried, 5 dropped.
+- Callers: `directoryOf` in `rank.ts` has one caller, `isChunkOfSegmentedPlayback`. The manifest proof (`hits.some(... hls || dash)`) and `scoreHit`'s `pathOf` and `originOf` do not use it, and they are unchanged.
+- Invariants: style is checked (no `any`, no `console`, no new imports). The new tests are in an existing registered spec. Skipped as not touched by the diff: cross-tool imports, `AppError`, shell, redaction, SSRF, progress, contract, Dockerfile, routes.
+- NFR: security ✓ (no new URL reaches a request) · performance ✓ (key cost unchanged; the sharded case adds at most 8 head reads, bounded by the dl-90 budget) · reliability ✓ · maintainability, above.
 
 ## Log
 
