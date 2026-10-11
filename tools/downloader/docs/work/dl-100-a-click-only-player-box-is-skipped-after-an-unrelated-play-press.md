@@ -227,8 +227,13 @@ not press a related-video card.
   (`carousel`, `watch`, the cross-site `Watch now`) are accepted as presses that
   count: they stay `NO_MEDIA_FOUND` and are pinned as such by tests (reworded by
   the owner, 2026-10-11; see the Log).
-- dl-81's delay cases stay green: the press of a real play control still holds
-  back the box click.
+- dl-81's delay cases stay green: the press of a real play control whose
+  `aria-label`, `title`, `data-testid`, `class` or `id` starts a word with "play"
+  (camelCase included: `videoPlayButton`), or that matches `PLAY_TEXT` or is a
+  player library's own class, still holds back the box click. An unlabelled
+  control spelled as one lower-case word (`btnplay`, `videoplaybutton`) is not
+  counted, and dl-81's defect returns for it; accepted (owner, 2026-10-11; see
+  the Log).
 - Each case has a test that fails if its branch is removed.
 - `npm run check` and `npm test -- --project downloader` pass.
 
@@ -374,3 +379,26 @@ not press a related-video card.
     between the count and the read, which a fixture cannot time; the cost is
     bounded by `max: 3` per frame and the press fails anyway. Its other low, "main
     never had the box click", is corrected above.
+- 2026-10-11 — **Owner's answer on gate 2's open decision** (asked by the
+  orchestrator via AskUserQuestion; the owner's, not an agent's). Question: a
+  play control spelled as one lower-case word (`data-testid="btnplay"`,
+  `"videoplaybutton"`) on an icon-only button is pressed and not counted, so
+  dl-81's defect (a related card pressed after a late manifest) returns for it;
+  what do we do? Options: "Reword, accept miss (Recommended)" (reword Done-when
+  2's second clause to the word-start reading, which is what option A says) and
+  "Deny-list rule" (count every match unless its "play" sits inside a known
+  non-play word such as `autoplay` or `display`; an open-ended word list).
+  **The owner chose "Reword, accept miss".** Done-when 2 is reworded above to say
+  what `isPlayPress` and `startsWord` do at `58af233d`: a press counts when the
+  element carries a player library's class or the id `play`, or an attribute a
+  loose selector reads has a word starting with its token (camelCase `Play`
+  included, except right after `auto`), or the text matches `PLAY_TEXT`; a
+  control spelled as one lower-case word is not counted. No code, test or fixture
+  changed.
+- 2026-10-11 — **Owner's answer on the builder's open decision** (asked by the
+  orchestrator via AskUserQuestion; the owner's). Question: do words starting
+  with "play" (Playlist, Playback, Plays, Player) count as play presses?
+  Options: "Keep counting (Recommended)" (as built; the builder's
+  recommendation; the gate gave none) and "Whole word 'play'" (gate 2 measured
+  it: frees 4 more of its 12 box rows, adds one regression against `main`,
+  `playbtn`). **The owner chose "Keep counting".** The build stands as it is.
