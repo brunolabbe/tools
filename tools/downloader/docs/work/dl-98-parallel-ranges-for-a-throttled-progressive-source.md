@@ -528,3 +528,20 @@ up'`), and red again with the relay bounded.
     produce is "no speed-up", from this test's 100 ms window. If Windows'
     fallback was anything else, this change does not fix it, and the new
     message names the refusal.
+
+**2026-10-11** — gate 3 (PASS at `6f85fb48`, narrow, run because the owner asked
+for one) and the landing. Gate 3 recorded three lows unfixed, with F8 from
+before: G3-1 (the meter keeps every completed chunk fetch alive), G3-2 (a
+silent request that stays open makes the meter ignore another's pause) and
+G3-3 (one dl-98 test red on the Windows leg). Its Windows reading was one run on
+each side of the round and said one more run would settle it.
+
+**"How should dl-98 land?"** The options were "Rerun the Windows job once, then
+land" (recommended), "Land now, record it" and "Another builder round on that
+test". **The owner chose "Rerun the Windows job once, then land"**, on the terms
+that if it failed again dl-98 lands and the failure is filed. It failed again,
+on the same test and on the F9 test too, both in run 38141287195, attempt 2
+(job 114495526538). Both are filed as
+[dl-106](./dl-106-two-parallel-ranges-tests-fail-on-the-windows-leg-and-pass-on-linux.md)
+in this pull request with both attempts as the reproduction. The Windows
+leg stays red on this merge; it is informational.
