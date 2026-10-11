@@ -240,3 +240,79 @@ not press a related-video card.
   label starts a word with 'play' or matches `PLAY_TEXT`", "Leave it: accept the
   cost and correct dl-81's Log" and "Hold it". `status` moves `needs-decision` to
   `ready`. The three residual rows are left to the builder.
+- 2026-10-11 — **Built** (builder, Sonnet 5.5). `provokeFrame` still presses every
+  `PLAY_SELECTORS` match, but `clickVisible` now counts a press only when
+  `isPlayPress` accepts it: the element carries a player library's own class
+  (`PLAY_LIBRARY_CLASSES`: `vjs-big-play-button`, `ytp-large-play-button`,
+  `jw-icon-display`, `plyr__control--overlaid`), or one of `aria-label`, `title`,
+  `data-testid`, `class`, `id` has a word starting with "play"
+  (`/(?:^|[^a-z])play/i`). `PLAY_TEXT` presses count as before. The cross-frame
+  OR is unchanged.
+  - **Reproduction, before and after**, the real `BrowserResolver`
+    (`quietMs: 1200`, `emptyMinWaitMs: 1200`, 25 s budget), against
+    `55214e67`'s `provoke.ts` and then the fix, one run each, outcome and
+    whether the control's beacon and `/beacon/box-clicked` were requested:
+
+    | ctl        | `55214e67`                        | fix                               |
+    | ---------- | --------------------------------- | --------------------------------- |
+    | `none`     | stream, box clicked               | stream, box clicked               |
+    | `autoplay` | `NO_MEDIA_FOUND`, box not clicked | stream, control + box clicked     |
+    | `display`  | `NO_MEDIA_FOUND`, box not clicked | stream, control + box clicked     |
+    | `carousel` | `NO_MEDIA_FOUND`, box not clicked | `NO_MEDIA_FOUND`, box not clicked |
+    | `watch`    | `NO_MEDIA_FOUND`, box not clicked | `NO_MEDIA_FOUND`, box not clicked |
+    | `xo`       | `NO_MEDIA_FOUND`, box not clicked | `NO_MEDIA_FOUND`, box not clicked |
+
+    The test names, failing at `55214e67` (2 of 8, `-t dl-100`): the `autoplay`
+    and `display` cases. Passing on the fix 3 of 3 runs: 8 of 8 each time.
+
+  - **The three residual rows: accepted, and pinned.** `carousel` ("Play
+    slideshow"), `watch` (the bare "Watch" link) and `xo` (a cross-site ad's
+    "Watch now") still hold back the box click, and `box-with-control.html?ctl=jw`
+    (a bare `jw-icon-display` with no label) is the same shape on the
+    library-class branch. Their tests assert `NO_MEDIA_FOUND` with the control's
+    beacon seen and the box's not, so narrowing any of them later flips a test on
+    purpose. Why accept rather than narrow:
+    - **Label.** "Play slideshow" and a "Watch" link are indistinguishable from a
+      player's own control by their label, which is all the rule reads; a
+      narrower list would be a list of English phrases.
+    - **Only in the frame holding the chosen player: measured, and it breaks the
+      case the cross-frame OR exists for.** `box-xo-embed.html` is a
+      `player-embed` wrapper around a cross-site frame whose own "Play" button
+      asks for its manifest 1.5 s after the press; a centre click on the wrapper
+      lands on that frame's surface. With the flag set only from the main frame
+      (a one-line mutation of `provokePlayback`), `xo` becomes the stream and the
+      embed test fails (2 of 8 failed, the `xo` case and the embed case; the
+      embed's surface was clicked). A frame holding the ad's "Watch now" and a
+      frame holding an embedded player's "Play" differ in nothing the resolver
+      reads: neither has a `<video>` before the press.
+    - **Only when media activity follows: not built.** The press is made before
+      the pass boundary and the box click made right after it, so "followed by
+      media" would mean deferring the click by up to the slowest manifest delay
+      dl-81 measured (3000 ms) and moving it out of `provokePlayback`'s pass
+      boundary, into `waitForQuiet`, where dl-105 may also work. A pressed play
+      control on a page whose manifest is slow is exactly the case a deferred
+      click would meet with a second click on a starting player (argued, not
+      measured). That is a
+      redesign, not a narrowing, and no measured page needs it.
+    - **The cost is bounded and not a regression:** `main` never had the box
+      click, and the page needs all of no `<video>`, no label of its own, and a
+      play-ish control that does nothing, to lose it.
+  - **Guards still green.** The dl-81 delay cases
+    (`player-poster-related-grid.html?delay=0|300|1500|3000`) pass, and
+    `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
+    ends `Tests  170 passed (170)`.
+  - **Mutations that fail a test** (`-t dl-100`, 8 cases; the library-class one run as `-t ctl=jw`):
+    removing the library-class branch fails `ctl=jw`; making the word-start test
+    return false fails `ctl=carousel`; the main-frame-only mutation above fails
+    `xo` and the embed test; the unfixed `provoke.ts` fails `autoplay` and
+    `display`.
+  - **Brief details.** The ticket's fixtures were used as written; two were
+    added (`box-xo-embed.html` with `embed-inner.html`, and a `jw` row in
+    `box-with-control.html`) for the two branches no row reached. Its Done-when
+    "3 of 3" holds as 3 runs of the 8 cases. dl-81's Log was **not** corrected:
+    that sentence ("a play button that does nothing") was the "Leave it" option's
+    fold-in, and option A narrows the cost to just that. A string
+    `locator.evaluate` is not invoked with the element (`"(el) => ..."` returns
+    `undefined`), so the label is read with `getAttribute`; a first draft that
+    evaluated a string counted nothing and made `autoplay` pass by accident, which
+    the `carousel` row exposed.

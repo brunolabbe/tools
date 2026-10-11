@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Click-only player box beside an unrelated play-ish control</title>
+  </head>
+  <body style="margin: 0">
+    <!-- player-box-click-only.html's box, plus one control chosen by ?ctl=:
+         autoplay  - a toggle labelled "Autoplay" (matches button[aria-label*='play' i])
+         carousel  - a hero carousel's "Play slideshow" button
+         display   - a plain span with data-testid="display-name" (matches [data-testid*='play' i])
+         watch     - a "Watch" link to a #fragment (matches PLAY_TEXT through role link)
+         jw        - JW Player's big-play icon: a class and no label at all (a real control)
+         none      - nothing
+         Each control records its click and does nothing to the player. -->
+    <div id="slot"></div>
+    <div class="player-box" style="width: 640px; height: 360px; background: #222"></div>
+    <p id="status">idle</p>
+    <script>
+      var ctl = new URLSearchParams(location.search).get("ctl") || "none";
+      var slot = document.getElementById("slot");
+      var el = null;
+      if (ctl === "autoplay") {
+        el = document.createElement("button");
+        el.setAttribute("aria-label", "Autoplay");
+        el.textContent = "Autoplay";
+      }
+      if (ctl === "carousel") {
+        el = document.createElement("button");
+        el.setAttribute("aria-label", "Play slideshow");
+        el.textContent = "||";
+      }
+      if (ctl === "display") {
+        el = document.createElement("span");
+        el.setAttribute("data-testid", "display-name");
+        el.textContent = "Jane Doe";
+      }
+      if (ctl === "jw") {
+        el = document.createElement("div");
+        el.className = "jw-icon-display";
+        el.style.cssText = "width: 40px; height: 40px; background: #888";
+      }
+      if (ctl === "watch") {
+        el = document.createElement("a");
+        el.href = "#later";
+        el.textContent = "Watch";
+      }
+      if (el) {
+        el.addEventListener("click", function () {
+          fetch("/beacon/control-" + ctl).catch(function () {});
+        });
+        slot.appendChild(el);
+      }
+      var started = false;
+      document.querySelector(".player-box").addEventListener("click", function () {
+        if (started) return;
+        started = true;
+        fetch("/beacon/box-clicked").catch(function () {});
+        fetch("/media/related/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+      });
+    </script>
+  </body>
+</html>

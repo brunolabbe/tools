@@ -792,14 +792,23 @@ const UNMARK_AGE_SCRIPT = `(() => {
   for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(AGE_MARK)});
 })()`;
 
+/**
+ * A player library's own big-play control, named by one class and by nothing
+ * else: whatever carries it is a play control, so its press always counts (see
+ * `isPlayPress`).
+ */
+const PLAY_LIBRARY_CLASSES: readonly string[] = [
+  "vjs-big-play-button",
+  "ytp-large-play-button",
+  "jw-icon-display",
+  "plyr__control--overlaid",
+];
+
 const PLAY_SELECTORS: readonly string[] = [
   "button[aria-label*='play' i]",
   "[role='button'][aria-label*='play' i]",
   "button[title*='play' i]",
-  ".vjs-big-play-button",
-  ".ytp-large-play-button",
-  ".jw-icon-display",
-  ".plyr__control--overlaid",
+  ...PLAY_LIBRARY_CLASSES.map((name) => `.${name}`),
   "[data-testid*='play' i]",
   "[class*='play-button' i]",
   "[class*='play-btn' i]",
@@ -810,6 +819,37 @@ const PLAY_SELECTORS: readonly string[] = [
 
 const PLAY_TEXT =
   /^\s*(?:play|watch|watch now|start|play video|lecture|abspielen|reproducir|riproduci|afspelen)\s*$/i;
+
+/** The attributes `PLAY_SELECTORS` read "play" out of. */
+const PLAY_ATTRIBUTES: readonly string[] = ["aria-label", "title", "data-testid", "class", "id"];
+
+/** "play" at the start of a word: not the end of "autoplay" or the middle of "display". */
+const PLAY_WORD_START = /(?:^|[^a-z])play/i;
+
+/**
+ * Whether the press of a `PLAY_SELECTORS` match **counts as starting a player**
+ * (dl-100), as opposed to merely being pressed. The selectors match "play"
+ * anywhere in an attribute, so they also press an "Autoplay" toggle and a
+ * `data-testid` of `display-name`. Pressing those stays as it was, but a press
+ * that counts holds back `provokeInput`'s box click for good, and neither is a
+ * player having started. A match counts when it is a player library's own
+ * control, or when one of those attributes has a word that starts with "play"
+ * ("Play", "Play slideshow", `play-btn`, `#play`), which "Autoplay" and
+ * "display" do not.
+ */
+async function isPlayPress(target: Locator): Promise<boolean> {
+  try {
+    const values = await Promise.all(
+      PLAY_ATTRIBUTES.map((name) => target.getAttribute(name, { timeout: 500 })),
+    );
+    const classes = (values[PLAY_ATTRIBUTES.indexOf("class")] ?? "").split(/\s+/);
+    if (PLAY_LIBRARY_CLASSES.some((name) => classes.includes(name))) return true;
+    return values.some((value) => value !== null && PLAY_WORD_START.test(value));
+  } catch {
+    // Gone already: the press below fails too, and nothing is counted.
+    return false;
+  }
+}
 
 /**
  * Shadow-piercing since dl-69, which also measured what the gap was worth,
@@ -1046,7 +1086,7 @@ function visibleQuery(selectors: readonly string[]): string {
 async function clickVisible(
   frame: Frame,
   selectors: readonly string[],
-  options: { timeoutMs: number; max: number },
+  options: { timeoutMs: number; max: number; countPress?: (target: Locator) => Promise<boolean> },
 ): Promise<number> {
   let clicked = 0;
   try {
@@ -1054,8 +1094,12 @@ async function clickVisible(
     const count = Math.min(await locator.count(), options.max);
     for (let index = 0; index < count; index++) {
       try {
-        await locator.nth(index).click({ timeout: options.timeoutMs });
-        clicked += 1;
+        // Every match is pressed; with `countPress`, only those it accepts are
+        // counted (dl-100). Read before the press, which can remove the element.
+        const target = locator.nth(index);
+        const counted = options.countPress === undefined ? true : await options.countPress(target);
+        await target.click({ timeout: options.timeoutMs });
+        if (counted) clicked += 1;
       } catch {
         // Covered by an overlay, detached, or simply not clickable. Normal.
       }
@@ -1650,7 +1694,8 @@ async function provokeInput(
 /**
  * One frame's provocation, in the order a person would try things. Returns
  * whether it **pressed something that starts a player** — a play-ish selector or
- * label, or the chosen `<video>` — which the input pass reads.
+ * label, or the chosen `<video>` — which the input pass reads. A selector match
+ * is pressed either way but counts only when `isPlayPress` says so (dl-100).
  *
  * The rows, with the frames each one runs in (dl-81 moved the scroll and a
  * narrower `play()` out of the same-origin set; the rest are unchanged):
@@ -1688,7 +1733,11 @@ async function provokeFrame(
     // Frame navigated away mid-probe.
   }
 
-  const playClicks = await clickVisible(frame, PLAY_SELECTORS, { timeoutMs: 2000, max: 3 });
+  const playClicks = await clickVisible(frame, PLAY_SELECTORS, {
+    timeoutMs: 2000,
+    max: 3,
+    countPress: isPlayPress,
+  });
   const labelClicked = await clickByText(frame, PLAY_TEXT, 2000);
 
   // Clicking the video surface itself is what a person would do when the player

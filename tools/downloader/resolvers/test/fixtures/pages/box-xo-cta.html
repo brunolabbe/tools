@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Click-only player box beside a cross-site ad with a Watch now button</title>
+  </head>
+  <body style="margin: 0">
+    <div style="display: flex; gap: 8px">
+      <div class="player-box" style="width: 640px; height: 360px; background: #222"></div>
+      <iframe
+        src="{{SECONDARY}}/cta-inner.html"
+        width="300"
+        height="250"
+        style="border: 0"
+      ></iframe>
+    </div>
+    <script>
+      var started = false;
+      document.querySelector(".player-box").addEventListener("click", function () {
+        if (started) return;
+        started = true;
+        fetch("/beacon/box-clicked").catch(function () {});
+        fetch("/media/related/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .catch(function () {});
+      });
+    </script>
+  </body>
+</html>
