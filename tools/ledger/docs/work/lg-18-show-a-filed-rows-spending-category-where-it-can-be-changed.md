@@ -3,7 +3,7 @@ id: lg-18
 tool: ledger
 title: Show a filed row's spending category where a person can change it
 kind: work-package
-status: ready
+status: done
 milestone: P5
 depends_on: [lg-9, lg-15]
 difficulty: standard
@@ -62,6 +62,88 @@ What nothing specifies yet, and the builder decides with the owner before buildi
 2. The list is reached from a period of the spending chart without leaving the
    screen's one range.
 3. Gates green.
+
+## Review
+
+**Gate: FAIL** — 2026-10-11 · `55214e67..9e127f79` · Opus 5.5, depth full
+
+| Done when                                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A wrongly categorised row gets its own category from the web, and the stats then show it under the new one; a web test, and an API test of the filter and the paging | `web/test/stats-rows.test.tsx` › "a row given a category of its own is written, and the chart counts it under the new one" (the write, the stats read again, Household in the readout) ✓; `api/test/stats.test.ts` › "a row given its own category moves from one list to the other" (the stats count 80000 under Household) ✓; filter: "scope=spending lists what the chart counted in the period, and nothing else" and "days narrow the list, both ends inclusive" ✓; paging: "offset and limit page the list, and the total does not move" ✓. Both tests move an _uncategorised_ row. The "map or rule" clause rests on lg-15's `api/test/spending-categories.test.ts` › "a row with its own override gets that, over its rule's and the map's". The gate's harness checked a map-categorised row given an override (Pharmacy, 3333 in its slice) |
+| The list opens from a period of the spending chart without leaving the screen's one range                                                                            | `web/test/stats-rows.test.tsx` › "the readout opens the rows of the selected period, over that period's own days" and "another period's readout opens that period's days" (from/to are the period's start/end; the list sits under the card and has no range control) ✓                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Gates green                                                                                                                                                          | **unproven (gate)**: `test (ubuntu-latest)` and `test (windows-latest, informational)` were still running on `9e127f79` when this was written; `check` ×2, `docker`, `codeql`, `CodeQL` and `dependency-review` are green on that sha. Locally `npm test -- --project ledger` gave 816 of 816                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+- **high** · F1 · shipped text false against the code: the doc comment on
+  `rowsQuerySchema` in `contract/src/api.ts` says `scope=spending` means "a list
+  opened from the chart sums to the slice it was opened from". That is false for
+  any slice that holds card lines, because the list carries bank rows only (the
+  owner's choice). The branch's own test knows it and adds `cardCents = 4000` to
+  the `none` slice. Reproduction: the gate harness (below), no range:
+  `2026-10-03|1 slice=12777 list=7777 expCard=5000` and
+  `2026-02-28|3 slice=3000 list=0 expCard=3000`. Fix: say the list sums to the
+  slice less the card lines in it, which are not rows. One sentence, no code.
+- **low** · F2 · positive control: the test "a category's list sums to its slice
+  of the chart, for every category and for none" stays green when
+  `countsAsSpending` returns `true` for every row
+  (`npx vitest run tools/ledger/api/test/stats.test.ts -t "sums to its slice"` →
+  `1 passed | 25 skipped`). Both sides read the one predicate, so the test cannot
+  fail on a change to it. The predicate itself is held: 6 of 26 tests in that file
+  fail under the mutation. The test's fixture also has no row on a period
+  boundary, and no person-assigned row or deposit inside its range, and `OPEN` is a
+  constant rather than the span the stats response names. The gate's harness
+  covers all of these, and it fails 3 of 3 slice tests under the same mutation.
+- **low** · F3 · `nfr:maintainability` · the "More categories" path of
+  `SpendingBody`'s `onOpen` in `web/src/stats/Cards.tsx` has no test. With
+  `key === "more"` removed, `npx vitest run tools/ledger/web/test` still gives
+  120 of 120, and the broken path would send `spendingCategory=NaN` (400).
+- **low** · F4 · a category's "Rows" button is offered whenever the slice is
+  non-zero, including a slice made only of card lines (harness: Household in
+  2026-02, 3000 of cards, no bank row). It opens "No bank row matches.", with a
+  notice giving the whole period's card total rather than that category's.
+  `SpendingStatsResponse` does not carry a slice's card share, so the clean fix
+  belongs with lg-19's card list.
+- **low** · F5 · the open list is kept by the period's `end`. If the stats read
+  after a write fails, `useSeries` returns `failed` and `Loaded` unmounts the
+  chart, the list with it. An open period ending "today" also changes `end` at
+  midnight, so the list vanishes on the next reload. Found by reading only; not run.
+- **low** · F6 · `rowsQuerySchema.spendingCategory` coerces `0x3`, ` 1`
+  (`%201`), `1e0` and `1.0` into ids, and `offset=` (empty) into 0. All of them
+  answer 200 in the harness. No live call site: the web sends `String(number)`.
+- **low** · F7 · lg-19 names `GET /api/period/open`. The route is
+  `/api/periods/open` (`ROUTES.periodOpen`). Its reproduction grep is otherwise
+  faithful (no output at `55214e67` or at the head), `npm run status -- --show lg-19`
+  parses it, and `difficulty: standard` is set.
+- **low** · F8 · a11y: "Show the rows" and each "Rows" button sit inside the
+  readout's `aria-live="polite"` region, so every slider step re-announces them.
+  Not checked with a screen reader.
+- **dropped** · a category id that does not exist answers 200 with no rows. That
+  is a filter matching nothing, not a defect.
+- **dropped** · a query's unknown key is reported as "check body". That comes from
+  `parsed` in `routes/spending-categories.ts`, which predates this branch and is
+  outside the range.
+- **dropped** · a change in `spendingStats`' behaviour. There is none: the
+  predicate is the old `continue` condition negated (De Morgan), `filter` keeps
+  the order, the existing stats tests are unchanged and green, and the harness's
+  hand-computed sums match every slice.
+- **dropped** · short or duplicated pages. None: the harness pages by one over
+  `scope=spending` (7), `scope=spending&spendingCategory=none` (2) and everything
+  (11). Each walk equals the unpaged list, and `total` stays constant across it.
+- **dropped** · touch targets. `button.small` is `min-height: 2.75rem`, and the
+  chart's 28px slot is untouched.
+- **findings** · the hunt returned 13: 8 carried, 5 dropped.
+- NFR: security ✓ (the read limit already covers the route, and the query is
+  bound by parameters in SQL) · performance: the dates narrow in SQL, but the
+  category and scope narrow in JavaScript, which the Log states (lg-15's F10
+  narrowed, not closed) · reliability: F5 · maintainability: F2, F3.
+
+Harness: `zz-gate-lg18.test.ts` in the gate's scratch directory. Copy it into
+`tools/ledger/api/test/` and run `npx vitest run tools/ledger/api/test/zz-gate-lg18.test.ts`.
+It covers rows on both ends of three periods (`2026-01-31`, `2026-02-01`,
+`2026-02-28`, `2026-03-01` and today `2026-10-03`), an override over a map, an
+override withdrawn, two rule categories, a person row, a deposit, a refund, an
+unfiled row, a mortgage row and five card lines. It checks every slice of every
+period with no range, with `to=2026-05-01` (which cuts the open period) and with a
+range inside February, against sums computed by hand. 5 of 5 at the head.
 
 ## Log
 
