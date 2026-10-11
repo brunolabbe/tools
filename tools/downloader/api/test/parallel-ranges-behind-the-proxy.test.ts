@@ -32,6 +32,8 @@ import {
 import type { EgressProxy } from "../src/egress-proxy.ts";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
+import { loadApiConfig } from "../src/config.ts";
+import { createApp } from "../src/server.ts";
 
 const FFMPEG = resolveFfmpegPath();
 const SLOW = 120_000;
@@ -241,4 +243,37 @@ describe("dl-98: the fan-out behind the guarded egress proxy", () => {
     },
     SLOW,
   );
+});
+
+describe("dl-98: SINGLE_CONNECTION_HOSTS, from the environment to the engine (gate 1's F5)", () => {
+  test("the API parses the variable, and the app hands the engine what it parsed", async () => {
+    const env = { SINGLE_CONNECTION_HOSTS: " cdn.example.com, .other.org ,, " };
+    const config = loadApiConfig({}, env);
+    expect(config.singleConnectionHosts).toEqual(["cdn.example.com", ".other.org"]);
+    expect(loadApiConfig({}, {}).singleConnectionHosts).toEqual([]);
+
+    const storage = await fs.mkdtemp(path.join(os.tmpdir(), "dl98-wiring-"));
+    const app = await createApp({
+      startGc: false,
+      logger: NOOP_LOGGER,
+      grabFrame: async () => null,
+      config: {
+        databasePath: ":memory:",
+        storageDir: path.join(storage, "storage"),
+        enableBrowserResolver: false,
+        enableYtdlpResolver: false,
+        turnstile: undefined,
+        singleConnectionHosts: config.singleConnectionHosts,
+      },
+    });
+    try {
+      expect(app.context.engine.config.singleConnectionHosts).toEqual([
+        "cdn.example.com",
+        ".other.org",
+      ]);
+    } finally {
+      await app.shutdown();
+      await fs.rm(storage, { recursive: true, force: true });
+    }
+  });
 });

@@ -42,6 +42,12 @@
  * none of it. The host is reported through `onRefused`, which the engine keeps
  * until the process restarts. Any other failure of a ranged fetch also drops
  * back, without remembering the host: it is not a refusal of the fan-out.
+ * A fetch the origin leaves silent for `idleMs` while it is being read is a
+ * reset, so a stall falls back too rather than waiting on ffmpeg's own timeout.
+ *
+ * The slots are shared by every request ffmpeg has open, and a newer request
+ * takes an older one's lookahead: ffmpeg opens a seek's or a reconnect's
+ * connection before it closes the old one, and waits for its answer first.
  *
  * ## Framing is exact
  *

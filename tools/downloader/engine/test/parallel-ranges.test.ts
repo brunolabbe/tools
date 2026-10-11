@@ -591,20 +591,30 @@ interface ProxyFixture {
 async function startProxy(connectRefusal: string): Promise<ProxyFixture> {
   const forwarded: string[] = [];
   const server = http.createServer((request, response) => {
-    forwarded.push(request.url ?? "");
-    const upstream = http.request(
-      request.url ?? "",
-      {
-        method: request.method,
-        headers: { ...request.headers, "x-fixture-proxy": "1" },
-        agent: false,
-      },
-      (answer) => {
-        response.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
-        answer.pipe(response);
-        response.once("close", () => answer.destroy());
-      },
-    );
+    const target = request.url ?? "";
+    forwarded.push(target);
+    const options = {
+      method: request.method,
+      headers: { ...request.headers, "x-fixture-proxy": "1" },
+      agent: false,
+    };
+    const onAnswer = (answer: http.IncomingMessage): void => {
+      response.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
+      answer.pipe(response);
+      response.once("close", () => answer.destroy());
+    };
+    // js/request-forgery, excused under docs/adr/005 by category, in
+    // tools/downloader/engine/test/parallel-ranges.test.ts, 2026-10-11, with
+    // the owner's excusal recorded in dl-98's Log: this is a test double, a
+    // forward proxy on 127.0.0.1 that lives for one test and forwards whatever
+    // absolute-form target that test sent it, so the request's URL is the
+    // test's by design. It never ships, and no visitor reaches it. Field five
+    // has no production design behind it to regress: what goes red if the
+    // fixture stops forwarding is "every fetch, relayed and ranged, goes through
+    // the proxy with the replayed headers" in this file. The call is on one line
+    // because the suppression covers exactly the line after the comment.
+    // codeql[js/request-forgery]
+    const upstream = http.request(target, options, onAnswer);
     upstream.on("error", () => response.destroy());
     response.once("close", () => upstream.destroy());
     upstream.end();

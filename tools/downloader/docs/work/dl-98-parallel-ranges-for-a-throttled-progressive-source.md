@@ -7,6 +7,7 @@ status: ready
 milestone: null
 depends_on: [dl-96, dl-102]
 difficulty: hard
+awaiting: CodeQL's js/request-forgery alert on startProxy in tools/downloader/engine/test/parallel-ranges.test.ts — reads dismissed (Suppressed via SARIF) on main's security tab after the first push to main following this merge
 ---
 
 # dl-98 — Parallel ranged reads for a progressive source throttled per connection
@@ -340,3 +341,116 @@ window against one.
 **Fold-in:** nothing. No open downloader ticket touches the progressive
 streaming path (`npm run status -- --tool downloader`: dl-49, dl-90, dl-93,
 dl-100).
+
+**2026-10-11** — two owner answers, put by the orchestrator after gate 1.
+
+1. **Decision 3, what makes a source's duration and size "known".** The
+   options were "Build's reading: probe, else ffmpeg's own duration" (the
+   builder's and the orchestrator's recommendation) and "Probe only". They were
+   asked with gate 1's measurement of dl-96's shape: under the first it splits
+   in 4.2 s, and under the second it stays on one connection at 14.1 s. **The
+   owner chose "Build's reading: probe, else ffmpeg's own duration".** The
+   duration is the probe's, or else ffmpeg's own `Duration:` line. The size is
+   the variant's, or else the origin's `Content-Range`. "F4: a source the probe
+   could not time, but ffmpeg can, is split (the owner's reading of Decision
+   3)" pins it.
+2. **CodeQL's `js/request-forgery` on `startProxy`**, the test-only forward
+   proxy in `engine/test/parallel-ranges.test.ts`. The options were "Excuse it,
+   with the register comment" (recommended) and "Refuse it". **The owner chose
+   "Excuse it, with the register comment".** The comment sits above the
+   forwarding call, under docs/adr/005, with the category as its reason. The
+   call is on one line, so the suppression's one-line scope covers it. The
+   `CodeQL` check stays red on the pull request until the push to `main` after
+   the merge runs `security.yml`'s dismissal step, which the `awaiting` line
+   above records.
+
+**2026-10-11** — gate 1's round (FAIL at `53a1e7af`: F1 to F3 high, F4 to F6
+med, F7 and F8 low). Each was reproduced on that head with the gate's own
+script first. Each fix has a test, and each test was run red with the fix
+reverted (`mutate-r1.py`, one revert at a time, source restored after). The
+tests are in "dl-98 round 1: what gate 1 found", at the end of
+`engine/test/parallel-ranges.test.ts`, and the last case of
+`api/test/parallel-ranges-behind-the-proxy.test.ts`.
+
+- **F1** (high), fixed. A status line Node will not write reached
+  `writeHead` inside an unobserved `.then`. Before the fix:
+  `crash.mts <tree> "HTTP/1.1 099 Odd"` died with `RangeError
+[ERR_HTTP_INVALID_STATUS_CODE]`, exit 1. After it, `job rejected:
+DOWNLOAD_FAILED`, the process alive, exit 0; the same for `000` and for
+  `206 Par\x01tial`, which matches what the base tree gives. Three changes:
+  - `#receiveOrFail` turns any throw into a failure of that fetch.
+  - A status outside 200 to 599 is told to ffmpeg as `502 Bad Gateway`.
+  - A reason phrase with a control character is relayed empty.
+
+  The gate's `fuzz.mts`: all 24 answers handled. The `101` now ends at the idle
+  bound (below) as `504 Connection timed out`. Tests: "F1: an origin answering
+  with status 099 / 000 / a control character in the reason phrase …" and "F1:
+  a 101 the client never hands back is ended by the idle bound, as a timeout".
+  The first three were red with the guards reverted, and the 101 test with the
+  bound removed.
+
+- **F7** (low), fixed. The loopback compares its path as text, and its request
+  handler catches anything. `badurl.mts <tree> "//["`: `ERR_INVALID_URL`, exit
+  1, before; `HTTP/1.1 404 Not Found`, process alive, after. Test: "F7: a
+  request target the loopback cannot parse is a 404, not a crash".
+- **F2** (high), fixed in both of the parts the gate named:
+  - **An idle bound.** `idleMs`, 20 s by default, is under ffmpeg's 30 s
+    `-rw_timeout` on the loopback. It applies to every origin fetch while the
+    feeder is reading it: no headers, or no byte, for that long is a reset.
+    Time while ffmpeg is not reading does not count. Once split, the reset is
+    a Decision 5 refusal and the job falls back. Before the split, it is passed
+    on as a cut ffmpeg reconnects from.
+  - **A newer request wins the slots.** It takes the older requests'
+    lookahead, which ffmpeg is about to abandon. Slots then go round-robin,
+    newest first, and a composed answer's headers are flushed at once rather
+    than with the first byte.
+
+  `starve2.mts <tree> a-open 96 4`: `NO RESPONSE … within 12000 ms` before, and
+  `first byte after 4 ms (status 206)` after; `a-resumes`: 5 ms.
+  `stall-engine.mts <tree> feeder faststart.mp4`: `TIMEOUT` at 153 s before;
+  `ok media=identical in 22.0 s` after, at the default bound. The direct path
+  takes 32.4 s on the same stall. Tests:
+  - "F2: a second request is answered at once while the first, split, is not
+    being read" (48 MiB body, 2 MiB chunks) was red with the arbitration
+    reverted.
+  - "F2: a fan-out fetch that sends its headers and then nothing falls back,
+    and the job completes" (idle bound 500 ms) was red with the bound removed.
+
+- **F3** (high), fixed. The meter now subtracts the time the origin was paused
+  from the interval that held it. It no longer discards that interval, which
+  every 64 KiB write paused. `winsim.mts <tree> normal 1000000 65536`: `feeder
+mode=single; fan-out … 0` before; `mode=parallel; fan-out … 29` after (and
+  for 131072). Tests: "F3: an origin that writes 65536 / 131072 bytes at a
+  time is measured, and splits", both red with the old interruption put back.
+  The fixture now takes a write size (16 KiB by default).
+  - **The cost:** bytes that queued in the socket while the origin was paused
+    arrive in a burst after it resumes, and count against little time. So a
+    visitor reading slowly can make an origin measure fast and keep it on one
+    connection. Splitting would not help a slow reader, so this errs the right
+    way.
+- **F4** (med), pinned per the owner's answer above. It was red with the
+  duration narrowed to the probe's (`durationSec: () => mediaDurationSec`).
+- **F5** (med), tested.
+  - "F5: SINGLE_CONNECTION_HOSTS reaches the engine's config from the
+    environment" (engine) was red with the parse removed.
+  - "the API parses the variable, and the app hands the engine what it parsed"
+    (`api/test/parallel-ranges-behind-the-proxy.test.ts`, through
+    `loadApiConfig` and `createApp`) was red with the parse removed, and
+    separately with `server.ts`'s pass-through removed.
+- **F6** (med): the register comment, per the owner's answer above.
+- **F8** (low), no bound added. The refused-host set holds one hostname per
+  distinct host that refused. A visitor adds at most one per job they can
+  start, and job starts are already rate-limited and capped per client. Any cap
+  would have to evict a host before restart and give it a second try, which
+  Decision 5 ("until restart") rules out. So a bound is not cheap in the sense
+  asked: it changes decided behaviour.
+
+**Windows:** expected green for the fan-out, but **not measured**. Gate 1 saw
+`fanOut` 0 and `mode` `single` in every failing win32 case, the feeder-only ones
+included. That is F3's signature, and F3 is reproduced and fixed on Linux. If
+Windows hands the feeder larger reads than Linux does, the meter was blind
+there, and it is not now. What could still be red there:
+
+- The 3x ratio, if Windows' timer granularity (about 15.6 ms against the
+  fixture's 32 ms slices) costs the split side its 15% margin.
+- `-http_proxy ""` through `spawn`, which no Windows run has reached yet.
