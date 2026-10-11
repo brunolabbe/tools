@@ -2248,6 +2248,13 @@ describe("a click-only player box beside a press that did not start a player (dl
   test.each([
     ["autoplay", "a toggle labelled Autoplay"],
     ["display", "a data-testid of display-name, which is no control at all"],
+    // The word is read in the attribute the selector matched on, not in the
+    // others (gate 1): a `player-` class or id on the same element does not
+    // turn the toggle into a play control.
+    ["autoplay-cls", "the Autoplay toggle, with a player-autoplay-toggle class"],
+    ["autoplay-id", "the Autoplay toggle, with a player-autoplay id"],
+    ["autoplay-camel", "an autoPlayToggle test id, in camelCase"],
+    ["display-cls", "display-name, with a player-meta class"],
   ])(
     "ctl=%s (%s) is pressed but does not hold back the box click",
     { timeout: TEST_TIMEOUT_MS },
@@ -2268,6 +2275,13 @@ describe("a click-only player box beside a press that did not start a player (dl
   // library-class branch, since `jw-icon-display` holds no "play" at all.
   test.each([
     ["jw", "/box-with-control.html?ctl=jw", "/beacon/control-jw"],
+    // A word start in the data-testid, the class and the id, each alone: the
+    // control has no label, so a rule that reads only aria-label and title
+    // misses all three.
+    ["testid-word", "/box-with-control.html?ctl=testid-word", "/beacon/control-testid-word"],
+    ["class-btn", "/box-with-control.html?ctl=class-btn", "/beacon/control-class-btn"],
+    ["id-button", "/box-with-control.html?ctl=id-button", "/beacon/control-id-button"],
+    ["id-play", "/box-with-control.html?ctl=id-play", "/beacon/control-id-play"],
     ["carousel", "/box-with-control.html?ctl=carousel", "/beacon/control-carousel"],
     ["watch", "/box-with-control.html?ctl=watch", "/beacon/control-watch"],
     ["xo", "/box-xo-cta.html", "/beacon/cta-pressed"],
@@ -2295,6 +2309,30 @@ describe("a click-only player box beside a press that did not start a player (dl
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
       expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
+    },
+  );
+
+  // Gate 1: an icon-only play control marked in camelCase, with no label to
+  // read. `main` counted its press; a rule that took only a non-letter for a
+  // word boundary did not, and a related-video card was pressed 1.5 s before
+  // the manifest came. `label` is the harness's control.
+  test.each([
+    ["label", "aria-label=Play"],
+    ["camel-testid", 'data-testid="videoPlayButton"'],
+    ["camel-title", 'title="VideoPlay"'],
+  ])(
+    "ctl=%s (%s) is a press that counts, so a slow player is not clicked past",
+    { timeout: TEST_TIMEOUT_MS },
+    async (ctl) => {
+      server.requests.length = 0;
+      const result = await probe(
+        `/player-poster-icon-grid.html?ctl=${ctl}&delay=1500`,
+        // The shipped floor, which a request at 1.5 s needs.
+        resolverWith(undefined, 9000),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      expect(server.requests).not.toContain("/beacon/card-clicked");
     },
   );
 });

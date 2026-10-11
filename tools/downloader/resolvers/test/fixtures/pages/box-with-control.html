@@ -11,6 +11,14 @@
          display   - a plain span with data-testid="display-name" (matches [data-testid*='play' i])
          watch     - a "Watch" link to a #fragment (matches PLAY_TEXT through role link)
          jw        - JW Player's big-play icon: a class and no label at all (a real control)
+         autoplay-cls - the Autoplay toggle again, also carrying class="player-autoplay-toggle"
+         autoplay-id  - the Autoplay toggle again, also carrying id="player-autoplay"
+         display-cls  - the display-name span again, also carrying class="player-meta"
+         testid-word  - an icon-only button whose only mark is data-testid="play-toggle" (a real control)
+         class-btn    - an icon-only div whose only mark is class="play-btn" (a real control)
+         id-button    - an icon-only div whose only mark is id="play-button" (a real control)
+         id-play      - an icon-only div whose only mark is id="play" (a real control)
+         autoplay-camel - an Autoplay toggle marked data-testid="autoPlayToggle", in camelCase
          none      - nothing
          Each control records its click and does nothing to the player. -->
     <div id="slot"></div>
@@ -39,6 +47,40 @@
         el = document.createElement("div");
         el.className = "jw-icon-display";
         el.style.cssText = "width: 40px; height: 40px; background: #888";
+      }
+      if (ctl === "autoplay-cls" || ctl === "autoplay-id") {
+        el = document.createElement("button");
+        el.setAttribute("aria-label", "Autoplay");
+        el.textContent = "Autoplay";
+        if (ctl === "autoplay-cls") el.className = "player-autoplay-toggle";
+        else el.id = "player-autoplay";
+      }
+      if (ctl === "display-cls") {
+        el = document.createElement("span");
+        el.setAttribute("data-testid", "display-name");
+        el.className = "player-meta";
+        el.textContent = "Jane Doe";
+      }
+      if (ctl === "testid-word") {
+        el = document.createElement("button");
+        el.setAttribute("data-testid", "play-toggle");
+        el.textContent = "\u25b6";
+      }
+      if (ctl === "autoplay-camel") {
+        el = document.createElement("button");
+        el.setAttribute("data-testid", "autoPlayToggle");
+        el.textContent = "Auto";
+      }
+      if (ctl === "id-play") {
+        el = document.createElement("div");
+        el.id = "play";
+        el.style.cssText = "width: 40px; height: 40px; background: #888";
+      }
+      if (ctl === "class-btn" || ctl === "id-button") {
+        el = document.createElement("div");
+        el.style.cssText = "width: 40px; height: 40px; background: #888";
+        if (ctl === "class-btn") el.className = "play-btn";
+        else el.id = "play-button";
       }
       if (ctl === "watch") {
         el = document.createElement("a");

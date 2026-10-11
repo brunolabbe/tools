@@ -793,9 +793,33 @@ const UNMARK_AGE_SCRIPT = `(() => {
 })()`;
 
 /**
+ * What a play-ish selector reads, and so what its press is counted on (dl-100).
+ * The substring selectors match "play" anywhere in one attribute, so "Autoplay"
+ * and `display-name` are pressed with the rest. Each is therefore kept with the
+ * attribute it reads and the token it looks for, which `isPlayPress` checks for
+ * a word start in that attribute alone: a toggle matched through its
+ * `aria-label` is not counted through a `player-*` class it also carries.
+ */
+interface LoosePlaySelector {
+  readonly selector: string;
+  readonly attribute: string;
+  readonly token: string;
+}
+
+const PLAY_LOOSE_SELECTORS: readonly LoosePlaySelector[] = [
+  { selector: "button[aria-label*='play' i]", attribute: "aria-label", token: "play" },
+  { selector: "[role='button'][aria-label*='play' i]", attribute: "aria-label", token: "play" },
+  { selector: "button[title*='play' i]", attribute: "title", token: "play" },
+  { selector: "[data-testid*='play' i]", attribute: "data-testid", token: "play" },
+  { selector: "[class*='play-button' i]", attribute: "class", token: "play-button" },
+  { selector: "[class*='play-btn' i]", attribute: "class", token: "play-btn" },
+  { selector: "[id*='play-button' i]", attribute: "id", token: "play-button" },
+];
+
+/**
  * A player library's own big-play control, named by one class and by nothing
- * else: whatever carries it is a play control, so its press always counts (see
- * `isPlayPress`).
+ * else: whatever carries it is a play control, so its press always counts, as
+ * does the id `play` (`button#play`, `#play`).
  */
 const PLAY_LIBRARY_CLASSES: readonly string[] = [
   "vjs-big-play-button",
@@ -805,14 +829,8 @@ const PLAY_LIBRARY_CLASSES: readonly string[] = [
 ];
 
 const PLAY_SELECTORS: readonly string[] = [
-  "button[aria-label*='play' i]",
-  "[role='button'][aria-label*='play' i]",
-  "button[title*='play' i]",
+  ...PLAY_LOOSE_SELECTORS.map((entry) => entry.selector),
   ...PLAY_LIBRARY_CLASSES.map((name) => `.${name}`),
-  "[data-testid*='play' i]",
-  "[class*='play-button' i]",
-  "[class*='play-btn' i]",
-  "[id*='play-button' i]",
   "button#play",
   "#play",
 ];
@@ -820,31 +838,46 @@ const PLAY_SELECTORS: readonly string[] = [
 const PLAY_TEXT =
   /^\s*(?:play|watch|watch now|start|play video|lecture|abspielen|reproducir|riproduci|afspelen)\s*$/i;
 
-/** The attributes `PLAY_SELECTORS` read "play" out of. */
-const PLAY_ATTRIBUTES: readonly string[] = ["aria-label", "title", "data-testid", "class", "id"];
-
-/** "play" at the start of a word: not the end of "autoplay" or the middle of "display". */
-const PLAY_WORD_START = /(?:^|[^a-z])play/i;
+/**
+ * Whether `value` has a word that starts with `token`: after the start or a
+ * non-letter ("Play slideshow", `play-btn`), or, for "play", at a capital that
+ * follows a lower-case letter (`videoPlayButton`, `VideoPlay`). Not the end of
+ * "autoplay"/"autoPlay", nor the middle of "display".
+ */
+function startsWord(value: string, token: string): boolean {
+  if (new RegExp(`(?:^|[^a-z])${token}`, "i").test(value)) return true;
+  return token === "play" && /(?<![Aa]uto)(?<=[a-z])Play/.test(value);
+}
 
 /**
  * Whether the press of a `PLAY_SELECTORS` match **counts as starting a player**
- * (dl-100), as opposed to merely being pressed. The selectors match "play"
- * anywhere in an attribute, so they also press an "Autoplay" toggle and a
- * `data-testid` of `display-name`. Pressing those stays as it was, but a press
- * that counts holds back `provokeInput`'s box click for good, and neither is a
- * player having started. A match counts when it is a player library's own
- * control, or when one of those attributes has a word that starts with "play"
- * ("Play", "Play slideshow", `play-btn`, `#play`), which "Autoplay" and
- * "display" do not.
+ * (dl-100), as opposed to merely being pressed. Pressing "Autoplay" or a
+ * `display-name` stays as it was; counting it would hold back `provokeInput`'s
+ * box click for good, and neither is a player having started. A match counts
+ * when it is a library's own control or has the id `play`, or when an attribute
+ * one of `PLAY_LOOSE_SELECTORS` reads has a word starting with its token.
+ *
+ * Errs toward counting: "Playlist" and "Player" start with "play" and count,
+ * because a control missed here is a play button the box click then lands on
+ * (the defect dl-81 closed), while one counted too many only leaves the box
+ * unclicked, as before dl-100.
  */
 async function isPlayPress(target: Locator): Promise<boolean> {
   try {
-    const values = await Promise.all(
-      PLAY_ATTRIBUTES.map((name) => target.getAttribute(name, { timeout: 500 })),
+    const attributes = [...new Set(PLAY_LOOSE_SELECTORS.map((entry) => entry.attribute))];
+    const read = new Map<string, string | null>();
+    await Promise.all(
+      attributes.map(async (name) => {
+        read.set(name, await target.getAttribute(name, { timeout: 500 }));
+      }),
     );
-    const classes = (values[PLAY_ATTRIBUTES.indexOf("class")] ?? "").split(/\s+/);
+    const classes = (read.get("class") ?? "").split(/\s+/);
     if (PLAY_LIBRARY_CLASSES.some((name) => classes.includes(name))) return true;
-    return values.some((value) => value !== null && PLAY_WORD_START.test(value));
+    if (read.get("id") === "play") return true;
+    return PLAY_LOOSE_SELECTORS.some((entry) => {
+      const value = read.get(entry.attribute);
+      return value !== null && value !== undefined && startsWord(value, entry.token);
+    });
   } catch {
     // Gone already: the press below fails too, and nothing is counted.
     return false;

@@ -34,8 +34,10 @@ included, while the box click acts only in the main frame. So the flag is set by
 On a page whose only way to start is a click on a player box (no `<video>`, no
 label, no link), any one of those turns the stream into `NO_MEDIA_FOUND`.
 
-**Nothing is lost against `main`**, which never had the box click. This is a
-case dl-81 would have reached and, with this flag, does not.
+**Nothing is lost against the state before dl-81** (`092fc118`), which never had
+the box click. This is a case dl-81 would have reached and, with this flag, does
+not. (Corrected 2026-10-11: this said "against `main`", but `main` has had
+`clickPlayerBox` since #390.)
 
 ## Reproduction
 
@@ -221,8 +223,10 @@ not press a related-video card.
 ## Done when
 
 - Each row of the reproduction table whose control is not a play control
-  (`autoplay`, `display`, and the remedy chosen for `carousel`, `watch` and the
-  cross-site button) yields the stream, 3 of 3.
+  (`autoplay`, `display`) yields the stream, 3 of 3. The three residual rows
+  (`carousel`, `watch`, the cross-site `Watch now`) are accepted as presses that
+  count: they stay `NO_MEDIA_FOUND` and are pinned as such by tests (reworded by
+  the owner, 2026-10-11; see the Log).
 - dl-81's delay cases stay green: the press of a real play control still holds
   back the box click.
 - Each case has a test that fails if its branch is removed.
@@ -294,9 +298,12 @@ not press a related-video card.
       click would meet with a second click on a starting player (argued, not
       measured). That is a
       redesign, not a narrowing, and no measured page needs it.
-    - **The cost is bounded and not a regression:** `main` never had the box
-      click, and the page needs all of no `<video>`, no label of its own, and a
-      play-ish control that does nothing, to lose it.
+    - **The cost is bounded:** the page needs all of no `<video>`, no label of
+      its own, and a play-ish control that does nothing, to lose the stream, and
+      this change only ever lets the box be clicked in more cases than `main`
+      does. (This line first said "`main` never had the box click", copied from
+      the brief, which predates dl-81's merge; `main` has had `clickPlayerBox`
+      since #390. Corrected in round 2.)
   - **Guards still green.** The dl-81 delay cases
     (`player-poster-related-grid.html?delay=0|300|1500|3000`) pass, and
     `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts`
@@ -316,3 +323,54 @@ not press a related-video card.
     `undefined`), so the label is read with `getAttribute`; a first draft that
     evaluated a string counted nothing and made `autoplay` pass by accident, which
     the `carousel` row exposed.
+- 2026-10-11 — **Owner's answer on Done-when 1** (asked by the orchestrator via
+  AskUserQuestion after gate 1 raised it). Question: "Done-when 1 says
+  carousel/watch/'Watch now' 'yield the stream' under the remedy chosen. The
+  builder accepted them, and its tests pin NO_MEDIA_FOUND, the literal opposite.
+  How do we settle it?" Options: "Reword the line (Recommended)", "Build the
+  narrowing" (media-activity), "Reword + file follow-up". **The owner chose
+  "Reword the line"**; Done-when 1 is reworded above. No follow-up ticket for the
+  media-activity narrowing was requested, so none is filed.
+- 2026-10-11 — **Gate 1, round 2** (builder, Sonnet 5.5). Gate 1 failed on two
+  highs; the second is the answer above. The first held: `PLAY_WORD_START =
+/(?:^|[^a-z])play/i` treats a capital as part of a word, so `data-testid=
+"videoPlayButton"` or `title="VideoPlay"` on an icon-only button was pressed but
+  not counted, and with the manifest 1.5 s late a related card was pressed
+  (`zz-gate-grid.html`, the gate's rows `camel-testid` and `camel-title`).
+  Reproduced as the new `player-poster-icon-grid.html?ctl=…&delay=1500` tests: at
+  `6dd64a7c` `camel-testid` and `camel-title` fail (`/beacon/card-clicked`) and
+  `label` passes; 5 of 17 dl-100 cases failed there (those two and the three
+  below). What changed in `provoke.ts`:
+  - **Per selector, as the gate proposed, with one difference.** `PLAY_SELECTORS`
+    is now built from `PLAY_LOOSE_SELECTORS` (each substring selector with the one
+    attribute it reads and the token it looks for) plus the library classes plus
+    `button#play`/`#play`. `isPlayPress` counts a library class, the id `play`, or a
+    word start of an entry's own token in that entry's own attribute. A match
+    through `aria-label` is no longer counted through a `player-*` class, id or
+    test id (the over-count med): `autoplay-cls`, `autoplay-id` and `display-cls`
+    fail at `6dd64a7c` and pass now. The gate's version said the play-specific
+    selectors (`play-button`, `play-btn`) always count; they do not here, because
+    `[class*='play-button']` also matches `autoplay-button` and `display-button`,
+    so they are word-start checks on their own token.
+  - **camelCase is a word start for "play"**: a capital `Play` after a lower-case
+    letter, except right after `auto` (`autoPlayToggle` stays uncounted).
+  - **Left as the owner's rule reads: "Playlist", "Playback", "Plays" and "Player"
+    start with "play" and count.** So `data-testid="player-autoplay"`,
+    `title="Playback rate"` and the like still hold back the box click, which at
+    `main` they also do. Tightening that to the whole word "play" would lose a
+    real control written `playbtn` or `playicon`, and a control lost is the
+    dl-81 defect (a card pressed) where one counted too many is the cost already
+    accepted. This is a judgement the owner's option A leaves; recorded, not
+    asked.
+  - **Mutants** (`-t dl-100`, 19 cases, all killed): `labelword` (only
+    `aria-label` and `title` read) fails `jw`, `testid-word`, `class-btn`,
+    `id-button`, `id-play`, `camel-testid` (6 of 19); no id-`play` branch fails
+    `id-play`; no camelCase fails `camel-testid` and `camel-title`; no `auto`
+    exception fails `autoplay-camel`; no library branch fails `jw`. The first
+    round's `id-play`, `autoplay-camel` and the three attribute rows had no test.
+  - **Not done.** The gate's low about `isPlayPress`'s `catch` (an element gone
+    before the read): no test, and each read can wait up to 500 ms on a detached
+    match before the press itself fails. A test would need a control that detaches
+    between the count and the read, which a fixture cannot time; the cost is
+    bounded by `max: 3` per frame and the press fails anyway. Its other low, "main
+    never had the box click", is corrected above.
