@@ -105,8 +105,10 @@ ones by order or by count.
   one connection, counted at the fixture. The 200 case has a constraint: see
   Build, "After dl-102".
 - Bytes held ahead never exceed 4 × 4 MB per job, measured, not assumed.
-- Every ranged fetch passes the SSRF check and the egress proxy, carries the
-  replayed headers, counts toward the size cap, and stops on cancel.
+- Each function this branch adds or changes that issues a ranged request —
+  listed by name in the Log — passes the SSRF check and the egress proxy,
+  carries the replayed headers, counts toward the size cap, and stops on
+  cancel, each with a test.
 
 ## Log
 
@@ -175,3 +177,9 @@ and remember it in SQLite with an expiry. They chose until restart (decision 5).
    `depends_on` now lists dl-102, so `npm run status -- --ready` withholds this
    ticket until dl-102 is `done`, and the owner's order does not rest on prose.
    `status` stays `ready`: nobody has started it, and it is only withheld.
+
+**2026-10-10** — the last Done when line reworded by the orchestrator, under the
+batch's rule that an acceptance line saying "every" is reworded to an
+enumerable scope before work starts. It read: "Every ranged fetch passes the
+SSRF check and the egress proxy, carries the replayed headers, counts toward
+the size cap, and stops on cancel." No source changed in this commit.
