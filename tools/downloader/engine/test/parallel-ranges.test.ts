@@ -23,7 +23,7 @@ import type { AddressInfo, Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
-import { AppError } from "@downloader/contract";
+import type { AppError } from "@downloader/contract";
 import type { MediaVariant, RequestContext } from "@downloader/contract";
 import type { EngineConfigInput } from "../src/config.ts";
 import type { FeederStats, RefusalKind } from "../src/download/parallel-ranges.ts";
