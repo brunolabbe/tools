@@ -19,6 +19,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
+import net from "node:net";
 import type { AddressInfo, Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -26,6 +27,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 import type { AppError } from "@downloader/contract";
 import type { MediaVariant, RequestContext } from "@downloader/contract";
 import type { EngineConfigInput } from "../src/config.ts";
+import { loadEngineConfig } from "../src/config.ts";
 import type { FeederStats, RefusalKind } from "../src/download/parallel-ranges.ts";
 import {
   hostListed,
@@ -65,6 +67,10 @@ interface Behaviour {
    * no length anywhere, so nothing can learn the file's size.
    */
   sizeless: boolean;
+  /** Bytes per write. 16 KiB unless a test needs the origin's writes larger (gate 1's F3). */
+  slice: number;
+  /** The first fan-out fetch is answered with headers and then nothing, once (gate 1's F2). */
+  stallFirstFanOut: boolean;
 }
 
 interface Seen {
@@ -83,6 +89,8 @@ const DEFAULT_BEHAVIOUR: Behaviour = {
   sharedBps: null,
   refuse: null,
   sizeless: false,
+  slice: 16 * 1024,
+  stallFirstFanOut: false,
 };
 let behaviour: Behaviour = { ...DEFAULT_BEHAVIOUR };
 let seen: Seen[] = [];
@@ -96,7 +104,8 @@ let files: Record<string, Buffer>;
 let origin: http.Server;
 let originUrl: string;
 
-const SLICE = 16 * 1024;
+/** A response the fixture holds open and silent; ended in `afterEach`. */
+const stalled: http.ServerResponse[] = [];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -115,7 +124,7 @@ async function send(
   let offset = 0;
   let next = performance.now();
   while (offset < body.length && !response.destroyed) {
-    const slice = body.subarray(offset, offset + SLICE);
+    const slice = body.subarray(offset, offset + behaviour.slice);
     offset += slice.length;
     if (bps.shared !== null) {
       const now = performance.now();
@@ -206,6 +215,19 @@ beforeAll(async () => {
       return;
     }
     const rates = { perConnection: behaviour.perConnectionBps, shared: behaviour.sharedBps };
+    if (fanOut && behaviour.stallFirstFanOut) {
+      behaviour.stallFirstFanOut = false;
+      const [, from, to] = /^bytes=(\d+)-(\d+)$/u.exec(range ?? "") ?? [];
+      response.writeHead(206, {
+        "content-type": "video/mp4",
+        "accept-ranges": "bytes",
+        "content-range": `bytes ${from}-${to}/${body.length}`,
+        "content-length": String(Number(to) - Number(from) + 1),
+      });
+      response.flushHeaders();
+      stalled.push(response);
+      return;
+    }
     if (refused) {
       switch (behaviour.refuse) {
         case "reset":
@@ -265,6 +287,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
+  for (const response of stalled.splice(0)) response.destroy();
   behaviour = { ...DEFAULT_BEHAVIOUR };
   resetCounts();
 });
@@ -894,4 +917,224 @@ describe("dl-98: a fallback and a relay it cannot resume", () => {
     },
     SLOW,
   );
+});
+
+/**
+ * A raw origin for answers `http.ServerResponse` will not write: it answers the
+ * seek probe honestly and every other request with `answer`, then closes.
+ */
+async function startRawOrigin(
+  answer: string,
+  holdOpen = false,
+): Promise<{ url: string; close(): Promise<void> }> {
+  const sockets = new Set<Socket>();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("error", () => undefined);
+    let head = "";
+    socket.on("data", (data: Buffer) => {
+      head += data.toString("latin1");
+      if (!head.includes("\r\n\r\n")) return;
+      if (/range: bytes=1-1\r\n/iu.test(head)) {
+        socket.end(
+          "HTTP/1.1 206 Partial Content\r\ncontent-range: bytes 1-1/5000000\r\ncontent-length: 1\r\n\r\nx",
+        );
+      } else if (holdOpen) socket.write(answer);
+      else socket.end(answer);
+      head = "";
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/clip.mp4`,
+    close: () => {
+      for (const socket of sockets) socket.destroy();
+      return new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+describe("dl-98 round 1: what gate 1 found", () => {
+  test.each([
+    ["status 099", "HTTP/1.1 099 Odd\r\ncontent-length: 0\r\n\r\n", 502, "Bad Gateway"],
+    ["status 000", "HTTP/1.1 000 Zero\r\ncontent-length: 0\r\n\r\n", 502, "Bad Gateway"],
+    [
+      "a control character in the reason phrase",
+      "HTTP/1.1 404 Not\x01Found\r\ncontent-length: 0\r\n\r\n",
+      404,
+      "",
+    ],
+  ])(
+    "F1: an origin answering with %s is told to ffmpeg as a status, and the process lives",
+    async (_name, answer, status, message) => {
+      const raw = await startRawOrigin(answer);
+      try {
+        const { feeder } = await feederFor("unused", { url: raw.url });
+        const read = await readLoopback(feeder.url);
+        feeder.close();
+        // Before the fix, `writeHead` threw inside an unobserved `.then`: an
+        // unhandled rejection, which vitest fails the run on, and the API dies of.
+        expect(`${read.status} ${read.statusMessage}`).toBe(`${status} ${message}`);
+      } finally {
+        await raw.close();
+      }
+    },
+  );
+
+  test("F1: a 101 the client never hands back is ended by the idle bound, as a timeout", async () => {
+    const raw = await startRawOrigin(
+      "HTTP/1.1 101 Switching Protocols\r\nupgrade: x\r\nconnection: upgrade\r\n\r\n",
+      true,
+    );
+    try {
+      const { feeder } = await feederFor("unused", {
+        url: raw.url,
+        settings: { ...PARALLEL_RANGE_DEFAULTS, ...FAST_SPLIT, idleMs: 300 },
+      });
+      const started = performance.now();
+      const read = await readLoopback(feeder.url);
+      feeder.close();
+      expect(`${read.status} ${read.statusMessage}`).toBe("504 Connection timed out");
+      expect(performance.now() - started).toBeLessThan(5_000);
+    } finally {
+      await raw.close();
+    }
+  });
+
+  test("F7: a request target the loopback cannot parse is a 404, not a crash", async () => {
+    const { feeder } = await feederFor("moov-end.mp4");
+    try {
+      const reply = await new Promise<string>((resolve) => {
+        const socket = net.connect(Number(new URL(feeder.url).port), "127.0.0.1", () => {
+          socket.write("GET //[ HTTP/1.1\r\nhost: x\r\nconnection: close\r\n\r\n");
+        });
+        let got = "";
+        socket.on("data", (data: Buffer) => (got += data.toString("latin1")));
+        socket.on("close", () => resolve(got.split("\r\n")[0] ?? ""));
+        socket.on("error", () => resolve("socket error"));
+      });
+      expect(reply).toBe("HTTP/1.1 404 Not Found");
+    } finally {
+      feeder.close();
+    }
+  });
+
+  test(
+    "F2: a second request is answered at once while the first, split, is not being read",
+    async () => {
+      // ffmpeg's seek: a new connection opened before the old one is closed.
+      const body = Buffer.alloc(48 * 1024 * 1024);
+      for (let index = 0; index < body.length; index += 4) body.writeUInt32BE(index, index);
+      files["forty-eight.bin"] = body;
+      behaviour.perConnectionBps = 20_000_000;
+      const { feeder } = await feederFor("forty-eight.bin", {
+        settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 2 * 1024 * 1024, measureMs: 100 },
+      });
+      const first = await new Promise<http.IncomingMessage>((resolve) => {
+        http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false }, resolve);
+      });
+      let read = 0;
+      first.on("data", (chunk: Buffer) => {
+        read += chunk.length;
+        if (read >= 8 * 1024 * 1024) first.pause();
+      });
+      await sleep(2_500);
+      expect(feeder.stats().mode).toBe("parallel");
+
+      const seekTo = Math.floor(body.length * 0.8);
+      const started = performance.now();
+      const second = await new Promise<{ status: number; firstByteMs: number; bytes: Buffer }>(
+        (resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("no answer within 10 s")), 10_000);
+          http
+            .get(
+              feeder.url,
+              { headers: { range: `bytes=${seekTo}-` }, agent: false },
+              (response) => {
+                const chunks: Buffer[] = [];
+                let firstByteMs = -1;
+                response.on("data", (chunk: Buffer) => {
+                  if (firstByteMs < 0) firstByteMs = performance.now() - started;
+                  chunks.push(chunk);
+                });
+                response.once("end", () => {
+                  clearTimeout(timer);
+                  resolve({
+                    status: response.statusCode ?? 0,
+                    firstByteMs,
+                    bytes: Buffer.concat(chunks),
+                  });
+                });
+              },
+            )
+            .on("error", reject);
+        },
+      );
+      first.destroy();
+      const stats = feeder.stats();
+      feeder.close();
+
+      expect(second.status).toBe(206);
+      expect(second.firstByteMs).toBeLessThan(2_000);
+      expect(second.bytes.equals(body.subarray(seekTo))).toBe(true);
+      expect(stats.maxHeldBytes).toBeLessThanOrEqual(4 * 2 * 1024 * 1024);
+    },
+    SLOW,
+  );
+
+  test(
+    "F2: a fan-out fetch that sends its headers and then nothing falls back, and the job completes",
+    async () => {
+      const expected = await reference("faststart.mp4");
+      behaviour.perConnectionBps = 2_000_000;
+      behaviour.stallFirstFanOut = true;
+      const started = performance.now();
+      const ran = await run(
+        engineWith({ parallelRanges: { ...FAST_SPLIT, idleMs: 500 } }),
+        variant("faststart.mp4", { durationSec: 0.5 }),
+      );
+      // Before the fix it waited on ffmpeg's 30 s read timeout, then on a
+      // reconnect the slots starved: TIMEOUT at the stage limit.
+      expect(performance.now() - started).toBeLessThan(15_000);
+      expect(stalled).toHaveLength(1);
+      expect(await packetDigests(ran.file)).toEqual(expected);
+    },
+    SLOW,
+  );
+
+  test.each([64 * 1024, 128 * 1024])(
+    "F3: an origin that writes %i bytes at a time is measured, and splits",
+    async (slice) => {
+      // 2 MB/s a connection against about 8 MB/s of media. With 64 KiB writes
+      // every chunk filled the loopback's write buffer, the pause discarded the
+      // interval, and the meter never reached its window: no split.
+      behaviour.perConnectionBps = 2_000_000;
+      behaviour.slice = slice;
+      await run(engineWith(), variant("moov-end.mp4", { durationSec: 0.5 }));
+      expect(counted().fanOut).toBeGreaterThan(4);
+    },
+    SLOW,
+  );
+
+  test(
+    "F4: a source the probe could not time, but ffmpeg can, is split (the owner's reading of Decision 3)",
+    async () => {
+      // dl-96's shape: the size known, the duration not. ffmpeg's own Duration
+      // line times it; with the duration taken from the probe alone this stays
+      // on one connection.
+      behaviour.perConnectionBps = 300_000;
+      await run(engineWith(), variant("moov-end.mp4", { durationSec: undefined }));
+      expect(counted().fanOut).toBeGreaterThan(4);
+    },
+    SLOW,
+  );
+
+  test("F5: SINGLE_CONNECTION_HOSTS reaches the engine's config from the environment", () => {
+    const config = loadEngineConfig(
+      { ffmpegPath: "ffmpeg" },
+      { SINGLE_CONNECTION_HOSTS: " cdn.example.com, .other.org ,, " },
+    );
+    expect(config.singleConnectionHosts).toEqual(["cdn.example.com", ".other.org"]);
+    expect(loadEngineConfig({ ffmpegPath: "ffmpeg" }, {}).singleConnectionHosts).toEqual([]);
+  });
 });

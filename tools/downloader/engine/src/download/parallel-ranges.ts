@@ -90,6 +90,14 @@ export interface ParallelRangeSettings {
    * per-client one gives about 1, so 1.5 sits well clear of both.
    */
   speedupFloor: number;
+  /**
+   * How long an origin request may go without headers or a byte, while the
+   * feeder is reading it, before it is treated as a reset (gate 1's F2). Below
+   * ffmpeg's own 30 s `-rw_timeout` on the loopback, so a stalled fetch falls
+   * back, or is passed on as a cut ffmpeg reconnects from, before ffmpeg gives
+   * up on the loopback itself.
+   */
+  idleMs: number;
 }
 
 export const PARALLEL_RANGE_DEFAULTS: Readonly<ParallelRangeSettings> = {
@@ -97,6 +105,7 @@ export const PARALLEL_RANGE_DEFAULTS: Readonly<ParallelRangeSettings> = {
   chunkBytes: 4 * 1024 * 1024,
   measureMs: 5_000,
   speedupFloor: 1.5,
+  idleMs: 20_000,
 };
 
 /** Decision 5's refusals, by what the fixture or the origin did. */
@@ -195,29 +204,60 @@ function parseContentRange(
   };
 }
 
-/** Records a rate over the time something was actually flowing, and nothing else. */
+/**
+ * A rate over the time the origin was being read, and nothing else.
+ *
+ * **Paused time is subtracted from the interval it falls in, not the interval
+ * thrown away** (gate 1's F3). Node reports backpressure from
+ * `ServerResponse#write` as soon as one call passes its 64 KiB high-water mark,
+ * whether or not the socket took the bytes at once, so an origin whose data
+ * events are 64 KiB pauses after every one. Discarding each interval that held
+ * a pause left such an origin with no measured time at all, and it never
+ * split: 2 MB/s a connection against 8 MB/s of media stayed on one connection
+ * with 64 KiB writes and split with 16 KiB ones.
+ */
 class Meter {
   bytes = 0;
   activeMs = 0;
   #lastAt: number | null = null;
+  #pausedAt: number | null = null;
+  #pausedMs = 0;
 
-  /** `bytes` arrived now; the interval since the last call counts unless it was interrupted. */
+  /** `bytes` arrived now: the interval since the last call counts, less any pause inside it. */
   record(bytes: number, now: number): void {
     if (this.#lastAt !== null) {
-      this.activeMs += now - this.#lastAt;
+      const paused = this.#pausedMs + (this.#pausedAt === null ? 0 : now - this.#pausedAt);
+      this.activeMs += Math.max(0, now - this.#lastAt - paused);
       this.bytes += bytes;
     }
     this.#lastAt = now;
+    this.#pausedMs = 0;
+    if (this.#pausedAt !== null) this.#pausedAt = now;
   }
 
+  /** The feeder stopped reading the origin, because ffmpeg stopped reading it. */
+  pause(now: number): void {
+    if (this.#pausedAt === null) this.#pausedAt = now;
+  }
+
+  resume(now: number): void {
+    if (this.#pausedAt === null) return;
+    this.#pausedMs += now - this.#pausedAt;
+    this.#pausedAt = null;
+  }
+
+  /** The next interval does not count at all: what was being measured changed. */
   interrupt(): void {
     this.#lastAt = null;
+    this.#pausedMs = 0;
   }
 
   reset(): void {
     this.bytes = 0;
     this.activeMs = 0;
     this.#lastAt = null;
+    this.#pausedMs = 0;
+    this.#pausedAt = null;
   }
 
   /** Bytes per second. */
@@ -248,6 +288,8 @@ class Fetch {
   failure: FetchFailure | null = null;
   response: IncomingMessage | null = null;
   paused = false;
+  /** Fires when the origin has said nothing for `idleMs` while it was being read. */
+  idle: NodeJS.Timeout | undefined;
   readonly controller = new AbortController();
   #closed!: () => void;
   readonly closed: Promise<void> = new Promise((resolve) => {
@@ -269,6 +311,7 @@ class Fetch {
 
   /** Stops the network side; the queue is kept. */
   abort(): void {
+    clearTimeout(this.idle);
     this.controller.abort();
     this.response?.destroy();
     if (!this.started) this.markClosed();
@@ -374,7 +417,12 @@ export class RangeFeeder {
         response.writeHead(503).end();
         return;
       }
-      feeder.#accept(request, response);
+      try {
+        feeder.#accept(request, response);
+      } catch {
+        // Nothing a request to the loopback carries may take the process down.
+        response.destroy();
+      }
     });
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -426,7 +474,8 @@ export class RangeFeeder {
       response.destroy();
       return;
     }
-    if (new URL(request.url ?? "/", "http://loopback").pathname !== this.#path) {
+    // Compared as text: a request target is not parsed (`GET //[` threw here, gate 1's F7).
+    if ((request.url ?? "").split("?")[0] !== this.#path) {
       response.writeHead(404).end();
       return;
     }
@@ -458,6 +507,11 @@ export class RangeFeeder {
     });
 
     if (composed) {
+      // ffmpeg opens a seek's or a reconnect's connection before it closes the
+      // old one, and waits for its headers first. The old request's lookahead
+      // is what it is about to abandon; left in place, it held every slot and
+      // the new request got nothing (gate 1's F2).
+      for (const other of this.#serves) if (other !== serve) this.#dropLookahead(other);
       this.#compose(serve, asked);
       return;
     }
@@ -485,7 +539,9 @@ export class RangeFeeder {
         ? {}
         : { "content-range": `bytes ${serve.position}-${serve.end - 1}/${size}` }),
     });
-    this.#fill(serve);
+    // Sent now, not with the first byte: the answer does not wait on the origin.
+    serve.response.flushHeaders();
+    this.#fillAll();
   }
 
   /** Hands ffmpeg what is ready, in order, as fast as it reads. */
@@ -541,10 +597,13 @@ export class RangeFeeder {
       if (serve.blocked && !head.paused) {
         head.paused = true;
         head.response.pause();
-        this.#meter.interrupt();
+        clearTimeout(head.idle);
+        this.#meter.pause(performance.now());
       } else if (!serve.blocked && head.paused) {
         head.paused = false;
         head.response.resume();
+        this.#meter.resume(performance.now());
+        this.#arm(serve, head);
       }
     }
   }
@@ -574,13 +633,41 @@ export class RangeFeeder {
     fetch.started = true;
     this.#originRequests += 1;
     this.#maxConcurrent = Math.max(this.#maxConcurrent, this.#inFlight());
+    this.#arm(serve, fetch);
     void this.#request(fetch, range).then(
-      (response) => this.#receive(serve, fetch, response),
+      (response) => this.#receiveOrFail(serve, fetch, response),
       (error: unknown) => {
         fetch.markClosed();
         this.#fail(serve, fetch, failureOf(error));
       },
     );
+  }
+
+  /**
+   * `#receive`, with any throw turned into a failure of this fetch. An answer
+   * that cannot be relayed must never reach the process: a rejection here had
+   * no handler, and a `099` status line took the API down (gate 1's F1).
+   */
+  #receiveOrFail(serve: Serve, fetch: Fetch, response: IncomingMessage): void {
+    try {
+      this.#receive(serve, fetch, response);
+    } catch {
+      response.destroy();
+      this.#fail(serve, fetch, UNRELAYABLE);
+    }
+  }
+
+  /** (Re)starts `fetch`'s idle bound. Data, a pause, the end and a failure each touch it. */
+  #arm(serve: Serve, fetch: Fetch): void {
+    clearTimeout(fetch.idle);
+    if (fetch.done || fetch.failure !== null || fetch.paused || this.#closed) return;
+    fetch.idle = setTimeout(() => {
+      // The failure first: `#fail` ignores a fetch that is already aborted.
+      this.#fail(serve, fetch, IDLE);
+      fetch.controller.abort();
+      fetch.response?.destroy();
+    }, this.#options.settings.idleMs);
+    fetch.idle.unref?.();
   }
 
   /** One request, through `route`, redirects followed each on a fresh request through it. */
@@ -633,7 +720,10 @@ export class RangeFeeder {
       fetch === serve.fetches[0] &&
       !serve.response.headersSent
     ) {
-      if (this.#relayHead(serve, response, status, range)) return;
+      if (this.#relayHead(serve, response, status, range)) {
+        clearTimeout(fetch.idle);
+        return;
+      }
     } else {
       // Composed: anything but the exact bytes asked for is a failure.
       const refused = this.#check(fetch, status, range);
@@ -652,6 +742,7 @@ export class RangeFeeder {
         return;
       }
       fetch.done = true;
+      clearTimeout(fetch.idle);
       this.#pump(serve);
     });
     response.on("error", () => undefined);
@@ -672,12 +763,20 @@ export class RangeFeeder {
     status: number,
     range: ReturnType<typeof parseContentRange>,
   ): boolean {
+    if (status < 200 || status > 599) {
+      // `099`, `000`, a `1xx` that reached here: nothing ffmpeg could be told
+      // in the origin's words, and `writeHead` throws on them (gate 1's F1).
+      throw new Error("unrelayable status");
+    }
     const headers: Record<string, string> = {};
     for (const name of RELAYED_HEADERS) {
       const value = response.headers[name];
       if (typeof value === "string") headers[name] = value;
     }
-    serve.response.writeHead(status, response.statusMessage ?? "", headers);
+    const message = response.statusMessage ?? "";
+    // A reason phrase with a control character is dropped, not relayed: Node
+    // refuses to write it, and the status code says what ffmpeg needs.
+    serve.response.writeHead(status, PRINTABLE_REASON.test(message) ? message : "", headers);
     if (status === 206 && range !== null) {
       serve.end = range.end;
       if (range.total !== null) this.#size = range.total;
@@ -739,11 +838,13 @@ export class RangeFeeder {
         this.#meter.record(piece.length, now);
       else this.#meter.interrupt();
     } else if (this.#mode === "single" && serve.end !== null && fetch.end === null) {
-      if (!fetch.paused) this.#meter.record(piece.length, now);
+      this.#meter.record(piece.length, now);
     }
 
+    this.#arm(serve, fetch);
     if (fetch.end !== null && fetch.start + fetch.received >= fetch.end) {
       fetch.done = true;
+      clearTimeout(fetch.idle);
       // The connection that was open before the split keeps sending past its chunk.
       fetch.response?.destroy();
       this.#fillAll();
@@ -756,6 +857,7 @@ export class RangeFeeder {
     // An abort is ours — a seek, a fallback, the end of the run — not the origin's.
     if (fetch.done || fetch.failure !== null || this.#closed) return;
     if (fetch.controller.signal.aborted) return;
+    clearTimeout(fetch.idle);
     fetch.failure = failure;
     if (this.#mode === "parallel") {
       this.#fallBack(failure);
@@ -848,24 +950,44 @@ export class RangeFeeder {
     this.#fillAll();
   }
 
-  /** In split mode, starts chunk fetches for every serve until the slots are full. */
+  /**
+   * In split mode, starts chunk fetches until the slots are full. Slots are
+   * shared by every request, so what is held is bounded per run, not per
+   * request; they go one at a time to each request in turn, newest first, so
+   * that no request waits on another's lookahead (gate 1's F2).
+   */
   #fillAll(): void {
     if (this.#mode !== "parallel" || this.#closed) return;
-    for (const serve of this.#serves) this.#fill(serve);
+    const newestFirst = [...this.#serves].toReversed();
+    for (;;) {
+      let started = false;
+      for (const serve of newestFirst) {
+        if (this.#occupied() >= this.#options.settings.connections) return;
+        if (this.#startNext(serve)) started = true;
+      }
+      if (!started) return;
+    }
   }
 
-  #fill(serve: Serve): void {
-    if (this.#mode !== "parallel" || serve.finished || serve.end === null) return;
-    const { connections, chunkBytes } = this.#options.settings;
-    for (;;) {
-      // Slots are shared by every serve: what is held is bounded per run, not per request.
-      if (this.#occupied() >= connections) return;
-      const last = serve.fetches.at(-1);
-      const next = last === undefined ? serve.position : (last.end ?? Number.POSITIVE_INFINITY);
-      if (next >= serve.end) return;
-      const fetch = new Fetch(next, Math.min(next + chunkBytes, serve.end));
-      serve.fetches.push(fetch);
-      this.#begin(serve, fetch, `bytes=${fetch.start}-${(fetch.end as number) - 1}`);
+  /** Starts the next chunk `serve` will need, if it needs one. */
+  #startNext(serve: Serve): boolean {
+    if (serve.finished || serve.end === null) return false;
+    const last = serve.fetches.at(-1);
+    const next = last === undefined ? serve.position : (last.end ?? Number.POSITIVE_INFINITY);
+    if (next >= serve.end) return false;
+    const fetch = new Fetch(next, Math.min(next + this.#options.settings.chunkBytes, serve.end));
+    serve.fetches.push(fetch);
+    this.#begin(serve, fetch, `bytes=${fetch.start}-${(fetch.end as number) - 1}`);
+    return true;
+  }
+
+  /** Drops every chunk `serve` fetched ahead of the one it is handing over. */
+  #dropLookahead(serve: Serve): void {
+    for (const fetch of serve.fetches.splice(1)) {
+      this.#held -= fetch.queued;
+      fetch.queue.length = 0;
+      fetch.queued = 0;
+      fetch.abort();
     }
   }
 
@@ -961,6 +1083,29 @@ export class RangeFeeder {
     }
   }
 }
+
+/** An answer `#receive` could not relay: a status or reason phrase Node will not write. */
+const UNRELAYABLE: FetchFailure = {
+  refusal: null,
+  detail: "unrelayable answer",
+  status: 502,
+  statusMessage: "Bad Gateway",
+};
+
+/**
+ * A fetch the origin left silent for `idleMs`. Counted as Decision 5's reset;
+ * told to ffmpeg, when it reaches it, in the words ffmpeg itself uses for a
+ * read that timed out, which `isHostFailure` reads as the host's.
+ */
+const IDLE: FetchFailure = {
+  refusal: "reset",
+  detail: "idle",
+  status: 504,
+  statusMessage: "Connection timed out",
+};
+
+/** A reason phrase Node will write: tab, space, visible ASCII and obs-text. */
+const PRINTABLE_REASON = /^[\t\x20-\x7e\x80-\xff]*$/u;
 
 function reset(detail: string): FetchFailure {
   return { refusal: "reset", detail, status: 502, statusMessage: "Connection reset by peer" };
