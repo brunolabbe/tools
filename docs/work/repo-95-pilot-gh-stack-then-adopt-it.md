@@ -465,3 +465,18 @@ request is the owner's decision`). The hook fires before the deny list is
   on `main` in a session started after the merge, before step 2 is built on a new
   branch. The earlier entry's "the next move is the owner's" is that question,
   since answered. The ticket lands `in-flight`: steps 2 to 4 remain.
+
+- 2026-10-11 — the guard (#412) merged as 5649a26e. In the orchestrator's
+  session, already running before the merge, after the shared checkout was
+  fast-forwarded to main, `gh stack merge --help` was refused by
+  `.claude/hooks/check-main-writes.sh` ("Merging a pull request is the owner's
+  decision, not an agent's. …"). The hook script is read from disk on every
+  call, so it binds as soon as the checkout has it; whether the
+  `Bash(gh stack merge*)` deny rule itself binds in a session started after the
+  merge is still unshown (gate 1's F2). The pilot's chain is gone: dl-103 (#417)
+  squash-merged before dl-98 pushed, so dl-98 (#421) was moved onto main with
+  `git rebase --onto` and never formed a stack. The owner answered "Steps 2 to 4
+  remain … What now?" on 2026-10-11 with "Hold until the next real chain"
+  (recommended; CHOSEN), over "Install now (step 2), pilot later" and "Drop the
+  pilot; keep the guard". The ticket stays `in-flight`; the next batch whose seam
+  map shows two branches sharing a file does steps 2 and 3 with one builder.

@@ -4962,3 +4962,80 @@ Total $38.0785, active 2h10m10s (rates read 2026-09-30).
 - Reading a build report for behaviour pinned in a test but not raised as a decision: lg-17's spending category for an automatic filing was put to the owner that way.
 - A gate building its database with the base's own code, in a detached base worktree, and migrating it with the head's code (both tickets).
 - The owner-chosen "fixed at landing" path from #407 (lg-17 G2-1), with no re-gate.
+
+### Batch 2026-10-10 (tools-67 / tools-59, eight tickets, dl-98 stacked then unstacked) — base 7709411
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over nine ready ids | 47s / 46s | 0 | $0.1860 |
+| #416 | merged | Sonnet 5.5 / medium | general-purpose | copy the `dataviz` skill to a file for lg-9's builder | 33s / 33s | 0 | $0.1724 |
+| #411 | merged | Sonnet 5.5 / high | builder-standard | repo-96 build and round 1 | 5m22s / 16m34s | 0 | $0.9222 |
+| #411 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-96 gates 1 and 2 | 9m33s / 17m12s | 0 | $3.0056 |
+| #411 | merged | Sonnet 5.5 / high | fixer | repo-96 round 2 and landing | 3m50s / 3m48s | 0 | $0.6056 |
+| #412 | merged | Opus 5.5 / high | builder-hard | repo-95 step 1 (guard slice) | 3m07s / 3m04s | 0 | $0.8446 |
+| #412 | merged | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | repo-95 gates 1 and 2 | 9m41s / 15m36s | 0 | $1.7343 |
+| #412 | merged | Sonnet 5.5 / high | fixer | repo-95 F1 round (hook) | 3m16s / 3m14s | 0 | $0.4123 |
+| #412 | merged | Sonnet 5.5 / high | fixer | repo-95 landing (F3, F4 at landing) | 4m21s / 4m20s | 0 | $0.3635 |
+| #416 | merged | Sonnet 5.5 / high | builder-standard | lg-9 build and round 1 | 35m48s / 1h33m36s | 0 | $8.4978 |
+| #416 | merged | Opus 5.5 / high | ticket-reviewer-opus | lg-9 gates 1 and 2 | 15m52s / 29m26s | 0 | $5.9904 |
+| #416 | merged | Sonnet 5.5 / high | fixer | lg-9 landing (three text fixes) | 3m39s / 3m37s | 0 | $0.3453 |
+| #413 | merged | Sonnet 5.5 / high | builder-standard | dl-93 build and round 1 | 21m09s / 1h48m53s | 1 | $2.3438 |
+| #413 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-93 gates 1 and 2 | 19m05s / 45m37s | 0 | $3.5651 |
+| #413 | merged | Sonnet 5.5 / high | fixer | dl-93 landing (nine prefixes) | 5m41s / 23m46s | 0 | $0.6403 |
+| #415 | merged | Sonnet 5.5 / high | builder-standard | dl-90 build and round 1 | 20m08s / 1h57m11s | 1 | $4.5445 |
+| #415 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-90 gates 1 and 2 | 30m32s / 59m38s | 0 | $6.0423 |
+| #415 | merged | Sonnet 5.5 / high | fixer | dl-90 landing, filed dl-104 and dl-105 | 3m38s / 21m36s | 0 | $0.6628 |
+| #417 | merged | Opus 5.5 / high | builder-hard | dl-103 build, rounds 1 and 2 | 48m40s / 3h45m36s | 1 | $15.1509 |
+| #417 | merged | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-103 gates 1, 2 and 3 (owner-asked) | 1h15m03s / 2h47m44s | 0 | $15.4656 |
+| #417 | merged | Sonnet 5.5 / high | fixer | dl-103 landing | 2m08s / 21m16s | 0 | $0.4863 |
+| #420 | merged | Sonnet 5.5 / high | builder-standard | repo-97 file, build and round 1 | 14m41s / 18m55s | 0 | $1.4639 |
+| #420 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-97 gates 1 and 2 | 9m19s / 17m31s | 0 | $2.6867 |
+| #420 | merged | Sonnet 5.5 / high | fixer | repo-97 landing (ci.yml, CLAUDE.md, testing.md by owner) | 9m11s / 9m03s | 0 | $0.4448 |
+| #421 | open, ready | Opus 5.5 / high | builder-hard | dl-98 build, rounds 1 and 2 | 1h18m13s / 12h45m53s | 1 | $26.9599 |
+| #421 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-98 gate 1, died with the session | — | — | unpriced (see defect 14) |
+| #421 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-98 gates 1, 2 and 3 (owner-asked) | 1h58m43s / 11h01m37s | 1 | $19.5883 |
+| #421 | open, ready | Sonnet 5.5 / high | fixer | dl-98 landing, filed dl-106 | 4m12s / 22m56s | 0 | $0.7228 |
+| — | — | Fable 5.1, then Opus 5.5 / high | orchestrator | the batch (model switched by the owner mid-intake) | 3h40m46s / 19h30m02s | 2 | $32.4352 |
+
+Total $156.28 priced, active 12h57m, one gate unpriced (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- repo-96 → #411: gate 1 FAIL (1 high: the 04:49 case failed the conditions as worded; 3 med, 2 low), gate 2 CONCERNS (no high; condition 3 re-asked with a measurement); one low recorded.
+- repo-95 → #412, a slice (step 1 and the hook), landed `in-flight`: gate 1 PASS for the slice (3 low), gate 2 PASS (1 low); F3 and F4 fixed at landing by owner choice, F2 recorded. Steps 2–4 held for the next real chain (owner, 2026-10-11).
+- lg-9 → #416: gate 1 FAIL (1 high: a fixed item's colour moved with the range; 2 med), gate 2 CONCERNS (no high); three text fixes at landing by owner choice; lg-18 filed.
+- dl-93 → #413: gate 1 FAIL (1 high: the link-in-a-sentence signal pressed submit and newsletter buttons on six pages), gate 2 PASS; nine consent compounds added at landing by owner choice.
+- dl-90 → #415: gate 1 FAIL (1 high: whole files read and found whole were dropped), gate 2 PASS (lows); dl-104 and dl-105 filed.
+- dl-103 → #417: gate 1 FAIL (1 high: a short source got SOURCE_NOT_SEEKABLE's copy), gate 2 CONCERNS (2 med), gate 3 CONCERNS (narrow, owner-asked; 1 low).
+- repo-97 → #420, filed this batch from dl-103 gate 2's reproduction that main was red: gate 1 FAIL (1 high: one row missing from a Log inventory), gate 2 PASS.
+- dl-98 → #421, cut on dl-103's branch, moved onto main with `git rebase --onto` before its first push after dl-103 squash-merged: gate 1 FAIL (3 high), gate 2 CONCERNS (2 med), gate 3 PASS (narrow, owner-asked; 3 low); `awaiting` CodeQL dismissal; dl-106 filed for two Windows-only test failures.
+
+**Defects in the skill:**
+
+1. `roles/builder.md`, _Scope_, and `roles/common.md` — say nothing of a branch's `.claude/settings.json` deny rule or hook being invisible to every session until it merges. Reproduction (repo-95 at 13b707b5): with `Bash(gh stack merge*)` in the branch's settings, `gh stack merge --help` → gh's own "gh stack is available as an official extension" and exit 1; the control `gh api --help`, denied on main → `Permission to use Bash with command gh api --help has been denied.` The gate added `Bash(echo worktreecontrol*)` on the branch and `echo worktreecontrol` ran.
+2. `roles/builder.md`, _Before you report_ — prescribes `git merge origin/<base>` for a moved main and names no message, while the commit-msg hook rejects git's default. Reproduction (lg-9): `git merge origin/main -m "merge origin/main into lg-9-history-and-stats-charts"` → `… is not a conventional commit — expected "type(scope): subject"`, then `Not committing merge`.
+3. `roles/reviewer.md`, the re-gate paragraph, and `review-ticket/gate.md` — `git log --no-merges <gated>..<new>` lists main's own commits as the round once the branch has merged main; only `--first-parent` gives the round. Reported independently by the lg-9, dl-93 and dl-103 gates. Reproduction: `git log --no-merges --oneline 42d0fb1f..cf56efcf` → five commits (77e911ec, 1a044437, a9503a52, 15adb4f7, e97df6f7) for a one-commit round; adding `--first-parent` → 77e911ec only.
+4. `roles/reviewer.md` — the dispatch's base sha read as a diff range after the branch merged main carries main's files. Reproduction (lg-9 gate 1): `git diff --stat 7709411e...043d5df8` → 27 files including `scripts/agent-cost.mjs` and `.claude/agents/builder-mechanical.md`; `e97df6f7...043d5df8` → 22.
+5. `review-ticket/gate.md`, _Steps_, step 4 — says "Six verdicts" while the rules below it add `unproven (scope)` and `unproven (open decision)`, and none fits a docs-only line checked by reading (repo-96 gate 1 used "verified" and said so in the row). Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n "Six verdicts\|^- \*\*unproven ("` → lines 62, 161, 164.
+6. `review-ticket/gate.md`, the open-decision entry — speaks of "the brief's Decision", and a ticket with no Decision section has only a Build step that says to stop (dl-93 step 4). Reproduction: `git show origin/main:tools/downloader/docs/work/dl-93-consent-container-wording-scope-after-dl-82.md | grep -c '^## Decision'` → 0.
+7. `review-ticket/gate.md`, _Worked cases_, the excused-check case — assumes the check is red; lg-9's excused alert left the check green. Reproduction: PR #416 at 043d5df8, `CodeQL` SUCCESS, its page reading "No new alerts in code changed by this pull request".
+8. `roles/reviewer.md` — says to read a CI job by its log; `gh run view <run> --job <id> --log` answers "logs will be available when it is complete" until the whole run finishes, while `gh run view <run> --json jobs` gives step conclusions at once (repo-97 gate 2, run 38096293404). And without `--attempt`, `--job <attempt-1 job id> --log` returns the latest attempt's log (dl-98 lander, run 38141287195).
+9. `roles/reviewer.md` — no way to read a ticket's brief without its Log when the branch rewords a Done-when line: the reworded line and the Log sit in one diff hunk. Reproduction (dl-98 gate 1): `git diff df941568 53a1e7af -- tools/downloader/docs/work/dl-98-*.md`; the workaround is `git show <head>:<ticket> | sed -n '1,/^## Log/p'`.
+10. `roles/common.md` — the `until [ -s <exit file> ]; do sleep 3; done` wait it prescribes runs past the 600 s foreground cap on a full downloader preflight and is moved to the background. Reproduction: dl-98 gate 1 and gate 2 both reported it; a full `npm test -- --project downloader` took 598 s alone on dl-93's branch.
+11. `roles/fixer.md`, _Set up_ (relayed from tools-4f, unverified here) — its one case is "detach onto origin/<branch>, never create the branch"; a fixer opening its own maintenance PR has to create one. Reproduction: #414 (branch `lg-awaiting-closed-2026-10-10`, one commit, no builder branch); `grep -n -A6 '^## Set up' .claude/skills/orchestrate-tickets/roles/fixer.md`.
+12. `roles/fixer.md` — does not say `--land` runs preflight itself after the push, so a dispatch's "preflight exits 0, then land" costs two full preflights. Reproduction: the `== preflight ==` section at the end of every `--land` output this batch (dl-93, dl-90, dl-103, dl-98 landings).
+13. `roles/fixer.md` — no word on a check cancelled and superseded on the same sha; two landers had to make the call. Reproduction: #420 at c6b0da58, `pr-title` run 38096293402 cancelled after 0 s and run 38096293439 success; #417 at dd42369d, runs 38095628103 (cancelled) and 38095633170 (success).
+14. `scripts/agent-cost.mjs` — one truncated final line drops the whole agent from the table and the command still exits 0. Reproduction: `node scripts/agent-cost.mjs --agent a3a6c4200cdcf2cd1` → `agent-a3a6c4200cdcf2cd1.jsonl:513: not valid JSON`, no row for that agent, `exit=0`. The transcript is 512 complete lines from a gate that died with the session.
+15. `scripts/preflight.mjs` — the merge-tree probe runs last, after the ~10-minute suites, so a sibling head that moved since the fetch fails the whole run with exit 16; and there is no flag to rerun one check. Reproduction (dl-98 builder): `FAIL #401 release-please--branches--main--components--ledger is at fcd77cc, which this checkout does not have — run git fetch origin and re-run`; `grep -n "parseArgs" -A12 scripts/preflight.mjs` → only `--base`, `--title`, `--repo`.
+16. `scripts/preflight.mjs` — the merge-tree probe lists the branch's own pull request as a sibling. Reproduction (dl-98): `ok #421 dl-98-parallel-ranges-throttled-source merges cleanly with HEAD`, run on #421's own head.
+17. `SKILL.md`, _If the session dies_ — says a gate that died is dispatched fresh; the harness now reports a stopped background agent as resumable from its saved transcript ("Resume it by sending it a message with SendMessage"). This batch followed the page: the fresh dl-98 gate reran from scratch. Reproduction: the task notification for a3a6c4200cdcf2cd1 after the restart.
+18. `reference/worktree-hygiene.md`, "Removing a worktree makes its agent unresumable" (relayed from tools-4f, unverified here) — covers only the orchestrator removing a worktree, not the harness reclaiming the worktree of an agent that stops clean, after which a resume runs in the shared checkout. Reproduction (tools-4f, 2026-10-10): a maintenance builder stopped at step 1 with no commits and no `<worktree>` line; its resume ran `git checkout --detach`, the farm and `npm run build` in /workspaces/tools, and `git -C /workspaces/tools log -1 --format=%D HEAD` no longer said `main`.
+19. `reference/records.md` and `SKILL.md` step 6 — a below-floor fix applied at landing must be "fully stated by the finding", and nothing says the lander applies the gate's wording rather than its own. Reproduction: repo-95's lander wrote its own Log sentence for F3 (its report: "I didn't use the gate's sentence verbatim; I wrote a similar one"), PR #412, commit 70aabb76.
+
+**Worked, and worth keeping:**
+
+- Holding an owner question until the gate had measured its premise: dl-103's short source, repo-96's condition 3 (re-asked with gate 2's measurement), dl-93's a1/a2 costs and dl-98's Decision 3 each reached the owner with numbers.
+- A gate on an unrelated branch (dl-103 gate 2) found main red since a peer's markdown-only merge; repo-97 filed and fixed it in the same batch, and `ci.yml`'s `check` job now runs `scripts/test/status.test.ts` on every change.
+- Landers reading the gated head's CI by name before the landing push, and reading a red leg's job log to name the one failing file (#413, #415, #417).
+- Unstacking dl-98 with `git rebase --onto origin/main <old parent tip>` before its first push: no force-push, no conflicts.
+- Gate prompts that name a positive control to plant and one premise to "measure, not judge".
