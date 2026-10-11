@@ -89,3 +89,65 @@ that returns early.
   above; the cause was not chased. `difficulty: standard`: the cause is unknown,
   and finding it needs judgement about three candidate explanations, but nothing
   in the brief touches a contract or an architecture choice.
+
+- 2026-10-11, built (the builder; Sonnet 5.5). **The cause is the third
+  candidate, and it is in the test: it timed the floor on the wall clock
+  (`Date.now()`), and the wall clock lost about two seconds before the wait
+  began.** The wait did what it should.
+  - **The evidence is in the filing's own log, which the brief quoted without
+    comparing its two numbers.** dl-90's preflight log
+    (`dl-90/build/preflight.log`, lines 10 and 17) has vitest timing the test
+    at 10606 ms and the assertion reading `expected 8577`. Vitest times a test
+    on the monotonic clock. A normal pass of this test takes 10.5 to 10.7 s
+    (10535 ms in a whole-file run and 10701 ms alone, this entry), so the probe
+    ran its normal length and `Date.now()` read 2029 ms less of it. Neither
+    other explanation can make a normal-length test read short. The wait counts
+    from its own start and returned at `waitedFor=9023` on the wall clock and
+    on the monotonic clock alike (instrumented, below). And no early return
+    exists on this page: `stop` needs DRM or a departure, and `hasPlayableHit`
+    was false (`playable=false eff=9000` in the log), so the floor was 9000.
+  - **Why only the test can lose the time.** The wait takes its `startedAt`
+    after page load, and the test took its `startTime` before it, so a wall
+    clock stepped back during the load is seen by the test and not by the
+    wait. That is also why a slow machine cannot cause it: it needs the clock
+    to move, not to be slow.
+  - **Not caught in the wild.** Instrumented (`Date.now` and `performance.now`
+    at the test's start and end and at the wait's entry and exits; temporary,
+    reverted), one whole-file run passed 181 of 181 in 614.55 s, with the floor
+    test at `elapsed=10535 perfElapsed=10536` and the wait at `waitedFor=9023
+perfWaited=9023`. A monitor sampling `Date.now()` against
+    `performance.now()` once a second across 13 minutes of it saw no step. It
+    saw the wall clock gain a steady 55 ms per 30 s (0.18 percent), which over
+    10 s is 18 ms and explains nothing. A second whole-file run was killed
+    part-way to keep the spend sane. So the step is inferred from the two
+    numbers above, not observed.
+  - **Reproduced on demand, instead.** The new last test in
+    `browser-resolver.test.ts`, "a wall clock stepped back before the wait does
+    not read as a floor that returned early", spies `Date.now` and steps it
+    back 5 s from the resolver's own `network-quiet` stage callback, which runs
+    after the test took its start and before the wait takes its own. Before the
+    fix, asserting the old measurement, it failed with `AssertionError:
+expected 1450 to be greater than or equal to 3000` (floor 3000 ms; the
+    test's wall clock had lost the whole 5 s). After it, with the assertion on
+    the stopwatch: 1 of 182 passes, and dl-80's floor test, on the same
+    stopwatch, 1 of 182 passes. The 9000 ms floor is unchanged.
+  - **The fix** is `startStopwatch` (a `performance.now()` reader, at the end of
+    the file) in place of `Date.now() - startTime` in dl-80's floor test, the
+    only assertion on elapsed time in that block that is a lower bound. The
+    ceilings in the other four tests keep `Date.now()`: a step back can only
+    shorten what they read, and a ceiling that reads short still held.
+  - **Why the bar is not ten consecutive runs.** The whole file takes 614 s
+    alone, so ten runs of it and ten of the project are about three hours,
+    for an event that has happened twice in the project's history and was not
+    seen in 13 minutes here. A pass count would not discriminate between a
+    fixed test and one that has not met a step. The deterministic test does,
+    and it fails without the fix.
+  - **Production was left alone.** `waitForQuiet`, the collector's
+    `lastActivityAt` and every deadline in the resolver also read
+    `Date.now()`, so a step forward inside the wait shortens the floor by the
+    step. That was not seen and is not what failed; it is not filed because
+    nothing reproduces it.
+  - **What the brief had wrong:** it asked for the reproduction in a full-suite
+    run, and the full run was never needed to name the cause, since the
+    filing's own log held the two clocks side by side. It also put the
+    suspicion on `emptyMinWaitMs` and a pooled browser; neither is involved.

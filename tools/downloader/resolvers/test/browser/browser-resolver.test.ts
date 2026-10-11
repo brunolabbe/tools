@@ -11,7 +11,7 @@
 
 import { AppError } from "@downloader/contract";
 import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@downloader/contract";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import type { BrowserResolverLogger } from "../../src/resolvers/browser.ts";
@@ -1823,7 +1823,11 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
         quietMs: 1200,
         emptyMinWaitMs: 9000,
       });
-      const startTime = Date.now();
+      // Read off the monotonic clock (dl-105): the wait counts from after page
+      // load, so a wall clock stepped back during the load lost time the wait
+      // never lost, and this lower bound read 8577 ms on a 10.6 s test. The
+      // last test in this file steps the clock on purpose and pins that.
+      const stopwatch = startStopwatch();
 
       let caught: unknown;
       try {
@@ -1835,7 +1839,7 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
         caught = error;
       }
 
-      const elapsedMs = Date.now() - startTime;
+      const elapsedMs = stopwatch();
       expect(caught).toBeInstanceOf(AppError);
       const error = caught as AppError;
       expectCode(error, "NO_MEDIA_FOUND");
@@ -2336,3 +2340,70 @@ describe("a click-only player box beside a press that did not start a player (dl
     },
   );
 });
+
+describe("the empty floor is measured on a clock the system cannot step (dl-105)", () => {
+  test(
+    "a wall clock stepped back before the wait does not read as a floor that returned early",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // dl-90's preflight failed dl-80's floor test with `expected 8577 to be
+      // greater than or equal to 9000` while vitest timed the same test at
+      // 10606 ms: the test's own clock lost two seconds that the wait, which
+      // starts counting after page load, never lost. Date.now follows the
+      // system clock, which this sandbox steps; the wait did what it should.
+      // The step is made here instead of waited for, at the one point that
+      // matters: after the test took its start, before the wait takes its own.
+      const floorMs = 3000;
+      const stepBackMs = 5000;
+      const realNow = Date.now.bind(Date);
+      let skewMs = 0;
+      const wallClock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + skewMs);
+
+      try {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 1200,
+          emptyMinWaitMs: floorMs,
+        });
+        const wallStart = Date.now();
+        const stopwatch = startStopwatch();
+
+        let caught: unknown;
+        try {
+          await resolver.resolve(
+            new URL(server.url("/no-media.html")),
+            options({
+              timeoutMs: 20_000,
+              onStage: (event) => {
+                if (event.stage === "network-quiet") skewMs = -stepBackMs;
+              },
+            }),
+          );
+        } catch (error) {
+          caught = error;
+        }
+
+        const wallElapsedMs = Date.now() - wallStart;
+        const elapsedMs = stopwatch();
+        expectCode(caught as AppError, "NO_MEDIA_FOUND");
+
+        // The step took: the clock the old assertion read lost the five
+        // seconds. Without this the test could not tell a fixed measurement
+        // from a step that never happened.
+        expect(wallElapsedMs).toBeLessThan(floorMs);
+        // The clock that cannot be stepped saw the whole wait.
+        expect(elapsedMs).toBeGreaterThanOrEqual(floorMs);
+      } finally {
+        wallClock.mockRestore();
+      }
+    },
+  );
+});
+
+/** Elapsed milliseconds since the call, off a clock that follows no one's `date`. */
+function startStopwatch(): () => number {
+  const startedAt = performance.now();
+  return () => performance.now() - startedAt;
+}
