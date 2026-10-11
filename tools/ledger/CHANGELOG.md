@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0](https://github.com/brunolabbe/tools/compare/ledger-v0.1.0...ledger-v0.2.0) (2026-10-11)
+
+
+### Features
+
+* **ledger:** file a row from three matching answers, and list it for review (lg-17) ([#408](https://github.com/brunolabbe/tools/issues/408)) ([7709411](https://github.com/brunolabbe/tools/commit/7709411e9b16ddf4457e571ace16d2b57cb6ba79))
+* **ledger:** history and stats, drawn as charts on a phone (lg-9) ([#416](https://github.com/brunolabbe/tools/issues/416)) ([817e7ce](https://github.com/brunolabbe/tools/commit/817e7cee24bb5a9bc3312bbc1bffa35ae2ab249f))
+* **ledger:** import the workbook's history, verified before it is written (lg-7) ([#396](https://github.com/brunolabbe/tools/issues/396)) ([55a0e9e](https://github.com/brunolabbe/tools/commit/55a0e9e4c9930762d3aaee5c01a62568ea2f7089))
+* **ledger:** spending categories on bank rows and period lines (lg-15) ([#406](https://github.com/brunolabbe/tools/issues/406)) ([d55a1f4](https://github.com/brunolabbe/tools/commit/d55a1f4269e45abf176bc6629eacd14dbc042616))
+
 ## 0.1.0 (2026-10-07)
 
 
