@@ -71,6 +71,8 @@ interface Behaviour {
   slice: number;
   /** The first fan-out fetch is answered with headers and then nothing, once (gate 1's F2). */
   stallFirstFanOut: boolean;
+  /** The next open-ended request (a relay) is answered this late, once (gate 2's F10). */
+  relayHeaderDelayMs: number;
 }
 
 interface Seen {
@@ -91,6 +93,7 @@ const DEFAULT_BEHAVIOUR: Behaviour = {
   sizeless: false,
   slice: 16 * 1024,
   stallFirstFanOut: false,
+  relayHeaderDelayMs: 0,
 };
 let behaviour: Behaviour = { ...DEFAULT_BEHAVIOUR };
 let seen: Seen[] = [];
@@ -183,7 +186,7 @@ beforeAll(async () => {
     "no-duration.mkv": await fs.readFile(mkv),
   };
 
-  origin = http.createServer((request, response) => {
+  const handle = (request: http.IncomingMessage, response: http.ServerResponse): void => {
     const name = path.basename(new URL(request.url ?? "/", "http://x").pathname);
     const body = files[name];
     const range = request.headers.range;
@@ -273,6 +276,16 @@ beforeAll(async () => {
       "content-length": String(end - start + 1),
     });
     void send(response, body.subarray(start, end + 1), rates);
+  };
+  origin = http.createServer((request, response) => {
+    const range = request.headers.range;
+    if (behaviour.relayHeaderDelayMs > 0 && range !== undefined && /^bytes=\d+-$/u.test(range)) {
+      const delay = behaviour.relayHeaderDelayMs;
+      behaviour.relayHeaderDelayMs = 0;
+      setTimeout(() => handle(request, response), delay);
+      return;
+    }
+    handle(request, response);
   });
   await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
   originUrl = `http://127.0.0.1:${(origin.address() as AddressInfo).port}`;
@@ -286,7 +299,25 @@ afterAll(async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+/**
+ * Every feeder `feederFor` started, closed after each test whatever its outcome:
+ * a failed assertion before a test's own `close` once left a feeder fetching
+ * from the shared origin into the next test (gate 2's F11).
+ */
+const liveFeeders: RangeFeeder[] = [];
+
+/** Polls `condition` until it holds, or fails with `describe()` after `ms`. */
+async function until(condition: () => boolean, ms: number, explain: () => string): Promise<void> {
+  const deadline = performance.now() + ms;
+  while (!condition()) {
+    if (performance.now() > deadline) throw new Error(`not within ${ms} ms: ${explain()}`);
+    // oxlint-disable-next-line no-await-in-loop
+    await sleep(10);
+  }
+}
+
 afterEach(() => {
+  for (const feeder of liveFeeders.splice(0)) feeder.close();
   for (const response of stalled.splice(0)) response.destroy();
   behaviour = { ...DEFAULT_BEHAVIOUR };
   resetCounts();
@@ -663,6 +694,7 @@ async function feederFor(
     onFatal: (error) => fatal.push(error),
     ...overrides,
   });
+  liveFeeders.push(feeder);
   return { feeder, fatal, refused };
 }
 
@@ -794,9 +826,15 @@ describe("dl-98: the feeder's own limits", () => {
       const controller = new AbortController();
       const { feeder } = await feederFor("moov-end.mp4", { signal: controller.signal });
       const reading = readLoopback(feeder.url);
-      await sleep(500);
-      expect(feeder.stats().mode).toBe("parallel");
-      expect(open).toBe(4);
+      // Four origin connections open at the moment of the cancel, waited for
+      // rather than sampled: a chunk fetched and not yet handed over holds a
+      // slot with no connection open, so any one instant can show three
+      // (gate 2's item 4, on Windows at 500 ms).
+      await until(
+        () => feeder.stats().mode === "parallel" && open === 4,
+        10_000,
+        () => JSON.stringify({ open, stats: feeder.stats() }),
+      );
       controller.abort();
       const canceledAt = performance.now();
       const read = await reading;
@@ -936,10 +974,11 @@ describe("dl-98: a fallback and a relay it cannot resume", () => {
 async function startRawOrigin(
   answer: string,
   holdOpen = false,
-): Promise<{ url: string; close(): Promise<void> }> {
+): Promise<{ url: string; open(): number; close(): Promise<void> }> {
   const sockets = new Set<Socket>();
   const server = net.createServer((socket) => {
     sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
     socket.on("error", () => undefined);
     let head = "";
     socket.on("data", (data: Buffer) => {
@@ -957,6 +996,7 @@ async function startRawOrigin(
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/clip.mp4`,
+    open: () => sockets.size,
     close: () => {
       for (const socket of sockets) socket.destroy();
       return new Promise<void>((resolve) => server.close(() => resolve()));
@@ -991,21 +1031,35 @@ describe("dl-98 round 1: what gate 1 found", () => {
     },
   );
 
-  test("F1: a 101 the client never hands back is ended by the idle bound, as a timeout", async () => {
+  test("F1: a 101 on a relay is left to ffmpeg's own timeout, and going away closes it", async () => {
     const raw = await startRawOrigin(
       "HTTP/1.1 101 Switching Protocols\r\nupgrade: x\r\nconnection: upgrade\r\n\r\n",
       true,
     );
     try {
+      // The owner's answer to gate 2's F10: the idle bound is the chunk fetches'
+      // alone, and a relay's wait is ffmpeg's own 30 s, as it is without the feeder.
       const { feeder } = await feederFor("unused", {
         url: raw.url,
         settings: { ...PARALLEL_RANGE_DEFAULTS, ...FAST_SPLIT, idleMs: 300 },
       });
-      const started = performance.now();
-      const read = await readLoopback(feeder.url);
-      feeder.close();
-      expect(`${read.status} ${read.statusMessage}`).toBe("504 Connection timed out");
-      expect(performance.now() - started).toBeLessThan(5_000);
+      const outcome = await new Promise<string>((resolve) => {
+        const request = http.get(
+          feeder.url,
+          { headers: { range: "bytes=0-" }, agent: false },
+          (response) => resolve(`answered ${response.statusCode ?? 0}`),
+        );
+        request.on("error", () => resolve("gave up"));
+        // ffmpeg's read timeout, shortened: the reader goes away.
+        setTimeout(() => request.destroy(), 1_000);
+      });
+      expect(outcome).toBe("gave up");
+      // And its going away is what closes the origin's connection.
+      await until(
+        () => raw.open() === 0,
+        2_000,
+        () => `origin sockets open: ${raw.open()}`,
+      );
     } finally {
       await raw.close();
     }
@@ -1037,8 +1091,16 @@ describe("dl-98 round 1: what gate 1 found", () => {
       for (let index = 0; index < body.length; index += 4) body.writeUInt32BE(index, index);
       files["forty-eight.bin"] = body;
       behaviour.perConnectionBps = 20_000_000;
+      const chunkSize = 2 * 1024 * 1024;
       const { feeder } = await feederFor("forty-eight.bin", {
-        settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 2 * 1024 * 1024, measureMs: 100 },
+        // The speed-up judge is not what this tests, and its 100 ms window is
+        // the one way a healthy origin can drop the split: off.
+        settings: {
+          ...PARALLEL_RANGE_DEFAULTS,
+          chunkBytes: chunkSize,
+          measureMs: 100,
+          speedupFloor: 0,
+        },
       });
       const first = await new Promise<http.IncomingMessage>((resolve) => {
         http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false }, resolve);
@@ -1048,8 +1110,16 @@ describe("dl-98 round 1: what gate 1 found", () => {
         read += chunk.length;
         if (read >= 8 * 1024 * 1024) first.pause();
       });
-      await sleep(2_500);
-      expect(feeder.stats().mode).toBe("parallel");
+      // Waited for, not sampled at 2.5 s: split, the first reader stopped, and
+      // its lookahead holding three chunks besides the one it is handing over.
+      await until(
+        () =>
+          feeder.stats().mode === "parallel" &&
+          read >= 8 * 1024 * 1024 &&
+          feeder.stats().maxHeldBytes >= 3 * chunkSize,
+        15_000,
+        () => JSON.stringify({ read, stats: feeder.stats() }),
+      );
 
       const seekTo = Math.floor(body.length * 0.8);
       const started = performance.now();
@@ -1087,7 +1157,7 @@ describe("dl-98 round 1: what gate 1 found", () => {
       expect(second.status).toBe(206);
       expect(second.firstByteMs).toBeLessThan(2_000);
       expect(second.bytes.equals(body.subarray(seekTo))).toBe(true);
-      expect(stats.maxHeldBytes).toBeLessThanOrEqual(4 * 2 * 1024 * 1024);
+      expect(stats.maxHeldBytes).toBeLessThanOrEqual(4 * chunkSize);
     },
     SLOW,
   );
@@ -1147,4 +1217,141 @@ describe("dl-98 round 1: what gate 1 found", () => {
     expect(config.singleConnectionHosts).toEqual(["cdn.example.com", ".other.org"]);
     expect(loadEngineConfig({ ffmpegPath: "ffmpeg" }, {}).singleConnectionHosts).toEqual([]);
   });
+});
+
+describe("dl-98 round 2: what gate 2 found", () => {
+  /**
+   * Gate 2's `stuckpause.mts`, shortened. A reads 200 KB and stops, so the
+   * loopback's buffers fill and the feeder pauses A's origin; then B reads
+   * from another offset at full speed. The origin is 4 MB/s a connection
+   * against 10 MB/s of media, so B is slow and should be split.
+   */
+  async function pausedThenRead(closeA: boolean): Promise<{ splitAfterMs: number | null }> {
+    const size = 60_000_000;
+    files["stuck.bin"] = Buffer.alloc(size, 9);
+    behaviour.perConnectionBps = 4_000_000;
+    const { feeder } = await feederFor("stuck.bin", {
+      settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 2_000 },
+      durationSec: () => size / 10_000_000,
+    });
+    let aBytes = 0;
+    const a = await new Promise<http.IncomingMessage>((resolve) => {
+      http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false }, (response) => {
+        response.on("data", (chunk: Buffer) => {
+          aBytes += chunk.length;
+          if (aBytes >= 200_000) response.pause();
+        });
+        resolve(response);
+      });
+    });
+    // Long enough for the loopback's buffers to fill and the pause to engage.
+    await sleep(4_000);
+    expect(feeder.stats().mode).toBe("single");
+    if (closeA) a.destroy();
+    await sleep(300);
+
+    const started = performance.now();
+    let splitAfterMs: number | null = null;
+    const b = http.get(feeder.url, { headers: { range: "bytes=30000000-" }, agent: false });
+    b.on("response", (response) => response.resume());
+    b.on("error", () => undefined);
+    try {
+      await until(
+        () => feeder.stats().mode !== "single",
+        6_000,
+        () => JSON.stringify(feeder.stats()),
+      );
+      splitAfterMs = performance.now() - started;
+    } catch {
+      splitAfterMs = null;
+    } finally {
+      b.destroy();
+      a.destroy();
+    }
+    return { splitAfterMs };
+  }
+
+  test(
+    "F9: a paused request ffmpeg closed does not keep the meter paused for the next one",
+    async () => {
+      const { splitAfterMs } = await pausedThenRead(true);
+      // Before the fix the meter stayed paused for good, and B never split.
+      expect(splitAfterMs).not.toBeNull();
+      expect(splitAfterMs).toBeLessThan(4_500);
+    },
+    SLOW,
+  );
+
+  test(
+    "F9: a paused request left open does not stop the meter for one that is reading",
+    async () => {
+      const { splitAfterMs } = await pausedThenRead(false);
+      expect(splitAfterMs).not.toBeNull();
+      expect(splitAfterMs).toBeLessThan(4_500);
+    },
+    SLOW,
+  );
+
+  test(
+    "F10: a relay answered later than the idle bound is not cut: its wait is ffmpeg's",
+    async () => {
+      // The owner's answer: the bound is the chunk fetches' and the
+      // continuation's. Gate 2: an origin whose first answer took 25 s failed
+      // at the 20 s bound behind the feeder, and finished direct.
+      behaviour.relayHeaderDelayMs = 1_000;
+      const { feeder } = await feederFor("moov-end.mp4", {
+        settings: { ...PARALLEL_RANGE_DEFAULTS, ...FAST_SPLIT, idleMs: 300 },
+        durationSec: () => 1_000,
+      });
+      const read = await readLoopback(feeder.url);
+      expect(read.status).toBe(206);
+      expect(read.complete).toBe(true);
+      expect(read.body.equals(files["moov-end.mp4"] as Buffer)).toBe(true);
+    },
+    SLOW,
+  );
+});
+
+describe("dl-98 round 2: a request that goes away is no longer measured", () => {
+  test(
+    "F9: a request ffmpeg closed while it was reading does not count a later pause as the origin's time",
+    async () => {
+      // 4 MB/s against 3 MB/s of media: fast, so the job must stay on one
+      // connection. A reads and is closed while it is still reading. B reads
+      // 200 KB and stops for 8 s, so the feeder pauses its origin, then reads
+      // on. Were A still counted as reading, B's pause would be charged to the
+      // origin, its rate would read low, and a fast origin would be split.
+      const size = 80_000_000;
+      files["released.bin"] = Buffer.alloc(size, 7);
+      behaviour.perConnectionBps = 4_000_000;
+      const { feeder } = await feederFor("released.bin", {
+        settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 4_000 },
+        durationSec: () => size / 3_000_000,
+      });
+      const a = http.get(feeder.url, { headers: { range: "bytes=0-" }, agent: false });
+      a.on("response", (response) => response.resume());
+      a.on("error", () => undefined);
+      await sleep(500);
+      a.destroy();
+
+      let bBytes = 0;
+      const b = http.get(feeder.url, { headers: { range: "bytes=20000000-" }, agent: false });
+      b.on("error", () => undefined);
+      b.on("response", (response) => {
+        response.on("data", (chunk: Buffer) => {
+          bBytes += chunk.length;
+          if (bBytes >= 200_000 && bBytes - chunk.length < 200_000) {
+            response.pause();
+            setTimeout(() => response.resume(), 8_000);
+          }
+        });
+      });
+      await sleep(12_000);
+      const stats = feeder.stats();
+      b.destroy();
+      expect(stats.mode, JSON.stringify(stats)).toBe("single");
+      expect(bBytes).toBeGreaterThan(10_000_000);
+    },
+    SLOW,
+  );
 });

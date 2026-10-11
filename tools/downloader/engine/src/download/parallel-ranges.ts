@@ -228,9 +228,20 @@ class Meter {
   #lastAt: number | null = null;
   #pausedAt: number | null = null;
   #pausedMs = 0;
+  /**
+   * The fetches being measured, and which of them are paused. The meter is
+   * paused only while every one of them is (gate 2's F9): one flag for all of
+   * them let a request ffmpeg had stopped reading freeze the verdict on another
+   * that was reading, and outlive the request itself.
+   */
+  readonly #members = new Set<object>();
+  readonly #paused = new Set<object>();
 
-  /** `bytes` arrived now: the interval since the last call counts, less any pause inside it. */
-  record(bytes: number, now: number): void {
+  /** `bytes` arrived now for `key`: the interval since the last call counts, less any pause inside it. */
+  record(key: object, bytes: number, now: number): void {
+    this.#members.add(key);
+    this.#paused.delete(key);
+    this.#update(now);
     if (this.#lastAt !== null) {
       const paused = this.#pausedMs + (this.#pausedAt === null ? 0 : now - this.#pausedAt);
       this.activeMs += Math.max(0, now - this.#lastAt - paused);
@@ -241,15 +252,23 @@ class Meter {
     if (this.#pausedAt !== null) this.#pausedAt = now;
   }
 
-  /** The feeder stopped reading the origin, because ffmpeg stopped reading it. */
-  pause(now: number): void {
-    if (this.#pausedAt === null) this.#pausedAt = now;
+  /** The feeder stopped reading `key`'s origin, because ffmpeg stopped reading it. */
+  pause(key: object, now: number): void {
+    if (!this.#members.has(key)) return;
+    this.#paused.add(key);
+    this.#update(now);
   }
 
-  resume(now: number): void {
-    if (this.#pausedAt === null) return;
-    this.#pausedMs += now - this.#pausedAt;
-    this.#pausedAt = null;
+  resume(key: object, now: number): void {
+    this.#paused.delete(key);
+    this.#update(now);
+  }
+
+  /** `key` is no longer measured: it ended, failed, or ffmpeg closed its request. */
+  release(key: object, now: number): void {
+    this.#members.delete(key);
+    this.#paused.delete(key);
+    this.#update(now);
   }
 
   /** The next interval does not count at all: what was being measured changed. */
@@ -264,6 +283,17 @@ class Meter {
     this.#lastAt = null;
     this.#pausedMs = 0;
     this.#pausedAt = null;
+    this.#members.clear();
+    this.#paused.clear();
+  }
+
+  #update(now: number): void {
+    const allPaused = this.#members.size > 0 && this.#paused.size === this.#members.size;
+    if (allPaused && this.#pausedAt === null) this.#pausedAt = now;
+    if (!allPaused && this.#pausedAt !== null) {
+      this.#pausedMs += now - this.#pausedAt;
+      this.#pausedAt = null;
+    }
   }
 
   /** Bytes per second. */
@@ -604,11 +634,11 @@ export class RangeFeeder {
         head.paused = true;
         head.response.pause();
         clearTimeout(head.idle);
-        this.#meter.pause(performance.now());
+        this.#meter.pause(head, performance.now());
       } else if (!serve.blocked && head.paused) {
         head.paused = false;
         head.response.resume();
-        this.#meter.resume(performance.now());
+        this.#meter.resume(head, performance.now());
         this.#arm(serve, head);
       }
     }
@@ -667,6 +697,11 @@ export class RangeFeeder {
   #arm(serve: Serve, fetch: Fetch): void {
     clearTimeout(fetch.idle);
     if (fetch.done || fetch.failure !== null || fetch.paused || this.#closed) return;
+    // A relay is ffmpeg's own read, and ffmpeg's own 30 s bounds it, as it does
+    // without the feeder; a relay takes no slot, so nothing waits behind it. The
+    // owner's answer to gate 2's F10: an origin that answered in 25 s failed at
+    // 20 s here and finished direct.
+    if (fetch.end === null) return;
     fetch.idle = setTimeout(() => {
       // The failure first: `#fail` ignores a fetch that is already aborted.
       this.#fail(serve, fetch, IDLE);
@@ -749,6 +784,7 @@ export class RangeFeeder {
       }
       fetch.done = true;
       clearTimeout(fetch.idle);
+      this.#meter.release(fetch, performance.now());
       this.#pump(serve);
     });
     response.on("error", () => undefined);
@@ -841,10 +877,10 @@ export class RangeFeeder {
     if (this.#mode === "parallel") {
       // A rate for the split only while every slot is reading.
       if (this.#inFlight() >= this.#options.settings.connections)
-        this.#meter.record(piece.length, now);
+        this.#meter.record(fetch, piece.length, now);
       else this.#meter.interrupt();
     } else if (this.#mode === "single" && serve.end !== null && fetch.end === null) {
-      this.#meter.record(piece.length, now);
+      this.#meter.record(fetch, piece.length, now);
     }
 
     this.#arm(serve, fetch);
@@ -864,6 +900,7 @@ export class RangeFeeder {
     if (fetch.done || fetch.failure !== null || this.#closed) return;
     if (fetch.controller.signal.aborted) return;
     clearTimeout(fetch.idle);
+    this.#meter.release(fetch, performance.now());
     fetch.failure = failure;
     if (this.#mode === "parallel") {
       this.#fallBack(failure);
@@ -943,6 +980,8 @@ export class RangeFeeder {
     lead.end = Math.min(from + this.#options.settings.chunkBytes, serve.end as number);
     lead.paused = false;
     lead.response?.resume();
+    // Bounded now, so the idle bound is its too.
+    this.#arm(serve, lead);
     this.#options.logger.info(
       "origin slower than the media on one connection; reading ranges in parallel",
       {
@@ -1077,6 +1116,8 @@ export class RangeFeeder {
   /** Releases everything a serve holds. */
   #drop(serve: Serve): void {
     for (const fetch of serve.fetches) {
+      // A paused request ffmpeg closed must not leave the meter paused (gate 2's F9).
+      this.#meter.release(fetch, performance.now());
       this.#held -= fetch.queued;
       fetch.queue.length = 0;
       fetch.queued = 0;
