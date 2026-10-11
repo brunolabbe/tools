@@ -2219,3 +2219,120 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     );
   });
 });
+
+describe("a click-only player box beside a press that did not start a player (dl-100)", () => {
+  // A box that only its own click starts, and one control beside it that does
+  // nothing to the player. Whether the box is then clicked is what is measured:
+  // the control's beacon says it was pressed, the box's that it was clicked.
+  function resolverWith(
+    hls = recordingHlsParser(),
+    emptyMinWaitMs = NO_EMPTY_FLOOR_MS,
+  ): BrowserResolver {
+    return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, emptyMinWaitMs });
+  }
+
+  test(
+    "ctl=none: with no control at all, the box is clicked and the stream is found",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      const result = await probe("/box-with-control.html?ctl=none", resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/beacon/box-clicked");
+    },
+  );
+
+  // Pressed as before; not counted as a player having started, because
+  // "Autoplay" and "display" do not start a word with "play".
+  test.each([
+    ["autoplay", "a toggle labelled Autoplay"],
+    ["display", "a data-testid of display-name, which is no control at all"],
+    // The word is read in the attribute the selector matched on, not in the
+    // others (gate 1): a `player-` class or id on the same element does not
+    // turn the toggle into a play control.
+    ["autoplay-cls", "the Autoplay toggle, with a player-autoplay-toggle class"],
+    ["autoplay-id", "the Autoplay toggle, with a player-autoplay id"],
+    ["autoplay-camel", "an autoPlayToggle test id, in camelCase"],
+    ["display-cls", "display-name, with a player-meta class"],
+  ])(
+    "ctl=%s (%s) is pressed but does not hold back the box click",
+    { timeout: TEST_TIMEOUT_MS },
+    async (ctl) => {
+      server.requests.length = 0;
+      const result = await probe(`/box-with-control.html?ctl=${ctl}`, resolverWith());
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      expect(server.requests).toContain(`/beacon/control-${ctl}`);
+      expect(server.requests).toContain("/beacon/box-clicked");
+    },
+  );
+
+  // What a press that counts still does, and the rows option A leaves counting
+  // on purpose (the owner's answer of 2026-10-11 left them to the builder; the
+  // ticket's Log has the reasoning): each is a label a player's own control
+  // can carry, so the box is left alone. `jw` is the one that proves the
+  // library-class branch, since `jw-icon-display` holds no "play" at all.
+  test.each([
+    ["jw", "/box-with-control.html?ctl=jw", "/beacon/control-jw"],
+    // A word start in the data-testid, the class and the id, each alone: the
+    // control has no label, so a rule that reads only aria-label and title
+    // misses all three.
+    ["testid-word", "/box-with-control.html?ctl=testid-word", "/beacon/control-testid-word"],
+    ["class-btn", "/box-with-control.html?ctl=class-btn", "/beacon/control-class-btn"],
+    ["id-button", "/box-with-control.html?ctl=id-button", "/beacon/control-id-button"],
+    ["id-play", "/box-with-control.html?ctl=id-play", "/beacon/control-id-play"],
+    ["carousel", "/box-with-control.html?ctl=carousel", "/beacon/control-carousel"],
+    ["watch", "/box-with-control.html?ctl=watch", "/beacon/control-watch"],
+    ["xo", "/box-xo-cta.html", "/beacon/cta-pressed"],
+  ])(
+    "ctl=%s is a press that counts, so the box is not clicked",
+    { timeout: TEST_TIMEOUT_MS },
+    async (_ctl, pathname, beacon) => {
+      server.requests.length = 0;
+      const error = await probeError(pathname, resolverWith());
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      expect(server.requests).toContain(beacon);
+      expect(server.requests).not.toContain("/beacon/box-clicked");
+    },
+  );
+
+  test(
+    "a Play press in a frame from another site still holds back the box click, whose centre is that frame",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      server.requests.length = 0;
+      // The embed asks for its manifest 1.5 s after its Play press, so the
+      // shipped floor; a centre click on the wrapper would land on the embed.
+      const result = await probe("/box-xo-embed.html", resolverWith(undefined, 9000));
+
+      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).not.toContain("/beacon/embed-surface-clicked");
+    },
+  );
+
+  // Gate 1: an icon-only play control marked in camelCase, with no label to
+  // read. `main` counted its press; a rule that took only a non-letter for a
+  // word boundary did not, and a related-video card was pressed 1.5 s before
+  // the manifest came. `label` is the harness's control.
+  test.each([
+    ["label", "aria-label=Play"],
+    ["camel-testid", 'data-testid="videoPlayButton"'],
+    ["camel-title", 'title="VideoPlay"'],
+  ])(
+    "ctl=%s (%s) is a press that counts, so a slow player is not clicked past",
+    { timeout: TEST_TIMEOUT_MS },
+    async (ctl) => {
+      server.requests.length = 0;
+      const result = await probe(
+        `/player-poster-icon-grid.html?ctl=${ctl}&delay=1500`,
+        // The shipped floor, which a request at 1.5 s needs.
+        resolverWith(undefined, 9000),
+      );
+
+      expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      expect(server.requests).not.toContain("/beacon/card-clicked");
+    },
+  );
+});
