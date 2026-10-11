@@ -236,3 +236,73 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
   - Fold-in decision: the 3 tests' shared "opens no more" pattern is fixed in all
     three places it occurs (see the last entry for how); nothing else was folded
     or left.
+- 2026-10-11, gate 1 failed `ba4fb1ec` on one high, and the owner chose the
+  remedy; this entry supersedes the `afterStop()` fix above.
+  - **The gate's finding (high).** `afterStop()` took its measuring point after
+    `await media.done`. In the engine test that is about 3.1 s after the abort
+    (`abort->done 2970..3016 ms, abort->settledAt 3071..3117 ms`, 5 of 5 runs),
+    so the three "opens no more" tests could not see a request opened in that
+    span: a planted `close()` that opens one more request 150 ms or 300 ms after
+    the stop failed the base tests and passed the engine test at `ba4fb1ec`. The
+    flake `afterStop()` removed is real (base, three stop tests only, 4 of 15
+    on Linux under load; the late arrival in the gate's instrumented run was
+    three fetches begun 10.7 to 12.1 ms before the cancel, which reached the
+    origin 1.8 to 2.7 ms after it) and stays removed.
+  - **Owner's answers, 2026-10-11** (asked by the orchestrator through
+    AskUserQuestion; both are the owner's choices, not an agent's):
+    1. "Gate it now (Recommended)" over "Another 25-run series" and "Tolerate
+       stalls", for the 1-in-25 Windows residual at `8f282c87`. Chosen: **Gate it
+       now.**
+    2. For the gate's remedy, "Count, not time (Recommended)" (the gate's (a):
+       count requests where the test can, and time only from the abort in the
+       engine test; its builder resumed with a fresh Windows series on the exact
+       file that lands, then gate 2) over "Keep a 100 ms window" (the gate's (b)).
+       Chosen: **Count, not time.**
+  - **What changed in `parallel-ranges.test.ts`.** `afterStop()` is gone.
+    - The feeder cancel test ("a cancel stops the relay and every ranged fetch,
+      and nothing is fetched after it") reads `feeder.stats().originRequests`
+      right after `abort()` and, after 300 ms, asserts it did not grow and that
+      the origin saw no more than that many requests (`seen.length`).
+    - The size-cap test does the same with the stats it already took after the
+      read, **and** keeps a time check, from 100 ms after the stop. The count
+      cannot do it alone there: the feeder begins 5 requests and the origin
+      sees 4 (`DBG originRequests=5 seen=4`, 5 of 5 runs), one being aborted
+      before it connects, so one planted extra hides in that slack. This is the
+      one place the count was not enough on its own; it is not an open decision
+      because the time check is the gate's own (b) for a test that has no better.
+    - The engine test has no feeder handle. Its measuring point is `abort()`
+      plus 100 ms, **taken before `await media.done`**, so the blind span is 100
+      ms and not 3.1 s. Its comment now says that.
+  - **The gate's mutations, at head `539911a4`, on Linux** (the gate's
+    `open-at-stop` and `open-after-stop-N`, re-planted from the same text by a
+    local script, the three stop tests, `-t`; 2 runs each, 15 for no mutation):
+
+    | planted                | cancel after first byte (engine) | feeder cancel | size cap |
+    | ---------------------- | -------------------------------- | ------------- | -------- |
+    | none, 15 runs          | pass                             | pass          | pass     |
+    | N = 0 (`open-at-stop`) | pass                             | **fail**      | pass     |
+    | N = 50                 | pass                             | **fail**      | pass     |
+    | N = 150                | **fail**                         | **fail**      | **fail** |
+    | N = 300                | **fail**                         | **fail**      | **fail** |
+    | N = 2000               | **fail**                         | pass          | pass     |
+
+    Every planted request fails at least one test, as the gate asked; the engine
+    test and the size-cap time check cannot see N of 0 and 50, which is the 100 ms
+    that distinguishes them from the 3 ms legitimate late arrival. The 4-of-15
+    base flake: 0 of 15 on the three stop tests unmutated.
+
+  - **The series on the file that lands**, `windows-latest`, run 38178371109,
+    head `60001f1d` (the test file's blob is `fd4af9bb`, the engine tree is
+    `fb219f77`, as printed in the run): `PASS` in runs 1 to 13 and 15 to 25,
+    `FAIL` in run 14, 24 of 25. The failure is the held-bytes test,
+    `AssertionError: expected 'fallen-back' to be 'parallel'`; this series printed
+    no judge lines, so it has no log to say whether a runner stall explains it
+    (the earlier one did). It is the same class of residual as the 1 in 25 at
+    `8f282c87` (a 50 ms judging window, three timer ticks), in a different test;
+    left as it is, because the owner chose to gate. A `measureMs` of 100 with the
+    same 10 MB/s would halve that noise and still leave the 2 MB before the
+    reader pauses at twice the window, but it changes a test setting and needs
+    another series.
+  - The series' head was the final head plus the probe workflow, which is deleted
+    in the final commit. `git diff 60001f1d <final head> -- tools/downloader/engine`
+    prints nothing.
