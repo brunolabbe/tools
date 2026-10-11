@@ -55,6 +55,14 @@ const VERBS = {
   spendingCategoryMap: ["GET", ROUTES.spendingCategoryMap],
   spendingCategoryOverrides: ["POST", ROUTES.spendingCategoryOverrides],
   rows: ["GET", ROUTES.rows],
+  statsMortgagePayments: ["GET", ROUTES.statsMortgagePayments],
+  statsSalaries: ["GET", ROUTES.statsSalaries],
+  statsContributions: ["GET", ROUTES.statsContributions],
+  statsMortgageOwn: ["GET", ROUTES.statsMortgageOwn],
+  statsBuffer: ["GET", ROUTES.statsBuffer],
+  statsSpending: ["GET", ROUTES.statsSpending],
+  statsFixedItems: ["GET", ROUTES.statsFixedItems],
+  statsSettlements: ["GET", ROUTES.statsSettlements],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");

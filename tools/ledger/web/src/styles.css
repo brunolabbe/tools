@@ -18,6 +18,24 @@
   --bad: #a3341f;
   --accent: #1f5f8b;
 
+  /*
+   * The charts' categorical slots (lg-9), in the `dataviz` skill's fixed order,
+   * validated for this page's own surface (#ffffff, #1a1e23) with
+   * `validate_palette.js`: every check passes, and three light slots (aqua,
+   * yellow, magenta) sit under 3:1 on white, which is why every chart has a
+   * table twin and a readout. Chrome, ink and gridlines are the tokens above.
+   */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  /* No spending category: a neutral, so it recedes behind the ones that mean something. */
+  --series-none: #898781;
+
   --radius: 10px;
   --gap: 1rem;
 }
@@ -31,6 +49,15 @@
     --muted: #9aa4ae;
     --bad: #e8836a;
     --accent: #7db4dc;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
   }
 }
 
@@ -322,6 +349,8 @@ select {
 .figures .amount,
 .figure .amount {
   font-variant-numeric: tabular-nums;
+  flex: none;
+  white-space: nowrap;
 }
 
 .lead {
@@ -377,6 +406,196 @@ label.check input {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/*
+ * The stats screen (lg-9). The SVG is drawn at the container's measured width, so
+ * its 12px text is 12px on a phone; a chart too wide for the screen scrolls in
+ * `.chart-scroll` and does not shrink its marks. Marks are thin, gridlines are
+ * solid hairlines in the border colour, and text wears the text tokens and never
+ * a series colour — identity is the swatch beside it.
+ */
+.range {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.range button[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+/*
+ * A grid item will not shrink below its content, and a chart is drawn at its
+ * container's width: without these the SVG sets the width it is then measured
+ * at, and the page grows past the screen.
+ */
+.chart-card {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  transition: opacity 0.15s;
+}
+
+.chart-box {
+  min-width: 0;
+}
+
+.chart-card.stale {
+  opacity: 0.55;
+}
+
+.chart-scroll {
+  overflow-x: auto;
+}
+
+.chart-scroll.with-axis {
+  display: flex;
+}
+
+/* Sticks to the left edge of the scrolling chart, over the columns that pass under it. */
+svg.chart-yaxis {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  background: var(--surface);
+  pointer-events: none;
+}
+
+svg.chart {
+  display: block;
+  flex: none;
+  max-width: none;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+svg.chart:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+svg.chart text {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+svg.chart .grid,
+svg.chart .baseline,
+svg.chart .crosshair {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+svg.chart .baseline {
+  stroke: var(--muted);
+}
+
+svg.chart .line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+svg.chart .area {
+  opacity: 0.1;
+}
+
+/* A dot carries a 2px ring in the surface colour, so it reads where it crosses a line. */
+svg.chart .dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+svg.chart .selected-band {
+  fill: var(--border);
+  opacity: 0.35;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.legend li,
+.readout-rows li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+}
+
+.key {
+  width: 1rem;
+  height: 0.25rem;
+  border-radius: 2px;
+}
+
+.readout {
+  min-height: 3rem;
+  padding-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.readout p {
+  margin: 0;
+}
+
+.readout-heading {
+  color: var(--muted);
+}
+
+.readout-rows {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.readout-rows strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-subhead {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+}
+
+.chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.chart-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (min-width: 48rem) {

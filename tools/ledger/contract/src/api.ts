@@ -54,6 +54,15 @@ export const ROUTES = {
   spendingCategoryMap: `${API_PREFIX}/spending-category-map`,
   spendingCategoryOverrides: `${API_PREFIX}/spending-category-overrides`,
   rows: `${API_PREFIX}/rows`,
+  // lg-9: the history and the charts, one route per series, each with a date range.
+  statsMortgagePayments: `${API_PREFIX}/stats/mortgage-payments`,
+  statsSalaries: `${API_PREFIX}/stats/salaries`,
+  statsContributions: `${API_PREFIX}/stats/contributions`,
+  statsMortgageOwn: `${API_PREFIX}/stats/mortgage-own`,
+  statsBuffer: `${API_PREFIX}/stats/buffer`,
+  statsSpending: `${API_PREFIX}/stats/spending`,
+  statsFixedItems: `${API_PREFIX}/stats/fixed-items`,
+  statsSettlements: `${API_PREFIX}/stats/settlements`,
 } as const;
 
 /**
@@ -835,4 +844,213 @@ export interface RowsResponse {
   rows: StoredRow[];
   /** How many rows match, before the limit. */
   total: number;
+}
+
+// --- lg-9: the history and the charts ---
+//
+// Every series is computed on read from what is already stored
+// (`books/src/stats.ts`) and stores nothing. Every route takes the same range,
+// inclusive at both ends; a missing end is the beginning or the end of the books.
+
+/** The days a series covers. `null` is unbounded on that side. */
+export interface StatsRange {
+  from: string | null;
+  to: string | null;
+}
+
+/** `?from=yyyy-mm-dd&to=yyyy-mm-dd`, either optional. */
+export const statsRangeQuerySchema = z
+  .strictObject({ from: isoDateSchema.optional(), to: isoDateSchema.optional() })
+  .refine((query) => query.from === undefined || query.to === undefined || query.from <= query.to, {
+    message: "from is after to.",
+  });
+
+/** The buffer's series also takes how large a drop has to be to be listed. */
+export const bufferStatsQuerySchema = z
+  .strictObject({
+    from: isoDateSchema.optional(),
+    to: isoDateSchema.optional(),
+    minDropCents: z.coerce.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
+  })
+  .refine((query) => query.from === undefined || query.to === undefined || query.from <= query.to, {
+    message: "from is after to.",
+  });
+
+/** What a drop in the buffer has to be, in cents, to be listed when the caller names no size. */
+export const DEFAULT_LARGE_DROP_CENTS = 50_000;
+
+/** One payment out of the mortgage bucket. */
+export interface MortgagePaymentPoint {
+  date: string;
+  /** What was paid, as a positive number of cents. */
+  cents: number;
+  /** The payment before this one, over the whole history and not only the range; `null` for the first ever. */
+  previousCents: number | null;
+  /** The amount differs from the payment before: a renewal, or a payment that was not the usual one. */
+  changed: boolean;
+}
+
+/**
+ * `GET /api/stats/mortgage-payments`: the payments from the mortgage bucket, oldest
+ * first. A payment is a joint row in the bucket that takes money out; a rebate
+ * (money in) is not one.
+ */
+export interface MortgagePaymentsResponse {
+  range: StatsRange;
+  payments: MortgagePaymentPoint[];
+}
+
+/** A ratio that took effect, as the chart needs it. */
+export interface RatioChange {
+  effectiveFrom: string;
+  shares: { personId: string; partsPerMillion: number }[];
+}
+
+/** One year of the salaries and the ratio. */
+export interface SalaryYear {
+  year: number;
+  /** The salaries that stand for the year, in id order; a person without one is absent. */
+  salaries: { personId: string; amountCents: number }[];
+  /** The ratio in effect on the year's last day; `null` before any was confirmed. */
+  ratio: RatioChange | null;
+  /** The ratios that took effect during the year, oldest first: more than one is a change within it. */
+  changes: RatioChange[];
+}
+
+/**
+ * `GET /api/stats/salaries`: the years that overlap the range, oldest first.
+ * `people` is everyone the books know, whatever the range holds, so a chart can
+ * colour a person by their place in it.
+ */
+export interface SalariesStatsResponse {
+  range: StatsRange;
+  people: string[];
+  years: SalaryYear[];
+}
+
+/** One day on which a row was filed to a person in a bucket, and the running totals at its end. */
+export interface ContributionPoint {
+  date: string;
+  /** Each person's cumulative contributions, in id order. */
+  contributions: { personId: string; contributedCents: number }[];
+}
+
+export interface ContributionSeries {
+  bucket: Bucket;
+  points: ContributionPoint[];
+}
+
+/**
+ * `GET /api/stats/contributions`: what each person has put into each bucket, as
+ * the sum of the rows filed to them, cumulative from the first row ever and shown
+ * from `range.from`. A joint row is nobody's contribution.
+ */
+export interface ContributionsResponse {
+  range: StatsRange;
+  people: string[];
+  series: ContributionSeries[];
+}
+
+/** One day on which the mortgage bucket moved, and whose money it held at its end. */
+export interface MortgageOwnPoint {
+  date: string;
+  balanceCents: number;
+  own: OwnMoney[];
+}
+
+/** `GET /api/stats/mortgage-own`: each person's own money in the mortgage bucket over time. */
+export interface MortgageOwnResponse {
+  range: StatsRange;
+  people: string[];
+  points: MortgageOwnPoint[];
+}
+
+export interface BufferPoint {
+  date: string;
+  balanceCents: number;
+}
+
+/** A row that took a large sum out of the buffer. */
+export interface BufferDrop {
+  rowId: number;
+  date: string;
+  description: string;
+  /** Negative: what left. */
+  amountCents: number;
+  balanceAfterCents: number;
+}
+
+/**
+ * `GET /api/stats/buffer`: the buffer's balance at the end of each day it moved, and
+ * the rows behind the drops of `minDropCents` or more.
+ */
+export interface BufferStatsResponse {
+  range: StatsRange;
+  minDropCents: number;
+  points: BufferPoint[];
+  drops: BufferDrop[];
+}
+
+/** What an uncategorised amount was called where it came from. */
+export interface SpendingDetail {
+  /** The period line's own free text, or the bank's category on a row; `null` for neither. */
+  label: string | null;
+  cents: number;
+}
+
+export interface SpendingByCategory {
+  /** `null` is uncategorised. */
+  categoryId: number | null;
+  cents: number;
+  /** On the uncategorised entry only: what it was, by the text it came with. */
+  detail?: SpendingDetail[];
+}
+
+/** One period of spending, from period lines (the cards) and joint rows out of the buffer (the account). */
+export interface SpendingPeriod {
+  start: string | null;
+  end: string;
+  /** The period not yet closed. */
+  open: boolean;
+  totalCents: number;
+  cardCents: number;
+  accountCents: number;
+  /** In category-id order, uncategorised last. */
+  categories: SpendingByCategory[];
+}
+
+/**
+ * `GET /api/stats/spending`: spending per period and per spending category (lg-15's
+ * list). The periods are the closed ones and the open one, oldest first, those that
+ * overlap the range; each holds everything dated inside it. Fixed items are charted
+ * on their own and are not in these totals.
+ */
+export interface SpendingStatsResponse {
+  range: StatsRange;
+  /** The whole list in the list's own order, retired ones too, with the name each has now. */
+  categories: { id: number; name: string; retired: boolean }[];
+  periods: SpendingPeriod[];
+}
+
+export interface FixedItemSeries {
+  label: string;
+  /** One amount per month in `months`, `0` where the item generated nothing. */
+  cents: number[];
+}
+
+/**
+ * `GET /api/stats/fixed-items`: the recurring items month by month, grouped by
+ * label so an item changed from some month on reads as one line.
+ */
+export interface FixedItemsResponse {
+  range: StatsRange;
+  /** `yyyy-mm`, consecutive. */
+  months: string[];
+  series: FixedItemSeries[];
+}
+
+/** `GET /api/stats/settlements`: the periods closed inside the range, oldest first, each with its formula version. */
+export interface SettlementsStatsResponse {
+  range: StatsRange;
+  periods: ClosedPeriod[];
 }

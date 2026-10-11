@@ -35,7 +35,7 @@ category (lg-15), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
 period's deposit a paste has brought in (lg-6), and the reader of the old
-workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7). The name is `books` because `ledger` is the tool. _Planned_, arriving
+workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7), and the history's series, one per chart on the stats screen (lg-9). The name is `books` because `ledger` is the tool. _Planned_, arriving
 with the ticket that first needs it rather than as an empty package now:
 **`receipts`**, the one package that talks to a model, reading a receipt photo.
 
@@ -139,6 +139,17 @@ everything that picked it. A row's spending category is **computed on read**,
 never stored (`spendingCategory` in `books`: override, then the classifying
 rule's, then the map's, then none), and a row without one is filed as ever and
 never waits in the inbox for want of it.
+
+**The stats store nothing, and a chart is coloured by the entity, never by its size**
+(lg-9). Every series is computed on read from the stored rows (`books/src/stats.ts`,
+gathered by `api/src/stats.ts`), a range trims what is shown and never what is counted
+(a cumulative total starts at the first row ever), and each series answers its own
+route. On the screen, a person, a spending category and a fixed item each keep the
+colour their place in a list gives them whatever range is chosen, so the API sends
+the whole list and not only what has an amount; past seven of a kind the rest share
+the eighth. The chart tokens (`--series-*` in `web/src/styles.css`) are the `dataviz`
+skill's categorical order, validated against this page's own two surfaces; every chart
+has a table twin, and a figure is never only in a hover.
 
 **People come from configuration, never the repository.** The `people` table
 (lg-5) is filled at boot from `ACCESS_PEOPLE`'s names, and a person's id is that
