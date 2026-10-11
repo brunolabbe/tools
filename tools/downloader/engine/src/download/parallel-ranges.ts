@@ -326,8 +326,12 @@ export class RangeFeeder {
   #settled = false;
   #size: number | null;
   #contentType: string | undefined;
-  /** Where a redirect led; later fetches go straight there, as ffmpeg's do. */
-  #target: URL;
+  /**
+   * The candidate's URL. Every fetch starts here and follows its own
+   * redirects: a hop is one response's answer, not the origin's, and caching
+   * one let a single refused hop stand in for every request after it.
+   */
+  readonly #target: URL;
   #closed = false;
   #held = 0;
   #maxHeld = 0;
@@ -609,7 +613,6 @@ export class RangeFeeder {
         target = new URL(location, target);
         continue;
       }
-      this.#target = target;
       return response;
     }
   }

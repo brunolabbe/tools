@@ -54,6 +54,13 @@
  *    directly. Its reach is a subset of ffmpeg's, not the same: it ignores
  *    `no_proxy` and stays on the proxy, and where ffmpeg would ignore a proxy
  *    that is not `http://` and go direct, it sends nothing.
+ *  - **Since dl-98, a ranging progressive origin is read by the engine too**,
+ *    not by ffmpeg: ffmpeg reads a loopback range server on 127.0.0.1, with
+ *    `-http_proxy ""` for that input alone, and the server's fetches to the
+ *    origin take the probe's route — the same proxy, the same TLS settings,
+ *    each redirect hop through it, the replayed `RequestContext` on each. A
+ *    slow origin is read over 4 connections; `singleConnectionHosts` opts a
+ *    host out, and a host that refuses is kept on one until restart.
  */
 
 import type { EngineConfig, EngineConfigInput } from "./config.ts";

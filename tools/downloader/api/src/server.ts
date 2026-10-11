@@ -403,6 +403,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       // split.
       ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
       proxyUrl: ffmpegEgress.proxyUrl,
+      // dl-98: a slow progressive origin is split into parallel ranges, through
+      // this same proxy, except on these hosts.
+      singleConnectionHosts: config.singleConnectionHosts,
     });
 
   // dl-56. **The same `ffmpegEgress` pair the engine was handed above**, for

@@ -62,6 +62,22 @@
  * 91,053 B not, on ffmpeg 6.1.1): the threshold is ffmpeg's internal buffering,
  * not something to depend on, and a video that small is not worth the risk.
  *
+ * ## A slow origin (dl-98)
+ *
+ * Some origins throttle each connection — the reported one served 27 KB/s to
+ * one and about four times that to four — so a progressive file whose origin
+ * answered the probe with a `206` is not handed to ffmpeg as its own URL:
+ * ffmpeg reads it from `download/parallel-ranges.ts`'s loopback range server,
+ * which relays one connection until it measures slower than the video plays,
+ * then fetches the rest four ranges at a time and hands them over in order.
+ * ffmpeg still seeks as it likes, so a tail `moov` is still a ranged read.
+ * Everything that file's header says about egress holds for its fetches; the
+ * errors keep naming the candidate (`context.url`), never the loopback; and
+ * the feeder is closed from ffmpeg's `completion`, because a refusal before the
+ * first byte leaves `attempt()` by a throw. Only an origin that ranges is put
+ * behind it, so dl-102's and dl-103's verdicts on one that does not are
+ * ffmpeg's reading of the origin itself, unchanged.
+ *
  * ## What can be retried
  *
  * Only what happens **before the first byte**. Mirror failover (dl-45) and the
@@ -743,22 +759,38 @@ async function attempt(
       onRefused: (host) => deps.refusedHosts?.add(host.toLowerCase()),
       // Read only once ffmpeg asks the loopback for bytes, so after it exists.
       onFatal: (error) => ffmpeg.terminate(error),
+    }).catch((error: unknown) => {
+      // A loopback that will not listen, or a CA file that will not read, costs
+      // the speed-up and nothing else: ffmpeg reads the origin as it always has.
+      logger.warn("the parallel-range feeder did not start; reading on one connection", {
+        jobId: request.jobId,
+        code: (error as NodeJS.ErrnoException | undefined)?.code ?? "failed",
+      });
+      return null;
     });
   }
 
-  const { args, transcodes } = buildStreamArgs({
-    url: context.url,
-    loopbackUrl: feeder?.url,
-    variant: request.variant,
-    requestContext: request.requestContext,
-    container: context.container,
-    audioOnly: context.audioOnly,
-    subtitles: context.subtitles,
-    title: request.title,
-    liveDurationSec: context.liveDurationSec,
-    tlsVerify: config.tlsVerify,
-    tlsCaFile: config.tlsCaFile,
-  });
+  const built = ((): ReturnType<typeof buildStreamArgs> => {
+    try {
+      return buildStreamArgs({
+        url: context.url,
+        loopbackUrl: feeder?.url,
+        variant: request.variant,
+        requestContext: request.requestContext,
+        container: context.container,
+        audioOnly: context.audioOnly,
+        subtitles: context.subtitles,
+        title: request.title,
+        liveDurationSec: context.liveDurationSec,
+        tlsVerify: config.tlsVerify,
+        tlsCaFile: config.tlsCaFile,
+      });
+    } catch (error: unknown) {
+      feeder?.close();
+      throw error;
+    }
+  })();
+  const { args, transcodes } = built;
 
   for (const notice of transcodes) {
     logger.warn("transcoding a stream — this is slow and lossy", {
