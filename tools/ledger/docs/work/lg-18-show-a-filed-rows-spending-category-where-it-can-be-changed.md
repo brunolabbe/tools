@@ -145,6 +145,41 @@ unfiled row, a mortgage row and five card lines. It checks every slice of every
 period with no range, with `to=2026-05-01` (which cuts the open period) and with a
 range inside February, against sums computed by hand. 5 of 5 at the head.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-11 · `9e127f79..17d55468` · Opus 5.5, re-gate of the round's own commits
+
+| Done when   | Proof                                                                                                                                                                                                                                                                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gates green | **unproven (gate)**: on `17d55468`, `check` ×2, `changes` and `dependency-review` are green. `test (ubuntu-latest)`, `test (windows-latest, informational)`, `docker` and `codeql` were still pending when read, once. Locally `npx vitest run tools/ledger/web/test` gave 121 of 121 and `tools/ledger/api/test/stats.test.ts` gave 26 of 26 |
+
+The other two rows are unchanged from gate 1. The round touched no source, only a
+doc comment, a test title, one new test and lg-19.
+
+- **F1 (high)** · **fixed**. The `rowsQuerySchema` comment in `contract/src/api.ts`
+  now says the list sums to the slice "less the card lines in that slice, which are
+  not rows". That matches the gate 1 harness (`slice=12777 list=7777` with 5000 of
+  cards). The renamed test in `api/test/stats.test.ts`, "a category's list sums to
+  its slice of the chart less the card lines, for every category and for none",
+  now claims what its body asserts (it adds `cardCents`). The PR #426 body carries
+  the same corrected sentence. A grep of `tools/ledger` for the claim finds no
+  other copy.
+- **F3 (low)** · **fixed**. `web/test/stats-rows.test.tsx` › "More categories opens
+  the whole period, not a category". With `key === "more"` removed from
+  `Cards.tsx`, that test fails: 1 failed, 120 passed of 121. Restored, all 121 pass.
+  The test's premise that nine categories fold two into "More categories" holds:
+  `SLOTS` is 8, and `assignSlots` gives seven their own slot when there are more
+  keys than slots.
+- **F7 (low)** · **fixed**. lg-19 now names `GET /api/periods/open`, and
+  `npm run status -- --show lg-19` still parses it (`fix`, `ready`, `standard`,
+  blocked by lg-18).
+- **F4 (low)** · **moved, recorded**. lg-19's Build now carries the card-only
+  slice as a contract choice for that ticket. lg-18 has no code change for it.
+- **F2, F5, F6, F8 (low)** · not in this round; they stay recorded as gate 1
+  wrote them.
+- **findings** · the round's lines raise nothing new: 0 carried, 0 dropped.
+- Nothing here is a `high`.
+
 ## Log
 
 - 2026-10-10 — Filed from lg-9's first gate round, at the owner's choice. The owner
