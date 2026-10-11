@@ -110,8 +110,12 @@ let originUrl: string;
 /** A response the fixture holds open and silent; ended in `afterEach`. */
 const stalled: http.ServerResponse[] = [];
 
-/** What a throttled origin may owe a client after a late wake-up: three Windows timer ticks. */
-const MAX_CREDIT_MS = 50;
+/**
+ * What a throttled origin may owe a client after a late wake-up: one Windows
+ * timer tick (15.6 ms) and some. More would let a stall come out as a burst
+ * that a 50 ms speed-up window reads as a faster origin.
+ */
+const MAX_CREDIT_MS = 25;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
