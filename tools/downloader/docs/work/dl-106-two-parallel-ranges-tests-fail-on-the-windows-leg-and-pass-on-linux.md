@@ -137,3 +137,94 @@ dl-98 exists to get right.
   what dl-98 should do, so it is not `hard`. It can only be reproduced on the
   Windows leg, which makes it slow rather than hard. Widening to three tests
   does not change that reason, so the field stays.
+- 2026-10-11, built (pull request #424, branch `dl-106-parallel-ranges-windows`).
+  **The cause is the test fixture, not the feeder or the judge**, and the
+  production code is unchanged. Everything below ran on `windows-latest` in a
+  branch-only probe workflow (since deleted: a workflow that runs one spec file N
+  times, which is the only affordable way to run it ten times there) and is
+  read from `gh run view <id> --log`.
+  - **A Windows timer fires on a ~15.6 ms tick.** Run 38158575134 (head
+    `bba22382`), the timer probe: `sleep(0): mean=11.41 p50=15.51`, `sleep(4):
+mean=14.69 p50=15.81 min=4.04`, `sleep(16): mean=26.94 p50=29.67`. Linux, the
+    same probe: `sleep(4): mean=4.11`.
+  - **So `send()`, which sleeps once per 16 KiB slice, cannot go faster than
+    about 1.4 MB/s there, whatever rate it is asked for.** The same run, the
+    fixture's own loop against a plain client: `asked=2000000 got=1299831`,
+    `asked=4000000 got=1430750`, `asked=40000000 got=1384852 in 43326 ms`, and
+    four connections at `asked=2000000` each got `1374354,1374636,...` ; on Linux
+    `asked=2000000 got=1979516`, `asked=4000000 got=3977061`.
+  - **That one fact explains the three reported failures.** A ("no speed-up at
+    4"): the shared 2 MB/s throttle read 1.12 MB/s on one connection and 1.98 on
+    four, a 1.77x speed-up over the 1.5 floor, so the feeder correctly kept the
+    split and never fell back (`judge-single rate=1121295`, `judge-split
+rate=1984081 single=1121295`, run 38158575134; the test's `after` list was
+    empty). F9: a "4 MB/s" origin against 3 MB/s of media is a fixture that
+    delivers 1.4 MB/s (the probe line above), which is slow, so the feeder
+    correctly split. The held-bytes test failed for a related reason, in the
+    bullet on the two further defects below.
+  - **Before the fix, in isolation, A and F9 fail every time.** Run 38160856396
+    (test file at `bba22382`): `before 1: FAIL`, `before 2: FAIL`, `before 3:
+FAIL`, each with `AssertionError: expected 0 to be greater than 0` (A) and
+    `... expected 'parallel' to be 'single'` (F9). The ten runs of 38158575134
+    failed 10 of 10 (the failing names were lost to a grep bug in the probe).
+    Run alone, the file fails the same two tests each time; in CI's full suite
+    the set varies, which fits other work on the machine changing the timer
+    resolution while a test runs. That last part is a hypothesis: nothing
+    here measured the resolution during a full-suite run.
+  - **The fix is in the fixture: `send()` is a bucket, not a timer per slice.** A
+    late wake-up writes every slice that fell due while it slept; what a stall
+    can bank is capped at `MAX_CREDIT_MS` (25 ms), so a reader that paused is not
+    answered with a burst. Run 38160489106 (head `aa21e562`): the same probe
+    with the bucket delivers `asked=2000000 got=1977212`, `asked=4000000
+got=3956421`, `asked=40000000 got=39500682`, four connections at 4 MB/s each
+    `3954745,...`. A, F9 and the held-bytes test were the tests this was found
+    for; no production line moved.
+  - **Two more defects of the same fixture surfaced once it was fast, and are
+    fixed in the same pull request.** (1) The held-bytes test asked its origin
+    for 40 MB/s, which the old fixture never delivered (13 MB/s on Linux, 1.4 on
+    Windows). Delivered in full, the 2 MB the reader takes before it pauses goes
+    by inside the 50 ms measuring window, so the split waited for the pause to
+    end (`AssertionError: expected 65536 to be greater than or equal to
+12582912`, run 38163890319) or fell back because a copy-bound single
+    connection is not 1.5x slower than four (`expected 'fallen-back' to be
+'parallel'`, same run). It now asks for 10 MB/s, a throttle this process can
+    outrun. (2) "a cancel after the first byte ... opens no more" measured
+    requests from the instant of `abort()`, and a fetch the feeder had already
+    written to its socket reaches the origin a few ms later: `AssertionError:
+expected [ { …(7) }, ... ] to deeply equal []` on Windows (run
+    38160856396, 1 of 10) and, with a late request 3 ms after the abort, on Linux
+    on both fixtures (old pacing 1 of 30, bucket 1 of 20 before the fix; on
+    Windows that test alone was 0 of 25 on each, run 38162765663; the
+    old-pacing log reads `"range": "bytes=1572864-1703935"`). `afterStop()` now
+    waits 100 ms before the measuring point, in the three tests that use the
+    pattern; the window after it stays longer than one fetch. A mutation
+    (`close()` made a no-op) still fails two of the three, the third does not
+    depend on `close()` and did not before.
+  - **After the fix**, same file, `windows-latest`: head `8f282c87` (the
+    fixture and the test changes, plus the probe files): `PASS` in runs 1 to 10
+    and 12 to 25, `FAIL` in run 11, 24 of 25 (run 38168166619). Run 11 failed
+    two tests that share a runner stall visible in the same log: the proxy test
+    (`expected 3 to be greater than 4`, a fallback `no-speedup 1635457 B/s split
+against 1906097 B/s on one`) and F9 (`parallel` for `single`), with
+    `judge-single rate=305588 activeMs=536` a few seconds earlier and the F9 byte
+    counts per second `5062656,5963776,7208960` where every other run has
+    `...,5095424,9142272,13189120`. An earlier head (`353a7a53`, run 38166078975) was 13 of 15 on the same file for the same kind of reason (F9's
+    `expected 5406720 to be greater than 10000000`, and the proxy test's `expected 0 to
+be greater than 4`, the second not explained: its log was not kept). On Linux
+    the same file is 38 of 38 (`npx vitest run
+tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
+    tests 40 of 40 and the held-bytes test 40 of 40 after the change.
+  - **What I could not show.** Why the full suite changes the timer
+    resolution is a hypothesis. The 1-in-25 residual on Windows is attributed to
+    runner stalls from the log's own numbers, not proved; the one failure of the
+    proxy test in run 38166078975 has no log. The Done-when's "10 consecutive
+    runs" is met (runs 1 to 10 and 12 to 25 of 38168166619) but is a weaker bar
+    than "no failure in 25".
+  - **What the brief had wrong.** "The cause is unmeasured ... the feeder, the
+    speed judge or the tests' timing assumptions": it was the last, and the
+    fixture's pacing in particular. "Reproduce first ... printing `stats()`
+    and `seen`" was not needed once a timer probe ran; the print of the judge's
+    rates was what showed A's 1.77x. The brief also expected one cause or
+    several: it is one in the fixture and two it exposed.
+  - Fold-in decision: the 3 tests' shared "opens no more" pattern is fixed in all
+    three places it occurs (`afterStop()`); nothing else was folded or left.
