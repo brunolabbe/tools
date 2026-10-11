@@ -35,7 +35,7 @@ jobs:
           git checkout bba22382 -- tools/downloader/engine/test/parallel-ranges.test.ts
           for i in 1 2 3; do
             npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "before-$i.log" 2>&1 && echo "before $i: PASS" || echo "before $i: FAIL"
-            grep -aE "^ *(FAIL|AssertionError)|Tests  " "before-$i.log" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-300 | head -40
+            sed "s/\x1b\[[0-9;]*m//g" "before-$i.log" | grep -aE "( FAIL |AssertionError|Tests  |Test Files)" | cut -c1-300 | head -40 || true
             grep -aE "judge-single|judge-split|fallBack" "before-$i.log" | cut -c1-200 > "before-decisions-$i.txt" || true
           done
           echo "--- decisions, before 1 ---"
@@ -52,7 +52,7 @@ jobs:
               echo "after $i: FAIL"
               fails=$((fails + 1))
             fi
-            grep -aE "^ *(FAIL|AssertionError)|Tests  " "after-$i.log" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-300 | head -40
+            sed "s/\x1b\[[0-9;]*m//g" "after-$i.log" | grep -aE "( FAIL |AssertionError|Tests  |Test Files)" | cut -c1-300 | head -40 || true
             grep -aE "judge-single|judge-split|fallBack" "after-$i.log" | cut -c1-200 > "after-decisions-$i.txt" || true
           done
           echo "failed runs after the fix: $fails of 10"
