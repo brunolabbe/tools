@@ -268,6 +268,62 @@ not press a related-video card.
 - Invariants walked: no cross-tool import, no new error code (`NO_MEDIA_FOUND` unchanged), no shell, no logging added, no contract edit, `import type` for `Locator` unchanged, new specs sit in an already-registered package. Skipped as untouchable by this diff: redaction, SSRF, progress, Dockerfile closure, route enumeration.
 - NFR: security n/a (no new URL or credential path) · performance: up to five 500 ms-bounded attribute reads per match, at most three matches per frame, low · reliability: the two highs · maintainability: the untested attribute read, above.
 
+### Gate 2
+
+**Gate: CONCERNS** — 2026-10-11 · `6dd64a7c..58af233d` (one commit, no merge) · Opus 5.5, re-gate of the round
+
+| Done when                                                                                                                   | Proof                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoplay`, `display` yield the stream, 3 of 3; the three residual rows are pinned `NO_MEDIA_FOUND` (reworded by the owner) | `resolvers/test/browser/browser-resolver.test.ts` › "ctl=%s (%s) is pressed but does not hold back the box click" (`autoplay`, `display`) and › "ctl=%s is a press that counts, so the box is not clicked" (`carousel`, `watch`, `xo`) ✓ — `-t "dl-100\|dl-81"` 42 of 42, three runs |
+| dl-81's delay cases stay green: the press of a real play control still holds back the box click                             | Delay cases ✓, three runs; camelCase controls ✓ › "ctl=%s (%s) is a press that counts, so a slow player is not clicked past". **unproven (open decision)** for a play control spelled as one lower-case word: see the first `med`                                                    |
+| Each case has a test that fails if its branch is removed                                                                    | ✓ by mutation at head: label-only read fails `testid-word`, `class-btn`, `id-button`, `camel-testid` (4 of 42); no id-`play` branch fails `id-play`; no camelCase fails `camel-testid`, `camel-title`; no `auto` exception fails `autoplay-camel`                                    |
+| `npm run check` and `npm test -- --project downloader` pass                                                                 | **verified** — `npm run check` exit 0 locally at head; PR #425 `check` and `test (ubuntu-latest)` pass on `58af233d`                                                                                                                                                                 |
+
+Gate 1's findings:
+
+- **high, camelCase play control not counted** — **fixed.** `gate-run.sh` with `zz-gate-grid.html`, `delay=1500`, floor 9000 at head: `label`, `camel-testid`, `camel-title` → stream, no card beacon (at `6dd64a7c` the last two pressed card 5).
+- **high, Done when 1 against the residual rows** — **fixed** by the owner's rewording; the line and the three pinning tests now agree.
+- **med, over-count through a `player*` attribute** — **fixed for `class` and `id`**: `autoplay-cls`, `autoplay-id`, `display-cls` → stream at head. What still counts is the same as `main` (the measurement is below).
+- **med, the `class`/`id`/`data-testid` read untested** — **fixed**: the label-only mutant is killed (4 of 42). The Log's "6 of 19" is for the builder's own mutant, which also drops the library-class and id-`play` reads.
+- **low, `isPlayPress`'s `catch` untested** — **not fixed**, with a reason in the Log; recorded.
+- **low, "`main` never had the box click"** — **fixed** in both the brief and the Log.
+
+New in the round's lines:
+
+- **med** · Done when 2 depends on it · **open decision** · **A play control spelled as one lower-case word is no longer counted, and dl-81's defect returns for it.** `startsWord` needs a non-letter or a lower-to-upper `Play` before the token, so `data-testid="videoplaybutton"` or `"btnplay"` on an icon-only button with no label is pressed and not counted. `zz-gate-grid.html?ctl=tid:<value>&delay=1500`, floor 9000:
+
+  | `data-testid`     | `main` (`55214e67`) | head                                            | whole word "play" (option 2 below) |
+  | ----------------- | ------------------- | ----------------------------------------------- | ---------------------------------- |
+  | `videoplaybutton` | stream              | `NO_MEDIA_FOUND`, card pressed, `/other-5.html` | same as head                       |
+  | `btnplay`         | stream              | `NO_MEDIA_FOUND`, card pressed, `/other-5.html` | same as head                       |
+  | `playbtn`         | stream              | stream                                          | `NO_MEDIA_FOUND`, card pressed     |
+
+  Option A's rule ("starts a word with play") cannot count `btnplay`, and no test pins the opposite, so this is the open-decision case and not a `high`. It needs all of: no `<video>`, no `aria-label`, `title` or text with a word-start "play", a late manifest, and a larger player-ish box. Options: **(a, recommended)** reword the line's second clause to the word-start reading, which is what A says, and accept the miss; **(b)** invert the rule into a deny-list — count every match unless its "play" sits inside a known non-play word (`autoplay`, `display`, …). That keeps `main`'s count for every real control and frees the table's rows, at the cost of an open-ended word list, which the builder already declined for `carousel`.
+
+- **low** · The `auto` exception only covers camelCase. `data-testid="auto-play-toggle"` and `aria-label="Auto Play"` still count, the same as `main` (measured: `NO_MEDIA_FOUND` at `main`, head and option 2). `startsWord` over a word list (`mutants.mjs`): `AutoPlay`, `autoPlay`, `videoAutoPlay`, `autoPlayToggle`, `DisplayName`, `Autoplay` → false; `displayPlay`, `RePlay`, `fairPlayLicense`, `gamePlayStats`, `screenPlay`, `powerPlay`, `Auto Play`, `auto-play` → true. Every one of these was counted at `main`.
+- **low** · `isPlayPress` checks every `PLAY_LOOSE_SELECTORS` entry's attribute, not only those whose selector matched. A `<span data-testid="display-name" title="Player info">` matches only the test-id selector but is counted through `title`. The function's doc is accurate. The commit message's "in the attribute that selector matched on" overstates it. Read from the code, not run.
+- **dropped** · `test (windows-latest, informational)` is red on `58af233d` in `engine/test/parallel-ranges.test.ts` (dl-98), as at `6dd64a7c`. That file is outside the diff.
+- **findings** · the round's hunt returned 4; 3 carried, 1 dropped.
+
+The builder's open decision (whether "Playlist", "Playback", "Plays" and "Player" count) — measurement only. `zz-gate-box.html?ctl=…`, one run each, "held" = `NO_MEDIA_FOUND` with the box not clicked:
+
+| control                                                    | `main` | head (option 1, as built) | option 2, whole word "play" |
+| ---------------------------------------------------------- | ------ | ------------------------- | --------------------------- |
+| `aria-label="Autoplay" class="player-autoplay-toggle"`     | held   | stream                    | stream                      |
+| `aria-label="Autoplay" id="player-autoplay"`               | held   | stream                    | stream                      |
+| `data-testid="display-name" class="player-meta"`           | held   | stream                    | stream                      |
+| `class="vjs-autoplay-toggle …" title="Autoplay"`           | held   | stream                    | stream                      |
+| `data-testid="AutoPlay"` / `"autoPlayToggle"`              | held   | stream                    | stream                      |
+| `aria-label="Autoplay" data-testid="player-autoplay"`      | held   | held                      | stream                      |
+| `data-testid="playlist-panel"`                             | held   | held                      | stream                      |
+| `data-testid="plays-count"`                                | held   | held                      | stream                      |
+| `title="Playback rate"`                                    | held   | held                      | stream                      |
+| `data-testid="auto-play-toggle"`, `aria-label="Auto Play"` | held   | held                      | held                        |
+
+On the box rows neither option is a regression against `main`: option 1 frees 6 of the 12, option 2 frees 10. On the grid, option 2 adds one regression against `main` (`playbtn`, table above) to the two that both options share. The branch's own suite passes 42 of 42 under option 2 too, so no test pins either choice.
+
+- NFR: security n/a · performance unchanged (the attribute reads are the five distinct names deduplicated from the entries, each bounded at 500 ms, as before) · reliability: the `med` above · maintainability ✓.
+
 ## Log
 
 - 2026-10-07 — **Filed** by the fixer landing dl-81 (Sonnet 5.5), from gate 3's
