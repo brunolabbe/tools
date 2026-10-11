@@ -30,7 +30,7 @@ grep -rn "ROUTES.periodLine\b\|correctLine" tools/ledger/web/src
 prints nothing, though `POST /api/period-lines/:id` exists and is the correction
 (`api/src/routes/periods.ts`). The web's only writers of a line are
 `addLine` (`ROUTES.periodLines`) and `retireLine`, both in `web/src/api/periods.ts`.
-And no route reads a closed period's lines: `GET /api/period/open` takes its start
+And no route reads a closed period's lines: `GET /api/periods/open` takes its start
 from the last close (`openPeriod`, `api/src/periods.ts`), so it lists only the open
 period's lines and those entered late.
 
@@ -50,6 +50,16 @@ and correct a line's spending category.
 - **Where.** The list lg-18 opens below the spending chart, so a period shows its
   bank rows and its card lines together; replace lg-18's on-screen notice that card
   lines are corrected elsewhere.
+- **A category whose slice is only card lines (lg-18's gate 1, F4).** lg-18 offers a
+  category's "Rows" button whenever the slice is non-zero, so a slice made only of
+  card lines opens "No bank row matches.", with a notice that gives the whole
+  period's card total, not that category's. Reproduced on lg-18's branch by the gate
+  harness: Household in 2026-02, 3000 of cards and no bank row. The cause is that
+  `SpendingStatsResponse` does not carry a slice's card share. lg-19 settles it when
+  the card lines are listed: either the list carries them, so the button always has
+  something to open, or the response carries each slice's card share so the notice
+  and the button can say the right thing. That is a contract choice, so it is
+  lg-19's to decide, not a patch to lg-18.
 
 ## Done when
 
