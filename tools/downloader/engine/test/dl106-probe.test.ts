@@ -30,6 +30,7 @@ async function paced(
   total: number,
   perConnection: number,
   slice: number,
+  bucket: boolean,
 ): Promise<void> {
   const body = Buffer.alloc(total, 1);
   let offset = 0;
@@ -37,9 +38,18 @@ async function paced(
   while (offset < body.length && !response.destroyed) {
     const piece = body.subarray(offset, offset + slice);
     offset += piece.length;
-    next += (piece.length * 1000) / perConnection;
-    // oxlint-disable-next-line no-await-in-loop
-    await sleep(Math.max(0, next - performance.now()));
+    if (bucket) {
+      next = Math.max(next, performance.now() - 50) + (piece.length * 1000) / perConnection;
+      const wait = next - performance.now();
+      if (wait > 0) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(wait);
+      }
+    } else {
+      next += (piece.length * 1000) / perConnection;
+      // oxlint-disable-next-line no-await-in-loop
+      await sleep(Math.max(0, next - performance.now()));
+    }
     if (!response.write(piece)) {
       // oxlint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve) => response.once("drain", () => resolve()));
@@ -48,11 +58,16 @@ async function paced(
   response.end();
 }
 
-async function measure(perConnection: number, slice: number, connections: number): Promise<string> {
+async function measure(
+  perConnection: number,
+  slice: number,
+  connections: number,
+  bucket: boolean,
+): Promise<string> {
   const total = Math.round(perConnection * 1.5);
   const server = http.createServer((_request, response) => {
     response.writeHead(200, { "content-length": String(total) });
-    void paced(response, total, perConnection, slice);
+    void paced(response, total, perConnection, slice, bucket);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -71,7 +86,7 @@ async function measure(perConnection: number, slice: number, connections: number
   );
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  return `asked=${perConnection} slice=${slice} conns=${connections} got=${rates.map((rate) => Math.round(rate)).join(",")} in ${Math.round(performance.now() - started)} ms`;
+  return `bucket=${bucket} asked=${perConnection} slice=${slice} conns=${connections} got=${rates.map((rate) => Math.round(rate)).join(",")} in ${Math.round(performance.now() - started)} ms`;
 }
 
 test("dl-106 probe: timer cost and what a paced origin delivers", async () => {
@@ -86,6 +101,7 @@ test("dl-106 probe: timer cost and what a paced origin delivers", async () => {
     [2_000_000, 16384, 4],
     [4_000_000, 16384, 4],
   ] as const) {
-    say(await measure(bps, slice, connections));
+    say(await measure(bps, slice, connections, false));
+    say(await measure(bps, slice, connections, true));
   }
 }, 120_000);

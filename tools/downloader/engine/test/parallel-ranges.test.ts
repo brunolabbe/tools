@@ -110,6 +110,9 @@ let originUrl: string;
 /** A response the fixture holds open and silent; ended in `afterEach`. */
 const stalled: http.ServerResponse[] = [];
 
+/** What a throttled origin may owe a client after a late wake-up: three Windows timer ticks. */
+const MAX_CREDIT_MS = 50;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -129,15 +132,32 @@ async function send(
   while (offset < body.length && !response.destroyed) {
     const slice = body.subarray(offset, offset + behaviour.slice);
     offset += slice.length;
+    // A throttle is a bucket that refills at the rate, not a timer per slice
+    // (dl-106). On Windows a timer fires on a ~15.6 ms tick when nothing else
+    // on the machine has asked for finer, so `sleep(4)` takes 15.6 ms and a
+    // fixture that sleeps once per 16 KiB slice cannot go faster than about
+    // 1 MB/s, whatever rate it was told: a "4 MB/s" origin read 1.4 MB/s there,
+    // slower than the media it was meant to outrun, and a "2 MB/s per client"
+    // origin read 1.1 MB/s on one connection and 2 on four, a 1.8x speed-up that
+    // the feeder rightly kept. So a late wake-up writes every slice that fell
+    // due while it slept, and the schedule is not reset to `now`; what a stall
+    // may bank is capped, so a reader that paused is not answered with a burst.
     if (bps.shared !== null) {
       const now = performance.now();
-      sharedNext = Math.max(sharedNext, now) + (slice.length * 1000) / bps.shared;
-      // oxlint-disable-next-line no-await-in-loop
-      await sleep(Math.max(0, sharedNext - now));
+      sharedNext = Math.max(sharedNext, now - MAX_CREDIT_MS) + (slice.length * 1000) / bps.shared;
+      if (sharedNext > now) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(sharedNext - now);
+      }
     } else if (bps.perConnection !== null) {
-      next += (slice.length * 1000) / bps.perConnection;
-      // oxlint-disable-next-line no-await-in-loop
-      await sleep(Math.max(0, next - performance.now()));
+      next =
+        Math.max(next, performance.now() - MAX_CREDIT_MS) +
+        (slice.length * 1000) / bps.perConnection;
+      const wait = next - performance.now();
+      if (wait > 0) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(wait);
+      }
     }
     if (response.destroyed) return;
     if (!response.write(slice)) {

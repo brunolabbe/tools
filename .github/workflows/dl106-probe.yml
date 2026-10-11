@@ -12,12 +12,14 @@ permissions:
 jobs:
   probe:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       DL106: "1"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -26,22 +28,33 @@ jobs:
       - run: npm run build
       - name: Timer and pacing probe
         shell: bash
-        run: npx vitest run tools/downloader/engine/test/dl106-probe.test.ts 2>&1 | grep -E "DL106|Tests |FAIL" || true
-      - name: The file, ten times
+        run: npx vitest run tools/downloader/engine/test/dl106-probe.test.ts 2>&1 | grep -aE "DL106 PROBE|Tests " || true
+      - name: Before the fix, three times
+        shell: bash
+        run: |
+          git checkout bba22382 -- tools/downloader/engine/test/parallel-ranges.test.ts
+          for i in 1 2 3; do
+            npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "before-$i.log" 2>&1 && echo "before $i: PASS" || echo "before $i: FAIL"
+            grep -aE "^ *(FAIL|AssertionError)|Tests  " "before-$i.log" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-300 | head -40
+            grep -aE "judge-single|judge-split|fallBack" "before-$i.log" | cut -c1-200 > "before-decisions-$i.txt" || true
+          done
+          echo "--- decisions, before 1 ---"
+          head -60 before-decisions-1.txt
+          git checkout HEAD -- tools/downloader/engine/test/parallel-ranges.test.ts
+      - name: After the fix, ten times
         shell: bash
         run: |
           fails=0
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            echo "=== run $i ==="
-            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "run-$i.log" 2>&1; then
-              echo "run $i: PASS"
+            if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "after-$i.log" 2>&1; then
+              echo "after $i: PASS"
             else
-              echo "run $i: FAIL"
+              echo "after $i: FAIL"
               fails=$((fails + 1))
-              grep -E "FAIL|AssertionError|DL106" "run-$i.log" | head -80
             fi
-            grep -E "DL106" "run-$i.log" | head -400 > "dl106-$i.txt" || true
+            grep -aE "^ *(FAIL|AssertionError)|Tests  " "after-$i.log" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-300 | head -40
+            grep -aE "judge-single|judge-split|fallBack" "after-$i.log" | cut -c1-200 > "after-decisions-$i.txt" || true
           done
-          echo "failed runs: $fails of 10"
-          echo "--- decisions of run 1 ---"
-          cat dl106-1.txt | head -150
+          echo "failed runs after the fix: $fails of 10"
+          echo "--- decisions, after 1 ---"
+          head -60 after-decisions-1.txt
