@@ -25,12 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: The file as the pull request has it, ten times
+      - name: The file as the pull request has it, fifteen times
         shell: bash
         run: |
           git log -1 --format="head %H"
           fails=0
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for i in $(seq 1 15); do
             if npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts > "final-$i.log" 2>&1; then
               echo "final $i: PASS"
             else
@@ -39,4 +39,4 @@ jobs:
             fi
             sed "s/\x1b\[[0-9;]*m//g" "final-$i.log" | grep -aE "( FAIL |AssertionError|Tests  |Test Files)" | cut -c1-300 | head -40 || true
           done
-          echo "failed runs: $fails of 10"
+          echo "failed runs: $fails of 15"

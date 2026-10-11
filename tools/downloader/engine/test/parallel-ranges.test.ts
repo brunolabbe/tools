@@ -800,7 +800,13 @@ describe("dl-98: the feeder's own limits", () => {
       const body = Buffer.alloc(40 * 1024 * 1024);
       for (let index = 0; index < body.length; index += 4) body.writeUInt32BE(index, index);
       files["forty.bin"] = body;
-      behaviour.perConnectionBps = 40_000_000;
+      // A throttle well under what this process can copy, which 40 MB/s is not:
+      // that was only ever the rate asked for. The fixture's sleep per slice
+      // delivered 13 MB/s on Linux and 1.4 on Windows. Delivered in full (dl-106)
+      // the 2 MB the reader takes before it pauses went by in under the 50 ms
+      // window, so the split waited for the pause to end, and 4 connections
+      // were not 1.5x one that was already limited by the CPU, so it fell back.
+      behaviour.perConnectionBps = 10_000_000;
       const { feeder } = await feederFor("forty.bin", {
         // The owner's 4 connections of 4 MB, and only the window shortened.
         settings: { ...PARALLEL_RANGE_DEFAULTS, measureMs: 50 },
