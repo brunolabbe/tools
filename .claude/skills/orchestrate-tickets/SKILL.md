@@ -231,6 +231,42 @@ work. How to ask is the root `CLAUDE.md` rule. What is specific to a batch:
   gate's numbers; the owner re-chose each time.
 - **An acceptance line that says "every" is reworded to an enumerable scope
   before dispatch**, or the gate can always find one more shape (dl-58).
+- **While the owner is away, a reversible choice is taken, not held.** An away
+  signal is the owner saying so; silence is not one, and neither is a cache
+  expiry. Then a decision that meets **every** condition is taken on your
+  recommended option without asking:
+  - it is reversible by **one revert on each unmerged branch it touched**;
+  - it is a path test: it touches no contract, no error taxonomy,
+    `.claude/settings.json`, `.github/workflows/`, `Dockerfile`,
+    `.devcontainer/allowed-domains.txt` or `.gitignore`'s `.claude/` allowlist,
+    and adds no new path to any branch's own `git diff --name-only` against its
+    base;
+  - it changes no `Done when` line, takes no decision a ticket's `Done when` or
+    Decision section reserves to the owner, and changes no gate verdict. A
+    commit made after a gate qualifies only if it changes no assertion, no code
+    under test, and no fixture, page or data a graded test reads;
+  - you dry-ran it (_Dry-run before you name it_), and the choice does not
+    override a builder's or a gate's recommendation.
+
+  Anything else is still held, or filed as a ticket at close.
+
+  **Flag each choice taken this way** in a comment on the pull request and in
+  the report the owner reads on return, in the form `AskUserQuestion` would have
+  used: the question, the options, the one taken, and the commit to revert, so
+  the owner can overrule it in one line. For a commit made after a gate, name
+  that gate's record, so the owner can order a re-gate. A choice taken this way
+  is a taken choice, not an open decision at close.
+
+  **This is an exception to two rules, and keeps both elsewhere.** It is an
+  exception to _A subagent's open decision is yours to forward, not to absorb_,
+  above, and to the root `CLAUDE.md` "Decisions" rule to ask with
+  `AskUserQuestion`. The answer goes back down to the subagent labelled as
+  **your choice under this rule, not the owner's**, with the question, the
+  options and the one taken, so no Log records an owner's answer that was never
+  given. It is also narrower than the rule that a decision arriving after the
+  owner has signed off becomes a ticket and the turn ends: that rule closes a
+  batch, this one keeps an unfinished batch moving, and a sign-off, not an away
+  signal, is what moves a decision from here to there.
 
 ### Relaying
 
