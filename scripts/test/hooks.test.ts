@@ -299,6 +299,7 @@ test("check-pr-title still reads a title out of a quoted span", () => {
 /** start of a line in this file, where the hook under test would read it as an */
 /** invocation if anything ever rewrote this file through a heredoc. */
 const MERGE = ["gh", "pr", "merge"].join(" ");
+const STACK_MERGE = ["gh", "stack", "merge"].join(" ");
 const PUSH = ["git", "push"].join(" ");
 
 /** A checkout whose HEAD is a known branch. No commit is needed: */
@@ -503,5 +504,32 @@ test("check-main-writes carries its limits in its header, not only in the ticket
     "decision B1",
   ]) {
     expect(header, fact).toContain(fact);
+  }
+});
+
+test("check-main-writes refuses a stacked-pull-request merge as it refuses a pull request merge", () => {
+  // repo-95: `gh stack merge` merges pull requests through the gh-stack
+  // extension. Until the hook named it, the deny rule `Bash(gh stack merge*)`
+  // was the only layer, and a glob is the matcher this hook exists to back up.
+  // Bare, flagged and chained spellings, as the `gh pr merge` case above.
+  for (const command of [
+    STACK_MERGE,
+    `${STACK_MERGE} -y`,
+    `${STACK_MERGE} --squash 12`,
+    `cd /tmp && ${STACK_MERGE} -y`,
+  ]) {
+    const result = run(MAIN_WRITES, command);
+    expect(result.status, command).toBe(2);
+    expect(result.stderr, command).toContain("owner's decision");
+  }
+  // The nearest shapes that must stay silent: the extension's other
+  // subcommands do not merge, and a mention in an argument is not an invocation.
+  for (const command of [
+    "gh stack view",
+    "gh stack sync",
+    "gh stack submit --open",
+    `echo ${STACK_MERGE}`,
+  ]) {
+    expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
   }
 });
