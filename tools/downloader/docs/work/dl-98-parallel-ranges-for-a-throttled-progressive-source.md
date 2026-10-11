@@ -454,3 +454,77 @@ there, and it is not now. What could still be red there:
 - The 3x ratio, if Windows' timer granularity (about 15.6 ms against the
   fixture's 32 ms slices) costs the split side its 15% margin.
 - `-http_proxy ""` through `spawn`, which no Windows run has reached yet.
+
+**2026-10-11** — two more owner answers, put by the orchestrator after gate 2
+(CONCERNS at `3b6a832d`, no high).
+
+1. **"How should the bound apply?"** (gate 2's F10.) The options were "Chunk
+   fetches only; the relay uses ffmpeg's timeout" (gate 2's (a), recommended by
+   the gate and the orchestrator) and "Keep it on the relay at 30 s or more".
+   **The owner chose "Chunk fetches only; the relay uses ffmpeg's timeout".**
+2. **"How should dl-98 finish?"** The options were "One more builder round,
+   then a narrow gate 3" (recommended), "Lander applies F9, F10 and F11, no
+   re-gate" and "Land as gated; file the rest as dl-106". **The owner chose
+   "One more builder round, then a narrow gate 3".**
+
+**2026-10-11** — gate 2's round. Each new test was run red on `3b6a832d` first,
+and each fix half was reverted alone to show its test red
+(`mutate-r2.py`, source restored after). The tests are in "dl-98 round 2: …" at
+the end of `engine/test/parallel-ranges.test.ts`.
+
+- **F9** (med), fixed as gate 2 stated it. The meter knows which fetches it is
+  measuring, is paused only while every one of them is, and releases a fetch
+  that ends, fails or whose request ffmpeg closed.
+  - Gate 2's `stuckpause.mts`: `withA` and `withAkept` gave "first non-single
+    at never" on `3b6a832d`. Now they give 0.1 s and 0.5 s.
+  - "F9: a paused request ffmpeg closed does not keep the meter paused for the
+    next one" and "F9: a paused request left open does not stop the meter for
+    one that is reading" were both red on `3b6a832d` (`expected null not to be
+null`: B never split). The second is red again with the all-paused rule
+    reverted.
+  - The release on drop needed its own case. Without it, the two tests above
+    still pass, because the all-paused rule alone covers them. Without it, a
+    request closed while still reading stays counted as reading, so a later
+    pause is charged to the origin. "F9: a request ffmpeg closed while it was
+    reading does not count a later pause as the origin's time" is red with the
+    release removed: a 4 MB/s origin against 3 MB/s of media was split.
+- **F10** (med), done as the owner chose. The idle bound now arms only for a
+  bounded fetch: a chunk, the connection open before the split once it has a
+  chunk's end, and the continuation after a fallback. A relay is left to
+  ffmpeg's own 30 s, as it is without the feeder; ffmpeg going away is what
+  closes it.
+  - Gate 2's `delayhdr.mts <tree> feeder 25000 faststart.mp4`: `ok () in
+25.8 s`, where it was `DOWNLOAD_FAILED … in 20.1 s`.
+  - `idlebound.mts <tree> chunk-silent`: the silent fan-out fetch is still cut
+    at 20.3 s (`onRefused 127.0.0.1 reset`), and the read continues
+    `fallen-back`.
+  - Tests: "F10: a relay answered later than the idle bound is not cut: its
+    wait is ffmpeg's", and the 101 test, renamed "F1: a 101 on a relay is left
+    to ffmpeg's own timeout, and going away closes it". Both were red on
+    `3b6a832d` (`expected 504 to be 206`; `expected 'answered 504' to be 'gave
+up'`), and red again with the relay bounded.
+  - The round-1 stall test still passes, so the chunk-fetch bound still does
+    its job.
+- **F11** (low), fixed with one registry instead of a `try/finally` in each
+  test. Every feeder `feederFor` starts is pushed to `liveFeeders`, which
+  `afterEach` closes whatever the test's outcome. That covers every feeder test
+  and any test added later, with no per-test cleanup to forget.
+- **The two Windows-only failures on `3b6a832d`** (gate 2's item 4). Both now
+  wait, with a bound, for the condition they asserted at one instant, and print
+  the feeder's stats if it never comes.
+  - "a cancel stops the relay and every ranged fetch …" waits for split with 4
+    origin connections open, up to 10 s, before it cancels. **Why one instant
+    could show 3:** a chunk fetched and not yet handed over holds a slot with
+    no origin connection open. Measured on Linux, 400 samples 5 ms apart during
+    a split: 4 open in 180, 2 in 22, 1 in 6, and 0 in 192 once the file was
+    done. So any one sample can see fewer than 4 on any platform, and Windows'
+    sample at 500 ms fell in a dip.
+  - "F2: a second request is answered at once …" waits, up to 15 s, until the
+    feeder has split, the first reader has stopped at 8 MiB, and its lookahead
+    holds three chunks besides the head. That is the precondition the test is
+    about, stated rather than slept for. The speed-up judge is off in this test
+    (`speedupFloor: 0`). **Why Windows fell back: not measured.** The leg
+    printed only `'fallen-back'`. The one refusal a healthy fixture origin can
+    produce is "no speed-up", from this test's 100 ms window. If Windows'
+    fallback was anything else, this change does not fix it, and the new
+    message names the refusal.
