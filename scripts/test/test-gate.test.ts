@@ -159,9 +159,11 @@ function startGate(
   extra: Record<string, string | undefined> = {},
   command?: string[],
   cwd?: string,
+  detached = false,
 ): Gate {
   const proc = spawn(process.execPath, [GATE, ...(command ?? [process.execPath, childFile])], {
     cwd,
+    detached,
     env: gateEnv(extra),
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
@@ -409,6 +411,62 @@ describe.skipIf(!supported)("leaving", () => {
     expect(await gate.done).toEqual({ code: 143, signal: null });
     await waitUntil(() => startTimeOf(pid) === null, "the child to die");
     await waitUntil(() => startTimeOf(grandchild ?? 0) === null, "the grandchild to die");
+    expect(slotFiles()).toEqual([]);
+  });
+
+  test("a SIGKILL to the gate's process group leaves nothing running", async () => {
+    // The shape of `kill -9 -<pgid>` on a terminal job. The child used to be
+    // started in a group of its own, which this signal does not reach: vitest
+    // and its workers survived, holding no slot (repo-103 gate 1).
+    const hold = path.join(work, "never");
+    const gate = startGate({ FAKE_HOLD: hold, FAKE_GRANDCHILD: "1" }, undefined, undefined, true);
+    await waitUntil(() => gate.stdout().includes("\n"), "the child to start");
+    const { pid, grandchild } = gate.report();
+    expect(startTimeOf(pid)).not.toBeNull();
+    expect(startTimeOf(grandchild ?? 0)).not.toBeNull();
+
+    process.kill(-(gate.proc.pid ?? 0), "SIGKILL");
+    await gate.exited;
+    await waitUntil(() => startTimeOf(pid) === null, "the child to die");
+    await waitUntil(() => startTimeOf(grandchild ?? 0) === null, "the grandchild to die");
+    // The gate could not release the slot; the next run's reclaim is the other test.
+    expect(slotFiles()).toEqual(["slot-0.lock"]);
+  });
+});
+
+describe.skipIf(!supported)("two runs reclaiming one stale lock", () => {
+  test("a stale lock another run is reclaiming is left to it", async () => {
+    // Re-read-then-unlink is not atomic: a run that has judged the lock stale
+    // can unlink the fresh one another run created in between, and both hold
+    // the slot (gate 1 measured 3 of 60 trials). The guard file is what stops
+    // the second run, so with the guard held the lock must be left untouched.
+    const dead = deadLock(0);
+    fs.writeFileSync(path.join(lockDir, "slot-0.lock.reclaim"), String(process.pid));
+    const gate = startGate();
+    expect(await gate.done).toEqual({ code: 0, signal: null });
+    expect(gate.report().locks["slot-1.lock"]?.pid).toBe(gate.proc.pid);
+    expect(gate.report().locks["slot-0.lock"]?.pid).toBe(dead);
+    expect(gate.report().workers).toBe("11");
+    // Neither the lock nor the guard belongs to this run, so neither is touched.
+    expect(slotFiles().toSorted()).toEqual(["slot-0.lock", "slot-0.lock.reclaim"]);
+  });
+
+  test("a guard left by a reclaimer that died is removed, and the slot reclaimed", async () => {
+    deadLock(0);
+    const guard = path.join(lockDir, "slot-0.lock.reclaim");
+    fs.writeFileSync(guard, "1");
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(guard, old, old);
+    const gate = startGate();
+    expect(await gate.done).toEqual({ code: 0, signal: null });
+    expect(gate.report().locks["slot-0.lock"]?.pid).toBe(gate.proc.pid);
+    expect(slotFiles()).toEqual([]);
+  });
+
+  test("the guard is not left behind by a reclaim", async () => {
+    deadLock(0);
+    const gate = startGate();
+    expect(await gate.done).toEqual({ code: 0, signal: null });
     expect(slotFiles()).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * A machine-wide gate for the heavy test runs (repo-103).
+ * A per-clone gate for the heavy test runs (repo-103).
  *
  *     node scripts/test-gate.mjs <command> [args...]
  *
@@ -18,21 +18,30 @@
  * no tokens.
  *
  * **What it does.**
- *  - Two slots (`TEST_GATE_MAX`), one lock file per slot, in
+ *  - Two runs hold a slot (`TEST_GATE_MAX`), one lock file per slot, in
  *    `<git-common-dir>/test-gate/`. `git rev-parse --git-common-dir` is the same
- *    directory for every worktree of this repository, which is what makes the
- *    gate machine-wide rather than per-checkout. A slot is claimed with an
+ *    directory for every worktree of one clone, and **only** for them: the gate
+ *    limits the runs that share a clone's `.git`, not every run on the machine.
+ *    A second clone has its own locks, and a lock written from another pid
+ *    namespace (another container sharing the directory) names a pid this one
+ *    cannot see, so it is always judged stale. A slot is claimed with an
  *    exclusive create, so two runs starting in the same instant cannot take the
  *    same one.
  *  - The child's `VITEST_MAX_WORKERS` is `max(1, floor((cpus - 1) / active))`,
  *    where `active` counts the live locks including this run's own, taken after
  *    a short settle so two runs started together both see each other. A lone run
- *    keeps every worker. The count is fixed at start: a run already going is
- *    never resized, so a late arrival briefly oversubscribes the machine.
+ *    keeps every worker. **The count is fixed at start and nothing resizes a run
+ *    going:** a run that starts alone keeps all 11 workers, so a second run that
+ *    arrives more than the settle later gets 5 beside it, and the machine is
+ *    oversubscribed (16 workers on 11 cores) for the whole time they overlap,
+ *    not briefly. Measured: every one of 16 staggered pairs in 96 trials did.
  *  - A third run waits, printing why every 15 s to stderr so an agent's Bash
- *    call does not look hung. The wait is bounded (`TEST_GATE_WAIT_MS`, five
- *    minutes) and ends in a run with one worker and no slot: it never
- *    deadlocks and never fails a run for having waited.
+ *    call does not look hung. The wait is bounded (`TEST_GATE_WAIT_MS`, 300 s)
+ *    and ends in a run with one worker and **no slot**: it never deadlocks and
+ *    never fails a run for having waited. So "at most two" holds only while
+ *    runs are shorter than the wait. A third downloader run, which lasts
+ *    minutes, always reaches the fallback and then runs beside the other two;
+ *    a one-worker downloader run took 1043 s here.
  *
  * **A lock records the pid and the process start time.** A pid alone proves
  * nothing, because pids are reused: the start time (field 22 of
@@ -41,7 +50,18 @@
  * start time differs, is stale and the next run reclaims it. The slot is
  * released on exit, on a signal, and when the child crashes. A SIGKILL on the
  * gate itself cannot be caught, so its lock stays until the next run finds it
- * stale; the child it leaves running is not counted.
+ * stale. The child is in the gate's process group, not a group of its own
+ * (repo-103 gate 1: a detached child survived a group SIGKILL), so a SIGKILL
+ * sent to the group takes vitest with it; one sent to the gate's pid alone
+ * leaves vitest running, uncounted.
+ *
+ * **Reclaiming a stale lock is serialised by a second exclusive file,**
+ * `slot-N.lock.reclaim`. Re-reading a lock and then unlinking it is not atomic:
+ * a run that had just judged the lock stale could unlink the fresh lock another
+ * run created in between, and both then held one slot (measured: 7 of 60 trials
+ * with a dead pid, 3 of 60 with two slots, before the guard). A run that cannot
+ * take the guard leaves that slot to whoever holds it and tries the next. A
+ * guard older than ten seconds belongs to a reclaimer that died and is removed.
  *
  * **It does nothing, and says nothing, when:**
  *  - `CI` is set. CI sizes its own workers (repo-99) and an environment variable
@@ -55,8 +75,9 @@
  *
  * **What it does not gate.** `npx vitest run <file>` is called directly by
  * agents and is not gated: those are the small runs (median 4 s) and one file
- * uses one worker anyway. `npm run test:<tool>` and `test:watch` are not gated
- * either; they are not what `npm test` and preflight call.
+ * uses one worker anyway. `test:watch` is not gated. Everything project-wide
+ * is: `npm test`, `npm test -- --project <tool>` and `npm run test:<tool>`.
+ * A project-wide `npx vitest run --project <tool>` is a bypass, not a gated call.
  *
  * Preflight runs `npm test` with its output captured, so a wait message from a
  * preflight's test step reaches the log only when that step fails.
@@ -99,14 +120,19 @@ export function parseStartTime(stat) {
 }
 
 /**
- * The start time of a live process, or null when it is gone or cannot be read.
+ * The start time of a live process, or null when it is gone, a zombie, or unreadable.
  *
  * @param {number} pid
  * @returns {string | null}
  */
 export function startTimeOf(pid) {
   try {
-    return parseStartTime(fs.readFileSync(`/proc/${pid}/stat`, "utf8"));
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    // A zombie has exited and is only waiting to be reaped: it runs nothing and
+    // holds no slot, and a parent that never reaps (a container's pid 1) would
+    // otherwise keep its lock live for ever.
+    if (stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z")) return null;
+    return parseStartTime(stat);
   } catch {
     return null;
   }
@@ -193,11 +219,59 @@ export function activeRuns(dir) {
   return pids;
 }
 
+/** A reclaimer that has held its guard this long is dead. */
+const GUARD_STALE_MS = 10_000;
+
+/**
+ * Write a lock with an exclusive create.
+ *
+ * @param {string} file
+ * @param {string} body
+ * @returns {boolean} false when the file already exists
+ */
+function tryCreate(file, body) {
+  try {
+    const fd = fs.openSync(file, "wx");
+    try {
+      fs.writeSync(fd, body);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return true;
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code === "EEXIST") return false;
+    throw error;
+  }
+}
+
+/**
+ * @param {string} guard
+ * @returns {boolean} whether this run now holds the guard
+ */
+function takeGuard(guard) {
+  if (tryCreate(guard, String(process.pid))) return true;
+  let age = 0;
+  try {
+    age = Date.now() - fs.statSync(guard).mtimeMs;
+  } catch {
+    return false; // released under us: let the next poll try
+  }
+  if (age < GUARD_STALE_MS) return false;
+  try {
+    fs.unlinkSync(guard);
+  } catch {
+    // someone else removed it first
+  }
+  return tryCreate(guard, String(process.pid));
+}
+
 /**
  * Take a free slot, reclaiming a stale one on the way. The create is exclusive,
- * so the filesystem picks the winner when two runs reach the same slot. Two
- * runs reclaiming the same stale lock can still race between the re-read and
- * the unlink; the worst outcome is a third concurrent run sized for two.
+ * so the filesystem picks the winner when two runs reach a free slot. A stale
+ * lock is removed only by the run holding that slot's reclaim guard, which
+ * re-reads the lock under it: the only thing that unlinks a slot file is a
+ * reclaimer that has just seen it stale and cannot have anyone else replacing
+ * it, so a live lock is never unlinked.
  *
  * @param {string} dir
  * @param {number} cap
@@ -212,28 +286,21 @@ export function claimSlot(dir, cap) {
   });
   for (let slot = 0; slot < cap; slot += 1) {
     const file = path.join(dir, `slot-${slot}.lock`);
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const fd = fs.openSync(file, "wx");
-        try {
-          fs.writeSync(fd, body);
-        } finally {
-          fs.closeSync(fd);
-        }
-        return file;
-      } catch (error) {
-        if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EEXIST") throw error;
-      }
-      const state = inspect(file);
-      if (state.live) break;
-      // Stale. Reclaim it only if it is still the lock just judged stale.
-      if (inspect(file).raw === state.raw) {
+    if (tryCreate(file, body)) return file;
+    if (inspect(file).live) continue;
+    const guard = `${file}.reclaim`;
+    if (!takeGuard(guard)) continue;
+    try {
+      if (!inspect(file).live) {
         try {
           fs.unlinkSync(file);
         } catch {
-          // someone else reclaimed it first; the retry sorts it out
+          // already gone
         }
       }
+      if (tryCreate(file, body)) return file;
+    } finally {
+      fs.rmSync(guard, { force: true });
     }
   }
   return null;
@@ -306,10 +373,51 @@ function resolveCommand([command, ...args]) {
 }
 
 /**
- * Kill a child and everything under it. POSIX children are started as their own
- * process group, so one negative-pid signal reaches vitest's workers and any
- * browser they launched; Windows has no groups, and `taskkill /T /F` is the
- * tree kill.
+ * Every descendant of `root`, by walking parent pids in /proc. Empty where
+ * /proc cannot be read.
+ *
+ * @param {number} root
+ * @returns {number[]}
+ */
+export function descendantsOf(root) {
+  /** @type {Map<number, number[]>} */
+  const children = new Map();
+  let names;
+  try {
+    names = fs.readdirSync("/proc");
+  } catch {
+    return [];
+  }
+  for (const name of names) {
+    if (!/^\d+$/u.test(name)) continue;
+    try {
+      const stat = fs.readFileSync(`/proc/${name}/stat`, "utf8");
+      const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
+      const list = children.get(ppid) ?? [];
+      list.push(Number(name));
+      children.set(ppid, list);
+    } catch {
+      // gone while we looked
+    }
+  }
+  const found = [];
+  const stack = [root];
+  for (let pid = stack.pop(); pid !== undefined; pid = stack.pop()) {
+    for (const child of children.get(pid) ?? []) {
+      found.push(child);
+      stack.push(child);
+    }
+  }
+  return found;
+}
+
+/**
+ * Signal a child and everything under it. The child stays in the gate's own
+ * process group (it is not detached), so a signal to the group from outside
+ * reaches vitest without this process's help. When the signal reaches only
+ * this process, the tree is found by walking /proc, deepest first so a parent
+ * cannot respawn what was just killed. Windows has no groups, and
+ * `taskkill /T /F` is the tree kill.
  *
  * @param {import("node:child_process").ChildProcess} child
  * @param {NodeJS.Signals} signal
@@ -323,10 +431,12 @@ function killTree(child, signal) {
     });
     return;
   }
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    // the group is already gone
+  for (const pid of [...descendantsOf(child.pid).toReversed(), child.pid]) {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // already gone
+    }
   }
 }
 
@@ -348,7 +458,6 @@ function runChild(argv, env, release) {
       env,
       stdio: "inherit",
       shell: false,
-      detached: process.platform !== "win32",
     });
     /** @type {NodeJS.Signals | null} */
     let forwarded = null;
