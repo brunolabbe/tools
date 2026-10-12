@@ -159,3 +159,11 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
 
     preflight passed (exit 0)
     ```
+
+  - Note on the shas above. The `Co-Authored-By` trailer was added after these
+    runs, by rebasing the three commits with `--amend`. The code commit
+    `036e7ac6` is now `a0c9d9f6`, the build Log commit `68b4cd25` is now
+    `90c45ca3`, and the commit that records the markdown-only run, `7dcc625f`,
+    is now `fd7f25bd`. `git diff 7dcc625f fd7f25bd` is empty, so each tree is
+    the one the runs measured. `036e7ac6` was the `--base` for the
+    markdown-only run.
