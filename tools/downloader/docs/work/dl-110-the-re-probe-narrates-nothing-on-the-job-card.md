@@ -64,8 +64,9 @@ status-level line.
    job's event stream. Proven in the orchestrator's tests with a stub resolver.
 2. A `stage` frame changes neither the job record nor what is persisted.
    Proven in `job-reducer.test.ts`.
-3. The job card's first progress message while re-analysing is the text of the
-   latest stage, and the status line before any stage arrives. Proven in
+3. While re-analysing, the card's status line stays first, the latest stage's
+   text is the second message above the browser note, and before any stage
+   arrives the card shows the status line and the browser note only. Proven in
    `app.test.tsx` through the real `useJobs`.
 4. A frame of a type an older client does not know does not fail or reconnect
    its job. Proven in `job-stream.test.ts`, or the brief's step 4 records why it
@@ -217,3 +218,9 @@ a removed card is never read, and it is no part of this ticket.
 Expected conflict: dl-108 widens `progressMessages` in `JobCard.tsx`, and this
 branch adds a `stage` parameter to it. It is resolved by hand when `main` is
 merged in after dl-108 lands.
+
+**2026-10-12, gate 1 round (fixer).** Three findings, one commit each.
+
+- _Done when 3 reworded._ The line still said the card's first progress message is the latest stage's text, which the owner's answer 2 above superseded: "**A second message**; Build step 3's "becomes" is superseded." It now reads: the status line stays first, the latest stage's text is the second message above the browser note, and before any stage arrives the card shows the status line and the browser note only. Reworded to match that answer, at gate 1's finding; the three `app.test.tsx` assertions were right and unchanged.
+- _Isolation test._ `api/test/pipeline.test.ts` › "a job's stage frames reach only its own subscribers, with another job probing" parks two jobs in `probing`, each after a different stage, and asserts each subscriber saw only its own job id and its own stages. With the hub fanning a stage frame out to every job's subscribers (gate 1's M1) it fails; otherwise 31 of 31 pass.
+- _`stageAfter` exhaustiveness._ The switch ends in a `never` assignment. Deleting its `probed`, `refused` and `heartbeat` cases now fails `tsc -p tools/downloader/web/tsconfig.json` with TS2322; before, it exited 0.
