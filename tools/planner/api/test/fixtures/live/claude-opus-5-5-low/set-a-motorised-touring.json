@@ -1,0 +1,1246 @@
+{
+  "set": "A",
+  "briefFixture": "motorised-touring",
+  "requestedModel": "claude-opus-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 4,
+    "outputPerMTok": 20,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 5
+  },
+  "servedModels": [
+    "claude-opus-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "route-and-logistics",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: motorised-touring\nSpecialist: route-and-logistics\n\nYou are the route and logistics specialist on a trip-planning tool.\nYou propose the legs this trip is made of — drives, rides, transfers, ferries and trains — with the stops that make a long one bearable.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is a movement, so its location is {\"kind\":\"between\",\"from\":{...},\"to\":{...}} with **both** ends as places. Endpoints in the title are not endpoints, and a candidate that puts them there is discarded.\n- This trip has 4 days.\n- **Nothing you propose may be longer than 480 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: motorised-touring\nLeaving from: Saguenay, Québec\nGoing to: not answered\nDates: 3 nights somewhere between 2027-01-20 and 2027-02-28\nTravellers: 4\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: 900 CAD, per-person\nAppetite for effort: demanding\nRoughest night they will accept: simple\nWould rule the trip out: not answered\n\nAbout this motorised-touring:\nMachine: snowmobile\nWhose machine: rental\nRange between stops: 180 km\nIn their words: Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Groomed-trail ride along the Saguenay fjord's north shore\",\"summary\":\"A groomed Trans-Québec trail ride out of Saguenay toward Sainte-Rose-du-Nord, well inside the 180 km range and gentle enough for two first-time riders. The destination was not answered, so this assumes a loop near home; trail numbers, distance and ride time are unverified, and ages and access needs are unknown.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Chicoutimi\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null},\"to\":{\"name\":\"Sainte-Rose-du-Nord\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":350,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Groomed-trail ride from Saguenay to Lac-Saint-Jean\",\"summary\":\"Classic groomed-corridor run west to the Lac-Saint-Jean region, with fuel and food stops in towns along the way. The destination was not answered; the distance, ride time and trail conditions are not checked, and the leg should be split if it runs past a day.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Jonquière\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null},\"to\":{\"name\":\"Alma\",\"locality\":\"Lac-Saint-Jean, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":350,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Groomed-trail return ride from Lac-Saint-Jean to Saguenay\",\"summary\":\"The return leg on groomed trail, so the rental machines end where they started. Distance, ride time and the rental's drop-off terms are unverified.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Alma\",\"locality\":\"Lac-Saint-Jean, Québec\",\"coordinates\":null},\"to\":{\"name\":\"Jonquière\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":350,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3951,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 853,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3951,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Groomed-trail ride along the Saguenay fjord's north shore",
+                "summary": "A groomed Trans-Québec trail ride out of Saguenay toward Sainte-Rose-du-Nord, well inside the 180 km range and gentle enough for two first-time riders. The destination was not answered, so this assumes a loop near home; trail numbers, distance and ride time are unverified, and ages and access needs are unknown.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Chicoutimi",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Sainte-Rose-du-Nord",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 350,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Groomed-trail ride from Saguenay to Lac-Saint-Jean",
+                "summary": "Classic groomed-corridor run west to the Lac-Saint-Jean region, with fuel and food stops in towns along the way. The destination was not answered; the distance, ride time and trail conditions are not checked, and the leg should be split if it runs past a day.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Jonquière",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Alma",
+                    "locality": "Lac-Saint-Jean, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 350,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Groomed-trail return ride from Lac-Saint-Jean to Saguenay",
+                "summary": "The return leg on groomed trail, so the rental machines end where they started. Distance, ride time and the rental's drop-off terms are unverified.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Alma",
+                    "locality": "Lac-Saint-Jean, Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Jonquière",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 350,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "practicalities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: motorised-touring\nSpecialist: practicalities\n\nYou are the practicalities specialist on a trip-planning tool.\nYou cover permits, documents, rentals, insurance and connectivity — the paperwork that decides whether the trip happens.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: motorised-touring\nLeaving from: Saguenay, Québec\nGoing to: not answered\nDates: 3 nights somewhere between 2027-01-20 and 2027-02-28\nTravellers: 4\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: 900 CAD, per-person\nAppetite for effort: demanding\nRoughest night they will accept: simple\nWould rule the trip out: not answered\n\nAbout this motorised-touring:\nMachine: snowmobile\nWhose machine: rental\nRange between stops: 180 km\nIn their words: Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Snowmobile trail permit (droit d'accès) for Québec federated trails\",\"summary\":\"Riding the FCMQ groomed trail network requires a valid trail access right per machine; rental outfitters around Saguenay–Lac-Saint-Jean often include it in the rental, so confirm whether yours does before buying separately. Destination is not answered, so the trail region could not be checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Fédération des clubs de motoneigistes du Québec (FCMQ) trail network\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":50,\"high\":600,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Snowmobile rental with guide option for first-time riders\",\"summary\":\"With two riders who have never ridden, a rental outfitter in Saguenay that offers a briefing or guided first day, helmets and cold-weather suits reduces risk on groomed trails. Ages and access needs were not answered, so minimum-age or licence rules for drivers could not be checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Snowmobile rental outfitters\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":250,\"high\":450,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30},{\"title\":\"Driver's licence and liability insurance check\",\"summary\":\"Québec requires snowmobile drivers on public trails to meet age rules and carry civil liability insurance; confirm the rental contract's liability coverage, damage deductible and whether a valid driver's licence is needed to cross roads. Traveller ages were not answered, so eligibility could not be confirmed.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Rental counter / insurer\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Connectivity and emergency communication on remote trails\",\"summary\":\"Cell coverage drops between villages on the Saguenay–Lac-Saint-Jean and Monts-Valin trails; renting a satellite messenger or PLB and downloading the iMotoneige trail app offline gives a fallback for a 180 km range. Route was not answered, so coverage gaps are not mapped.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Outdoor gear rental\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":120,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3801,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1006,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3801,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Snowmobile trail permit (droit d'accès) for Québec federated trails",
+                "summary": "Riding the FCMQ groomed trail network requires a valid trail access right per machine; rental outfitters around Saguenay–Lac-Saint-Jean often include it in the rental, so confirm whether yours does before buying separately. Destination is not answered, so the trail region could not be checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Fédération des clubs de motoneigistes du Québec (FCMQ) trail network",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 50,
+                  "high": 600,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Snowmobile rental with guide option for first-time riders",
+                "summary": "With two riders who have never ridden, a rental outfitter in Saguenay that offers a briefing or guided first day, helmets and cold-weather suits reduces risk on groomed trails. Ages and access needs were not answered, so minimum-age or licence rules for drivers could not be checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Snowmobile rental outfitters",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 250,
+                  "high": 450,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Driver's licence and liability insurance check",
+                "summary": "Québec requires snowmobile drivers on public trails to meet age rules and carry civil liability insurance; confirm the rental contract's liability coverage, damage deductible and whether a valid driver's licence is needed to cross roads. Traveller ages were not answered, so eligibility could not be confirmed.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Rental counter / insurer",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": null,
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Connectivity and emergency communication on remote trails",
+                "summary": "Cell coverage drops between villages on the Saguenay–Lac-Saint-Jean and Monts-Valin trails; renting a satellite messenger or PLB and downloading the iMotoneige trail app offline gives a fallback for a 180 km range. Route was not answered, so coverage gaps are not mapped.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Outdoor gear rental",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 120,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: motorised-touring\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: motorised-touring\nLeaving from: Saguenay, Québec\nGoing to: not answered\nDates: 3 nights somewhere between 2027-01-20 and 2027-02-28\nTravellers: 4\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: 900 CAD, per-person\nAppetite for effort: demanding\nRoughest night they will accept: simple\nWould rule the trip out: not answered\n\nAbout this motorised-touring:\nMachine: snowmobile\nWhose machine: rental\nRange between stops: 180 km\nIn their words: Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Trailside snowmobile motel, Saguenay–Lac-Saint-Jean\",\"summary\":\"Simple motels on the regional snowmobile trail network around Lac-Saint-Jean let riders park sleds at the door and refuel nearby, which suits short groomed-trail days for first-time riders. The destination was not answered, so this assumes riding stays near the departure region; access needs and ages were also not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Trailside motel near Lac-Saint-Jean\",\"locality\":\"Lac-Saint-Jean, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":90,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30},{\"title\":\"Rustic trail-network cabin or relais, Monts-Valin area\",\"summary\":\"Simple heated cabins and relais near the Monts-Valin snow area, close to Saguenay, give a short first leg on groomed trail, which helps the two new riders. Exact operators, availability, and any access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Cabin or relais near Monts-Valin\",\"locality\":\"Saint-David-de-Falardeau, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":35,\"high\":80,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":45},{\"title\":\"Snowmobile-friendly inn, Charlevoix side\",\"summary\":\"If the loop heads south, simple inns in Charlevoix that welcome snowmobilers keep each day within the 180 km range on groomed trail. The destination was not answered, so whether this fits the route is unknown; ages and access needs were not answered either.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Snowmobile-friendly inn in Charlevoix\",\"locality\":\"Charlevoix, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":50,\"high\":110,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":45},{\"title\":\"Snowmobile motel, Chibougamau or Roberval direction\",\"summary\":\"Simple motels in the towns along the northern and western Lac-Saint-Jean trail corridors cater to sledders and keep rental logistics straightforward. Route and destination were not answered, so this is offered as one option among several; access needs not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Snowmobile motel in Roberval\",\"locality\":\"Roberval, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":90,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3800,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1055,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3800,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Trailside snowmobile motel, Saguenay–Lac-Saint-Jean",
+                "summary": "Simple motels on the regional snowmobile trail network around Lac-Saint-Jean let riders park sleds at the door and refuel nearby, which suits short groomed-trail days for first-time riders. The destination was not answered, so this assumes riding stays near the departure region; access needs and ages were also not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Trailside motel near Lac-Saint-Jean",
+                    "locality": "Lac-Saint-Jean, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 90,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Rustic trail-network cabin or relais, Monts-Valin area",
+                "summary": "Simple heated cabins and relais near the Monts-Valin snow area, close to Saguenay, give a short first leg on groomed trail, which helps the two new riders. Exact operators, availability, and any access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Cabin or relais near Monts-Valin",
+                    "locality": "Saint-David-de-Falardeau, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 35,
+                  "high": 80,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 45
+              },
+              {
+                "title": "Snowmobile-friendly inn, Charlevoix side",
+                "summary": "If the loop heads south, simple inns in Charlevoix that welcome snowmobilers keep each day within the 180 km range on groomed trail. The destination was not answered, so whether this fits the route is unknown; ages and access needs were not answered either.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Snowmobile-friendly inn in Charlevoix",
+                    "locality": "Charlevoix, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 50,
+                  "high": 110,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 45
+              },
+              {
+                "title": "Snowmobile motel, Chibougamau or Roberval direction",
+                "summary": "Simple motels in the towns along the northern and western Lac-Saint-Jean trail corridors cater to sledders and keep rental logistics straightforward. Route and destination were not answered, so this is offered as one option among several; access needs not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Snowmobile motel in Roberval",
+                    "locality": "Roberval, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 90,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "conditions-and-gear",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: motorised-touring\nSpecialist: conditions-and-gear\n\nYou are the conditions and gear specialist on a trip-planning tool.\nYou describe the conditions this trip turns on — season, weather bands, snow, trail and tide — and the kit they imply. You never present any of it as clearance to go: point at the authoritative local source and say who it is.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: motorised-touring\nLeaving from: Saguenay, Québec\nGoing to: not answered\nDates: 3 nights somewhere between 2027-01-20 and 2027-02-28\nTravellers: 4\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: 900 CAD, per-person\nAppetite for effort: demanding\nRoughest night they will accept: simple\nWould rule the trip out: not answered\n\nAbout this motorised-touring:\nMachine: snowmobile\nWhose machine: rental\nRange between stops: 180 km\nIn their words: Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Trail conditions check: Québec snowmobile federation trail map\",\"summary\":\"Groomed-trail status around Saguenay–Lac-Saint-Jean changes daily in late January and February. The authoritative source is the Fédération des clubs de motoneigistes du Québec (FCMQ) interactive trail map and the local club bulletins. Use these, not this note, to judge whether a loop is open. A trail access pass (droit d'accès) is required on FCMQ trails; rental outfits often include it, so confirm with them. The destination was not answered, so no specific loop is assessed here.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"FCMQ trail network, Saguenay–Lac-Saint-Jean\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Cold-weather riding kit for first-timers\",\"summary\":\"Saguenay in late January can run well below −25 °C with wind chill on the machine. Two riders have never ridden, so check that the rental includes or rents insulated one-piece suits, boots, mitts, a full-face modular helmet with breath box or heated visor, and a balaclava. Ask about hand and thumb warmers. For forecasts and extreme-cold warnings, Environment and Climate Change Canada is the authority. Ages and access needs were not answered and are not accounted for.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Snowmobile rental outfitter, Saguenay area\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":150,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-20\",\"to\":\"02-28\"},\"bookingLeadTimeDays\":null},{\"title\":\"Guided intro and short groomed loop for novices\",\"summary\":\"A guided half-day on groomed trail lets the two new riders learn throttle, braking and leaning before longer legs. This fits the group's stated preference for fewer kilometres on groomed trail. Guides know current trail and lake-ice status, but local clubs and the outfitter remain the authority. Do not treat this note as clearance; never cross lake or river ice unless it is a marked, open trail.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Guided snowmobile outfitter, Saguenay–Lac-Saint-Jean\",\"locality\":\"Saguenay, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":400,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-20\",\"to\":\"02-28\"},\"bookingLeadTimeDays\":14},{\"title\":\"Fuel and range planning on the trail network\",\"summary\":\"The stated range between stops is 180 km. Cold and novice riding raise fuel use, so plan fuel at trailside relais well inside that range and confirm their winter opening with the relais or the club. Simple lodging at trailside relais suits the 'simple' night tolerance. Opening dates and prices are unverified, and peak February weekends book up.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Trailside relais (rest stops), Saguenay–Lac-Saint-Jean\",\"locality\":\"Saguenay–Lac-Saint-Jean, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3835,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1217,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3835,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Trail conditions check: Québec snowmobile federation trail map",
+                "summary": "Groomed-trail status around Saguenay–Lac-Saint-Jean changes daily in late January and February. The authoritative source is the Fédération des clubs de motoneigistes du Québec (FCMQ) interactive trail map and the local club bulletins. Use these, not this note, to judge whether a loop is open. A trail access pass (droit d'accès) is required on FCMQ trails; rental outfits often include it, so confirm with them. The destination was not answered, so no specific loop is assessed here.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "FCMQ trail network, Saguenay–Lac-Saint-Jean",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": null,
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Cold-weather riding kit for first-timers",
+                "summary": "Saguenay in late January can run well below −25 °C with wind chill on the machine. Two riders have never ridden, so check that the rental includes or rents insulated one-piece suits, boots, mitts, a full-face modular helmet with breath box or heated visor, and a balaclava. Ask about hand and thumb warmers. For forecasts and extreme-cold warnings, Environment and Climate Change Canada is the authority. Ages and access needs were not answered and are not accounted for.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Snowmobile rental outfitter, Saguenay area",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 150,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-20",
+                  "to": "02-28"
+                },
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Guided intro and short groomed loop for novices",
+                "summary": "A guided half-day on groomed trail lets the two new riders learn throttle, braking and leaning before longer legs. This fits the group's stated preference for fewer kilometres on groomed trail. Guides know current trail and lake-ice status, but local clubs and the outfitter remain the authority. Do not treat this note as clearance; never cross lake or river ice unless it is a marked, open trail.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Guided snowmobile outfitter, Saguenay–Lac-Saint-Jean",
+                    "locality": "Saguenay, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 400,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-20",
+                  "to": "02-28"
+                },
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Fuel and range planning on the trail network",
+                "summary": "The stated range between stops is 180 km. Cold and novice riding raise fuel use, so plan fuel at trailside relais well inside that range and confirm their winter opening with the relais or the club. Simple lodging at trailside relais suits the 'simple' night tolerance. Opening dates and prices are unverified, and peak February weekends book up.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Trailside relais (rest stops), Saguenay–Lac-Saint-Jean",
+                    "locality": "Saguenay–Lac-Saint-Jean, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": null,
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: motorised-touring\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 4 days.\n- **Nothing you propose may be longer than 480 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: motorised-touring\nLeaving from: Saguenay, Québec\nGoing to: not answered\nDates: 3 nights somewhere between 2027-01-20 and 2027-02-28\nTravellers: 4\nAges that change the plan: not answered\nAccess needs: not answered\nBudget: 900 CAD, per-person\nAppetite for effort: demanding\nRoughest night they will accept: simple\nWould rule the trip out: not answered\n\nAbout this motorised-touring:\nMachine: snowmobile\nWhose machine: rental\nRange between stops: 180 km\nIn their words: Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Guided snowmobile day on groomed Saguenay–Lac-Saint-Jean trails\",\"summary\":\"Rental sleds with a guide on the regional groomed network out of Saguenay. This suits the mixed party because the two novices get a briefing and ride on maintained trail, and you can choose shorter loops well within the 180 km range. Destination, ages and access needs were not answered, so I could not check whether this fits everyone. A trail permit is usually needed, and I have not confirmed whether the rental includes it.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Saguenay snowmobile rental and guiding outfitters\",\"locality\":\"Saguenay, QC\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":200,\"high\":450,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":14},{\"title\":\"Beginner snowmobile orientation session\",\"summary\":\"A short instruction session for the two first-time riders before any longer trail day. It covers controls, trail signage and safe following distance on groomed routes. I do not know of a specific provider, how long a session runs or what it costs, so those are left unknown.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Local snowmobile rental outfitter\",\"locality\":\"Saguenay, QC\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Ice fishing village on the Saguenay fjord\",\"summary\":\"Winter fishing cabins out on the frozen fjord at La Baie, and you can reach the area by sled on short groomed segments. It makes a lower-effort break between riding days. Ice conditions and the open period vary from year to year and I have not checked them; this is not clearance to go out on the ice.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Ice fishing village, Baie des Ha! Ha!\",\"locality\":\"La Baie, Saguenay, QC\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":120,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":7},{\"title\":\"Snowshoeing in Parc national du Fjord-du-Saguenay\",\"summary\":\"Marked winter trails with fjord views give a demanding non-motorised outing on a rest day from the sleds. I did not verify trail lengths, winter opening or fees.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Parc national du Fjord-du-Saguenay\",\"locality\":\"Saguenay region, QC\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":10,\"high\":40,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Dog sledding excursion\",\"summary\":\"An outfitter-run sled-dog outing in the region makes a distinctive winter experience that does not depend on riding skill, so it suits the whole party equally. I did not confirm the operator, duration or exact pricing.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Regional dog sledding outfitter\",\"locality\":\"Saguenay–Lac-Saint-Jean, QC\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":120,\"high\":300,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":14}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3878,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1237,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3878,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Guided snowmobile day on groomed Saguenay–Lac-Saint-Jean trails",
+                "summary": "Rental sleds with a guide on the regional groomed network out of Saguenay. This suits the mixed party because the two novices get a briefing and ride on maintained trail, and you can choose shorter loops well within the 180 km range. Destination, ages and access needs were not answered, so I could not check whether this fits everyone. A trail permit is usually needed, and I have not confirmed whether the rental includes it.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Saguenay snowmobile rental and guiding outfitters",
+                    "locality": "Saguenay, QC",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 200,
+                  "high": 450,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Beginner snowmobile orientation session",
+                "summary": "A short instruction session for the two first-time riders before any longer trail day. It covers controls, trail signage and safe following distance on groomed routes. I do not know of a specific provider, how long a session runs or what it costs, so those are left unknown.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Local snowmobile rental outfitter",
+                    "locality": "Saguenay, QC",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": null,
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Ice fishing village on the Saguenay fjord",
+                "summary": "Winter fishing cabins out on the frozen fjord at La Baie, and you can reach the area by sled on short groomed segments. It makes a lower-effort break between riding days. Ice conditions and the open period vary from year to year and I have not checked them; this is not clearance to go out on the ice.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Ice fishing village, Baie des Ha! Ha!",
+                    "locality": "La Baie, Saguenay, QC",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 120,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 7
+              },
+              {
+                "title": "Snowshoeing in Parc national du Fjord-du-Saguenay",
+                "summary": "Marked winter trails with fjord views give a demanding non-motorised outing on a rest day from the sleds. I did not verify trail lengths, winter opening or fees.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Parc national du Fjord-du-Saguenay",
+                    "locality": "Saguenay region, QC",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 10,
+                  "high": 40,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Dog sledding excursion",
+                "summary": "An outfitter-run sled-dog outing in the region makes a distinctive winter experience that does not depend on riding skill, so it suits the whole party equally. I did not confirm the operator, duration or exact pricing.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Regional dog sledding outfitter",
+                    "locality": "Saguenay–Lac-Saint-Jean, QC",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 120,
+                  "high": 300,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 14
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Groomed-trail ride along the Saguenay fjord's north shore",
+      "summary": "A groomed Trans-Québec trail ride out of Saguenay toward Sainte-Rose-du-Nord, well inside the 180 km range and gentle enough for two first-time riders. The destination was not answered, so this assumes a loop near home; trail numbers, distance and ride time are unverified, and ages and access needs are unknown.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Chicoutimi",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Sainte-Rose-du-Nord",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 350,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-route-and-logistics-1",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Groomed-trail ride from Saguenay to Lac-Saint-Jean",
+      "summary": "Classic groomed-corridor run west to the Lac-Saint-Jean region, with fuel and food stops in towns along the way. The destination was not answered; the distance, ride time and trail conditions are not checked, and the leg should be split if it runs past a day.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Jonquière",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Alma",
+          "locality": "Lac-Saint-Jean, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 350,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-route-and-logistics-2",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Groomed-trail return ride from Lac-Saint-Jean to Saguenay",
+      "summary": "The return leg on groomed trail, so the rental machines end where they started. Distance, ride time and the rental's drop-off terms are unverified.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Alma",
+          "locality": "Lac-Saint-Jean, Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Jonquière",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 350,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-route-and-logistics-3",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Trailside snowmobile motel, Saguenay–Lac-Saint-Jean",
+      "summary": "Simple motels on the regional snowmobile trail network around Lac-Saint-Jean let riders park sleds at the door and refuel nearby, which suits short groomed-trail days for first-time riders. The destination was not answered, so this assumes riding stays near the departure region; access needs and ages were also not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Trailside motel near Lac-Saint-Jean",
+          "locality": "Lac-Saint-Jean, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 90,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-3-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rustic trail-network cabin or relais, Monts-Valin area",
+      "summary": "Simple heated cabins and relais near the Monts-Valin snow area, close to Saguenay, give a short first leg on groomed trail, which helps the two new riders. Exact operators, availability, and any access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Cabin or relais near Monts-Valin",
+          "locality": "Saint-David-de-Falardeau, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 35,
+        "high": 80,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 45,
+      "id": "pl-40-3-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Snowmobile-friendly inn, Charlevoix side",
+      "summary": "If the loop heads south, simple inns in Charlevoix that welcome snowmobilers keep each day within the 180 km range on groomed trail. The destination was not answered, so whether this fits the route is unknown; ages and access needs were not answered either.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Snowmobile-friendly inn in Charlevoix",
+          "locality": "Charlevoix, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 50,
+        "high": 110,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 45,
+      "id": "pl-40-3-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Snowmobile motel, Chibougamau or Roberval direction",
+      "summary": "Simple motels in the towns along the northern and western Lac-Saint-Jean trail corridors cater to sledders and keep rental logistics straightforward. Route and destination were not answered, so this is offered as one option among several; access needs not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Snowmobile motel in Roberval",
+          "locality": "Roberval, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 90,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-3-lodging-4",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Guided snowmobile day on groomed Saguenay–Lac-Saint-Jean trails",
+      "summary": "Rental sleds with a guide on the regional groomed network out of Saguenay. This suits the mixed party because the two novices get a briefing and ride on maintained trail, and you can choose shorter loops well within the 180 km range. Destination, ages and access needs were not answered, so I could not check whether this fits everyone. A trail permit is usually needed, and I have not confirmed whether the rental includes it.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Saguenay snowmobile rental and guiding outfitters",
+          "locality": "Saguenay, QC",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 200,
+        "high": 450,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-3-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Beginner snowmobile orientation session",
+      "summary": "A short instruction session for the two first-time riders before any longer trail day. It covers controls, trail signage and safe following distance on groomed routes. I do not know of a specific provider, how long a session runs or what it costs, so those are left unknown.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Local snowmobile rental outfitter",
+          "locality": "Saguenay, QC",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Ice fishing village on the Saguenay fjord",
+      "summary": "Winter fishing cabins out on the frozen fjord at La Baie, and you can reach the area by sled on short groomed segments. It makes a lower-effort break between riding days. Ice conditions and the open period vary from year to year and I have not checked them; this is not clearance to go out on the ice.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ice fishing village, Baie des Ha! Ha!",
+          "locality": "La Baie, Saguenay, QC",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 7,
+      "id": "pl-40-3-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Snowshoeing in Parc national du Fjord-du-Saguenay",
+      "summary": "Marked winter trails with fjord views give a demanding non-motorised outing on a rest day from the sleds. I did not verify trail lengths, winter opening or fees.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national du Fjord-du-Saguenay",
+          "locality": "Saguenay region, QC",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 40,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Dog sledding excursion",
+      "summary": "An outfitter-run sled-dog outing in the region makes a distinctive winter experience that does not depend on riding skill, so it suits the whole party equally. I did not confirm the operator, duration or exact pricing.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Regional dog sledding outfitter",
+          "locality": "Saguenay–Lac-Saint-Jean, QC",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 300,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-3-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Trail conditions check: Québec snowmobile federation trail map",
+      "summary": "Groomed-trail status around Saguenay–Lac-Saint-Jean changes daily in late January and February. The authoritative source is the Fédération des clubs de motoneigistes du Québec (FCMQ) interactive trail map and the local club bulletins. Use these, not this note, to judge whether a loop is open. A trail access pass (droit d'accès) is required on FCMQ trails; rental outfits often include it, so confirm with them. The destination was not answered, so no specific loop is assessed here.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "FCMQ trail network, Saguenay–Lac-Saint-Jean",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-conditions-and-gear-1",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cold-weather riding kit for first-timers",
+      "summary": "Saguenay in late January can run well below −25 °C with wind chill on the machine. Two riders have never ridden, so check that the rental includes or rents insulated one-piece suits, boots, mitts, a full-face modular helmet with breath box or heated visor, and a balaclava. Ask about hand and thumb warmers. For forecasts and extreme-cold warnings, Environment and Climate Change Canada is the authority. Ages and access needs were not answered and are not accounted for.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Snowmobile rental outfitter, Saguenay area",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 150,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-20",
+        "to": "02-28"
+      },
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-conditions-and-gear-2",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Guided intro and short groomed loop for novices",
+      "summary": "A guided half-day on groomed trail lets the two new riders learn throttle, braking and leaning before longer legs. This fits the group's stated preference for fewer kilometres on groomed trail. Guides know current trail and lake-ice status, but local clubs and the outfitter remain the authority. Do not treat this note as clearance; never cross lake or river ice unless it is a marked, open trail.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Guided snowmobile outfitter, Saguenay–Lac-Saint-Jean",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 400,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-20",
+        "to": "02-28"
+      },
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-3-conditions-and-gear-3",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Fuel and range planning on the trail network",
+      "summary": "The stated range between stops is 180 km. Cold and novice riding raise fuel use, so plan fuel at trailside relais well inside that range and confirm their winter opening with the relais or the club. Simple lodging at trailside relais suits the 'simple' night tolerance. Opening dates and prices are unverified, and peak February weekends book up.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Trailside relais (rest stops), Saguenay–Lac-Saint-Jean",
+          "locality": "Saguenay–Lac-Saint-Jean, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-conditions-and-gear-4",
+      "specialist": "conditions-and-gear",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Snowmobile trail permit (droit d'accès) for Québec federated trails",
+      "summary": "Riding the FCMQ groomed trail network requires a valid trail access right per machine; rental outfitters around Saguenay–Lac-Saint-Jean often include it in the rental, so confirm whether yours does before buying separately. Destination is not answered, so the trail region could not be checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Fédération des clubs de motoneigistes du Québec (FCMQ) trail network",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 50,
+        "high": 600,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-practicalities-1",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Snowmobile rental with guide option for first-time riders",
+      "summary": "With two riders who have never ridden, a rental outfitter in Saguenay that offers a briefing or guided first day, helmets and cold-weather suits reduces risk on groomed trails. Ages and access needs were not answered, so minimum-age or licence rules for drivers could not be checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Snowmobile rental outfitters",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 250,
+        "high": 450,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-3-practicalities-2",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Driver's licence and liability insurance check",
+      "summary": "Québec requires snowmobile drivers on public trails to meet age rules and carry civil liability insurance; confirm the rental contract's liability coverage, damage deductible and whether a valid driver's licence is needed to cross roads. Traveller ages were not answered, so eligibility could not be confirmed.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Rental counter / insurer",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-practicalities-3",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Connectivity and emergency communication on remote trails",
+      "summary": "Cell coverage drops between villages on the Saguenay–Lac-Saint-Jean and Monts-Valin trails; renting a satellite messenger or PLB and downloading the iMotoneige trail app offline gives a fallback for a 180 km range. Route was not answered, so coverage gaps are not mapped.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Outdoor gear rental",
+          "locality": "Saguenay, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 120,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-3-practicalities-4",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "budget",
+      "reason": "specialist-dropped-for-budget",
+      "detail": "This part of the plan was left out to keep the run inside its budget. Re-planning with a larger budget would fill it in."
+    },
+    {
+      "specialist": "food",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about where to eat."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19265,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 5368,
+    "thinkingTokens": 0,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.18442
+}

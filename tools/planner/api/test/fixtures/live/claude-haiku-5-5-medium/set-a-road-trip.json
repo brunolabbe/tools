@@ -1,0 +1,1318 @@
+{
+  "set": "A",
+  "briefFixture": "road-trip",
+  "requestedModel": "claude-haiku-5-5",
+  "effort": "medium",
+  "prices": {
+    "inputPerMTok": 0.1,
+    "outputPerMTok": 0.5,
+    "cacheReadPerMTok": 0.01,
+    "cacheWritePerMTok": 0.125
+  },
+  "servedModels": [
+    "claude-haiku-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "food",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: food\n\nYou are the food specialist on a trip-planning tool.\nYou propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Seafood supper on the Percé waterfront\",\"summary\":\"A relaxed sit-down seafood meal in the village beneath Percé Rock, a good way to end a stop-heavy day. Access needs were not answered, so I could not check seating, step-free entry or quiet corners for the 7-year-old, and no dietary restrictions were stated, so I have not assumed any.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé waterfront restaurants\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":120,\"high\":260,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Smoked fish and bakery picnic stop\",\"summary\":\"Pick up smoked fish, bread and local cheese from shops along the route and eat at a roadside or harbour spot, which suits the family's need to stop often. Access needs were not answered, so I could not confirm which spots have level ground or washrooms.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Gaspé town shops\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":90,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-haiku-5-5",
+          "usage": {
+            "inputTokens": 3924,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1092,
+            "thinkingTokens": 601
+          },
+          "countedInputTokens": 3924,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Seafood supper on the Percé waterfront",
+                "summary": "A relaxed sit-down seafood meal in the village beneath Percé Rock, a good way to end a stop-heavy day. Access needs were not answered, so I could not check seating, step-free entry or quiet corners for the 7-year-old, and no dietary restrictions were stated, so I have not assumed any.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé waterfront restaurants",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 120,
+                  "high": 260,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Smoked fish and bakery picnic stop",
+                "summary": "Pick up smoked fish, bread and local cheese from shops along the route and eat at a roadside or harbour spot, which suits the family's need to stop often. Access needs were not answered, so I could not confirm which spots have level ground or washrooms.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Gaspé town shops",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 90,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "budget",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: budget\n\nYou are the budget specialist on a trip-planning tool.\nYou give cost estimates as bands and say what assumption each one rests on. You never total anything: the tool sums the bands itself, in code.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Forillon National Park coastal trails\",\"summary\":\"Short, mostly flat coastal walks with cliffs and sea views suit a seven-year-old who needs frequent breaks. Access needs were not answered, so I cannot tell whether these paths and lookouts suit everyone in the party, and the cost band assumes a standard Parks Canada day entry for four.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Forillon National Park\",\"locality\":\"Gaspé, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":80,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Percé Rock and village viewpoints\",\"summary\":\"Percé Rock is one of the stops you already want, and the village waterfront gives short, low-effort views that can be stopped at whenever the children need to move. Access needs were not answered, so I cannot confirm the viewpoints are step-free for everyone; the band covers only free or low-cost lookouts and a light meal.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé Rock\",\"locality\":\"Percé, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":90,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Bonaventure Island boat excursion\",\"summary\":\"A boat trip to the island seabird colony is a new kind of outing that gives the children something to watch without a long drive. Access needs were not answered, so I cannot say whether boarding and island paths suit everyone; the band is per person and assumes a standard guided boat ticket, which I have not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Bonaventure Island\",\"locality\":\"Percé, Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":110,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-haiku-5-5",
+          "usage": {
+            "inputTokens": 3834,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1420,
+            "thinkingTokens": 668
+          },
+          "countedInputTokens": 3834,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Forillon National Park coastal trails",
+                "summary": "Short, mostly flat coastal walks with cliffs and sea views suit a seven-year-old who needs frequent breaks. Access needs were not answered, so I cannot tell whether these paths and lookouts suit everyone in the party, and the cost band assumes a standard Parks Canada day entry for four.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Forillon National Park",
+                    "locality": "Gaspé, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 80,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Percé Rock and village viewpoints",
+                "summary": "Percé Rock is one of the stops you already want, and the village waterfront gives short, low-effort views that can be stopped at whenever the children need to move. Access needs were not answered, so I cannot confirm the viewpoints are step-free for everyone; the band covers only free or low-cost lookouts and a light meal.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé Rock",
+                    "locality": "Percé, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 90,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Bonaventure Island boat excursion",
+                "summary": "A boat trip to the island seabird colony is a new kind of outing that gives the children something to watch without a long drive. Access needs were not answered, so I cannot say whether boarding and island paths suit everyone; the band is per person and assumes a standard guided boat ticket, which I have not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Bonaventure Island",
+                    "locality": "Percé, Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 110,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Forillon National Park campground near Gaspé\",\"summary\":\"A simple campground inside Forillon, close to the park's trails and the cliffs the family already wants to see, so it suits frequent short stops. Access needs were not answered, so I cannot check accessible sites or routes; confirm them before relying on this. Nightly cost and booking lead time are my estimates, not checked figures.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Forillon National Park campground\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":35,\"high\":70,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Percé village inn for a simple night\",\"summary\":\"A basic village inn or motel in Percé, put within walking distance of the rock, offers a bed and a private bathroom without campground effort. Access needs were not answered, so accessible rooms are unconfirmed. Cost band and lead time are estimates I have not checked against current rates.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé village inn\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":150,\"high\":260,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":90},{\"title\":\"Percé-area campground with showers\",\"summary\":\"A campground near Percé with showers and a short drive to the rock, a simple option that keeps the cost low. Access needs were not answered, so I cannot confirm accessible facilities. Showers and availability are not verified; check them directly.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé-area campground\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":40,\"high\":75,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Gaspé guesthouse with family rooms\",\"summary\":\"A guesthouse in Gaspé town offers family rooms and a simple breakfast, a stop on the loop that gives the seven-year-old a break from the car. Access needs were not answered, so I cannot say whether rooms are accessible. Cost and lead time are unchecked estimates.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Gaspé guesthouse\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":120,\"high\":220,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":60}]}",
+          "stopReason": "end",
+          "servedModel": "claude-haiku-5-5",
+          "usage": {
+            "inputTokens": 3833,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1667,
+            "thinkingTokens": 713
+          },
+          "countedInputTokens": 3833,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Forillon National Park campground near Gaspé",
+                "summary": "A simple campground inside Forillon, close to the park's trails and the cliffs the family already wants to see, so it suits frequent short stops. Access needs were not answered, so I cannot check accessible sites or routes; confirm them before relying on this. Nightly cost and booking lead time are my estimates, not checked figures.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Forillon National Park campground",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 35,
+                  "high": 70,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Percé village inn for a simple night",
+                "summary": "A basic village inn or motel in Percé, put within walking distance of the rock, offers a bed and a private bathroom without campground effort. Access needs were not answered, so accessible rooms are unconfirmed. Cost band and lead time are estimates I have not checked against current rates.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé village inn",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 150,
+                  "high": 260,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 90
+              },
+              {
+                "title": "Percé-area campground with showers",
+                "summary": "A campground near Percé with showers and a short drive to the rock, a simple option that keeps the cost low. Access needs were not answered, so I cannot confirm accessible facilities. Showers and availability are not verified; check them directly.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé-area campground",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 40,
+                  "high": 75,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Gaspé guesthouse with family rooms",
+                "summary": "A guesthouse in Gaspé town offers family rooms and a simple breakfast, a stop on the loop that gives the seven-year-old a break from the car. Access needs were not answered, so I cannot say whether rooms are accessible. Cost and lead time are unchecked estimates.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Gaspé guesthouse",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 120,
+                  "high": 220,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 60
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Bonaventure Island boat tour from Percé\",\"summary\":\"A short boat trip out to the gannet colony, which the kids usually find more exciting than the car ride. Not checked: whether the crossing and landing suit your access needs, which you did not answer, so please confirm with the operator before committing.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé wharf, Percé Rock\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":180,\"cost\":{\"currency\":\"CAD\",\"low\":60,\"high\":120,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Percé Rock shoreline and beach stop\",\"summary\":\"A flexible stop to see Percé Rock up close from the beach, with room to get out of the car and run around. Access on the beach and stairs is unknown to me because you did not answer the access question.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Percé Rock beach\",\"locality\":\"Percé\",\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":20,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Short coastal walk in Forillon National Park\",\"summary\":\"A short, easy coastal trail with cliffs and sea views, good for a break in the drive. Trail difficulty and surface are not checked, and access needs are unanswered, so the family should confirm before choosing this route.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Cap-Bon-Ami, Forillon National Park\",\"locality\":\"Gaspé\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":30,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Grande-Grave heritage site visit\",\"summary\":\"A preserved fishing-village area inside Forillon, with interpretive displays that suit children. Opening details and accessibility are not checked and access needs are unanswered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Grande-Grave, Forillon National Park\",\"locality\":\"Grande-Grave\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":40,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Cap-des-Rosiers lighthouse stop\",\"summary\":\"A quick photo and lighthouse stop with cliff views, easy to add when the seven-year-old needs a break from the car. Hours and access are unknown to me.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Cap-des-Rosiers lighthouse\",\"locality\":\"Cap-des-Rosiers\",\"coordinates\":null}},\"durationMinutes\":45,\"cost\":{\"currency\":\"CAD\",\"low\":0,\"high\":20,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Seafood lunch at a Gaspésie wharf\",\"summary\":\"A relaxed seafood meal at a working fishing wharf, a good low-effort stop with a view. Menus, prices and accessibility are not checked, and access needs are unanswered.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Rivière-au-Renard wharf\",\"locality\":\"Rivière-au-Renard\",\"coordinates\":null}},\"durationMinutes\":60,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":80,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-haiku-5-5",
+          "usage": {
+            "inputTokens": 3911,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 2136,
+            "thinkingTokens": 814
+          },
+          "countedInputTokens": 3911,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Bonaventure Island boat tour from Percé",
+                "summary": "A short boat trip out to the gannet colony, which the kids usually find more exciting than the car ride. Not checked: whether the crossing and landing suit your access needs, which you did not answer, so please confirm with the operator before committing.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé wharf, Percé Rock",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 180,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 60,
+                  "high": 120,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Percé Rock shoreline and beach stop",
+                "summary": "A flexible stop to see Percé Rock up close from the beach, with room to get out of the car and run around. Access on the beach and stairs is unknown to me because you did not answer the access question.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Percé Rock beach",
+                    "locality": "Percé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 20,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Short coastal walk in Forillon National Park",
+                "summary": "A short, easy coastal trail with cliffs and sea views, good for a break in the drive. Trail difficulty and surface are not checked, and access needs are unanswered, so the family should confirm before choosing this route.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Cap-Bon-Ami, Forillon National Park",
+                    "locality": "Gaspé",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 30,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Grande-Grave heritage site visit",
+                "summary": "A preserved fishing-village area inside Forillon, with interpretive displays that suit children. Opening details and accessibility are not checked and access needs are unanswered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Grande-Grave, Forillon National Park",
+                    "locality": "Grande-Grave",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 40,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Cap-des-Rosiers lighthouse stop",
+                "summary": "A quick photo and lighthouse stop with cliff views, easy to add when the seven-year-old needs a break from the car. Hours and access are unknown to me.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Cap-des-Rosiers lighthouse",
+                    "locality": "Cap-des-Rosiers",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 45,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 0,
+                  "high": 20,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Seafood lunch at a Gaspésie wharf",
+                "summary": "A relaxed seafood meal at a working fishing wharf, a good low-effort stop with a view. Menus, prices and accessibility are not checked, and access needs are unanswered.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Rivière-au-Renard wharf",
+                    "locality": "Rivière-au-Renard",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 60,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 80,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "route-and-logistics",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: road-trip\nSpecialist: route-and-logistics\n\nYou are the route and logistics specialist on a trip-planning tool.\nYou propose the legs this trip is made of — drives, rides, transfers, ferries and trains — with the stops that make a long one bearable.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is a movement, so its location is {\"kind\":\"between\",\"from\":{...},\"to\":{...}} with **both** ends as places. Endpoints in the title are not endpoints, and a candidate that puts them there is discarded.\n- This trip has 9 days.\n- **Nothing you propose may be longer than 300 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: road-trip\nLeaving from: Montréal, Québec\nGoing to: Gaspésie\nDates: 2027-07-03 to 2027-07-11, fixed\nTravellers: 4\nAges that change the plan: 41, 39, 11, 7\nAccess needs: not answered\nBudget: 4200 CAD, total\nAppetite for effort: moderate\nRoughest night they will accept: simple\nWould rule the trip out: No more than one night in any campground without showers\n\nAbout this road-trip:\nHow much road a day holds: half-day\nVehicle: car\nWhose vehicle: own\nRoute style: loop\nStops they already want: Percé Rock, Forillon National Park\nIn their words: The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Montréal to Rivière-du-Loup along the south shore\",\"summary\":\"A first leg on the south shore (Highway 20) avoids the north shore you have already driven, and the route suits frequent stops for the seven-year-old. Access needs were not answered, so I could not account for them and have not planned around them. Travel time is unmeasured, so none is given.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Montréal\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Rivière-du-Loup\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":60,\"high\":120,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Rivière-du-Loup to Rimouski on the St. Lawrence\",\"summary\":\"A short coastal stretch with many places to stop and stretch legs, so the children are not kept in the car for long. Travel time is unmeasured, so none is given.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Rivière-du-Loup\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Rimouski\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":60,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Rimouski to Cap-Chat on Route 132\",\"summary\":\"Route 132 begins the Gaspé coast and offers frequent pull-offs over the water, which suits a family that wants to stop often. Travel time is unmeasured, so none is given.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Rimouski\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Cap-Chat\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":60,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Cap-Chat to Gaspé past Forillon National Park\",\"summary\":\"This leg passes the park you already want to visit, so the stop at Forillon fits naturally within it. Travel time is unmeasured, so none is given.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Cap-Chat\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Gaspé\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":30,\"high\":60,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Gaspé to Percé for Percé Rock\",\"summary\":\"Percé Rock is one of the stops you already want, and this short drive ends at the rock itself. Travel time is unmeasured, so none is given.\",\"location\":{\"kind\":\"between\",\"from\":{\"name\":\"Gaspé\",\"locality\":\"Québec\",\"coordinates\":null},\"to\":{\"name\":\"Percé\",\"locality\":\"Québec\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":20,\"high\":40,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null}]}",
+          "stopReason": "end",
+          "servedModel": "claude-haiku-5-5",
+          "usage": {
+            "inputTokens": 3984,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 2615,
+            "thinkingTokens": 1408
+          },
+          "countedInputTokens": 3984,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Montréal to Rivière-du-Loup along the south shore",
+                "summary": "A first leg on the south shore (Highway 20) avoids the north shore you have already driven, and the route suits frequent stops for the seven-year-old. Access needs were not answered, so I could not account for them and have not planned around them. Travel time is unmeasured, so none is given.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Montréal",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Rivière-du-Loup",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 60,
+                  "high": 120,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Rivière-du-Loup to Rimouski on the St. Lawrence",
+                "summary": "A short coastal stretch with many places to stop and stretch legs, so the children are not kept in the car for long. Travel time is unmeasured, so none is given.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Rivière-du-Loup",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Rimouski",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Rimouski to Cap-Chat on Route 132",
+                "summary": "Route 132 begins the Gaspé coast and offers frequent pull-offs over the water, which suits a family that wants to stop often. Travel time is unmeasured, so none is given.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Rimouski",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Cap-Chat",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Cap-Chat to Gaspé past Forillon National Park",
+                "summary": "This leg passes the park you already want to visit, so the stop at Forillon fits naturally within it. Travel time is unmeasured, so none is given.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Cap-Chat",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Gaspé",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 30,
+                  "high": 60,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Gaspé to Percé for Percé Rock",
+                "summary": "Percé Rock is one of the stops you already want, and this short drive ends at the rock itself. Travel time is unmeasured, so none is given.",
+                "location": {
+                  "kind": "between",
+                  "from": {
+                    "name": "Gaspé",
+                    "locality": "Québec",
+                    "coordinates": null
+                  },
+                  "to": {
+                    "name": "Percé",
+                    "locality": "Québec",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 20,
+                  "high": 40,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Montréal to Rivière-du-Loup along the south shore",
+      "summary": "A first leg on the south shore (Highway 20) avoids the north shore you have already driven, and the route suits frequent stops for the seven-year-old. Access needs were not answered, so I could not account for them and have not planned around them. Travel time is unmeasured, so none is given.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Montréal",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Rivière-du-Loup",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 60,
+        "high": 120,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-1",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rivière-du-Loup to Rimouski on the St. Lawrence",
+      "summary": "A short coastal stretch with many places to stop and stretch legs, so the children are not kept in the car for long. Travel time is unmeasured, so none is given.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Rivière-du-Loup",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Rimouski",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-2",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Rimouski to Cap-Chat on Route 132",
+      "summary": "Route 132 begins the Gaspé coast and offers frequent pull-offs over the water, which suits a family that wants to stop often. Travel time is unmeasured, so none is given.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Rimouski",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Cap-Chat",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-3",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cap-Chat to Gaspé past Forillon National Park",
+      "summary": "This leg passes the park you already want to visit, so the stop at Forillon fits naturally within it. Travel time is unmeasured, so none is given.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Cap-Chat",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Gaspé",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-4",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Gaspé to Percé for Percé Rock",
+      "summary": "Percé Rock is one of the stops you already want, and this short drive ends at the rock itself. Travel time is unmeasured, so none is given.",
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Gaspé",
+          "locality": "Québec",
+          "coordinates": null
+        },
+        "to": {
+          "name": "Percé",
+          "locality": "Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 40,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-route-and-logistics-5",
+      "specialist": "route-and-logistics",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Forillon National Park campground near Gaspé",
+      "summary": "A simple campground inside Forillon, close to the park's trails and the cliffs the family already wants to see, so it suits frequent short stops. Access needs were not answered, so I cannot check accessible sites or routes; confirm them before relying on this. Nightly cost and booking lead time are my estimates, not checked figures.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Forillon National Park campground",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 35,
+        "high": 70,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-1-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Percé village inn for a simple night",
+      "summary": "A basic village inn or motel in Percé, put within walking distance of the rock, offers a bed and a private bathroom without campground effort. Access needs were not answered, so accessible rooms are unconfirmed. Cost band and lead time are estimates I have not checked against current rates.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé village inn",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 150,
+        "high": 260,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 90,
+      "id": "pl-40-1-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Percé-area campground with showers",
+      "summary": "A campground near Percé with showers and a short drive to the rock, a simple option that keeps the cost low. Access needs were not answered, so I cannot confirm accessible facilities. Showers and availability are not verified; check them directly.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé-area campground",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 75,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-1-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Gaspé guesthouse with family rooms",
+      "summary": "A guesthouse in Gaspé town offers family rooms and a simple breakfast, a stop on the loop that gives the seven-year-old a break from the car. Access needs were not answered, so I cannot say whether rooms are accessible. Cost and lead time are unchecked estimates.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Gaspé guesthouse",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 220,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 60,
+      "id": "pl-40-1-lodging-4",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Bonaventure Island boat tour from Percé",
+      "summary": "A short boat trip out to the gannet colony, which the kids usually find more exciting than the car ride. Not checked: whether the crossing and landing suit your access needs, which you did not answer, so please confirm with the operator before committing.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé wharf, Percé Rock",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "CAD",
+        "low": 60,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Percé Rock shoreline and beach stop",
+      "summary": "A flexible stop to see Percé Rock up close from the beach, with room to get out of the car and run around. Access on the beach and stairs is unknown to me because you did not answer the access question.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé Rock beach",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 20,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Short coastal walk in Forillon National Park",
+      "summary": "A short, easy coastal trail with cliffs and sea views, good for a break in the drive. Trail difficulty and surface are not checked, and access needs are unanswered, so the family should confirm before choosing this route.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Cap-Bon-Ami, Forillon National Park",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 30,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Grande-Grave heritage site visit",
+      "summary": "A preserved fishing-village area inside Forillon, with interpretive displays that suit children. Opening details and accessibility are not checked and access needs are unanswered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Grande-Grave, Forillon National Park",
+          "locality": "Grande-Grave",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 40,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Cap-des-Rosiers lighthouse stop",
+      "summary": "A quick photo and lighthouse stop with cliff views, easy to add when the seven-year-old needs a break from the car. Hours and access are unknown to me.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Cap-des-Rosiers lighthouse",
+          "locality": "Cap-des-Rosiers",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 45,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 20,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Seafood lunch at a Gaspésie wharf",
+      "summary": "A relaxed seafood meal at a working fishing wharf, a good low-effort stop with a view. Menus, prices and accessibility are not checked, and access needs are unanswered.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Rivière-au-Renard wharf",
+          "locality": "Rivière-au-Renard",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 60,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 80,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-activities-6",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Seafood supper on the Percé waterfront",
+      "summary": "A relaxed sit-down seafood meal in the village beneath Percé Rock, a good way to end a stop-heavy day. Access needs were not answered, so I could not check seating, step-free entry or quiet corners for the 7-year-old, and no dietary restrictions were stated, so I have not assumed any.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé waterfront restaurants",
+          "locality": "Percé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 260,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-1",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Smoked fish and bakery picnic stop",
+      "summary": "Pick up smoked fish, bread and local cheese from shops along the route and eat at a roadside or harbour spot, which suits the family's need to stop often. Access needs were not answered, so I could not confirm which spots have level ground or washrooms.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Gaspé town shops",
+          "locality": "Gaspé",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 90,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-food-2",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Forillon National Park coastal trails",
+      "summary": "Short, mostly flat coastal walks with cliffs and sea views suit a seven-year-old who needs frequent breaks. Access needs were not answered, so I cannot tell whether these paths and lookouts suit everyone in the party, and the cost band assumes a standard Parks Canada day entry for four.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Forillon National Park",
+          "locality": "Gaspé, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 20,
+        "high": 80,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-budget-1",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Percé Rock and village viewpoints",
+      "summary": "Percé Rock is one of the stops you already want, and the village waterfront gives short, low-effort views that can be stopped at whenever the children need to move. Access needs were not answered, so I cannot confirm the viewpoints are step-free for everyone; the band covers only free or low-cost lookouts and a light meal.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Percé Rock",
+          "locality": "Percé, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 90,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-budget-2",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Bonaventure Island boat excursion",
+      "summary": "A boat trip to the island seabird colony is a new kind of outing that gives the children something to watch without a long drive. Access needs were not answered, so I cannot say whether boarding and island paths suit everyone; the band is per person and assumes a standard guided boat ticket, which I have not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Bonaventure Island",
+          "locality": "Percé, Québec",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 40,
+        "high": 110,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-1-budget-3",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "conditions-and-gear",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about conditions or kit: this trip does not turn on them."
+    },
+    {
+      "specialist": "practicalities",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about rental paperwork or insurance: you are not renting anything for this trip."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19486,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 8930,
+    "thinkingTokens": 4204,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.0064136
+}

@@ -1247,12 +1247,12 @@ did: `RUN_TOKEN_BUDGET=20000` ran 4 specialists and now runs 1. **Nothing errors
 The plan comes back with `specialist-dropped-for-budget` gaps, which is exactly
 the shape of a budget working as intended.
 
-The arithmetic also counts output only. Input is roughly a quarter of a fixture
-run's dollars, and a corridor run is not a fixture run: nothing caps how many
-discovery finds reach a specialist's prompt today. Whether the budget should
-count input is
-[pl-40](../tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md)'s
-measurement to take; until then, size `RUN_TOKEN_BUDGET` in output tokens, as
+The arithmetic also counts output only. Input is nearly two-fifths of a fixture
+run's dollars (37–39% in pl-40's set A, on all three models), and a corridor run is not a fixture run: its finds-reading specialists also
+read up to 40 discovery finds, which roughly doubles their input. [pl-40](../tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md)
+measured this on 2026-10-12, now that pl-41 caps the finds. Input is 19.5% of a
+corridor run's worst case, under the 20% at which counting it would have been
+filed. So size `RUN_TOKEN_BUDGET` in output tokens, as
 `maxSpecialists × 16000` for the roster you mean to afford, or leave it unset and
 let `MAX_SPECIALISTS` be the cap.
 
@@ -1262,7 +1262,8 @@ bill a single attempt twice: the declined model's partial reply and the fallback
 model's whole one, each up to `MAX_OUTPUT_TOKENS`. So the worst case per
 specialist is four times `MAX_OUTPUT_TOKENS` — 32,000 at the default — not the
 16,000 the budget divides by. The arithmetic is deliberately left alone here, as
-the input-token gap is; how often a fallback fires is pl-40's to measure.
+the input-token gap is. pl-40's run saw no fallback in 574 replies across three
+models, which is an observation, not a rate.
 
 #### What the runs cost
 

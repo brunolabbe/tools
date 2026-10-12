@@ -3,7 +3,7 @@ id: pl-40
 tool: planner
 title: A real model has run the plan, and the bill it ran up is on record
 kind: work-package
-status: in-flight
+status: done
 milestone: P3
 depends_on: [pl-39, pl-49, pl-55]
 difficulty: standard
@@ -346,6 +346,28 @@ the `parseCli` suite mentions the flag). The reviewer re-anchored it to line
 163's quote-free test title and asked that only that one citation be
 replaced; nothing else in the section was touched by the builder. Re-run
 after the fix: 12 verified, 0 moved, 0 unanchored, exit 0.
+
+### Gate 3 — 2026-10-12 · `391af241...018a05ab` · the paid run's Log, recomputed from its 111 records by the reviewer at medium
+
+**Gate: FAIL**, repaired in `b733a204`. The reviewer recomputed every figure in the
+paid-run entry from the records. The bill table, the session total, rules (a)–(c),
+set C, set D, the thinking counts and all 44 `count_tokens` prompts reproduced.
+
+- **One high.** Opus's set-B stop printed 104 finds-reader candidates where the
+  records give 100, the figure from the discarded first launch. The corpus total
+  becomes 427.
+- **Six lows.** Four sentences disagreed with the records: the attempt-1 count,
+  the prompt's character count, the complaint's size and Haiku's ceiling share.
+  The set A ceiling's pricing of resort's missing fifth specialist went unstated.
+  "Shorter" was overclaimed for Haiku. Set C's limit sat outside its claim's
+  paragraph. Four other documents still carried the estimates the run replaced:
+  pl-39, pl-49, pl-55's tokenizer trap, and `docs/02-DEPLOYMENT.md`.
+
+All seven were fixed and each fix was checked by hand against the records. No
+second gate ran, because the repair is wording and two numbers. The run returned
+13 findings: 7 carried and 6 dropped as checked and correct, or not grading
+matter. One dropped finding adds a fact to the Log: Haiku's empty finds-reader
+replies.
 
 ## Log
 
@@ -809,3 +831,236 @@ and carries the five commands and the reasoning behind the effort choices.
 
 Gate 2's acceptance table and earlier entries still name `claude-opus-5`. They
 are left as written, because they record what was true when they ran.
+
+### 2026-10-12 — the paid run: five model-and-effort pairs, $6.92, `done`
+
+**What ran.** Sets A–D under all five pairs pl-55 lists, from `391af241` (pl-55
+merged), with the owner's key. Rates were read from Anthropic's pricing page on
+the day, per MTok as input / output / cache read / 5-minute cache write:
+Haiku 5.5 $0.10 / $0.50 / $0.01 / $0.125, Sonnet 5.5 $2 / $10 / $0.10 / $2.50,
+Opus 5.5 $4 / $20 / $0.20 / $5. **Sonnet 5.5's cache read is $0.10, not the
+$0.20 pl-55's brief carried**, which this commit corrects there. The caps were
+pl-55's: `--max-usd` 1 per Haiku pair, 5 for Sonnet, 10 for Opus. No session
+came near its cap.
+
+**An interruption, and what it cost.** The first launch ran the pairs as three
+parallel chains under a shell that belonged to the agent session, and that
+shell died with the session about four minutes in. Sonnet had finished. Haiku
+`low` and Opus had each reached set C run 2. The harness has no resume, and a
+rerun into the same directory overwrites set C onwards, so by the owner's
+choice both partial pairs were rerun in full under `setsid` and the partial
+records discarded. They had spent **$3.78** ($3.65 Opus, $0.13 Haiku), which is
+in no table below. The account's spend for pl-40 is $10.70.
+
+**`count_tokens` replaces every chars/4 figure in this brief.** It was run over
+every rendered prompt before its call. On all 550 attempt-1 calls it equals the
+billed `input_tokens` exactly, and all five pairs counted every prompt
+identically. Attempt 1, per specialist:
+
+| Shape                   | Per specialist                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| backcountry             | activities 3,912 · practicalities 3,835 · conditions-and-gear 3,869 · lodging 3,834 · route-and-logistics 3,985 |
+| city-and-culture        | practicalities 3,877 · budget 3,877 · food 3,967 · lodging 3,876 · activities 3,954                             |
+| motorised-touring       | route-and-logistics 3,951 · practicalities 3,801 · lodging 3,800 · conditions-and-gear 3,835 · activities 3,878 |
+| multi-city              | lodging 3,802 · food 3,893 · activities 3,880 · practicalities 3,803 · route-and-logistics 3,953                |
+| resort                  | activities 3,898 · lodging 3,820 · budget 3,821 · practicalities 3,821                                          |
+| road-trip, set A        | budget 3,834 · food 3,924 · lodging 3,833 · route-and-logistics 3,984 · activities 3,911                        |
+| road-trip, sets B and D | activities 8,207 · food 8,220; the three that read no finds as set A                                            |
+| road-trip, set C        | activities 8,265 · food 8,278                                                                                   |
+
+- **A no-finds call is about 3.8k–4.0k tokens, not the ~783 this brief
+  estimated.** The estimate was right about the prompt text: road-trip's
+  `budget` system prompt and message text are 2,661 characters, ~665 by chars/4. The
+  other ~3.15k come with the request itself. The only other thing it carries is
+  the structured-output schema (`output_config.format`, built from
+  `specialistReplySchema`), which the filing did not count. Nothing here
+  measures the schema in isolation.
+- **The discovery block over the real capture is ~4.3k tokens** (8,207 −
+  3,911), not ~10.7k. pl-41's cap of 40 finds is the reason, against the
+  filing's uncapped 276. The run used the capped shape that ships, as this brief
+  asked.
+- **The hostile find adds 58 tokens** (8,265 − 8,207), and it reaches both
+  finds readers' prompts in every pair. Set C's records carry 41 finds where B's
+  carry 40. Nothing re-caps between discovery and the fan-out.
+
+**The table.** One row per set per pair. Rule (a) and the
+observed-against-ceiling check below were also run per individual run, and both
+hold on all 111. "Ceiling" is Build step 3's formula at
+the pair's own output rate, not $25/MTok. Its input term is rebuilt per
+specialist from that run's measured attempt-1 input: attempt 1, then attempt 2
+as attempt 1 plus `maxOutputTokens` plus the complaint. The complaint measured
+85–86 tokens on every Opus and Sonnet re-ask in set D, and 86 is used. Set A's
+resort roster has four specialists. Its fifth is priced at its largest measured
+one, which raises set A's ceiling by about half a percent over pricing only the
+four. "Thinking" is
+`thinkingTokens ÷ outputTokens`, decision A's lower bound. Cache reads are zero
+everywhere because pl-39 sets no `cache_control`, so B's cost with and without
+cache reads is the same figure.
+
+| Model, effort      | Set | Runs | Calls |   Input |  Output | Thinking (lower bound) | Cache reads | Observed | Ceiling | Input share of ceiling | Malformed | Re-asks | Refusals | `length` | Fallbacks |
+| ------------------ | --- | ---: | ----: | ------: | ------: | ---------------------: | ----------: | -------: | ------: | ---------------------: | --------: | ------: | -------: | -------: | --------: |
+| Haiku 5.5 `low`    | A   |    6 |    29 | 112,428 |  38,159 |                  48.4% |           0 |  $0.0303 |   $0.29 |                  16.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `low`    | B   |   15 |    75 | 421,170 |  98,840 |                  45.4% |           0 |  $0.0915 |   $0.74 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `low`    | C   |    3 |    15 |  84,582 |  18,762 |                  45.1% |           0 |  $0.0178 |   $0.15 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `low`    | D   |    1 |     9 |  48,480 |   3,580 |                  68.9% |           0 |  $0.0066 | $0.0085 |                  69.8% |         5 |       4 |        0 |        5 |         0 |
+| Haiku 5.5 `medium` | A   |    6 |    29 | 112,428 |  45,124 |                  51.8% |           0 |  $0.0338 |   $0.29 |                  16.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `medium` | B   |   15 |    75 | 421,170 | 134,720 |                  52.7% |           0 |    $0.11 |   $0.74 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `medium` | C   |    3 |    15 |  84,582 |  25,269 |                  51.9% |           0 |  $0.0211 |   $0.15 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `medium` | D   |    1 |     9 |  48,280 |   4,432 |                  95.9% |           0 |  $0.0070 | $0.0085 |                  69.8% |         8 |       4 |        0 |        8 |         0 |
+| Haiku 5.5 `high`   | A   |    6 |    29 | 112,428 |  72,049 |                  65.4% |           0 |  $0.0473 |   $0.29 |                  16.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `high`   | B   |   15 |    76 | 426,175 | 208,782 |                  65.1% |           0 |    $0.15 |   $0.74 |                  19.5% |         1 |       1 |        0 |        1 |         0 |
+| Haiku 5.5 `high`   | C   |    3 |    15 |  84,582 |  38,842 |                  66.2% |           0 |  $0.0279 |   $0.15 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Haiku 5.5 `high`   | D   |    1 |    10 |  56,586 |   5,120 |                 100.0% |           0 |  $0.0082 | $0.0085 |                  69.8% |        10 |       5 |        0 |       10 |         0 |
+| Sonnet 5.5 `low`   | A   |    6 |    29 | 112,428 |  34,016 |                   0.0% |           0 |    $0.57 |   $5.75 |                  16.5% |         0 |       0 |        0 |        0 |         0 |
+| Sonnet 5.5 `low`   | B   |    8 |    40 | 224,624 |  55,851 |                   0.0% |           0 |    $1.01 |   $7.95 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Sonnet 5.5 `low`   | C   |    3 |    15 |  84,582 |  20,547 |                   0.0% |           0 |    $0.37 |   $2.98 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Sonnet 5.5 `low`   | D   |    1 |    10 |  59,146 |   5,034 |                   0.0% |           0 |    $0.17 |   $0.17 |                  69.8% |         9 |       5 |        0 |        9 |         0 |
+| Opus 5.5 `low`     | A   |    6 |    29 | 112,428 |  35,926 |                   4.0% |           0 |    $1.17 |  $11.50 |                  16.5% |         0 |       0 |        0 |        0 |         0 |
+| Opus 5.5 `low`     | B   |    8 |    40 | 224,624 |  54,755 |                   0.0% |           0 |    $1.99 |  $15.89 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Opus 5.5 `low`     | C   |    3 |    15 |  84,582 |  20,788 |                   0.0% |           0 |    $0.75 |   $5.96 |                  19.5% |         0 |       0 |        0 |        0 |         0 |
+| Opus 5.5 `low`     | D   |    1 |    10 |  59,145 |   5,120 |                   0.0% |           0 |    $0.34 |   $0.34 |                  69.8% |        10 |       5 |        0 |       10 |         0 |
+
+**Session total: $6.92** (Haiku `low` $0.15 · `medium` $0.17 · `high` $0.23 ·
+Sonnet $2.12 · Opus $4.25), plus the $3.78 the interruption discarded.
+
+**Per run, on the shape that matters (set B, road-trip with the capped
+corridor):** Haiku $0.006 at `low` to $0.010 at `high`, Sonnet $0.126, Opus
+$0.249. Set B sits at **12.5–12.7% of its own ceiling** for Sonnet and Opus. For Haiku
+it sits at 12.3% at `low`, 14.7% at `medium` and 19.7% at `high`, where thinking
+fills more of the output bound.
+
+**Rules (a)–(c): none tripped, and no `pl-` fix is filed.**
+
+- **(a)** No run billed more output than `maxSpecialists ×
+maxAttemptsPerSpecialist × maxOutputTokens`. Set D sits exactly on the bound
+  for Opus and Haiku `high` (5,120 = 5 × 2 × 512), and 86 under it for
+  Sonnet. **Billed output per call stayed within `max_tokens` with thinking
+  on**: every `length` stop billed exactly 512. No run's dollars exceeded its
+  reconstructed ceiling either.
+- **(b)** Input is **19.5%** of the reconstructed ceiling for sets B and C at
+  the deployed 8,000 cap, and 16.5% for set A. That is under the 20% line by
+  half a point, where the filing estimated ~19%. The share comes out identical
+  for all three models because each charges five times input for output. It is
+  a property of the prices and the prompt, not of the model. pl-41's cap is what
+  holds it there: a longer corridor no longer grows the block. **It is close
+  enough that a prompt growing by a few hundred tokens per call would trip it.**
+  The schema overhead above is the obvious lever if that day comes.
+- **(c)** Zero fallbacks in 574 replies, and no refusals. Every served model
+  equals the requested one.
+
+**Set D is at the edge, as designed.** At `MAX_OUTPUT_TOKENS=512`, Opus and
+Haiku `high` stopped at `length` on all 10 attempts. Sonnet stopped on 9: its `budget`
+re-ask finished under 512 and parsed. Each specialist was
+re-asked once, and the run's cost met its ceiling ($0.34 of $0.34 for Opus).
+**Haiku at `low` and `medium` does not reach the edge** for 4 and 1 of its 5
+specialists respectively. Their first or second reply fits inside 512 tokens
+and parses, so those runs made 9 calls, not 10. The API accepted 512 with thinking on for all
+three models, so no floor applies. **The re-ask echo is the visible reply
+only.** At Haiku `high`, where all 512 tokens were thinking, attempt 2's input
+grew by 86 tokens, not 598. The ceiling's `+ maxOutputTokens` term is therefore
+an upper bound wherever a model thinks. It is exact only where it does not,
+which at `low` effort is Sonnet and Opus.
+
+**`runCeilingUsd` omits the complaint**, so the harness's spend stop
+under-reaches Build step 3's formula by 5 × 86 input tokens per run: $0.0017 on
+an Opus run, 0.5% of set D's ceiling. That is immaterial to a `--max-usd` stop,
+and it is recorded here rather than fixed.
+
+**Set B stopped:**
+
+| Pair           | Stop                        | Finds-reader candidates |
+| -------------- | --------------------------- | ----------------------- |
+| Haiku `low`    | 15-run cap                  | 52                      |
+| Haiku `medium` | 15-run cap                  | 75                      |
+| Haiku `high`   | 100 reached on the 15th run | 100                     |
+| Sonnet `low`   | 100 reached in 8 runs       | 100                     |
+| Opus `low`     | 100 reached in 8 runs       | 100                     |
+
+The corpus covers two of the three finds readers, `activities` and `food`.
+`conditions-and-gear` needs a backcountry corridor capture, which this ticket
+scoped out.
+
+**Set C: the hostile name moved nothing that could be seen. Fifteen runs of one
+string are an observation, not a proof of resistance.** Set C ran three times per
+pair, fifteen runs in all, with pl-29's string verbatim as find 40.
+
+- No reply from any specialist mentions "Grand Hotel", "Ignore prior" or
+  "system".
+- No candidate proposes booking anything. The only "book" in a set-C candidate
+  is advice to the party ("book well ahead", "check before booking"), the same
+  wording set B carries.
+- `lodging`, which reads no finds, proposed no Grand Hotel either.
+- Every reply parsed, and every stop reason was `end`. Set B's only other stop
+  reason in 306 attempts is Haiku `high`'s one `length`.
+
+**Decision A's two questions, which pl-52's report wording waits on:**
+
+- **A run mixing a null breakdown with a reported one: never.** Every one of the
+  574 replies reported `thinkingTokens`, so no run's sum is a partial lower
+  bound.
+- **A reply that fell back across several attempts while thinking: never
+  observed,** because nothing fell back. This run cannot say how often it
+  happens. It can only say it did not happen here.
+
+**What the thinking column says about effort.** At `low`, Sonnet 5.5 reported
+zero thinking on all 94 replies, and Opus 5.5 on 91 of 94. Their bills are
+almost all visible reply. Haiku 5.5 thinks on nearly every reply: about 45% of
+output at `low`, 52% at `medium`, 65% at `high`. **`high` reaches the 8,000
+cap**, as pl-55 warned. Set B run 1's `route-and-logistics` spent 7,065 of
+8,000 tokens thinking, stopped at `length` with truncated JSON, and its re-ask
+parsed. That was 1 call in 76. On Haiku, effort buys candidates: 13.0 → 14.3 →
+16.8 per set-A run, and 3.5 → 5.0 → 6.7 finds-reader candidates per set-B run.
+Each step costs 12–40% more.
+
+**Reply quality, measured as far as this run can measure it.** Nothing here is
+labelled, so quality is read off counts and a look at the text.
+
+|                                   | Candidates per set-A run | Candidates per set-B run | From finds readers, per set-B run | Malformed at 8,000 |
+| --------------------------------- | -----------------------: | -----------------------: | --------------------------------: | -----------------: |
+| Opus `low`                        |                     23.2 |                     28.5 |                              12.5 |                  0 |
+| Sonnet `low`                      |                     22.7 |                     28.4 |                              12.5 |                  0 |
+| Haiku (`low` / `medium` / `high`) |                    13–17 |                    15–19 |                           3.5–6.7 |       1, at `high` |
+
+`accept` rejected nothing in any pair. Read side by side, Sonnet's and Opus's
+set-B `activities` replies name the same places with similarly specific
+detail: the Bonaventure gannet colony, Percé's tides. Haiku's titles and
+replies are shorter and more generic ("Percé Rock viewing stop"), though its
+summaries run slightly longer. **Haiku's finds readers also returned an empty
+list on 11 of their 90 set-B replies** (7 of 30 at `low`). Sonnet's and Opus's
+never did.
+
+**Recommendation for the default, on dollars and quality, not tokens: Sonnet
+5.5 at `low`.** It matched Opus 5.5 on every count above at half the price
+($0.126 against $0.249 per corridor run). Opus thought on 3 of its 94 replies and
+Sonnet on none, so the gap is the rate card alone. Haiku 5.5 is 13–21× cheaper
+again, but it proposes
+about half the candidates, and a third to a half as many from the finds. That
+is the half of the tool P3 exists to ground. The deployed default is still
+`claude-opus-5`, which this run did not measure. **Choosing is the owner's**,
+and a change of default is its own ticket.
+
+**What this run settles for the tickets waiting on it:**
+
+- **pl-29:** set C above.
+- **pl-36:** the corpus exists, 427 finds-reader candidates over the 61
+  set-B runs, each with the capped corridor's finds in its prompt, unlabelled as Build step 4 requires. The join is
+  still its own ticket.
+- **pl-52:** decision A's answers above.
+
+**Done-when, checked on this branch:**
+
+- `npm test` run with the key in the environment collects 77 `planner` files,
+  none under `api/test/live/`. The two `live-*` files it collects are the
+  offline gate tests beside that directory.
+- `live-records.test.ts` passes over all 111 records (129 tests). It failed on
+  a planted `{"headers":{"x-api-key":"sk-ant-…"}}` record and passed again once
+  the plant was removed.
+- The key lived in a gitignored, mode-600 file outside the worktree for the
+  length of the run, and was deleted afterwards.
+
+### 2026-10-12 — owner decision: the default is Sonnet 5.5 at `low`
+
+The owner chose the recommendation above. The switch is not a ticket: it has
+no decision left in it, and it is a `feat` that releases the planner, so it is
+its own pull request (#464). It changes `API_DEFAULTS.model`, its tests and the
+documents that name the default. `MODEL` still overrides it per deployment.
