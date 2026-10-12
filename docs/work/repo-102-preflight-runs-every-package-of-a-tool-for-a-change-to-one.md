@@ -260,12 +260,18 @@ return [];` now fails it (1 failed, 16 passed of the 17 repo-102 tests), and so
     does ignoring `hasTests` (1 failed, 16 passed). The fixture gained `docsite`,
     a workspace with no `test/` directory that depends on `engine`.
   - Low, a computed specifier or a `..`-segment join is read by no scan —
-    _not fixed_. The finding states no fix, and none exists for text: a
-    specifier built at run time (`["@downloader", "contract"].join("/")`) cannot
-    be read from source. This is the gap the ticket's Why accepts: CI runs every
-    suite, so a coupling the graph misses shows up red on the pull request. It is
-    recorded here so the next reader knows the scan's reach: string literals and
-    literal heads, not computed values.
+    _not fixed_. The finding states no fix. Two shapes are unread: a specifier
+    built at run time (`["@downloader", "contract"].join("/")`), which cannot be
+    read from source, and a `..`-segment join such as
+    `path.join(import.meta.dirname, "..", "..", "web", "public")`, which is
+    literal but which `segmentPath` does not accept as a head. This is the gap
+    the ticket's Why accepts: CI runs every suite, so a coupling the graph
+    misses shows up red on the pull request. It is recorded here so the next
+    reader knows the scan's reach: a quoted relative path, or a
+    `tools/<tool>/<package>` path written whole or in `", "` segments; not a
+    computed value and not a `".."` segment join. (Corrected at landing: this
+    entry first said "none exists for text" and "not computed values" alone,
+    which was wrong for the `..` join; gate 2 found it.)
   - Low, `tools/downloader/api/test/ytdlp-in-the-image.test.ts` › `pins()` — an
     undeclared cross-package read, _named here, nothing filed_. It walks every
     `.json`, `.ts`, `.mjs`, `.ya?ml`, `.sh` and `.toml` file in the repo,
@@ -286,3 +292,33 @@ tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails (1 failed, 11
     diff touches" — _not fixed_. Role pages are changed only in the owner's
     review session, which has logged it there; this branch does not edit
     `roles/builder.md`.
+- 2026-10-12 — **Gate 2's two lows, _fixed at landing_** (the owner chose that
+  over leaving them recorded, with no re-gate). Gate 2 passed `9d753314`. The
+  owner was asked "Land it how?" with three options: assert `helpers2` and fix
+  the Log (recommended); also resolve `..` joins in `segmentPath`; land as is.
+  **Chosen: assert `helpers2` and fix the Log.** `scripts/preflight.mjs` is not
+  touched by this step.
+  - Low, the directory-index half of the extensionless-specifier test asserted
+    nothing — _fixed_. `helpers2` was read by the same `web` test as `mp4`, and a
+    whole-package edge absorbs a scoped one, so the `mp4` edge stood in for it.
+    The `helpers2` import now sits in a `contract` test, a different reader, and
+    the test asserts that `contract` depends on `engine` as `new Set([""])`. Its
+    control, with the `index.<ext>` lookup deleted from `namesCode` in
+    `scripts/preflight.mjs` and the file then restored with `git checkout`:
+    `npx vitest run scripts/test/preflight.test.ts -t repo-102` prints
+    `× packageGraph reads an extensionless specifier that resolves to a file as
+code, so the edge is the whole package (repo-102)` and `Tests 1 failed | 16
+passed | 74 skipped (91)`. Unmutated: `Tests 91 passed (91)`. One assertion
+    moved with it: an engine `mp4.ts` change now plans the whole tool, because
+    `contract` reads `engine` in the fixture and every package depends on
+    `contract`; the test says so.
+  - Low, the Log said the scan cannot read a literal `..`-segment join — _fixed
+    in the Log only_. Round 1's entry on the computed-specifier gap now names the
+    `path.join(import.meta.dirname, "..", "..", "web", "public")` shape as
+    unread though literal, and gives the scan's reach as a quoted relative path or
+    a `tools/<tool>/<package>` path written whole or in `", "` segments. The gap
+    stays; CI is the backstop the ticket's Why accepts. `segmentPath` is not
+    changed, by the owner's choice.
+  - Left recorded and unfixed: the computed-specifier and `..`-join gap above, and
+    the stale "the suite of every tool the diff touches" bullet in
+    `roles/builder.md`, which only the owner's review session edits.

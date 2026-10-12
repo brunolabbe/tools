@@ -1951,16 +1951,20 @@ test("packageGraph reads an extensionless specifier that resolves to a file as c
     "tools/foo/engine/test/helpers/mp4.ts": "export const mp4 = 1;\n",
     "tools/foo/engine/test/helpers2/index.ts": "export const x = 1;\n",
     // Bundler resolution lets a web test leave the extension off.
-    "tools/foo/web/test/c.test.ts":
-      'import { mp4 } from "../../engine/test/helpers/mp4";\nimport { x } from "../../engine/test/helpers2";\n',
+    "tools/foo/web/test/c.test.ts": 'import { mp4 } from "../../engine/test/helpers/mp4";\n',
+    // The directory form is read by a different package, so one edge cannot
+    // stand in for the other: a whole-package edge absorbs a scoped one.
+    "tools/foo/contract/test/d.test.ts": 'import { x } from "../../engine/test/helpers2";\n',
   });
   try {
     expect(packageGraph(tree.dir, "foo")?.get("web")?.dependsOn.get("engine")).toEqual(
       new Set([""]),
     );
-    expect(planFor(["tools/foo/engine/test/helpers/mp4.ts"], tree.dir)).toContain(
-      "tools/foo/web/test/",
+    expect(packageGraph(tree.dir, "foo")?.get("contract")?.dependsOn.get("engine")).toEqual(
+      new Set([""]),
     );
+    // Contract now reads engine as a whole, and every package depends on contract.
+    expect(planFor(["tools/foo/engine/test/helpers/mp4.ts"], tree.dir)).toEqual([]);
   } finally {
     tree.cleanup();
   }
