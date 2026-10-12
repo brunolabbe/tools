@@ -1057,3 +1057,10 @@ and a change of default is its own ticket.
   the plant was removed.
 - The key lived in a gitignored, mode-600 file outside the worktree for the
   length of the run, and was deleted afterwards.
+
+### 2026-10-12 — owner decision: the default is Sonnet 5.5 at `low`
+
+The owner chose the recommendation above. The switch is not a ticket: it has
+no decision left in it, and it is a `feat` that releases the planner, so it is
+its own pull request (#464). It changes `API_DEFAULTS.model`, its tests and the
+documents that name the default. `MODEL` still overrides it per deployment.
