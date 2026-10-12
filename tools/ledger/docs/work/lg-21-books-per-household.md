@@ -390,3 +390,17 @@ deeply equal { n: 17 }`).
     `Tests  2 passed (2)`.
   - `npx vitest run tools/ledger`: `Tests  904 passed (904)`, against 880 before
     the merge; the 24 added are lg-19's, none of the 880 lost.
+- 2026-10-12, after merge — **Gate 2's N1 fixed** (`test(ledger)`, its own pull
+  request). `answeredRoutes` now tells Fastify's `HEAD` from an author's by the
+  `headRouteOnSendHandler()` `onSend` hook that `printRoutes({ includeMeta: true })`
+  prints under it, and drops only that one; it no longer drops every `HEAD` with a
+  `GET` beside it. `tools/ledger/CLAUDE.md`'s "whatever the method" is now true,
+  so it is unchanged. Fastify refuses a `HEAD` registered after its `GET`
+  (`FST_ERR_DUPLICATED_ROUTE`), so the planted case registers it first, in
+  `registerMeRoute`:
+  - `app.head(ROUTES.rules, …)` on the old filter: `Tests  2 passed (2)`, the
+    gate's reproduction. On the new one: `1 failed | 1 passed (2)`, naming
+    `"HEAD /api/rules"`.
+  - `app.head(ROUTES.me, …)` with the same `onRequest` as its `GET`, so the two
+    print on one line as `(HEAD, GET)`: `1 failed`, naming `"HEAD /api/me"`.
+  - Unplanted: `Tests  2 passed (2)`.
