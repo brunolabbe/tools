@@ -181,7 +181,7 @@ function startGate(
     stdout: () => out,
     stderr: () => err,
     done,
-    report: () => JSON.parse(out.split("\n")[0]) as Report,
+    report: () => JSON.parse(out.split("\n")[0] ?? "") as Report,
   };
 }
 
