@@ -489,3 +489,10 @@ On the box rows neither option is a regression against `main`: option 1 frees 6 
   recommendation; the gate gave none) and "Whole word 'play'" (gate 2 measured
   it: frees 4 more of its 12 box rows, adds one regression against `main`,
   `playbtn`). **The owner chose "Keep counting".** The build stands as it is.
+- 2026-10-12, after merge. The gate's last-round low on the commit message
+  ("in the attribute that selector matched on") held for the doc comment above
+  `PLAY_LOOSE_SELECTORS` in `resolvers/src/browser/provoke.ts` too, which said
+  `isPlayPress` reads "that attribute alone". It reads every attribute a loose
+  selector reads, whichever one matched. The comment now says so; the code is
+  unchanged. The other recorded lows (the untested `catch`, the `auto` exception
+  covering camelCase only) were judged not worth a change and stay recorded.

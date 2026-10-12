@@ -796,9 +796,10 @@ const UNMARK_AGE_SCRIPT = `(() => {
  * What a play-ish selector reads, and so what its press is counted on (dl-100).
  * The substring selectors match "play" anywhere in one attribute, so "Autoplay"
  * and `display-name` are pressed with the rest. Each is therefore kept with the
- * attribute it reads and the token it looks for, which `isPlayPress` checks for
- * a word start in that attribute alone: a toggle matched through its
- * `aria-label` is not counted through a `player-*` class it also carries.
+ * attribute it reads and the token it looks for, and `isPlayPress` counts a press
+ * when any of those attributes has a word starting with its token, whichever
+ * selector matched: `<span data-testid="display-name" title="Player info">` is
+ * matched by its test id alone and counted through its `title`.
  */
 interface LoosePlaySelector {
   readonly selector: string;

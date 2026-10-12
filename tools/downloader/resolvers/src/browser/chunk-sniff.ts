@@ -43,7 +43,7 @@
 
 import { childrenOf, HEAD_WINDOW_BYTES, isPrintable } from "../mp4-header.ts";
 import type { NetworkHit } from "./types.ts";
-import { isNumberedName } from "./media-match.ts";
+import { directoryOf, isNumberedName } from "./media-match.ts";
 
 /** Bytes asked for per candidate. Holds `styp`, `sidx` and `moof`, or `ftyp` and a whole init `moov`. */
 export const SNIFF_HEAD_BYTES = HEAD_WINDOW_BYTES;
@@ -81,16 +81,6 @@ export function sniffHead(head: Uint8Array): HeadVerdict {
     }
   }
   return "unknown";
-}
-
-/** `origin + directory`: the same path on another host is another directory. */
-function directoryOf(raw: string): string {
-  try {
-    const url = new URL(raw);
-    return `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)}`;
-  } catch {
-    return raw.slice(0, raw.lastIndexOf("/") + 1);
-  }
 }
 
 function pathOf(raw: string): string {

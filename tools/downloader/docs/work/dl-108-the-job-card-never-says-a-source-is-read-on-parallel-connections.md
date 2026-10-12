@@ -1,0 +1,111 @@
+---
+id: dl-108
+tool: downloader
+title: The job card never says when a throttled source is being read on parallel connections
+kind: work-package
+status: ready
+milestone: null
+depends_on: [dl-98]
+difficulty: standard
+---
+
+# dl-108 — Show the origin connection count on the job card
+
+## Why
+
+[dl-98](./dl-98-parallel-ranges-for-a-throttled-progressive-source.md) splits a
+progressive source that measures slower than its own bitrate into parallel
+ranged reads, four connections by default. Nothing outside the API's logs says
+it happened. The job card shows the speed and nothing about why it changed, so
+the owner could not tell whether a job was split.
+
+On 2026-10-12 the owner asked about a job then running in the devcontainer. The
+answer took a socket listing. ffmpeg was reading
+`http://127.0.0.1:<port>/<token>`, the loopback feeder. The API process held
+four established `CONNECT` tunnels through its in-process egress proxy to the
+same origin address on `:443`. So the job had split. A relay on one connection
+would have held one tunnel. A page meant to explain a download should not need
+`ss -tnp`.
+
+**Decided by the owner, 2026-10-12**, from two options with their costs:
+
+1. **Shape: a connection count, not a transfer mode.** The rejected option was
+   `"single" | "parallel" | "fallen-back"`, which is the feeder's own `mode`.
+   The chosen one is the number of origin fetches open right now. It is more
+   literal. It can move between chunks (4, then 3, then 4), and it does not
+   say _why_ a job went back to 1. The owner accepted both costs.
+2. **Filed, not built now.** It goes to a later batch.
+
+## Build
+
+1. **Contract** (`contract/src/job.ts`, `contract/src/api.ts`). Add
+   `originConnections: number | null` to `JobProgress` and to
+   `jobProgressSchema`. Doc comment: the number of requests to the origin open at
+   the moment of the snapshot, the relay included. `1` on a job the feeder reads
+   and has not split. `null` when no feeder is in the path: HLS or DASH, a
+   source that refused the seek probe, a host listed in
+   `SINGLE_CONNECTION_HOSTS`, a remembered refusal, a separate audio rendition,
+   a live capture. All of those are `splittable()`'s `false` in
+   `engine/src/stream.ts`. `null` means "not measured", never `1`, so the field
+   follows the contract's nullable-on-purpose rule rather than guessing.
+2. **Feeder** (`engine/src/download/parallel-ranges.ts`). Expose the count it
+   already keeps. `#inFlight()` counts fetches marked `inFlight` across every
+   serve. Add `openFetches` to `FeederStats` from it, or add a cheap accessor if
+   `stats()` builds too much per tick. **Check that the relay and the
+   post-fallback continuation are counted as `inFlight`**, not only the ranged
+   chunks. If the relay is not, a single-connection job reads 0. Count what
+   reaches the origin, not what ffmpeg has open to the loopback.
+3. **Engine** (`engine/src/stream.ts`, the `onProgress` handler of
+   `streamFfmpeg` in `attempt`). Set
+   `originConnections: feeder === null ? null : <the count>` on every snapshot.
+   `toJobProgress` in `engine/src/ffmpeg/progress.ts` builds the rest. Set the
+   field there too, as `null`, so every other producer of a `JobProgress`
+   compiles and says "not measured".
+4. **API.** `api/src/db/job-store.ts` reads `progress_json` with a bare
+   `JSON.parse` cast, so a row written before this change has no
+   `originConnections`. Either default it to `null` where the row is read, or
+   make the web side treat `undefined` as `null`. Pick one and test it with a
+   row that lacks the key. `initialProgress()` sets it to `null`.
+5. **Web** (`web/src/components/JobCard.tsx`). While downloading, when
+   `originConnections` is 2 or more, show a short hint beside the speed, for
+   example "Reading on 4 connections. This source throttles each one." Show
+   nothing at 1 or `null`: the hint exists to explain a split, and "1
+   connection" on every job is noise. Make it reachable to a screen reader
+   (the `aria-live` hint paragraph is the precedent). Add the field to every
+   mock in `web/src/api/scenarios.ts`, and add one mock scenario that splits,
+   so the mocked UI can show the hint.
+6. **Tests.** Add them at the **end** of each suite; inserting mid-file moves
+   other tickets' cited lines.
+   - `engine/test/parallel-ranges.test.ts`: the throttled fixture's progress
+     snapshots reach `originConnections >= 2` after the split. The fast-origin
+     fixture's never exceed 1 and are never `null`.
+   - `engine/test/stream.test.ts` or equivalent: an HLS job reports `null`
+     throughout.
+   - `web/test/job-card.test.tsx`: the hint renders at 4, and is absent at 1
+     and at `null`.
+   - The legacy-row case from step 4.
+
+Traps worth knowing in advance:
+
+- Progress ticks come from ffmpeg's `-progress` pipe, not from the feeder. The
+  count is sampled when ffmpeg reports, so a split shows on the next tick, not
+  the instant it happens. That is fine. Do not add a second emitter.
+- The dl-98 fixtures are timing-sensitive (dl-105, dl-106). Assert on "ever
+  reached" or "never exceeded" across the snapshots, never on the value at an
+  instant. The Windows leg failed exactly that kind of assertion.
+
+## Done when
+
+1. A job the feeder splits reports `originConnections >= 2` in its progress
+   after the split. A test fails if the engine stops setting the field.
+2. A feeder job on a fast origin reports `1` throughout. A job with no feeder
+   in the path reports `null` throughout.
+3. A persisted job whose `progress_json` predates the field still loads and
+   renders, with the field read as `null`.
+4. The job card shows the hint at 2 or more connections and nothing at 1 or
+   `null`, proven by `web/test/job-card.test.tsx`.
+
+## Log
+
+**2026-10-12**: filed from the owner's question on a live job (Why). Shape and
+timing decided by the owner (Why, 1 and 2). Nothing built.

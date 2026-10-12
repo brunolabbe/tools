@@ -317,3 +317,82 @@ test("More categories opens the whole period, not a category", async () => {
     expect.anything(),
   );
 });
+
+test("a failed read of the chart after a write keeps the chart and the open list, and says so", async () => {
+  vi.mocked(setRowSpendingCategory).mockResolvedValue({
+    rowId: SHOP.id,
+    spendingCategory: { id: 3, source: "override" },
+  });
+  await chart();
+  fireEvent.click(screen.getByRole("button", { name: "Show the rows" }));
+  const select = await screen.findByLabelText(`Spending category for ${SHOP.description}`);
+  vi.mocked(fetchSpendingStats).mockRejectedValue(
+    new AppError("UNREACHABLE", "The books are away."),
+  );
+
+  fireEvent.change(select, { target: { value: "3" } });
+
+  await waitFor(() => expect(fetchSpendingStats).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain("The books are away."),
+  );
+  expect(screen.getByRole("slider")).toBeTruthy();
+  expect(screen.getByRole("list", { name: "Rows in this period" })).toBeTruthy();
+});
+
+test("the open period's last day moving on, as it does at midnight, keeps its list open", async () => {
+  vi.mocked(setRowSpendingCategory).mockResolvedValue({
+    rowId: SHOP.id,
+    spendingCategory: { id: 3, source: "override" },
+  });
+  await chart();
+  fireEvent.click(screen.getByRole("button", { name: "Show the rows" }));
+  const select = await screen.findByLabelText(`Spending category for ${SHOP.description}`);
+  const open = AFTER.periods[1] as SpendingStatsResponse["periods"][number];
+  vi.mocked(fetchSpendingStats).mockResolvedValue({
+    ...AFTER,
+    periods: [
+      AFTER.periods[0] as SpendingStatsResponse["periods"][number],
+      { ...open, end: "2026-03-01" },
+    ],
+  });
+
+  fireEvent.change(select, { target: { value: "3" } });
+
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Show the rows for Household" })).toBeTruthy(),
+  );
+  expect(screen.getByRole("list", { name: "Rows in this period" })).toBeTruthy();
+});
+
+test("the readout's buttons are outside its live region, and its figures inside it", async () => {
+  await chart();
+
+  const button = screen.getByRole("button", { name: "Show the rows" });
+  expect(button.closest("[aria-live]")).toBeNull();
+  for (const one of screen.getAllByRole("button", { name: /^Show the rows for / })) {
+    expect(one.closest("[aria-live]")).toBeNull();
+  }
+  const live = button.closest(".readout")?.querySelector("[aria-live]");
+  expect(live?.textContent).toContain("Groceries");
+});
+
+test("a failed read with no write before it fails the card, on a new range or back on an old one", async () => {
+  const A = { from: "2026-01-01", to: "2026-02-28" };
+  const B = { from: "2026-02-01", to: "2026-02-28" };
+  const { rerender } = render(<SpendingCard range={A} />);
+  await screen.findByRole("slider");
+
+  vi.mocked(fetchSpendingStats).mockRejectedValue(
+    new AppError("UNREACHABLE", "The books are away."),
+  );
+  rerender(<SpendingCard range={B} />);
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
+  expect(screen.queryByRole("slider")).toBeNull();
+
+  // Back on the range read first: it was not written under, so its answer is not held.
+  rerender(<SpendingCard range={A} />);
+  await waitFor(() => expect(fetchSpendingStats).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
+  expect(screen.queryByRole("slider")).toBeNull();
+});
