@@ -11,7 +11,9 @@
  *
  * The run: `MAX_JOBS_PER_CLIENT=1` (see `playwright.config.ts`), a proxy that
  * holds every segment back so the first download stays open, two jobs, and the
- * second job's link followed while the first is still streaming.
+ * second job's link followed while the first is still streaming. The panel's
+ * Download opens each job's link itself, so the second press is the attempt
+ * that is refused.
  */
 
 import { expect, test } from "@playwright/test";
@@ -40,27 +42,21 @@ test("a download refused at the per-client cap says why and stays usable", async
   await page.getByRole("button", { name: "Analyse" }).click();
   await expect(page.getByRole("table")).toBeVisible();
 
-  // Two jobs from the one analysis. Each press waits for its card, so the
-  // second cannot race the first one's creation.
+  // Two jobs from the one analysis, each press opening its own job's link.
   const cards = page.getByRole("listitem").filter({ hasText: slow.masterUrl });
   const press = page.getByRole("button", { name: "Download", exact: true });
   await press.click();
   await expect(cards).toHaveCount(1);
+  // The first link is spent once the server has taken it, which is also when it
+  // takes the slot — so the second press cannot race the first one's opening.
+  await expect(cards.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
   await press.click();
   await expect(cards).toHaveCount(2);
 
   // Newest first: the older job is the one that holds the slot.
   const holder = cards.nth(1);
   const refused = cards.nth(0);
-  const holderLink = holder.getByRole("link", { name: "Download", exact: true });
   const refusedLink = refused.getByRole("link", { name: "Download", exact: true });
-  await expect(holderLink).toBeVisible();
-  await expect(refusedLink).toBeVisible();
-
-  await holderLink.click();
-  // Inside the delayed first segment, so the slot is certainly still held.
-  await page.waitForTimeout(1500);
-  await refusedLink.click();
 
   // --- What the page says ------------------------------------------------
   const alert = refused.getByRole("alert");

@@ -65,21 +65,20 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   await expect(chosen).toBeChecked();
 
   // --- Download ----------------------------------------------------------
-  await page.getByRole("button", { name: "Download", exact: true }).click();
+  // dl-53: creating the job hands out a single-use link, and following it is
+  // what re-probes, runs ffmpeg and streams the file to this browser as it is
+  // produced. The one press does both: no second Download on the card.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download", exact: true }).click(),
+  ]);
 
   const job = page.getByRole("listitem").filter({ hasText: hls.masterUrl }).first();
   await expect(job).toBeVisible();
-
-  // dl-53: creating the job does nothing but hand out a single-use link. The
-  // card offers it; following it is what re-probes, runs ffmpeg and streams the
-  // file to this browser as it is produced.
-  const link = job.getByRole("link", { name: "Download", exact: true });
-  await expect(link).toBeVisible();
-  const href = await link.getAttribute("href");
+  const href = new URL(download.url()).pathname;
   expect(href).toMatch(/^\/api\/files\//u);
 
   // --- The file ----------------------------------------------------------
-  const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
   const saved = await download.path();
   expect(await download.failure()).toBeNull();
   const body = await readFile(saved);
@@ -94,7 +93,7 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
     timeout: 120_000,
   });
   await expect(job.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
-  const again = await request.get(href ?? "");
+  const again = await request.get(href);
   expect(again.status()).toBe(410);
 
   // ffmpeg pulled the segments itself rather than just the playlist — the

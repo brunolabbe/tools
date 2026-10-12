@@ -21,6 +21,7 @@
  * API is holding a browser open while Playwright holds another.
  */
 
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { collectCspViolations, cspViolationsOn } from "../csp-violations.ts";
 import {
@@ -191,29 +192,29 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   // fetches that same one segment again.
   const beforeDownload = hls.requests.length;
 
-  await page.getByRole("button", { name: "Download", exact: true }).click();
+  // dl-53: the job hands out a single-use link, and opening it is what runs the
+  // re-probe and streams the file. The press opens it for the visitor, so the
+  // browser's download is the witness — no second press on the card.
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: PROBE_TIMEOUT_MS }),
+    page.getByRole("button", { name: "Download", exact: true }).click(),
+  ]);
 
   const job = page.getByRole("listitem").filter({ hasText: hls.watchUrl }).first();
   await expect(job).toBeVisible();
 
-  // dl-53: the job hands out a single-use link, and opening it is what runs the
-  // re-probe and streams the file. Opened here by the test's own client, which
-  // stands where the browser's download would.
-  const link = job.getByRole("link", { name: "Download", exact: true });
-  await expect(link).toBeVisible();
-
   // --- The file -----------------------------------------------------------
-  const href = await link.getAttribute("href");
-  expect(href).toMatch(/^\/api\/files\//u);
-
-  const response = await request.get(href ?? "", { timeout: PROBE_TIMEOUT_MS });
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-disposition"]).toContain("attachment");
+  expect(new URL(download.url()).pathname).toMatch(/^\/api\/files\//u);
+  const saved = await download.path();
+  expect(await download.failure()).toBeNull();
+  // Named by the server's `Content-Disposition`, which the link carries as an
+  // attachment: the anchor's `download` attribute has no value of its own.
+  expect(download.suggestedFilename()).toMatch(/\.mp4$/u);
   await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
     timeout: PROBE_TIMEOUT_MS,
   });
 
-  const body = await response.body();
+  const body = await readFile(saved);
   // A real MP4 and not an error page: bytes 4-8 of an MP4 are the `ftyp` box.
   expect(body.subarray(4, 8).toString("latin1")).toBe("ftyp");
   expect(body.byteLength).toBeGreaterThan(10_000);

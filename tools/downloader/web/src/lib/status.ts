@@ -11,7 +11,7 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
 
 /** Why the job is sitting in this state, in one line. */
 export const STATUS_HINT: Record<JobStatus, string> = {
-  queued: "Starts when you open the download link. The link works once.",
+  queued: "Starting your download. If it does not begin, press Download. The link works once.",
   probing: "Fetching fresh stream links — signed URLs expire within minutes.",
   downloading: "Sending the video to your browser as it is fetched. Nothing is kept here.",
   completed: "Your browser has the whole file. The server kept no copy.",

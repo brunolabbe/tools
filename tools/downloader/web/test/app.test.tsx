@@ -34,7 +34,7 @@ import type { ApiClient } from "../src/api/types.ts";
 import type { EventStreamHandlers } from "../src/lib/event-stream.ts";
 import { JOBS_STORAGE_KEY } from "../src/lib/job-store.ts";
 import { PROBE_STAGE_PENDING } from "../src/lib/probe-stages.ts";
-import { NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
+import { LINK, NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -84,6 +84,7 @@ async function mountApp(usingMock: boolean, overrides: Partial<ApiClient> = {}):
     cancelJob: vi.fn(unused("JOB_NOT_FOUND")),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
     openProbeEvents: vi.fn(() => ({ close: vi.fn() })),
+    openLink: vi.fn(),
     // The job-stream cases below need a client that answers; the probe cases
     // need one that rejects loudly on anything they did not mean to reach. The
     // two live in one harness because the module-registry dance above is the
@@ -873,4 +874,77 @@ test("a refusal that arrives after the job has moved on is not shown", async () 
     listeners[0]?.onEvent(REFUSED);
   });
   expect(screen.queryByRole("alert")).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// One press starts the download
+// ---------------------------------------------------------------------------
+
+/** Analyses, answers the probe, and presses the panel's Download. */
+async function pressDownload(fake: Fake): Promise<void> {
+  analyse(SOURCE_URL);
+  await settle();
+  await act(async () => {
+    fake.probes[0]?.resolve({ probe: probe(), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  fireEvent.click(screen.getByRole("button", { name: "Download" }));
+  await settle();
+}
+
+test("the panel's Download opens the created job's link once its stream listens", async () => {
+  // Creating a job only hands out a single-use link (dl-53). The visitor used to
+  // press Download a second time, on the card, before anything happened.
+  const listeners: EventStreamHandlers[] = [];
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+
+  await pressDownload(fake);
+
+  // Not yet: the server keeps no replay log, so a refusal sent before the
+  // stream listens would never reach the card (dl-77).
+  expect(listeners).toHaveLength(1);
+  expect(fake.client.openLink).not.toHaveBeenCalled();
+
+  act(() => listeners[0]?.onOpen());
+  expect(fake.client.openLink).toHaveBeenCalledTimes(1);
+  expect(fake.client.openLink).toHaveBeenCalledWith(LINK.url);
+  // Still offered on the card, for a browser that blocked the automatic one.
+  expect(screen.getByRole("link", { name: "Download" }).getAttribute("href")).toBe(LINK.url);
+
+  // Once: a reconnect is not a second press.
+  act(() => listeners[0]?.onError());
+  expect(fake.client.openLink).toHaveBeenCalledTimes(1);
+});
+
+test("a stream that cannot connect does not hold the download back", async () => {
+  const listeners: EventStreamHandlers[] = [];
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+
+  await pressDownload(fake);
+  act(() => listeners[0]?.onError());
+
+  expect(fake.client.openLink).toHaveBeenCalledWith(LINK.url);
+});
+
+test("a job that could not be created opens nothing", async () => {
+  const fake = await mountApp(false);
+
+  await pressDownload(fake);
+
+  expect(fake.client.createJob).toHaveBeenCalledTimes(1);
+  expect(fake.client.openLink).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toBeDefined();
 });

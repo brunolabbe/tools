@@ -46,6 +46,10 @@ export interface UseJobs {
   refusals: Record<string, AppErrorPayload>;
   /** The visitor followed the link again: whatever it was refused for before is old news. */
   clearRefusal(id: string): void;
+  /**
+   * Creates the job and opens its single-use link, which is what starts the
+   * work (dl-53) — so one press both makes the job and fetches the file.
+   */
   start(url: string, options: JobOptions): Promise<Job>;
   cancel(id: string): Promise<void>;
   remove(id: string): void;
@@ -124,8 +128,9 @@ export function useJobs(api: ApiClient): UseJobs {
   );
 
   const attach = useCallback(
-    (jobId: string) => {
+    (jobId: string, onListening?: () => void) => {
       if (streams.current.has(jobId)) return;
+      let listening = false;
       const stream = createJobStream({
         jobId,
         open: (id, handlers) => api.openJobEvents(id, handlers),
@@ -133,7 +138,16 @@ export function useJobs(api: ApiClient): UseJobs {
         onEvent: (event) => applyEvent(jobId, event),
         onReconciled: mergeJob,
         onReconcileError: (error) => failLocally(jobId, AppError.from(error).toPayload()),
-        onStateChange: (state) => setStreamStates((previous) => ({ ...previous, [jobId]: state })),
+        onStateChange: (state) => {
+          setStreamStates((previous) => ({ ...previous, [jobId]: state }));
+          // `reconnecting` too: a stream that cannot connect must not hold the
+          // download back, it only costs the card the refusal's reason.
+          // `closed` is not, because that is a job removed before it started.
+          if (!listening && (state === "open" || state === "reconnecting")) {
+            listening = true;
+            onListening?.();
+          }
+        },
       });
       streams.current.set(jobId, stream);
       stream.start();
@@ -177,7 +191,12 @@ export function useJobs(api: ApiClient): UseJobs {
     async (url: string, options: JobOptions): Promise<Job> => {
       const { job } = await api.createJob({ url, options });
       setJobs((previous) => sortJobs(upsertJob(previous, job)));
-      attach(job.id);
+      // Not until the job's stream is listening: the server keeps no replay
+      // log, so a link refused before then would lose its reason (dl-77) and
+      // leave the card saying the download is starting. The card keeps
+      // offering the link for a browser that did not let this one through.
+      const { link } = job;
+      attach(job.id, link ? () => api.openLink(link.url) : undefined);
       return job;
     },
     [api, attach],

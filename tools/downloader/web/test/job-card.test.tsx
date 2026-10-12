@@ -253,7 +253,11 @@ test("a finished file of unknown duration is described without a trailing dash",
 
 test("each active status names itself and says why the job is sitting there", () => {
   const cases = [
-    ["queued", "Queued", "Starts when you open the download link. The link works once."],
+    [
+      "queued",
+      "Queued",
+      "Starting your download. If it does not begin, press Download. The link works once.",
+    ],
     ["probing", "Re-analysing", "Fetching fresh stream links — signed URLs expire within minutes."],
     [
       "downloading",
