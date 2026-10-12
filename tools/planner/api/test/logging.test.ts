@@ -134,7 +134,7 @@ describe("what boot writes down about grounding", () => {
     });
 
     const configured = lines.find((line) => line.msg === "agent configured");
-    expect(configured).toMatchObject({ provider: "anthropic", model: "claude-opus-5" });
+    expect(configured).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5-5" });
     // Exactly those two beside pino's own fields, so a later addition — the
     // config object, say — has to come past this test.
     const {
