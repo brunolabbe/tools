@@ -140,3 +140,6 @@ the Log.
   - **Not folded in:** the two `directoryOf` copies (here and in
     `chunk-sniff.ts`) could share one export, but that edits dl-90's merged file
     for a saving of eight lines and a comment; left as two.
+- 2026-10-12, after merge. The gate's low on the two `directoryOf` copies is
+  folded in: one export in `resolvers/src/browser/media-match.ts`, imported by
+  `rank.ts` and `chunk-sniff.ts`, so the two keys cannot drift apart.
