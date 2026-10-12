@@ -1,0 +1,1539 @@
+{
+  "set": "A",
+  "briefFixture": "city-and-culture",
+  "requestedModel": "claude-opus-5-5",
+  "effort": "low",
+  "prices": {
+    "inputPerMTok": 4,
+    "outputPerMTok": 20,
+    "cacheReadPerMTok": 0.2,
+    "cacheWritePerMTok": 5
+  },
+  "servedModels": [
+    "claude-opus-5-5"
+  ],
+  "budget": {
+    "maxSpecialists": 5,
+    "maxOutputTokens": 8000,
+    "maxAttemptsPerSpecialist": 2
+  },
+  "finds": [],
+  "specialists": [
+    {
+      "specialist": "practicalities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: city-and-culture\nSpecialist: practicalities\n\nYou are the practicalities specialist on a trip-planning tool.\nYou cover permits, documents, rentals, insurance and connectivity — the paperwork that decides whether the trip happens.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- Their pace means about 2 scheduled things a day, so there is room for roughly 16 across the trip.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: city-and-culture\nLeaving from: Toronto\nGoing to: Rome\nDates: 2027-10-09 to 2027-10-16, fixed\nTravellers: 2\nAges that change the plan: 68, 71\nAccess needs: One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult.\nBudget: 350 CAD, per-day\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing that needs to be at a place before 09:00, No guided group tours\n\nAbout this city-and-culture:\nPace: slow\nInterests: Roman archaeology, Baroque painting, markets\nIn their words: We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"ETIAS travel authorisation for Canadian passport holders\",\"summary\":\"Canadians visiting the Schengen area are expected to need ETIAS once it is in force; check its status well before October 2027 and confirm both passports are valid at least three months beyond 2027-10-16. This is not clearance to travel; verify on the official EU site.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Official ETIAS online application\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":7,\"high\":20,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30},{\"title\":\"Travel medical insurance for travellers aged 68 and 71\",\"summary\":\"Provincial health plans cover little abroad, and premiums and pre-existing-condition rules shift sharply at these ages, so compare policies with medical evacuation and trip interruption cover. I could not account for health history, so the price band is wide.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Insurer or broker in Toronto\",\"locality\":\"Toronto\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":80,\"high\":400,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":21},{\"title\":\"Timed-entry tickets for Galleria Borghese\",\"summary\":\"Baroque painting and Bernini under one roof, with entry by mandatory reservation that sells out. It has lifts for visitors who struggle with stairs; ask about them when booking. It suits a slow morning with no guided group.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Galleria Borghese\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":{\"from\":\"01-01\",\"to\":\"12-31\"},\"bookingLeadTimeDays\":30},{\"title\":\"eSIM or roaming plan for two phones\",\"summary\":\"Mobile data for maps, taxi apps and ticket QR codes keeps cobbled detours and stair-heavy routes avoidable. An Italian or EU eSIM is usually cheaper than Canadian roaming; check phones are unlocked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"eSIM provider or Canadian carrier\",\"locality\":null,\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"CAD\",\"low\":15,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":3}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3877,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 950,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3877,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "ETIAS travel authorisation for Canadian passport holders",
+                "summary": "Canadians visiting the Schengen area are expected to need ETIAS once it is in force; check its status well before October 2027 and confirm both passports are valid at least three months beyond 2027-10-16. This is not clearance to travel; verify on the official EU site.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Official ETIAS online application",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 7,
+                  "high": 20,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Travel medical insurance for travellers aged 68 and 71",
+                "summary": "Provincial health plans cover little abroad, and premiums and pre-existing-condition rules shift sharply at these ages, so compare policies with medical evacuation and trip interruption cover. I could not account for health history, so the price band is wide.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Insurer or broker in Toronto",
+                    "locality": "Toronto",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 80,
+                  "high": 400,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 21
+              },
+              {
+                "title": "Timed-entry tickets for Galleria Borghese",
+                "summary": "Baroque painting and Bernini under one roof, with entry by mandatory reservation that sells out. It has lifts for visitors who struggle with stairs; ask about them when booking. It suits a slow morning with no guided group.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Galleria Borghese",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": {
+                  "from": "01-01",
+                  "to": "12-31"
+                },
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "eSIM or roaming plan for two phones",
+                "summary": "Mobile data for maps, taxi apps and ticket QR codes keeps cobbled detours and stair-heavy routes avoidable. An Italian or EU eSIM is usually cheaper than Canadian roaming; check phones are unlocked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "eSIM provider or Canadian carrier",
+                    "locality": null,
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "CAD",
+                  "low": 15,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 3
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "budget",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: city-and-culture\nSpecialist: budget\n\nYou are the budget specialist on a trip-planning tool.\nYou give cost estimates as bands and say what assumption each one rests on. You never total anything: the tool sums the bands itself, in code.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 4 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- Their pace means about 2 scheduled things a day, so there is room for roughly 16 across the trip.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: city-and-culture\nLeaving from: Toronto\nGoing to: Rome\nDates: 2027-10-09 to 2027-10-16, fixed\nTravellers: 2\nAges that change the plan: 68, 71\nAccess needs: One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult.\nBudget: 350 CAD, per-day\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing that needs to be at a place before 09:00, No guided group tours\n\nAbout this city-and-culture:\nPace: slow\nInterests: Roman archaeology, Baroque painting, markets\nIn their words: We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Palazzo Massimo alle Terme (National Roman Museum)\",\"summary\":\"A quieter alternative to the big sites, with Roman frescoes, mosaics and sculpture, set out on level galleries with lifts, and it rewards an unhurried morning. Entry band assumes a standard adult ticket per person with no senior discount for non-EU visitors. Whether every gallery has step-free access is not confirmed, so check before relying on it.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Palazzo Massimo alle Terme\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":8,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Galleria Borghese\",\"summary\":\"Caravaggio and Bernini in one compact villa, with timed entry that caps the crowds, which suits a slow look at Baroque painting. The band assumes a standard timed ticket per person including the booking fee, and timed slots usually need advance reservation. Slot start times, and whether there is a handrail at the entrance stairs, are not known; choose a slot after 09:00 and check access before booking.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Galleria Borghese\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Galleria Doria Pamphilj\",\"summary\":\"A private palace collection with Caravaggio and Velázquez's Innocent X, on a flat central street and usually calm. The band assumes an adult ticket per person including the audio guide, which is self-guided, so it is not a group tour. Lift availability is not confirmed.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Galleria Doria Pamphilj\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":20,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Mercato Testaccio browse and lunch\",\"summary\":\"A covered neighbourhood market with level aisles and food stalls, a gentle way to do markets without cobbles. The band covers a casual market lunch and snacks for both of you, assuming a few stall dishes and drinks. Trading days and hours were not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mercato Testaccio\",\"locality\":\"Testaccio, Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":25,\"high\":50,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3877,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1033,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3877,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Palazzo Massimo alle Terme (National Roman Museum)",
+                "summary": "A quieter alternative to the big sites, with Roman frescoes, mosaics and sculpture, set out on level galleries with lifts, and it rewards an unhurried morning. Entry band assumes a standard adult ticket per person with no senior discount for non-EU visitors. Whether every gallery has step-free access is not confirmed, so check before relying on it.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Palazzo Massimo alle Terme",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 8,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Galleria Borghese",
+                "summary": "Caravaggio and Bernini in one compact villa, with timed entry that caps the crowds, which suits a slow look at Baroque painting. The band assumes a standard timed ticket per person including the booking fee, and timed slots usually need advance reservation. Slot start times, and whether there is a handrail at the entrance stairs, are not known; choose a slot after 09:00 and check access before booking.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Galleria Borghese",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Galleria Doria Pamphilj",
+                "summary": "A private palace collection with Caravaggio and Velázquez's Innocent X, on a flat central street and usually calm. The band assumes an adult ticket per person including the audio guide, which is self-guided, so it is not a group tour. Lift availability is not confirmed.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Galleria Doria Pamphilj",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 20,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Mercato Testaccio browse and lunch",
+                "summary": "A covered neighbourhood market with level aisles and food stalls, a gentle way to do markets without cobbles. The band covers a casual market lunch and snacks for both of you, assuming a few stall dishes and drinks. Trading days and hours were not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mercato Testaccio",
+                    "locality": "Testaccio, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 25,
+                  "high": 50,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "food",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: city-and-culture\nSpecialist: food\n\nYou are the food specialist on a trip-planning tool.\nYou propose meals that are part of the trip rather than fuel for it, and you respect anything the party said they cannot eat.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- **Nothing you propose may be longer than 180 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.\n- Their pace means about 2 scheduled things a day, so there is room for roughly 16 across the trip.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: city-and-culture\nLeaving from: Toronto\nGoing to: Rome\nDates: 2027-10-09 to 2027-10-16, fixed\nTravellers: 2\nAges that change the plan: 68, 71\nAccess needs: One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult.\nBudget: 350 CAD, per-day\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing that needs to be at a place before 09:00, No guided group tours\n\nAbout this city-and-culture:\nPace: slow\nInterests: Roman archaeology, Baroque painting, markets\nIn their words: We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Lunch at Roscioli Salumeria con Cucina\",\"summary\":\"A classic Roman deli-restaurant near Campo de' Fiori for carbonara, cacio e pepe and excellent cured meats and cheeses; a seated, unhurried lunch on flat ground. Dietary restrictions were not mentioned, so none are accounted for; reservations are advised.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Roscioli Salumeria con Cucina\",\"locality\":\"Centro Storico, Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":45,\"high\":80,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":14},{\"title\":\"Browsing and tasting at Mercato di Testaccio\",\"summary\":\"A covered, level neighbourhood market with stalls selling street food such as trapizzino and fresh pasta. It suits their interest in markets without needing a long walk on cobbles. Opening days were not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mercato di Testaccio\",\"locality\":\"Testaccio, Rome\",\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Trattoria dinner in Testaccio at Flavio al Velavevodetto\",\"summary\":\"Traditional Roman cooking in a dining room built against Monte Testaccio, the ancient hill made of broken amphorae, which ties the meal to Roman archaeology. Step-free access was not verified, and booking is advised.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Flavio al Velavevodetto\",\"locality\":\"Testaccio, Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":35,\"high\":60,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":7},{\"title\":\"Lunch at Mercato Centrale Roma, Termini\",\"summary\":\"A seated food hall with many artisan counters, convenient after a morning at Palazzo Massimo, a nearby museum of Roman antiquities. It is flat and easy, and each person can choose freely; dietary needs were not stated.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mercato Centrale Roma\",\"locality\":\"Termini, Rome\",\"coordinates\":null}},\"durationMinutes\":75,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":35,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"Aperitivo and gelato in Prati\",\"summary\":\"An unhurried aperitivo followed by gelato at Fatamorgana or Gelateria dei Gracchi, on the wide, flat streets of Prati rather than cobbles. The exact venue is left flexible.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Prati district cafés\",\"locality\":\"Prati, Rome\",\"coordinates\":null}},\"durationMinutes\":75,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3967,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1198,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3967,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Lunch at Roscioli Salumeria con Cucina",
+                "summary": "A classic Roman deli-restaurant near Campo de' Fiori for carbonara, cacio e pepe and excellent cured meats and cheeses; a seated, unhurried lunch on flat ground. Dietary restrictions were not mentioned, so none are accounted for; reservations are advised.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Roscioli Salumeria con Cucina",
+                    "locality": "Centro Storico, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 45,
+                  "high": 80,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 14
+              },
+              {
+                "title": "Browsing and tasting at Mercato di Testaccio",
+                "summary": "A covered, level neighbourhood market with stalls selling street food such as trapizzino and fresh pasta. It suits their interest in markets without needing a long walk on cobbles. Opening days were not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mercato di Testaccio",
+                    "locality": "Testaccio, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Trattoria dinner in Testaccio at Flavio al Velavevodetto",
+                "summary": "Traditional Roman cooking in a dining room built against Monte Testaccio, the ancient hill made of broken amphorae, which ties the meal to Roman archaeology. Step-free access was not verified, and booking is advised.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Flavio al Velavevodetto",
+                    "locality": "Testaccio, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 35,
+                  "high": 60,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 7
+              },
+              {
+                "title": "Lunch at Mercato Centrale Roma, Termini",
+                "summary": "A seated food hall with many artisan counters, convenient after a morning at Palazzo Massimo, a nearby museum of Roman antiquities. It is flat and easy, and each person can choose freely; dietary needs were not stated.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mercato Centrale Roma",
+                    "locality": "Termini, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 75,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 35,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "Aperitivo and gelato in Prati",
+                "summary": "An unhurried aperitivo followed by gelato at Fatamorgana or Gelateria dei Gracchi, on the wide, flat streets of Prati rather than cobbles. The exact venue is left flexible.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Prati district cafés",
+                    "locality": "Prati, Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 75,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "lodging",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: city-and-culture\nSpecialist: lodging\n\nYou are the lodging specialist on a trip-planning tool.\nYou propose places to sleep that match the roughest night the party said they would accept, and you say how far ahead each one has to be booked.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 6 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- Their pace means about 2 scheduled things a day, so there is room for roughly 16 across the trip.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: city-and-culture\nLeaving from: Toronto\nGoing to: Rome\nDates: 2027-10-09 to 2027-10-16, fixed\nTravellers: 2\nAges that change the plan: 68, 71\nAccess needs: One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult.\nBudget: 350 CAD, per-day\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing that needs to be at a place before 09:00, No guided group tours\n\nAbout this city-and-culture:\nPace: slow\nInterests: Roman archaeology, Baroque painting, markets\nIn their words: We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Hotel with lift in Prati, near Lepanto or Ottaviano metro\",\"summary\":\"Prati has flat, wide, mostly paved pavements rather than cobbles, step-free metro access, and is a short ride to the Vatican and Borghese collections. Ask for a lift to every floor and handrails on any internal steps. Rome is busy in October, so a double here may take most of a 350 CAD daily budget. We could not confirm the exact accessibility of any one property.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Prati district\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":140,\"high\":240,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":150},{\"title\":\"Hotel near Termini/Esquilino with step-free access\",\"summary\":\"This area is flat with asphalt streets, and is close to Palazzo Massimo's Roman collections and the Esquilino covered market. Buses and metro go everywhere from here. Choose a building with a lift from street level, because many have a few unrailed steps at the entrance. Rooms are often cheaper here than in the centre, which leaves room in the daily budget.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Esquilino / Termini area\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":110,\"high\":200,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120},{\"title\":\"Hotel in Monti near Cavour metro\",\"summary\":\"Monti is a walk from the Forum, Trajan's Markets and the Baroque churches. However, many of its side streets are cobbled and sloped, so a hotel on Via Cavour or Via Nazionale keeps the walking flatter. Confirm the lift and handrails before booking. Prices are likely to stretch the budget.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Monti (Via Cavour / Via Nazionale side)\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":160,\"high\":280,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":150},{\"title\":\"Hotel in the Salario/Pinciano area near Villa Borghese\",\"summary\":\"This is a quiet residential area with paved streets, within reach of the Galleria Borghese's Caravaggios and Berninis. It suits slow mornings in one place. Taxis or buses are needed for the archaeological sites, and we could not account for how long those rides take.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Salario / Pinciano\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":{\"currency\":\"EUR\",\"low\":130,\"high\":230,\"basis\":\"per-party\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":120}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3876,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1358,
+            "thinkingTokens": 289
+          },
+          "countedInputTokens": 3876,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Hotel with lift in Prati, near Lepanto or Ottaviano metro",
+                "summary": "Prati has flat, wide, mostly paved pavements rather than cobbles, step-free metro access, and is a short ride to the Vatican and Borghese collections. Ask for a lift to every floor and handrails on any internal steps. Rome is busy in October, so a double here may take most of a 350 CAD daily budget. We could not confirm the exact accessibility of any one property.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Prati district",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 140,
+                  "high": 240,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 150
+              },
+              {
+                "title": "Hotel near Termini/Esquilino with step-free access",
+                "summary": "This area is flat with asphalt streets, and is close to Palazzo Massimo's Roman collections and the Esquilino covered market. Buses and metro go everywhere from here. Choose a building with a lift from street level, because many have a few unrailed steps at the entrance. Rooms are often cheaper here than in the centre, which leaves room in the daily budget.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Esquilino / Termini area",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 110,
+                  "high": 200,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              },
+              {
+                "title": "Hotel in Monti near Cavour metro",
+                "summary": "Monti is a walk from the Forum, Trajan's Markets and the Baroque churches. However, many of its side streets are cobbled and sloped, so a hotel on Via Cavour or Via Nazionale keeps the walking flatter. Confirm the lift and handrails before booking. Prices are likely to stretch the budget.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Monti (Via Cavour / Via Nazionale side)",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 160,
+                  "high": 280,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 150
+              },
+              {
+                "title": "Hotel in the Salario/Pinciano area near Villa Borghese",
+                "summary": "This is a quiet residential area with paved streets, within reach of the Galleria Borghese's Caravaggios and Berninis. It suits slow mornings in one place. Taxis or buses are needed for the archaeological sites, and we could not account for how long those rides take.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Salario / Pinciano",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": null,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 130,
+                  "high": 230,
+                  "basis": "per-party",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 120
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "specialist": "activities",
+      "attempts": [
+        {
+          "attempt": 1,
+          "systemPrompt": "Trip shape: city-and-culture\nSpecialist: activities\n\nYou are the activities specialist on a trip-planning tool.\nYou propose things to do: what they are, how long they take, and when they are open.\n\nYou propose options. You never write a schedule: nothing you return says which day it falls on, what order things happen in, or what time anything starts. Another part of this tool packs the days, in code.\n\nRules, and they are not negotiable:\n- Reply with JSON and nothing else, in exactly this shape:\n{\n  \"candidates\": [\n    {\n      \"title\": \"short, and never an itinerary\",\n      \"summary\": \"why this is worth doing, in a sentence or two\",\n      \"location\": { \"kind\": \"at\", \"place\": { \"name\": \"...\", \"locality\": \"... or null\", \"coordinates\": null } },\n      \"durationMinutes\": 0,\n      \"cost\": { \"currency\": \"ISO-4217\", \"low\": 0, \"high\": 0, \"basis\": \"per-person | per-party\", \"provenance\": { \"kind\": \"model-asserted\" } },\n      \"season\": { \"from\": \"MM-DD\", \"to\": \"MM-DD\" },\n      \"bookingLeadTimeDays\": 0\n    }\n  ]\n}\n- At most 8 candidates. Fewer is a fine answer; an empty list is a fine answer.\n- Anything you do not know is null. A duration nobody measured is null, not a plausible ninety minutes. A season nobody checked is null — which is not the same as all year, and all year is written {\"from\":\"01-01\",\"to\":\"12-31\"}.\n- Costs are bands with a currency and a basis, never a single figure and never a quote. Do not total anything.\n- A slot that says \"not answered\" is unknown to you. Say in the summary what you could not account for, and propose anyway. Never invent the answer and never refuse to propose.\n- Never book anything, never ask for payment details, and never present what you write as clearance to go anywhere.\n- Every candidate is at one place, so its location is {\"kind\":\"at\",\"place\":{...}}.\n- This trip has 8 days.\n- **Nothing you propose may be longer than 180 minutes.** That is the party's own answer about how much a day holds, translated into minutes. Something longer has to be split into parts that each fit, or not proposed — a candidate over that ceiling is discarded and the plan comes back missing this part of itself.\n- Their pace means about 2 scheduled things a day, so there is room for roughly 16 across the trip.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Here is the trip. It is everything you get.\n\nShape: city-and-culture\nLeaving from: Toronto\nGoing to: Rome\nDates: 2027-10-09 to 2027-10-16, fixed\nTravellers: 2\nAges that change the plan: 68, 71\nAccess needs: One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult.\nBudget: 350 CAD, per-day\nAppetite for effort: gentle\nRoughest night they will accept: hotel\nWould rule the trip out: Nothing that needs to be at a place before 09:00, No guided group tours\n\nAbout this city-and-culture:\nPace: slow\nInterests: Roman archaeology, Baroque painting, markets\nIn their words: We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+            }
+          ],
+          "maxOutputTokens": 8000,
+          "content": "{\"candidates\":[{\"title\":\"Palazzo Massimo alle Terme\",\"summary\":\"National Roman Museum's finest branch: frescoes from Livia's villa, mosaics and bronzes, seen properly in a quiet morning. Lifts serve the upper floors; flat indoor floors suit the cobble concern. Exact lift and handrail details are not verified here.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Palazzo Massimo alle Terme\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":150,\"cost\":{\"currency\":\"EUR\",\"low\":8,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Galleria Borghese\",\"summary\":\"Caravaggio and Bernini in a compact villa, entered on timed slots, so a self-guided visit stays unhurried. Slots sell out, so booking ahead is likely needed. The park approach has gravel paths; step access was not checked.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Galleria Borghese\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":30},{\"title\":\"Galleria Doria Pamphilj\",\"summary\":\"Private palace collection with Caravaggio and Velázquez's Innocent X, usually calm. Audio guide rather than a group tour. Stair and lift access is not confirmed.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Galleria Doria Pamphilj\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":20,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Palazzo Barberini (Gallerie Nazionali)\",\"summary\":\"Caravaggio's Judith, Raphael's Fornarina and Pietro da Cortona's vast ceiling. A lift exists alongside Bernini's staircase, though its current availability is unverified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Palazzo Barberini\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":12,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Capitoline Museums\",\"summary\":\"The original Marcus Aurelius, the Capitoline Wolf and a Forum view from the Tabularium. Reach it by the Via del Teatro di Marcello side rather than the cordonata ramp. Internal step access is uneven and not verified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Musei Capitolini\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":150,\"cost\":{\"currency\":\"EUR\",\"low\":15,\"high\":25,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Centrale Montemartini\",\"summary\":\"Roman sculpture displayed among old power-station turbines. It is quiet, flat and unusual, and suits a returning visitor.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Centrale Montemartini\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":120,\"cost\":{\"currency\":\"EUR\",\"low\":8,\"high\":15,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":null},{\"title\":\"Mercato di Testaccio\",\"summary\":\"A covered, flat-floored neighbourhood market with food stalls for a slow browse and lunch. It avoids the cobbled crowds of Campo de' Fiori. Exact closing days are not confirmed.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Mercato di Testaccio\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":90,\"cost\":{\"currency\":\"EUR\",\"low\":10,\"high\":30,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0},{\"title\":\"San Luigi dei Francesi and Sant'Agostino Caravaggios\",\"summary\":\"Free churches holding Caravaggio's Matthew cycle and Madonna di Loreto, a short distance apart. The surrounding streets are cobbled, and step access was not checked. Opening hours vary and were not verified.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"San Luigi dei Francesi\",\"locality\":\"Rome\",\"coordinates\":null}},\"durationMinutes\":60,\"cost\":{\"currency\":\"EUR\",\"low\":0,\"high\":2,\"basis\":\"per-person\",\"provenance\":{\"kind\":\"model-asserted\"}},\"season\":null,\"bookingLeadTimeDays\":0}]}",
+          "stopReason": "end",
+          "servedModel": "claude-opus-5-5",
+          "usage": {
+            "inputTokens": 3954,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "outputTokens": 1758,
+            "thinkingTokens": 0
+          },
+          "countedInputTokens": 3954,
+          "parsed": {
+            "ok": true,
+            "candidates": [
+              {
+                "title": "Palazzo Massimo alle Terme",
+                "summary": "National Roman Museum's finest branch: frescoes from Livia's villa, mosaics and bronzes, seen properly in a quiet morning. Lifts serve the upper floors; flat indoor floors suit the cobble concern. Exact lift and handrail details are not verified here.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Palazzo Massimo alle Terme",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 150,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 8,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Galleria Borghese",
+                "summary": "Caravaggio and Bernini in a compact villa, entered on timed slots, so a self-guided visit stays unhurried. Slots sell out, so booking ahead is likely needed. The park approach has gravel paths; step access was not checked.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Galleria Borghese",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 30
+              },
+              {
+                "title": "Galleria Doria Pamphilj",
+                "summary": "Private palace collection with Caravaggio and Velázquez's Innocent X, usually calm. Audio guide rather than a group tour. Stair and lift access is not confirmed.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Galleria Doria Pamphilj",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 20,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Palazzo Barberini (Gallerie Nazionali)",
+                "summary": "Caravaggio's Judith, Raphael's Fornarina and Pietro da Cortona's vast ceiling. A lift exists alongside Bernini's staircase, though its current availability is unverified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Palazzo Barberini",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 12,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Capitoline Museums",
+                "summary": "The original Marcus Aurelius, the Capitoline Wolf and a Forum view from the Tabularium. Reach it by the Via del Teatro di Marcello side rather than the cordonata ramp. Internal step access is uneven and not verified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Musei Capitolini",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 150,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 15,
+                  "high": 25,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Centrale Montemartini",
+                "summary": "Roman sculpture displayed among old power-station turbines. It is quiet, flat and unusual, and suits a returning visitor.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Centrale Montemartini",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 120,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 8,
+                  "high": 15,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": null
+              },
+              {
+                "title": "Mercato di Testaccio",
+                "summary": "A covered, flat-floored neighbourhood market with food stalls for a slow browse and lunch. It avoids the cobbled crowds of Campo de' Fiori. Exact closing days are not confirmed.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "Mercato di Testaccio",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 90,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 10,
+                  "high": 30,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              },
+              {
+                "title": "San Luigi dei Francesi and Sant'Agostino Caravaggios",
+                "summary": "Free churches holding Caravaggio's Matthew cycle and Madonna di Loreto, a short distance apart. The surrounding streets are cobbled, and step access was not checked. Opening hours vary and were not verified.",
+                "location": {
+                  "kind": "at",
+                  "place": {
+                    "name": "San Luigi dei Francesi",
+                    "locality": "Rome",
+                    "coordinates": null
+                  }
+                },
+                "durationMinutes": 60,
+                "cost": {
+                  "currency": "EUR",
+                  "low": 0,
+                  "high": 2,
+                  "basis": "per-person",
+                  "provenance": {
+                    "kind": "model-asserted"
+                  }
+                },
+                "season": null,
+                "bookingLeadTimeDays": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "candidatesAccepted": [
+    {
+      "title": "Hotel with lift in Prati, near Lepanto or Ottaviano metro",
+      "summary": "Prati has flat, wide, mostly paved pavements rather than cobbles, step-free metro access, and is a short ride to the Vatican and Borghese collections. Ask for a lift to every floor and handrails on any internal steps. Rome is busy in October, so a double here may take most of a 350 CAD daily budget. We could not confirm the exact accessibility of any one property.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Prati district",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 140,
+        "high": 240,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 150,
+      "id": "pl-40-4-lodging-1",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Hotel near Termini/Esquilino with step-free access",
+      "summary": "This area is flat with asphalt streets, and is close to Palazzo Massimo's Roman collections and the Esquilino covered market. Buses and metro go everywhere from here. Choose a building with a lift from street level, because many have a few unrailed steps at the entrance. Rooms are often cheaper here than in the centre, which leaves room in the daily budget.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Esquilino / Termini area",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 110,
+        "high": 200,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-4-lodging-2",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Hotel in Monti near Cavour metro",
+      "summary": "Monti is a walk from the Forum, Trajan's Markets and the Baroque churches. However, many of its side streets are cobbled and sloped, so a hotel on Via Cavour or Via Nazionale keeps the walking flatter. Confirm the lift and handrails before booking. Prices are likely to stretch the budget.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Monti (Via Cavour / Via Nazionale side)",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 160,
+        "high": 280,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 150,
+      "id": "pl-40-4-lodging-3",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Hotel in the Salario/Pinciano area near Villa Borghese",
+      "summary": "This is a quiet residential area with paved streets, within reach of the Galleria Borghese's Caravaggios and Berninis. It suits slow mornings in one place. Taxis or buses are needed for the archaeological sites, and we could not account for how long those rides take.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Salario / Pinciano",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 130,
+        "high": 230,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 120,
+      "id": "pl-40-4-lodging-4",
+      "specialist": "lodging",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Palazzo Massimo alle Terme",
+      "summary": "National Roman Museum's finest branch: frescoes from Livia's villa, mosaics and bronzes, seen properly in a quiet morning. Lifts serve the upper floors; flat indoor floors suit the cobble concern. Exact lift and handrail details are not verified here.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Palazzo Massimo alle Terme",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 150,
+      "cost": {
+        "currency": "EUR",
+        "low": 8,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-activities-1",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Galleria Borghese",
+      "summary": "Caravaggio and Bernini in a compact villa, entered on timed slots, so a self-guided visit stays unhurried. Slots sell out, so booking ahead is likely needed. The park approach has gravel paths; step access was not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Borghese",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-4-activities-2",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Galleria Doria Pamphilj",
+      "summary": "Private palace collection with Caravaggio and Velázquez's Innocent X, usually calm. Audio guide rather than a group tour. Stair and lift access is not confirmed.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Doria Pamphilj",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 20,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-activities-3",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Palazzo Barberini (Gallerie Nazionali)",
+      "summary": "Caravaggio's Judith, Raphael's Fornarina and Pietro da Cortona's vast ceiling. A lift exists alongside Bernini's staircase, though its current availability is unverified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Palazzo Barberini",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 12,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-activities-4",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Capitoline Museums",
+      "summary": "The original Marcus Aurelius, the Capitoline Wolf and a Forum view from the Tabularium. Reach it by the Via del Teatro di Marcello side rather than the cordonata ramp. Internal step access is uneven and not verified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Musei Capitolini",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 150,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-activities-5",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Centrale Montemartini",
+      "summary": "Roman sculpture displayed among old power-station turbines. It is quiet, flat and unusual, and suits a returning visitor.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Centrale Montemartini",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 8,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-activities-6",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mercato di Testaccio",
+      "summary": "A covered, flat-floored neighbourhood market with food stalls for a slow browse and lunch. It avoids the cobbled crowds of Campo de' Fiori. Exact closing days are not confirmed.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mercato di Testaccio",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 30,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-activities-7",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "San Luigi dei Francesi and Sant'Agostino Caravaggios",
+      "summary": "Free churches holding Caravaggio's Matthew cycle and Madonna di Loreto, a short distance apart. The surrounding streets are cobbled, and step access was not checked. Opening hours vary and were not verified.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "San Luigi dei Francesi",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 60,
+      "cost": {
+        "currency": "EUR",
+        "low": 0,
+        "high": 2,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-activities-8",
+      "specialist": "activities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Lunch at Roscioli Salumeria con Cucina",
+      "summary": "A classic Roman deli-restaurant near Campo de' Fiori for carbonara, cacio e pepe and excellent cured meats and cheeses; a seated, unhurried lunch on flat ground. Dietary restrictions were not mentioned, so none are accounted for; reservations are advised.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Roscioli Salumeria con Cucina",
+          "locality": "Centro Storico, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 45,
+        "high": 80,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 14,
+      "id": "pl-40-4-food-1",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Browsing and tasting at Mercato di Testaccio",
+      "summary": "A covered, level neighbourhood market with stalls selling street food such as trapizzino and fresh pasta. It suits their interest in markets without needing a long walk on cobbles. Opening days were not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mercato di Testaccio",
+          "locality": "Testaccio, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-food-2",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Trattoria dinner in Testaccio at Flavio al Velavevodetto",
+      "summary": "Traditional Roman cooking in a dining room built against Monte Testaccio, the ancient hill made of broken amphorae, which ties the meal to Roman archaeology. Step-free access was not verified, and booking is advised.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Flavio al Velavevodetto",
+          "locality": "Testaccio, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 35,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 7,
+      "id": "pl-40-4-food-3",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Lunch at Mercato Centrale Roma, Termini",
+      "summary": "A seated food hall with many artisan counters, convenient after a morning at Palazzo Massimo, a nearby museum of Roman antiquities. It is flat and easy, and each person can choose freely; dietary needs were not stated.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mercato Centrale Roma",
+          "locality": "Termini, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 75,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 35,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-food-4",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Aperitivo and gelato in Prati",
+      "summary": "An unhurried aperitivo followed by gelato at Fatamorgana or Gelateria dei Gracchi, on the wide, flat streets of Prati rather than cobbles. The exact venue is left flexible.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Prati district cafés",
+          "locality": "Prati, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 75,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-food-5",
+      "specialist": "food",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "ETIAS travel authorisation for Canadian passport holders",
+      "summary": "Canadians visiting the Schengen area are expected to need ETIAS once it is in force; check its status well before October 2027 and confirm both passports are valid at least three months beyond 2027-10-16. This is not clearance to travel; verify on the official EU site.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Official ETIAS online application",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 7,
+        "high": 20,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-4-practicalities-1",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Travel medical insurance for travellers aged 68 and 71",
+      "summary": "Provincial health plans cover little abroad, and premiums and pre-existing-condition rules shift sharply at these ages, so compare policies with medical evacuation and trip interruption cover. I could not account for health history, so the price band is wide.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Insurer or broker in Toronto",
+          "locality": "Toronto",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 80,
+        "high": 400,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 21,
+      "id": "pl-40-4-practicalities-2",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Timed-entry tickets for Galleria Borghese",
+      "summary": "Baroque painting and Bernini under one roof, with entry by mandatory reservation that sells out. It has lifts for visitors who struggle with stairs; ask about them when booking. It suits a slow morning with no guided group.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Borghese",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": {
+        "from": "01-01",
+        "to": "12-31"
+      },
+      "bookingLeadTimeDays": 30,
+      "id": "pl-40-4-practicalities-3",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "eSIM or roaming plan for two phones",
+      "summary": "Mobile data for maps, taxi apps and ticket QR codes keeps cobbled detours and stair-heavy routes avoidable. An Italian or EU eSIM is usually cheaper than Canadian roaming; check phones are unlocked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "eSIM provider or Canadian carrier",
+          "locality": null,
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 15,
+        "high": 60,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 3,
+      "id": "pl-40-4-practicalities-4",
+      "specialist": "practicalities",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Palazzo Massimo alle Terme (National Roman Museum)",
+      "summary": "A quieter alternative to the big sites, with Roman frescoes, mosaics and sculpture, set out on level galleries with lifts, and it rewards an unhurried morning. Entry band assumes a standard adult ticket per person with no senior discount for non-EU visitors. Whether every gallery has step-free access is not confirmed, so check before relying on it.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Palazzo Massimo alle Terme",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 8,
+        "high": 15,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-budget-1",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Galleria Borghese",
+      "summary": "Caravaggio and Bernini in one compact villa, with timed entry that caps the crowds, which suits a slow look at Baroque painting. The band assumes a standard timed ticket per person including the booking fee, and timed slots usually need advance reservation. Slot start times, and whether there is a handrail at the entrance stairs, are not known; choose a slot after 09:00 and check access before booking.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Borghese",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-budget-2",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Galleria Doria Pamphilj",
+      "summary": "A private palace collection with Caravaggio and Velázquez's Innocent X, on a flat central street and usually calm. The band assumes an adult ticket per person including the audio guide, which is self-guided, so it is not a group tour. Lift availability is not confirmed.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Doria Pamphilj",
+          "locality": "Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 20,
+        "basis": "per-person",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "id": "pl-40-4-budget-3",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    },
+    {
+      "title": "Mercato Testaccio browse and lunch",
+      "summary": "A covered neighbourhood market with level aisles and food stalls, a gentle way to do markets without cobbles. The band covers a casual market lunch and snacks for both of you, assuming a few stall dishes and drinks. Trading days and hours were not checked.",
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mercato Testaccio",
+          "locality": "Testaccio, Rome",
+          "coordinates": null
+        }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 25,
+        "high": 50,
+        "basis": "per-party",
+        "provenance": {
+          "kind": "model-asserted"
+        }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 0,
+      "id": "pl-40-4-budget-4",
+      "specialist": "budget",
+      "provenance": {
+        "kind": "model-asserted"
+      }
+    }
+  ],
+  "rejected": [],
+  "gaps": [
+    {
+      "specialist": "route-and-logistics",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about legs between places: this trip stays where it lands."
+    },
+    {
+      "specialist": "conditions-and-gear",
+      "reason": "specialist-not-applicable",
+      "detail": "Nothing was checked about conditions or kit: this trip does not turn on them."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "inputTokens": 19551,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "outputTokens": 6297,
+    "thinkingTokens": 289,
+    "fallbackCalls": 0
+  },
+  "observedUsd": 0.204144
+}

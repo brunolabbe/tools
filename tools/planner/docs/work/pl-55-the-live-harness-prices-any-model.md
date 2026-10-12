@@ -126,7 +126,9 @@ with `--max-usd 10`, each with its own rates and its own `--out`. **Read the
 rates from Anthropic's pricing page on the day.** On 2026-10-12 the cached model
 table read, per MTok in and out: $0.10 / $0.50 for Haiku 5.5 (on prompts up to
 100K tokens; this harness's largest is about 10.7k), $2 / $10 for Sonnet 5.5, and
-$4 / $20 for Opus 5.5, with cache reads at $0.20 for the latter two. No ticket
+$4 / $20 for Opus 5.5, with cache reads at $0.20 for the latter two. (The
+pricing page itself said $0.10 for Sonnet 5.5's cache reads that same day, and
+pl-40's run used it — the cached table was wrong, which is the point.) No ticket
 should be the source of a rate.
 
 ## Done when
