@@ -36,8 +36,10 @@
  * honest answer to "nobody said"), so every dollar figure this run produces is
  * zero and every `count_tokens` call is skipped — that branch only exists for
  * `MODEL_PROVIDER=anthropic`, and nothing here has a key to exercise it with.
- * The owner's run against `claude-opus-5` is what turns these numbers real;
- * see the ticket's Log for what is proved by which run.
+ * The owner's runs are what turn these numbers real: each measures whatever
+ * model `MODEL` names at the effort `MODEL_EFFORT` names, priced at the rates
+ * the four `MODEL_PRICE_*` variables give (pl-55), and every record says all
+ * three. See pl-40's Log for what is proved by which run.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -69,8 +71,8 @@ import { isAnswered, TRIP_SHAPES } from "@planner/contract";
 import type { Candidate, PlanGap, Specialist, TripBrief, TripShape } from "@planner/contract";
 import { dayCapacity, tripSpan } from "@planner/itinerary";
 import { loadFixture } from "../../../contract/test/fixtures.ts";
-import type { ApiConfig } from "../../src/config.ts";
-import { loadApiConfig } from "../../src/config.ts";
+import type { ApiConfig, ModelPrices } from "../../src/config.ts";
+import { loadApiConfig, MODEL_PRICE_VARIABLES } from "../../src/config.ts";
 import type { AppLogger } from "../../src/logger.ts";
 import { createLogger } from "../../src/logger.ts";
 import { createModelProvider } from "../../src/server.ts";
@@ -105,24 +107,43 @@ export function assertLiveRunConsent(env: NodeJS.ProcessEnv): void {
 // The session spend stop
 // ---------------------------------------------------------------------------
 
+/** `ModelPrices` with every rate settled — what the spend stop and every record are priced at. */
+export type LivePrices = { [K in keyof ModelPrices]: number };
+
 /**
- * Dollar rates this script prices its *own* spend-stop and Log table with.
+ * The rates this run prices its spend stop and its records with, read from the
+ * same four `MODEL_PRICE_*` variables the deployed cost report reads (pl-49) —
+ * never from a table in code, because a rate changes and differs by model, and
+ * a table keyed by model id would be stale the day one did (pl-55).
  *
- * **Deliberately separate from `ApiConfig.modelPrices`.** Those are operator
- * settings for the deployed cost report (pl-49) and are `undefined` unless an
- * operator sets four environment variables — this harness must price its own
- * safety margin whether or not that operator has. These are Opus 5's public
- * rates, the same ones pl-39's and pl-40's filing used: $5 / MTok input, $25 /
- * MTok output. Cache read and write are pl-39's own Traps-section estimate —
- * "about a tenth of the input rate" and "about a quarter more" — used only for
- * the informational with/without-cache split the Traps section asks for.
+ * Under `anthropic` an unset rate refuses the run, naming every unset
+ * variable: a spend stop with no rate is no stop at all, so `main()` calls this
+ * before a provider exists. Under any other provider an unset rate prices as
+ * 0 — the scripted provider reports `null` usage, so every dollar figure is 0
+ * whatever the rate, and a keyless scripted run must work with nothing set.
  */
-const OPUS_5_PRICES = {
-  inputPerMTok: 5,
-  outputPerMTok: 25,
-  cacheReadPerMTok: 0.5,
-  cacheWritePerMTok: 6.25,
-};
+export function livePricesFor(
+  config: Pick<ApiConfig, "modelProvider" | "modelPrices">,
+): LivePrices {
+  const kinds = Object.keys(MODEL_PRICE_VARIABLES) as (keyof ModelPrices)[];
+  if (config.modelProvider === "anthropic") {
+    const unset = kinds.filter((kind) => config.modelPrices[kind] === undefined);
+    if (unset.length > 0) {
+      throw new Error(
+        `Refusing: ${unset.map((kind) => MODEL_PRICE_VARIABLES[kind]).join(", ")} ` +
+          `${unset.length === 1 ? "is" : "are"} unset. A paid run prices its spend stop from ` +
+          "all four MODEL_PRICE_* variables — read the rates for MODEL from the provider's " +
+          "pricing page and set them.",
+      );
+    }
+  }
+  return {
+    inputPerMTok: config.modelPrices.inputPerMTok ?? 0,
+    outputPerMTok: config.modelPrices.outputPerMTok ?? 0,
+    cacheReadPerMTok: config.modelPrices.cacheReadPerMTok ?? 0,
+    cacheWritePerMTok: config.modelPrices.cacheWritePerMTok ?? 0,
+  };
+}
 
 /**
  * A conservative per-call input estimate, before this session has measured
@@ -155,7 +176,11 @@ const FALLBACK_WORST_INPUT_TOKENS: Record<LiveSet, number> = {
  * scripted provider and this arithmetic is the only part of the spend stop
  * this build can prove.
  */
-export function runCeilingUsd(budget: RunBudget, worstInputTokensPerCall: number): number {
+export function runCeilingUsd(
+  budget: RunBudget,
+  worstInputTokensPerCall: number,
+  prices: LivePrices,
+): number {
   const outputCeilingTokens =
     budget.maxSpecialists * budget.maxAttemptsPerSpecialist * budget.maxOutputTokens;
   const perSpecialistInputCeiling =
@@ -165,23 +190,22 @@ export function runCeilingUsd(budget: RunBudget, worstInputTokensPerCall: number
   const inputCeilingTokens = budget.maxSpecialists * perSpecialistInputCeiling;
 
   return (
-    (outputCeilingTokens * OPUS_5_PRICES.outputPerMTok +
-      inputCeilingTokens * OPUS_5_PRICES.inputPerMTok) /
+    (outputCeilingTokens * prices.outputPerMTok + inputCeilingTokens * prices.inputPerMTok) /
     1_000_000
   );
 }
 
-/** What a run actually billed, at the rates above — `null` usage prices as 0, never as unknown. */
-export function observedUsd(usage: RunUsage): number {
+/** What a run actually billed, at the rates given — `null` usage prices as 0, never as unknown. */
+export function observedUsd(usage: RunUsage, prices: LivePrices): number {
   const input = usage.inputTokens ?? 0;
   const output = usage.outputTokens ?? 0;
   const cacheRead = usage.cacheReadTokens ?? 0;
   const cacheWrite = usage.cacheWriteTokens ?? 0;
   return (
-    (input * OPUS_5_PRICES.inputPerMTok +
-      output * OPUS_5_PRICES.outputPerMTok +
-      cacheRead * OPUS_5_PRICES.cacheReadPerMTok +
-      cacheWrite * OPUS_5_PRICES.cacheWritePerMTok) /
+    (input * prices.inputPerMTok +
+      output * prices.outputPerMTok +
+      cacheRead * prices.cacheReadPerMTok +
+      cacheWrite * prices.cacheWritePerMTok) /
     1_000_000
   );
 }
@@ -210,16 +234,19 @@ export function observedUsd(usage: RunUsage): number {
 class SessionSpendStop {
   #spentUsd = 0;
   readonly #maxUsd: number;
+  readonly #prices: LivePrices;
   readonly #worstInputBySet: Record<LiveSet, number>;
 
-  constructor(maxUsd: number) {
+  /** `prices` are `livePricesFor`'s — the rates of whatever model `MODEL` names, never a constant. */
+  constructor(maxUsd: number, prices: LivePrices) {
     this.#maxUsd = maxUsd;
+    this.#prices = prices;
     this.#worstInputBySet = { ...FALLBACK_WORST_INPUT_TOKENS };
   }
 
   /** Throws rather than starting a run whose ceiling would take the session past `--max-usd`. */
   assertRoomFor(set: LiveSet, budget: RunBudget): void {
-    const ceiling = runCeilingUsd(budget, this.#worstInputBySet[set]);
+    const ceiling = runCeilingUsd(budget, this.#worstInputBySet[set], this.#prices);
     if (this.#spentUsd + ceiling > this.#maxUsd) {
       throw new Error(
         `session spend stop: set ${set}'s next run could bill up to $${ceiling.toFixed(2)}, ` +
@@ -231,7 +258,7 @@ class SessionSpendStop {
 
   /** Records what a finished run billed, and refines the next ceiling from what was actually seen. */
   record(set: LiveSet, usage: RunUsage, attempt1Inputs: readonly number[]): void {
-    this.#spentUsd += observedUsd(usage);
+    this.#spentUsd += observedUsd(usage, this.#prices);
     const worstSeen = attempt1Inputs.reduce((max, value) => Math.max(max, value), 0);
     if (worstSeen > 0) {
       this.#worstInputBySet[set] = Math.max(this.#worstInputBySet[set], worstSeen);
@@ -463,6 +490,10 @@ interface LiveRunRecord {
   set: LiveSet;
   briefFixture: TripShape;
   requestedModel: string;
+  /** `MODEL_EFFORT` — so two runs at different efforts never read the same. */
+  effort: ApiConfig["modelEffort"];
+  /** The rates `observedUsd` was priced at, so a record states its own assumptions months later. */
+  prices: LivePrices;
   servedModels: string[];
   budget: RunBudget;
   finds: SerializedFind[];
@@ -563,6 +594,7 @@ interface RunOneInput {
   capacity: TripCapacity;
   provider: ModelProvider;
   config: ApiConfig;
+  prices: LivePrices;
   tokenClient: Anthropic | null;
   budget: RunBudget;
   finds?: readonly Find[] | undefined;
@@ -602,6 +634,8 @@ async function runOne(input: RunOneInput): Promise<LiveRunRecord> {
     set: input.set,
     briefFixture: input.briefFixture,
     requestedModel: input.provider.model,
+    effort: input.config.modelEffort,
+    prices: input.prices,
     servedModels: [...servedModels],
     budget: input.budget,
     finds: serializeFinds(input.finds ?? []),
@@ -613,7 +647,7 @@ async function runOne(input: RunOneInput): Promise<LiveRunRecord> {
     rejected: result.rejected,
     gaps: result.gaps,
     usage: result.usage,
-    observedUsd: observedUsd(result.usage),
+    observedUsd: observedUsd(result.usage, input.prices),
   };
 }
 
@@ -648,6 +682,11 @@ export interface Cli {
 
 const RECOGNIZED_FLAGS = new Set(["--out", "--max-usd"]);
 
+const USAGE =
+  "Usage: node --import tsx tools/planner/api/test/live/run.ts --out <dir> [--max-usd <n>]\n" +
+  `Under MODEL_PROVIDER=anthropic, set ${Object.values(MODEL_PRICE_VARIABLES).join(", ")} ` +
+  "to the rates of the model MODEL names: the spend stop and every record are priced from them.";
+
 /**
  * Parses `--out <dir>` and `--max-usd <n>`, `--flag=value` accepted too.
  *
@@ -673,10 +712,7 @@ export function parseCli(argv: readonly string[]): Cli {
     const name = equals === -1 ? token : token.slice(0, equals);
 
     if (!RECOGNIZED_FLAGS.has(name)) {
-      throw new Error(
-        `Unrecognized argument: ${token}\n` +
-          "Usage: node --import tsx tools/planner/api/test/live/run.ts --out <dir> [--max-usd <n>]",
-      );
+      throw new Error(`Unrecognized argument: ${token}\n${USAGE}`);
     }
 
     let value: string;
@@ -704,7 +740,7 @@ export function parseCli(argv: readonly string[]): Cli {
 
   if (outDir === undefined) {
     throw new Error(
-      "Usage: node --import tsx tools/planner/api/test/live/run.ts --out <dir> [--max-usd <n>]\n" +
+      `${USAGE}\n` +
         "No default output directory on purpose: a scratch run and the checked-in " +
         "tools/planner/api/test/fixtures/live/ must never be reachable by the same accident.",
     );
@@ -731,9 +767,11 @@ async function main(): Promise<void> {
   const { outDir, maxUsd } = parseCli(process.argv.slice(2));
 
   const config = loadApiConfig();
+  // Before a provider exists: a paid run with an unset rate has no spend stop.
+  const prices = livePricesFor(config);
   const logger = createLogger({ level: "warn" });
   const tokenClient = countTokensClient(config);
-  const spend = new SessionSpendStop(maxUsd);
+  const spend = new SessionSpendStop(maxUsd, prices);
 
   // Built through the same factory `api` boots with (`createModelProvider`),
   // not a hand-constructed client — a hand-built one would prove a
@@ -741,7 +779,10 @@ async function main(): Promise<void> {
   // key, the same way the deployed service does.
   const provider = createModelProvider(config, logger);
 
-  console.log(`pl-40 live harness: provider=${provider.name} model=${provider.model}`);
+  console.log(
+    `pl-40 live harness: provider=${provider.name} model=${provider.model} ` +
+      `effort=${config.modelEffort} prices=${JSON.stringify(prices)}`,
+  );
   console.log(`writing records to ${path.resolve(outDir)}`);
 
   let runCounter = 0;
@@ -764,6 +805,7 @@ async function main(): Promise<void> {
       capacity,
       provider,
       config,
+      prices,
       tokenClient,
       budget,
       runId: nextRunId(),
@@ -794,6 +836,7 @@ async function main(): Promise<void> {
       capacity: capacityB,
       provider,
       config,
+      prices,
       tokenClient,
       budget: budgetB,
       finds: findsB,
@@ -824,6 +867,7 @@ async function main(): Promise<void> {
       capacity: capacityB,
       provider,
       config,
+      prices,
       tokenClient,
       budget: budgetB,
       finds: findsC,
@@ -845,6 +889,7 @@ async function main(): Promise<void> {
     capacity: capacityB,
     provider,
     config: configD,
+    prices,
     tokenClient,
     budget: budgetD,
     finds: findsB,
