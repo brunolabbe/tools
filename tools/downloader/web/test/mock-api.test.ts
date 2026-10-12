@@ -520,15 +520,15 @@ describe("the nowebm scenario refuses WebM and nothing else (dl-99)", () => {
   });
 });
 
-describe("the throttled scenario reports a split (dl-108)", () => {
-  function counts(events: readonly JobEvent[]): (number | null)[] {
-    return events.flatMap((event) =>
-      event.type === "progress" && event.progress.stage === "downloading"
-        ? [event.progress.originConnections]
-        : [],
-    );
-  }
+function counts(events: readonly JobEvent[]): (number | null)[] {
+  return events.flatMap((event) =>
+    event.type === "progress" && event.progress.stage === "downloading"
+      ? [event.progress.originConnections]
+      : [],
+  );
+}
 
+describe("the throttled scenario reports a split (dl-108)", () => {
   test("one connection, then four; the default scenario never claims a count", async () => {
     const throttled = counts((await run(scenarioUrl("throttled"))).events);
     expect(throttled[0]).toBe(1);
