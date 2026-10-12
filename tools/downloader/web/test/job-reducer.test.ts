@@ -7,6 +7,7 @@ import {
   refusalAfter,
   upsertJob,
 } from "../src/lib/job-reducer.ts";
+import { variant } from "./fixtures.ts";
 
 const T0 = "2026-08-05T10:00:00.000Z";
 const T1 = "2026-08-05T10:00:01.000Z";
@@ -234,6 +235,57 @@ describe("reconcileJob", () => {
   test("accepts the remote when there is no local copy", () => {
     const remote = job({ id: "job-2" });
     expect(reconcileJob(undefined, remote)).toBe(remote);
+  });
+
+  describe("a finished job the server has cleared (dl-107)", () => {
+    const chosen = variant();
+    const finished = { sizeBytes: 10, container: "mp4", durationSec: 3 };
+    const local = job({
+      status: "completed",
+      updatedAt: T1,
+      variant: chosen,
+      result: { ...finished, filename: "Sample.mp4" },
+    });
+    const cleared = job({
+      status: "completed",
+      updatedAt: T2,
+      sourceUrl: "",
+      variant: null,
+      result: { ...finished, filename: "" },
+    });
+
+    test("keeps the page address, the variant and the filename the browser already holds", () => {
+      const next = reconcileJob(local, cleared);
+      expect(next.sourceUrl).toBe(local.sourceUrl);
+      expect(next.variant).toEqual(chosen);
+      expect(next.result?.filename).toBe("Sample.mp4");
+      // The server still wins everything it did not blank.
+      expect(next.updatedAt).toBe(T2);
+      expect(next.result?.sizeBytes).toBe(10);
+    });
+
+    test("from what a restore actually holds: a card saved mid-download keeps its page and variant, and has no filename to keep", () => {
+      // The state `useJobs`' restore produces: the job was non-terminal when the
+      // tab closed, so there is no `result` and the filename never reached this
+      // browser (it arrives only on the `completed` event). Gate 1 of dl-107.
+      const saved = job({ status: "downloading", updatedAt: T1, variant: chosen, result: null });
+      const next = reconcileJob(saved, cleared);
+      expect(next.sourceUrl).toBe(saved.sourceUrl);
+      expect(next.variant).toEqual(chosen);
+      expect(next.status).toBe("completed");
+      // Nothing local to keep, so the server's blank stands here. The card names
+      // the file by the title this browser kept instead (job-card.test.tsx).
+      expect(next.result?.filename).toBe("");
+    });
+
+    test("takes the server's blanks when there is no local copy to keep", () => {
+      expect(reconcileJob(undefined, cleared).sourceUrl).toBe("");
+    });
+
+    test("does not keep a local address over a server one that is not blank", () => {
+      const moved = job({ status: "completed", updatedAt: T2, sourceUrl: "https://x.example/" });
+      expect(reconcileJob(local, moved).sourceUrl).toBe("https://x.example/");
+    });
   });
 });
 

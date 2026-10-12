@@ -109,7 +109,10 @@ export interface JobProgress {
  * the visitor who opened the job's link and no copy exists to link to (dl-53).
  */
 export interface JobResult {
-  /** Sanitised, filesystem-safe name derived from the source title. */
+  /**
+   * Sanitised, filesystem-safe name derived from the source title. Empty on a row
+   * the server has cleared, like `Job.sourceUrl` (dl-107).
+   */
   filename: string;
   /** Bytes sent to the visitor. */
   sizeBytes: number;
@@ -147,10 +150,20 @@ export interface JobLink {
  */
 export interface Job {
   id: string;
+  /**
+   * The page the job was made for. **Empty on a row the server has cleared**
+   * (dl-107, approved by the owner on 2026-10-12): a finished job's page address
+   * is blanked once its link's lifetime has passed, since nothing but the browser
+   * that already holds it has a use for it. A client that wants the address keeps
+   * its own copy and must not replace it with an empty one (`reconcileJob`).
+   */
   sourceUrl: string;
   /** Null until a variant is chosen (auto-select picks one during `probing`). */
   variantId: string | null;
-  /** Snapshot of the chosen variant, kept so the UI can label the job after the probe ages out. */
+  /**
+   * Snapshot of the chosen variant, kept so the UI can label the job after the probe ages
+   * out. Null again on a row the server has cleared (dl-107): its media URL went with it.
+   */
   variant: MediaVariant | null;
   status: JobStatus;
   progress: JobProgress;

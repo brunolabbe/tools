@@ -88,6 +88,11 @@ ENV PORT=8100
 # A volume, so the books survive a redeploy. It is the only copy of anything
 # either person typed or imported.
 ENV DATABASE_PATH=/data/ledger.db
+# Who belongs to which household (lg-20): a file of its own on the same volume,
+# written with `node tools/ledger/api/dist/household-ledger.js`. Named here rather
+# than left to its default beside the books, because lg-21 turns DATABASE_PATH
+# into a directory of books.
+ENV DIRECTORY_PATH=/data/directory.db
 # Same-origin UI: no CORS to configure.
 ENV WEB_DIR=/app/tools/ledger/web/dist/app
 

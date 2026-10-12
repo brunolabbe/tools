@@ -8,11 +8,13 @@ import { createApp } from "../src/server.ts";
 import {
   ALEX,
   AUDIENCE,
+  HOUSEHOLD,
   JWKS_URL,
   SAM,
   STRANGER,
   accessConfig,
   jwksFetch,
+  memberDirectory,
   signToken,
   testKey,
 } from "./helpers/access.ts";
@@ -48,6 +50,7 @@ async function start(
   const served = jwksFetch(options.keys ?? (() => [KEY]));
   const lines: string[] = [];
   app = await createApp({
+    directory: memberDirectory(),
     config: { databasePath: ":memory:", access: options.access ?? accessConfig() },
     logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
     now: () => clock.now,
@@ -89,7 +92,10 @@ describe("the Access identity check", () => {
     const response = await me(harness, signToken({ key: KEY, nowSec: harness.nowSec() }));
 
     expect(response.statusCode).toBe(200);
-    expect(response.json<MeResponse>()).toEqual({ person: { id: "alex", email: ALEX } });
+    expect(response.json<MeResponse>()).toEqual({
+      person: { id: "alex", email: ALEX, household: HOUSEHOLD },
+      admin: false,
+    });
     // The key set came from the host built out of the team name, and nowhere else.
     expect(harness.urls).toEqual([JWKS_URL]);
   });
@@ -137,7 +143,7 @@ describe("the Access identity check", () => {
     expectRefused(await me(harness, token), "UNAUTHENTICATED", 403);
   });
 
-  test("a valid token for an address the configuration does not know is a 403", async () => {
+  test("a valid token for an address the directory does not know is a 403", async () => {
     const harness = await start();
     const token = signToken({ key: KEY, nowSec: harness.nowSec(), claims: { email: STRANGER } });
     expectRefused(await me(harness, token), "FORBIDDEN", 403);
@@ -207,7 +213,10 @@ describe("the Access identity check", () => {
     const response = await me(harness);
 
     expect(response.statusCode).toBe(200);
-    expect(response.json<MeResponse>()).toEqual({ person: { id: "sam", email: SAM } });
+    expect(response.json<MeResponse>()).toEqual({
+      person: { id: "sam", email: SAM, household: HOUSEHOLD },
+      admin: false,
+    });
     expect(harness.urls).toEqual([]);
   });
 });

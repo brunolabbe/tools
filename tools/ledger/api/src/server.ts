@@ -20,11 +20,12 @@ import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
+import { Directory } from "./directory.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { registerIdentityCheck } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
-import { configuredPeople, enrollPeople } from "./people.ts";
+import { createEnroller } from "./people.ts";
 import { registerBucketRoutes } from "./routes/buckets.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerInboxRoutes } from "./routes/inbox.ts";
@@ -47,13 +48,19 @@ export interface CreateAppOptions {
    * the one built from configuration.
    */
   fetch?: Fetch;
+  /**
+   * The household directory, already open. Tests hand one in, built in memory
+   * with the members they need; otherwise `config.directoryPath` is opened.
+   * Either way the app closes it on shutdown.
+   */
+  directory?: Directory;
 }
 
 export interface App {
   server: FastifyInstance;
   context: AppContext;
   config: ApiConfig;
-  /** Stops intake and closes the database. */
+  /** Stops intake and closes the books and the directory. */
   shutdown(): Promise<void>;
 }
 
@@ -77,10 +84,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // ENOENT on a path nobody chose explicitly is a poor first impression.
     mkdirSync(path.dirname(config.databasePath), { recursive: true });
   }
+  const directory = options.directory ?? Directory.open(config.directoryPath);
+  const devIdentity = config.access.devIdentity;
+  if (devIdentity !== undefined && directory.membershipOf(devIdentity) === undefined) {
+    directory.close();
+    // `INTERNAL`, as every refusal to boot is: the operator reads it in the log.
+    throw new AppError(
+      "INTERNAL",
+      "DEV_IDENTITY is not a member of any household in the directory, so every request would be refused. Add it with npm run household:ledger.",
+    );
+  }
   const db = new Database(config.databasePath);
   migrate(db);
-  // Before any route can be asked who the household is (people.ts).
-  enrollPeople(db, configuredPeople(config.access.people), now());
+  // Before any route can be asked who the household is (people.ts). Until
+  // lg-21 there is one books file and the host command allows one household,
+  // so every current member is that household's.
+  const enroll = createEnroller(db, now);
+  enroll(directory.people());
 
   let shuttingDown = false;
 
@@ -88,6 +108,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     config,
     logger,
     db,
+    directory,
     rateLimits: {
       reads: new RateLimiter({ perMinute: config.rateLimitReadsPerMinute }),
       writes: new RateLimiter({ perMinute: config.rateLimitWritesPerMinute }),
@@ -114,10 +135,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     server,
     createIdentityVerifier({
       config: config.access,
+      directory,
       fetch: options.fetch ?? globalThis.fetch,
       now,
       logger,
     }),
+    // A member added since boot, or since the last request, is enrolled the
+    // first time anyone in their household is seen.
+    { onMember: (person) => void enroll(directory.people(person.household)) },
   );
   registerHealthRoute(server, context);
   registerMeRoute(server, context);
@@ -147,6 +172,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       logger.info("shutting down");
       await server.close();
       db.close();
+      directory.close();
       logger.info("shutdown complete");
     },
   };

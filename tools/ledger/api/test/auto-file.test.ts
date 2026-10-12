@@ -31,7 +31,7 @@ import { runImportCommand } from "../src/import-command.ts";
 import { enrollPeople } from "../src/people.ts";
 import { importStatement } from "../src/statements.ts";
 import type { App } from "../src/server.ts";
-import { SAM } from "./helpers/access.ts";
+import { SAM, writeMemberDirectory } from "./helpers/access.ts";
 import {
   addRule,
   classifications,
@@ -728,6 +728,7 @@ describe("every reader of the standing classification answers an automatic filin
       const db = new Database(databasePath);
       migrate(db);
       enrollPeople(db, ["alex", "sam"], now);
+      writeMemberDirectory(path.join(dir, "directory.db"));
       const context = { db, personId: "alex", now: () => now };
       importStatement(
         context,
@@ -785,7 +786,7 @@ describe("every reader of the standing classification answers an automatic filin
         },
         env: {
           DATABASE_PATH: databasePath,
-          ACCESS_PEOPLE: "alex@example.test=alex,sam@example.test=sam",
+          DIRECTORY_PATH: path.join(dir, "directory.db"),
         },
         cwd: dir,
         now: () => now,

@@ -94,9 +94,9 @@ describe("the logger", () => {
     const context = lines[0]?.["requestContext"] as { headers: Record<string, string> };
     expect(context.headers["Cookie"]).toBe("[redacted]");
     expect(context.headers["Authorization"]).toBe("[redacted]");
-    // Referer is the header that makes replay work; redacting it would make
-    // the log useless for the failure it is most often read for.
-    expect(context.headers["Referer"]).toBe("https://example.com/watch");
+    // Referer is the header that makes replay work, so it is kept, but as the
+    // origin only: its path is a page a visitor asked for (dl-107).
+    expect(context.headers["Referer"]).toBe("https://example.com");
     expect(JSON.stringify(lines[0])).not.toContain("super-secret");
   });
 
@@ -278,7 +278,7 @@ describe("correlation, end to end", () => {
     expect(complete).toHaveLength(1);
     expect(complete[0]).toContain(REDACTED);
     // The non-secret header survives: redaction, not deletion.
-    expect(complete[0]).toContain("https://example.com/watch");
+    expect(complete[0]).toContain("https://example.com");
   });
 
   test("nor the orchestrator's, whose re-probe fetches the preview with those headers", async () => {
@@ -853,7 +853,7 @@ describe("a failed probe never logs the page URL's credentials", () => {
     const failed = raw.filter((line) => line.includes('"msg":"request failed"'));
     expect(failed).toHaveLength(1);
     expect(failed[0]).toContain("cdn.example");
-    expect(failed[0]).toContain("/watch");
+    expect(failed[0]).not.toContain("/watch");
   });
 
   test("a 4xx: the error handler's 'request rejected' line — the ticket's own reproduction", async () => {
@@ -884,7 +884,7 @@ describe("a failed probe never logs the page URL's credentials", () => {
     const rejected = raw.filter((line) => line.includes('"msg":"request rejected"'));
     expect(rejected).toHaveLength(1);
     expect(rejected[0]).toContain("cdn.example");
-    expect(rejected[0]).toContain("/watch");
+    expect(rejected[0]).not.toContain("/watch");
   });
 });
 
@@ -922,8 +922,8 @@ describe("safeFields redacts a URL wherever it appears in a log line", () => {
     expect(serialised).not.toContain("OTHER-SECRET");
     // Redaction, not deletion: the site is still legible.
     expect(serialised).toContain("cdn.example");
-    expect(serialised).toContain("/watch");
-    expect(serialised).toContain("/m.m3u8");
+    expect(serialised).not.toContain("/watch");
+    expect(serialised).not.toContain("/m.m3u8");
   });
 
   test("a relative path in details is left alone — it is not a credential", () => {
@@ -959,7 +959,7 @@ describe("safeFields redacts a URL wherever it appears in a log line", () => {
     const serialised = JSON.stringify(lines[0]);
     expect(serialised).not.toContain("SECRET_BLOCKED");
     expect(serialised).toContain("blocked.test");
-    expect(serialised).toContain("/seg.ts");
+    expect(serialised).not.toContain("/seg.ts");
   });
 
   /**
@@ -987,7 +987,7 @@ describe("safeFields redacts a URL wherever it appears in a log line", () => {
     const serialised = JSON.stringify(lines[0]);
     expect(serialised).not.toContain("SECRET123");
     expect(serialised).toContain("127.0.0.1");
-    expect(serialised).toContain("/drm/watch");
+    expect(serialised).not.toContain("/drm/watch");
     expect(serialised).toContain("Unsupported URL");
   });
 });
@@ -1014,7 +1014,7 @@ describe("the success-path Referer never reaches 'probe complete' with its query
     harness = undefined;
   });
 
-  test("a Referer carrying the full signed page URL is redacted, host and path kept", async () => {
+  test("a Referer carrying the full signed page URL is cut to its origin", async () => {
     const raw: string[] = [];
     const signedUrl = "https://referer.example/watch?v=1&sig=SECRET_REFERER";
     harness = await createHarness({
@@ -1036,7 +1036,7 @@ describe("the success-path Referer never reaches 'probe complete' with its query
     expect(complete).toHaveLength(1);
     // Redaction, not deletion: the site is still legible.
     expect(complete[0]).toContain("referer.example");
-    expect(complete[0]).toContain("/watch");
+    expect(complete[0]).not.toContain("/watch");
   });
 });
 
@@ -1058,7 +1058,7 @@ describe("safeFields redacts every reference to a shared object, not only the fi
     const serialised = JSON.stringify(lines[0]);
     expect(serialised).not.toContain("SHARED");
     expect(serialised).toContain("h.example");
-    expect(serialised).toContain("/p");
+    expect(serialised).not.toContain("h.example/");
   });
 
   test("a shared object reached through details and through an array is redacted both times", () => {

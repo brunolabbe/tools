@@ -66,19 +66,26 @@ export const ROUTES = {
 } as const;
 
 /**
- * Who a request is from: the Access identity, mapped to a person by the API's
- * configuration (lg-3). `id` is the configured name for the person, which is
- * what anything that records "who did this" keys on; `email` is the address
- * Access vouched for.
+ * Who a request is from: the Access identity, looked up in the household
+ * directory on every request (lg-3, lg-20). `id` is the person's name in their
+ * household, which is what anything that records "who did this" keys on;
+ * `email` is the address Access vouched for; `household` is the directory's id
+ * for the household that address is a member of.
  */
 export interface Person {
   id: string;
   email: string;
+  household: string;
 }
 
-/** `GET /api/me`: the caller, as the API identified them. */
+/**
+ * `GET /api/me`: the caller, as the API identified them. `admin` is whether the
+ * address is one of the operator's `LEDGER_ADMINS` (lg-20). An admin in no
+ * household has no person, and is refused here as on every books route.
+ */
 export interface MeResponse {
   person: Person;
+  admin: boolean;
 }
 
 /** `POST /api/statements`: an AccèsD paste, exactly as the clipboard held it. */
@@ -115,6 +122,8 @@ export interface HealthResponse {
   version: string;
   uptimeSec: number;
   database: { open: boolean };
+  /** The household directory (lg-20), which is a file of its own. */
+  directory: { open: boolean };
 }
 
 export const errorPayloadSchema = z.object({
