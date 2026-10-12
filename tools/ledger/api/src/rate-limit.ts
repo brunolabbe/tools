@@ -1,5 +1,6 @@
 /**
- * Per-person admission control on every API route but health (lg-4).
+ * Per-person admission control on every API route but health (lg-4), a person
+ * being a name in a household (lg-21).
  *
  * The mechanism is `@webtools/core`'s token bucket, shared with the downloader
  * and the planner; what is here is what is the ledger's own: who the bucket is
@@ -50,8 +51,12 @@ export function createRateLimitHook(options: RateLimitHookOptions): Hook {
     if (!limiter.enabled) return;
 
     // A person's id, which is the household's own name for them and no secret,
-    // and so is safe in a log line where an address or a token is not.
-    const key = personOf(request).id;
+    // and so is safe in a log line where an address or a token is not — behind
+    // their household's id, so two households' people with the same name do
+    // not share a bucket (lg-21). An id is one lowercase word, so the first
+    // colon is always the one written here.
+    const person = personOf(request);
+    const key = `${person.household}:${person.id}`;
     const decision = limiter.check(key);
 
     reply.header("RateLimit-Limit", String(decision.limit));

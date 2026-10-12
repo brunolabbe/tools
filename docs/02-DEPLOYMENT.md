@@ -1301,12 +1301,24 @@ holds one.
 ## The ledger
 
 A plain Node image, like the planner's, with SQLite on a volume and nothing it
-reaches outside the host. Two things are its own:
+reaches outside the host. Three things are its own:
 
 - **The volume is the books.** `ledger_storage` is the only copy of every
-  statement either person imported, and of the history carried over from the
-  spreadsheet it replaces. `docker compose down` without `-v` leaves it alone;
-  back it up as you would that spreadsheet, and more often.
+  statement anyone imported, and of the history carried over from the
+  spreadsheet it replaces. Each household's books are a file of their own,
+  `/data/households/<id>.db`, beside the directory, so **a backup takes the whole
+  data directory**, `/data`, never one file: a household's books without the
+  directory have nobody to sign in as, and one household's file is not the
+  others'. `docker compose down` without `-v` leaves it alone; back it up as you
+  would that spreadsheet, and more often.
+- **The release that gives each household its own books (lg-21) does not
+  carry over `/data/ledger.db`,** the one books file before it. Nobody had
+  started using the ledger, so it is deleted rather than migrated, and nothing
+  reads it any more: once the new image is up, remove it and its write-ahead
+  files,
+  `docker compose -f compose.prod.yaml -f compose.ledger.prod.yaml exec ledger rm -f /data/ledger.db /data/ledger.db-wal /data/ledger.db-shm`.
+  The image's `DATABASE_PATH` is now the directory `/data`; an override that
+  still names a file is refused at boot.
 - **Its login admits every household's addresses, and the household directory
   says whose they are** — [step 2](#the-ledgers-every-households-addresses-and-still-no-bypass) has the
   policy. The directory is `/data/directory.db` on the same volume, read on every
@@ -1323,11 +1335,13 @@ reaches outside the host. Two things are its own:
 
   A household id is one lowercase word; a household holds two people, each
   behind any number of addresses, and a name it has held stays one of its two.
-  Until each household has books of its own (lg-21) the command refuses a second
-  household. **On the first deploy of this release the directory is empty**, so
-  everyone sees the "no household" page until the household and its members
-  are added; and delete `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads
-  any more. `--as` in the workbook import names a person the directory holds.
+  A household's books file is made by the API the first time it needs it. **On
+  the first deploy of the directory (lg-20) it is empty**, so everyone sees the
+  "no household" page until the household and its members are added, and the
+  API's boot log warns that the directory has no members; and delete
+  `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads any more. The workbook
+  import takes `--household <id>`, writes that household's books and no other's,
+  and `--as` names one of its members.
 
 There is no model behind it yet. Reading receipts will be one, behind a seam of
 its own with an offline default, and it will get a section here when it lands.

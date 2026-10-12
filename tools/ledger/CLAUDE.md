@@ -47,7 +47,7 @@ npm run dev:ledger:api      # just the API
 npm run dev:ledger:web      # just the UI
 npm test -- --project ledger
 npm run e2e:ledger          # "No tests found" until the first spec
-npm run import:ledger -- <workbook.xlsx> --as <person>   # the one-off import; a dry run without --write
+npm run import:ledger -- <workbook.xlsx> --household <id> --as <person>   # the one-off import; a dry run without --write
 npm run household:ledger -- <add | member | remove | list>  # the household directory, from the host
 ```
 
@@ -95,18 +95,34 @@ neither member nor admin is refused at the hook. A route reads the caller with
 header of its own. Only lg-22's `adminOf` reads the admin flag: being an admin
 reads no books.
 
+**A route reads its books from `booksOf(request)`, never from a handle of its
+own** (lg-21). Each household's books are a SQLite file of their own,
+`households/<id>.db` in the data directory (`DATABASE_PATH`), opened by
+`api/src/books.ts` and attached to the request by the identity hook for the
+caller's household; an identity with no household has none, and `booksOf`
+refuses it as `personOf` does. `AppContext` holds no handle, so the compiler
+finds a route that reaches for one, and `api/test/isolation.test.ts` writes
+through every write route as two households, reads every read route back, and
+reads every table of both files directly, since a write can land where no read
+shows it. It takes its list of routes from the server itself, whatever the
+method and whether `ROUTES` names it, so a route added later is swept too. A
+route given another household's handle, or the one handle for both, is the leak
+it catches.
+
 **Every API route but health is rate limited, per person.** A route takes
 `{ onRequest: rateLimitsFor(context).read }` or `.write` from
-`api/src/rate-limit.ts`, over core's token bucket, keyed on `personOf(request)`
-and not the address. A route added without one is unlimited, and
+`api/src/rate-limit.ts`, over core's token bucket, keyed on the household and
+the person `personOf(request)` gives, and not the address — two households can
+each have an alex (lg-21). A route added without one is unlimited, and
 `api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead.
 
 **Never log a request's headers.** Behind Access every request carries a signed
 identity token in a header and a cookie, and `logger.ts` censors both as a
 backstop — not as permission.
 
-**`/api/health` never says where the data is.** It reports whether the books and
-the household directory are open, never their paths. The contract's
+**`/api/health` never says where the data is.** It reports whether every
+household's books and the household directory are open, never their paths,
+which households there are, or how many. The contract's
 `HealthResponse` has no field for either, and `api/test/health.test.ts` holds the
 route to that with real files.
 
@@ -169,9 +185,12 @@ migrations in `api/src/db/directory-schema.ts`) holds households and who belongs
 to each: appended, never edited, with the schema refusing an `UPDATE` or a
 `DELETE`. An address is in at most one household, and **a household holds at
 most two person names, ever** — the books settle between two people, and a name
-stays in them once there — refused as `HOUSEHOLD_FULL`. The `people` table
-(lg-5) is filled from the members' names at boot and whenever a request shows a
-name it lacks (`createEnroller` in `api/src/people.ts`), and a person's id is
+stays in them once there — refused as `HOUSEHOLD_FULL`. Each household's
+`people` table (lg-5), in its own books, is filled from its members' names when
+the file is opened and whenever a request shows a name it lacks
+(`createEnroller` in `api/src/people.ts`, never waiting on another process's
+write lock: a name the books cannot take refuses only that person, lg-21), and
+a person's id is
 that name — the text lg-4 stores on rules and classifications — so it must stay
 that name. Migration 3 also enrols the person ids lg-4 had already stored on
 rules and classifications, and nothing else. Why a name is permanent is in

@@ -83,8 +83,8 @@ address is in is the household directory's to say.
 
 Who belongs to which household, and as whom, is the household directory
 (lg-20): a SQLite file beside the books (`DIRECTORY_PATH`, by default
-`directory.db` beside `DATABASE_PATH`), read on every request, so a change
-applies without a restart. Until the app has a screen for it (lg-22), it is
+`directory.db` in the data directory, `DATABASE_PATH`), read on every request, so
+a change applies without a restart. Until the app has a screen for it (lg-22), it is
 written from the host:
 
 ```bash
@@ -96,22 +96,26 @@ npm run household:ledger -- list
 
 A household holds two people, each behind any number of addresses, and a name
 it has held stays one of its two. Every address must also be on the ledger's
-Access policy. Until each household has books of its own (lg-21), the command
-refuses a second household. In the image, run
+Access policy. Each household's books are a file of their own,
+`households/<id>.db` in the data directory, which the API makes, migrates and
+fills with the household's names the first time it needs it (lg-21); so back up
+the whole data directory, not one file. In the image, run
 `node tools/ledger/api/dist/household-ledger.js` with the same arguments.
 `LEDGER_ADMINS` names the addresses that will manage the directory from the app.
 
 ### Importing the old workbook
 
-Once, from the repo root, into the database the API is configured with
-(`DATABASE_PATH`), as a command rather than a route (lg-7). `--as` names a
-member's person in the household directory, which it reads and never writes:
+Once, from the repo root, into one household's books in the data directory the
+API is configured with (`DATABASE_PATH`), as a command rather than a route
+(lg-7). `--household` names the household by its id, and the import opens that
+household's file and no other (lg-21); `--as` names one of that household's
+members in the household directory, which it reads and never writes:
 
 ```bash
-npm run import:ledger -- ~/classeur.xlsx --as alex [--corrections ~/corrections.json] [--write]
+npm run import:ledger -- ~/classeur.xlsx --household home --as alex [--corrections ~/corrections.json] [--write]
 ```
 
-Without `--write` it is a dry run. It copies the database file and its
+Without `--write` it is a dry run. It copies the household's books file and its
 write-ahead log into a private temporary directory, never opening the
 originals, and imports into the copy. Then it prints the report — rows imported,
 repaired, skipped and corrected, each bucket's figures beside the workbook's,

@@ -15,6 +15,7 @@ import type {
 } from "@ledger/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
+import { booksOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { confirmRatio, currentSalaries, enterSalaries, ratiosAsOf } from "../salaries.ts";
 import { asOfOf } from "./buckets.ts";
@@ -32,8 +33,8 @@ export function registerSalaryRoutes(app: FastifyInstance, context: AppContext):
   // salaries refuses the second request in a minute too" — that test, not this
   // comment, is what holds it. Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.salaries, { onRequest: read }, async () => {
-    const body: SalariesResponse = { salaries: currentSalaries(context.db) };
+  app.get(ROUTES.salaries, { onRequest: read }, async (request) => {
+    const body: SalariesResponse = { salaries: currentSalaries(booksOf(request)) };
     return body;
   });
 
@@ -51,7 +52,7 @@ export function registerSalaryRoutes(app: FastifyInstance, context: AppContext):
 
   app.get(ROUTES.ratios, { onRequest: read }, async (request) => {
     const asOf = asOfOf(context, request);
-    const body: RatiosResponse = { asOf, ...ratiosAsOf(context.db, asOf) };
+    const body: RatiosResponse = { asOf, ...ratiosAsOf(booksOf(request), asOf) };
     return body;
   });
 

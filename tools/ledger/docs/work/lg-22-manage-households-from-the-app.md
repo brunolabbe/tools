@@ -79,9 +79,11 @@ a command on the host. The owner chose to manage it from the app
      that refuses an `id` that already exists, and make the scan see `REPLACE`
      and a quoted or qualified table name. Plant each and watch it go red.
    - **The member lookup reads the whole directory** (F6). `Directory.people`
-     selects every current membership and filters in JavaScript, and the
+     selected every current membership and filtered in JavaScript, and the
      identity hook calls it on every request: 10 ms at 6000 members, against
-     0.02 ms for `membershipOf`. Filter by household in the SQL.
+     0.02 ms for `membershipOf`. **Done in lg-21**, whose per-household books
+     are attached by that hook: `Directory.members(household)` filters in the
+     SQL. Nothing is left of it here.
 
 **Traps.**
 
@@ -122,3 +124,8 @@ a command on the host. The owner chose to manage it from the app
   an address, and the person's name stays in the books. This ticket lands
   before lg-23 and keeps refusing a third person name. lg-23 changes that test
   when it lifts the cap.
+- 2026-10-12 — Step 9's F6 (the member lookup reading the whole directory) was
+  folded into lg-21, which puts that lookup on every request's books path:
+  `Directory.members(household)` now filters in the SQL. Measured on the built
+  class with 6000 members in 3000 households, `people(household)` went from
+  9.853 ms to 0.031 ms a call (`membershipOf` 0.016 ms). F2 stays here.

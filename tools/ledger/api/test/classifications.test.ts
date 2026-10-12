@@ -10,7 +10,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ClassificationRecord, ErrorResponse, InboxRow, RuleDraft } from "@ledger/contract";
 import type { App } from "../src/server.ts";
-import { SAM } from "./helpers/access.ts";
+import { SAM, homeBooks } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import {
   GROCERIES,
@@ -151,7 +151,7 @@ describe("classifying on paste", () => {
     const target = await start();
     await addRule(target, MORTGAGE_RULE);
     // A classification that cannot be written, as a full disk or a locked file would be.
-    target.context.db.exec(
+    homeBooks(target).exec(
       "CREATE TRIGGER refuse BEFORE INSERT ON classifications BEGIN SELECT RAISE(ABORT, 'refused'); END",
     );
 
@@ -163,10 +163,10 @@ describe("classifying on paste", () => {
 
     expect(response.statusCode).toBe(500);
     // Nothing of the paste stayed: not its rows, and not the import they came from.
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM statement_rows").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM statement_rows").get()).toEqual({
       n: 0,
     });
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM statement_imports").get()).toEqual({
       n: 0,
     });
   });
@@ -440,7 +440,7 @@ describe("classifying a row again", () => {
       person_id: "sam",
     });
     // And the answer that stands is the later one.
-    const standing = target.context.db
+    const standing = homeBooks(target)
       .prepare("SELECT bucket, person_id FROM current_classifications WHERE row_id = ?")
       .all(mortgageRow);
     expect(standing).toEqual([{ bucket: "current-expenses", person_id: "sam" }]);

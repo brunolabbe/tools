@@ -57,7 +57,7 @@ async function start(
   app = await createApp({
     directory,
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       access: accessConfig({ admins: new Set(admins) }),
     },
     logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),

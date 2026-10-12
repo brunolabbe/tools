@@ -34,19 +34,42 @@ export function knownPeople(db: Database): string[] {
   );
 }
 
+export interface Enroller {
+  /**
+   * Adds the names the table lacks, and returns how many it added. With
+   * `wait: false` a books file another process holds the write lock on — the
+   * import command, mid-import — refuses at once rather than after the
+   * connection's `busy_timeout`, which would be spent on the event loop.
+   */
+  enroll(ids: readonly string[], options?: { wait?: boolean }): number;
+  /** Whether the table is known to hold this name. */
+  knows(id: string): boolean;
+}
+
 /**
  * `enrollPeople`, remembering what the table already holds so that the request
  * that finds nothing new — every request but the first after a member is added
  * — writes nothing. The memory only ever lags the table: nothing removes a
  * person, so a name it lacks costs one `INSERT OR IGNORE`, never a wrong answer.
  */
-export function createEnroller(db: Database, now: () => Date): (ids: readonly string[]) => number {
+export function createEnroller(db: Database, now: () => Date): Enroller {
   const known = new Set(knownPeople(db));
-  return (ids) => {
-    const missing = ids.filter((id) => !known.has(id));
-    if (missing.length === 0) return 0;
-    const added = enrollPeople(db, missing, now());
-    for (const id of missing) known.add(id);
-    return added;
+  return {
+    enroll(ids, { wait = true } = {}) {
+      const missing = ids.filter((id) => !known.has(id));
+      if (missing.length === 0) return 0;
+      const timeout = Number(db.pragma("busy_timeout", { simple: true }));
+      if (!wait) db.pragma("busy_timeout = 0");
+      try {
+        const added = enrollPeople(db, missing, now());
+        for (const id of missing) known.add(id);
+        return added;
+      } finally {
+        // Interpolated because PRAGMA takes no bound parameter; it is the
+        // connection's own number, read just above.
+        if (!wait) db.pragma(`busy_timeout = ${String(timeout)}`);
+      }
+    },
+    knows: (id) => known.has(id),
   };
 }

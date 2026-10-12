@@ -1,12 +1,13 @@
 /**
- * `npm run import:ledger -- <workbook.xlsx> --as <person> [--corrections <file.json>] [--write]`
+ * `npm run import:ledger -- <workbook.xlsx> --household <id> --as <person> [--corrections <file.json>] [--write]`
  * (lg-7).
  *
  * A command and not a route: the import is a one-off, run by the owner on the
  * machine that holds the database, and has no reason to exist on the network.
- * It writes to the database the API is configured with (`DATABASE_PATH`), and
- * `--as` names a person the household directory holds (`DIRECTORY_PATH`, lg-20),
- * which it reads and never writes.
+ * It writes to one household's books, the file the API keeps for `--household`
+ * in its data directory (`DATABASE_PATH`, lg-21), and to no other; `--as` names
+ * a person that household's members stand under in the household directory
+ * (`DIRECTORY_PATH`, lg-20), which it reads and never writes.
  *
  * **A dry run never opens that file.** The file and its write-ahead log are
  * copied, byte for byte, into a private directory, and the import is done on
@@ -42,7 +43,8 @@ import { AppError } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { loadApiConfig } from "./config.ts";
 import { configure } from "./db/schema.ts";
-import { Directory } from "./directory.ts";
+import { checkDataDir, householdBooksPath } from "./books.ts";
+import { Directory, isHouseholdId } from "./directory.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import { readSheets } from "./xlsx.ts";
 
@@ -55,11 +57,13 @@ export interface CommandIo {
   now: () => Date;
 }
 
-const USAGE = `Usage: npm run import:ledger -- <workbook.xlsx> --as <person> [--corrections <file.json>] [--write]
+const USAGE = `Usage: npm run import:ledger -- <workbook.xlsx> --household <id> --as <person> [--corrections <file.json>] [--write]
 
-Imports the household's old workbook into the ledger's database (DATABASE_PATH).
-Without --write it is a dry run: the report is printed and nothing is written.
-  --as           the person the import is recorded under, as the household directory names them
+Imports a household's old workbook into that household's books, in the ledger's
+data directory (DATABASE_PATH). Without --write it is a dry run: the report is
+printed and nothing is written.
+  --household    the household whose books the import writes, by its id in the directory
+  --as           the person the import is recorded under, one of that household's members
   --corrections  the owner's corrections, a JSON file kept outside the repository
   --write        perform the import, if every verification holds
 `;
@@ -77,8 +81,8 @@ function usage(io: CommandIo, message: string): number {
  * make the rehearsal differ from the real import, which verifies everything
  * again on the real file before it commits.
  */
-function copyBooks(databasePath: string, into: string): string | undefined {
-  if (databasePath === ":memory:" || !existsSync(databasePath)) return undefined;
+function copyBooks(databasePath: string | undefined, into: string): string | undefined {
+  if (databasePath === undefined || !existsSync(databasePath)) return undefined;
   const copy = path.join(into, "ledger.db");
   copyFileSync(databasePath, copy);
   // A copy keeps the original's mode, and a read-only copy cannot be opened to
@@ -98,19 +102,20 @@ function openCopy(copy: string | undefined): Database.Database {
 }
 
 function openReal(databasePath: string): Database.Database {
-  if (databasePath !== ":memory:") mkdirSync(path.dirname(databasePath), { recursive: true });
+  mkdirSync(path.dirname(databasePath), { recursive: true });
   const db = new Database(databasePath);
   configure(db);
   return db;
 }
 
 /**
- * The names the directory's current members stand under. Read, never written:
+ * The names the household's current members stand under. Read, never written:
  * the file is opened read-only, and a missing one is refused rather than
  * created, because an import into books whose household has no members would
- * be recorded under a name nobody can sign in as.
+ * be recorded under a name nobody can sign in as; so is a household the
+ * directory does not hold, which has no books to import into.
  */
-function directoryPeople(directoryPath: string): string[] {
+function directoryPeople(directoryPath: string, household: string): string[] {
   if (directoryPath !== ":memory:" && !existsSync(directoryPath)) {
     throw new AppError(
       "BAD_REQUEST",
@@ -119,7 +124,13 @@ function directoryPeople(directoryPath: string): string[] {
   }
   const directory = Directory.openReadOnly(directoryPath);
   try {
-    return directory.people();
+    if (directory.household(household) === undefined) {
+      throw new AppError(
+        "BAD_REQUEST",
+        `--household names "${household}", which the household directory does not hold.`,
+      );
+    }
+    return directory.people(household);
   } finally {
     directory.close();
   }
@@ -155,6 +166,7 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
         write: { type: "boolean", default: false },
         corrections: { type: "string" },
         as: { type: "string" },
+        household: { type: "string" },
         help: { type: "boolean", default: false },
       },
     });
@@ -168,6 +180,13 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
   }
   const [workbookArg, ...extra] = positionals;
   if (workbookArg === undefined || extra.length > 0) return usage(io, "Name exactly one workbook.");
+  const household = values.household?.trim();
+  if (household === undefined || household === "") {
+    return usage(io, "Name the household whose books the import writes, with --household.");
+  }
+  if (!isHouseholdId(household)) {
+    return usage(io, `--household is a household's id, one lowercase word; "${household}" is not.`);
+  }
   const personId = values.as?.trim();
   if (personId === undefined || personId === "") {
     return usage(io, "Name the person the import is recorded under, with --as.");
@@ -175,19 +194,23 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
 
   try {
     const config = loadApiConfig({}, io.env);
-    if (values.write && config.databasePath === ":memory:") {
+    if (values.write && config.dataDir === ":memory:") {
       return usage(
         io,
-        "DATABASE_PATH is :memory:, which nothing outlives; name the database file.",
+        "DATABASE_PATH is :memory:, which nothing outlives; name the data directory.",
       );
     }
-    const members = directoryPeople(config.directoryPath);
+    checkDataDir(config.dataDir);
+    const members = directoryPeople(config.directoryPath, household);
     if (!members.includes(personId)) {
       return usage(
         io,
-        `--as names "${personId}", who is not a member in the household directory (${members.join(", ") || "it has none"}).`,
+        `--as names "${personId}", who is not a member of ${household} in the household directory (${members.join(", ") || "it has none"}).`,
       );
     }
+    // The one file this command opens to write, and only with --write.
+    const booksPath =
+      config.dataDir === ":memory:" ? undefined : householdBooksPath(config.dataDir, household);
     const workbookPath = path.resolve(io.cwd, workbookArg);
     const corrections =
       values.corrections === undefined
@@ -211,13 +234,15 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
       now: io.now,
     };
     const print = (report: string): void => {
-      io.stdout(`Workbook: ${workbookPath}\nDatabase: ${config.databasePath}\n\n${report}`);
+      io.stdout(
+        `Workbook: ${workbookPath}\nHousehold: ${household}\nDatabase: ${booksPath ?? ":memory:"}\n\n${report}`,
+      );
     };
 
     const scratch = mkdtempSync(path.join(os.tmpdir(), "ledger-import-"));
     let rehearsal;
     try {
-      const copy = openCopy(copyBooks(config.databasePath, scratch));
+      const copy = openCopy(copyBooks(booksPath, scratch));
       try {
         rehearsal = importWorkbook(copy, sheets, { ...options, commit: false });
       } finally {
@@ -231,7 +256,8 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
       return rehearsal.ok ? 0 : 1;
     }
 
-    const db = openReal(config.databasePath);
+    if (booksPath === undefined) throw new AppError("INTERNAL");
+    const db = openReal(booksPath);
     try {
       const result = importWorkbook(db, sheets, { ...options, commit: true });
       print(result.report);

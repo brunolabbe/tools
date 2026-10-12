@@ -24,6 +24,7 @@ import type {
   SpendingCategoriesResponse,
   StoredRow,
 } from "@ledger/contract";
+import { householdBooksPath } from "../src/books.ts";
 import { bucketsAsOf } from "../src/buckets.ts";
 import { classifyRow, inboxCount } from "../src/classifications.ts";
 import { applyMigrations, migrate } from "../src/db/schema.ts";
@@ -31,7 +32,7 @@ import { runImportCommand } from "../src/import-command.ts";
 import { enrollPeople } from "../src/people.ts";
 import { importStatement } from "../src/statements.ts";
 import type { App } from "../src/server.ts";
-import { SAM, writeMemberDirectory } from "./helpers/access.ts";
+import { HOUSEHOLD, SAM, homeBooks, writeMemberDirectory } from "./helpers/access.ts";
 import {
   addRule,
   classifications,
@@ -120,7 +121,7 @@ async function storedRow(target: App, id: number): Promise<StoredRow | undefined
 }
 
 function standing(target: App, rowId: number): Record<string, unknown> | undefined {
-  return target.context.db
+  return homeBooks(target)
     .prepare("SELECT * FROM current_classifications WHERE row_id = ?")
     .get(rowId) as Record<string, unknown> | undefined;
 }
@@ -210,7 +211,7 @@ describe("history files a row on paste (lg-17)", () => {
     await pasteSlice(target, stretch, 0, 6);
     const grounds = [];
     for (const index of [3, 4, 5]) grounds.push(await answer(target, idAt(index), SAM_CURRENT));
-    const seed = target.context.db.prepare(
+    const seed = homeBooks(target).prepare(
       `INSERT INTO classifications (row_id, bucket, person_id, rule_id, source, classified_at, classified_by, rests_on_1, rests_on_2, rests_on_3)
        VALUES (?, 'current-expenses', 'sam', NULL, 'auto', '2026-10-03T09:30:00.000Z', NULL, ?, ?, ?)`,
     );
@@ -329,7 +330,7 @@ describe("an automatic filing is stored, reviewed and superseded (lg-17)", () =>
   test("names the three answers it rests on and no person, and the database refuses one that does not", async () => {
     const target = await start();
     const [first, second, third] = await threeAnsweredThenTwo(target);
-    const insert = target.context.db.prepare(
+    const insert = homeBooks(target).prepare(
       `INSERT INTO classifications (row_id, bucket, person_id, rule_id, source, classified_at, classified_by, rests_on_1, rests_on_2, rests_on_3)
        VALUES (?, 'mortgage', NULL, ?, ?, '2026-10-03T09:30:00.000Z', ?, ?, ?, ?)`,
     );
@@ -562,7 +563,7 @@ describe("every reader of the standing classification answers an automatic filin
     const buckets = await get<BucketsResponse>(target, `${ROUTES.buckets}?asOf=2026-09-30`);
 
     expect(inbox.map((row) => row.id)).toEqual([idAt(4)]);
-    expect(inboxCount(target.context.db)).toBe(1);
+    expect(inboxCount(homeBooks(target))).toBe(1);
     expect(buckets.unclassified).toBe(1);
   });
 
@@ -723,7 +724,7 @@ describe("every reader of the standing classification answers an automatic filin
     ): Promise<{ code: number; out: string; buffer: number }> {
       const now = new Date("2026-10-07T12:00:00.000Z");
       dir = mkdtempSync(path.join(os.tmpdir(), "ledger-auto-import-"));
-      databasePath = path.join(dir, "books", "ledger.db");
+      databasePath = householdBooksPath(path.join(dir, "books"), HOUSEHOLD);
       mkdirSync(path.dirname(databasePath), { recursive: true });
       const db = new Database(databasePath);
       migrate(db);
@@ -777,7 +778,8 @@ describe("every reader of the standing classification answers an automatic filin
 
       writeFileSync(path.join(dir, "classeur.xlsx"), await render(history()));
       let out = "";
-      const code = await runImportCommand(["classeur.xlsx", "--as", "alex", "--write"], {
+      const args = ["classeur.xlsx", "--household", HOUSEHOLD, "--as", "alex", "--write"];
+      const code = await runImportCommand(args, {
         stdout: (text) => {
           out += text;
         },
@@ -785,7 +787,7 @@ describe("every reader of the standing classification answers an automatic filin
           out += text;
         },
         env: {
-          DATABASE_PATH: databasePath,
+          DATABASE_PATH: path.join(dir, "books"),
           DIRECTORY_PATH: path.join(dir, "directory.db"),
         },
         cwd: dir,

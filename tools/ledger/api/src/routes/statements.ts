@@ -11,7 +11,7 @@ import { AppError, ROUTES, importStatementRequestSchema } from "@ledger/contract
 import type { ImportStatementReport } from "@ledger/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
-import { personOf } from "../identity.ts";
+import { booksOf, personOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { importStatement } from "../statements.ts";
 
@@ -31,7 +31,7 @@ export function registerStatementRoutes(app: FastifyInstance, context: AppContex
         throw new AppError("BAD_REQUEST", "Send the pasted statement as { text }, and not empty.");
       }
       const report: ImportStatementReport = importStatement(
-        { db: context.db, personId: personOf(request).id, now: context.now },
+        { db: booksOf(request), personId: personOf(request).id, now: context.now },
         body.data.text,
       );
       return report;
