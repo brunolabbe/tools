@@ -442,7 +442,8 @@ the other tools too.
   `LEDGER_ACCESS_AUD` in `.env` — and `compose.ledger.prod.yaml` refuses to
   start without them. `LEDGER_ADMINS`, optional, names the addresses that may
   manage the directory. `LEDGER_ACCESS_PEOPLE` is retired: the directory
-  replaced it, and the API refuses to start with `ACCESS_PEOPLE` set.
+  replaced it, and compose no longer passes it to the API, so nothing refuses a
+  stale line in `.env`. Delete it by hand.
 - **Never "widen it" to public**, below. The next section is about tools whose
   data is nobody's in particular; this one's is named households'. Opening the
   ledger's policy to any address that proves itself is repo-98, deferred until
@@ -795,11 +796,15 @@ or a request from a lawyer.
    address. Keep the notice itself.
 2. **Copy the log files first**, because they rotate by size and a busy day can
    drop a line within hours. Docker keeps the live file and the rotated
-   `*-json.log.N` together in one directory; copy the whole of it:
+   `<id>-json.log.N` side by side. Copy those files and not their directory,
+   which also holds `config.v2.json`: the container's environment, the
+   service's secrets with it. The directory is root's, so the match runs under
+   `sudo` rather than as a glob in your own shell:
 
    ```bash
-   docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader)
-   sudo cp -a "$(dirname "$(docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader))")" ~/hold/<notice>/logs
+   log="$(docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader))"
+   mkdir -p ~/hold/<notice>/logs
+   sudo find "$(dirname "$log")" -maxdepth 1 -name "$(basename "$log")*" -exec cp -a {} ~/hold/<notice>/logs/ \;
    ```
 
 3. **Copy the database**, which holds each download's host, status, error code and

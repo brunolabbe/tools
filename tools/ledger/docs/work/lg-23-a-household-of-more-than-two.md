@@ -3,9 +3,9 @@ id: lg-23
 tool: ledger
 title: A household of more than two people
 kind: work-package
-status: needs-decision
+status: ready
 milestone: P6
-depends_on: [lg-20]
+depends_on: [lg-20, lg-22]
 difficulty: hard
 ---
 
@@ -80,6 +80,19 @@ put to the owner below as Question 4 and not as Build steps.
 
 ## The decision
 
+**Answered by the owner on 2026-10-12, every recommendation taken:**
+
+1. **A** — the matching rule, generalised: up to N − 1 buffer deposits.
+2. **A** — `lead` is the person with most and their margin over the next.
+3. **A** — a membership change that changes the people in a ratio waits for a
+   close, so every stretch has the same people.
+4. lg-22's "remove a member" removes an **address**. A person's name stays in
+   the books for good. **lg-22 lands first**, with the cap, and this ticket
+   changes lg-22's test that refuses a third name.
+
+The answers also approve `HOUSEHOLD_FULL` leaving `@ledger/contract` (Build 4).
+The questions are kept as asked below, so the reasoning stays on record.
+
 Nobody can build this until the owner chooses how a settlement works for more
 than two people, because it changes what money the household is asked to move.
 
@@ -133,24 +146,29 @@ books at all.
 
 ## Build
 
-Once the answers are on this ticket, and in the commit that records them
-(`status: ready`, `difficulty` re-rated):
+The answers are above. Build after lg-22 has merged.
 
 1. **The arithmetic**, in `books/` where it is pure. `ratioFromSalaries` for N
    salaries, with the rounding rule extended past one remainder (shares sum to
    exactly 1 000 000; a tie rule that needs no state, like the odd cent in
-   `buckets.ts`). The settlement per Question 1.
+   `buckets.ts`). The settlement is the generalised matching rule (Question 1
+   A). Check the derivation against `settleStretches` before building on it.
 2. **The record.** `periods` and the contract's period shapes carry the
-   settlement as Question 1 chose; the books' stored formula stays `v3` for two
-   people and a household of two reads and closes unchanged.
-3. **The mortgage bucket** per Question 2, and `proposalFor` per Question 1's
-   shares.
+   settlement as a list of deposits and transfers. The books' stored formula
+   stays `v3` for two people, and a household of two reads and closes unchanged.
+3. **The mortgage bucket**: `lead` is the person with most and their margin
+   over the next (Question 2 A). `proposalFor` proposes for N salaries.
 4. **The directory.** A directory migration 2 drops the cap's trigger (migration
    1 stays as shipped, appended never edited), the class stops counting names,
-   `HOUSEHOLD_FULL` leaves `@ledger/contract` (the owner's approval of that
-   contract change comes with this ticket's answers) and the host command's text
-   changes. lg-20's tests for the cap change with it.
-5. **Docs.** `00-ANALYSIS.md` §7's "a household is still exactly two people" and
+   `HOUSEHOLD_FULL` leaves `@ledger/contract` (approved with the answers) and
+   the host command's text changes. lg-20's tests for the cap change with it,
+   and so does lg-22's test that refuses a third person name (Question 4).
+5. **People change only at a close** (Question 3 A). A ratio whose people
+   differ from the open stretch's people does not take effect inside the open
+   period. The build chooses whether it is refused or deferred to the next
+   period, and records which in the Log. Removing an address never removes a
+   name from the books (Question 4).
+6. **Docs.** `00-ANALYSIS.md` §7's "a household is still exactly two people" and
    the ledger `CLAUDE.md`'s person-name rule, and the roadmap row.
 
 ## Done when
@@ -166,7 +184,9 @@ Once the answers are on this ticket, and in the commit that records them
    share to within a cent each.
 4. A household can hold more than two names in the directory, and a test that
    asserts a third is refused is replaced by one asserting it is not.
-5. Gates green.
+5. A test proves that a ratio with a different set of people cannot take effect
+   inside an open period.
+6. Gates green.
 
 ## Log
 
@@ -177,3 +197,9 @@ Once the answers are on this ticket, and in the commit that records them
   second household's books, and a bigger household in the one books file works
   the same. It does not wait for lg-22 either, but Question 4 asks the owner to
   fix the order.
+- 2026-10-12 — The owner answered all four questions over `AskUserQuestion`,
+  each time taking the recommended option. The answers are under _The decision_.
+  The status is now `ready`, `difficulty` stays `hard`, and `depends_on` adds
+  lg-22, because Question 4 put it first. Build 5 and Done when 5 are new and
+  carry Question 3. Question 4's recommendation came from the session that
+  asked, not from the filing.
