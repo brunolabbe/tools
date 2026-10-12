@@ -55,6 +55,13 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
    - Keep one integration test, scaled down: `measureMs` from 4000 to about
      1000, pause from 8 s to about 2 s, sleep from 12 s to about 3 s. Read
      dl-106 first: its Windows timer-tick findings govern how far it can shrink.
+   - Read dl-120 too: the loopback limits the shrink as well. When a test's
+     reader stops, the kernel's socket buffers take 5.2 to 9.2 MB (measured on
+     Linux) before the feeder pauses the origin, and all of it is measured
+     origin time. A window shorter than that fill closes before the pause it is
+     meant to contain. Keep the origin's rate × `measureMs` well above about
+     10 MB, or the test stops proving the pause. At 4 MB/s, `measureMs` 1000
+     closes the window after 4 MB.
 
 ## Done when
 

@@ -1332,16 +1332,25 @@ describe("dl-98 round 2: what gate 2 found", () => {
   /**
    * Gate 2's `stuckpause.mts`, shortened. A reads 200 KB and stops, so the
    * loopback's buffers fill and the feeder pauses A's origin; then B reads
-   * from another offset at full speed. The origin is 4 MB/s a connection
-   * against 10 MB/s of media, so B is slow and should be split.
+   * from another offset at full speed. The origin is 8 MB/s a connection
+   * against 20 MB/s of media, so B is slow and should be split.
+   *
+   * The pause has to engage inside the 2 s window, or the meter closes the
+   * window on A alone and rightly splits before B exists (dl-120). What it
+   * waits on is the loopback: the kernel's socket buffers between the feeder
+   * and a stopped A took 5.2 to 7.8 MB before the feeder's writes blocked,
+   * the larger under CPU contention, so at 4 MB/s A was the origin's for up to
+   * 1.99 s of the 2, and the tests split in 5 of 20 runs on a shared core. At
+   * 8 MB/s the same buffers (7.5 to 9.2 MB) take about 1 s. The ratio of
+   * origin to media is the 0.4 it was.
    */
   async function pausedThenRead(closeA: boolean): Promise<{ splitAfterMs: number | null }> {
     const size = 60_000_000;
     files["stuck.bin"] = Buffer.alloc(size, 9);
-    behaviour.perConnectionBps = 4_000_000;
+    behaviour.perConnectionBps = 8_000_000;
     const { feeder } = await feederFor("stuck.bin", {
       settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 2_000 },
-      durationSec: () => size / 10_000_000,
+      durationSec: () => size / 20_000_000,
     });
     let aBytes = 0;
     const a = await new Promise<http.IncomingMessage>((resolve) => {
