@@ -212,3 +212,10 @@ false` (every path edge whole-package) fails the data-scope test and the real
     repo-101 change); it is a role page outside this ticket's Build and no
     behaviour depends on it, and a builder who believes it loses nothing.
   - Not done, left to repo-103: any machine-sharing or worker-count change.
+- 2026-10-12 — Open decision answered by the owner on 2026-10-12, relayed by the
+  coordinator. Question: how should a path that names data become an edge in the
+  package graph? Options: A, data paths are scoped edges (a changed file fires
+  the reader only when it is under the named path, and the edge does not spread
+  to the reader's dependents); B, every cross-package path is a whole-package
+  edge. **Chosen: A**, the recommended option and what `2c9c11e3` implements, so
+  no code changed.
