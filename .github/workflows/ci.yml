@@ -355,6 +355,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
+      # TEMPORARY (repo-99): proves CI is set on both legs and what the runner
+      # reports for its cores. Removed in the commit that records the measurement.
+      - shell: bash
+        run: echo "repo-99 CI=$CI RUNNER_OS=$RUNNER_OS cores=$(node -p 'require("node:os").availableParallelism()')"
       - run: npm test
       # The other half of "informational, not invisible". `continue-on-error`
       # takes the run's conclusion green, so without this a Windows failure is
