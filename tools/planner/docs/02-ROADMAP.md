@@ -184,7 +184,8 @@ real model_, and as of 2026-09-13 `createModelProvider` knew only `scripted`:
 every grounded candidate had been written by a script. Two pieces close it, and
 they are split because only the first can be proven in CI:
 
-6. **A real model behind the seam** — Anthropic, `claude-opus-5` by default,
+6. **A real model behind the seam** — Anthropic, `claude-opus-5` by default
+   (`claude-sonnet-5-5` since pl-40's run),
    structured replies through `ModelProvider`, adaptive thinking at low effort
    and an 8,000-token reply cap. → [pl-39](./work/pl-39-a-real-model-behind-the-seam.md)
 7. **The milestone, proven** — a key-gated live run that records what a real

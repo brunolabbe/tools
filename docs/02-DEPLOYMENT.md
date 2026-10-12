@@ -1198,14 +1198,14 @@ model is a deliberate act per deployment, not something a host inherits.
 the first one, Anthropic's. A real provider also means outbound egress from the
 host, which nothing else on this page needs.
 
-| Variable            | Value                     | Required                                     |
-| ------------------- | ------------------------- | -------------------------------------------- |
-| `MODEL_PROVIDER`    | `anthropic`               | yes                                          |
-| `ANTHROPIC_API_KEY` | the key                   | yes — **a secret**, see below                |
-| `MODEL`             | `claude-opus-5` (default) | no                                           |
-| `MODEL_EFFORT`      | `low` (default)           | no — `low`, `medium`, `high`, `xhigh`, `max` |
-| `MODEL_TIMEOUT_MS`  | `120000` (default)        | no — per attempt                             |
-| `MAX_OUTPUT_TOKENS` | `8000` (default)          | no — see the budget trap below               |
+| Variable            | Value                         | Required                                     |
+| ------------------- | ----------------------------- | -------------------------------------------- |
+| `MODEL_PROVIDER`    | `anthropic`                   | yes                                          |
+| `ANTHROPIC_API_KEY` | the key                       | yes — **a secret**, see below                |
+| `MODEL`             | `claude-sonnet-5-5` (default) | no                                           |
+| `MODEL_EFFORT`      | `low` (default)               | no — `low`, `medium`, `high`, `xhigh`, `max` |
+| `MODEL_TIMEOUT_MS`  | `120000` (default)            | no — per attempt                             |
+| `MAX_OUTPUT_TOKENS` | `8000` (default)              | no — see the budget trap below               |
 
 **The key is a secret, and it never goes in a compose file that is checked in.**
 Put it in the host's `.env` beside `COMPOSE_FILE`, and pass it through from an
@@ -1232,7 +1232,7 @@ header for one. Under `scripted` the variable is ignored, since nothing builds
 the SDK.
 
 After it boots, `/api/health` reports `agent: { provider: "anthropic", model:
-"claude-opus-5" }` — the model configured. A refused request can be answered by a
+"claude-sonnet-5-5" }` — the model configured. A refused request can be answered by a
 fallback model inside the same call, and when that happens the log line
 `model reply served by another model` names the one that did.
 
