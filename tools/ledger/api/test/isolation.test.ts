@@ -8,9 +8,19 @@
  * "Maison" and sam, away writes "Chalet" and kim, and each writes amounts the
  * other never does.
  *
- * The tables below walk `ROUTES` the way `route-limits.test.ts` does: the first
- * test fails when a route the app answers is in neither table, so a route
- * added later cannot be left out of the sweep.
+ * A write that lands in the wrong books need not show through any read: a
+ * map entry for a bank category the other household has no rows in is listed
+ * by no read route. So after the writes every table of each household's file
+ * is read directly (gate 1, F1): none may hold the other household's marks,
+ * and each table holds as many rows in one file as in the other, since both
+ * households make the same writes. And the two households' ids differ — away
+ * writes one more category and one more row before everything else, home
+ * after — so an id one of them names is not also valid in the other's books.
+ *
+ * The first test takes every route the server answers from the server itself
+ * (`printRoutes`), whatever its method and whether or not the contract's
+ * `ROUTES` names it, and fails when one is in neither table, so a route added
+ * later cannot be left out of the sweep (gate 1, F2).
  */
 
 import { describe, expect, test } from "vitest";
@@ -102,11 +112,23 @@ function marks(household: Household): string[] {
   ];
 }
 
-/** The rows a household pastes, oldest first: the last two arrive in a second paste. */
+/**
+ * A row only so that the two households' row ids differ: away pastes it before
+ * its others, home after them.
+ */
+function spareRow(household: Household, date: string): PasteRow {
+  const { word } = household;
+  return { date, category: `${word} Divers`, description: `Réserve /${word}`, amountCents: -1_111 };
+}
+
+/**
+ * The rows a household pastes, oldest first, in two pastes: the second holds
+ * the last two of the list below, and home's spare row after them.
+ */
 function statementRows(household: Household): PasteRow[] {
   const { word } = household;
   const transfer = `Virement /${word} Caisse`;
-  return [
+  const rows: PasteRow[] = [
     {
       date: "2026-07-02",
       category: `${word} Virements`,
@@ -158,10 +180,28 @@ function statementRows(household: Household): PasteRow[] {
       amountCents: -6_789,
     },
   ];
+  return household === AWAY
+    ? [spareRow(household, "2026-06-20"), ...rows]
+    : [...rows, spareRow(household, "2026-09-25")];
 }
 
-function paste(household: Household, from: number, to?: number): string {
-  return renderPaste(withBalances(statementRows(household), 1_000_000).slice(from, to));
+/** The first paste, or the second. */
+function paste(household: Household, which: 1 | 2): string {
+  const rows = withBalances(statementRows(household), 1_000_000);
+  // Away's spare row is the first of its first paste, home's the last of its second.
+  const split = household === AWAY ? 7 : 6;
+  return renderPaste(which === 1 ? rows.slice(0, split) : rows.slice(split));
+}
+
+/** One more category, so that the two households' category ids differ too. */
+async function spareCategory(app: App, household: Household): Promise<void> {
+  await post(
+    app,
+    household,
+    ROUTES.spendingCategories,
+    { name: `${household.word} réserve` },
+    "spare",
+  );
 }
 
 /** Two households, each with alex and one other, in one directory. */
@@ -356,7 +396,7 @@ const WRITES: Write[] = [
   {
     route: "statements",
     async run(app, h) {
-      await post(app, h, ROUTES.statements, { text: paste(h, 0, 6) }, this.route);
+      await post(app, h, ROUTES.statements, { text: paste(h, 1) }, this.route);
     },
   },
   {
@@ -380,7 +420,7 @@ const WRITES: Write[] = [
         this.route,
       );
       // The second paste, now that history has three answers to file from.
-      await post(app, h, ROUTES.statements, { text: paste(h, 6) }, "statements");
+      await post(app, h, ROUTES.statements, { text: paste(h, 2) }, "statements");
     },
   },
   {
@@ -563,24 +603,87 @@ const READS: { route: RouteName; method: Method; url: string }[] = [
   { route: "statsSettlements", method: "GET", url: ROUTES.statsSettlements },
 ];
 
+/**
+ * Every (method, path) the server answers, read from Fastify's own route tree,
+ * sorted. `printRoutes` draws a tree, each line one node's segment and its
+ * methods, four columns deeper per level, so a node's path is its ancestors'
+ * segments and its own. The `HEAD` Fastify adds beside each `GET` is left out;
+ * any other `HEAD`, or any other method, is kept, so that it fails the
+ * comparison.
+ */
+function answeredRoutes(app: App): string[] {
+  const pairs = new Set<string>();
+  const segments: string[] = [];
+  for (const line of app.server.printRoutes({ commonPrefix: false }).split("\n")) {
+    const match = /^([│├└─ ]*)(\S+) \(([A-Z, ]+)\)$/u.exec(line);
+    if (match === null) continue;
+    const [, indent = "", segment = "", methods = ""] = match;
+    const depth = indent.length / 4 - 1;
+    segments.length = depth;
+    segments.push(segment);
+    for (const method of methods.split(", ")) pairs.add(`${method} ${segments.join("")}`);
+  }
+  return [...pairs]
+    .filter((pair) => {
+      const [method, path] = pair.split(" ");
+      return !(method === "HEAD" && pairs.has(`GET ${path ?? ""}`));
+    })
+    .toSorted();
+}
+
+/**
+ * What each household's file holds that it should not: a table holding the
+ * other household's marks, or a table whose row count differs between the two
+ * files. Read straight from the files, not through any route.
+ */
+function storedLeaks(app: App): string[] {
+  const found: string[] = [];
+  const tables = (household: Household) => {
+    const db = app.books.of(household.id);
+    const names = (
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    return new Map(
+      names.map((name) => [name, db.prepare(`SELECT * FROM "${name}"`).all()] as const),
+    );
+  };
+  const held = new Map([HOME, AWAY].map((household) => [household.id, tables(household)] as const));
+  for (const [own, other] of [
+    [HOME, AWAY],
+    [AWAY, HOME],
+  ] as const) {
+    for (const [table, rows] of held.get(own.id) ?? []) {
+      const text = JSON.stringify(rows);
+      const shown = marks(other).filter((mark) => text.includes(mark));
+      if (shown.length > 0)
+        found.push(`${own.id}'s ${table} holds ${other.id}'s ${shown.join(", ")}`);
+    }
+  }
+  for (const [table, rows] of held.get(HOME.id) ?? []) {
+    const away = held.get(AWAY.id)?.get(table)?.length ?? 0;
+    if (rows.length !== away)
+      found.push(`${table} holds ${rows.length} rows at home, ${away} away`);
+  }
+  return found;
+}
+
 describe("the isolation sweep", () => {
   test("covers every route the app answers, so a route added later cannot be left out", async () => {
     const app = await start();
     try {
-      const answered: string[] = [];
-      for (const [name, path] of Object.entries(ROUTES)) {
-        for (const method of ["GET", "POST"] as const) {
-          if (app.server.hasRoute({ method, url: path })) answered.push(`${method} ${name}`);
-        }
-      }
+      const answered = answeredRoutes(app);
       const swept = [
-        ...WRITES.map((write) => `POST ${write.route}`),
-        ...READS.map((read) => `${read.method} ${read.route}`),
+        ...WRITES.map((write) => `POST ${ROUTES[write.route]}`),
+        ...READS.map((read) => `${read.method} ${ROUTES[read.route]}`),
         // Reads no books, and is answered with no identity at all.
-        "GET health",
+        `GET ${ROUTES.health}`,
       ];
 
-      expect(swept.toSorted()).toEqual(answered.toSorted());
+      expect(swept.toSorted()).toEqual(answered);
+      // The listing was read: a format it no longer parses fails here, not by
+      // finding nothing to compare.
       expect(answered.length).toBeGreaterThan(40);
     } finally {
       await app.shutdown();
@@ -590,9 +693,14 @@ describe("the isolation sweep", () => {
   test("each household reads its own records through every read route, and nothing of the other's", async () => {
     const app = await start();
     try {
+      // Home first, then away, as two people would, but with away's ids
+      // shifted by a spare category and row, and home's spare made last so
+      // that both files end up with the same number of rows.
       for (const household of [HOME, AWAY]) {
         const written: Written = {};
+        if (household === AWAY) await spareCategory(app, household);
         for (const write of WRITES) await write.run(app, household, written);
+        if (household === HOME) await spareCategory(app, household);
       }
 
       // Every read is made before anything is asserted, so a failure lists
@@ -617,6 +725,7 @@ describe("the isolation sweep", () => {
 
       expect(leaks).toEqual([]);
       expect(silent).toEqual([]);
+      expect(storedLeaks(app)).toEqual([]);
     } finally {
       await app.shutdown();
     }

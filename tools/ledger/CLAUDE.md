@@ -102,9 +102,12 @@ own** (lg-21). Each household's books are a SQLite file of their own,
 caller's household; an identity with no household has none, and `booksOf`
 refuses it as `personOf` does. `AppContext` holds no handle, so the compiler
 finds a route that reaches for one, and `api/test/isolation.test.ts` writes
-through every write route as two households and reads every read route back,
-walking `ROUTES` so that a route added later is swept too. A route given
-another household's handle, or the one handle for both, is the leak it catches.
+through every write route as two households, reads every read route back, and
+reads every table of both files directly, since a write can land where no read
+shows it. It takes its list of routes from the server itself, whatever the
+method and whether `ROUTES` names it, so a route added later is swept too. A
+route given another household's handle, or the one handle for both, is the leak
+it catches.
 
 **Every API route but health is rate limited, per person.** A route takes
 `{ onRequest: rateLimitsFor(context).read }` or `.write` from
