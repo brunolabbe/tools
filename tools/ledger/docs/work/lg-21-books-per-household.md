@@ -40,7 +40,8 @@ the other. A request that holds only its own household's file cannot do that.
      notes, and do not write code that adopts it.
 2. **The request carries its books.** The identity hook in `api/src/identity.ts`
    attaches the household's handle, and `booksOf(request)` returns it, failing
-   closed like `personOf`.
+   closed like `personOf` — for an identity with no membership, an admin in no
+   household included, there is no handle and the route is refused.
    - **`db` is removed from `AppContext`** (`api/src/context.ts`), so the compiler
      finds every remaining use. At filing there were about 88 uses of `context.db`
      across 15 files.
@@ -98,3 +99,5 @@ the other. A request that holds only its own household's file cannot do that.
 - 2026-10-12 — Filed with lg-20, lg-22 and repo-98 from the owner's design
   discussion. The owner said the existing `ledger.db` can be wiped, so nothing
   migrates it.
+- 2026-10-12 — Reviewed: lg-20 now lets an admin with no household through the
+  identity hook, so `booksOf` is named as refusing that identity.

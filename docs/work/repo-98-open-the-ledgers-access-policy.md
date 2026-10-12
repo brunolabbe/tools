@@ -1,36 +1,50 @@
 ---
 id: repo-98
 tool: repo
-title: The ledger's Access policy admits any address that proves itself
+title: The ledger's Access policy admits any address that proves itself, if the ledger is ever to be open
 kind: work-package
-status: ready
+status: needs-decision
 milestone: null
-depends_on: [lg-20]
+depends_on: [lg-20, lg-22]
 difficulty: standard
 ---
 
-# repo-98 — The ledger's Access policy admits any address that proves itself
+# repo-98 — The ledger's Access policy admits any address that proves itself, if the ledger is ever to be open
 
 ## Why
 
-The ledger's Access application admits exactly two addresses: `--email` and
-`--ledger-email` in `scripts/cloudflare-setup.mjs`, whose header comment argues
-for the second address. On 2026-10-12 the owner decided that more than one
-household uses the ledger, that membership lives in the ledger's own directory
-(lg-20), and that a household's members add their own members from the app
-(lg-22). An allowlist on Access would be a second list of members, and a
-household could not add anyone without the operator's dashboard. So Access stops
-deciding _who_ and keeps deciding _whether someone proved an address_
-(`tools/ledger/docs/00-ANALYSIS.md` §7, _Access proves the address and the
-ledger decides who is in_).
+The ledger's Access application admits listed addresses only: two at creation
+(`--email` and `--ledger-email` in `scripts/cloudflare-setup.mjs`), and after
+lg-20 every household's members, each added by the operator in the dashboard.
+The directory decides which household an admitted address is in
+(`tools/ledger/docs/00-ANALYSIS.md` §7, _Access keeps its allowlist, and the
+directory decides who is in_). That was the owner's choice on 2026-10-12, at
+review, over the open policy this ticket first described: at two or three
+households, a new address is a dashboard edit a few times in the tool's life,
+and no stranger ever reaches the origin.
 
-The policy becomes `allow` with `include: [{ everyone: {} }]`. That is not a
-Bypass. An unauthenticated request still stops at Cloudflare, and every request
-that reaches the origin still carries a token the ledger verifies.
+**This ticket is the other choice, kept for the day the owner wants the ledger
+open to anyone** — households the operator does not admit by hand. The decision
+it waits on is that one, and nothing builds it before. It does not need a
+provider of the ledger's own: Access already fronts Google, GitHub and a
+one-time PIN, so "anyone who proves an address" is a policy change, and the
+tool keeps no login of its own (the ledger `CLAUDE.md`).
 
-It depends on lg-20 because lg-20 rewrites the same ledger section of
-`docs/02-DEPLOYMENT.md`, and because lg-20 adds the "no household" page and
-the rate limit on refused addresses that a stranger now reaches.
+The policy would become `allow` with `include: [{ everyone: {} }]`. That is not
+a Bypass. An unauthenticated request still stops at Cloudflare, and every
+request that reaches the origin still carries a token the ledger verifies. What
+it costs, measured at filing:
+
+- **Every stranger who proves an address takes a Zero Trust seat, and a full
+  plan blocks every new sign-in.** Cloudflare's seat-management page: once the
+  subscription's seats are consumed, additional users who attempt to log in are
+  blocked, and inactive users are not removed by default. So fifty strangers,
+  or one with fifty mailboxes, lock the next household out until the operator
+  clears seats. The free plan's seat count was reported as 50 from Cloudflare's
+  2020 announcement, and no current official page confirmed it.
+- **The identity check and the admin routes become reachable by any stranger.**
+  Both fail closed today, and the authority sweep (lg-22) proves it, but they
+  are then a surface, and the refusal path needs a limit of its own.
 
 ## Build
 
@@ -50,32 +64,50 @@ the rate limit on refused addresses that a stranger now reaches.
    dashboard steps in `docs/02-DEPLOYMENT.md`: Zero Trust → Access → Applications →
    ledger → its Allow policy → replace the email includes with _Everyone_, and
    keep the login methods as they are.
-3. **`docs/02-DEPLOYMENT.md`.**
-   - Rewrite _The ledger's: two people, and still no Bypass_. Keep its _No Bypass
-     rule, ever_. Its _Never "widen it" to public_ becomes "never Bypass, and never
-     admit without proof of an address", with the reason.
+3. **Seat expiration on, before the policy opens.** Zero Trust → Settings →
+   Admin controls, at its shortest window (one month at filing), so a stranger's
+   seat frees itself. Read the account's current seat count and the window in
+   the dashboard and write both into the deployment notes, with what a full plan
+   does to a new sign-in. Do not quote the 2020 figure as current.
+4. **Refused requests are rate limited by client address.** A stranger who
+   proves any address reaches the identity check (lg-20). A refusal is keyed on
+   the client address (`trustProxy`, as `ApiConfig` already configures it) and
+   not on a person, since there is none. A test proves the limit holds. Every
+   other route keeps its per-person limit.
+5. **The sweep and the page meet a stranger.** lg-22's authority sweep already
+   walks an admitted address that is neither member nor admin; name that case
+   as the stranger's and keep it. lg-20's "no household" page is what a stranger
+   sees, and it must go on naming nobody and nothing.
+6. **`docs/02-DEPLOYMENT.md`.**
+   - Rewrite the ledger's step 2 section. Keep its _No Bypass rule, ever_. Its
+     _Never "widen it" to public_ becomes "never Bypass, and never admit without
+     proof of an address", with the reason.
    - Remove `--ledger-email` from the setup command.
-4. **Zero Trust seats.** Every address that signs in takes a seat on the Zero Trust
-   plan, strangers included. The free plan's limit was reported as 50 at filing,
-   from Cloudflare's 2020 announcement; no current official page confirmed it.
-   Read the account's current limit, and how a seat is freed, in the dashboard,
-   and write both into the deployment notes. Do not quote the 2020 figure as
-   current.
+   - lg-22's screens stop telling a member that the operator must admit the
+     address.
 
 ## Done when
 
 1. `cloudflare-setup.mjs`'s desired state gives the ledger `allow` + `everyone` and
    leaves every other tool's policy unchanged; `scripts/test/cloudflare-setup.test.ts`
    proves both.
-2. `docs/02-DEPLOYMENT.md` carries the dashboard steps for the live application,
-   and the seat limit as read from the account, not as remembered.
-3. After the owner applies it, an address in no household signs in through Access
+2. Refused requests are rate limited by client address; a test proves it.
+3. `docs/02-DEPLOYMENT.md` carries the dashboard steps for the live application,
+   seat expiration, and the seat count as read from the account, not as remembered.
+4. After the owner applies it, an address in no household signs in through Access
    and sees lg-20's "no household" page, and a member reaches their books. This
    reading is the owner's, after the deploy.
-4. Gates green.
+5. Gates green.
 
 ## Log
 
 - 2026-10-12 — Filed with lg-20, lg-21 and lg-22. The owner weighed keeping the
   allowlist on Access and replacing Access with an OIDC provider such as Auth0,
   and chose this.
+- 2026-10-12 — Reviewed before merge, and the owner reversed it: the allowlist
+  stays, and this ticket is the deferred opening, `needs-decision` until the
+  owner wants the ledger open to anyone. The review brought the seat rule from
+  Cloudflare's own page (a full plan blocks new sign-ins; expiration off by
+  default), which the first filing had as "read the limit". The limit on
+  refusals by client address moved here from lg-20, since only this ticket lets
+  a stranger reach the check.

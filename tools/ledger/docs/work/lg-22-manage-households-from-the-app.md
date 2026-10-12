@@ -43,21 +43,28 @@ a command on the host. The owner chose to manage it from the app
 
 4. **Every change is an appended directory record naming the person who made it**
    (lg-20). Adding an address that already belongs to another household is
-   refused. An address that changes household is a removal by an admin, then an
+   refused, and so is a third person name (lg-20's cap). **A member is told only
+   that the address cannot be added**, whichever the reason: the reason would
+   let any member ask whether an address uses the ledger. An admin is told
+   which. An address that changes household is a removal by an admin, then an
    add.
 5. **Every new route takes a rate limit** (`rateLimitsFor(context).write`/`.read`),
-   or `api/test/route-limits.test.ts` fails.
+   or `api/test/route-limits.test.ts` fails. An admin route is keyed on the
+   admin's address, since an admin may have no person (lg-20), and
+   `route-limits.test.ts` accepts that hook as it does the two.
 6. **The authority sweep.** It walks every admin route as a non-admin member, and
-   every household route as a member of the _other_ household. Each must answer
-   403 and change nothing. Make it fail first by loosening one guard, and record
-   the failing run in the Log.
+   every household route as a member of the _other_ household and as an admin
+   in no household, and every route as an address Access admits that is
+   neither member nor admin. Each must answer 403 and change nothing. Make it
+   fail first by loosening one guard, and record the failing run in the Log.
 7. **The screens.**
    - An admin sees households and members, with add and remove.
    - A member sees their household's members and history, and adds one.
    - Mobile-first, as the rest of the web is.
-   - Each screen tells whoever adds a member that the person signs in with that
-     address through Access, which by then admits any address that proves itself
-     (repo-98).
+   - Each screen tells whoever adds a member that the address must also be
+     admitted on the ledger's Access policy, which the operator does in the
+     dashboard (`docs/02-DEPLOYMENT.md`, step 2), and the admin screen lists
+     every household's addresses so the operator can see which to admit.
 8. **Error codes.** A new ledger code arrives with the route that first throws it,
    with its status in `api/src/http-errors.ts` (the ledger `CLAUDE.md`), for
    example an address already in another household. Use core's `FORBIDDEN` for a
@@ -76,9 +83,10 @@ a command on the host. The owner chose to manage it from the app
    can sign in to empty books of its own; API and web tests prove it.
 2. A member adds a member to their own household and sees its history, and can
    remove nobody; tests prove both.
-3. The authority sweep proves every admin route refuses a non-admin, and every
-   household route refuses a member of another household, with nothing changed.
-   The Log records that it failed with one guard loosened.
+3. The authority sweep proves every admin route refuses a non-admin, every
+   household route refuses a member of another household and an admin in no
+   household, and every route refuses an admitted address that is neither,
+   with nothing changed. The Log records that it failed with one guard loosened.
 4. Every new route is rate limited (`route-limits.test.ts`).
 5. Gates green.
 
@@ -87,3 +95,8 @@ a command on the host. The owner chose to manage it from the app
 - 2026-10-12 — Filed with lg-20, lg-21 and repo-98. The owner chose the admin
   screen over a host command alone, and chose that members add but do not remove,
   over members adding and removing anyone but the last.
+- 2026-10-12 — Reviewed before merge. Access keeps its allowlist, so a member's
+  add now tells them the operator must admit the address; a member's refusal
+  is one generic answer, because the specific one was an oracle over every
+  address; admin routes get a limiter keyed on the address; and the sweep gains
+  the two identities lg-20 now lets through the hook without a household.
