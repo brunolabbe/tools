@@ -253,7 +253,7 @@ and their defaults.
 to visitors is `web/public/terms.html`, and `api/test/log-fields.test.ts` pins the
 log fields it describes). The client's **network** (a /24, or a /48 for IPv6, never
 the address; `api/src/log-address.ts`) is on the `request` line of every request,
-and the rate limits keep the whole address in memory only. The page URL is in the
+and the rate limits keep the address in memory only (IPv4 whole, IPv6 as its /64). The page URL is in the
 `jobs` row of a download, query string included — and again in a failed job's
 `error_json`, which has had its query stripped before it is stored — until the
 sweep **blanks it fifteen minutes after the job ends** (`FINISHED_JOB_CLEAR_AFTER_MS`,

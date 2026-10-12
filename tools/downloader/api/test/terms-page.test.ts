@@ -122,7 +122,9 @@ describe("what it says", () => {
     expect(text).toContain("never your whole address");
     expect(text).toContain("that page's domain, never its path");
     expect(text).not.toContain("domain and path");
-    expect(text).toContain("keep your whole address in the server's memory");
+    expect(text).toContain(
+      "keep your address in the server's memory (for IPv6, its first 64 bits)",
+    );
   });
 
   test("it names the person in charge and the contact, and says where the traffic goes", async () => {

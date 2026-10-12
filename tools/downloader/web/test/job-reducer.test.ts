@@ -264,6 +264,20 @@ describe("reconcileJob", () => {
       expect(next.result?.sizeBytes).toBe(10);
     });
 
+    test("from what a restore actually holds: a card saved mid-download keeps its page and variant, and has no filename to keep", () => {
+      // The state `useJobs`' restore produces: the job was non-terminal when the
+      // tab closed, so there is no `result` and the filename never reached this
+      // browser (it arrives only on the `completed` event). Gate 1 of dl-107.
+      const saved = job({ status: "downloading", updatedAt: T1, variant: chosen, result: null });
+      const next = reconcileJob(saved, cleared);
+      expect(next.sourceUrl).toBe(saved.sourceUrl);
+      expect(next.variant).toEqual(chosen);
+      expect(next.status).toBe("completed");
+      // The known gap, recorded rather than hidden: nothing local to keep, so the
+      // server's blank stands. A change that fills it should flip this line.
+      expect(next.result?.filename).toBe("");
+    });
+
     test("takes the server's blanks when there is no local copy to keep", () => {
       expect(reconcileJob(undefined, cleared).sourceUrl).toBe("");
     });

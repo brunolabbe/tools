@@ -20,13 +20,21 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
+import type { JobResponse } from "@downloader/contract";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, test } from "vitest";
 import { FINISHED_JOB_CLEAR_AFTER_MS, JOB_RETENTION_DAYS } from "../src/jobs/links.ts";
 import { shortenAddress, shortenKey } from "../src/log-address.ts";
 import { createLogger, cutUrlsToOrigin } from "../src/logger.ts";
 import { runSweep } from "../src/server.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver, variant } from "./helpers.ts";
+import {
+  createHarness,
+  probeResult,
+  SOURCE_URL,
+  StubResolver,
+  variant,
+  waitFor,
+} from "./helpers.ts";
 import type { Harness, HarnessOptions } from "./helpers.ts";
 
 type Line = Record<string, unknown> & { msg: string };
@@ -151,6 +159,101 @@ describe("the address on a log line", () => {
     expect(limited[0]?.["key"]).toBe("203.0.113.0/24");
     expect(raw).not.toContain(client);
   });
+
+  test("an IPv6 client's rate-limited line says the /48, while the limiter still counts its /64", async () => {
+    // `clientKey` hands the limiter the /64, so the line would otherwise write
+    // `2001:db8:1:1::/64`: a network of one household, not the /48 the request
+    // line writes.
+    const a = "2001:db8:1:1::aaaa";
+    const b = "2001:db8:1:2::bbbb";
+    const statuses: number[] = [];
+    const { lines, raw } = await logged(
+      async (current) => {
+        for (const remoteAddress of [a, b, a, "2001:db8:1:1::cccc"]) {
+          // oxlint-disable-next-line no-await-in-loop
+          const response = await current.app.server.inject({
+            method: "POST",
+            url: ROUTES.probe,
+            payload: { url: SOURCE_URL },
+            remoteAddress,
+          });
+          statuses.push(response.statusCode);
+        }
+      },
+      { rateLimitProbePerMinute: 1 },
+    );
+
+    // Two /64s in one /48 are two buckets; the same /64 shares one.
+    expect(statuses).toEqual([200, 200, 429, 429]);
+    const limited = lines.filter((line) => line.msg === "rate limited");
+    expect(limited.map((line) => line["key"])).toEqual(["2001:db8:1::/48", "2001:db8:1::/48"]);
+    expect(raw).not.toMatch(/2001:db8:1:1|2001:db8:1:2|aaaa|bbbb|cccc/u);
+  });
+
+  test.each([
+    ["an IPv4 client", "203.0.113.77", "203.0.113.78", "203.0.113.0/24", /203\.0\.113\.7[78]/u],
+    ["an IPv6 client", "2001:db8:5:1::1", "2001:db8:5:2::1", "2001:db8:5::/48", /2001:db8:5:[12]/u],
+  ])(
+    "the per-client cap line says the network for %s, and the cap still counts the address",
+    async (_name, first, second, network, leaked) => {
+      let release: (() => void) | undefined;
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const raw: string[] = [];
+      harness = await createHarness({
+        logger: createLogger({ level: "info", write: (line) => void raw.push(line) }),
+        resolver: new StubResolver(async () => {
+          await blocked;
+          return probeResult();
+        }),
+        config: { maxConcurrentJobs: 4, maxJobsPerClient: 1, maxQueuedJobs: 0 },
+      });
+      const current = harness;
+      raw.length = 0;
+
+      // Opens a job's link and reports whether it took a slot (201) or was refused.
+      const open = async (remoteAddress: string, url: string): Promise<number> => {
+        const created = await current.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url },
+          remoteAddress,
+        });
+        const { job } = created.json() as JobResponse;
+        const token = (job.link?.url ?? "").split("/").at(-1) ?? "";
+        let answered: number | null = null;
+        void current.app.server
+          .inject({ method: "GET", url: job.link?.url ?? "", remoteAddress })
+          .then((response) => {
+            answered = response.statusCode;
+            return undefined;
+          });
+        await waitFor(
+          () => ({ answered, used: current.app.context.store.findLink(token)?.usedAt ?? null }),
+          (state) => state.answered !== null || state.used !== null,
+        );
+        return answered ?? 201;
+      };
+
+      try {
+        const results = [
+          await open(first, `${SOURCE_URL}/1`),
+          await open(first, `${SOURCE_URL}/2`),
+          // A different address in the same network is a different client to the cap.
+          await open(second, `${SOURCE_URL}/3`),
+        ];
+        expect(results).toEqual([201, 429, 201]);
+        const refused = raw
+          .map((line) => JSON.parse(line) as Line)
+          .filter((line) => line.msg === "download refused: per-client cap reached");
+        expect(refused.map((line) => line["key"])).toEqual([network]);
+        expect(raw.join("")).not.toMatch(leaked);
+      } finally {
+        release?.();
+      }
+    },
+  );
 });
 
 describe("a finished job's row (dl-107)", () => {

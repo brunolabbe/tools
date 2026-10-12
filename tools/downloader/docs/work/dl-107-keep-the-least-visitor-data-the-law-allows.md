@@ -60,14 +60,17 @@ or row 3's `jobId`, and from that to row 4. Remove or weaken the address on
 row 1 and the join is gone everywhere at once.
 
 **What no purpose needs after the job ends.** Rows 4–7 exist so a running job
-can run. The browser has its copy before the job finishes, and on reload it
-re-fetches only unfinished jobs (`useJobs.ts`'s restore). The report reads
-none of them (row 8). So the most sensitive data the service holds, a full
-page address and a signed media URL, could be cleared within minutes of a job
-ending instead of kept 14 days. One reader would notice: a tab closed while a
-job ran, reopened after the clearing, fetches the finished row, and
-`reconcileJob` would replace the card's page URL and filename with blanks
-unless it keeps the local copy's.
+can run. The browser has its page address and its variant before the job
+finishes, and on reload it re-fetches only unfinished jobs (`useJobs.ts`'s
+restore). The report reads none of them (row 8). So the most sensitive data the
+service holds, a full page address and a signed media URL, could be cleared
+within minutes of a job ending instead of kept 14 days. One reader would
+notice: a tab closed while a job ran, reopened after the clearing, fetches the
+finished row, and `reconcileJob` would replace the card's page URL with a blank
+unless it keeps the local copy's. **The filename is not like them** (corrected
+at gate 1): it reaches the browser only on the `completed` event, so a tab
+closed before that never holds it, and a cleared row's blank filename is all
+such a card can show. See the Log.
 
 ## The law
 
@@ -207,7 +210,8 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
    `JobStore` statement clears the four fields on rows whose `finished_at` is
    older than `LINK_TTL_MS`. Settle the contract question first, and make
    `reconcileJob` ([job-reducer.ts](../../web/src/lib/job-reducer.ts)) keep
-   the local `sourceUrl` and filename when the server's copy has been cleared.
+   the local `sourceUrl` when the server's copy has been cleared (not the
+   filename: a card saved mid-download never held one, see the Log).
 2. Row 7, independently: `error_json` should not hold a query even while the
    row is live. Run `details` through `redactUrlsDeep` before it is stored, as
    the logger already does before it is written.
@@ -299,8 +303,8 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
     from the compose file, so a cap that moves without the page fails.
   - **The hold procedure's commands were written from the compose files and not
     run against a host**, and the deployment doc says so. The image keeps the
-    database at `/data/jobs.db` (`STORAGE_DIR`) with no write-ahead log, which
-    is what makes one file copy whole.
+    database at `/data/jobs.db` (`STORAGE_DIR`). (This entry said "with no
+    write-ahead log, which is what makes one file copy whole"; that was wrong, see round 1.)
   - **Question 5 is published with a title, not a name:** "the operator of this
     service, one person", at the abuse alias. If the owner wants a name, it is
     one line in `web/public/terms.html`.
@@ -311,3 +315,32 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
     `job-retention.test.ts`'s premise is the redacted `details.url`.
   - **Fold-in:** none. dl-49 and dl-108 are the pieces this work makes nearer
     and the dispatch holds both behind this ticket; neither was started.
+- 2026-10-12 — Round 1, after gate 1 failed `dac72673`. Fixed:
+  - **The hold copy of the database was incomplete.** The service runs SQLite
+    in WAL mode (`migrate` sets `journal_mode = WAL`), so `jobs.db` alone can lack
+    its tables: the gate's `walcopy.mts` printed `no such table: jobs` for the
+    copy while the live database held 1 row. The deployment doc's step 3 now
+    stops the service and copies `jobs.db`, `jobs.db-wal` and `jobs.db-shm`
+    together. The earlier Log line that said otherwise is corrected above.
+  - **The brief's premise about the filename was wrong.** The browser holds the
+    page address and the variant before a job finishes, not the filename: that
+    arrives on the `completed` event, so a tab closed mid-download never has it,
+    and `reconcileJob` has nothing to keep. `reconcile.mts` printed
+    `card text: "Saved by your browser — "` for that state. The Why, the Build
+    step and the `reconcileJob` comment now say so, and a reducer test starts
+    from the state restore produces (a `downloading` local copy, `result: null`).
+    **How the card should read in that case is an open decision, not made here**
+    (see the report): any fix shows less than the real filename, which main shows
+    today, and the only way to keep it is to stop clearing it (a change to 1A).
+  - **The per-client cap line and the IPv6 forms had no test.** `visitor-data.test.ts`
+    now covers `download refused: per-client cap reached` for IPv4 and IPv6 and the
+    IPv6 `rate limited` line, which `clientKey` would otherwise write as a `/64`.
+    Reverting `shortenKey` on either line turns 2 tests red.
+  - **`v6Groups` is lifted** to `@webtools/core/rate-limit` (exported, one word)
+    and `log-address.ts` imports it, per the second-consumer rule.
+  - **The terms page and architecture doc said the limits keep the "whole
+    address"**; for IPv6 they keep the `/64`. Both now say so, and the test follows.
+  - Not changed, as the coordinator directed: the userinfo edge in `cutUrlsToOrigin`
+    (no live call site), the 15 minutes depending on `GC_INTERVAL_MS`, and step 2
+    copying the container's whole log directory (which in Docker's usual layout
+    includes `config.v2.json`, not checked on the host).

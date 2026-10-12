@@ -5,35 +5,17 @@
  * as the container's log lives. What the log's readers need is whether a burst
  * came from one network, not which house, so the address is cut before it is
  * written: an IPv4 address to its /24, an IPv6 one to its /48. The rate limits
- * are unaffected, because they key on the whole address in memory
- * (`clientKey`, `@webtools/core/rate-limit`) and never read this.
+ * are unaffected, because they key on the address in memory (`clientKey`: IPv4
+ * whole, IPv6 as its /64; `@webtools/core/rate-limit`) and never read this.
  *
- * The IPv6 expansion is `clientKey`'s `v6Groups` copied rather than imported:
- * it is not exported, and a second consumer of a ten-line helper does not yet
- * pay for a change to core's public surface. If a third appears, lift it.
+ * The IPv6 expansion is core's `v6Groups`, exported for this second consumer.
  */
 
 import net from "node:net";
+import { v6Groups } from "@webtools/core/rate-limit";
 
 /** What a line says when the address cannot be read, so that nothing raw leaks. */
 export const UNKNOWN_ADDRESS = "unknown";
-
-function v6Groups(address: string): number[] | null {
-  const [head = "", tail] = address.split("::");
-  const headParts = head === "" ? [] : head.split(":");
-  const tailParts = tail === undefined || tail === "" ? [] : tail.split(":");
-  const missing = 8 - headParts.length - tailParts.length;
-  if (tail !== undefined && missing < 1) return null;
-  const parts =
-    tail === undefined
-      ? headParts
-      : [...headParts, ...Array<string>(missing).fill("0"), ...tailParts];
-  if (parts.length !== 8) return null;
-  const groups = parts.map((part) => Number.parseInt(part, 16));
-  return groups.some((group) => !Number.isInteger(group) || group < 0 || group > 0xffff)
-    ? null
-    : groups;
-}
 
 /**
  * `203.0.113.77` becomes `203.0.113.0/24`; `2001:db8:1:2::9` becomes

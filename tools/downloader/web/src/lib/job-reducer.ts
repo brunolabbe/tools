@@ -181,9 +181,13 @@ export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {
  * its link's lifetime has passed the server blanks the page address, the media
  * variant and the filename, since only this browser has any use for them. So a
  * blank there never replaces something we already hold. That is the one case
- * where the older copy is allowed to win a field: a tab closed while a job ran
- * and reopened after the clearing fetches the finished row, and without this its
- * card would lose its page and its filename.
+ * where the older copy is allowed to win a field. What a card saved mid-download
+ * actually holds is its page address, which the job was started from, and the
+ * variant, so a tab closed while a job ran and reopened after the clearing keeps
+ * those. **It does not hold the filename**: that reaches the browser only on the
+ * `completed` event, so a card saved before it has `result: null` and nothing to
+ * keep, and the cleared row's `filename: ""` stands. The filename branch below
+ * serves only a local copy that already completed.
  */
 export function reconcileJob(local: Job | undefined, remote: Job): Job {
   if (!local) return remote;

@@ -730,8 +730,8 @@ would open it sooner; nothing here builds that.
 | Host, status, error code and times                           | `jobs`                     | 14 days, by the sweep (`JOB_RETENTION_DAYS`)                                |
 | A hostname and resolver timings                              | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default; `0` is refused at boot             |
 
-The log fields are measured and pinned by `api/test/log-fields.test.ts`. The full
-network address is held only in memory, by the rate limits, and never written.
+The log fields are measured and pinned by `api/test/log-fields.test.ts`. The rate limits
+hold the address in memory only (an IPv4 address whole, an IPv6 one as its /64), and never write it.
 
 **Log retention.** `compose.downloader.prod.yaml` caps the downloader's log at
 5 files of 5 MB, which is a **size, not an age** — Docker's `json-file` and
@@ -788,15 +788,26 @@ or a request from a lawyer.
 3. **Copy the database**, which holds each download's host, status, error code and
    times for 14 days, and no page address once a job is over. It can therefore
    say what was fetched from a **site**, not which page. The image keeps it at
-   `/data/jobs.db` (`STORAGE_DIR=/data`), and the service uses no write-ahead
-   log, so one file is the whole of it:
+   `/data/jobs.db` (`STORAGE_DIR=/data`), and the service runs SQLite in
+   write-ahead-log mode (`migrate` in `api/src/db/schema.ts`), so the most recent
+   rows, which are the ones a notice usually names, sit in `jobs.db-wal` until a
+   checkpoint. `jobs.db` alone can be missing its tables (measured on the real
+   `migrate`: the copy failed with `no such table: jobs` while the live database
+   held the row). Stop the service, so that nothing is written mid-copy, and copy
+   whichever of the three files exist together:
 
    ```bash
+   docker compose stop downloader
    docker compose cp downloader:/data/jobs.db ~/hold/<notice>/jobs.db
+   docker compose cp downloader:/data/jobs.db-wal ~/hold/<notice>/jobs.db-wal
+   docker compose cp downloader:/data/jobs.db-shm ~/hold/<notice>/jobs.db-shm
+   docker compose start downloader
    ```
 
-   Read the rows for the named site from the copy, with `sqlite3` on the host,
-   not from the live file.
+   A clean stop may checkpoint and remove the `-wal` and `-shm` files; a copy of a
+   file that is not there fails, and that is fine. Stopping ends any download in
+   progress, so pick a quiet moment. Read the rows for the named site from the
+   copy, with `sqlite3` on the host, not from the live file.
 
 4. **Reply from the abuse alias** and say what was found. What the service holds
    about a visitor is a network (a /24 or a /48, not an address), a site and a
