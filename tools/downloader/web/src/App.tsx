@@ -219,6 +219,7 @@ export function App(): React.JSX.Element {
           titles={jobs.titles}
           streamStates={jobs.streamStates}
           refusals={jobs.refusals}
+          stages={jobs.stages}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
           onRemove={jobs.remove}

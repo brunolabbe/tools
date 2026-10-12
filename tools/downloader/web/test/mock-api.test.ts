@@ -519,3 +519,41 @@ describe("the nowebm scenario refuses WebM and nothing else (dl-99)", () => {
     expect(events.some((event) => event.type === "completed")).toBe(true);
   });
 });
+
+/** The frames from the `probing` status to `probed`, as `status` or `stage by resolver`. */
+function reprobe(events: readonly JobEvent[]): string[] {
+  const start = events.findIndex((event) => event.type === "status" && event.status === "probing");
+  const end = events.findIndex((event) => event.type === "probed");
+  return events.slice(start, end).flatMap((event) => {
+    if (event.type === "status") return [event.status];
+    if (event.type === "stage") return [`${event.stage} by ${event.resolver}`];
+    return [];
+  });
+}
+
+describe("the job's re-probe narrates its stages (dl-110)", () => {
+  test("a slow scenario replays its own script on the job's stream, inside the probing window", async () => {
+    const { events, errors } = await run(scenarioUrl("slow"));
+
+    expect(errors).toBe(0);
+    for (const event of events) expect(jobEventSchema.safeParse(event).success).toBe(true);
+    const expected = (findScenario(scenarioUrl("slow")).stages ?? []).map(
+      (beat) => `${beat.stage} by ${beat.resolver}`,
+    );
+    expect(expected.length).toBeGreaterThan(2);
+    expect(reprobe(events)).toEqual(["probing", ...expected]);
+    // None outside the window: every stage frame is between `probing` and `probed`.
+    expect(events.filter((event) => event.type === "stage")).toHaveLength(expected.length);
+  });
+
+  test("an ordinary scenario narrates the direct tier, and the job folds as it did", async () => {
+    const { job, events } = await run(scenarioUrl(""));
+
+    expect(reprobe(events)).toEqual([
+      "probing",
+      "resolver-start by direct",
+      "direct-head by direct",
+    ]);
+    expect(applyJobEvents(job, events)).toEqual((await api.getJob(job.id)).job);
+  });
+});

@@ -8,13 +8,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppError, TERMINAL_STATUSES } from "@downloader/contract";
-import type { AppErrorPayload, Job, JobEvent, JobOptions } from "@downloader/contract";
+import type {
+  AppErrorPayload,
+  Job,
+  JobEvent,
+  JobOptions,
+  ProbeStageEvent,
+} from "@downloader/contract";
 import type { ApiClient } from "../api/types.ts";
 import {
   applyJobEvent,
   isTerminal,
   reconcileJob,
   refusalAfter,
+  stageAfter,
   upsertJob,
 } from "../lib/job-reducer.ts";
 import { createJobStream } from "../lib/job-stream.ts";
@@ -41,6 +48,12 @@ export interface UseJobs {
   refusals: Record<string, AppErrorPayload>;
   /** The visitor followed the link again: whatever it was refused for before is old news. */
   clearRefusal(id: string): void;
+  /**
+   * The latest stage each job's re-probe reported (dl-110), by job id — see
+   * `stageAfter`. Beside the jobs and unsaved for the reason `refusals` is: a
+   * reload forgets it, and the card says the status line until the next one.
+   */
+  stages: Record<string, ProbeStageEvent>;
   /** The page title each job was started from, by job id — see `loadTitles`. */
   titles: Record<string, string>;
   /**
@@ -64,6 +77,7 @@ export function useJobs(api: ApiClient): UseJobs {
   const [jobs, setJobs] = useState<Job[]>(() => loadJobs(storage));
   const [streamStates, setStreamStates] = useState<Record<string, StreamState>>({});
   const [refusals, setRefusals] = useState<Record<string, AppErrorPayload>>({});
+  const [stages, setStages] = useState<Record<string, ProbeStageEvent>>({});
   const [titles, setTitles] = useState<Record<string, string>>(() => loadTitles(storage));
   const streams = useRef(new Map<string, JobStream>());
   const jobsRef = useRef(jobs);
@@ -105,6 +119,13 @@ export function useJobs(api: ApiClient): UseJobs {
           : { ...previous, [jobId]: next };
       });
     }
+    setStages((previous) => {
+      const next = stageAfter(previous[jobId], event);
+      // The same reference for a frame that changes nothing — every heartbeat
+      // and progress tick passes through here.
+      if (next === previous[jobId]) return previous;
+      return next === undefined ? without(previous, jobId) : { ...previous, [jobId]: next };
+    });
     setJobs((previous) =>
       previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
     );
@@ -214,16 +235,13 @@ export function useJobs(api: ApiClient): UseJobs {
   );
 
   const clearRefusal = useCallback((id: string) => {
-    setRefusals((previous) => {
-      if (!(id in previous)) return previous;
-      const { [id]: _gone, ...rest } = previous;
-      return rest;
-    });
+    setRefusals((previous) => without(previous, id));
   }, []);
 
   const remove = useCallback(
     (id: string) => {
       detach(id);
+      setStages((previous) => without(previous, id));
       setJobs((previous) => previous.filter((job) => job.id !== id));
     },
     [detach],
@@ -243,10 +261,18 @@ export function useJobs(api: ApiClient): UseJobs {
     streamStates,
     refusals,
     clearRefusal,
+    stages,
     titles,
     start,
     cancel,
     remove,
     clearSaved,
   };
+}
+
+/** The map without `id`, or the same map when it had none, so React can skip the render. */
+function without<T>(map: Record<string, T>, id: string): Record<string, T> {
+  if (!(id in map)) return map;
+  const { [id]: _gone, ...rest } = map;
+  return rest;
 }

@@ -13,7 +13,15 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
-import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
+import type {
+  Job,
+  JobResponse,
+  JobStatus,
+  ProbeResponse,
+  ProbeResult,
+  ResolveOptions,
+  Resolver,
+} from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { initialProgress } from "../src/db/job-store.ts";
 import type { LightMyRequestResponse as Response } from "fastify";
@@ -858,5 +866,66 @@ describe("CONTAINER_UNSUPPORTED is re-probed once although it is not retryable (
     expect(finished.error?.retryable).toBe(false);
     expect(finished.attempts).toBe(2);
     expect(harness.engine.calls).toBe(2);
+  });
+});
+
+describe("the re-probe narrates its stages on the job's stream (dl-110)", () => {
+  /**
+   * Reports one stage of its own mid-resolve, as a real tier does beside an
+   * `await`. `StubResolver` reports none, which is the case the card falls back
+   * to the status line for.
+   */
+  class NarratingResolver implements Resolver {
+    readonly name = "narrating";
+    readonly priority = 10;
+
+    canHandle(): boolean {
+      return true;
+    }
+
+    async resolve(_url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      options.onStage?.({ stage: "page-load", resolver: this.name });
+      return probeResult();
+    }
+  }
+
+  test("resolver-start and the tier's own stage arrive between probing and downloading", async () => {
+    harness = await createHarness({ resolver: new NarratingResolver() });
+
+    const created = await createJob(harness, {}, { open: false });
+    const frames: string[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "status") frames.push(event.status);
+      if (event.type === "stage") frames.push(`${event.stage} by ${event.resolver}`);
+    });
+    openLink(harness, created);
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    expect(frames).toEqual([
+      "probing",
+      "resolver-start by narrating",
+      "page-load by narrating",
+      "downloading",
+      "completed",
+    ]);
+  });
+
+  test("a subscriber that throws on a stage frame cannot fail the job or silence the others", async () => {
+    harness = await createHarness({ resolver: new NarratingResolver() });
+
+    const created = await createJob(harness, {}, { open: false });
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "stage") throw new Error("a socket that closed mid-write");
+    });
+    const stages: string[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "stage") stages.push(event.stage);
+    });
+    openLink(harness, created);
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    expect(stages).toEqual(["resolver-start", "page-load"]);
   });
 });

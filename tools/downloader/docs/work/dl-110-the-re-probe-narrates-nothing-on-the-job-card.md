@@ -168,3 +168,52 @@ recommended option:
 4. The mocked API — options: `mock.ts` replays the scenario's stage script as job
    `stage` frames, with a case in `mock-api.test.ts` / leave the mock silent.
    **The mock sends stages.**
+
+**2026-10-12, built** to the answers above. The contract is the diff proposed
+above, unchanged. The API passes `onStage` to the re-probe's `registry.resolve`
+and publishes each stage through a new `JobEventHub.stage`; the store is not
+touched. The web keeps the latest stage per job in `useJobs` beside
+`refusals`, and the card shows it as a second message while `probing`, under a
+new `search` mark. The mock replays the scenario's beats inside its probing
+window.
+
+Done when, each with the test that proves it:
+
+1. `api/test/pipeline.test.ts` › "resolver-start and the tier's own stage arrive
+   between probing and downloading", which asserts the exact frame order:
+   `probing`, `resolver-start by narrating`, `page-load by narrating`,
+   `downloading`, `completed`. With the orchestrator's `events.stage` call
+   replaced by `void event`, it and its sibling ("a subscriber that throws on a
+   stage frame cannot fail the job or silence the others") both fail.
+2. `web/test/job-reducer.test.ts` › "changes neither the job record nor what is
+   persisted": `applyJobEvent` returns the same reference, and `saveJobs` writes
+   the same bytes before and after.
+3. `web/test/app.test.tsx` › "a re-analysing card narrates the latest stage under
+   its status line, and drops it when the job moves on", through the real
+   `useJobs`. It also covers the back-edge, where a second `probing` shows the
+   status line again and not the first attempt's last stage.
+4. `web/test/http-client.test.ts` › "a frame of a type this bundle does not know
+   is dropped, and the stream carries on (dl-110)". It fails when `openJobEvents`
+   is changed to call `onError` on a frame that does not parse.
+
+What the brief had wrong, beyond the answers above. **"Drops it when the job
+leaves `probing`" cannot be judged against the job as last rendered.** The
+server sends `status: probing` and the first stage back to back, and React can
+fold both before re-rendering. A stage checked against the job held in
+`jobsRef` would then be checked against a job still `queued`, and dropped. So
+`stageAfter` decides from the frames alone: any `status` frame clears it, and so
+do a `progress` frame that is not `probing` and a terminal frame. The card reads
+the stage only while the job is `probing`. `app.test.tsx` › "a stage sent back
+to back with the probing status is not lost to the render between them" fails
+against the status-gated version (measured: 1 failed / 27).
+
+Fold-ins. `STATUS_HINT`'s doc comment was rewritten, as recorded above.
+`http.ts` gained a comment on why a frame that does not parse is dropped
+rather than treated as a broken stream. `useJobs`'s two map-removals now share
+one `without` helper. Not folded in: `refusals` keeps the entry of a removed job,
+which this branch's `remove` now clears for `stages` only. It is harmless, since
+a removed card is never read, and it is no part of this ticket.
+
+Expected conflict: dl-108 widens `progressMessages` in `JobCard.tsx`, and this
+branch adds a `stage` parameter to it. It is resolved by hand when `main` is
+merged in after dl-108 lands.

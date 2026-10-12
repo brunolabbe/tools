@@ -8,7 +8,8 @@
  * are decoration and hidden from assistive technology, the text carries it all.
  */
 
-export type MessageIcon = "link" | "refresh" | "send" | "browser";
+/** `search` marks the re-probe's latest stage (dl-110), under the status line's `refresh`. */
+export type MessageIcon = "link" | "refresh" | "send" | "browser" | "search";
 
 export interface ProgressMessage {
   key: string;
@@ -73,6 +74,12 @@ function Icon({ name }: { name: MessageIcon }): React.JSX.Element {
           <path d="M3 9h18" />
           <path d="M7 6.5h.01" />
           <path d="M10 6.5h.01" />
+        </>
+      )}
+      {name === "search" && (
+        <>
+          <circle cx="11" cy="11" r="6" />
+          <path d="M20 20l-4.35-4.35" />
         </>
       )}
     </svg>
