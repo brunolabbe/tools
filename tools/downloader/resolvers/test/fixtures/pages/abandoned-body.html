@@ -8,9 +8,10 @@
     <h1>Abandoned body</h1>
     <!-- The one page that fetches a playlist and never reads it (dl-111). The
          collector's body read for that request never completes, so the probe
-         ends on settle()'s cap instead of on the read. Every other fixture
-         reads what it fetches, so a test that is not about the cap does not
-         wait for it. -->
+         ends on settle()'s cap instead of on the read. No other test reaches
+         that cap (dl-111 measured it), so a test that is not about the cap
+         does not wait for it. A few other pages still fetch without reading;
+         none is waited on. -->
     <button id="play" type="button">Play</button>
     <video id="v" width="640" height="360" muted playsinline controls></video>
     <p id="status">idle</p>

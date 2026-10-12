@@ -2412,10 +2412,10 @@ describe("a page that abandons a fetched playlist (dl-111)", () => {
     "a body the page never reads is abandoned at settle()'s cap, and the probe still answers",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      // The other fixtures read every body they fetch, so none of them reaches
-      // `settle()`'s cap; this is the one browser test that does. It asserts
-      // the answer and no timing: `sniff.test.ts` pins the cap without a
-      // browser, and a duration here would measure the machine.
+      // No other browser test reaches `settle()`'s cap: dl-111 planted a throw
+      // at the cap and this was the only one that failed. It asserts the
+      // answer and no timing: `sniff.test.ts` pins the cap without a browser,
+      // and a duration here would measure the machine.
       const hls = recordingHlsParser();
       const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
       const result = await probe("/abandoned-body.html", resolver);

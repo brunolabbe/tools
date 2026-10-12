@@ -74,9 +74,13 @@ the abandoned-body cap without a browser.
 
 ## Done when
 
-1. No browser test that is not about the settle cap takes 3 s more than the
-   baseline probe. Proof: before and after per-test durations for every fixture
-   changed, from a local run, in the Log.
+1. No browser test other than the abandoned-body one reaches `settle()`'s cap.
+   Proof: a throw planted at the cap, run over the browser directory, fails that
+   one test and no other (output in the Log); the before and after per-test
+   durations for every fixture changed are in the Log as well. _(Reworded in
+   round 2, 2026-10-12; the first wording was "no browser test that is not
+   about the settle cap takes 3 s more than the baseline probe", which six
+   tests that wait on purpose or in provocation fail. See the Log.)_
 2. Exactly one browser test exercises an abandoned body on purpose, and its
    name says so.
 3. `npm test -- --project downloader` passes, and every test this changes still
@@ -142,13 +146,19 @@ the abandoned-body cap without a browser.
     noise.
   - **Still over 3.5 s, none an unread fetch.** The three dl-83 "accepted
     residue" rows (13.0, 12.8 and 10.8 s) request no manifest at all: their
-    `server.requests` hold the page and a beacon and nothing else, so the time
-    is the age-press path, not a stalled body. dl-48's late modal
+    `server.requests` hold the page and one or two beacons (`/beacon/accept`
+    and `/beacon/view-partners` for the two cookie-sheet rows, `/beacon/nav-18`
+    for the menu-button row) and nothing else, so the time is not a stalled
+    body. Round 2 below measures where it goes. dl-48's late modal
     (`quietMs: 6000` plus a 3500 ms delay), dl-80's floor tests (10.5, 7.4 and
     4.0 s), dl-81's 3000 ms-delay row (4.8 s) and dl-100's cross-origin Play
     press (4.5 s) wait on purpose; so does dl-105's stepped clock (4.5 s).
-  - **Pages left alone.** `player-box-interstitial` and
-    `shadow-player-lazy-mount` also fetch a master and never read it. I patched
+  - **Pages left alone.** Five pages still fetch without reading: `drm.html`,
+    `player-box-interstitial.html`, `shadow-player-lazy-mount.html`,
+    `related-card-target.html` and `no-media.html` (the last fetches
+    `/media/notes.json`, not a manifest). No test waits on any of them. For
+    `player-box-interstitial` and
+    `shadow-player-lazy-mount` I patched
     and reverted both: the first fetches only on a click that its test asserts
     never happens (it ends `NO_MEDIA_FOUND`), and the second is reached only by
     `provoke.test.ts`, which stops at the request and never waits on a body. No
@@ -161,3 +171,50 @@ the abandoned-body cap without a browser.
     `browser-resolver.test.ts`, "a body the page never reads is abandoned at
     settle()'s cap, and the probe still answers". It asserts the answer and no
     duration; it takes 5.86 s, so it does reach the cap. `no-store` is untouched.
+- 2026-10-12 — Round 2, after gate 1 graded round 1 CONCERNS at e2239132.
+  - **The owner's answer (2026-10-12), relayed by the orchestrator.** Gate 1's
+    open decision was that "no browser test that is not about the settle cap
+    takes 3 s more than the baseline" is false for six tests nobody touched: the
+    dl-48 late modal and the dl-80 floor tests wait by design, and the three
+    dl-83 rows have no wait named in their code. The options were "Reword +
+    file dl-118 (Recommended)", "Reword, log the dl-83 time only" and "Keep it
+    literal, widen dl-111". **Chosen: reword and file dl-118.** Done when 1 now
+    reads "no browser test other than the abandoned-body one reaches
+    `settle()`'s cap", and the dl-83 time is
+    [dl-118](./dl-118-three-age-gate-rows-spend-11-s-each-in-provoke-playback.md).
+    No sibling (dl-113 to dl-117) covers it.
+  - **The proof for the reworded line: a planted throw.** In
+    `resolvers/src/browser/intercept.ts`, `settle()` threw
+    `MUTATION: settle cap reached with an unread body` when its deadline had
+    passed or its `expire` timer won the race. Run over the whole browser
+    directory with
+    `npx vitest run tools/downloader/resolvers/test/browser --reporter=json`,
+    then reverted (`git checkout` of that file; the committed
+    tree does not carry it). Result, 753 of 756 passed:
+
+    ```
+    browser/browser-resolver.test.ts 1 of 183 failed
+       FAIL a page that abandons a fetched playlist (dl-111) a body the page never reads is abandoned at settle()'s cap, and the probe still answers | Error: MUTATION: settle cap reached with an unread body
+    browser/consent-scope.test.ts 0 of 27 failed
+    browser/chunk-streams.test.ts 0 of 11 failed
+    browser/provoke.test.ts 0 of 231 failed   (and 0 failed in the other six files)
+    browser/sniff.test.ts 2 of 59 failed
+       FAIL a sniff never holds the probe up (dl-79) a body that never arrives is abandoned when settle()'s budget runs out
+       FAIL a compressed typed manifest is read within a budget of inflated bytes (dl-91) a read that never settles gives its slot back ...
+    ```
+
+    The two `sniff.test.ts` rows use fake responses, not a browser, and are the
+    ones that pin the cap by design. Among tests that drive Chromium, the
+    abandoned-body test is the only one that reaches the cap.
+
+  - **dl-83 rows, measured again.** Re-ran gate 1's stage script on the three
+    pages (it is pasted in dl-118): `provoke-playback` runs about 11.1 s on the
+    two cookie-sheet pages and 9.1 s on the menu-button page, `network-quiet` is
+    the 1.2 s `quietMs`, `settle-requests` is about 12 ms. A control page,
+    `age-false-shell-link.html`, spends 1.0 s in `provoke-playback`. Where
+    inside provocation the time goes is unmeasured and is dl-118's step 1.
+  - **Both low findings fixed.** The comments in `abandoned-body.html` and in
+    the new test now say what was measured (no other test reaches the cap)
+    instead of "every other fixture reads what it fetches", which five pages
+    contradict. The beacon count above is corrected: the cookie-sheet rows
+    request two beacons, the menu-button row one.
