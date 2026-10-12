@@ -52,6 +52,7 @@ function renderCard(value: ReturnType<typeof job>): unknown {
           title={undefined}
           streamState={undefined}
           refusal={undefined}
+          stage={undefined}
           onFollowLink={vi.fn()}
           onCancel={vi.fn()}
           onRemove={vi.fn()}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AppErrorPayload, Job, JobStatus } from "@downloader/contract";
+import type { AppErrorPayload, Job, JobStatus, ProbeStageEvent } from "@downloader/contract";
 import { useElapsed } from "../hooks/useElapsed.ts";
 import { useNow } from "../hooks/useNow.ts";
 import { localErrorPayload } from "../lib/error-presentation.ts";
@@ -11,6 +11,7 @@ import {
   formatSpeed,
 } from "../lib/format.ts";
 import type { StreamState } from "../lib/job-stream.ts";
+import { probeStageText } from "../lib/probe-stages.ts";
 import { STATUS_HINT, STATUS_LABEL } from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
 import { ProgressMessages } from "./ProgressMessages.tsx";
@@ -33,6 +34,11 @@ interface JobCardProps {
    * page cannot see it, so this comes from the job's event stream.
    */
   refusal: AppErrorPayload | undefined;
+  /**
+   * The latest stage the re-probe reported (dl-110), or `undefined` before the
+   * first. Read only while the job is `probing`.
+   */
+  stage: ProbeStageEvent | undefined;
   /** The visitor followed the link, which makes any earlier refusal old news. */
   onFollowLink: (id: string) => void;
   onCancel: (id: string) => void;
@@ -45,6 +51,7 @@ export function JobCard({
   title,
   streamState,
   refusal,
+  stage,
   onFollowLink,
   onCancel,
   onRemove,
@@ -139,7 +146,10 @@ export function JobCard({
           />
           {/* Directly under the bar (dl-109). The connection count (dl-108) is
               one more message here, with its "4×" as the mark. */}
-          <ProgressMessages messages={progressMessages(job.status, progress.originConnections)} />
+          <ProgressMessages
+            messages={progressMessages(job.status, stage, progress.originConnections)}
+          />
+
           <Stats status={job.status} progress={progress} waitedMs={waitedMs} />
         </>
       )}
@@ -223,11 +233,24 @@ const STATUS_ICON: Partial<Record<JobStatus, MessageIcon>> = {
   downloading: "send",
 };
 
-/** The status line first, then whatever explains it. */
-function progressMessages(status: JobStatus, originConnections: number | null): ProgressMessage[] {
+/**
+ * The status line first, then whatever explains it. While re-analysing, the
+ * re-probe's latest stage is the second line (dl-110, the owner's choice over
+ * replacing the status line): the registry reports its first stage almost at
+ * once, so a replaced status line would never be read, and it is the one that
+ * says why the page is being analysed again.
+ */
+function progressMessages(
+  status: JobStatus,
+  stage: ProbeStageEvent | undefined,
+  originConnections: number | null,
+): ProgressMessage[] {
   const messages: ProgressMessage[] = [
     { key: "status", mark: STATUS_ICON[status] ?? "send", text: STATUS_HINT[status] },
   ];
+  if (status === "probing" && stage !== undefined) {
+    messages.push({ key: "stage", mark: "search", text: probeStageText(stage) });
+  }
   if (status === "probing") {
     messages.push({
       key: "browser",

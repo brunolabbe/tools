@@ -230,7 +230,7 @@ export class JobOrchestrator {
     } else {
       store.patch(jobId, { attempts }, this.#iso());
     }
-    const probe = await this.#probe(job.sourceUrl, signal, log);
+    const probe = await this.#probe(jobId, job.sourceUrl, signal, log);
     throwIfAborted(signal);
 
     if (probe.drm.protected) {
@@ -357,8 +357,13 @@ export class JobOrchestrator {
     });
   }
 
-  async #probe(sourceUrl: string, signal: AbortSignal, log: AppLogger): Promise<ProbeResult> {
-    const { registry, guard, probeTimeoutMs, proxyUrl } = this.#options;
+  async #probe(
+    jobId: string,
+    sourceUrl: string,
+    signal: AbortSignal,
+    log: AppLogger,
+  ): Promise<ProbeResult> {
+    const { registry, guard, probeTimeoutMs, proxyUrl, events } = this.#options;
     // Re-checked here as well as at intake: the row has been sitting in SQLite
     // since the client posted it, and DNS may say something different now.
     const url = await guard.assertAllowed(sourceUrl);
@@ -366,6 +371,13 @@ export class JobOrchestrator {
       timeoutMs: probeTimeoutMs,
       signal,
       ...(proxyUrl === undefined ? {} : { proxyUrl }),
+      // dl-110: the same stages the first analysis narrates, onto the job's own
+      // stream, because the card is the only sign this wait is going on. Never
+      // able to fail the probe: the registry wraps a listener that throws, and
+      // the hub drops a subscriber that throws, so neither end can raise here.
+      onStage: (event) => {
+        events.stage(jobId, event);
+      },
     };
     // Stripped here rather than at the event: the `probed` event carries the
     // whole result to the client, and this process's loopback port is no part

@@ -1,13 +1,23 @@
 import { describe, expect, test } from "vitest";
-import type { AppErrorPayload, Job, JobEvent, JobProgress } from "@downloader/contract";
+import type {
+  AppErrorPayload,
+  Job,
+  JobEvent,
+  JobProgress,
+  ProbeStage,
+  ProbeStageEvent,
+} from "@downloader/contract";
 import {
   applyJobEvent,
   applyJobEvents,
   reconcileJob,
   refusalAfter,
+  stageAfter,
   upsertJob,
 } from "../src/lib/job-reducer.ts";
+import { JOBS_STORAGE_KEY, saveJobs } from "../src/lib/job-store.ts";
 import { variant } from "./fixtures.ts";
+import { createMemoryStorageStub } from "./helpers.ts";
 
 const T0 = "2026-08-05T10:00:00.000Z";
 const T1 = "2026-08-05T10:00:01.000Z";
@@ -355,5 +365,65 @@ describe("a refused link (dl-77)", () => {
     ).toBe(error);
     expect(refusalAfter(error, queued, { type: "heartbeat", at: T2 })).toBe(error);
     expect(refusalAfter(undefined, undefined, refused(T2))).toBeUndefined();
+  });
+});
+
+function stage(name: ProbeStage, at: string): JobEvent {
+  return { type: "stage", jobId: "job-1", stage: name, resolver: "browser", at };
+}
+
+describe("a re-probe's stage (dl-110)", () => {
+  test("changes neither the job record nor what is persisted", () => {
+    const probing = job({ status: "probing", updatedAt: T1 });
+    const storage = createMemoryStorageStub();
+    saveJobs(storage, [probing]);
+    const before = storage.raw.get(JOBS_STORAGE_KEY);
+
+    const after = applyJobEvent(probing, stage("page-load", T2));
+    // The same reference, so React skips the render and the persisting effect
+    // has nothing new to write; and what it would write is byte-for-byte the same.
+    expect(after).toBe(probing);
+    saveJobs(storage, [after]);
+    expect(storage.raw.get(JOBS_STORAGE_KEY)).toBe(before);
+    expect(before).not.toContain("page-load");
+  });
+
+  test("the latest stage is kept beside the job and replaced by the next", () => {
+    const first = stageAfter(undefined, stage("resolver-start", T1));
+    expect(first).toEqual({ stage: "resolver-start", resolver: "browser" });
+    expect(stageAfter(first, stage("page-load", T2))).toEqual({
+      stage: "page-load",
+      resolver: "browser",
+    });
+  });
+
+  test("it is kept through frames that leave the job where it is", () => {
+    const held: ProbeStageEvent = { stage: "page-load", resolver: "browser" };
+    expect(stageAfter(held, { type: "heartbeat", at: T2 })).toBe(held);
+    expect(
+      stageAfter(held, {
+        type: "progress",
+        jobId: "job-1",
+        progress: progress({ stage: "probing", percent: null, downloadedBytes: 0 }),
+        at: T2,
+      }),
+    ).toBe(held);
+  });
+
+  test("it is dropped by every status frame and by any frame placing the job elsewhere", () => {
+    const held: ProbeStageEvent = { stage: "page-load", resolver: "browser" };
+    // A fresh `probing` is a fresh probe: the back-edge's re-probe starts from
+    // the status line, not from the first attempt's last stage.
+    expect(
+      stageAfter(held, { type: "status", jobId: "job-1", status: "probing", at: T2 }),
+    ).toBeUndefined();
+    expect(
+      stageAfter(held, { type: "status", jobId: "job-1", status: "downloading", at: T2 }),
+    ).toBeUndefined();
+    expect(
+      stageAfter(held, { type: "progress", jobId: "job-1", progress: progress(), at: T2 }),
+    ).toBeUndefined();
+    const error: AppErrorPayload = { code: "JOB_CANCELED", message: "stopped", retryable: false };
+    expect(stageAfter(held, { type: "canceled", jobId: "job-1", error, at: T2 })).toBeUndefined();
   });
 });

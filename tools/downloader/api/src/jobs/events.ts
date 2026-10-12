@@ -19,6 +19,7 @@ import type {
   JobResult,
   JobStatus,
   ProbeResult,
+  ProbeStageEvent,
 } from "@downloader/contract";
 import type { AppErrorPayload } from "@downloader/contract";
 
@@ -101,6 +102,20 @@ export class JobEventHub {
   /** A refused link (dl-77). Not terminal: the job and its link are untouched. */
   refused(jobId: string, error: AppErrorPayload): void {
     this.emit({ type: "refused", jobId, error, at: this.#now() });
+  }
+
+  /**
+   * A point the re-probe reached (dl-110). Not a status: the job record does not
+   * change, which is why nothing calls the store beside it.
+   */
+  stage(jobId: string, event: ProbeStageEvent): void {
+    this.emit({
+      type: "stage",
+      jobId,
+      stage: event.stage,
+      resolver: event.resolver,
+      at: this.#now(),
+    });
   }
 
   #now(): string {

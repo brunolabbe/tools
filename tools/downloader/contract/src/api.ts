@@ -307,6 +307,13 @@ export const jobEventSchema = z.discriminatedUnion("type", [
     error: appErrorPayloadSchema,
     at: z.string(),
   }),
+  z.object({
+    type: z.literal("stage"),
+    jobId: z.string().min(1),
+    stage: z.enum(PROBE_STAGES),
+    resolver: z.string().min(1),
+    at: z.string(),
+  }),
   z.object({ type: z.literal("heartbeat"), at: z.string() }),
 ]) satisfies z.ZodType<JobEvent>;
 

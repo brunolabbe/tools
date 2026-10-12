@@ -133,6 +133,9 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
       source.addEventListener("open", () => handlers.onOpen());
       source.addEventListener("message", (message: MessageEvent<string>) => {
         const event = parseJobEvent(message.data);
+        // A frame this bundle cannot read is dropped, never taken as a broken
+        // stream: a tab opened before a deploy meets every frame the server
+        // learned since (dl-110), and a reconnect here would break all of them.
         if (event) handlers.onEvent(event);
       });
       source.addEventListener("error", () => {

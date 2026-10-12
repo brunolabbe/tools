@@ -220,6 +220,7 @@ describe("jobEventSchema", () => {
       },
       at: AT,
     },
+    { type: "stage", jobId: "j", stage: "page-load", resolver: "browser", at: AT },
     { type: "heartbeat", at: AT },
   ];
 
@@ -241,6 +242,7 @@ describe("jobEventSchema", () => {
       "probed",
       "progress",
       "refused",
+      "stage",
       "status",
     ]);
   });
@@ -433,5 +435,26 @@ describe("AGE_CONFIRMATION_REQUIRED copy (dl-94)", () => {
       "This video asks the viewer to confirm their age, and the server did not confirm it.",
     );
     expect(message).not.toMatch(/not set|turned on|operator|enable|setting|configur/i);
+  });
+});
+
+describe("the job's stage frame (dl-110)", () => {
+  const stage = {
+    type: "stage",
+    jobId: "j",
+    stage: "provoke-playback",
+    resolver: "browser",
+    at: AT,
+  };
+
+  test("parses back from the wire exactly as the probe channel's stage does", () => {
+    expect(parseJobEvent(JSON.stringify(stage))).toEqual(stage);
+  });
+
+  test("is rejected for a stage outside PROBE_STAGES, an empty resolver, or no job", () => {
+    expect(jobEventSchema.safeParse({ ...stage, stage: "teleport" }).success).toBe(false);
+    expect(jobEventSchema.safeParse({ ...stage, resolver: "" }).success).toBe(false);
+    const { jobId: _missing, ...bare } = stage;
+    expect(jobEventSchema.safeParse(bare).success).toBe(false);
   });
 });

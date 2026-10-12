@@ -26,7 +26,7 @@
 import { act } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { AppErrorPayload, Job } from "@downloader/contract";
+import type { AppErrorPayload, Job, ProbeStageEvent } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import { reconcileJob } from "../src/lib/job-reducer.ts";
@@ -64,6 +64,7 @@ interface MountOptions {
   streamState?: StreamState;
   refusal?: AppErrorPayload;
   title?: string;
+  stage?: ProbeStageEvent;
 }
 
 // `title`, `streamState` and `refusal` are `T | undefined` and **required** on
@@ -79,6 +80,7 @@ function mount(value: Job, options: MountOptions = {}): Handlers {
         title={options.title}
         streamState={options.streamState}
         refusal={options.refusal}
+        stage={options.stage}
         onFollowLink={spies.onFollowLink}
         onCancel={spies.onCancel}
         onRemove={spies.onRemove}
@@ -96,6 +98,7 @@ function renderList(jobs: readonly Job[], extra: Partial<Parameters<typeof JobLi
       titles={{}}
       streamStates={{}}
       refusals={{}}
+      stages={{}}
       onFollowLink={vi.fn()}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
@@ -340,6 +343,7 @@ function renderCard(value: Job): { container: HTMLElement; unmount: () => void }
         title={undefined}
         streamState={undefined}
         refusal={undefined}
+        stage={undefined}
         onFollowLink={vi.fn()}
         onCancel={vi.fn()}
         onRemove={vi.fn()}
@@ -775,6 +779,29 @@ test("a whitespace-only title is no title: no trailing dash", () => {
 
   const line = screen.getByText("Saved by your browser");
   expect(line.textContent).toBe("Saved by your browser");
+});
+
+// ---------------------------------------------------------------------------
+// The re-probe's stages (dl-110)
+// ---------------------------------------------------------------------------
+
+test("a re-analysing card puts the latest stage under the status line, above the browser note", () => {
+  mount(job("probing"), { stage: { stage: "page-load", resolver: "browser" } });
+
+  expect(messages()).toEqual([
+    "Re-analysing the page for fresh stream links — signed links expire within minutes.",
+    "Loading the page",
+    "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
+  ]);
+});
+
+test("a stage held for a job that is no longer re-analysing is never shown", () => {
+  mount(job("downloading"), { stage: { stage: "page-load", resolver: "browser" } });
+
+  expect(screen.queryByText("Loading the page")).toBeNull();
+  expect(messages()[0]).toBe(
+    "Sending the video to your browser as it is fetched. Nothing is kept here.",
+  );
 });
 
 // ---------------------------------------------------------------------------

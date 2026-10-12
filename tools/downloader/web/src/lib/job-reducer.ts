@@ -9,7 +9,14 @@
  */
 
 import { TERMINAL_STATUSES } from "@downloader/contract";
-import type { AppErrorPayload, Job, JobEvent, JobStatus, ProbeResult } from "@downloader/contract";
+import type {
+  AppErrorPayload,
+  Job,
+  JobEvent,
+  JobStatus,
+  ProbeResult,
+  ProbeStageEvent,
+} from "@downloader/contract";
 
 function timestamp(value: string): number {
   const parsed = Date.parse(value);
@@ -130,6 +137,11 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
       // field for a refusal. The card's copy lives beside the job — see
       // `refusalAfter`.
       return job;
+    case "stage":
+      // Not a change to the job either (dl-110): a stage is a moment of the
+      // re-probe, and `Job` is what browsers persist. It lives beside the job —
+      // see `stageAfter`.
+      return job;
     case "canceled":
       // `error` is populated for the copy, but `status` is what the rest of the
       // UI reads — see the note on `Job` in `shared/job.ts`.
@@ -166,6 +178,53 @@ export function refusalAfter(
   if (event.type !== "refused") return current;
   if (job === undefined || job.status !== "queued" || isStale(job, event.at)) return current;
   return event.error;
+}
+
+/**
+ * The latest stage the re-probe reported for one job (dl-110), given the one
+ * held before and the event just received. Kept beside the job for the reason
+ * a refusal is.
+ *
+ * Decided by the frames alone, not by the job's status when the frame arrives:
+ * the server sends `status: probing` and the first stage back to back, and a
+ * stage judged against a list that had not yet re-rendered would be judged
+ * against a job still `queued`, and lost. The card shows a stage only while the
+ * job is `probing`, so one held a moment too long is never on screen.
+ *
+ * Every `status` frame drops it — a fresh `probing` is a fresh probe, so the
+ * back-edge's re-probe starts from its own status line rather than from the
+ * first attempt's last stage — and so does any frame placing the job anywhere
+ * but `probing`.
+ */
+export function stageAfter(
+  current: ProbeStageEvent | undefined,
+  event: JobEvent,
+): ProbeStageEvent | undefined {
+  switch (event.type) {
+    case "stage":
+      return { stage: event.stage, resolver: event.resolver };
+    case "status":
+      return undefined;
+    case "progress":
+      return event.progress.stage === "probing" ? current : undefined;
+    case "completed":
+    case "failed":
+    case "canceled":
+      return undefined;
+    case "probed":
+    case "refused":
+    case "heartbeat":
+      return current;
+    default: {
+      // `undefined` is a legitimate answer here ("clear the stage"), so unlike
+      // `applyJobEvent` a missing case would not be a type error on its own: this
+      // makes a new `JobEvent` member one. What it returns is still `undefined`,
+      // never the frame: a frame that somehow got past the type clears the stage.
+      const unhandled: never = event;
+      void unhandled;
+      return undefined;
+    }
+  }
 }
 
 export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {
