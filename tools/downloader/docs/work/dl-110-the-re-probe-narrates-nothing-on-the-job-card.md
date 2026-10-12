@@ -151,3 +151,20 @@ _Open decisions for the owner_, each with a recommendation:
 _Fold-in, decided here because it is implied:_ `STATUS_HINT`'s doc comment in
 `web/src/lib/status.ts` says "the re-probe's own stages do not reach the job's
 event stream", which this change makes false; it is rewritten with the build.
+
+**2026-10-12, answered — decided by the owner**, through the orchestrator's
+`AskUserQuestion`, relayed to the builder by message. Each choice was the
+recommended option:
+
+1. Contract diff and the frame's name — options: approve with `"stage"` /
+   approve with `"probe-stage"` / not yet. **Approved as drafted above, named
+   `"stage"`.**
+2. Where the stage text goes — options: a second message above the browser note,
+   three messages while re-analysing / replace the status line as Build step 3
+   said. **A second message**; Build step 3's "becomes" is superseded.
+3. Proof of Done when 4 — options: a test of `openJobEvents` in
+   `web/test/http-client.test.ts` with a stubbed `EventSource` / the measurement
+   in this Log only. **The test.**
+4. The mocked API — options: `mock.ts` replays the scenario's stage script as job
+   `stage` frames, with a case in `mock-api.test.ts` / leave the mock silent.
+   **The mock sends stages.**
