@@ -355,6 +355,14 @@ describe("CONSENT_TEXT (dl-82)", () => {
   test.each(ADDED)("CONSENT_TEXT_ANYWHERE does not match %j", (label) => {
     expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
   });
+
+  // The pagination link "Continua" and the review vote "Sono d'accordo con questa
+  // recensione" were pressed in a browser until dl-113 (the dl-82 lookalikes
+  // page); the pattern that reaches outside a container refuses every sentence and
+  // bare word this one does.
+  test.each(REFUSED)("CONSENT_TEXT_ANYWHERE does not match %j either", (label) => {
+    expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
+  });
 });
 
 describe("CONSENT_WORDING (dl-82 gate 2)", () => {
@@ -386,6 +394,11 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     // dl-93: "cookie" needs no word start, because German and Swedish compound it.
     "Wir verwenden Statistikcookies und Marketingcookies.",
     "Läs mer om kakorna på sajten.",
+    // The wordings of consent-scope's r4 and r6 rows (dl-113). r3, r7 and r8 are
+    // "Cookie-Einstellungen", "Statistikcookies" and "kakorna" above; these two were
+    // the ones no row here carried.
+    "Ta strona używa plików cookie.",
+    "Wir verwenden Cookies.",
     "Vi använder kakorn.",
     // dl-93, at landing (gate 2): the compounds a7f47bd2's bare "cookie" matched
     // and the first named list did not.
@@ -410,7 +423,10 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Iscriviti alla newsletter per ricevere le offerte.",
     "Home",
     "",
-    // dl-82 gate 3: ordinary words that merely begin like a consent word.
+    // dl-82 gate 3: ordinary words that merely begin like a consent word. The
+    // gate's a4 (Italian "consente", in a docked checkout bar) and a5 (Swedish
+    // "pannkakor", in a sticky header's note) were also probed in a browser until
+    // dl-113; their fixture sentences are these two rows.
     "Il pagamento sicuro consente di ordinare.",
     "Il pagamento è consentito.",
     "I partner consentono l'ordine.",
@@ -541,6 +557,65 @@ describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
     // and leave the shell about 4000 px below the viewport.
     expect(placement.top).toBeLessThan(placement.height);
     expect(placement.bottom).toBeGreaterThan(0);
+  });
+
+  // Gate 1's page, once probed through the whole resolver (dl-113): the first
+  // match is a 300x250 ad iframe and a nav bar, both already in view, and the real
+  // shell, the largest candidate, sits 3000 px down.
+  test("brings the large shell into view, not the ad iframe and nav bar above the fold", async () => {
+    const placement = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/player-nav-first.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          await page.evaluate<boolean>(SCROLL_SCRIPT);
+          return await page.evaluate<{ top: number; bottom: number; height: number }>(
+            `(() => {
+              var rect = document.querySelector('.player-shell').getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom, height: window.innerHeight };
+            })()`,
+          );
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    expect(placement.top).toBeLessThan(placement.height);
+    expect(placement.bottom).toBeGreaterThan(0);
+  });
+});
+
+describe("a page that refuses the visitor's region is GEO_BLOCKED (dl-113)", () => {
+  // `capture-rules.test.ts` pins the wording against a hand-made signals object;
+  // this reads the signals off the page, which is what the resolver-level probe of
+  // the same page added, without launching the whole probe.
+  test("reads the refusal off the page and classifies it", async () => {
+    const verdict = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          const url = server.url("/geo.html");
+          await page.goto(url, { waitUntil: "domcontentloaded" });
+          return classifyFailure({
+            ...(await readSignals(page)),
+            finalUrl: url,
+            status: 200,
+            quietReached: true,
+          });
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    expect(verdict.code).toBe("GEO_BLOCKED");
   });
 });
 

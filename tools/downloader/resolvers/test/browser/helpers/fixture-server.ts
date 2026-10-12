@@ -34,8 +34,9 @@ const CONTENT_TYPES: Record<string, string> = {
 
 /**
  * dl-79: playlist endpoints that name nothing about what they carry. The path
- * has no extension and the type is `text/plain` or `application/octet-stream`,
- * so only the body says it is a manifest. Keyed by `pathname?id`.
+ * has no extension and the type is `text/plain` (the `application/octet-stream`
+ * and DASH rows were demoted by dl-113 to `sniff.test.ts`), so only the body says
+ * it is a manifest. Keyed by `pathname?id`.
  */
 const UNTYPED_ENDPOINTS: Record<string, { file: string; contentType: string }> = {
   "/api/playlist?1": {
@@ -45,20 +46,6 @@ const UNTYPED_ENDPOINTS: Record<string, { file: string; contentType: string }> =
   "/api/playlist?2": {
     file: path.join("media", "untyped", "not-a-playlist.txt"),
     contentType: "text/plain; charset=utf-8",
-  },
-  "/api/playlist?3": {
-    file: path.join("media", "untyped", "media.m3u8"),
-    contentType: "application/octet-stream",
-  },
-  "/api/manifest?1": {
-    file: path.join("media", "dash", "manifest.mpd"),
-    contentType: "text/plain; charset=utf-8",
-  },
-  // dl-92: the one *typed* extensionless master. It is here because it shares
-  // the route shape, not the untyped body-sniffing path.
-  "/api/playlist?4": {
-    file: path.join("media", "extless", "master.m3u8"),
-    contentType: "application/vnd.apple.mpegurl",
   },
 };
 
@@ -125,7 +112,6 @@ const CROSS_ORIGIN_FRAMES: Record<string, { innerPath: string; title: string }> 
     innerPath: "/cross-origin-card-inner.html",
     title: "Cross-origin card",
   },
-  "/cross-origin-shadow.html": { innerPath: "/shadow-player.html", title: "Cross-origin shadow" },
   "/cross-origin-shadow-order.html": {
     innerPath: "/shadow-player-order.html",
     title: "Cross-origin shadow order",
@@ -191,16 +177,11 @@ function makeHandler(
 
       // dl-55: a redirect during load is legitimate — the landing URL is
       // recorded only after navigation settles, so this must still probe.
-      if (pathname === "/guard-redirect") {
-        response.writeHead(302, { location: "/mse.html" });
-        response.end();
-        return;
-      }
-
-      // dl-55, decision 2: proves the landing URL is the page reached after
-      // the redirect, not the one first requested — a wrong `landingUrl`
-      // would flag the target's own fragment-only play as a departure, and
-      // `/guard-redirect` alone cannot tell the two apart.
+      // Decision 2: proves the landing URL is the page reached after the
+      // redirect, not the one first requested — a wrong `landingUrl` would flag
+      // the target's own fragment-only play as a departure, which a redirect to
+      // a page that never navigates again (the `/guard-redirect` route dl-113
+      // removed) could not tell apart.
       if (pathname === "/guard-redirect-then-fragment") {
         response.writeHead(302, { location: "/guard-redirect-fragment-target.html" });
         response.end();

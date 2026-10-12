@@ -31,14 +31,6 @@
       </button>
     </div>
     <script>
-      // dl-82 gate 3: ?menu=link adds one "Cookie policy" link to the header's
-      // nav. The header's prose is unchanged, so it must still not be a container.
-      if (new URLSearchParams(location.search).get("menu") === "link") {
-        var link = document.createElement("a");
-        link.href = "#c";
-        link.textContent = "Cookie policy";
-        document.querySelector("nav").append(link);
-      }
 
       function mountPlayer() {
         fetch("/media/mse/master.m3u8")
