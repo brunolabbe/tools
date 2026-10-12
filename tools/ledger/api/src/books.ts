@@ -23,7 +23,7 @@ import { AppError } from "@ledger/contract";
 import type { Person } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { API_DEFAULTS } from "./config.ts";
-import { migrate } from "./db/schema.ts";
+import { applyMigrations, configure } from "./db/schema.ts";
 import { isHouseholdId } from "./directory.ts";
 import type { Directory } from "./directory.ts";
 import type { AppLogger } from "./logger.ts";
@@ -71,6 +71,48 @@ interface Held {
   enroller: Enroller;
 }
 
+/** Whether a SQLite error is another connection holding the write lock. */
+function isBusy(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "SQLITE_BUSY";
+}
+
+/**
+ * The lock answered as a paste that meets it is (statements.ts): retryable, and
+ * the same request goes through once the other writer is done.
+ */
+function busy(error: unknown): AppError {
+  return new AppError("TIMEOUT", "The ledger's books were busy. Try again in a moment.", {
+    cause: error,
+    retryable: true,
+  });
+}
+
+/**
+ * `run` with the connection's `busy_timeout` at 0, so a write lock another
+ * process holds refuses at once instead of being waited out on the event loop,
+ * which would hold up every household's requests, not only this one's.
+ */
+function withoutWaiting<T>(db: Database.Database, run: () => T): T {
+  const timeout = Number(db.pragma("busy_timeout", { simple: true }));
+  db.pragma("busy_timeout = 0");
+  try {
+    return run();
+  } finally {
+    // Interpolated because PRAGMA takes no bound parameter; it is the
+    // connection's own number, read just above.
+    db.pragma(`busy_timeout = ${String(timeout)}`);
+  }
+}
+
+/**
+ * Whether opening a household's books may wait on another process's write lock.
+ * Boot may: nothing is served yet. A request or a health probe may not (lg-20's
+ * gate F5; lg-21's gate F3).
+ */
+interface OpenOptions {
+  wait: boolean;
+}
+
 export class Books {
   readonly #dataDir: string;
   readonly #directory: Directory;
@@ -90,9 +132,9 @@ export class Books {
     this.#logger = options.logger;
   }
 
-  /** Opens every household the directory holds: what boot does. */
-  openAll(): void {
-    for (const household of this.#directory.households()) this.#open(household.id);
+  /** Opens every household the directory holds: what boot does, waiting on a lock. */
+  openAll(options: OpenOptions = { wait: true }): void {
+    for (const household of this.#directory.households()) this.#open(household.id, options);
   }
 
   /**
@@ -100,7 +142,7 @@ export class Books {
    * tests; a route reads its books from `booksOf(request)`, never from here.
    */
   of(household: string): Database.Database {
-    return this.#open(household).db;
+    return this.#open(household, { wait: true }).db;
   }
 
   /**
@@ -110,24 +152,14 @@ export class Books {
    * A name the books cannot take — another process holds the write lock —
    * refuses only the person whose name it is (lg-20's gate, F5): the
    * household's other members are served, and the next request tries again.
-   * Neither waits on the lock.
+   * Nothing here waits on the lock, the first open of a household included.
    */
   forMember(person: Person): Database.Database {
-    const held = this.#open(person.household);
+    const held = this.#open(person.household, { wait: false });
     try {
       held.enroller.enroll(this.#directory.people(person.household), { wait: false });
     } catch (error: unknown) {
-      if (!held.enroller.knows(person.id)) {
-        // As a paste that meets the lock is answered (statements.ts): the
-        // same request goes through once the other writer is done.
-        if ((error as { code?: unknown } | null)?.code === "SQLITE_BUSY") {
-          throw new AppError("TIMEOUT", "The ledger's books were busy. Try again in a moment.", {
-            cause: error,
-            retryable: true,
-          });
-        }
-        throw error;
-      }
+      if (!held.enroller.knows(person.id)) throw isBusy(error) ? busy(error) : error;
       this.#logger.warn("a new member's name could not be enrolled yet; the next request retries", {
         household: person.household,
       });
@@ -137,13 +169,13 @@ export class Books {
 
   /**
    * Whether every household's books are open: each one the directory holds is
-   * opened if it is not yet, and a household whose file cannot be is reported as
-   * not open. Never says which, or where.
+   * opened if it is not yet, without waiting on a lock, and a household whose
+   * file cannot be is reported as not open. Never says which, or where.
    */
   check(): boolean {
     if (this.#directory.open) {
       try {
-        this.openAll();
+        this.openAll({ wait: false });
       } catch (error: unknown) {
         this.#logger.error("a household's books could not be opened", {
           error: error instanceof Error ? error.message : String(error),
@@ -161,7 +193,7 @@ export class Books {
     }
   }
 
-  #open(household: string): Held {
+  #open(household: string, { wait }: OpenOptions): Held {
     const held = this.#held.get(household);
     if (held !== undefined) return held;
     if (this.#directory.household(household) === undefined) {
@@ -172,17 +204,37 @@ export class Books {
     const memory = this.#dataDir === ":memory:";
     const file = memory ? ":memory:" : householdBooksPath(this.#dataDir, household);
     if (!memory) mkdirSync(path.dirname(file), { recursive: true });
-    const db = new Database(file);
+    // better-sqlite3 waits 5 s on a lock by default, which `configure` would
+    // spend on switching the journal before it sets the timeout itself.
+    const db = new Database(file, { timeout: wait ? 5000 : 0 });
+    let enroller: Enroller;
     try {
-      migrate(db);
-      const enroller = createEnroller(db, this.#now);
-      enroller.enroll(this.#directory.people(household));
-      const opened = { db, enroller };
-      this.#held.set(household, opened);
-      return opened;
+      configure(db);
+      // Unmigrated books are no use to anyone, so a migration the lock refuses
+      // closes the file again, and the next request or probe opens it afresh.
+      if (wait) applyMigrations(db);
+      else withoutWaiting(db, () => applyMigrations(db));
+      enroller = createEnroller(db, this.#now);
     } catch (error: unknown) {
       db.close();
-      throw error;
+      throw isBusy(error) ? busy(error) : error;
     }
+    const opened = { db, enroller };
+    try {
+      enroller.enroll(this.#directory.people(household), { wait });
+    } catch (error: unknown) {
+      if (!isBusy(error)) {
+        db.close();
+        throw error;
+      }
+      // Migrated books whose names the lock kept out are kept, and
+      // `forMember` enrols them on a later request, refusing meanwhile only a
+      // person whose name is not in yet.
+      this.#logger.warn("a household's names could not be enrolled yet; the next request retries", {
+        household,
+      });
+    }
+    this.#held.set(household, opened);
+    return opened;
   }
 }

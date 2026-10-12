@@ -7,7 +7,7 @@
  * a household's records land in, which `:memory:` cannot show.
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, PeopleResponse } from "@ledger/contract";
 import { householdBooksPath } from "../src/books.ts";
+import { configure, migrate } from "../src/db/schema.ts";
 import { Directory } from "../src/directory.ts";
 import { runHouseholdCommand } from "../src/household-command.ts";
 import { createLogger } from "../src/logger.ts";
@@ -266,4 +267,65 @@ describe("the boot and enrol path (lg-20's gate, F4, F5, F8)", () => {
     expect(kim.json<PeopleResponse>()).toEqual({ people: ["kim"] });
     expect(existsSync(householdBooksPath(dir, "away"))).toBe(true);
   });
+});
+
+/** A request's status, and how long it took to answer. */
+async function timed(run: () => Promise<{ statusCode: number }>) {
+  const startedAt = Date.now();
+  const response = await run();
+  return { status: response.statusCode, ms: Date.now() - startedAt };
+}
+
+// lg-21's gate 1, F3: F5's refusal held only for a household already open. The
+// first open of a household added since boot waited out the lock and answered
+// 500, and so did a health probe, each for 5 s on the event loop.
+describe("the first open of a household whose books another process holds locked", () => {
+  /** Boots with home only, then adds away, whose file `prepare` makes and locks. */
+  async function lockedAway(prepare: (db: Database.Database) => void) {
+    const directory = memberDirectory([[ALEX, "alex"]]);
+    const target = await start(directory);
+    addAway(directory);
+    const file = householdBooksPath(dir, "away");
+    mkdirSync(path.dirname(file), { recursive: true });
+    const other = new Database(file);
+    prepare(other);
+    other.prepare("BEGIN IMMEDIATE").run();
+    return { target, other };
+  }
+
+  test.each([
+    // The import --write, which made and migrated the file and is writing it.
+    ["migrated", (db: Database.Database) => migrate(db)],
+    // The import --write into new books: configured, its migration still in
+    // its own transaction.
+    ["not yet migrated", (db: Database.Database) => configure(db)],
+  ])(
+    "%s: refuses its member at once, keeps the others served, and opens once unlocked",
+    async (_name, prepare) => {
+      const { target, other } = await lockedAway(prepare);
+      try {
+        const kim = await timed(async () => await send(target, KIM, ROUTES.me));
+        const health = await timed(
+          async () => await target.server.inject({ method: "GET", url: ROUTES.health }),
+        );
+        const alex = await timed(async () => await send(target, ALEX, ROUTES.people));
+
+        expect(kim.status).toBe(504);
+        expect(alex.status).toBe(200);
+        expect(health.status).not.toBe(500);
+        expect(Math.max(kim.ms, health.ms, alex.ms)).toBeLessThan(1000);
+
+        other.prepare("ROLLBACK").run();
+
+        const after = await send(target, KIM, ROUTES.people);
+        expect(after.statusCode, after.body).toBe(200);
+        expect(after.json<PeopleResponse>()).toEqual({ people: ["alex", "kim"] });
+        expect((await target.server.inject({ method: "GET", url: ROUTES.health })).statusCode).toBe(
+          200,
+        );
+      } finally {
+        other.close();
+      }
+    },
+  );
 });
