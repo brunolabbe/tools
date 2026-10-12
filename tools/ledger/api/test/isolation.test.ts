@@ -610,28 +610,37 @@ const READS: { route: RouteName; method: Method; url: string }[] = [
  * Every (method, path) the server answers, read from Fastify's own route tree,
  * sorted. `printRoutes` draws a tree, each line one node's segment and its
  * methods, four columns deeper per level, so a node's path is its ancestors'
- * segments and its own. The `HEAD` Fastify adds beside each `GET` is left out;
- * any other `HEAD`, or any other method, is kept, so that it fails the
- * comparison.
+ * segments and its own. The `HEAD` Fastify adds beside each `GET` is left out,
+ * and it is told from a `HEAD` an author registered by its own `onSend` hook,
+ * which `includeMeta` prints on the lines under the route's. Any other `HEAD`,
+ * or any other method, is kept, so that it fails the comparison (lg-21's gate 2,
+ * N1: telling them apart by the `GET` beside them let an author's `HEAD` through).
+ * Should Fastify rename that hook, every `HEAD` is kept and the comparison fails,
+ * rather than one passing unseen.
  */
 function answeredRoutes(app: App): string[] {
   const pairs = new Set<string>();
+  const fastifysOwn = new Set<string>();
   const segments: string[] = [];
-  for (const line of app.server.printRoutes({ commonPrefix: false }).split("\n")) {
+  let methods: string[] = [];
+  for (const line of app.server
+    .printRoutes({ commonPrefix: false, includeMeta: true })
+    .split("\n")) {
+    if (line.includes("(onSend)") && line.includes("headRouteOnSendHandler()")) {
+      if (methods.length === 1 && methods[0] === "HEAD")
+        fastifysOwn.add(`HEAD ${segments.join("")}`);
+      continue;
+    }
     const match = /^([│├└─ ]*)(\S+) \(([A-Z, ]+)\)$/u.exec(line);
     if (match === null) continue;
-    const [, indent = "", segment = "", methods = ""] = match;
+    const [, indent = "", segment = "", listed = ""] = match;
     const depth = indent.length / 4 - 1;
     segments.length = depth;
     segments.push(segment);
-    for (const method of methods.split(", ")) pairs.add(`${method} ${segments.join("")}`);
+    methods = listed.split(", ");
+    for (const method of methods) pairs.add(`${method} ${segments.join("")}`);
   }
-  return [...pairs]
-    .filter((pair) => {
-      const [method, path] = pair.split(" ");
-      return !(method === "HEAD" && pairs.has(`GET ${path ?? ""}`));
-    })
-    .toSorted();
+  return [...pairs].filter((pair) => !fastifysOwn.has(pair)).toSorted();
 }
 
 /**
