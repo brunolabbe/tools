@@ -164,12 +164,20 @@ export function isTicketPath(candidate) {
  * The tools a diff touches, read from its own paths — never from a `--project`
  * flag a caller could mistype or forget.
  *
+ * **A markdown path is not a code change, so it does not touch its tool**
+ * (repo-101). A gate record, a Log entry or a filed ticket under `tools/<tool>/`
+ * used to plan that tool's whole suite, which is the same cost `ci.yml`'s
+ * `changes` job already spares a documentation-only change. The rule is the
+ * same suffix test that job applies, with no exceptions, so the two cannot
+ * disagree about what counts as documentation.
+ *
  * @param {string[]} diffPaths
  * @returns {string[]}
  */
 export function touchedTools(diffPaths) {
   const found = new Set();
   for (const p of diffPaths) {
+    if (p.endsWith(".md")) continue;
     const match = /^tools\/([^/]+)\//u.exec(p);
     if (match) found.add(match[1]);
   }
@@ -1136,7 +1144,13 @@ export function preflight(repo, options) {
   let diffPaths;
   try {
     run("git", ["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd: repo });
-    diffPaths = lines(run("git", ["diff", "--name-only", `${base}...HEAD`], { cwd: repo }));
+    // `--no-renames` is load-bearing here too (repo-101), for the reason
+    // `ci.yml`'s `changes` job gives: with rename detection on, `git mv
+    // src/a.ts docs/a.md` lists `docs/a.md` alone, so the deleted source would
+    // never reach `touchedTools` and its tool's suite would be skipped.
+    diffPaths = lines(
+      run("git", ["diff", "--no-renames", "--name-only", `${base}...HEAD`], { cwd: repo }),
+    );
   } catch (error) {
     throw fail(
       `--base ${base} could not be read: ${/** @type {Error} */ (error).message}`,
