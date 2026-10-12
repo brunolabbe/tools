@@ -154,3 +154,31 @@ which this note did not examine. That is step 1 below.
   re-run by dl-111's builder, with the numbers above. Difficulty is `standard`
   on the builder's judgement: step 1 is measurement, but step 2 touches
   production provocation code and needs a call on which clicks may wait less.
+- 2026-10-12 — Step 1 done (builder, on `origin/main` d759b80e). **Every
+  second is a click that a covering layer blocks and Playwright retries until the
+  click's own timeout.** Method: the reproduction's `stages.mts` run with
+  `DEBUG=pw:api`, which stamps each Playwright call; calls over 100 ms,
+  `offset ms (from launch) + duration`, all `locator.click failed`:
+
+  | page                  | blocked click (offset, wait)                                                                                               | sum    | `provoke-playback` | total |
+  | --------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------ | ----- |
+  | cookie-sheet-sticky   | 787 +2002 play selector · 2792 +2001 play text · 5712 +2000 consent text · 7738 +2000 play selector · 9740 +2001 play text | 10.0 s | 623 → 11754 ms     | 12976 |
+  | cookie-sheet-closable | 789 +2003 · 2796 +2001 · 5718 +2000 · 7746 +2001 · 9750 +2001 (same five)                                                  | 10.0 s | 629 → 11768 ms     | 12990 |
+  | shell-menu-button     | 752 +2002 play selector · 2757 +2064 play text · 5801 +2001 play selector · 7804 +1999 play text                           | 8.1 s  | 635 → 9754 ms      | 10974 |
+
+  The sites: the play-selector wait is `provokeFrame`'s
+  `clickVisible(frame, PLAY_SELECTORS, { timeoutMs: 2000 })` (`provoke.ts:1770`),
+  the play-text wait `clickByText(frame, PLAY_TEXT, 2000)` (`:1775`), both once
+  per pass; the third wait on the cookie rows is pass 1's own age press opening
+  `#vendors` over the sheet, so pass 2's `dismissConsent(frame, 2000, …)`
+  (`:1754` → `clickByTextIn`, `:1320`) cannot reach "Accept All Cookies". The log
+  says `<div id="vendors">…</div> intercepts pointer events` (or `#menu`) on every
+  retry, with Playwright's 20, 100, 100, 500, 500, … ms back-off. The remainder of
+  `provoke-playback` is the fixed `sleep(900)` between the passes (`:1835`) and
+  about 0.2 s of calls. `dismissModal` (`:1753`) is 6 ms plus a 2 ms Escape,
+  `confirmAgeGate` 33 ms including the click, the scroll 1 ms, the first
+  consent click 52 ms, `isPlayPress`'s five `getAttribute` calls 20 ms together:
+  none of them waits. `:1552`, `:1573`, `:1674` do not appear at all.
+  `isPlayPress`/`startsWord` hold none of the time, so dl-114 is not affected.
+  Stopped here for the call in Build step 2 (a new option in production
+  provocation code).
