@@ -1284,8 +1284,11 @@ left out of those figures rather than counted as free.
 
 Under that table is a thinking row, [pl-52](../tools/planner/docs/work/pl-52-thinking-tokens-in-the-cost-report.md):
 the part of the output the model spent reasoning. **It is a share of the output
-row, already priced there, so it is never added to the dollars.** It is also a
-lower bound, and the report says so beside the row. A database older than
+row, already priced there, so it is never added to the dollars.** It covers
+only the runs that reported a breakdown, so a `share` line beneath it divides
+total thinking by total output over the runs that reported both, which is the
+figure to compare with the output row. It is also a lower bound, and the report
+says so beside the row. A database older than
 schema version 12 is refused with a sentence until the planner has started once
 and migrated it.
 

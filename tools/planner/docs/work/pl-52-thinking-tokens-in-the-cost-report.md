@@ -151,3 +151,47 @@ a database at 9 to 11.
 the thinking row and the version-12 refusal; that section described the report's
 output, so it would have been stale otherwise. **Not folded in:** nothing else
 was made free.
+
+### 2026-10-12 — gate 1 round 1: three findings, owner's answers recorded
+
+Gate 1 graded `942fec1a` CONCERNS. Its one open decision was put to the owner
+(2026-10-12, `AskUserQuestion`):
+
+- **Question:** the thinking row's percentiles run over only the runs that
+  reported a breakdown, while the output row it calls itself "part of" covers
+  every metered run, so right after migration 12 the thinking row can read
+  larger than the output row. What should the report do?
+- **Options:** (1) also print the share `Σ thinking ÷ Σ output` over the runs
+  that reported both; (2) one header sentence saying the triple covers only the
+  runs that reported a breakdown; (3) accept as is, the "N of M" count being the
+  disclosure.
+- **Choice:** (1), the gate's recommendation.
+- **Question:** the two lows (a real zero has no test; the caveat cites "the one
+  funded run" with no id or date): fix both, or leave them recorded?
+- **Choice:** fix both.
+
+**Med, fixed: the share line.** `thinkingShare` in `api/src/cost-report.ts` sums
+thinking and output over the runs where both are non-null, and the report prints
+`share  31.3% of output: total thinking ÷ total output over the 2 runs that
+reported both` under the thinking row. It is `—` when no run reported both or
+when their output sums to 0 (no division, no NaN), and `0.0%` when runs reported
+both and thought nothing. Tests in `cost-report.test.ts`: "prints the share of
+output over the runs that reported both, so the comparison is one population"
+(20.6%, run 2 excluded); "a window that mixes runs from before the migration
+with runs after it reads the share, not the narrower row" (the gate's five-run
+reproduction, 90.0% over 2 runs); "prints a dash, not a zero, when no run in the
+window reported a thinking breakdown" (share `—` over 0 runs, no `NaN`); "the
+share is 0.0% for runs that all thought nothing, and a dash when there was no
+output to divide" (Σ output 0 and the empty list).
+
+**Low, fixed: a real zero.** `run-usage.test.ts` "a reply that reported zero
+thinking records zero, not null" (`MeteredProvider({ thinking: 0 })`) and
+`cost-report.test.ts` "a real zero is a figure: it is kept in the row and the
+share, not read as unreported" (one run at 0, one at 120, row `0 120 60`). Both of
+the gate's mutations now fail a test (`mutate2.mjs … zero-to-null-persist` fails
+the first with 1 failed | 659 passed of 660; `zero-dropped-report` fails the
+second, also 1 of 660), each reverted afterwards.
+
+**Low, fixed: the caveat's citation.** It now reads "The funded run of 2026-10-12
+(pl-40: 574 replies, three models)", so the run can be found and the sentence
+can be seen to go stale when a second measurement exists.
