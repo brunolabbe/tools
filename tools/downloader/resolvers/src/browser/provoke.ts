@@ -1726,6 +1726,20 @@ async function provokeInput(
 }
 
 /**
+ * A click's wait, held to `cap` when one is given (dl-118). Absent, the wait is
+ * `timeoutMs` as written, so a caller that never sets the cap sees the old
+ * behaviour exactly. A cap that is not a positive finite number is treated as
+ * absent: Playwright reads a timeout of 0 or NaN as "no timeout", so passing
+ * one through would remove the bound instead of lowering it, and a negative
+ * one would fail every click at once.
+ */
+export function cappedTimeout(timeoutMs: number, cap: number | undefined): number {
+  return cap === undefined || !Number.isFinite(cap) || cap <= 0
+    ? timeoutMs
+    : Math.min(timeoutMs, cap);
+}
+
+/**
  * One frame's provocation, in the order a person would try things. Returns
  * whether it **pressed something that starts a player** — a play-ish selector or
  * label, or the chosen `<video>` — which the input pass reads. A selector match
@@ -1747,11 +1761,15 @@ async function provokeInput(
 async function provokeFrame(
   frame: Frame,
   pageOrigin: string | undefined,
-  options: { confirmAge: boolean; hasPlayable: () => boolean },
+  options: { confirmAge: boolean; hasPlayable: () => boolean; clickTimeoutMs?: number | undefined },
 ): Promise<boolean> {
   const scriptable = isScriptableFrame(frame, pageOrigin);
+  // The three waits a covering layer can make a probe sit out in full (dl-118):
+  // the consent and play clicks. The modal close and the age press keep their
+  // own timeouts, since each has to land when it is the right control.
+  const blockable = cappedTimeout(2000, options.clickTimeoutMs);
   await dismissModal(frame, { timeoutMs: 1500, scriptable });
-  await dismissConsent(frame, 2000, scriptable);
+  await dismissConsent(frame, blockable, scriptable);
 
   // Recognising a gate needs the layer around a control or the page's wording
   // as well as the control's label, so it is only tried where script runs. The player mounts after the press,
@@ -1768,11 +1786,11 @@ async function provokeFrame(
   }
 
   const playClicks = await clickVisible(frame, PLAY_SELECTORS, {
-    timeoutMs: 2000,
+    timeoutMs: blockable,
     max: 3,
     countPress: isPlayPress,
   });
-  const labelClicked = await clickByText(frame, PLAY_TEXT, 2000);
+  const labelClicked = await clickByText(frame, PLAY_TEXT, blockable);
 
   // Clicking the video surface itself is what a person would do when the player
   // has no visible chrome.
@@ -1809,6 +1827,15 @@ export async function provokePlayback(
     signal: AbortSignal;
     confirmAge: boolean;
     hasPlayable?: () => boolean;
+    /**
+     * An upper bound on the wait of the consent and play clicks (dl-118). A
+     * click Playwright finds covered is retried until its timeout, 2000 ms
+     * here, so a layer that stays up costs a probe that wait on every such
+     * click. Unset by default, and a value that is not a positive finite number
+     * counts as unset; a test sets it to stop paying for a cover it put there
+     * on purpose.
+     */
+    clickTimeoutMs?: number | undefined;
   },
 ): Promise<void> {
   const pageOrigin = originOf(page.url());
@@ -1823,7 +1850,11 @@ export async function provokePlayback(
       if (remaining(options.deadline) < 1500) return;
       try {
         if (
-          await provokeFrame(frame, pageOrigin, { confirmAge: options.confirmAge, hasPlayable })
+          await provokeFrame(frame, pageOrigin, {
+            confirmAge: options.confirmAge,
+            hasPlayable,
+            clickTimeoutMs: options.clickTimeoutMs,
+          })
         ) {
           pressed = true;
         }
