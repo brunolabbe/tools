@@ -589,6 +589,9 @@ const READS: { route: RouteName; method: Method; url: string }[] = [
   { route: "ratios", method: "GET", url: `${ROUTES.ratios}?asOf=2026-09-30` },
   { route: "periods", method: "GET", url: ROUTES.periods },
   { route: "periodOpen", method: "GET", url: `${ROUTES.periodOpen}?end=2026-09-30` },
+  // Closed periods' lines as well as the open one's (lg-19), so no span is
+  // given: every stored line shows, and the household's own marks are in them.
+  { route: "periodLines", method: "GET", url: ROUTES.periodLines },
   { route: "recurring", method: "GET", url: ROUTES.recurring },
   { route: "spendingCategories", method: "GET", url: ROUTES.spendingCategories },
   { route: "spendingCategoryMap", method: "GET", url: ROUTES.spendingCategoryMap },

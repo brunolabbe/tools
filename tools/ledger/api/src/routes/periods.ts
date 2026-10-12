@@ -109,7 +109,7 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
         "from and to are days, written yyyy-mm-dd; spendingCategory, offset and limit are whole numbers.",
       );
     }
-    const body: PeriodLinesResponse = listLines(context.db, query.data);
+    const body: PeriodLinesResponse = listLines(booksOf(request), query.data);
     return body;
   });
 

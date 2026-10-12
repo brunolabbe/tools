@@ -879,7 +879,7 @@ describe("GET /api/period-lines, as the spending chart opens a period (lg-19)", 
     const [first] = lines as [PeriodLine];
     const settledBefore = await periods(target);
     const nextBefore = (await open(target)).settlement;
-    const rowsBefore = target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get();
+    const rowsBefore = homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get();
 
     const corrected = await post<PeriodLine>(
       target,
@@ -895,10 +895,10 @@ describe("GET /api/period-lines, as the spending chart opens a period (lg-19)", 
     expect(view.lines.map((line) => [line.date, line.late])).toEqual([["2026-10-02", false]]);
     expect(view.settlement).toEqual(nextBefore);
     // It is a later line, not an edit: one more row, and the first is as it was.
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
       n: (rowsBefore as { n: number }).n + 1,
     });
-    const original = target.context.db
+    const original = homeBooks(target)
       .prepare("SELECT spending_category_id AS id FROM period_lines WHERE id = ?")
       .get(first.id);
     expect(original).toEqual({ id: groceries });
