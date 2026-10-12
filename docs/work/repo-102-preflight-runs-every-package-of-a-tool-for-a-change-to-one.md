@@ -223,6 +223,73 @@ reaching `main`.
   measured) · reliability: fails open on every unplaced path; the misses are
   above · maintainability: above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-12 · `2c9c11e3..9d753314`, round `3fbf841e` + `64f70095` (the merge from `main`, #444 and #448, not reviewed) · Opus 5.5, depth standard
+
+| Done when                                                                       | Proof                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Real downloader: api-only plans api not resolvers; `contract` plans all five | `scripts/test/preflight.test.ts` › "testPlan on the real downloader: an api diff plans api only, a contract diff plans all five (repo-102)" ✓, unchanged by the round. The real graph of all three tools dumps byte-identical at `2c9c11e3` and `9d753314`.                                        |
+| 2. A path in no package plans the whole tool                                    | `scripts/test/preflight.test.ts` › "testPlan plans the whole tool for any path that belongs to no package (repo-102)" ✓. Its two guards are now pinned by "testPlan widens for a file at the tool's root whose name begins with a package's, and ignores a package that owns no tests (repo-102)". |
+| 3. Log records before/after wall time and test count                            | **verified** at gate 1 (561 s, 2,502 tests → 30 s, 839 tests); untouched by the round.                                                                                                                                                                                                             |
+
+Gate 1's findings:
+
+- **high, `withoutComments` loses code text** — **fixed**. Gate 1's six
+  plants, re-run on a copy of `9d753314`: the `" //"`-in-a-string reader and
+  the template line starting `/*` both now plan engine. A second stripper,
+  `@babel/parser`'s comment ranges, gives zero edge differences across all 600
+  scannable files in the three tools. On the gate-1 tree the same harness
+  reports `LOST: web/public` and `LOST: web/test/fixtures` under the old rule,
+  so it can fail. No real comment's text now invents an edge: the planner
+  `contract` docblocks that name `@planner/intake` still strip, and the graph is
+  unchanged. Mutations: putting back the old `//` rule or the old lazy block
+  rule, or deleting any one of the three strips, each turns at least one
+  repo-102 test red.
+- **low, scope longer than any file** — **fixed** with `p.startsWith(read)`.
+  Putting back `p === read || p.startsWith(read + "/")` fails "packageGraph
+  scopes a name built at run time by its literal head…". The change only
+  widens: `tools/downloader/web/publicity/a.ts` now also plans api (the
+  `web/public` scope). That costs time and hides nothing. The leaf plans are
+  unchanged (api → api; resolvers `src` → api, resolvers; web `src` → web).
+- **low, extensionless code import read as data** — **fixed** (`namesCode`).
+  Making `namesCode` read only extensions fails "packageGraph reads an
+  extensionless specifier that resolves to a file as code…".
+- **low, two mutation survivors** — **fixed**. Deleting `if (slash < 0) return [];`
+  fails 1 of 17, and ignoring `hasTests` fails 1 of 17.
+- **low, computed specifier / `..`-segment join** — **not fixed**, low, may
+  land. The Log's line about the scan's reach is half right (see the new
+  finding below).
+- **low, `pins()` read** — named in the Log, by the owner's choice.
+- **low, `roles/builder.md`** — recorded unfixed, by the owner's direction.
+
+New in the round's lines:
+
+- **low** · no `Done when` line depends on it · one half of the round's test
+  asserts nothing of its own. "packageGraph reads an extensionless specifier
+  that resolves to a file as code…" plants both `helpers/mp4` and the directory
+  form `helpers2`, but only `mp4` reaches its assertions. Deleting the
+  `index.<ext>` lookup from `namesCode` leaves all 17 repo-102 tests green.
+- **low** · no `Done when` line depends on it · the Log says the scan reads
+  "string literals and literal heads, not computed values" and that no fix
+  exists for text. A `..`-segment join is literal and is not read:
+  `path.join(import.meta.dirname, "..", "..", "web", "public")` in place of
+  `terms-page.test.ts`'s `new URL(…)` plans `tools/downloader/web/test/` alone
+  for a `web/public/terms.html` change. `segmentPath` could accept `".."` heads
+  resolved from the file, as the relative scan does.
+- **dropped** · a data directory that shares its stem with a sibling `.ts`
+  becomes a whole-package edge under `namesCode` (`../../web/test/fixtures/`
+  resolves beside `web/test/fixtures.ts`). That only widens, and no real edge
+  changed.
+- **findings** · the round's hunt returned 3; 2 carried (both low), 1 dropped.
+  No `high`.
+- Runs at `9d753314`: `npx vitest run --project repo scripts/test/preflight.test.ts`
+  91 of 91; `npm run check` exit 0. CI on `9d753314`: check, CodeQL, codeql
+  and dependency-review pass; test (ubuntu-latest) and test (windows-latest,
+  informational) pending.
+- NFR: security ✓ (`namesCode`'s `existsSync` only runs on paths already
+  inside a package) · performance ✓ · reliability ✓ · maintainability: above.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed audit. vitest's own `--changed` was
