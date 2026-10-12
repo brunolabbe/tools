@@ -154,6 +154,39 @@ Traps worth knowing in advance:
 - Invariants: no cross-tool import, no new error code, no spawn, no new logging or URL, unknown is `null` (not faked), the contract edit is decided in the ticket, the edited spec files are already registered, no new dependency, no `any` or `console` in added lines. Routes skipped: none changed.
 - NFR: security n/a · performance ✓ (`stats()` once per progress tick, a handful of fetches) · reliability ✓ (old records keep parsing; F9 flake predates the branch) · maintainability: F1.
 
+### Gate 2
+
+**Gate: FAIL** — 2026-10-12 · `5670642d..69d90d53` (the round: `1a789dbc`, `69d90d53`) · Opus 5.5, re-gate
+
+| Done when                                                                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2 (reworded by the owner: never more than `1`, never `null`, `1` while the relay reads; `null` with no feeder) | `engine/test/parallel-ranges.test.ts` › "a fast origin never reports more than one connection, and never null" ✓, now with `samples.some((value) => value === 1)`. Positive control: with `#inFlight()` skipping relays it fails, `[0,0,0,0]: expected false to be true`. With `originConnectionsOf` reporting `0` outside a split it fails the same way. The `null` clause is unchanged from gate 1 ✓. Measured at 4 MB/s, 10 of 10 runs (`faststart.mp4` and `moov-end.mp4`): `1, 1, 1, 0`, with the `0` on the closing tick |
+
+Earlier findings:
+
+- **F1 (high)**: **fixed** for what it named. Outside a split the count is now capped at 1, so the 2 that gate 1 measured on an unsplit feeder never reaches a snapshot. The 0 mid-download is now covered by "`0` when none is open". The sentence the round wrote for the split case is a new `high`, below.
+- **F2 (med)**: **fixed**. The line was reworded per the owner's answer (a). The test now fails on both mutations that gate 1's positive control showed staying green.
+- **F3 (med)**: **fixed**. `originConnectionsOf` in `engine/src/stream.ts` caps the count at 1 unless `mode === "parallel"`. `engine/test/stream.test.ts` › "outside a split it never exceeds 1, even with two requests open (F3)" fails with the cap removed (`expected 2 to be 1`). See the `low` below for the call site.
+- **F4 (low)**: **fixed**. The probing test asserts `messages()` has length 2 before it asserts the absence.
+- **F5 (low)**: **fixed as a caveat**. The `FeederStats.openFetches` comment now matches `#dropLookahead` and `#fallBack`.
+
+New in the round's lines:
+
+- **high** · no `Done when` line depends on it · The rewritten doc comment on `JobProgress.originConnections` in `contract/src/job.ts` says "Once it has split it is `2` or more and moves between chunks (4, then 3, then 4)". The code does not keep that lower bound.
+  - **The closing snapshot of a split job is `0`.** `mode` is still `"parallel"`, so `originConnectionsOf` passes the raw count. Measured: `1, 4, 4, 4, 3, 0` in 3 of 3 runs (`moov-end.mp4`, 500 kB/s per connection).
+  - **A split the origin refuses reads `1` for the rest of the job.** `mode` is `"fallen-back"`, and the cap applies. Measured with `behaviour.refuse = "429"`: the fan-out request `bytes=229424-360495` went out, then 16 ticks of `1` and a closing `0`, 3 of 3 runs.
+
+  The fix is one sentence: "In a split it is the requests open, up to the configured connections, and moves between chunks (4, then 3); it is `0` at the closing snapshot, and `1` for the rest of the job once a split falls back." Reproduction: `scratchpad/dl-108/gate-1/probe-split.sh <tree> <outdir>` and `scratchpad/dl-108/gate-2/probe-fallback.sh <tree> <outdir>`. Each appends a sampling test to `parallel-ranges.test.ts`, runs it, and restores the file.
+
+- **low** · Nothing holds the call site in `attempt`. With `originConnections: feeder === null ? null : feeder.stats().openFetches` restored in `stream.ts`, which is exactly the pre-round code, all 8 dl-108 tests pass (`-t dl-108` over `parallel-ranges.test.ts` and `stream.test.ts`). The unit test proves `originConnectionsOf`, not that the engine calls it. No engine-level run here samples a tick inside a two-request overlap.
+- **findings** · the round's lines returned 3: 2 carried, and 1 dropped. Dropped: the F5 caveat does not name the error page `#relayHead` pipes, which also leaves the count; a caveat need not list every case.
+- Locally at `69d90d53`, after `npm run build`:
+  - 9 affected spec files: 213 of 213 passed.
+  - `stream.test.ts -t dl-108`: 4 passed of 79.
+  - `parallel-ranges.test.ts`: 43 of 43 passed.
+- CI on `69d90d53`, read once: every check passes except `test (ubuntu-latest)` and `test (windows-latest, informational)`, both **still pending**.
+- NFR: security n/a · performance ✓ · reliability ✓ · maintainability: the `high` above.
+
 ## Log
 
 **2026-10-12**: filed from the owner's question on a live job (Why). Shape and
