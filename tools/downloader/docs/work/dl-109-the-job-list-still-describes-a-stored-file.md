@@ -59,6 +59,13 @@ as it is produced, and no copy is kept". The UI kept the earlier shape:
 7. **dl-108's connection count is one of the progress messages**, with "4×" as
    its badge; dl-108's Build step 5 is rewritten here to say so. dl-108 itself
    stays a separate ticket.
+8. **Nothing moves when bytes start to flow.** The size figure heads the bar
+   from the first frame — "0 B of ~430 MB" while preparing, with the bar
+   indeterminate and no percent — instead of an "Expected size" stat that
+   later jumps above the bar. The stats sit in three fixed columns: a time
+   (Waiting while preparing, Remaining while downloading), then Speed, then
+   Segments; an unknown value leaves its cell empty rather than letting the
+   next one slide over, so every card in the list lines up.
 
 ## Build
 
@@ -99,7 +106,9 @@ as it is produced, and no copy is kept". The UI kept the earlier shape:
    `job-card.test.tsx`.
 7. Every progress message leads with a badge hidden from assistive technology,
    and the messages are one `aria-live` region. Proven in `job-card.test.tsx`.
-8. `npm run check`, the downloader unit suite and `e2e:downloader` pass.
+8. The size figure is above the bar in every active state, and each stat keeps
+   its column whatever else is known. Proven in `job-card.test.tsx`.
+9. `npm run check`, the downloader unit suite and `e2e:downloader` pass.
 
 ## Log
 

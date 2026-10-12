@@ -113,22 +113,23 @@ export function JobCard({
           again rather than as a step walked backwards. */}
       {active && (
         <>
-          {job.status === "downloading" && (
-            <div className="job__meter">
-              <span className="job__figure">
-                {formatBytes(progress.downloadedBytes)}{" "}
-                {/* An expectation, not a measurement (dl-96), so it says so. */}
-                <span className="muted">
-                  {progress.totalBytes !== null
-                    ? `of ~${formatBytes(progress.totalBytes)}`
-                    : "· total not known yet"}
-                </span>
+          {/* In the same place from the first frame, so nothing moves when bytes
+              start to flow; while preparing it reads "0 B of ~430 MB" and the
+              bar stays indeterminate, with no percent until there is one. */}
+          <div className="job__meter">
+            <span className="job__figure">
+              {formatBytes(progress.downloadedBytes)}{" "}
+              {/* An expectation, not a measurement (dl-96), so it says so. */}
+              <span className="muted">
+                {progress.totalBytes !== null
+                  ? `of ~${formatBytes(progress.totalBytes)}`
+                  : "· total not known yet"}
               </span>
-              {progress.percent !== null && (
-                <span className="muted job__percent">{Math.round(progress.percent)}%</span>
-              )}
-            </div>
-          )}
+            </span>
+            {job.status === "downloading" && progress.percent !== null && (
+              <span className="muted job__percent">{Math.round(progress.percent)}%</span>
+            )}
+          </div>
           <ProgressBar
             percent={job.status === "downloading" ? progress.percent : null}
             label={STATUS_LABEL[job.status]}
@@ -169,7 +170,8 @@ export function JobCard({
 /**
  * Only what is known (dl-109). An unknown value used to render as "—" in a
  * fixed grid of five, which on most jobs was a row of dashes; it is left out
- * instead. The downloaded figure is not here — it heads the bar.
+ * instead. The downloaded figure is not here — it heads the bar, in every
+ * active state.
  */
 function Stats({
   status,
@@ -180,21 +182,23 @@ function Stats({
   progress: Job["progress"];
   waitedMs: number;
 }): React.JSX.Element | null {
-  const rows: { term: string; value: string }[] = [];
+  // Each stat owns a column, so cards line up down the list and an unknown
+  // value leaves its cell empty rather than letting the next one slide over.
+  const rows: { term: string; value: string; column: 1 | 2 | 3 }[] = [];
   if (status === "queued" || status === "probing") {
-    rows.push({ term: "Waiting", value: `${Math.floor(waitedMs / 1000)} s` });
-    if (progress.totalBytes !== null) {
-      rows.push({ term: "Expected size", value: `~${formatBytes(progress.totalBytes)}` });
-    }
+    rows.push({ term: "Waiting", value: `${Math.floor(waitedMs / 1000)} s`, column: 1 });
   } else {
-    if (progress.speedBps !== null)
-      rows.push({ term: "Speed", value: formatSpeed(progress.speedBps) });
+    // A time first in both states — how long it has waited, how long is left —
+    // so the eye finds it in the same place when the job starts to move.
     if (progress.etaSec !== null)
-      rows.push({ term: "Remaining", value: formatEta(progress.etaSec) });
+      rows.push({ term: "Remaining", value: formatEta(progress.etaSec), column: 1 });
+    if (progress.speedBps !== null)
+      rows.push({ term: "Speed", value: formatSpeed(progress.speedBps), column: 2 });
     if (progress.segmentsDone !== null) {
       rows.push({
         term: "Segments",
         value: `${progress.segmentsDone}${progress.segmentsTotal === null ? "" : ` / ${progress.segmentsTotal}`}`,
+        column: 3,
       });
     }
   }
@@ -202,7 +206,7 @@ function Stats({
   return (
     <dl className="stats">
       {rows.map((row) => (
-        <div key={row.term}>
+        <div key={row.term} className={`stats__col-${row.column}`}>
           <dt>{row.term}</dt>
           <dd>{row.value}</dd>
         </div>

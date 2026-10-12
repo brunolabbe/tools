@@ -185,11 +185,16 @@ test("a half-known segment count shows what is done, not a count against null", 
   expect(screen.queryByText(/null/u)).toBeNull();
 });
 
-test("a preparing job shows how long it has waited, and an expected size once one is known", () => {
-  mount(job("probing", { progress: { totalBytes: 100_307_911 } }));
+test("a preparing job shows how long it has waited, and its figure where the download's will be", () => {
+  mount(job("probing", { progress: { downloadedBytes: 0, totalBytes: 100_307_911 } }));
 
   expect(stat("Waiting")).toBe("0 s");
-  expect(stat("Expected size")).toBe("~96 MB");
+  // The figure heads the bar from the start, so nothing moves when bytes flow;
+  // the bar stays indeterminate and there is no percent until there is one.
+  expect(screen.getByText(/^0 B/u)).toBeDefined();
+  expect(screen.getByText("of ~96 MB")).toBeDefined();
+  expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
+  expect(screen.queryByText(/%/u)).toBeNull();
   act(() => {
     vi.advanceTimersByTime(12_000);
   });
@@ -664,4 +669,35 @@ test("every progress message leads with a badge that a screen reader skips", () 
     }
     cleanup();
   }
+});
+
+test("time leads the stats in both states: waited while preparing, remaining while downloading", () => {
+  mount(job("probing"));
+  expect(screen.getAllByRole("term").map((term) => term.textContent)).toEqual(["Waiting"]);
+  cleanup();
+
+  mount(
+    job("downloading", {
+      progress: { etaSec: 90, speedBps: 13_000_000, segmentsDone: 1, segmentsTotal: 2 },
+    }),
+  );
+  expect(screen.getAllByRole("term").map((term) => term.textContent)).toEqual([
+    "Remaining",
+    "Speed",
+    "Segments",
+  ]);
+});
+
+/** The column class a stat's cell carries, by its label. */
+function columnOf(term: string): string {
+  return screen.getByText(term, { selector: "dt" }).parentElement?.className ?? "";
+}
+
+test("each stat keeps its own column, so an unknown one leaves a gap rather than a shift", () => {
+  // No time left known: Speed stays in the second column and Segments in the
+  // third, exactly where they sit on a card that knows all three.
+  mount(job("downloading", { progress: { etaSec: null, speedBps: 13_000_000, segmentsDone: 4 } }));
+  expect(columnOf("Speed")).toBe("stats__col-2");
+  expect(columnOf("Segments")).toBe("stats__col-3");
+  expect(stat("Remaining")).toBeNull();
 });
