@@ -347,6 +347,28 @@ the `parseCli` suite mentions the flag). The reviewer re-anchored it to line
 replaced; nothing else in the section was touched by the builder. Re-run
 after the fix: 12 verified, 0 moved, 0 unanchored, exit 0.
 
+### Gate 3 — 2026-10-12 · `391af241...018a05ab` · the paid run's Log, recomputed from its 111 records by the reviewer at medium
+
+**Gate: FAIL**, repaired in `b733a204`. The reviewer recomputed every figure in the
+paid-run entry from the records. The bill table, the session total, rules (a)–(c),
+set C, set D, the thinking counts and all 44 `count_tokens` prompts reproduced.
+
+- **One high.** Opus's set-B stop printed 104 finds-reader candidates where the
+  records give 100, the figure from the discarded first launch. The corpus total
+  becomes 427.
+- **Six lows.** Four sentences disagreed with the records: the attempt-1 count,
+  the prompt's character count, the complaint's size and Haiku's ceiling share.
+  The set A ceiling's pricing of resort's missing fifth specialist went unstated.
+  "Shorter" was overclaimed for Haiku. Set C's limit sat outside its claim's
+  paragraph. Four other documents still carried the estimates the run replaced:
+  pl-39, pl-49, pl-55's tokenizer trap, and `docs/02-DEPLOYMENT.md`.
+
+All seven were fixed and each fix was checked by hand against the records. No
+second gate ran, because the repair is wording and two numbers. The run returned
+13 findings: 7 carried and 6 dropped as checked and correct, or not grading
+matter. One dropped finding adds a fact to the Log: Haiku's empty finds-reader
+replies.
+
 ## Log
 
 ### 2026-09-13 — filed
