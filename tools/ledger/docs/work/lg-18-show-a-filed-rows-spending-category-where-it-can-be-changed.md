@@ -239,3 +239,22 @@ chart counts it under the new one` fails.
   - The brief had nothing wrong that mattered, but it did not say the chart's slice
     and a plain `spendingCategory=none` list would disagree (deposits and unfiled rows
     are uncategorised too); `scope=spending` is what the owner chose to close that.
+- 2026-10-12, after merge: gate 1's F5 and F8 fixed, on the owner's choice; F2
+  and F6 stay recorded, judged not worth a change.
+  - **F5.** The open list is kept by the period's `start`, not its `end`: the
+    open period's end is the range's last day, today by default, so it moved at
+    midnight. And a failed read of the chart after a write no longer unmounts
+    the card: `useSeries` keeps this range's answer when a read of the same
+    range fails after a `reload` bump the answer predates, and passes the
+    failure on, which the spending card shows as an alert under its caption. Any
+    other failed read — a new range, or back on an earlier one with no write
+    between — still fails the card as before. The first build kept the answer
+    after any failed read of a range it had held, which made the seven cards
+    that never reload draw stale figures as current with no alert (gate 3's med,
+    reproduced on `MortgagePaymentCard`); the answer is now tied to the `reload`
+    value it was read at. Tests at the end of `web/test/stats-rows.test.tsx`;
+    each fails with its source reverted.
+  - **F8.** The readout's container is no longer `aria-live`. A visually hidden
+    paragraph inside it carries the readout's heading, figures and notes as one
+    sentence, and is the live region; the buttons are outside it. Each note in
+    that sentence ends on a full stop, so two do not run together.

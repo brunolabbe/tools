@@ -63,14 +63,17 @@ function signed(cents: number): string {
   return `${cents > 0 ? "+" : ""}${formatCents(cents)}`;
 }
 
-/** A card while its series loads, fails, or is ready; the ready body is the caller's. */
+/**
+ * A card while its series loads, fails, or is ready; the ready body is the
+ * caller's, and so is saying that a read again over the same range failed.
+ */
 function Loaded<T>(props: {
   title: string;
   series: Series<T>;
-  children: (data: T, stale: boolean) => React.ReactElement;
+  children: (data: T, stale: boolean, failure: string | null) => React.ReactElement;
 }): React.ReactElement {
   const { title, series, children } = props;
-  if (series.state === "ready") return children(series.data, series.stale);
+  if (series.state === "ready") return children(series.data, series.stale, series.failure);
   return (
     <section className="card chart-card">
       <h2>{title}</h2>
@@ -471,16 +474,20 @@ function nameOf(period: SpendingPeriod): string {
 function SpendingBody(props: {
   data: SpendingStatsResponse;
   stale: boolean;
+  /** The chart was not read again after a write, and shows the figures from before. */
+  failure: string | null;
   /** A row's category was written, so the series is out of date. */
   onChanged: () => void;
 }): React.ReactElement {
-  const { data, stale } = props;
+  const { data, stale, failure } = props;
   const { periods, categories } = data;
-  // The period whose rows are open below the chart, by its end. `id` makes opening
-  // another category of the same period start the list again on it.
+  // The period whose rows are open below the chart, by its start: the open
+  // period's end is the range's last day, today by default, so it moves at
+  // midnight and would close the list on the next read (lg-18 F5). `id` makes
+  // opening another category of the same period start the list again on it.
   const [opened, setOpened] = useState<{
     id: number;
-    end: string;
+    start: string | null;
     category: number | "none" | null;
   } | null>(null);
   // Slots are by place in the whole list, which the API sends whatever the range,
@@ -521,7 +528,8 @@ function SpendingBody(props: {
     const period = periods[index];
     return period === undefined ? "" : nameOf(period);
   };
-  const shown = opened === null ? undefined : periods.find((period) => period.end === opened.end);
+  const shown =
+    opened === null ? undefined : periods.find((period) => period.start === opened.start);
 
   return (
     <>
@@ -541,6 +549,11 @@ function SpendingBody(props: {
         }}
         empty={periods.length === 0 ? "No period overlaps this range." : null}
         stale={stale}
+        failure={
+          failure === null
+            ? null
+            : `The chart was not read again after the change, and shows the figures from before it: ${failure}`
+        }
       >
         <ColumnChart
           name="Spending per period, by spending category"
@@ -561,7 +574,7 @@ function SpendingBody(props: {
             // "More categories" is several at once, so it opens the whole period.
             const category =
               key === null || key === "more" ? null : key === "none" ? "none" : Number(key);
-            setOpened({ id: (opened?.id ?? 0) + 1, end: period.end, category });
+            setOpened({ id: (opened?.id ?? 0) + 1, start: period.start, category });
           }}
           notes={(index) => {
             const period = periods[index];
@@ -604,8 +617,13 @@ export function SpendingCard({ range }: { range: StatsRange }): React.ReactEleme
   const series = useSeries(fetchSpendingStats, range, reload);
   return (
     <Loaded title="Spending by period" series={series}>
-      {(data, stale) => (
-        <SpendingBody data={data} stale={stale} onChanged={() => setReload((n) => n + 1)} />
+      {(data, stale, failure) => (
+        <SpendingBody
+          data={data}
+          stale={stale}
+          failure={failure}
+          onChanged={() => setReload((n) => n + 1)}
+        />
       )}
     </Loaded>
   );
