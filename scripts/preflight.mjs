@@ -22,7 +22,8 @@
  * re-deriving its judgement:**
  *
  *   - check 1 shells out to `npm run check` and, for each tool the diff
- *     touches, `npm test -- --project <tool>` — read from the diff's own
+ *     touches with a path that is not markdown (repo-101),
+ *     `npm test -- --project <tool>` — read from the diff's own
  *     paths, never from a flag, so a forgotten `--project` cannot silently
  *     skip a tool's suite the way a hand-typed one can.
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
@@ -168,8 +169,9 @@ export function isTicketPath(candidate) {
  * (repo-101). A gate record, a Log entry or a filed ticket under `tools/<tool>/`
  * used to plan that tool's whole suite, which is the same cost `ci.yml`'s
  * `changes` job already spares a documentation-only change. The rule is the
- * same suffix test that job applies, with no exceptions, so the two cannot
- * disagree about what counts as documentation.
+ * same suffix test that job applies, with no exceptions. Only the suffix test
+ * is shared: a `.md` under `packages/` or `scripts/` still plans a suite here
+ * through `sharedConfigTouched` and `scriptsTouched`, where CI skips the matrix.
  *
  * @param {string[]} diffPaths
  * @returns {string[]}

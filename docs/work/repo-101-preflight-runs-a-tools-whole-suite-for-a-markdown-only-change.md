@@ -167,3 +167,38 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
     is now `fd7f25bd`. `git diff 7dcc625f fd7f25bd` is empty, so each tree is
     the one the runs measured. `036e7ac6` was the `--base` for the
     markdown-only run.
+- 2026-10-12 — Landed by the fixer (Sonnet 5.5) after gate 1 PASS at `983a3e09`.
+  The owner authorised four lows to be fixed at landing, with no re-gate. The
+  gate section above is unchanged.
+  - Gate 1 low, `touchedTools` docblock overclaim — _fixed at landing_. The
+    sentence "so the two cannot disagree about what counts as documentation" is
+    gone; the docblock now says only the suffix test is shared with `ci.yml`,
+    and that a `.md` under `packages/` or `scripts/` still plans a suite through
+    `sharedConfigTouched` and `scriptsTouched`.
+  - Gate 1 low, unreachable shas in this Log — _fixed at landing_. The runs
+    above pin `036e7ac6`, `68b4cd25` and `7dcc625f`, which the amend rewrote and
+    which resolve from no branch. The surviving equivalents are `a0c9d9f6`,
+    `90c45ca3` and `fd7f25bd`. The markdown-only run is reproduced from the
+    surviving code commit with `node scripts/preflight.mjs --base a0c9d9f6
+--title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`;
+    its diff is this ticket file alone (`git diff --name-only a0c9d9f6...HEAD`)
+    and the pasted output above is its result. These shas also stop resolving
+    once the squash merge deletes the branch, so the pasted outputs are the
+    record, not the commands.
+  - Gate 1 low, stale wording — _fixed at landing_ for the file header of
+    `scripts/preflight.mjs` (check 1 now says a markdown path does not count).
+    Not changed: the same wording in
+    `.claude/skills/orchestrate-tickets/roles/builder.md`, a role page that no
+    one in this batch may edit. A builder who believes it loses nothing: preflight runs fewer suites, never more.
+  - Open decision, `.md` under `packages/` and `scripts/` — owner's answer on
+    2026-10-12: "Leave it" (option A, the recommended one). `sharedConfigTouched`
+    and `scriptsTouched` stay as they are, so such a file still plans the full
+    suite or `repo` + `core`. No `.md` file is tracked under either directory
+    today, so the rule has no live call site. Extending the skip is the
+    alternative, two lines and two tests, if one is ever added.
+  - Gate 1, not graded, `test (ubuntu-latest)` red at `Run npm ci` on the first
+    run of `983a3e09`: on the re-run `gh pr checks 436` shows every check
+    passing, `test (ubuntu-latest)` at 12m27s and `test (windows-latest,
+informational)` at 12m49s.
+  - Gate 1 low, `checkTitle` changes under `--no-renames` with no test — not
+    in the owner's four authorised fixes, so left as the gate recorded it.
