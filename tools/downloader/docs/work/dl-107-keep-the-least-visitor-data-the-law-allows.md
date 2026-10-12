@@ -113,7 +113,7 @@ Art. 5 if they applied.
 3. Does routing visitors through Cloudflare (US) trigger the s. 17 assessment?
 4. Would Bill C-22's schedule of core providers reach it, if enacted?
 
-## The decision — all five answered by the owner on 2026-10-12
+## The decision — all six answered by the owner on 2026-10-12
 
 **Every question took its recommended option, A.** 1A includes approving the
 contract change it names: `Job.sourceUrl` may be empty on a cleared row. The
@@ -175,12 +175,33 @@ person in charge and a confidentiality policy, if the act applies.
   Text only, and harmless if the act turns out not to apply.
 - **B — Wait for the lawyer's answer to question 1.**
 
+**6 — The page's path on log lines (row 2).** Asked after the first five,
+when the owner asked whether they were the most the rules allow. They were
+not: 2A shortens the address on the `request` line only, and row 2's lines
+still carry the page's origin and path under the same `requestId`, so the log
+would still join a /24 network to the exact page for its lifetime.
+
+- **A — Site only (taken).** Every page or media URL a log line carries is cut
+  to its origin, never its path. Costs: debugging a page that fails means
+  asking the visitor for its address; the analysis record (row 9) already
+  answers "which sites fail" without one.
+- **B — Keep origin and path (2A as first answered).**
+
+**Further steps offered at the same time and not taken:** dropping the address
+entirely instead of 2A; deleting the job row at job end and keeping daily
+totals instead of rows; expiring the browser's saved list. Each was declined
+for its cost (abuse tracing and limit tuning; the report's per-failure detail;
+visitors' history), not for a legal reason. **The largest remaining holder is
+Cloudflare**, which sees all traffic and, with the human check on, the address,
+a TLS fingerprint and the User-Agent, under its own retention; the only lever
+on this side is leaving that check off.
+
 The analysis-outcome record (row 9) holds nobody and stays at 90 days. Its
 `0`-means-forever trap is fixed in the build whatever is chosen.
 
 ## Build
 
-Written for the options taken: 1A, 2A, 3A, 4A, 5A.
+Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
 
 1. Rows 4–7: in `runSweep` ([server.ts](../../api/src/server.ts)), a new
    `JobStore` statement clears the four fields on rows whose `finished_at` is
@@ -201,6 +222,11 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A.
    are gone after one sweep while host, status and code remain.
 7. The hold procedure in `docs/02-DEPLOYMENT.md`.
 8. The person in charge and the purposes on the terms page (question 5).
+9. Row 2 (question 6): in the logger's deep walk (`redactUrlsDeep`,
+   [logger.ts](../../api/src/logger.ts)), cut every absolute URL to its
+   origin. Give the logger its own matcher rather than changing
+   `redactUrlsInText`, which ffmpeg's stderr and stored errors also use. The
+   `request` line's own `url` is an API path, not a page, and stays.
 
 ## Done when
 
@@ -213,6 +239,9 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A.
 4. `OUTCOME_RETENTION_DAYS=0` cannot keep rows forever — proven by a test.
 5. The terms page states each period and what it holds, and its test fails
    when one disagrees with the code.
+6. No log line holds a page or media URL's path — proven by a test that logs
+   a `details.url`, a nested `requestContext` URL and a URL inside a sentence,
+   and finds only their origins.
 
 ## Log
 
@@ -223,3 +252,6 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A.
   1A's contract change approved; moved to `ready`. The first push and pull
   request were refused by a permission prompt and retried with the owner's
   approval.
+- 2026-10-12 — Question 6 added and answered A when the owner asked whether
+  the first five were the most the rules allow. The other further steps were
+  offered and declined; the decision section records them and why.
