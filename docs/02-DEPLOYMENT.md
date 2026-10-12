@@ -228,11 +228,11 @@ CLOUDFLARE_API_TOKEN=… node scripts/cloudflare-setup.mjs \
 ```
 
 `--email` is the one address every tool's Allow policy admits. `--ledger-email`
-is the second person the ledger's policy admits, and only the ledger's — see
-[its section of step 2](#the-ledgers-two-people-and-still-no-bypass). The script
+is a second address the ledger's policy admits, and only the ledger's — see
+[its section of step 2](#the-ledgers-every-households-addresses-and-still-no-bypass). The script
 refuses to create the ledger's application without it, and ignores it once the
-application exists: it never rewrites a policy, so changing either address later
-is a dashboard edit.
+application exists: it never rewrites a policy, so changing either address
+later, or adding another household's, is a dashboard edit.
 
 That prints a plan and writes nothing. `--apply` makes the changes. It is
 idempotent — a second run reports `nothing to do` — so it is also the way to
@@ -328,9 +328,9 @@ has authentication of its own:
 - **The planner** has no owner model, so every visitor reads and edits everyone's
   plans — and once it runs a real model, every visitor spends your token budget.
   The detail is [below](#the-planners-no-bypass-rule-ever).
-- **The ledger** holds a household's bank history, and the Access identity is the
+- **The ledger** holds households' bank history, and the Access identity is the
   only identity it has. The detail is
-  [below](#the-ledgers-two-people-and-still-no-bypass).
+  [below](#the-ledgers-every-households-addresses-and-still-no-bypass).
 
 For each tool this host runs, **Access → Applications → Add an application →
 Self-hosted**:
@@ -414,24 +414,40 @@ email on it was the only thing hiding that. See that ticket's Log if
 unauthenticated endpoint is a stranger spending your token budget, with
 `MAX_OUTPUT_TOKENS` capping one reply and nothing capping the number of replies.
 
-### The ledger's: two people, and still no Bypass
+### The ledger's: every household's addresses, and still no Bypass
 
-The one application, with **two** addresses on its Allow policy rather than one:
-the account it keeps is shared by the two people it belongs to, and both use the
-tool. Add the second on the ledger's policy only — adding it to `--email`, or to
-another tool's policy, hands that person the other tools too.
+The one application, with **every household's addresses** on its Allow policy:
+each household that uses the ledger is two people with books of their own, and
+each of them may sign in from more than one address. The setup script creates
+the policy with two, `--email` and `--ledger-email`, and never rewrites a policy,
+so every other address is added here, in the dashboard: **Access → Applications
+→ ledger → its Allow policy → Include → Emails**. Add each on the ledger's policy
+only — adding one to `--email`, or to another tool's policy, hands that person
+the other tools too.
 
+- **Access admits; the household directory decides.** Access lets a listed
+  address reach the ledger. The directory on the ledger's volume says which
+  household it is in and as whom, and refuses one it has no member for — that
+  address gets a page saying it belongs to no household. So membership is in two
+  places, and they drift closed: an address on one list and not the other is
+  refused either way. Add a member with the household command
+  ([the ledger's section](#the-ledger)), then add its address here.
 - **No Bypass rule, ever**, for the planner's first reason and a stronger one:
   nothing in the ledger is a capability link, and what it holds is bank history.
 - **Access is its identity, not only its gate.** The tool has no login of its
   own; who imported a statement or paid a receipt is the address Access puts on
   the request. The API verifies Access's signed token on every API route but
   `/api/health`, so the loopback port answers health and refuses the rest. It
-  needs the team name, the application's AUD tag and the address-to-person
-  list — `LEDGER_ACCESS_TEAM`, `LEDGER_ACCESS_AUD` and `LEDGER_ACCESS_PEOPLE`
-  in `.env` — and `compose.ledger.prod.yaml` refuses to start without them.
+  needs the team name and the application's AUD tag — `LEDGER_ACCESS_TEAM` and
+  `LEDGER_ACCESS_AUD` in `.env` — and `compose.ledger.prod.yaml` refuses to
+  start without them. `LEDGER_ADMINS`, optional, names the addresses that may
+  manage the directory. `LEDGER_ACCESS_PEOPLE` is retired: the directory
+  replaced it, and compose no longer passes it to the API, so nothing refuses a
+  stale line in `.env`. Delete it by hand.
 - **Never "widen it" to public**, below. The next section is about tools whose
-  data is nobody's in particular; this one's is two named people's.
+  data is nobody's in particular; this one's is named households'. Opening the
+  ledger's policy to any address that proves itself is repo-98, deferred until
+  the owner wants the ledger open, and is not something to do from this page.
 
 ### When you want it genuinely public
 
@@ -529,9 +545,11 @@ looks:
   was never handed out, and the CI gate asked only for `/api/health`, which
   answered perfectly throughout. That gate now greps the document for the
   bundle's root element, and this is the deployed equivalent of the same check.
-- **ledger** — open it from a phone, as each of the two people, and check both
-  get past the login. A policy with one address on it looks exactly like a
-  working one to the person whose address it is.
+- **ledger** — open it from a phone, as each member of each household, and
+  check each gets past the login to their own books. A policy or a directory
+  missing an address looks exactly like a working one to everyone else: the
+  missing one sees Access refuse them, or the page saying they belong to no
+  household.
 
 ---
 
@@ -595,9 +613,12 @@ behind the rest, and p50 download duration. The report prints no path, query
 string or address, and `probe_outcomes` holds none; `OUTCOME_RETENTION_DAYS`
 (default 90) bounds it by size rather than by privacy — see
 [dl-57](../tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md).
-The `jobs` table is different: it holds the full page URL, and the sweep deletes a
-row 14 days after it was made (dl-54), so the download figures cover at most the
-last 14 days whatever `--days` says.
+The `jobs` table is different: while a download runs it holds the full page URL,
+and the sweep blanks that, the media URL, the title and any URL in the error
+fifteen minutes after the job ends (dl-107), and deletes the row 14 days after it
+was made (dl-54). The report reads only status, error code and times, which the
+blanking leaves, so the download figures cover at most the last 14 days whatever
+`--days` says.
 
 ### Things that bite every tool
 
@@ -718,42 +739,110 @@ would open it sooner; nothing here builds that.
 
 **What is kept, and when it goes**
 
-| What                                               | Where                      | Gone after                                            |
-| -------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| Client address, per request                        | the container's log        | the log's size cap (below); about 14 days at the size |
-| Page domain and path, on some lines, never a query | the container's log        | the same                                              |
-| The full page URL, query included                  | `jobs`, a row per download | 14 days, by the sweep (`JOB_RETENTION_DAYS`)          |
-| A hostname and resolver timings                    | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default               |
+| What                                                         | Where                      | Gone after                                                                  |
+| ------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------------------- |
+| The client's network (a /24 or /48), per request             | the container's log        | the log's size cap (below); about 7 days at the size                        |
+| A page's or media file's site, on some lines, never its path | the container's log        | the same                                                                    |
+| The full page URL, query included, and the media URL         | `jobs`, a row per download | 15 minutes after the job ends, by the sweep (`FINISHED_JOB_CLEAR_AFTER_MS`) |
+| The video's title, and any URL in an error                   | `jobs`                     | the same                                                                    |
+| Host, status, error code and times                           | `jobs`                     | 14 days, by the sweep (`JOB_RETENTION_DAYS`)                                |
+| A hostname and resolver timings                              | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default; `0` is refused at boot             |
 
-The log fields are measured and pinned by `api/test/log-fields.test.ts`.
+The log fields are measured and pinned by `api/test/log-fields.test.ts`. The rate limits
+hold the address in memory only (an IPv4 address whole, an IPv6 one as its /64), and never write it.
 
 **Log retention.** `compose.downloader.prod.yaml` caps the downloader's log at
-5 files of 10 MB, which is a **size, not an age** — Docker's `json-file` and
+5 files of 5 MB, which is a **size, not an age** — Docker's `json-file` and
 `local` drivers have no age option. A host with less traffic than the cap was
-sized for keeps lines longer than 14 days; one with more keeps them shorter. The
-terms page says "about 14 days" and that a quiet service keeps lines longer,
-because that is what a size cap delivers. Size it against your own day:
+sized for keeps lines longer than 7 days; one with more keeps them shorter. The
+terms page says "about 7 days" and that a quiet service keeps lines longer,
+because that is what a size cap delivers. The cap was 10 MB, about 14 days, until
+dl-107 (owner decision 3A, 2026-10-12): the log no longer holds a whole address or
+a page's path, so it is not worth keeping as long. Size it against your own day:
 
 ```bash
 docker compose logs --since 24h downloader | wc -c
 ```
 
-Multiply by 14 and compare with 50 MB; the file also carries Docker's envelope,
+Multiply by 7 and compare with 25 MB; the file also carries Docker's envelope,
 about 40% more than the lines themselves (measured: 5,848 bytes against 4,138 for
 a first visit's 16 lines against a live API, curl standing in for the browser;
-the API alone is 2,551 against 1,811 for 7). The cap's own figure, 600 first
-visits a day for 14 days, is an assumption about traffic, not a measurement of
-this host. The owner chose this size cap over the two ways below on 2026-10-03.
-To make it an age instead, there are two ways, neither of which this repository
-can do for you:
+the API alone is 2,551 against 1,811 for 7). Those figures were taken before
+dl-107 shortened two fields, so they read slightly high. The cap's own figure,
+600 first visits a day for 7 days, is an assumption about traffic, not a
+measurement of this host. The owner chose this size cap over the two ways below
+on 2026-10-03. To make it an age instead, there are two ways, neither of which
+this repository can do for you:
 
-- the `journald` logging driver with `MaxRetentionSec=14day` in the host's
+- the `journald` logging driver with `MaxRetentionSec=7day` in the host's
   `journald.conf`, which expires by time. It needs systemd-journald on the host,
   and a host without it fails to start the container, so it is not set here;
 - a daily job on the host that deletes the downloader's **rotated** files older
-  than 14 days (the `*-json.log.N` beside the path `docker inspect -f '{{.LogPath}}'`
-  prints for the container). It leaves the live file, which keeps up to 10 MB of
+  than 7 days (the `*-json.log.N` beside the path `docker inspect -f '{{.LogPath}}'`
+  prints for the container). It leaves the live file, which keeps up to 5 MB of
   whatever is newest. Not run by the author.
+
+**When a legal notice arrives** (dl-107, owner decision 4A). No law found here
+obliges keeping an address or a page before a notice comes, and every duty to keep
+something starts at the notice and covers only what is still held then. So the
+procedure is to copy what exists the day it arrives, before the log rotates and
+the sweep runs, and to keep the copy only as long as the notice requires. It is
+not run by anything; the operator does it by hand. The notice may be a copyright
+notice forwarded to the abuse alias, a preservation demand or a production order
+(the Criminal Code's preservation demand holds for 21 days and an order for 90),
+or a request from a lawyer.
+
+1. **Write down when it arrived**, and what it names: a site, a page, a time, an
+   address. Keep the notice itself.
+2. **Copy the log files first**, because they rotate by size and a busy day can
+   drop a line within hours. Docker keeps the live file and the rotated
+   `<id>-json.log.N` side by side. Copy those files and not their directory,
+   which also holds `config.v2.json`: the container's environment, the
+   service's secrets with it. The directory is root's, so the match runs under
+   `sudo` rather than as a glob in your own shell:
+
+   ```bash
+   log="$(docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader))"
+   mkdir -p ~/hold/<notice>/logs
+   sudo find "$(dirname "$log")" -maxdepth 1 -name "$(basename "$log")*" -exec cp -a {} ~/hold/<notice>/logs/ \;
+   ```
+
+3. **Copy the database**, which holds each download's host, status, error code and
+   times for 14 days, and no page address once a job is over. It can therefore
+   say what was fetched from a **site**, not which page. The image keeps it at
+   `/data/jobs.db` (`STORAGE_DIR=/data`), and the service runs SQLite in
+   write-ahead-log mode (`migrate` in `api/src/db/schema.ts`), so the most recent
+   rows, which are the ones a notice usually names, sit in `jobs.db-wal` until a
+   checkpoint. `jobs.db` alone can be missing its tables (measured on the real
+   `migrate`: the copy failed with `no such table: jobs` while the live database
+   held the row). Stop the service, so that nothing is written mid-copy, and copy
+   whichever of the three files exist together:
+
+   ```bash
+   docker compose stop downloader
+   docker compose cp downloader:/data/jobs.db ~/hold/<notice>/jobs.db
+   docker compose cp downloader:/data/jobs.db-wal ~/hold/<notice>/jobs.db-wal
+   docker compose cp downloader:/data/jobs.db-shm ~/hold/<notice>/jobs.db-shm
+   docker compose start downloader
+   ```
+
+   A clean stop may checkpoint and remove the `-wal` and `-shm` files; a copy of a
+   file that is not there fails, and that is fine. Stopping ends any download in
+   progress, so pick a quiet moment. Read the rows for the named site from the
+   copy, with `sqlite3` on the host, not from the live file.
+
+4. **Reply from the abuse alias** and say what was found. What the service holds
+   about a visitor is a network (a /24 or a /48, not an address), a site and a
+   time; the terms page says so, and the reply should not claim more.
+5. **Delete the copy** when the notice's period ends: six months for a copyright
+   notice that did not become a suit, a year if it did, 21 or 90 days for a
+   preservation demand or order. Preserving more than the notice asks is keeping
+   what the rest of this section exists to avoid.
+
+This is a procedure and not legal advice, and the commands above were written from
+the compose files and not run against a host. The questions a lawyer should answer
+are listed in
+[dl-107](../tools/downloader/docs/work/dl-107-keep-the-least-visitor-data-the-law-allows.md).
 
 ### Tightening it past one user
 
@@ -1218,8 +1307,27 @@ reaches outside the host. Two things are its own:
   statement either person imported, and of the history carried over from the
   spreadsheet it replaces. `docker compose down` without `-v` leaves it alone;
   back it up as you would that spreadsheet, and more often.
-- **Its login admits two people**, and is also how it knows which of them is
-  asking — [step 2](#the-ledgers-two-people-and-still-no-bypass) has the policy.
+- **Its login admits every household's addresses, and the household directory
+  says whose they are** — [step 2](#the-ledgers-every-households-addresses-and-still-no-bypass) has the
+  policy. The directory is `/data/directory.db` on the same volume, read on every
+  request, so a change applies without a restart. Until the app has a screen for
+  it (lg-22) it is written from the host, inside the running container:
+
+  ```bash
+  F="-f compose.prod.yaml -f compose.ledger.prod.yaml"
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js add <household> <display name>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js member <household> <address> <person>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js remove <address>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js list
+  ```
+
+  A household id is one lowercase word; a household holds two people, each
+  behind any number of addresses, and a name it has held stays one of its two.
+  Until each household has books of its own (lg-21) the command refuses a second
+  household. **On the first deploy of this release the directory is empty**, so
+  everyone sees the "no household" page until the household and its members
+  are added; and delete `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads
+  any more. `--as` in the workbook import names a person the directory holds.
 
 There is no model behind it yet. Reading receipts will be one, behind a seam of
 its own with an offline default, and it will get a section here when it lands.

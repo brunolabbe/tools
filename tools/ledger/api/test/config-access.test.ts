@@ -1,13 +1,16 @@
 /**
- * The Access half of the configuration (lg-3), in a file of its own so
- * `config.test.ts` keeps its lines.
+ * The Access half of the configuration (lg-3), and the admins and the retired
+ * `ACCESS_PEOPLE` (lg-20), in a file of its own so `config.test.ts` keeps its
+ * lines.
  */
 
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { AppError } from "@ledger/contract";
 import { loadApiConfig } from "../src/config.ts";
 import { createApp } from "../src/server.ts";
-import { ALEX, SAM, accessConfig } from "./helpers/access.ts";
+import type { App } from "../src/server.ts";
+import { ADMIN, ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
 
 /** The message a refused configuration throws, or `undefined` when it loads. */
 function refusal(env: NodeJS.ProcessEnv): string | undefined {
@@ -20,7 +23,17 @@ function refusal(env: NodeJS.ProcessEnv): string | undefined {
   }
 }
 
-const PEOPLE = `${ALEX}=alex, ${SAM}=sam`;
+/** An app whose development identity is `devIdentity`, over alex and sam's household. */
+async function start(devIdentity: string): Promise<App> {
+  return await createApp({
+    directory: memberDirectory(),
+    config: {
+      databasePath: ":memory:",
+      logLevel: "silent",
+      access: accessConfig({ devIdentity }),
+    },
+  });
+}
 
 describe("loadApiConfig: Access", () => {
   test("defaults to no Access settings, no development identity, not production", () => {
@@ -29,30 +42,27 @@ describe("loadApiConfig: Access", () => {
     expect(config.production).toBe(false);
     expect(config.access.team).toBeUndefined();
     expect(config.access.audience).toBeUndefined();
-    expect(config.access.people.size).toBe(0);
+    expect(config.access.admins.size).toBe(0);
     expect(config.access.devIdentity).toBeUndefined();
   });
 
-  test("reads the team, the audience and the people", () => {
+  test("reads the team, the audience and the admins", () => {
     const { access } = loadApiConfig(
       {},
       {
         ACCESS_TEAM: "Household-Test",
         ACCESS_AUD: "an-aud-tag",
-        ACCESS_PEOPLE: `Alex@Example.TEST=alex , ${SAM}=sam`,
+        LEDGER_ADMINS: ` Admin@Example.TEST , ${SAM}`,
       },
     );
 
     expect(access.team).toBe("household-test");
     expect(access.audience).toBe("an-aud-tag");
-    expect([...access.people]).toEqual([
-      [ALEX, "alex"],
-      [SAM, "sam"],
-    ]);
+    expect([...access.admins]).toEqual([ADMIN, SAM]);
   });
 
   test("the development identity cannot be enabled in production mode", () => {
-    const env = { DEV_IDENTITY: ALEX, ACCESS_PEOPLE: PEOPLE };
+    const env = { DEV_IDENTITY: ALEX };
 
     expect(refusal(env)).toBeUndefined();
     expect(refusal({ ...env, NODE_ENV: "production" })).toMatch(/DEV_IDENTITY.*production/u);
@@ -67,6 +77,7 @@ describe("loadApiConfig: Access", () => {
     // boot, not a warning in a log nobody reads.
     await expect(
       createApp({
+        directory: memberDirectory(),
         config: {
           databasePath: ":memory:",
           logLevel: "silent",
@@ -77,10 +88,14 @@ describe("loadApiConfig: Access", () => {
     ).rejects.toThrow(/DEV_IDENTITY/u);
   });
 
-  test("refuses a development identity the people map does not know", () => {
-    expect(refusal({ DEV_IDENTITY: "nobody@example.test", ACCESS_PEOPLE: PEOPLE })).toMatch(
-      /not an address in ACCESS_PEOPLE/u,
+  test("refuses to start with a development identity the directory has no member for", async () => {
+    await expect(start("nobody@example.test")).rejects.toThrow(
+      /DEV_IDENTITY is not a member of any household/u,
     );
+    // An admin is not a member either: development is someone's books.
+    await expect(start(ADMIN)).rejects.toThrow(/DEV_IDENTITY/u);
+    const app = await start(SAM);
+    await app.shutdown();
   });
 
   test("refuses half an Access configuration", () => {
@@ -100,15 +115,28 @@ describe("loadApiConfig: Access", () => {
     }
   });
 
-  test("refuses a malformed people entry without echoing the address", () => {
-    const message = refusal({ ACCESS_PEOPLE: `${ALEX}=alex, sam-without-a-person` });
-    expect(message).toMatch(/entry 2/u);
+  test("refuses an admin entry that is not an address, without echoing it", () => {
+    const message = refusal({ LEDGER_ADMINS: `${ALEX}, sam-without-a-domain` });
+    expect(message).toMatch(/LEDGER_ADMINS entry 2/u);
     expect(message).not.toContain("sam");
     expect(message).not.toContain(ALEX);
+  });
 
-    expect(refusal({ ACCESS_PEOPLE: `${ALEX}=alex, ${ALEX.toUpperCase()}=other` })).toMatch(
-      /twice/u,
+  test("refuses ACCESS_PEOPLE, set to anything, so a stale .env cannot look as if it admits people", () => {
+    for (const value of [`${ALEX}=alex`, ""]) {
+      expect(refusal({ ACCESS_PEOPLE: value }), value).toMatch(/ACCESS_PEOPLE is retired/u);
+    }
+  });
+
+  test("the directory sits beside the books unless DIRECTORY_PATH says otherwise", () => {
+    expect(loadApiConfig({}, { DATABASE_PATH: "/data/ledger.db" }).directoryPath).toBe(
+      path.join("/data", "directory.db"),
     );
+    expect(
+      loadApiConfig({}, { DATABASE_PATH: "/data/ledger.db", DIRECTORY_PATH: "/elsewhere/d.db" })
+        .directoryPath,
+    ).toBe("/elsewhere/d.db");
+    expect(loadApiConfig({ databasePath: ":memory:" }, {}).directoryPath).toBe(":memory:");
   });
 });
 
@@ -116,18 +144,15 @@ describe("loadApiConfig: Access", () => {
 describe("loadApiConfig: production mode, however it is written", () => {
   test("refuses the development identity for any spelling of production", () => {
     for (const value of ["production", "Production", "PRODUCTION", " production", "production "]) {
-      expect(
-        refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX, ACCESS_PEOPLE: PEOPLE }),
-        value,
-      ).toMatch(/DEV_IDENTITY.*production/u);
+      expect(refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX }), value).toMatch(
+        /DEV_IDENTITY.*production/u,
+      );
     }
   });
 
   test("and only production: other names still allow it", () => {
     for (const value of ["development", "test", "", "productionish"]) {
-      expect(refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX, ACCESS_PEOPLE: PEOPLE }), value).toBe(
-        undefined,
-      );
+      expect(refusal({ NODE_ENV: value, DEV_IDENTITY: ALEX }), value).toBe(undefined);
     }
   });
 });

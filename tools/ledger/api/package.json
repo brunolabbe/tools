@@ -13,7 +13,9 @@
     "dev": "npm run build && node --watch --import ./dev-env.mjs --import tsx src/main.ts",
     "start": "node dist/main.js",
     "// import:ledger": "The workbook import (lg-7): a one-off command, never a route. Builds first for the reason on the dev key. Without --write it is a dry run. In the image, where nothing can build, run node tools/ledger/api/dist/import-ledger.js with the same arguments. A relative workbook path is read from where npm was started (INIT_CWD), not from this directory.",
-    "import:ledger": "npm run build && node dist/import-ledger.js"
+    "import:ledger": "npm run build && node dist/import-ledger.js",
+    "// household:ledger": "The household directory from the host (lg-20): add a household, add or remove a member, list them. Builds first for the reason on the dev key. In the image, where nothing can build, run node tools/ledger/api/dist/household-ledger.js with the same arguments. It writes DIRECTORY_PATH, which defaults to directory.db beside DATABASE_PATH; like the dev server, it resolves a relative default from this directory.",
+    "household:ledger": "npm run build && node dist/household-ledger.js"
   },
   "dependencies": {
     "@fastify/static": "^10.1.3",

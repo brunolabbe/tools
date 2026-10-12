@@ -22,6 +22,7 @@ import type {
   JobStatus,
   MediaVariant,
 } from "@downloader/contract";
+import { redactUrlsInText } from "@downloader/engine";
 import type { Database, Statement } from "better-sqlite3";
 import { hostnameOrNull } from "../host.ts";
 
@@ -393,7 +394,7 @@ export class JobStore {
       status: to,
       progress_json: JSON.stringify(progress),
       result_json: result === null ? null : JSON.stringify(result),
-      error_json: error === null ? null : JSON.stringify(error),
+      error_json: error === null ? null : JSON.stringify(redactStoredError(error)),
       variant_id: patch.variantId === undefined ? current.variantId : patch.variantId,
       variant_json: variant === null ? null : JSON.stringify(variant),
       attempts: patch.attempts ?? current.attempts,
@@ -568,4 +569,93 @@ export class JobStore {
     // merged records that cite them found them.
     return this.#db.prepare(`DELETE FROM jobs WHERE created_at < ?`).run(beforeIso).changes;
   }
+
+  /**
+   * Blanks what a finished job's row holds about the visitor, keeping the rest
+   * (dl-107, owner decision 1A), and returns how many rows were cleared.
+   *
+   * Four things go: `source_url` (the page address, query included), the whole
+   * `variant_json` (the media URL, often signed, with its alternates), the result's
+   * `filename` (derived from the video's title) and the error's `details`, in
+   * which some resolvers put a full URL. What stays is what the report reads and
+   * what the card shows after a restore: host, status, error code and message,
+   * times, size and container.
+   *
+   * **`details` keeps `reason` and `retryAfterSec`**, which are not URLs and are
+   * what the card reads to say a link expired or how long to wait. Clearing the
+   * whole bag, as the brief said, would turn a reloaded "link expired" into a
+   * bare "canceled". Anything else a resolver put there goes.
+   *
+   * The marker is `source_url = ''`, so a cleared row is not touched again by the
+   * next sweep, and a row is cleared in one transaction, all four together.
+   * Unfinished rows are never touched: the job is still using them.
+   */
+  clearFinishedBefore(beforeIso: string): number {
+    const rows = this.#db
+      .prepare(
+        `SELECT id, result_json, error_json FROM jobs
+          WHERE finished_at IS NOT NULL AND finished_at < ? AND source_url <> ''`,
+      )
+      .all(beforeIso) as { id: string; result_json: string | null; error_json: string | null }[];
+    if (rows.length === 0) return 0;
+
+    const clear = this.#db.prepare(
+      `UPDATE jobs SET source_url = '', variant_json = NULL,
+                       result_json = @result_json, error_json = @error_json
+        WHERE id = @id`,
+    );
+    this.#db.transaction((): void => {
+      for (const row of rows) {
+        const result = parseJson<JobResult>(row.result_json);
+        const error = parseJson<AppErrorPayload>(row.error_json);
+        clear.run({
+          id: row.id,
+          result_json: result === null ? null : JSON.stringify({ ...result, filename: "" }),
+          error_json: error === null ? null : JSON.stringify(withoutDetails(error)),
+        });
+      }
+    })();
+    return rows.length;
+  }
+}
+
+/** The `details` keys that are not about a URL, and that the card reads. */
+const KEPT_DETAILS = ["reason", "retryAfterSec"] as const;
+
+function withoutDetails(error: AppErrorPayload): AppErrorPayload {
+  const { details, ...rest } = error;
+  if (details === undefined) return rest;
+  const kept: Record<string, unknown> = {};
+  for (const key of KEPT_DETAILS) {
+    const value = details[key];
+    // A short token or a number: what a cancel reason and a wait look like, and too
+    // little room for an address to hide in.
+    if ((typeof value === "string" && /^[\w-]{1,40}$/u.test(value)) || typeof value === "number") {
+      kept[key] = value;
+    }
+  }
+  return Object.keys(kept).length === 0 ? rest : { ...rest, details: kept };
+}
+
+/**
+ * A stored error's `details` with no query string in any string in it (dl-107).
+ *
+ * Some resolvers put the page's `url.href` there, query included, and the
+ * logger redacts it on the way to a line while the row used to keep it whole. A
+ * signed URL's query is a live credential, so it goes before the write, whatever
+ * the row's later fate. Text matching, not whole-string parsing, for the reason
+ * the logger gives: yt-dlp echoes the URL mid-sentence in `details.stderr`.
+ */
+function redactStoredError(error: AppErrorPayload): AppErrorPayload {
+  if (error.details === undefined) return error;
+  return { ...error, details: redactStrings(error.details) as Record<string, unknown> };
+}
+
+function redactStrings(value: unknown): unknown {
+  if (typeof value === "string") return redactUrlsInText(value);
+  if (Array.isArray(value)) return value.map(redactStrings);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, redactStrings(entry)]),
+  );
 }

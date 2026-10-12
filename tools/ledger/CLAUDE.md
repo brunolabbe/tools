@@ -48,18 +48,23 @@ npm run dev:ledger:web      # just the UI
 npm test -- --project ledger
 npm run e2e:ledger          # "No tests found" until the first spec
 npm run import:ledger -- <workbook.xlsx> --as <person>   # the one-off import; a dry run without --write
+npm run household:ledger -- <add | member | remove | list>  # the household directory, from the host
 ```
 
-**Every API route but health answers 403 until you name a person.** The API
+**Every API route but health answers 403 until you are a member.** The API
 refuses anything Cloudflare Access has not vouched for, and in development
-nothing has. Start it as someone instead — `.env.example` has the rest:
+nothing has; and an address must be a member in the household directory. Put
+an invented one there, then start as it — `.env.example` has the rest:
 
 ```bash
-ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger
+npm run household:ledger -- add home "Test household"
+npm run household:ledger -- member home alex@example.test alex
+DEV_IDENTITY=alex@example.test npm run dev:ledger
 ```
 
-or put those two in `tools/ledger/.env`, which the API's dev script loads (and
-nothing else does — not the e2e server, not the image).
+or put `DEV_IDENTITY` in `tools/ledger/.env`, which the API's dev script loads
+(and nothing else does — not the household command, not the e2e server, not
+the image).
 
 The API's dev script builds before it watches, because `@ledger/contract`
 resolves to `dist/` and a fresh checkout has none (lg-12); the reason is on the
@@ -77,12 +82,18 @@ invented descriptions, invented amounts — shaped like the real thing. The one
 exception is none: a failing real row is reproduced by writing a synthetic row
 that fails the same way.
 
-**Identity comes from Cloudflare Access.** Two people, two addresses, one Access
-policy (`docs/02-DEPLOYMENT.md`, step 2). The tool has no login of its own and
-must not grow one; who did something is the Access identity on the request.
-`api/src/access.ts` verifies the token, a hook in `api/src/identity.ts` runs it
-on every API route but health, and a route reads the caller with
-`personOf(request)` — never from a header of its own.
+**Identity comes from Cloudflare Access; membership from the household
+directory** (lg-20). Access's policy admits every household's addresses
+(`docs/02-DEPLOYMENT.md`, step 2), and the tool has no login of its own and must
+not grow one. `api/src/access.ts` verifies the token, then looks the address up
+in the directory **on every request** — never cached, so a removal applies to
+the next request — and a hook in `api/src/identity.ts` leaves the result on the
+request: the address, whether it is an admin (`LEDGER_ADMINS`), and its
+household and person, or none for an admin in no household. An address that is
+neither member nor admin is refused at the hook. A route reads the caller with
+`personOf(request)`, which refuses an identity with no household — never from a
+header of its own. Only lg-22's `adminOf` reads the admin flag: being an admin
+reads no books.
 
 **Every API route but health is rate limited, per person.** A route takes
 `{ onRequest: rateLimitsFor(context).read }` or `.write` from
@@ -94,9 +105,10 @@ and not the address. A route added without one is unlimited, and
 identity token in a header and a cookie, and `logger.ts` censors both as a
 backstop — not as permission.
 
-**`/api/health` never says where the data is.** It reports whether the database
-is open, never its path. The contract's `HealthResponse` has no field for it, and
-`api/test/health.test.ts` holds the route to that with a real file.
+**`/api/health` never says where the data is.** It reports whether the books and
+the household directory are open, never their paths. The contract's
+`HealthResponse` has no field for either, and `api/test/health.test.ts` holds the
+route to that with real files.
 
 **Ledger error codes live in `contract/src/errors.ts`**, in
 `LEDGER_ERROR_CODES`, and grows on purpose one ticket at a time. A code arrives
@@ -151,12 +163,19 @@ the eighth. The chart tokens (`--series-*` in `web/src/styles.css`) are the `dat
 skill's categorical order, validated against this page's own two surfaces; every chart
 has a table twin, and a figure is never only in a hover.
 
-**People come from configuration, never the repository.** The `people` table
-(lg-5) is filled at boot from `ACCESS_PEOPLE`'s names, and a person's id is that
-name — the text lg-4 stores on rules and classifications — so it must stay that
-name. Migration 3 also enrols the person ids lg-4 had already stored on rules and
-classifications, and nothing else. Why a name is permanent is in
-`docs/00-ANALYSIS.md` §7.
+**People come from the household directory, never the repository.** The
+directory (`api/src/directory.ts`, a SQLite file of its own with its own
+migrations in `api/src/db/directory-schema.ts`) holds households and who belongs
+to each: appended, never edited, with the schema refusing an `UPDATE` or a
+`DELETE`. An address is in at most one household, and **a household holds at
+most two person names, ever** — the books settle between two people, and a name
+stays in them once there — refused as `HOUSEHOLD_FULL`. The `people` table
+(lg-5) is filled from the members' names at boot and whenever a request shows a
+name it lacks (`createEnroller` in `api/src/people.ts`), and a person's id is
+that name — the text lg-4 stores on rules and classifications — so it must stay
+that name. Migration 3 also enrols the person ids lg-4 had already stored on
+rules and classifications, and nothing else. Why a name is permanent is in
+`docs/00-ANALYSIS.md` §7. `ACCESS_PEOPLE` is retired: boot refuses it.
 
 **Rules live in the database only.** Caisse names identify a household, so no
 rule is seeded from the repository: not in a migration, not in a fixture. A test

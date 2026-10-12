@@ -4,7 +4,9 @@
  *
  * A command and not a route: the import is a one-off, run by the owner on the
  * machine that holds the database, and has no reason to exist on the network.
- * It writes to the database the API is configured with (`DATABASE_PATH`).
+ * It writes to the database the API is configured with (`DATABASE_PATH`), and
+ * `--as` names a person the household directory holds (`DIRECTORY_PATH`, lg-20),
+ * which it reads and never writes.
  *
  * **A dry run never opens that file.** The file and its write-ahead log are
  * copied, byte for byte, into a private directory, and the import is done on
@@ -40,7 +42,7 @@ import { AppError } from "@ledger/contract";
 import Database from "better-sqlite3";
 import { loadApiConfig } from "./config.ts";
 import { configure } from "./db/schema.ts";
-import { configuredPeople } from "./people.ts";
+import { Directory } from "./directory.ts";
 import { importWorkbook } from "./workbook-import.ts";
 import { readSheets } from "./xlsx.ts";
 
@@ -57,7 +59,7 @@ const USAGE = `Usage: npm run import:ledger -- <workbook.xlsx> --as <person> [--
 
 Imports the household's old workbook into the ledger's database (DATABASE_PATH).
 Without --write it is a dry run: the report is printed and nothing is written.
-  --as           the person the import is recorded under, as ACCESS_PEOPLE names them
+  --as           the person the import is recorded under, as the household directory names them
   --corrections  the owner's corrections, a JSON file kept outside the repository
   --write        perform the import, if every verification holds
 `;
@@ -100,6 +102,27 @@ function openReal(databasePath: string): Database.Database {
   const db = new Database(databasePath);
   configure(db);
   return db;
+}
+
+/**
+ * The names the directory's current members stand under. Read, never written:
+ * the file is opened read-only, and a missing one is refused rather than
+ * created, because an import into books whose household has no members would
+ * be recorded under a name nobody can sign in as.
+ */
+function directoryPeople(directoryPath: string): string[] {
+  if (directoryPath !== ":memory:" && !existsSync(directoryPath)) {
+    throw new AppError(
+      "BAD_REQUEST",
+      `There is no household directory at ${directoryPath}. Create the household and its members first, with npm run household:ledger.`,
+    );
+  }
+  const directory = Directory.openReadOnly(directoryPath);
+  try {
+    return directory.people();
+  } finally {
+    directory.close();
+  }
 }
 
 function loadCorrections(file: string): Corrections {
@@ -158,6 +181,13 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
         "DATABASE_PATH is :memory:, which nothing outlives; name the database file.",
       );
     }
+    const members = directoryPeople(config.directoryPath);
+    if (!members.includes(personId)) {
+      return usage(
+        io,
+        `--as names "${personId}", who is not a member in the household directory (${members.join(", ") || "it has none"}).`,
+      );
+    }
     const workbookPath = path.resolve(io.cwd, workbookArg);
     const corrections =
       values.corrections === undefined
@@ -175,7 +205,7 @@ export async function runImportCommand(argv: readonly string[], io: CommandIo): 
 
     const options = {
       personId,
-      configured: configuredPeople(config.access.people),
+      members,
       corrections,
       write: values.write,
       now: io.now,

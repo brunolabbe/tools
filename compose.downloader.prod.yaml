@@ -52,13 +52,16 @@ services:
     image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
     pull_policy: always
 
-    # How long the container's log keeps a visitor's address (dl-54). The terms
-    # page promises 14 days, and every `request` line carries the client address.
+    # How long the container's log keeps what it holds about a visitor (dl-54):
+    # every `request` line carries the client's network, a /24 or a /48 since
+    # dl-107, and no log line carries a page's path. The terms page promises about
+    # 7 days (14 until dl-107, which halved the cap once the log stopped holding a
+    # whole address: owner decision 3A, 2026-10-12).
     #
     # **This is a size cap, not an age limit, and Docker has no option for age:**
     # `json-file` rotates when a file reaches `max-size` and keeps `max-file`
     # files, and the `local` driver takes the same two options. So the figure
-    # below is a size chosen to hold about 14 days of the traffic it was sized
+    # below is a size chosen to hold about 7 days of the traffic it was sized
     # for, and it holds longer on a quiet host and shorter on a busy one.
     #
     # How it was derived. A first visit, run against a live API with the real
@@ -71,9 +74,11 @@ services:
     # Docker wraps each line in its own JSON envelope (curl stood in for the
     # browser, and the preview was a miss, which costs a line more than a hit; the
     # bytes are in dl-54's Log). The API alone, with no page, is 7 lines and 2,551
-    # bytes. Call a visit 6 KB: 10 MB x 5 files is 50 MB, which is about 8,300
-    # visits, or 600 a day for 14 days. A failed visit adds a `request failed`
-    # line, and a return visit is smaller because the assets are cached.
+    # bytes. Call a visit 6 KB (dl-107 shortened two fields on those lines, which
+    # only makes the figure safe: it was not re-measured): 5 MB x 5 files is 25 MB,
+    # which is about 4,200 visits, or 600 a day for 7 days. A failed visit adds a
+    # `request failed` line, and a return visit is smaller because the assets are
+    # cached.
     # **That traffic is an assumption: nothing measured this host's day.** Replace it with
     # `docker compose logs --since 24h downloader | wc -c` once there is one, and
     # see "Log retention" in docs/02-DEPLOYMENT.md for the host-side purge that
@@ -81,7 +86,7 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
+        max-size: "5m"
         max-file: "5"
 
     networks: [edge]

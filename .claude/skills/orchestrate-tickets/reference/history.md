@@ -5140,3 +5140,39 @@ Total $24.4198, active 3h41m51s (rates read 2026-10-10). The close-out fixer is 
 - Gates planting their own production mutations, not the builder's, on test-speed tickets: every shortened dl-112 timing went red under its mutation, and dl-111's cap throw exposed the reworded line's false proof clause.
 - Lows fixed at landing by owner choice (four tickets, no re-gate), and a mechanical post-gate-2 round handed to a fixer with conditional ship authority (dl-111).
 - Reserving new ticket ids with a live peer orchestrator by message before filing (dl-118 here, lg-23 there).
+
+### Batch 2026-10-12 (tools-46, dl-107 and lg-20, beside tools-34's batch) — base bb4d2044
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over seven ready ids | 57s / 57s | 0 | $0.1900 |
+| #440 | open, ready | Sonnet 5.5 / high | builder-standard | dl-107 build, round 1, owner's answer B | 23m38s / 1h23m59s | 0 | $5.9614 |
+| #440 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-107 gates 1 and 2 | 14m53s / 1h01m42s | 0 | $5.9790 |
+| #440 | open, ready | Sonnet 5.5 / high | fixer | dl-107 landing (gate 2's two lows at landing) | 3m10s / 20m58s | 0 | $0.4390 |
+| #441 | open, ready | Opus 5.5 / high | builder-hard | lg-20 build | 24m35s / 44m26s | 0 | $9.0950 |
+| #441 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-20 gate 1 | 20m24s / 20m13s | 0 | $4.5522 |
+| #441 | open, ready | Sonnet 5.5 / high | fixer | lg-20 landing (F1 at landing, filed lg-23) | 5m03s / 15m00s | 0 | $0.9503 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h03m09s / 2h01m30s | 0 | $3.6332 |
+
+Total $30.8002, active 2h35m49s (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- dl-107 → #440: gate 1 FAIL (2 high: the hold procedure copied `jobs.db` alone under WAL; a tab reopened after the clear showed "Saved by your browser — " with no name; 1 med; 5 low), owner chose B (title fallback) for the second high mid-round, gate 2 PASS (2 new lows, both fixed at landing by owner choice); gate 1's lows 4, 5 and 6 recorded.
+- lg-20 → #441: gate 1 CONCERNS (no high; F1 med fixed at landing by owner choice; F2–F8 low recorded); owner answered the cap, codes and contract-scope questions; lg-23 filed (`needs-decision`, households of more than two people).
+
+**Defects in the skill:**
+
+1. `roles/builder.md`, step 1 of the set-up (`git checkout -b <branch> origin/<base>`) — the branch it creates tracks `origin/<base>`, so a bare `git push` aims at the base's name; the page gives no refspec. Reproduction (dl-107 builder): after `git checkout -b dl-107 origin/main`, `git rev-parse --abbrev-ref dl-107@{upstream}` → `origin/main`. The builder pushed with `git push -u origin dl-107:dl-107`.
+2. `roles/common.md`, the preflight paragraph ("wait with `until [ -s <exit file> ]; do sleep 3; done`"), and `reference/records.md`, _Landing_ — a foreground Bash call is capped at 600 s, and preflight on a branch that touches root `package.json`, or a `--land` whose preflight runs every tool, takes longer. Reproduction (lg-20 builder): the wait returned `Command did not complete within its 600s timeout and was moved to the background (ID: b4olxqyqy)`; the lg-20 lander's `--land` wait was auto-backgrounded the same way.
+3. Root `CLAUDE.md`, _Testing_ — "one project per tool plus one for `packages/`" does not name that project. Reproduction (dl-107 gate 2): `npx vitest run --project packages` → `No projects matched the filter "packages"`; `grep -n 'name:' vitest.config.ts` → `21: name: "core",`.
+4. `roles/reviewer.md`, line 45 ("Mutate in place on your…") — a gate has `Write` for scratch and no `Edit`, so an in-place mutation is a shell edit, which the sandbox refuses. Reproduction (lg-20 gate 1): `sed -i '292a\  const snapshot …' tools/ledger/api/src/access.ts` → refused as "too complex to verify". A mutation script written to scratch and run as `node <script> <tree>` worked; the page does not mention it.
+5. `review-ticket/gate.md`, step 4 — says "no commit pins" (line 47) and, under _Six verdicts_, counts a green CI leg proven "naming the check and the sha" (line 72). Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n -i -E "no commit pin|Six verdicts|naming the check"` → lines 47, 62, 72. lg-20 gate 1 named the check and pointed at the header's sha.
+6. `review-ticket/gate.md`, _Severity and the gate_ — the `high` row's "shipped text that is false against the code" (line 143) and the `low` row's "a defect with no live call site" (line 145) both fit two findings this batch, and nothing says which wins or how to grade text false in the safe direction. Reproduction: lg-20 gate 1 F1 (the schema said to refuse a NUL id that only a raw writer can supply) was graded `med`, which neither row names. dl-107 gate 1 finding 8 (the terms page claims the whole IPv6 address is kept where the limiter keeps the /64) was graded `low`.
+7. `roles/fixer.md` — nothing on filing a ticket during a landing (`git show origin/main:.claude/skills/orchestrate-tickets/roles/fixer.md | grep -n -i -E "file a ticket|filing|01-TICKETS"` → no output). The lg-20 lander filed lg-23 from `docs/01-TICKETS.md` alone and added a roadmap row the dispatch did not name.
+
+**Worked, and worth keeping:**
+
+- Two orchestrators on one checkout: at intake the peer listed every file its open branches touched, and each reserved its new ticket ids by message (dl-118, lg-23) before using them. No branch of either batch conflicted.
+- Asking a gate to measure the premise of a builder's open decision before the owner was asked (lg-20's cap: what a third name does to buckets and period close). The owner answered on the measurement.
+- A builder told to stop if the only fix shows less than main does stopped with three priced options instead of choosing (dl-107 finding 2).

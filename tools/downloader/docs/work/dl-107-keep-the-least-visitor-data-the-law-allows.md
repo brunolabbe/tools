@@ -3,7 +3,7 @@ id: dl-107
 tool: downloader
 title: Keep the least visitor data the law allows
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -60,14 +60,18 @@ or row 3's `jobId`, and from that to row 4. Remove or weaken the address on
 row 1 and the join is gone everywhere at once.
 
 **What no purpose needs after the job ends.** Rows 4–7 exist so a running job
-can run. The browser has its copy before the job finishes, and on reload it
-re-fetches only unfinished jobs (`useJobs.ts`'s restore). The report reads
-none of them (row 8). So the most sensitive data the service holds, a full
-page address and a signed media URL, could be cleared within minutes of a job
-ending instead of kept 14 days. One reader would notice: a tab closed while a
-job ran, reopened after the clearing, fetches the finished row, and
-`reconcileJob` would replace the card's page URL and filename with blanks
-unless it keeps the local copy's.
+can run. The browser has its page address and its variant before the job
+finishes, and on reload it re-fetches only unfinished jobs (`useJobs.ts`'s
+restore). The report reads none of them (row 8). So the most sensitive data the
+service holds, a full page address and a signed media URL, could be cleared
+within minutes of a job ending instead of kept 14 days. One reader would
+notice: a tab closed while a job ran, reopened after the clearing, fetches the
+finished row, and `reconcileJob` would replace the card's page URL with a blank
+unless it keeps the local copy's. **The filename is not like them** (corrected
+at gate 1): it reaches the browser only on the `completed` event, so a tab
+closed before that never holds it, and a cleared row's blank filename leaves
+such a card with only the page title this browser persisted, and with no title
+held it reads "Saved by your browser" with no dash. See the Log.
 
 ## The law
 
@@ -207,7 +211,8 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
    `JobStore` statement clears the four fields on rows whose `finished_at` is
    older than `LINK_TTL_MS`. Settle the contract question first, and make
    `reconcileJob` ([job-reducer.ts](../../web/src/lib/job-reducer.ts)) keep
-   the local `sourceUrl` and filename when the server's copy has been cleared.
+   the local `sourceUrl` when the server's copy has been cleared (not the
+   filename: a card saved mid-download never held one, see the Log).
 2. Row 7, independently: `error_json` should not hold a query even while the
    row is live. Run `details` through `redactUrlsDeep` before it is stored, as
    the logger already does before it is written.
@@ -243,6 +248,260 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
    a `details.url`, a nested `requestContext` URL and a URL inside a sentence,
    and finds only their origins.
 
+## Review
+
+**Gate: FAIL**: 2026-10-12 · `bb4d2044..dac72673` · Opus 5.5, depth full (`standard` ticket)
+
+| Done when                                                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A finished row loses page URL, media URL, title and error URL one sweep after the link's lifetime, and keeps host, status, error code and times | `api/test/visitor-data.test.ts` › "a finished job's row (dl-107)" › "one sweep after the link's lifetime blanks the four fields and keeps the rest" ✓. The `not.toContain` loop has companion assertions on non-empty values (`result`, `error`, `jobHost`, `finishedAt`, `createdAt`). The timing is held by "not before the link's lifetime is up, and never for a job still running", which went red when the sweep's grace was removed (M4) |
+| 2. No `request` line holds a full address, for both handlers and both families                                                                     | `visitor-data.test.ts` › "the address on a log line" › "a served request writes its network and not %s's address" and "a request the router refuses before any hook runs writes the same, for %s" (IPv4 and IPv6) ✓. Reverting `shortenAddress` in the served handler (M7) turned 4 tests red, and reverting it in the framework handler (M7b) turned 2 red                                                                                     |
+| 3. A stored `error_json` holds no query string                                                                                                     | `visitor-data.test.ts` › "a stored error holds no query string (dl-107)" › "at any depth, and inside a sentence, while the row is still live" ✓. It covers a nested object inside an array, a sentence and a top-level `url`, and went red when `redactStoredError` was removed (M8). Every write of `error_json` goes through `JobStore#write` or `clearFinishedBefore`, and the `INSERT` writes `NULL`                                        |
+| 4. `OUTCOME_RETENTION_DAYS=0` cannot keep rows for ever                                                                                            | `api/test/probe-outcomes.test.ts` › "probe_outcomes retention" › "0 cannot keep rows for ever: the service refuses to start on it (dl-107)" ✓. Red when the check became `days < 0` (M10)                                                                                                                                                                                                                                                       |
+| 5. The terms page states each period and its test fails when one disagrees                                                                         | `api/test/terms-page.test.ts` › "what it says" › "the retention it states are the ones the code applies" and "the minutes after which a finished download's addresses are erased are the sweep's" ✓. Both derive their values: setting `max-size` to `"10m"` turned 2 red (M6), and setting `FINISHED_JOB_CLEAR_AFTER_MS` to 20 minutes turned 1 red (M5)                                                                                       |
+| 6. No log line holds a page or media URL's path                                                                                                    | `visitor-data.test.ts` › "no log line holds a page's or a media file's path (dl-107)" › "a details.url, a nested requestContext URL and a URL inside a sentence are cut to their origins" ✓. It asserts exact origins, not only absence, and turned red when the cut kept the path (M9)                                                                                                                                                         |
+
+- **high** · `nfr:reliability` · no `Done when` line depends on it · **The hold
+  procedure copies one database file, and that file is incomplete.**
+  `docs/02-DEPLOYMENT.md`, "When a legal notice arrives", step 3, says "the
+  service uses no write-ahead log, so one file is the whole of it", and the
+  ticket's Log says the same. `migrate` in `api/src/db/schema.ts` runs
+  `db.pragma("journal_mode = WAL")`. So the rows committed most recently, which
+  are the ones a notice usually names, sit in `jobs.db-wal` until a checkpoint,
+  and `docker compose cp downloader:/data/jobs.db` leaves them behind.
+  Reproduction:
+  `node --import tsx /tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/walcopy.mts <worktree> /tmp/claude-1000/dl-107/wal`
+  opens a database through the real `migrate`, writes one job through
+  `JobStore`, and copies `jobs.db` alone:
+
+  ```
+  journal_mode: wal
+  files beside the live db: jobs.db, jobs.db-shm, jobs.db-wal
+  copy of jobs.db alone: jobs table present = { n: 0 } rows = SqliteError: no such table: jobs
+  live db rows = { n: 1 }
+  ```
+
+  Remedy: stop the service (`docker compose stop downloader`) and copy
+  `jobs.db`, `jobs.db-wal` and `jobs.db-shm` together. Copying the three while
+  the service runs can produce a torn copy. Correct the Log line too.
+
+- **high** · `nfr:maintainability` · no `Done when` line depends on it · **A
+  reopened tab loses the filename after all, and the comment says it keeps it.**
+  The comment on `reconcileJob` in `web/src/lib/job-reducer.ts` says a tab
+  "closed while a job ran and reopened after the clearing fetches the finished
+  row, and without this its card would lose its page and its filename". But a
+  card saved while the job ran is non-terminal and has `result: null`. The
+  filename only reaches the browser with the `completed` event, so there is no
+  local filename to keep. The restore path in `useJobs.ts` refetches
+  non-terminal jobs only, so the `filename` branch of `keepWhatWasCleared` never
+  runs from a restore. The branch's test,
+  `web/test/job-reducer.test.ts` › "a finished job the server has cleared
+  (dl-107)" › "keeps the page address, the variant and the filename the browser
+  already holds", starts from a local job that is already `completed`, a state
+  the restore path never sends to `reconcileJob`. The SSE route has the same
+  effect: it sends a cleared row's `completed` frame with `"filename":""`.
+  Reproduction:
+  `node --import tsx /tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/reconcile.mts <worktree>` passes a `downloading`
+  local job and a cleared remote job:
+
+  ```
+  {"sourceUrl":"https://site.example/watch/1","variant":{...},"result":{"filename":"","sizeBytes":10,...}}
+  card text: "Saved by your browser — "
+  ```
+
+  This happens whenever someone closes the tab while the browser is still
+  downloading and reopens it more than 15 minutes after the job ends.
+  `CompletedResult` in `JobCard.tsx` then renders the blank. Remedy: when
+  `filename === ""`, `CompletedResult` falls back to the title `useJobs`
+  already keeps per job (`titles`), or drops the dash. Fix the comment to match,
+  and give the test a `downloading`/`result: null` case. The brief's premise
+  that "the browser has its copy before the job finishes" is false for the
+  filename, so correct the ticket too.
+
+- **med** · `nfr:security` · no `Done when` line depends on it (Done when 2
+  names `request` lines only) · **No test on the branch covers the per-client
+  cap line's shortening, and nothing covers its IPv6 form.** Reverting
+  `shortenKey` on `download refused: per-client cap reached` in
+  `api/src/routes/files.ts` (M2) left `visitor-data`, `per-client-caps` and
+  `log-fields` all green. Only the gate's own test went red (1 failed | 52
+  passed). The `rate limited` line is covered for IPv4 only, by
+  `visitor-data.test.ts` › "a rate-limited request's line holds the network,
+  not the bucket's whole key". On the dispatch's positive control: reverting
+  `shortenKey` on the `rate limited` line (M1) turns that IPv4 test red. A
+  _full_ IPv6 address cannot reach that line through `clientKey`, so the
+  reverted line writes the `/64` (`2001:db8:1:1::/64`). Only the gate's IPv6
+  test catches that. Remedy: add the gate's two IPv6 cases from
+  `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/gate-dl107.test.ts` ("IPv6: two /64s in one /48 are two
+  buckets..." and "per-client job cap: a second /64 in the same /48 is
+  admitted...") to `visitor-data.test.ts`.
+
+- **low** · `nfr:security` · no live call site · `cutUrlsToOrigin` in
+  `api/src/logger.ts` keeps part of a password when the userinfo contains a raw
+  `/`, `?`, `#` or `\`. Before this change, `redactUrlsInText` turned such a
+  string into `[unparsable-url]`. From `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/logshapes.mts`:
+  `https://user:PA/SS4@host.example/p` → log `"https://user:PA"`, row
+  `"[unparsable-url]"`. Its doc comment says userinfo goes. Graded low because
+  WHATWG `URL` and Python's `urlsplit` both read these strings as host `user`,
+  port `PA` and reject them, and every URL that reaches a log here has passed
+  `new URL`. Remedy: when the match contains `@`, emit `[unparsable-url]` unless
+  `new URL(match)` parses, and take `.protocol` and `.host` from the parse.
+
+- **low** · `nfr:maintainability` · the terms page's "for 15 minutes after it
+  ends" is enforced by a sweep every `GC_INTERVAL_MS`, which is a setting (60 s
+  by default). The erasure therefore lands between 15 and 15 + interval
+  minutes, and an operator who sets a long interval makes the page false.
+  `JOB_RETENTION_MS` is a constant precisely so that no setting can do that.
+  Remedy: cap `gcIntervalMs` well under the clear window, or have the page say
+  "within a minute or two of".
+
+- **low** · `nfr:security` · the hold procedure's step 2 copies the container's
+  whole log _directory_. A Docker container directory also holds
+  `config.v2.json`, which contains the container's environment and therefore
+  its secrets. That layout comes from Docker's standard layout and was not
+  measured on the host. Remedy: copy only `*-json.log*`.
+
+- **low** · `nfr:maintainability` · `api/src/log-address.ts` copies
+  `v6Groups` out of `@webtools/core/rate-limit` rather than exporting it, and its
+  comment says "if a third appears, lift it". The root `CLAUDE.md` rule is to
+  lift on the second consumer. A reason is given, so this is low.
+
+- **low** · the terms page's "keep your whole address in the server's memory"
+  and the architecture doc's "the rate limits keep the whole address in memory"
+  are false for IPv6, where `clientKey` keeps the `/64`. Graded low because the
+  text overstates what is held rather than understating it.
+
+- **dropped** · the shortened key reaching the limiter or the per-client
+  count. Refuted: the gate's `gate-dl107.test.ts` admits two IPv6 `/64`s in one
+  `/48` and two IPv4 addresses in one `/24` as separate buckets and separate
+  cap counts (4 of 4 green). The harness was shown able to fail:
+  `limiter.check(shortenKey(key))` (M3) turned 3 red, including the existing
+  `rate-limit.test.ts` › "and an IPv6 client shares one bucket across its own
+  /64".
+- **dropped** · a finished job that is retried or re-probed and then cleared
+  while it runs. No such path exists: `JOB_TRANSITIONS` gives `completed`,
+  `failed` and `canceled` no exits, `downloading → probing` happens before
+  `finished_at` is set, and web's retry starts a new analysis from the card's
+  local `sourceUrl`. Measured over HTTP: a job's link opened at +14 min, after
+  one sweep, still streamed 200, and a job finished at +14 min was untouched by
+  the +16 min sweep and cleared by the +30 min one.
+- **dropped** · the `request` line keeps its own query
+  (`"url":"/api/files/[redacted]?sig=QSECRET"` for an absolute-form target).
+  This predates the branch, and the brief's step 9 keeps the request line's own
+  `url` on purpose. An absolute-form target with userinfo is otherwise cut to
+  `http://evil.example` on every line (4 shapes, `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/gate-absform.test.ts`).
+- **dropped** · scheme-less, protocol-relative, `wss://`, JSON-escaped and
+  percent-encoded URLs pass through the cut unchanged. `redactUrlsInText`
+  matched exactly the same population before (`https?://\S+`), so this is not
+  a regression of this branch.
+- **dropped** · an orchestrator `patch` landing on a terminal row after the
+  clear would re-add a variant. That needs a patch more than 15 minutes after a
+  cancel, and the run's abort signal ends long before that.
+- **findings** · the hunt returned 13: 8 carried, 5 dropped.
+- NFR: security: the per-client line is untested, and there is the userinfo
+  edge and the hold copy · performance: n/a, one unindexed `SELECT` (cost not measured)
+  per minute over at most 14 days of rows · reliability: the WAL hold copy ·
+  maintainability: the false `reconcileJob` comment and the copied `v6Groups`.
+- Invariants checked: no cross-tool import; `AppError("INTERNAL")` for the
+  config refusal, matching the other config errors; no shell; `redactUrl` and
+  `redactHeaders` ordering unchanged (structural redaction, then the walk); the
+  contract edit is doc comments only and carries the owner's approval; the new
+  spec is under the `api/test` glob and ran; `api` already depended on
+  `@downloader/engine`, so no Dockerfile line is owed; no `any`, no `console`.
+  Skipped as untouched: SSRF, process trees, faked progress, `printRoutes`.
+- CI on `dac72673`: every check green, including `test (ubuntu-latest)`,
+  `test (windows-latest, informational)`, `e2e (direct)`, `e2e (sniffer)`,
+  `docker` and `CodeQL`.
+
+### Gate 2
+
+**Gate: PASS**: 2026-10-12 · `dac72673..0b0385bb` (the round is `fe2a8f85` and `0b0385bb`) · Opus 5.5, re-gate
+
+Gate 1's acceptance table stands, and no line of it changed in this round. The
+`terms-page.test.ts` assertion this round reworded still turns red on the
+mutations from gate 1.
+
+**Gate 1's findings**
+
+- **1, high, the hold copy of the database: fixed.** Step 3 of
+  `docs/02-DEPLOYMENT.md` now stops the service and copies `jobs.db`,
+  `jobs.db-wal` and `jobs.db-shm`. `walcopy3.mts` runs that procedure against
+  the real `migrate` and `JobStore`, in two cases:
+  - Handle left open, as a kill leaves it: all three files are copied, and the
+    copy reads `{"n":2}`.
+  - Clean `db.close()`, which the service does on shutdown: only `jobs.db` is
+    left, the `-wal` and `-shm` copies fail with `ENOENT`, and the copy still
+    reads `{"n":2}`.
+
+  So "a copy of a file that is not there fails, and that is fine" is true.
+  `walcopy.mts`, the old one-file copy, still prints `no such table: jobs`, which
+  the doc now says. One thing is unmeasured: there is no Docker daemon here, so
+  `docker compose cp` from a stopped container was not run. Compose's `cp.go`
+  passes `true` for stopped containers to `getContainers`, read through
+  WebFetch.
+
+- **2, high, the filename on a reopened tab: fixed, as option B.**
+  - **The card.** `savedLabel` in `web/src/components/JobCard.tsx` uses the
+    filename, else the kept title, else nothing, and adds the dash only when the
+    name is not `""`. An empty-string title therefore renders "Saved by your
+    browser" with no dash. On top of that, `loadTitles` drops `""` and `start`
+    stores a title only when it is truthy.
+  - **The tests.** `web/test/job-card.test.tsx` › "a reopened card with a blank
+    filename is named by the title this browser kept" and "and with no title kept
+    either it reads without a dash, never a dash and nothing". Both reconcile a
+    `downloading` local copy with a cleared row, which is the state restore
+    produces. Removing the title fallback (M5) turned the first red, and always
+    adding the dash (M6) turned the second red.
+  - **The `reconcileJob` comment is now true.** `reconcile.mts` against
+    `0b0385bb` still returns `filename: ""`, which is what the comment says
+    stands.
+  - **The ticket's corrected premise is true** in its Why, its Build step 1 and
+    its Log.
+- **3, med, the per-client cap line and the IPv6 forms had no test: fixed.**
+  `api/test/visitor-data.test.ts` now has:
+  - "an IPv6 client's rate-limited line says the /48, while the limiter still
+    counts its /64";
+  - "the per-client cap line says the network for %s, and the cap still counts
+    the address", for IPv4 and IPv6.
+
+  Reverting `shortenKey` on the `rate limited` line (M1) turned 2 red, IPv4 and
+  IPv6. Reverting it on the cap line (M2) turned 2 red. Feeding the shortened
+  key to the limiter (M3) turned 1 red, and feeding it to the cap (M4) turned 2
+  red, so the new tests also hold the bucketing.
+
+- **7, low, the copied `v6Groups`: fixed.** Core's change is the one word
+  `export` in `packages/core/src/rate-limit.ts`, and `log-address.ts` imports it.
+  I rebuilt, and `export` appears in `packages/core/dist/rate-limit.d.ts`. The
+  `core` project passed 58 of 58. In the 237 of 237 spec run, `rate-limit.test.ts`,
+  `per-client-caps.test.ts`, `probe-outcomes.test.ts` and the ledger's
+  `route-limits.test.ts` all passed.
+- **8, low, "whole address" for IPv6: fixed.** The terms page, the
+  architecture doc and the deployment doc now say an IPv6 address is held as
+  its /64, and `terms-page.test.ts` follows the new wording.
+- **4, 5 and 6, all low: not fixed.** The coordinator recorded them under the
+  severity floor, and the ticket's Log names all three.
+
+**New in the round's lines**
+
+- **low** · the ticket's Why now ends "a cleared row's blank filename is all
+  such a card can show". Since option B, such a card shows the kept title,
+  which the Log records. Remedy: "...is all the server can give such a card;
+  the card falls back to the title it kept".
+- **low** · no known producer · `savedLabel` tests `name === ""`, not a trimmed
+  name. A whitespace-only title would render "Saved by your browser — " followed
+  by blanks. The browser resolver trims its titles (`pickTitle`), but the yt-dlp
+  one passes `info.title` through untrimmed. Remedy: `name.trim() === ""`.
+- **findings** · the round returned 2 new: both carried, none dropped.
+- CI on `0b0385bb`, read at the time of writing:
+  - Passed: `check` ×2, `codeql`, `CodeQL`, `dependency-review`, `changes`,
+    `docker` ×3, `e2e`, `e2e (direct)`, `e2e (sniffer)`.
+  - Still running: `test (ubuntu-latest)` and
+    `test (windows-latest, informational)`.
+
+  No acceptance line rests on either running leg: every line is proven by a
+  local spec.
+
+Nothing in this gate is a `high`.
+
 ## Log
 
 - 2026-10-12 — Filed as `needs-decision` from the owner's question about two
@@ -255,3 +514,127 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
 - 2026-10-12 — Question 6 added and answered A when the owner asked whether
   the first five were the most the rules allow. The other further steps were
   offered and declined; the decision section records them and why.
+- 2026-10-12 — Built to 1A, 2A, 3A, 4A, 5A, 6A on branch `dl-107` from
+  `bb4d2044`. What the brief had wrong or left open, and what was done:
+  - **The contract change is a doc comment, not a schema change.** `sourceUrl`
+    and `filename` are `z.string()` in `api.ts` and already accept `""`, so a
+    cleared row parses with no edit to a schema. `Job.sourceUrl`, `Job.variant`
+    and `JobResult.filename` now say they are blank or null on a cleared row
+    (`contract/src/job.ts`), which is the change the owner approved.
+  - **`details` is cleared to its `reason` and `retryAfterSec`, not to nothing.**
+    The card reads `details.reason` to say a link expired
+    (`error-presentation.ts`), and a tab reopened after the clearing fetches the
+    row with the server's copy winning, so blanking the whole bag would turn
+    "link expired" into a bare "canceled". Only a short token (`[\w-]{1,40}`) or
+    a number survives under those two keys, too little room for an address. The
+    brief said "blanked"; Done-when 1 holds either way.
+  - **The address was on two more lines than the brief's inventory.**
+    `rate limited` logs the bucket's `key` (`ip:<address>`, or an IPv6 `/64`) and
+    `download refused: per-client cap reached` logs `clientKey(request.ip)`.
+    Both go through `shortenKey` now (`api/src/log-address.ts`); Done-when 2 names
+    only the `request` line, and it would have been met with these two still
+    writing the whole address.
+  - **`probe complete` carries no `requestId`** (`log-fields.test.ts` already
+    pinned that), so the brief's "row 2 shares that `requestId`" is true of
+    `request failed` and `request rejected` and not of the success line. The path
+    is cut from all of them regardless.
+  - **Row 2's cut covers the message, a child's bindings and an `Error`'s message
+    and stack too**, not only `fields`: the logger runs one function over all of
+    them (`createLogger`'s `redactMessage`, the `redactError` copy). A request
+    line's own absolute-form `url` (`http://host/api/files/<t>`, a scanner's
+    shape) is now cut to its origin like any other URL.
+  - **Row 9: refused at boot**, the first of the brief's two options. `0`, `-5`
+    and any override under 1 throw `INTERNAL` naming the variable; `abc` still
+    falls back to 90 as the other integers do. The sweep's `<= 0` branch is gone,
+    so the table cannot be told to keep everything by any route.
+  - **Row 7's redaction is at the one place the row is written**
+    (`JobStore#write`), through `redactUrlsInText` (the query goes, the path
+    stays while the row is live), not through the logger's `redactUrlsDeep`,
+    which is private, handles errors and cycles a stored payload cannot have,
+    and now cuts to the origin.
+  - **The log cap is `5m` x 5 and the figure was not re-measured.** The 6 KB a
+    visit comes from dl-54's measurement before two fields got shorter; the page
+    quotes the arithmetic's result (7), and `terms-page.test.ts` recomputes it
+    from the compose file, so a cap that moves without the page fails.
+  - **The hold procedure's commands were written from the compose files and not
+    run against a host**, and the deployment doc says so. The image keeps the
+    database at `/data/jobs.db` (`STORAGE_DIR`). (This entry said "with no
+    write-ahead log, which is what makes one file copy whole"; that was wrong, see round 1.)
+  - **Question 5 is published with a title, not a name:** "the operator of this
+    service, one person", at the abuse alias. If the owner wants a name, it is
+    one line in `web/public/terms.html`.
+  - Existing tests whose assertions named a path were turned over, not deleted:
+    `logging.test.ts`, `logging-routes.test.ts`, `log-fields.test.ts` and
+    `egress-proxy.test.ts` now assert the origin and that the path is absent;
+    `probe-outcomes.test.ts` replaces "0 disables pruning" with the refusal;
+    `job-retention.test.ts`'s premise is the redacted `details.url`.
+  - **Fold-in:** none. dl-49 and dl-108 are the pieces this work makes nearer
+    and the dispatch holds both behind this ticket; neither was started.
+- 2026-10-12 — Round 1, after gate 1 failed `dac72673`. Fixed:
+  - **The hold copy of the database was incomplete.** The service runs SQLite
+    in WAL mode (`migrate` sets `journal_mode = WAL`), so `jobs.db` alone can lack
+    its tables: the gate's `walcopy.mts` printed `no such table: jobs` for the
+    copy while the live database held 1 row. The deployment doc's step 3 now
+    stops the service and copies `jobs.db`, `jobs.db-wal` and `jobs.db-shm`
+    together. The earlier Log line that said otherwise is corrected above.
+  - **The brief's premise about the filename was wrong.** The browser holds the
+    page address and the variant before a job finishes, not the filename: that
+    arrives on the `completed` event, so a tab closed mid-download never has it,
+    and `reconcileJob` has nothing to keep. `reconcile.mts` printed
+    `card text: "Saved by your browser — "` for that state. The Why, the Build
+    step and the `reconcileJob` comment now say so, and a reducer test starts
+    from the state restore produces (a `downloading` local copy, `result: null`).
+    **How the card should read in that case is an open decision, not made here**
+    (see the report): any fix shows less than the real filename, which main shows
+    today, and the only way to keep it is to stop clearing it (a change to 1A).
+  - **The per-client cap line and the IPv6 forms had no test.** `visitor-data.test.ts`
+    now covers `download refused: per-client cap reached` for IPv4 and IPv6 and the
+    IPv6 `rate limited` line, which `clientKey` would otherwise write as a `/64`.
+    Reverting `shortenKey` on either line turns 2 tests red.
+  - **`v6Groups` is lifted** to `@webtools/core/rate-limit` (exported, one word)
+    and `log-address.ts` imports it, per the second-consumer rule.
+  - **The terms page and architecture doc said the limits keep the "whole
+    address"**; for IPv6 they keep the `/64`. Both now say so, and the test follows.
+  - Not changed, as the coordinator directed: the userinfo edge in `cutUrlsToOrigin`
+    (no live call site), the 15 minutes depending on `GC_INTERVAL_MS`, and step 2
+    copying the container's whole log directory (which in Docker's usual layout
+    includes `config.v2.json`, not checked on the host).
+- 2026-10-12 — Round 1, owner's answers to the two open questions, both asked
+  through the coordinator and answered on 2026-10-12:
+  - **How a reopened card reads once the server has blanked its filename.**
+    Options: A, drop the dash ("Saved by your browser"); B, fall back to the page
+    title this browser kept per job ("Saved by your browser — <title>", persisted
+    under `downloader:titles:v1`); C, stop clearing `result.filename`, which
+    reverses part of decision 1A. **Chosen: B**, the recommended one. Built in
+    `JobCard.tsx` (`savedLabel`): the file's own name when the server still has
+    it, else the title, else "Saved by your browser" with no dash. Proven by
+    `web/test/job-card.test.tsx`, three tests at the end: a reopened card (a
+    `downloading` local copy reconciled with a cleared row, the state restore
+    produces) with a title and without one, and a filename that wins over the
+    title. `npx vitest run tools/downloader/web/test/job-card.test.tsx`: 48 of 48.
+  - **How the person in charge reads on the terms page.** Options: the title ("the
+    operator of this service, one person") or the owner's name. **Chosen: keep the
+    title**, the recommended one, until the lawyer answers question 1 (is a free
+    one-person service an "enterprise" under art. 1525). `terms.html` is unchanged
+    by this.
+- 2026-10-12 — Landing, by the fixer, at the owner's instruction, with no
+  re-gate. Gate 2's lows 1 and 2 were **fixed at landing** by the owner's choice:
+  - **Low 1:** the Why's last sentence no longer says a cleared row's blank
+    filename is all such a card can show; it says the card falls back to the
+    persisted page title, and to "Saved by your browser" with no dash when no
+    title is held.
+  - **Low 2:** `savedLabel` tests the trimmed name, so a whitespace-only title
+    reads "Saved by your browser" with no trailing dash. Proven by the last test
+    in `web/test/job-card.test.tsx`: red without the trim (`Unable to find an
+element with the text: Saved by your browser`, 1 failed of 49), green with it
+    (49 of 49, `npx vitest run tools/downloader/web/test/job-card.test.tsx`).
+  - Gate 1's lows 4, 5 and 6 stay recorded and unfixed: the owner was offered
+    them and did not choose them.
+- 2026-10-12 — The owner triaged lows 4, 5 and 6 after the merge. **Low 6 is
+  fixed**: step 2 of the hold procedure in `docs/02-DEPLOYMENT.md` copies only
+  the `<id>-json.log*` files, not their directory, so `config.v2.json` and the
+  secrets in it stay out of the hold copy. The `find` was tried on a mock
+  container directory: it copied the three log files and left `config.v2.json`
+  and `hostconfig.json` behind. **Lows 4 and 5 stay unfixed**: 4 has no input
+  that reaches it, and 5 is off by a minute unless an operator sets a long
+  `GC_INTERVAL_MS`.

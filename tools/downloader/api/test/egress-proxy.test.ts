@@ -1182,6 +1182,6 @@ describe("what the log says happened never carries the target's query string (dl
     expect(refused).toHaveLength(1);
     // Redaction, not deletion: the site is still legible.
     expect(refused[0]).toContain("blocked.test");
-    expect(refused[0]).toContain("/seg.ts");
+    expect(refused[0]).not.toContain("/seg.ts");
   });
 });

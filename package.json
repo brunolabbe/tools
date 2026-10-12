@@ -23,6 +23,7 @@
     "dev:ledger:api": "npm run dev -w @ledger/api",
     "dev:ledger:web": "npm run dev -w @ledger/web",
     "import:ledger": "npm run import:ledger -w @ledger/api --",
+    "household:ledger": "npm run household:ledger -w @ledger/api --",
     "typecheck": "tsc --build --verbose",
     "test": "vitest run",
     "test:watch": "vitest",

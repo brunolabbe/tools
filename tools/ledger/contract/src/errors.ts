@@ -20,7 +20,8 @@
  * parser's (lg-1) and the fifth arrived with the page's footer (lg-14); the two
  * after them are the store's (lg-2), the next two are the rules' and the
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
- * periods' (lg-6), and the last is the spending categories' (lg-15).
+ * periods' (lg-6), the next is the spending categories' (lg-15), and the last
+ * is the household directory's (lg-20).
  */
 
 import {
@@ -130,6 +131,14 @@ export const LEDGER_ERROR_CODES = [
    * retired will meet. The caller reloads the list rather than retries.
    */
   "SPENDING_CATEGORY_NOT_FOUND",
+  // --- The household directory (lg-20) ---
+  /**
+   * The household already has two people, and the address names a third. The
+   * books are two people's: a ratio is between two salaries and a settlement is
+   * between two people, so a third name would break them. A further address for
+   * a person already in the household is not a third person.
+   */
+  "HOUSEHOLD_FULL",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -164,6 +173,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "No ratio is in effect on the period's last day. Confirm one on the salaries screen first.",
   SPENDING_CATEGORY_NOT_FOUND:
     "There is no such spending category in the list. It may have been retired since the list was loaded.",
+  HOUSEHOLD_FULL: "A household holds two people, and this one already has both.",
 };
 
 /**
