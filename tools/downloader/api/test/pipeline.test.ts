@@ -928,4 +928,69 @@ describe("the re-probe narrates its stages on the job's stream (dl-110)", () => 
     expect(finished.status).toBe("completed");
     expect(stages).toEqual(["resolver-start", "page-load"]);
   });
+
+  /**
+   * Reports a different stage per source, then holds there on that source's
+   * latch. Two jobs are in `probing` at once (the default is two slots), so
+   * each one's frames are in the hub while the other's are being emitted — the
+   * only moment a frame keyed to the wrong job could be seen.
+   */
+  class PerSourceResolver implements Resolver {
+    readonly name = "per-source";
+    readonly priority = 10;
+    readonly reached = { a: latch(), b: latch() };
+    readonly release = { a: latch(), b: latch() };
+
+    canHandle(): boolean {
+      return true;
+    }
+
+    async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+      const which = url.searchParams.get("source") === "b" ? "b" : "a";
+      options.onStage?.({ stage: which === "a" ? "page-load" : "ytdlp-run", resolver: this.name });
+      this.reached[which].open();
+      await this.release[which].wait;
+      return probeResult();
+    }
+  }
+
+  test("a job's stage frames reach only its own subscribers, with another job probing", async () => {
+    const resolver = new PerSourceResolver();
+    harness = await createHarness({
+      config: { maxConcurrentJobs: 2, maxJobsPerClient: 0 },
+      resolver,
+    });
+
+    const a = await createJob(harness, { url: `${SOURCE_URL}?source=a` }, { open: false });
+    const b = await createJob(harness, { url: `${SOURCE_URL}?source=b` }, { open: false });
+    const seen = new Map<string, { jobId: string; stage: string }[]>([
+      [a.id, []],
+      [b.id, []],
+    ]);
+    for (const job of [a, b]) {
+      harness.app.context.events.subscribe(job.id, (event) => {
+        if (event.type === "stage") {
+          seen.get(job.id)?.push({ jobId: event.jobId, stage: event.stage });
+        }
+      });
+    }
+    openLink(harness, a);
+    openLink(harness, b);
+
+    // Both resolvers have reported and are parked: the two jobs overlap.
+    await Promise.all([resolver.reached.a.wait, resolver.reached.b.wait]);
+    resolver.release.a.open();
+    resolver.release.b.open();
+    await runToTerminal(harness, a.id);
+    await runToTerminal(harness, b.id);
+
+    expect(seen.get(a.id)).toEqual([
+      { jobId: a.id, stage: "resolver-start" },
+      { jobId: a.id, stage: "page-load" },
+    ]);
+    expect(seen.get(b.id)).toEqual([
+      { jobId: b.id, stage: "resolver-start" },
+      { jobId: b.id, stage: "ytdlp-run" },
+    ]);
+  });
 });
