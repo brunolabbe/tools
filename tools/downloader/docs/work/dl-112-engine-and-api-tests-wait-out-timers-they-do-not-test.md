@@ -3,7 +3,7 @@ id: dl-112
 tool: downloader
 title: Engine and API tests wait out frame grabs, fake-ffmpeg exits and stage timeouts they do not test
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -92,6 +92,50 @@ assertions, keep a comment naming the gate finding they came from.
    covers it.
 3. `npm test -- --project downloader` passes, and no test removed here had a
    gate or owner decision behind it (check `git log -S` on its name).
+
+## Review
+
+**Gate: PASS** — 2026-10-12 · `bb4d2044..4244dc61` · Opus 5.5, depth medium
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Before and after durations for each of the five files, from a local run, in the Log               | **verified**: the Log has all five. Two re-timed here, `npx vitest run <file>`, base test file against head test file on the same build: `egress-ca.test.ts` 16.8 s → 3.5 s (12 of 12 both; Log 15.8 → 2.7), `parallel-ranges.test.ts` 102.4 s → 78.8 s (38 of 38 both; Log 102.2 → 78.8). Per test: unknown size 5.5 → 1.6 s, unknown duration 5.5 → 1.6 s, opted-out 4.2 → 1.1 s, refusal rows 4.4 → 2.3 s. The direction and size in the Log hold                          |
+| 2. Every test deleted or merged is named in the Log with the test that now covers it                 | **verified**: the diff removes one test, `mirror-failover.test.ts` › "a host that refuses the connection is failed over to the mirror", and merges one fixture (`ensureLargeFixture`). The Log names both and what covers them. Test counts do not move elsewhere: egress-ca 12/12 and parallel-ranges 38/38 at base and head. Mutation H below shows the named replacement goes red when refused-connection failover breaks                                                  |
+| 3. `npm test -- --project downloader` passes; no removed test had a gate or owner decision behind it | **verified**: `npx vitest run --project downloader` at head gave 2457 passed, 2 skipped (2459), 114 files plus 1 skipped, exit 0. PR #438's `test (ubuntu-latest)` and `test (windows-latest, informational)` both passed on `4244dc61` (run 38264895200; Windows 5108 passed, 24 skipped). For the second clause, `git log -S` on the deleted name prints `4b9ce2ff` (repo-39) and `1f0f4402` (dl-45), and neither is a gate finding or an owner choice. Reading taken below |
+
+**Each changed timing still fails when the behaviour it names breaks.** Production mutations were planted in a copy of the head tree and the test was run at the head. All went red:
+
+- `egress-ca.test.ts`: `server.ts` loses the `originTls` spread, and "set" and "deprecated name" fail with `expected 502 to be 200` (3 failed, 9 passed).
+- `stream.test.ts`, the 300 ms stand-in exit, two mutations:
+  - A reconnect clears every connection (`endedEarly.clear()`). "however the lines interleave" and "Windows-shaped connection" both fail with `promise resolved "{ bytes: 4096, durationSec: 6 }" instead of rejecting`.
+  - Reconnects are ignored. Both fail with `promise rejected "AppError: The source cut part of the vide…" instead of resolving`.
+  - As a check on the comment's claim, `EXIT_AFTER_LINES_MS = 0` still passed 5 of 5 runs on Linux.
+- `stream.test.ts` and `stream-link.test.ts`, the 2 s / 5 s late segment: the stage timeout is replaced by an hour, with the engine `dist` rebuilt. Both "an error after the first byte" tests fail with `expected false to be true` on `aborted`.
+- `stream-link.test.ts`, "waiting for a slot" with `firstGet` now awaited: `files.ts` `onClose` never cancels. The test fails with `timed out waiting for job … "status":"queued"` after 20.4 s, so the awaited `firstGet` does not hang the failure.
+- `parallel-ranges.test.ts` at 4 MB/s, four mutations:
+  - The opt-out is ignored in `splittable`: the opted-out test fails with `fanOut 25, maxOpen 4, requests 27`.
+  - An unknown duration is read as 0.1 s: the unknown-duration test fails with the same counts.
+  - 503 is removed from `REFUSAL_STATUSES`: the 503 row fails with `{ fanOut: 3, maxOpen: 2, requests: 6 }` (1 failed, 5 passed).
+  - The no-speed-up fallback is removed: the per-client-throttle row fails with `expected 0 to be greater than 0`.
+
+**The deleted mirror test.**
+
+- Mutation H drops `Connection to \S+ failed` and `Connection refused` from `FFMPEG_HOST_FAILURE`. Over the whole engine package, 3 of 262 fail: `failover.test.ts` › "a host that never answered is one, on either path", plus two in `mirror-failover.test.ts`, "…exactly as it does to an HLS one (dl-47)" and "the last candidate's own failure is what reaches the caller".
+- Mutation I is an off-by-one in the loop, `index + 2 < candidates.length`. It breaks exactly the deleted test's single-mirror shape. The dl-47 test stays green, because it has three candidates. "the last candidate's own failure…" goes red (`expected 1 to be greater than 1`), so a single-mirror regression is still caught, though by an error-path test rather than one that decodes the recovered file.
+
+**The shared fixture.** `fixtureRoot` is a per-file `mkdtemp` and the memo is module state, so no second file can reach it. No block in the project runs concurrently.
+
+- The four changed api and engine files (all but `parallel-ranges.test.ts`) were run together under the project's settings twice: 108 of 108 both times.
+- A `--sequence.shuffle` run with seed 1 ran dl-103's block before dl-102's: 30 passed, 45 skipped, exit 0.
+
+- **low** · no `Done when` line depends on it · `api/test/egress-ca.test.ts`, the comment in `wiredApp` says "a probe's verdict does not wait on the grab's result". The probe route does wait for the grab: `routes/probe.ts` awaits `captureThumbnail` before it replies. At the base, the 6.7 s each probe test took was inside the test body, since `cleanups` run in `afterAll`. What holds is that the status does not depend on what the grab returns. "does not depend on the grab's result" is the accurate wording.
+- **dropped** · reading of Done when 3's "a gate … behind it". I read it as a test a gate finding or an owner decision asked for, which is the owner's own wording in Why ("keep any row that a gate or an owner decision chose"). The deleted test was dl-45's builder's proof for its Done when 2, which its gate then ran. It was not chosen by a gate, so the line holds. Under the stricter reading (any test a gate record cites), it collides: dl-45's `## Review` cites the deleted test, pinned to a commit that is on `origin/main` and still resolves, and dl-45's line ("a connection-level failure from the first host … retries the alternate and succeeds — driven by a fixture origin") is still proven by the dl-47 test, which mutation H turns red. So neither reading leaves a line unproven.
+- **dropped** · the unknown-size row did not go red under a size guessed at 4 MiB in `#bitrate` and the split, nor with `splittable` also ignoring `seekable`. That held at the base too, so it predates this branch and is not about the rate. The behaviour never broke: `#relayHead` nulls `serve.end` on any non-206 answer, so the mutation is no evidence either way.
+- **dropped** · brief step 7's 403 and 503 rows were kept, not cut. dl-98's Log records the owner choosing "Cover 403 and 503 too", and the brief's own rule keeps a row an owner decision chose. Not a defect.
+- **findings** · the hunt returned 4: 1 carried, 3 dropped.
+- Windows: the leg ran green once on `4244dc61`. The two 300 ms stand-in tests are `skipIf(win32)` and never run there. The tightened rates and the 2 s stage timeouts did run there and passed: "an error after the first byte" took 2098 ms in the engine and 6688 ms in the api; unknown size 2263 ms; opted-out 1091 ms. That is one sample, so flake rate is unmeasured.
+- Not verified: the Log's claim that the four `later(5000, …)` dl-103 stand-ins are never reached. It explains a speed-up not taken; nothing correct rests on it.
+- NFR: security n/a (test-only diff, no `src` touched) · performance ✓ (measured above) · reliability ✓ (two together-runs, one shuffled run, one full project run, CI on both legs) · maintainability: the comment above.
 
 ## Log
 
