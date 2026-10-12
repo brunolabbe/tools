@@ -813,5 +813,7 @@ test("one connection, none open between requests, and not measured all say nothi
 
 test("a job that is not downloading shows no connection message, whatever the count says", () => {
   mount(job("probing", { progress: { originConnections: 4 } }));
+  // The card did render, with its own status line and nothing after it.
+  expect(messages()).toHaveLength(2);
   expect(screen.queryByText(/Reading on 4 connections/u)).toBeNull();
 });

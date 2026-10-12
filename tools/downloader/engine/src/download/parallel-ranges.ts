@@ -144,7 +144,13 @@ export interface FeederStats {
   originRequests: number;
   /** The most ranged fetches in flight at once. */
   maxConcurrentFetches: number;
-  /** Requests to the origin open right now, a relay's included (dl-108). */
+  /**
+   * Requests to the origin open right now, a relay's included (dl-108): one per
+   * request ffmpeg has open outside a split, so 2 is possible without one. A
+   * fetch being torn down (a dropped lookahead, a fallback's closing chunk) is
+   * already out of the count while its socket closes, so this can read below
+   * what the origin sees for that moment.
+   */
   openFetches: number;
   refusal: { kind: RefusalKind; detail: string } | null;
 }

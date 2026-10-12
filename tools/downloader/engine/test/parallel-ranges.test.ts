@@ -1513,7 +1513,12 @@ describe("dl-108: the job's progress says how many connections reach the origin"
         expect(value, JSON.stringify(samples)).toBeLessThanOrEqual(1);
       }
       // Not "always 1": the closing tick comes after the relay has ended, which
-      // is a true 0. That the relay counts as 1 while it reads is the next test.
+      // is a true 0. But the relay is counted while it reads: an engine that
+      // reported 0 throughout, or a feeder that did not count relays, fails here.
+      expect(
+        samples.some((value) => value === 1),
+        JSON.stringify(samples),
+      ).toBe(true);
     },
     SLOW,
   );

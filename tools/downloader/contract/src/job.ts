@@ -104,10 +104,11 @@ export interface JobProgress {
   processedSec: number | null;
   /**
    * The requests to the origin open at the moment of the snapshot, the relay
-   * included (dl-108). `1` on a job the range feeder reads and has not split;
-   * `2` or more once it has, and it can move between chunks. It is a count of
-   * what reaches the origin, not of what ffmpeg has open to the loopback, and
-   * it is `0` in the gap between one request and the next.
+   * included (dl-108). A job the range feeder has not split reads `1` while its
+   * one request is open and never more; `0` when none is open, which includes
+   * the closing snapshot, after the body has ended. Once it has split it is `2`
+   * or more and moves between chunks (4, then 3, then 4). It is a count of what
+   * reaches the origin, not of what ffmpeg has open to the loopback.
    *
    * `null` when no feeder is in the path — HLS or DASH, a source that refused
    * the seek probe, a host that allows one connection, a remembered refusal, a

@@ -103,8 +103,10 @@ Traps worth knowing in advance:
 
 1. A job the feeder splits reports `originConnections >= 2` in its progress
    after the split. A test fails if the engine stops setting the field.
-2. A feeder job on a fast origin reports `1` throughout. A job with no feeder
-   in the path reports `null` throughout.
+2. A feeder job on a fast origin never reports more than `1` and never `null`,
+   and reports `1` while its relay reads (the closing tick, after the body has
+   ended, is a true `0`). A job with no feeder in the path reports `null`
+   throughout. _(Reworded 2026-10-12 by the owner's answer, Log, round 1.)_
 3. A persisted job whose `progress_json` predates the field still loads and
    renders, with the field read as `null`.
 4. The job card shows the connections message at 2 or more connections and nothing at 1 or
@@ -154,3 +156,45 @@ timing decided by the owner (Why, 1 and 2). Nothing built.
    the same `progressMessages()` on its own branch and reconciles onto this one.
 6. **Not measured**: the rendered card in a browser. The web unit tests render
    it in jsdom; no screenshot was taken.
+
+**2026-10-12 (round 1, gate 1 at `5670642d`: FAIL)**: two decisions answered by
+the owner on 2026-10-12, through the orchestrator, each from options the gate
+gave with its recommendation first:
+
+- **F2, the count on a fast origin.** Options: (a) reword Done when 2 to "never
+  more than `1` and never `null`; `1` while the relay reads", and have the
+  fast-origin test assert `samples.some((v) => v === 1)` as well as `<= 1`; (b)
+  clamp a feeder job to at least `1` until it ends. **Chosen: (a).** The line
+  above is reworded. The gate measured the real sequence five times on
+  `faststart.mp4` and `moov-end.mp4` at 4 MB/s: `n=1` at 82, 582 and 1083 ms, then
+  `n=0` at 1103 ms, just before the body end at 1113 ms.
+- **F3, a false "throttles each one".** The feeder counts every request ffmpeg
+  has open, so a seek's overlap reads 2 without any split (measured by the gate
+  with two ranged reads on `mode: "single"`: `openFetches` was 2). Options: (a)
+  report `openFetches` only while `mode === "parallel"` and cap it at 1
+  otherwise; (b) drop "This source throttles each one." from the copy; (c)
+  accept a rare transient false line. **Chosen: (a).** `originConnectionsOf` in
+  `engine/src/stream.ts` does it; `engine/test/stream.test.ts`, "outside a split it
+  never exceeds 1, even with two requests open (F3)", is red with the cap removed
+  (`expected 2 to be 1`).
+
+Findings and what changed:
+
+- **F1 (high).** The doc comment on `JobProgress.originConnections` claimed `1`
+  on an unsplit job and `0` only in a gap. Rewritten to what the count is: `1`
+  while the one request is open and never more outside a split, `0` when none is
+  open (which includes the closing snapshot), `2` or more only in a split.
+  `FeederStats.openFetches` carries the F5 caveat too.
+- **F2.** Done when 2 reworded (above); the fast-origin test now fails on an
+  engine that reports `0` throughout. **The positive control the gate planted**:
+  with `#inFlight()` skipping relays (`fetch.inFlight && fetch.end !== null`),
+  "a fast origin never reports more than one connection, and never null" now
+  fails (`[0,0,0,0]: expected false to be true`), together with the feeder-level
+  relay test (`expected +0 to be 1`); before this round it passed. The new clause
+  held in 5 of 5 reruns.
+- **F4 (low).** The "not downloading" card test now asserts the card rendered its
+  two messages before asserting the connection line is absent.
+- **F5 (low).** Taken as a caveat on `FeederStats.openFetches`, not a code change:
+  no reader depends on the precision and the card never shows below 2.
+- **Not measured**: whether a real source seeks while output is being written. F3's
+  cap makes the answer matter only to the split's own count.

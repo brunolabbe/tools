@@ -105,6 +105,7 @@ import type {
 import type { EngineConfig } from "./config.ts";
 import { downloadCandidates, isHostFailure } from "./download/failover.ts";
 import { hostListed, RangeFeeder } from "./download/parallel-ranges.ts";
+import type { FeederStats } from "./download/parallel-ranges.ts";
 import type { SeekVerdict } from "./download/seek-probe.ts";
 import { egressProxy, probeSeek, SeekProbeCanceled } from "./download/seek-probe.ts";
 import { assertWithinSizeLimit, estimateVariantBytes } from "./estimate.ts";
@@ -657,6 +658,17 @@ async function refuseUnseekable(
 }
 
 /**
+ * `JobProgress.originConnections` from the feeder's stats (dl-108): null with no
+ * feeder in the path. Outside a split the count is capped at one, because
+ * ffmpeg can hold two requests at once (a seek's overlap) without any split, and
+ * the card reads 2 or more as "this source throttles each one".
+ */
+export function originConnectionsOf(stats: FeederStats | null): number | null {
+  if (stats === null) return null;
+  return stats.mode === "parallel" ? stats.openFetches : Math.min(stats.openFetches, 1);
+}
+
+/**
  * What the visitor's file should come to, when that is the source's own size
  * (dl-96).
  *
@@ -871,8 +883,7 @@ async function attempt(
           speedBps: rate.bytesPerSecond(),
         }),
         downloadedBytes: sent,
-        // What reaches the origin, sampled when ffmpeg reports; null with no feeder.
-        originConnections: feeder === null ? null : feeder.stats().openFetches,
+        originConnections: originConnectionsOf(feeder?.stats() ?? null),
       });
     },
     onInfoLine: (line) => {
