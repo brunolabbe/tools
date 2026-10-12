@@ -112,9 +112,11 @@ export function ChartCard(props: {
   empty: string | null;
   /** The previous render is held, dimmed, while the next loads: no skeleton, no jump. */
   stale: boolean;
+  /** Why what is drawn is out of date, when reading it again failed. */
+  failure?: string | null;
   children: ReactNode;
 }): React.ReactElement {
-  const { title, caption, legend, table, empty, stale, children } = props;
+  const { title, caption, legend, table, empty, stale, failure = null, children } = props;
   const [asTable, setAsTable] = useState(false);
   const headingId = useId();
   return (
@@ -125,6 +127,11 @@ export function ChartCard(props: {
     >
       <h2 id={headingId}>{title}</h2>
       <p className="muted hint">{caption}</p>
+      {failure !== null && (
+        <p className="bad" role="alert">
+          {failure}
+        </p>
+      )}
       {empty !== null ? (
         <p className="muted">{empty}</p>
       ) : (
@@ -182,9 +189,20 @@ function TableView({ title, table }: { title: string; table: TableData }): React
   );
 }
 
+/** The readout as one sentence, for the live region: its figures without its buttons. */
+function spokenOf(readout: Readout): string {
+  const rows = readout.rows.map((row) => `${row.label} ${row.value}`).join(", ");
+  return [`${readout.heading}: ${rows}.`, ...(readout.notes ?? [])].join(" ");
+}
+
 function ReadoutView({ readout }: { readout: Readout | null }): React.ReactElement {
+  // Only the words are live. A button inside a live region is announced again on
+  // every slider step, and the region rewrites on every one (lg-18, gate F8).
   return (
-    <div className="readout" aria-live="polite">
+    <div className="readout">
+      <p className="sr-only" aria-live="polite">
+        {readout === null ? "" : spokenOf(readout)}
+      </p>
       {readout !== null && (
         <>
           <p className="readout-heading">{readout.heading}</p>
