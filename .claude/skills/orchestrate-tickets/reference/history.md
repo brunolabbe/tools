@@ -5230,3 +5230,26 @@ Total $73.9658, active 6h41m22s (rates read 2026-10-10). The orchestrator row is
 - Holding a landing on a preflight mergeTree failure instead of waiving it. Both blocked landings cleared once dl-110 merged main, with no rule bent.
 - Having the gate measure a builder's open decision before it went to the owner (lg-21 health, dl-108 F2/F3), so each question carried numbers.
 - Coordinating seams and ids with a peer by message: dl-119 and dl-120 claimed by the peer, and dl-120 stacked on dl-108's landed head as a draft.
+
+### Batch 2026-10-12 (tools-a1, pl-52) — base 34c2cba
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #467 | open, ready | Sonnet 5.5 / high | builder-standard | pl-52 build, round 1 and landing | 11m31s / 50m47s | 0 | $1.8855 |
+| #467 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | pl-52 gates 1 and 2 | 9m49s / 24m41s | 0 | $3.3833 |
+| — | — | Opus 5.5 / high | orchestrator | the batch (floor) | 25m05s / 52m12s | 0 | $1.9847 |
+
+Total $7.2535, active 46m25s (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- pl-52 → #467: gate 1 CONCERNS (1 med open decision: the thinking row's population is narrower than the output row's; owner chose option 1, print Σthinking ÷ Σoutput; 2 low, owner chose fix both), gate 2 PASS (1 new low: the Log quoted an unpinned 31.3%; fixed at landing by owner choice). No seam-mapper: the only ready planner ticket. The owner's batch answer also named pl-29 and pl-36, both `done`; re-asked, the owner confirmed the ids were a slip.
+
+**Defects in the skill:**
+
+1. `roles/reviewer.md` — says nothing of where a gate's full report goes, while `SKILL.md` step 9, `roles/builder.md` and `roles/fixer.md` each tell the lander to post "each gate's full report" to the thread. The report exists only as the gate's final message to the orchestrator, which the lander never sees, so the orchestrator has to transcribe it to a file by hand. Reproduction: `grep -n -i "full report" .claude/skills/orchestrate-tickets/roles/reviewer.md` → no match; `grep -n -i "full report" .claude/skills/orchestrate-tickets/roles/fixer.md` → `56:- Then post each gate's full report to the pull request thread`. In this batch the gate-1 scratch held only `gate-1@942fec1a.md` until the orchestrator wrote `report.md` beside it.
+
+**Worked, and worth keeping:**
+
+- Resuming the builder for the round and again for the landing: one agent across build, round 1 and landing came to $1.8855, and the owner's "fixed at landing" low rode in the landing dispatch.
+- The gate dating the caveat's run from the commits that bracket it (391af241 at 17:20, 27b8919d at 19:02), not from the merge, when the orchestrator flagged the date as unverified.
