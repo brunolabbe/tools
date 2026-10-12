@@ -774,8 +774,10 @@ describe("BrowserResolver", () => {
     // the owner's decision removed and which it accepted.
     describe("false candidates and the press, as gate round 1 measured them (dl-83)", () => {
       const MASTER = "/media/mse/master.m3u8";
+      // What a click behind a cover that never clears may wait (dl-118).
+      const BLOCKED_CLICK_MS = 300;
 
-      function confirming(): BrowserResolver {
+      function confirming(clickTimeoutMs?: number): BrowserResolver {
         const hls = recordingHlsParser();
         return new BrowserResolver({
           pool,
@@ -783,6 +785,7 @@ describe("BrowserResolver", () => {
           quietMs: 1200,
           confirmAge: true,
           emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+          ...(clickTimeoutMs === undefined ? {} : { clickTimeoutMs }),
         });
       }
 
@@ -904,7 +907,9 @@ describe("BrowserResolver", () => {
         { timeout: TEST_TIMEOUT_MS },
         async (_name, pathname, pressed) => {
           server.requests.length = 0;
-          const error = await probeError(pathname, confirming());
+          // The cover these pages put up stays up, so every play and consent click
+          // is retried until its timeout, 8 to 10 s a row at 2000 ms (dl-118).
+          const error = await probeError(pathname, confirming(BLOCKED_CLICK_MS));
 
           expectCode(error, "NO_MEDIA_FOUND");
           expect(server.requests).toContain(pressed);

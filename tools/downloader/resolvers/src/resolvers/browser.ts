@@ -149,6 +149,12 @@ export interface BrowserResolverOptions {
    */
   emptyMinWaitMs?: number;
   /**
+   * dl-118: an upper bound, in ms, on how long a consent or play click waits
+   * for a covering layer to clear. Unset, they wait 2000 ms as always. Only a
+   * test that puts a cover up and expects it to stay should set it.
+   */
+  clickTimeoutMs?: number;
+  /**
    * Passed to the pool this resolver builds for itself — see
    * `BrowserPoolOptions.proxyRootSpkiSha256`, which carries the reasoning.
    *
@@ -194,6 +200,7 @@ export class BrowserResolver implements Resolver {
   readonly #dashParser: DashParser;
   readonly #quietMs: number;
   readonly #emptyMinWaitMs: number;
+  readonly #clickTimeoutMs: number | undefined;
   readonly #confirmAge: boolean;
   readonly #logger: BrowserResolverLogger;
   readonly #proxyRootCaPem: string | undefined;
@@ -215,6 +222,7 @@ export class BrowserResolver implements Resolver {
     this.#dashParser = options.dashParser ?? parseDash;
     this.#quietMs = options.quietMs ?? DEFAULT_QUIET_MS;
     this.#emptyMinWaitMs = options.emptyMinWaitMs ?? EMPTY_MIN_WAIT_MS;
+    this.#clickTimeoutMs = options.clickTimeoutMs;
     this.#confirmAge = options.confirmAge ?? false;
     this.#logger = options.logger ?? NOOP_LOGGER;
     this.#proxyRootCaPem = options.proxyRootCaPem;
@@ -369,6 +377,7 @@ export class BrowserResolver implements Resolver {
       deadline: deadline - TEARDOWN_RESERVE_MS,
       signal: options.signal,
       confirmAge: this.#confirmAge,
+      clickTimeoutMs: this.#clickTimeoutMs,
       // dl-81: what could replace a stream with a worse one waits on this.
       hasPlayable: () => collector.hasPlayableHit(),
     });

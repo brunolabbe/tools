@@ -182,3 +182,29 @@ which this note did not examine. That is step 1 below.
   `isPlayPress`/`startsWord` hold none of the time, so dl-114 is not affected.
   Stopped here for the call in Build step 2 (a new option in production
   provocation code).
+
+- 2026-10-12 — Step 2 decided by the owner, relayed by the orchestrator, from
+  four options: **A**, an optional `clickTimeoutMs` cap, unset by default, the
+  three rows passing 300 ms (chosen; the builder's recommendation); **B**, a
+  hit-test that skips covered targets (changes what a real page sees, as a
+  fading banner would be skipped); **C**, `test.concurrent` on the rows (the
+  fixture server's `requests` array is shared and `/beacon/view-partners` is
+  common to two rows); **D**, close with the measurement only. Built as A:
+  `BrowserResolverOptions.clickTimeoutMs` -> `provokePlayback` ->
+  `provokeFrame`, where `cappedTimeout(2000, cap)` replaces the literal on the
+  consent click (`dismissConsent`), the play-selector click and the play-text
+  click. `dismissModal` (1500) and the age press (2000) keep their own timeouts:
+  the press has to land, and 300 ms on a loaded runner might not be enough for
+  Playwright's stable check. `isPlayPress`/`startsWord` untouched.
+  - Default unchanged: the same `stages.mts` run on the changed code, no cap,
+    `/age-false-shell-menu-button.html` — `10925 ms, error NO_MEDIA_FOUND`, four
+    `locator.click failed` of 2004, 2000, 1999 and 2066 ms (10974 ms before).
+  - Rows, `npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts
+-t "accepted residue: .* is pressed where play is a click"`, 3 passed of 183:
+    closable 4546 ms (was 12.8 to 13.0 s), sticky 4489 ms (was 12.8 to 13.0 s),
+    menu button 4125 ms (was 10.8 s). Same three assertions. The margin under
+    5 s is about 0.5 s, so a runner slower than this one may see a row above it;
+    the floor is the 2.9 s a clean probe costs here.
+  - The cap itself, `provoke.test.ts` "clickTimeoutMs caps the clicks a covering
+    layer blocks (dl-118)": one page, four blocked play clicks, `clickTimeoutMs:
+200`, finishes in under 5 s where the uncapped run above takes 8 s of waits.

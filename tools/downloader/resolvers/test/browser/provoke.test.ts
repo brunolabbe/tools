@@ -542,3 +542,37 @@ describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
     expect(placement.bottom).toBeGreaterThan(0);
   });
 });
+
+describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () => {
+  // The menu button opens a full-screen menu over the play button, so each play
+  // click is retried until its timeout. Uncapped, the four of them (two passes,
+  // a selector and a label each) wait 8 s between them, measured on 2026-10-12.
+  test("four blocked play clicks cost 4 x the cap, not 4 x 2000 ms", async () => {
+    server.requests.length = 0;
+    const startedAt = Date.now();
+    await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+      const context = await browser.newContext();
+      try {
+        const page = await context.newPage();
+        await page.goto(server.url("/age-false-shell-menu-button.html"), {
+          waitUntil: "domcontentloaded",
+        });
+        await provokePlayback(page, {
+          deadline: Date.now() + 15_000,
+          signal: new AbortController().signal,
+          confirmAge: true,
+          clickTimeoutMs: 200,
+        });
+      } finally {
+        await context.close();
+      }
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    // The press landed, which is what opened the cover; and the cap held with
+    // room to spare against the 8 s it replaces.
+    expect(server.requests).toContain("/beacon/nav-18");
+    expect(server.requests).not.toContain("/beacon/play");
+    expect(elapsedMs).toBeLessThan(5000);
+  });
+});
