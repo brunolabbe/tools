@@ -123,3 +123,5 @@ and correct a line's spending category.
     category is longer than 100 would be refused by `periodLineDraftSchema` on
     correction (400 naming the field). Neither was measured against a real
     workbook; the import has no such limit on what it stores.
+- 2026-10-12, at landing: gate 1's F4 (the sentence above saying F5 and F8 "stay
+  recorded on lg-18") fixed by the lander in f2ae0c89, without a re-gate.
