@@ -89,3 +89,75 @@ the abandoned-body cap without a browser.
   owner decision chose; allow production timing options only with unchanged
   defaults; split the big file and raise workers on CI only; one ticket per
   phase. This ticket needs none of them, since it changes test fixtures only.
+- 2026-10-12 — Built. Found by timing, not by the suspect list: every browser
+  test under `resolvers/test/browser` (755 tests) timed before and after, one
+  run each on this machine, `npx vitest run tools/downloader/resolvers/test/browser
+--reporter=json`. The signature of the defect is a playlist fetched as the
+  last request and never read, so the probe waits `settle()`'s 3000 ms cap once.
+  A normal probe here is about 2.8 s; the stalled ones were 5.7 to 6.4 s.
+  - **Fixed**, 19 pages, one `.then(function (r) { return r.text(); })` each and
+    no other change: `cross-origin-card-inner`, `guard-fragment`,
+    `guard-pushstate`, `guard-query`, `guard-redirect-fragment-target`,
+    `guard-router-rewrite`, `guard-script-redirect-target`, `iframe-player`,
+    `modal-escape`, `player-box-billboard`, `player-box-click-only`,
+    `related-card`, `related-card-area`, `shadow-card`, `shadow-player`,
+    `shadow-player-order`, `shadow-player-play-only`, `xo-play-only-inner`,
+    `xo-scroll-player-inner`. Two of them (`guard-pushstate`,
+    `xo-scroll-player-inner`) fetched a master; the other 17 a variant.
+  - **24 tests dropped by at least 1.5 s**, all of them by about 3 s. The two
+    that end on a departure (`pushState`, a query key outside the exception)
+    stalled once rather than twice, so they started shorter. Before to after,
+    in ms:
+
+    | test                                                                            | before | after |
+    | ------------------------------------------------------------------------------- | -----: | ----: |
+    | dl-81 clicks the middle of the largest player-ish box when no video was clicked |   5725 |  2730 |
+    | dl-81 frame from another site, scripted play()                                  |   5793 |  2789 |
+    | dl-81 frame from another site, scroll                                           |   5764 |  2776 |
+    | dl-81 never clicks a frame: a billboard larger than the page's own box          |   5793 |  2775 |
+    | dl-48 presses Escape on a dialog it finds no close control in                   |   6017 |  2998 |
+    | dl-55 fragment-only change on play                                              |   5852 |  2851 |
+    | dl-55 router history.replaceState ~300ms in                                     |   5745 |  2757 |
+    | dl-55 history.pushState never returns the other page's stream                   |   4584 |  1656 |
+    | dl-55 script redirect ~200ms after load                                         |   5898 |  2842 |
+    | dl-55 the landing URL is the page reached after a redirect                      |   5862 |  2843 |
+    | captures a stream from a same-origin iframe embed                               |   6159 |  3061 |
+    | dl-55 a query key outside the exception is still a departure                    |   4644 |  1643 |
+    | dl-55 a reordered query string                                                  |   5856 |  2842 |
+    | dl-55 adding ?autoplay=                                                         |   5858 |  2848 |
+    | dl-55 adding ?start=                                                            |   5890 |  2849 |
+    | dl-55 adding ?t=                                                                |   5905 |  2849 |
+    | dl-55 cross-origin chooser, genuinely cross-origin frame                        |   6380 |  2807 |
+    | dl-55 picks the largest visible candidate                                       |   5765 |  2744 |
+    | dl-55 starts the real player and never reaches the card                         |   5766 |  2755 |
+    | dl-68 shadow-root player with no click listener                                 |   5763 |  2733 |
+    | dl-61 indexes candidates in the locator's own order                             |   5839 |  2798 |
+    | dl-61 never clicks a shadow-root card inside a link                             |   5774 |  2734 |
+    | dl-61 shadow-root player inside a cross-origin frame                            |   5839 |  2799 |
+    | dl-61 shadow-root player probed directly                                        |   5764 |  2747 |
+
+  - **File totals:** `browser-resolver.test.ts` 622.4 s to 548.8 s (CI timed it
+    at 620 s); the directory's 755 tests summed 741.5 s to 660.0 s, and the
+    756th is the new test below. Every other file in the directory is within
+    noise.
+  - **Still over 3.5 s, none an unread fetch.** The three dl-83 "accepted
+    residue" rows (13.0, 12.8 and 10.8 s) request no manifest at all: their
+    `server.requests` hold the page and a beacon and nothing else, so the time
+    is the age-press path, not a stalled body. dl-48's late modal
+    (`quietMs: 6000` plus a 3500 ms delay), dl-80's floor tests (10.5, 7.4 and
+    4.0 s), dl-81's 3000 ms-delay row (4.8 s) and dl-100's cross-origin Play
+    press (4.5 s) wait on purpose; so does dl-105's stepped clock (4.5 s).
+  - **Pages left alone.** `player-box-interstitial` and
+    `shadow-player-lazy-mount` also fetch a master and never read it. I patched
+    and reverted both: the first fetches only on a click that its test asserts
+    never happens (it ends `NO_MEDIA_FOUND`), and the second is reached only by
+    `provoke.test.ts`, which stops at the request and never waits on a body. No
+    timing moved for either, so nothing proves the change. `drm.html` is the same
+    shape and ends on a verdict that does not wait. The ticket's other suspects
+    (`consent-scope`, `chunk-streams`, `manifest-refetch`, the proxy size probe)
+    do not stall: their slowest rows are 3.2 s and 3.0 s.
+  - **One abandoned body on purpose**: `fixtures/pages/abandoned-body.html`
+    (master read, variant fetched and dropped) and the last test in
+    `browser-resolver.test.ts`, "a body the page never reads is abandoned at
+    settle()'s cap, and the probe still answers". It asserts the answer and no
+    duration; it takes 5.86 s, so it does reach the cap. `no-store` is untouched.

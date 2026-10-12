@@ -21,7 +21,11 @@
         new IntersectionObserver(function (entries) {
           if (!entries[0].isIntersecting || mounted) return;
           mounted = true;
-          fetch("/media/related/master.m3u8").catch(function () {});
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
         }).observe(shell);
       })();
     </script>

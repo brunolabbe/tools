@@ -18,7 +18,11 @@
           history.pushState({}, "", "/guard-pushstate-target.html");
           document.body.innerHTML =
             '<h1>Somewhere else now</h1><video id="v" muted playsinline autoplay></video>';
-          fetch("/media/related-target/master.m3u8").catch(function () {});
+          fetch("/media/related-target/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .catch(function () {});
         });
       })();
     </script>

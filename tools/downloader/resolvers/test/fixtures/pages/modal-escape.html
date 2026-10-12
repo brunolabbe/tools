@@ -50,6 +50,9 @@
             .then(function () {
               return fetch("/media/mse/v1080.m3u8");
             })
+            .then(function (r) {
+              return r.text();
+            })
             .catch(function () {});
         });
       })();
