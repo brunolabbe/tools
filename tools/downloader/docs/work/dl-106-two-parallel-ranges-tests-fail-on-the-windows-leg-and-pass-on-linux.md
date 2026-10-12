@@ -3,7 +3,7 @@ id: dl-106
 tool: downloader
 title: dl-98's parallel-ranges tests fail on the Windows leg, a different set on each run, and pass on Linux
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-98]
 difficulty: standard
@@ -110,6 +110,61 @@ dl-98 exists to get right.
   `parallel-ranges.test.ts` file on `windows-latest`, or the Log says why that is
   not the bar.
 - They still pass on Linux, and `npm run check` passes.
+
+## Review
+
+**Gate: FAIL** — 2026-10-11 · `55214e67..ba4fb1ec` · Opus 5.5, depth full
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The cause is named in the Log with a Windows run that shows it                                       | **verified** — read from `gh run view <id> --log`: run 38158575134 (`bba22382`) prints `sleep(4): mean=14.69 … p50=15.81`, `asked=4000000 … got=1430750`, and for A `judge-single rate=1121295` then `judge-split rate=1984081 single=1121295 floor=1.5`; run 38160856396 checks out the `bba22382` test file and prints `before 1/2/3: FAIL`, each on A (`expected 0 to be greater than 0`) and F9 (`expected 'parallel' to be 'single'`); run 38160489106 prints the bucket's `asked=40000000 … got=39500682` |
+| The three tests pass in 10 consecutive runs of the file on `windows-latest`, or the Log says why not | **verified** — run 38168166619 (`8f282c87`) prints `final 1..10: PASS`, `final 11: FAIL`, `final 12..25: PASS`. `8f282c87..ba4fb1ec` also removes the env-gated `dbg` lines from `parallel-ranges.ts` and the test's `afterEach` print and F9 sampler (see the `low` below). `test (windows-latest, informational)` on `ba4fb1ec` (run 38172178386): `parallel-ranges.test.ts (38 tests)` ✓, `Tests 5069 passed \| 24 skipped (5093)`                                                                           |
+| They still pass on Linux, and `npm run check` passes                                                 | **verified** — `npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts` 38 of 38 in 4 of 4 runs at head. `npm run check` exit 0. `test (ubuntu-latest)` pass on `ba4fb1ec`                                                                                                                                                                                                                                                                                                                         |
+
+- **high** · no `Done when` line depends on it · nfr:reliability · **`afterStop()` makes the three "opens no more" tests blind to the defect they exist to catch**, and in the engine test the blind span is about 3.1 s, not 100 ms. The three tests are `engine/test/parallel-ranges.test.ts` › "a cancel after the first byte closes every origin connection and opens no more", › "a cancel stops the relay and every ranged fetch, and nothing is fetched after it" and › "the size cap counts reassembled bytes, relayed and fetched, and stops every fetch". In the engine test, `settledAt` is taken after `await media.done`. At base, `canceledAt` was taken right after `abort()`. A probe line in that test reads `abort->done 2970..3016 ms, abort->settledAt 3071..3117 ms` (5 of 5 runs). So the Log's "`afterStop()` now waits 100 ms before the measuring point" is false for that test, and so are `afterStop`'s doc comment ("not from the instant the stop was asked for") and the test's comment "The window is longer than the 262 ms one fetch takes".
+  - **Reproduction.** Premise: `RangeFeeder.close()` in `engine/src/download/parallel-ranges.ts` is mutated so that it opens one more origin request per open serve, N ms after the stop (`mutate.mjs open-at-stop` / `open-after-stop-<N>`; each run is the whole file unless filtered by `-t`):
+
+    | planted                    | base test                           | head test                                         |
+    | -------------------------- | ----------------------------------- | ------------------------------------------------- |
+    | N = 0                      | 3 of 3 stop tests fail, 2 of 2 runs | 38 of 38 pass, 2 of 2 runs                        |
+    | N = 50                     | —                                   | 38 of 38 pass                                     |
+    | N = 150                    | 3 of 3 fail                         | the two feeder tests fail, the engine test passes |
+    | N = 300                    | engine test fails                   | the two feeder tests fail, the engine test passes |
+    | N = 2000, engine test only | fails, 2 of 2                       | passes, 2 of 2                                    |
+
+    Base fails on the line `expected [ { range: 'bytes=1179648-', … } ] to deeply equal []`.
+
+  - **The flake the change removed is real.** It must stay removed. With no mutation and only the three stop tests run (`-t`), the base test file fails the engine test 4 of 15 times on Linux under load, and the head file fails it 0 of 15 times. With `#begin` instrumented, the one late arrival in 24 runs is three fan-out fetches begun 10.7–12.1 ms _before_ the cancel (`lastBegins=[[1831.7,…],[1832.5,…],[1833.1,…]]`, `canceledAt=1843.8`, `beginsAfterCancel=[]`) that reached the origin 1.8–2.7 ms after it.
+  - **Open decision: which remedy.** Both keep the flake fixed.
+    - **(a) Recommended: count rather than time where the test can.** In the two feeder tests, take `feeder.stats().originRequests` at the stop. After the settle, assert that the origin saw exactly that many requests (`seen.length`) and that `originRequests` did not grow: no window at all, and every N above fails. In the engine test, which has no feeder handle, take the measuring point from the abort (`canceledAt + 100`, computed before `await media.done`), not from `done`. That cuts its blind span from about 3.1 s to 100 ms. Cost: one fixer round in the test file, plus a Windows reading of the stop tests from the PR's own leg.
+    - **(b) Keep the 100 ms window, but start it at the abort in the engine test.** The comments and the Log then say that a fetch opened within 100 ms of a stop is not caught. The brief forbids loosening, so this is a loosening the owner must accept by name.
+- **low** · no `Done when` line depends on it · nfr:maintainability · The Log describes `8f282c87`, the head of the 24-of-25 Windows series, as "the fixture and the test changes, plus the probe files". But `git diff 8f282c87 ba4fb1ec` also removes code from two files that stay on the branch:
+  - `dbg()` and its three calls (`judge-split`, `judge-single`, `fallBack`) in `engine/src/download/parallel-ranges.ts`, which write to stderr while `DL106` is set, as it was in that workflow;
+  - the test file's `afterEach` `seen` print and F9's 1 s `marks` sampler.
+
+  By reading, none of these changes a decision. Still, the series did not run the file that lands, and the Log should say so. No probe file or workflow remains: `git diff --name-only 55214e67...ba4fb1ec` lists only the ticket and `parallel-ranges.test.ts`, and `git grep "DL106\|dl106" ba4fb1ec` outside `*.md` finds nothing.
+
+- **dropped** · The held-bytes test's rate cut from 40 to 10 MB/s is not a tolerance change. Delivered rates measured on Linux by `pacing.mts`:
+  - base asked 40 MB/s and got 14.9 MB/s; head asks 10 MB/s and gets 9.9 MB/s;
+  - with a 15.6 ms timer tick modelled, base got 1.08 MB/s at any asked rate, and head gets 9.88 MB/s.
+
+  The assertions are unchanged. `hold-unbounded` (`#occupied` counts only in-flight fetches) fails the held-bytes test at base and at head.
+
+- **dropped** · The bucket in `send()` gives a speed judge no false speed-up. On Linux it delivers the asked rate within 1% from 500 KB/s to 10 MB/s on one connection.
+  - Peak over the asked rate, steady state with a 15.6 ms tick modelled: ≤ 1.33x in any 50 ms window, ≤ 1.09x in any 200 ms window. Base reads 1.31x / 1.15x at 500 KB/s.
+  - Shared 2 MB/s throttle: 2.03 MB/s on one connection, 2.06–2.09 MB/s total on four. That is a 1.03x speed-up against the 1.5 floor.
+  - After a 300 ms reader pause, the burst is 7x per 50 ms at both base and head. That is socket buffering, not the credit.
+- **dropped** · The builder's note that `close()` made a no-op does not fail the engine cancel test is true at base too, so `afterStop()` did not cause it. `close-noop` fails the same two feeder tests at base and at head, 1 of 1 run each, and not the engine test. ffmpeg's exit closes the serves. That predates this branch.
+- **dropped** · A raised speed-up floor (`floor-3.6`, 3.6x) passes all 38 tests at head. That is not a regression any of the three tests claims to catch: the per-connection fixture measures at least 3.6x at four connections.
+- **positive control** · The base test file passes on Linux, 38 of 38 in 3 of 3 whole-file runs. The head fails on each regression it should catch, in both trees:
+  - `no-fallback`: A fails at base and head;
+  - `floor-0.9`: A fails at base and head;
+  - `hold-unbounded`: held-bytes and F2 fail at base and head;
+  - `no-release-on-drop` (gate 2's F9 undone): F9 fails at base and head, 2 of 2 each;
+  - `close-noop`: the two feeder stop tests fail at base and head.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- Invariants: the diff is one test file and the ticket, so only style applies (no `any`, no `console`, `node:` builtins) ✓. The rest are skipped as out of the diff's reach.
+- NFR: security n/a · performance n/a (three tests 100 ms longer) · reliability — the high above · maintainability — the low above.
 
 ## Log
 
