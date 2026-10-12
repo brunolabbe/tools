@@ -206,6 +206,11 @@ async function wiredApp(
   cleanups.push(() => fs.rm(storageDir, { recursive: true, force: true }));
   const app = await createApp({
     startGc: false,
+    // The probe's thumbnail step grabs a frame when the source names no image,
+    // and this fixture answers every path with the master playlist, so the
+    // real grab runs to its 6 s timeout (6.8 s a test, measured). Nothing here
+    // is about thumbnails; a probe's verdict does not wait on the grab's result.
+    grabFrame: async () => null,
     ...(logger === undefined ? {} : { logger }),
     config: {
       databasePath: ":memory:",

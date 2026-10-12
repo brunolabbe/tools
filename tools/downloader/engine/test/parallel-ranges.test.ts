@@ -117,6 +117,15 @@ const stalled: http.ServerResponse[] = [];
  */
 const MAX_CREDIT_MS = 25;
 
+/**
+ * A rate that is slow against a source declared 0.5 s long, whose 4 MB are read
+ * at about 8 MB/s as media: every test that needs "slow" and then reads the
+ * whole file to the end pays 4 MB over this rate, once per read. Four MB/s is
+ * half the media rate, where 1 and 2 MB/s were an eighth and a quarter of it
+ * and made the same claims at two to four times the cost (dl-112).
+ */
+const SLOW_AGAINST_HALF_A_SECOND = 4_000_000;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -512,7 +521,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
     async () => {
       // An origin that honours `Range` states the size in every `206`, so the
       // size is unknown only from one that does not; that one is never split.
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       behaviour.sizeless = true;
       const source = variant("faststart.mp4", { durationSec: 0.5, filesizeBytes: undefined });
       await run(engineWith(), source);
@@ -529,7 +538,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
   test(
     "a source of unknown duration stays on one connection; control: told its duration, it splits",
     async () => {
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       const untimed = variant("no-duration.mkv", { container: "mkv", durationSec: undefined });
       const ran = await run(engineWith(), untimed);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
@@ -545,7 +554,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
   test(
     "an opted-out host stays on one connection, a subdomain of it too",
     async () => {
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       const source = variant("faststart.mp4", { durationSec: 0.5 });
       await run(engineWith({ singleConnectionHosts: ["127.0.0.1"] }), source);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
@@ -583,7 +592,7 @@ describe("dl-98: a host that refuses parallel ranges", () => {
       kind: "no speed-up at 4 (a per-client throttle)",
       set: (b) => {
         b.perConnectionBps = null;
-        b.sharedBps = 2_000_000;
+        b.sharedBps = SLOW_AGAINST_HALF_A_SECOND;
       },
     },
   ];
@@ -592,7 +601,7 @@ describe("dl-98: a host that refuses parallel ranges", () => {
     "$kind: the job completes on one connection, identical in media, and the next job opens one",
     async ({ set }) => {
       const expected = await reference("faststart.mp4");
-      behaviour.perConnectionBps = 2_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       set(behaviour);
       const engine = engineWith();
       const source = variant("faststart.mp4", { durationSec: 0.5 });
