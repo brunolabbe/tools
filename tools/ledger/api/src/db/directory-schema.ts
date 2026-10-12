@@ -30,6 +30,9 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
     id TEXT PRIMARY KEY CHECK (
       length(id) BETWEEN 1 AND 32
       AND id NOT GLOB '*[^a-z]*'
+      -- length() and GLOB stop at a NUL, so 'ho' || char(0) || 'me' reads as
+      -- 'ho'; the byte count is the length of the whole value.
+      AND length(CAST(id AS BLOB)) = length(id)
       AND id NOT IN ('con', 'prn', 'aux', 'nul')
     ),
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80 AND name = trim(name)),

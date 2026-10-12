@@ -289,3 +289,27 @@ describe("the directory is only ever appended to", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("a household id and a NUL byte", () => {
+  test("the schema refuses an id with a NUL in it, at the start, the middle or the end", () => {
+    const db = raw();
+
+    // SQLite's `length` and `GLOB` read a text value to its first NUL, so a
+    // check written over the text alone passes `ho\0me` and `a\0` as the plain
+    // words `ho` and `a`. The class refuses them first; this is the writer that
+    // skips the class.
+    for (const id of ["\0home", "ho\0me", "a\0", "\0"]) {
+      expect(
+        () =>
+          db
+            .prepare(
+              "INSERT INTO households (id, name, created_at, created_by) VALUES (?, 'n', 'x', 'operator')",
+            )
+            .run(id),
+        JSON.stringify(id),
+      ).toThrow(/CHECK/u);
+    }
+    expect(db.prepare("SELECT count(*) AS n FROM households").get()).toEqual({ n: 1 });
+    db.close();
+  });
+});

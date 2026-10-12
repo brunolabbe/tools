@@ -240,3 +240,21 @@ memberships` string in the command fails the directory scan; a dropped
     health field but add a `--by <address>` flag; remove the health field. Owner
     chose **approve both**: `HealthResponse.directory: { open }` is approved as
     an additive contract change, and the changed-by stays the literal `operator`.
+- 2026-10-12 — Gate 1's **F1** (med: the household-id CHECK admits an embedded
+  NUL, `ho\0me` and `a\0`) is _fixed at landing_, by the owner's instruction,
+  with no re-gate and no round opened. F2 to F8 stay recorded and unfixed; F3's
+  option (a) was offered to the owner for landing and not chosen. The gate
+  section is committed as written.
+  - The clause is `AND length(CAST(id AS BLOB)) = length(id)` in the `households`
+    CHECK in `api/src/db/directory-schema.ts`, as the finding gave it. The test
+    is "the schema refuses an id with a NUL in it, at the start, the middle or
+    the end", the last test in `api/test/directory.test.ts`, inserting each of
+    `\0home`, `ho\0me`, `a\0` and `\0` straight through SQL.
+  - Without the clause, `npx vitest run tools/ledger/api/test/directory.test.ts`
+    exits 1:
+    `× the schema refuses an id with a NUL in it, at the start, the middle or the end`,
+    `AssertionError: "ho\u0000me": expected [Function] to throw an error`,
+    `Tests  1 failed | 12 passed (13)`.
+  - With it, the same command exits 0: `Tests  13 passed (13)`.
+  - The ledger API project with the clause: `npx vitest run tools/ledger/api`
+    exits 0, `Test Files  25 passed (25)`, `Tests  443 passed (443)`.
