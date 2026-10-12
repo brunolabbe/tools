@@ -49,10 +49,10 @@ detail and the numbers behind each.
 - **Everything keeps its history, and there are stats.** Salaries, ratios,
   mortgage payments, balances and spending by category are all charted.
   Nothing is overwritten.
-- **Receipts are read locally first.** Free local OCR reads the totals and
-  taxes, and a model is called only when the arithmetic fails or items or
-  categories are wanted. This is pending a measurement on real receipts, which
-  is lg-8's first step.
+- **Receipts are read by Claude Haiku 5.5, when the person asks.** Decided on
+  2026-10-12, after measuring real receipts against local OCR (lg-8's Log).
+  The photo is sent only on that request, and a receipt can always be typed
+  in by hand instead.
 - **Receipts are read line by line.** Items that are not shared come off,
   together with their taxes and deposits, and the code computes that part, not
   the model. An item can also be marked as the _other_ person's, which makes it
