@@ -153,3 +153,12 @@ passed (44)`: the config test, the three argv pins and the NaN fallback.
     process-tree kill, and neither is proven on Windows until the draft pull
     request's Windows leg has run; the `hls-e2e` kill-tree tests run there. The
     new grace tests are skipped on win32 (the branch has no grace to pin).
+
+- 2026-10-12 — **The owner's answer on the stream-link test.** Asked whether
+  `api/test/stream-link.test.ts` "an error after the first byte aborts the
+  connection" (about 9.2 s) should be shortened, which needs a new API config key
+  and so is ruled out by this ticket's rule 3, the owner chose **"A, leave it as
+  is"** on 2026-10-12, over "B, file a follow-up ticket for a test-only
+  `killGraceMs` API config key". A was the recommended option. The test is
+  unchanged and nothing is filed; the "left as it was, for the owner to decide"
+  line above is now decided. Relayed through the coordinator.
