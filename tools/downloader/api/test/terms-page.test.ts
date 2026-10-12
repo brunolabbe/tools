@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { API_DEFAULTS } from "../src/config.ts";
-import { JOB_RETENTION_DAYS } from "../src/jobs/links.ts";
+import { FINISHED_JOB_CLEAR_AFTER_MS, JOB_RETENTION_DAYS } from "../src/jobs/links.ts";
 import { createHarness } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 
@@ -29,6 +29,24 @@ afterEach(async () => {
 });
 
 const page = (): Promise<string> => fs.readFile(new URL("terms.html", PUBLIC), "utf8");
+
+const COMPOSE = new URL("../../../../compose.downloader.prod.yaml", import.meta.url);
+
+/**
+ * The days the production log cap holds, by the arithmetic the compose comment
+ * gives: a visit is 6 KB and the cap was sized for 600 a day. Read from the file
+ * itself, so a change to `max-size` or `max-file` that the page does not follow
+ * fails the test that quotes it (dl-107).
+ */
+async function logDaysFromCompose(): Promise<number> {
+  const compose = await fs.readFile(COMPOSE, "utf8");
+  const size = /max-size:\s*"(\d+)m"/u.exec(compose)?.[1];
+  const files = /max-file:\s*"(\d+)"/u.exec(compose)?.[1];
+  expect(size).toBeDefined();
+  expect(files).toBeDefined();
+  const bytes = Number(size) * 1024 * 1024 * Number(files);
+  return Math.round(bytes / (6_000 * 600));
+}
 
 /** What `vite build` does with `public/`: copies it beside `index.html`. */
 async function serving(): Promise<Harness> {
@@ -80,7 +98,42 @@ describe("what it says", () => {
     expect(text).toContain(`${JOB_RETENTION_DAYS} days`);
     expect(text).toContain(`${API_DEFAULTS.outcomeRetentionDays} days`);
     // The log's "about" is the figure compose's size cap was derived from.
-    expect(text).toContain(`about ${JOB_RETENTION_DAYS} days`);
+    expect(text).toContain(`about ${await logDaysFromCompose()} days`);
+  });
+
+  test("the minutes after which a finished download's addresses are erased are the sweep's", async () => {
+    const text = (await page()).replace(/\s+/gu, " ");
+
+    expect(FINISHED_JOB_CLEAR_AFTER_MS % 60_000).toBe(0);
+    const minutes = FINISHED_JOB_CLEAR_AFTER_MS / 60_000;
+    expect(text).toContain(`${minutes} minutes after it ends`);
+    expect(text).toContain(`for ${minutes} minutes after`);
+  });
+
+  test("the log's days are what the compose cap holds at the traffic it was sized for", async () => {
+    // 5 MB x 5 files at 6 KB a visit and 600 visits a day is a week. If the cap
+    // moves, the page has to move with it: this is the number the page quotes.
+    expect(await logDaysFromCompose()).toBe(7);
+  });
+
+  test("it says what a log line holds and what it does not", async () => {
+    const text = (await page()).replace(/\s+/gu, " ");
+
+    expect(text).toContain("never your whole address");
+    expect(text).toContain("that page's domain, never its path");
+    expect(text).not.toContain("domain and path");
+    expect(text).toContain(
+      "keep your address in the server's memory (for IPv6, its first 64 bits)",
+    );
+  });
+
+  test("it names the person in charge and the contact, and says where the traffic goes", async () => {
+    const text = (await page()).replace(/\s+/gu, " ");
+
+    expect(text).toContain("The person in charge of the personal information");
+    expect(text).toContain("the operator of this service");
+    expect(text).toContain('href="mailto:abuse@oludoi.com"');
+    expect(text).toContain("Cloudflare, a company based in the United States");
   });
 
   test("it carries each thing the ticket requires", async () => {

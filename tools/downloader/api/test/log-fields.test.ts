@@ -24,6 +24,7 @@ import { createHarness, probeResult, StubResolver, waitFor } from "./helpers.ts"
 import type { Harness } from "./helpers.ts";
 
 const CLIENT = "203.0.113.9";
+const NETWORK = "203.0.113.0/24";
 const PAGE = "http://127.0.0.1/watch/42?token=SECRETQ&t=7";
 
 type Line = Record<string, unknown> & { msg: string };
@@ -147,7 +148,7 @@ describe("what one probe and one download write at info", () => {
     ]);
   });
 
-  test("the client address is on the request line and nowhere else", async () => {
+  test("the client's network, not its address, is on the request line and nowhere else", async () => {
     const { lines, raw } = await run(resolver(), async (harness) => {
       const job = await visit(harness, PAGE);
       await waitFor(
@@ -156,13 +157,19 @@ describe("what one probe and one download write at info", () => {
       );
     });
 
-    expect(byMessage(lines, "request").map((line) => line["ip"])).toEqual([CLIENT, CLIENT, CLIENT]);
+    // The /24, never the address (dl-107): the whole address is not in the log at all.
+    expect(byMessage(lines, "request").map((line) => line["ip"])).toEqual([
+      NETWORK,
+      NETWORK,
+      NETWORK,
+    ]);
+    expect(raw.join("")).not.toContain(CLIENT);
     const elsewhere = lines.filter((line) => line.msg !== "request");
-    expect(elsewhere.map((line) => JSON.stringify(line)).join("")).not.toContain(CLIENT);
+    expect(elsewhere.map((line) => JSON.stringify(line)).join("")).not.toContain("203.0.113");
     expect(raw.join("")).not.toContain("SECRETQ");
   });
 
-  test("the page URL is on the probe line, with its query string gone, and on no request line", async () => {
+  test("the page's site is on the probe line, with its path and query string gone, and on no request line", async () => {
     const { lines } = await run(resolver(), async (harness) => {
       const job = await visit(harness, PAGE);
       await waitFor(
@@ -171,9 +178,10 @@ describe("what one probe and one download write at info", () => {
       );
     });
 
-    const carrying = lines.filter((line) => JSON.stringify(line).includes("/watch/42"));
-    expect(carrying.map((line) => line.msg)).toEqual(["probe complete"]);
-    expect(JSON.stringify(carrying[0])).toContain("http://127.0.0.1/watch/42?[redacted]");
+    // Owner decision 6 (dl-107): a log line names the site, never the page.
+    expect(lines.filter((line) => JSON.stringify(line).includes("/watch/42"))).toEqual([]);
+    const probed = byMessage(lines, "probe complete");
+    expect(probed.map((line) => JSON.stringify(line)).join("")).toContain("http://127.0.0.1");
     // The request line's `url` is the API route the visitor called, which is
     // why the page is in the POST body and never in a log.
     expect(byMessage(lines, "request").map((line) => line["url"])).toEqual([
@@ -190,7 +198,7 @@ describe("what a failed probe and a failed download write at info", () => {
       throw new AppError("UNREACHABLE", undefined, { details: { url: PAGE } });
     });
 
-  test("the page's origin and path reach `details`, the query string does not, and the address stays on the request line", async () => {
+  test("the page's origin reaches `details`, its path and query string do not, and the network stays on the request line", async () => {
     const { lines, raw } = await run(failing(), async (harness) => {
       const job = await visit(harness, PAGE);
       await waitFor(
@@ -201,8 +209,8 @@ describe("what a failed probe and a failed download write at info", () => {
 
     const failures = byMessage(lines, "request failed");
     expect(failures.map((line) => line["details"])).toEqual([
-      { url: "http://127.0.0.1/watch/42?[redacted]" },
-      { url: "http://127.0.0.1/watch/42?[redacted]" },
+      { url: "http://127.0.0.1" },
+      { url: "http://127.0.0.1" },
     ]);
     // These carry a `requestId`, and the `request` line of the same request
     // carries the address: for a failure the two are joined, by that id.

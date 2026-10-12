@@ -595,9 +595,12 @@ behind the rest, and p50 download duration. The report prints no path, query
 string or address, and `probe_outcomes` holds none; `OUTCOME_RETENTION_DAYS`
 (default 90) bounds it by size rather than by privacy — see
 [dl-57](../tools/downloader/docs/work/dl-57-a-record-of-how-probes-and-downloads-end.md).
-The `jobs` table is different: it holds the full page URL, and the sweep deletes a
-row 14 days after it was made (dl-54), so the download figures cover at most the
-last 14 days whatever `--days` says.
+The `jobs` table is different: while a download runs it holds the full page URL,
+and the sweep blanks that, the media URL, the title and any URL in the error
+fifteen minutes after the job ends (dl-107), and deletes the row 14 days after it
+was made (dl-54). The report reads only status, error code and times, which the
+blanking leaves, so the download figures cover at most the last 14 days whatever
+`--days` says.
 
 ### Things that bite every tool
 
@@ -718,42 +721,106 @@ would open it sooner; nothing here builds that.
 
 **What is kept, and when it goes**
 
-| What                                               | Where                      | Gone after                                            |
-| -------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| Client address, per request                        | the container's log        | the log's size cap (below); about 14 days at the size |
-| Page domain and path, on some lines, never a query | the container's log        | the same                                              |
-| The full page URL, query included                  | `jobs`, a row per download | 14 days, by the sweep (`JOB_RETENTION_DAYS`)          |
-| A hostname and resolver timings                    | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default               |
+| What                                                         | Where                      | Gone after                                                                  |
+| ------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------------------- |
+| The client's network (a /24 or /48), per request             | the container's log        | the log's size cap (below); about 7 days at the size                        |
+| A page's or media file's site, on some lines, never its path | the container's log        | the same                                                                    |
+| The full page URL, query included, and the media URL         | `jobs`, a row per download | 15 minutes after the job ends, by the sweep (`FINISHED_JOB_CLEAR_AFTER_MS`) |
+| The video's title, and any URL in an error                   | `jobs`                     | the same                                                                    |
+| Host, status, error code and times                           | `jobs`                     | 14 days, by the sweep (`JOB_RETENTION_DAYS`)                                |
+| A hostname and resolver timings                              | `probe_outcomes`           | `OUTCOME_RETENTION_DAYS`, 90 by default; `0` is refused at boot             |
 
-The log fields are measured and pinned by `api/test/log-fields.test.ts`.
+The log fields are measured and pinned by `api/test/log-fields.test.ts`. The rate limits
+hold the address in memory only (an IPv4 address whole, an IPv6 one as its /64), and never write it.
 
 **Log retention.** `compose.downloader.prod.yaml` caps the downloader's log at
-5 files of 10 MB, which is a **size, not an age** — Docker's `json-file` and
+5 files of 5 MB, which is a **size, not an age** — Docker's `json-file` and
 `local` drivers have no age option. A host with less traffic than the cap was
-sized for keeps lines longer than 14 days; one with more keeps them shorter. The
-terms page says "about 14 days" and that a quiet service keeps lines longer,
-because that is what a size cap delivers. Size it against your own day:
+sized for keeps lines longer than 7 days; one with more keeps them shorter. The
+terms page says "about 7 days" and that a quiet service keeps lines longer,
+because that is what a size cap delivers. The cap was 10 MB, about 14 days, until
+dl-107 (owner decision 3A, 2026-10-12): the log no longer holds a whole address or
+a page's path, so it is not worth keeping as long. Size it against your own day:
 
 ```bash
 docker compose logs --since 24h downloader | wc -c
 ```
 
-Multiply by 14 and compare with 50 MB; the file also carries Docker's envelope,
+Multiply by 7 and compare with 25 MB; the file also carries Docker's envelope,
 about 40% more than the lines themselves (measured: 5,848 bytes against 4,138 for
 a first visit's 16 lines against a live API, curl standing in for the browser;
-the API alone is 2,551 against 1,811 for 7). The cap's own figure, 600 first
-visits a day for 14 days, is an assumption about traffic, not a measurement of
-this host. The owner chose this size cap over the two ways below on 2026-10-03.
-To make it an age instead, there are two ways, neither of which this repository
-can do for you:
+the API alone is 2,551 against 1,811 for 7). Those figures were taken before
+dl-107 shortened two fields, so they read slightly high. The cap's own figure,
+600 first visits a day for 7 days, is an assumption about traffic, not a
+measurement of this host. The owner chose this size cap over the two ways below
+on 2026-10-03. To make it an age instead, there are two ways, neither of which
+this repository can do for you:
 
-- the `journald` logging driver with `MaxRetentionSec=14day` in the host's
+- the `journald` logging driver with `MaxRetentionSec=7day` in the host's
   `journald.conf`, which expires by time. It needs systemd-journald on the host,
   and a host without it fails to start the container, so it is not set here;
 - a daily job on the host that deletes the downloader's **rotated** files older
-  than 14 days (the `*-json.log.N` beside the path `docker inspect -f '{{.LogPath}}'`
-  prints for the container). It leaves the live file, which keeps up to 10 MB of
+  than 7 days (the `*-json.log.N` beside the path `docker inspect -f '{{.LogPath}}'`
+  prints for the container). It leaves the live file, which keeps up to 5 MB of
   whatever is newest. Not run by the author.
+
+**When a legal notice arrives** (dl-107, owner decision 4A). No law found here
+obliges keeping an address or a page before a notice comes, and every duty to keep
+something starts at the notice and covers only what is still held then. So the
+procedure is to copy what exists the day it arrives, before the log rotates and
+the sweep runs, and to keep the copy only as long as the notice requires. It is
+not run by anything; the operator does it by hand. The notice may be a copyright
+notice forwarded to the abuse alias, a preservation demand or a production order
+(the Criminal Code's preservation demand holds for 21 days and an order for 90),
+or a request from a lawyer.
+
+1. **Write down when it arrived**, and what it names: a site, a page, a time, an
+   address. Keep the notice itself.
+2. **Copy the log files first**, because they rotate by size and a busy day can
+   drop a line within hours. Docker keeps the live file and the rotated
+   `*-json.log.N` together in one directory; copy the whole of it:
+
+   ```bash
+   docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader)
+   sudo cp -a "$(dirname "$(docker inspect -f '{{.LogPath}}' $(docker compose ps -q downloader))")" ~/hold/<notice>/logs
+   ```
+
+3. **Copy the database**, which holds each download's host, status, error code and
+   times for 14 days, and no page address once a job is over. It can therefore
+   say what was fetched from a **site**, not which page. The image keeps it at
+   `/data/jobs.db` (`STORAGE_DIR=/data`), and the service runs SQLite in
+   write-ahead-log mode (`migrate` in `api/src/db/schema.ts`), so the most recent
+   rows, which are the ones a notice usually names, sit in `jobs.db-wal` until a
+   checkpoint. `jobs.db` alone can be missing its tables (measured on the real
+   `migrate`: the copy failed with `no such table: jobs` while the live database
+   held the row). Stop the service, so that nothing is written mid-copy, and copy
+   whichever of the three files exist together:
+
+   ```bash
+   docker compose stop downloader
+   docker compose cp downloader:/data/jobs.db ~/hold/<notice>/jobs.db
+   docker compose cp downloader:/data/jobs.db-wal ~/hold/<notice>/jobs.db-wal
+   docker compose cp downloader:/data/jobs.db-shm ~/hold/<notice>/jobs.db-shm
+   docker compose start downloader
+   ```
+
+   A clean stop may checkpoint and remove the `-wal` and `-shm` files; a copy of a
+   file that is not there fails, and that is fine. Stopping ends any download in
+   progress, so pick a quiet moment. Read the rows for the named site from the
+   copy, with `sqlite3` on the host, not from the live file.
+
+4. **Reply from the abuse alias** and say what was found. What the service holds
+   about a visitor is a network (a /24 or a /48, not an address), a site and a
+   time; the terms page says so, and the reply should not claim more.
+5. **Delete the copy** when the notice's period ends: six months for a copyright
+   notice that did not become a suit, a year if it did, 21 or 90 days for a
+   preservation demand or order. Preserving more than the notice asks is keeping
+   what the rest of this section exists to avoid.
+
+This is a procedure and not legal advice, and the commands above were written from
+the compose files and not run against a host. The questions a lawyer should answer
+are listed in
+[dl-107](../tools/downloader/docs/work/dl-107-keep-the-least-visitor-data-the-law-allows.md).
 
 ### Tightening it past one user
 

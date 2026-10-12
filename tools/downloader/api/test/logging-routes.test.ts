@@ -16,7 +16,9 @@ import { createLogger } from "../src/logger.ts";
 import type { LoggerOptions } from "../src/logger.ts";
 
 const SIGNED = "https://cdn.example/v.mp4?X-Amz-Signature=SECRET&x=1";
-const REDACTED_URL = "https://cdn.example/v.mp4?[redacted]";
+// What a URL becomes in a line: its origin and nothing after it (dl-107). It was
+// `https://cdn.example/v.mp4?[redacted]` while only the query string went.
+const REDACTED_URL = "https://cdn.example";
 
 interface ErrLine {
   level: string;

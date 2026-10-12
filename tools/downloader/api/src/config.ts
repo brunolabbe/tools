@@ -97,9 +97,9 @@ export interface ApiConfig {
    */
   gcIntervalMs: number;
   /**
-   * How long a `probe_outcomes` row survives before the sweep prunes it. This
-   * is about table size, not privacy — a
-   * row carries a hostname and resolver timings, never a path, a query string
+   * How long a `probe_outcomes` row survives before the sweep prunes it, at least 1:
+   * `0` no longer means keep for ever (dl-107). A table size bound, not a privacy one:
+   * a row carries a hostname and resolver timings, never a path, a query string
    * or an address (dl-57).
    */
   outcomeRetentionDays: number;
@@ -456,6 +456,27 @@ function proxyUrl(raw: string | undefined): string | undefined {
   return value;
 }
 
+/**
+ * `OUTCOME_RETENTION_DAYS`, which must be at least 1 (dl-107).
+ *
+ * `0` used to switch pruning off, "the rate limits' convention for off", which
+ * made a table that exists to be pruned keep every row for ever. That is the one
+ * thing a retention setting must not be able to say, so the service now refuses
+ * to start rather than keep it quietly, or quietly turn `0` into some other
+ * number. A value that is not a number still falls back to the default, as the
+ * other settings do.
+ */
+function outcomeRetentionDays(days: number): number {
+  if (days < 1) {
+    throw new AppError("INTERNAL", "OUTCOME_RETENTION_DAYS must be at least 1.", {
+      details: {
+        hint: "0 no longer keeps every row for ever; the sweep always prunes. Unset it for 90 days.",
+      },
+    });
+  }
+  return days;
+}
+
 /** See `ApiConfig.turnstile`. The error names the variables, never their values. */
 function turnstile(
   rawSiteKey: string | undefined,
@@ -541,9 +562,12 @@ export function loadApiConfig(
       overrides.maxFileSizeBytes ??
       int(env["MAX_FILE_SIZE_MB"], API_DEFAULTS.maxFileSizeMb) * 1024 * 1024,
     gcIntervalMs: overrides.gcIntervalMs ?? int(env["GC_INTERVAL_MS"], API_DEFAULTS.gcIntervalMs),
-    outcomeRetentionDays:
+    outcomeRetentionDays: outcomeRetentionDays(
       overrides.outcomeRetentionDays ??
-      int(env["OUTCOME_RETENTION_DAYS"], API_DEFAULTS.outcomeRetentionDays, { min: 0 }),
+        int(env["OUTCOME_RETENTION_DAYS"], API_DEFAULTS.outcomeRetentionDays, {
+          min: Number.MIN_SAFE_INTEGER,
+        }),
+    ),
     probeCacheTtlMs: Math.min(
       PROBE_CACHE_TTL_CEILING_MS,
       overrides.probeCacheTtlMs ??

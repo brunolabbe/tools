@@ -10,6 +10,7 @@
 import { AppError, ROUTES } from "@downloader/contract";
 import { clientKey } from "@webtools/core/rate-limit";
 import { describe, expect, test } from "vitest";
+import { loadApiConfig } from "../src/config.ts";
 import { runSweep } from "../src/server.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 
@@ -292,20 +293,45 @@ describe("probe_outcomes retention", () => {
     }
   });
 
-  test("0 disables pruning entirely, like the rate limits' convention for off", async () => {
-    let clock = new Date("2026-09-07T00:00:00.000Z");
+  test("0 cannot keep rows for ever: the service refuses to start on it (dl-107)", async () => {
+    // It used to switch pruning off, "the rate limits' convention for off". A
+    // retention setting must not be able to say keep everything, so the boot
+    // fails, from the environment and from an override alike.
+    await expect(createHarness({ config: { outcomeRetentionDays: 0 } })).rejects.toMatchObject({
+      code: "INTERNAL",
+      message: expect.stringContaining("OUTCOME_RETENTION_DAYS") as string,
+    });
+    expect(() => loadApiConfig({}, { OUTCOME_RETENTION_DAYS: "0" })).toThrow(
+      /OUTCOME_RETENTION_DAYS must be at least 1/u,
+    );
+    expect(() => loadApiConfig({}, { OUTCOME_RETENTION_DAYS: "-5" })).toThrow(
+      /OUTCOME_RETENTION_DAYS must be at least 1/u,
+    );
+  });
+
+  test("a number that is not one still falls back to the default, and 1 prunes at a day", async () => {
+    expect(loadApiConfig({}, { OUTCOME_RETENTION_DAYS: "abc" }).outcomeRetentionDays).toBe(90);
+    expect(loadApiConfig({}, {}).outcomeRetentionDays).toBe(90);
+
+    const clock = new Date("2026-09-07T00:00:00.000Z");
     const harness = await createHarness({
       now: () => clock,
-      config: { outcomeRetentionDays: 0 },
+      config: { outcomeRetentionDays: 1 },
     });
     try {
       const store = harness.app.context.store;
-      const veryOld = new Date(clock.getTime() - 400 * 24 * 3_600_000).toISOString();
-      store.recordProbeOutcome(outcome("ancient.example"), veryOld);
+      store.recordProbeOutcome(
+        outcome("old.example"),
+        new Date(clock.getTime() - 25 * 3_600_000).toISOString(),
+      );
+      store.recordProbeOutcome(
+        outcome("new.example"),
+        new Date(clock.getTime() - 23 * 3_600_000).toISOString(),
+      );
 
       runSweep(harness.app.context);
 
-      expect(store.probeOutcomes()).toHaveLength(1);
+      expect(store.probeOutcomes().map((row) => row.host)).toEqual(["new.example"]);
     } finally {
       await harness.dispose();
     }

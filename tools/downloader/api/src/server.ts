@@ -29,7 +29,13 @@ import type { HumanCheck } from "./human-check.ts";
 import { readOperatorCa, withSystemRoots } from "./operator-ca.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
-import { cancelError, JOB_RETENTION_MS, LINK_ROW_GRACE_MS, recordCanceled } from "./jobs/links.ts";
+import {
+  cancelError,
+  FINISHED_JOB_CLEAR_AFTER_MS,
+  JOB_RETENTION_MS,
+  LINK_ROW_GRACE_MS,
+  recordCanceled,
+} from "./jobs/links.ts";
 import { JobOrchestrator } from "./jobs/orchestrator.ts";
 import { ProbeCache } from "./jobs/probe-cache.ts";
 import { ProbeStageHub } from "./probe-stages.ts";
@@ -803,22 +809,27 @@ export function runSweep(context: AppContext): void {
 
     const linksPruned = context.store.pruneLinks(new Date(nowMs - LINK_ROW_GRACE_MS).toISOString());
 
+    // A finished job's page address, media URL, title and error URLs are not
+    // needed once its link's lifetime has passed: the browser has them, and the
+    // report reads none (dl-107). The row stays, without them, until it is pruned.
+    const jobsCleared = context.store.clearFinishedBefore(
+      new Date(nowMs - FINISHED_JOB_CLEAR_AFTER_MS).toISOString(),
+    );
+
     const jobsPruned = context.store.pruneJobs(new Date(nowMs - JOB_RETENTION_MS).toISOString());
     const thumbnailsPurged = context.thumbnails.purgeExpired();
 
     // `probe_outcomes` carries no address and no path, so this bound is about
-    // table size, not privacy (dl-57). 0 keeps every row, the same convention
-    // the rate limits use for "off".
-    const outcomesPruned =
-      context.config.outcomeRetentionDays <= 0
-        ? 0
-        : context.store.pruneProbeOutcomes(
-            new Date(nowMs - context.config.outcomeRetentionDays * 24 * 3_600_000).toISOString(),
-          );
+    // table size, not privacy (dl-57). There is no "off": config refuses a value
+    // under 1, so a table meant to be pruned cannot be told to keep every row.
+    const outcomesPruned = context.store.pruneProbeOutcomes(
+      new Date(nowMs - context.config.outcomeRetentionDays * 24 * 3_600_000).toISOString(),
+    );
 
     context.logger.debug("sweep complete", {
       linksExpired,
       linksPruned,
+      jobsCleared,
       jobsPruned,
       thumbnailsPurged,
       outcomesPruned,
