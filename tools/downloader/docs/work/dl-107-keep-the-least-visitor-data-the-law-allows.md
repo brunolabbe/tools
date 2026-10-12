@@ -412,6 +412,96 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
   `test (windows-latest, informational)`, `e2e (direct)`, `e2e (sniffer)`,
   `docker` and `CodeQL`.
 
+### Gate 2
+
+**Gate: PASS**: 2026-10-12 · `dac72673..0b0385bb` (the round is `fe2a8f85` and `0b0385bb`) · Opus 5.5, re-gate
+
+Gate 1's acceptance table stands, and no line of it changed in this round. The
+`terms-page.test.ts` assertion this round reworded still turns red on the
+mutations from gate 1.
+
+**Gate 1's findings**
+
+- **1, high, the hold copy of the database: fixed.** Step 3 of
+  `docs/02-DEPLOYMENT.md` now stops the service and copies `jobs.db`,
+  `jobs.db-wal` and `jobs.db-shm`. `walcopy3.mts` runs that procedure against
+  the real `migrate` and `JobStore`, in two cases:
+  - Handle left open, as a kill leaves it: all three files are copied, and the
+    copy reads `{"n":2}`.
+  - Clean `db.close()`, which the service does on shutdown: only `jobs.db` is
+    left, the `-wal` and `-shm` copies fail with `ENOENT`, and the copy still
+    reads `{"n":2}`.
+
+  So "a copy of a file that is not there fails, and that is fine" is true.
+  `walcopy.mts`, the old one-file copy, still prints `no such table: jobs`, which
+  the doc now says. One thing is unmeasured: there is no Docker daemon here, so
+  `docker compose cp` from a stopped container was not run. Compose's `cp.go`
+  passes `true` for stopped containers to `getContainers`, read through
+  WebFetch.
+
+- **2, high, the filename on a reopened tab: fixed, as option B.**
+  - **The card.** `savedLabel` in `web/src/components/JobCard.tsx` uses the
+    filename, else the kept title, else nothing, and adds the dash only when the
+    name is not `""`. An empty-string title therefore renders "Saved by your
+    browser" with no dash. On top of that, `loadTitles` drops `""` and `start`
+    stores a title only when it is truthy.
+  - **The tests.** `web/test/job-card.test.tsx` › "a reopened card with a blank
+    filename is named by the title this browser kept" and "and with no title kept
+    either it reads without a dash, never a dash and nothing". Both reconcile a
+    `downloading` local copy with a cleared row, which is the state restore
+    produces. Removing the title fallback (M5) turned the first red, and always
+    adding the dash (M6) turned the second red.
+  - **The `reconcileJob` comment is now true.** `reconcile.mts` against
+    `0b0385bb` still returns `filename: ""`, which is what the comment says
+    stands.
+  - **The ticket's corrected premise is true** in its Why, its Build step 1 and
+    its Log.
+- **3, med, the per-client cap line and the IPv6 forms had no test: fixed.**
+  `api/test/visitor-data.test.ts` now has:
+  - "an IPv6 client's rate-limited line says the /48, while the limiter still
+    counts its /64";
+  - "the per-client cap line says the network for %s, and the cap still counts
+    the address", for IPv4 and IPv6.
+
+  Reverting `shortenKey` on the `rate limited` line (M1) turned 2 red, IPv4 and
+  IPv6. Reverting it on the cap line (M2) turned 2 red. Feeding the shortened
+  key to the limiter (M3) turned 1 red, and feeding it to the cap (M4) turned 2
+  red, so the new tests also hold the bucketing.
+
+- **7, low, the copied `v6Groups`: fixed.** Core's change is the one word
+  `export` in `packages/core/src/rate-limit.ts`, and `log-address.ts` imports it.
+  I rebuilt, and `export` appears in `packages/core/dist/rate-limit.d.ts`. The
+  `core` project passed 58 of 58. In the 237 of 237 spec run, `rate-limit.test.ts`,
+  `per-client-caps.test.ts`, `probe-outcomes.test.ts` and the ledger's
+  `route-limits.test.ts` all passed.
+- **8, low, "whole address" for IPv6: fixed.** The terms page, the
+  architecture doc and the deployment doc now say an IPv6 address is held as
+  its /64, and `terms-page.test.ts` follows the new wording.
+- **4, 5 and 6, all low: not fixed.** The coordinator recorded them under the
+  severity floor, and the ticket's Log names all three.
+
+**New in the round's lines**
+
+- **low** · the ticket's Why now ends "a cleared row's blank filename is all
+  such a card can show". Since option B, such a card shows the kept title,
+  which the Log records. Remedy: "...is all the server can give such a card;
+  the card falls back to the title it kept".
+- **low** · no known producer · `savedLabel` tests `name === ""`, not a trimmed
+  name. A whitespace-only title would render "Saved by your browser — " followed
+  by blanks. The browser resolver trims its titles (`pickTitle`), but the yt-dlp
+  one passes `info.title` through untrimmed. Remedy: `name.trim() === ""`.
+- **findings** · the round returned 2 new: both carried, none dropped.
+- CI on `0b0385bb`, read at the time of writing:
+  - Passed: `check` ×2, `codeql`, `CodeQL`, `dependency-review`, `changes`,
+    `docker` ×3, `e2e`, `e2e (direct)`, `e2e (sniffer)`.
+  - Still running: `test (ubuntu-latest)` and
+    `test (windows-latest, informational)`.
+
+  No acceptance line rests on either running leg: every line is proven by a
+  local spec.
+
+Nothing in this gate is a `high`.
+
 ## Log
 
 - 2026-10-12 — Filed as `needs-decision` from the owner's question about two
