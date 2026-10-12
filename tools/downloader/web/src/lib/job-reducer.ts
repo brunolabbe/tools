@@ -176,13 +176,40 @@ export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {
  * Merges a freshly fetched job with the locally reduced one. The server is
  * authoritative unless our copy is strictly newer, which happens when an event
  * lands while the refetch is in flight.
+ *
+ * **The server's copy of a finished job may have been cleared** (dl-107): once
+ * its link's lifetime has passed the server blanks the page address, the media
+ * variant and the filename, since only this browser has any use for them. So a
+ * blank there never replaces something we already hold. That is the one case
+ * where the older copy is allowed to win a field. What a card saved mid-download
+ * actually holds is its page address, which the job was started from, and the
+ * variant, so a tab closed while a job ran and reopened after the clearing keeps
+ * those. **It does not hold the filename**: that reaches the browser only on the
+ * `completed` event, so a card saved before it has `result: null` and nothing to
+ * keep, and the cleared row's `filename: ""` stands: `JobCard` names the saved
+ * file by the title this browser kept instead, or by nothing at all. The filename
+ * branch below serves only a local copy that already completed.
  */
 export function reconcileJob(local: Job | undefined, remote: Job): Job {
   if (!local) return remote;
   const localAt = timestamp(local.updatedAt);
   const remoteAt = timestamp(remote.updatedAt);
   if (Number.isNaN(localAt) || Number.isNaN(remoteAt)) return remote;
-  return remoteAt >= localAt ? remote : local;
+  return remoteAt >= localAt ? keepWhatWasCleared(local, remote) : local;
+}
+
+function keepWhatWasCleared(local: Job, remote: Job): Job {
+  if (!isTerminal(remote)) return remote;
+  const sourceUrl = remote.sourceUrl === "" ? local.sourceUrl : remote.sourceUrl;
+  const variant = remote.variant ?? local.variant;
+  const result =
+    remote.result !== null && remote.result.filename === "" && local.result !== null
+      ? { ...remote.result, filename: local.result.filename }
+      : remote.result;
+  if (sourceUrl === remote.sourceUrl && variant === remote.variant && result === remote.result) {
+    return remote;
+  }
+  return { ...remote, sourceUrl, variant, result };
 }
 
 export function isTerminal(job: Job): boolean {

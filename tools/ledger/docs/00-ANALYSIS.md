@@ -459,33 +459,41 @@ at that moment, not in a notice on the capture screen that nobody rereads.
 
 ## 7. Identity
 
-Both people reach the tool through Cloudflare Access, with two addresses on one
-policy. Access puts the identity in a signed header
+Everyone reaches the tool through Cloudflare Access, every household's addresses
+on one policy. Access puts the identity in a signed header
 (`Cf-Access-Jwt-Assertion`). The API **verifies that token** against the team's
 signing keys, and does not merely read the plain email header beside it, because
 anything that reaches the origin without passing through Access can forge the
 plain one. The scaffold's own note is the case: the loopback port bypasses Access
 entirely.
 
-- **A request with no valid token** gets a 401 on every route except
-  `/api/health`.
+- **A request with no valid token** gets a 403 on every route except
+  `/api/health` (a 401 would need a `WWW-Authenticate` scheme Access has none
+  of; lg-3).
 - **Development** sets a fixed identity through configuration, which the
-  production image refuses.
-- **The email-to-person mapping** is configuration, never a table seeded from
-  the repository.
-- **A name in `ACCESS_PEOPLE` is permanent.** _Decided by the owner on
-  2026-10-05, in lg-5._ The books name people by that name: lg-4 stores it on
-  rules and classifications, and lg-5's `people` table holds every name the
-  configuration has ever used, and the person ids already stored on rules and
-  classifications, and nothing else. Nothing removes one, so a renamed or
-  departed person stays a person: listed by `/api/people`, asked for on the
-  salaries screen, and given a share of the mortgage's joint rows.
-  Changing an address is safe; changing the name it maps to is not. Retiring a
-  person is future work, for when someone first needs it.
+  production image refuses, and which must be a member in the directory.
+- **Which household an address is in, and as whom,** is the household directory
+  (lg-20), read on every request and written by the host command until lg-22;
+  never a table seeded from the repository. Who is an admin is configuration
+  (`LEDGER_ADMINS`). An address that is neither is refused, and the page says it
+  belongs to no household.
+- **A person's name is permanent within a household.** _Decided by the owner
+  on 2026-10-05, in lg-5, for the names `ACCESS_PEOPLE` held then; the directory
+  replaced that setting in lg-20._ The books name people by that name: lg-4
+  stores it on rules and classifications, and lg-5's `people` table holds every
+  name the household's members have stood under, and the person ids already
+  stored on rules and classifications, and nothing else. Nothing removes one,
+  so a renamed or departed person stays a person: listed by `/api/people`,
+  asked for on the salaries screen, and given a share of the mortgage's joint
+  rows. So the directory counts a name toward the household's two once it has
+  held it, whether or not it holds it now. Changing an address is safe;
+  changing the name it stands under is not. Retiring a person is future work,
+  for when someone first needs it.
 
-The list above describes the tool as built: one household. What follows is
-decided and not built yet; lg-20, lg-21 and lg-22 build it, and repo-98 is the
-later opening of the Access policy, if the owner ever wants the ledger open.
+The list above describes the tool as built, with the directory (lg-20) and one
+household. What follows is decided; lg-20 built its directory, lg-21 and lg-22
+build the rest, and repo-98 is the later opening of the Access policy, if the
+owner ever wants the ledger open.
 
 ### More than one household
 

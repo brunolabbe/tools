@@ -29,9 +29,18 @@ npm test -- --project ledger
 ```
 
 Started like that, every API route but health answers 403: the API trusts only
-Cloudflare Access. In development, name a person instead —
-`ACCESS_PEOPLE=alex@example.test=alex DEV_IDENTITY=alex@example.test npm run dev:ledger`
-— or put those two lines in `.env` — and see `.env.example` for the rest.
+Cloudflare Access. In development, put an invented household and member in the
+household directory, then start as that member:
+
+```bash
+npm run household:ledger -- add home "Test household"
+npm run household:ledger -- member home alex@example.test alex
+DEV_IDENTITY=alex@example.test npm run dev:ledger
+```
+
+— or put `DEV_IDENTITY` in `.env` — and see `.env.example` for the rest. The
+household command does not read `.env`, so a `DATABASE_PATH` or
+`DIRECTORY_PATH` set there must be set for the command too.
 
 Settings are environment variables, listed with their defaults in
 [`.env.example`](./.env.example). Copy it to `.env` beside it and
@@ -67,15 +76,39 @@ Beside the other tools, on the same host and the same tunnel — the
 [root README](../../README.md#deploying-a-set-of-tools) for the shape, and
 [docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) for the walkthrough and
 [its ledger section](../../docs/02-DEPLOYMENT.md#the-ledger). Its Access policy
-admits two people rather than one, and gets no Bypass rule.
+admits every household's addresses, and gets no Bypass rule; which household an
+address is in is the household directory's to say.
+
+### Households and their members
+
+Who belongs to which household, and as whom, is the household directory
+(lg-20): a SQLite file beside the books (`DIRECTORY_PATH`, by default
+`directory.db` beside `DATABASE_PATH`), read on every request, so a change
+applies without a restart. Until the app has a screen for it (lg-22), it is
+written from the host:
+
+```bash
+npm run household:ledger -- add <household> <display name>        # one lowercase word, then a name
+npm run household:ledger -- member <household> <address> <person> # an address, as that person
+npm run household:ledger -- remove <address>
+npm run household:ledger -- list
+```
+
+A household holds two people, each behind any number of addresses, and a name
+it has held stays one of its two. Every address must also be on the ledger's
+Access policy. Until each household has books of its own (lg-21), the command
+refuses a second household. In the image, run
+`node tools/ledger/api/dist/household-ledger.js` with the same arguments.
+`LEDGER_ADMINS` names the addresses that will manage the directory from the app.
 
 ### Importing the old workbook
 
 Once, from the repo root, into the database the API is configured with
-(`DATABASE_PATH`), as a command rather than a route (lg-7):
+(`DATABASE_PATH`), as a command rather than a route (lg-7). `--as` names a
+member's person in the household directory, which it reads and never writes:
 
 ```bash
-ACCESS_PEOPLE=… npm run import:ledger -- ~/classeur.xlsx --as alex [--corrections ~/corrections.json] [--write]
+npm run import:ledger -- ~/classeur.xlsx --as alex [--corrections ~/corrections.json] [--write]
 ```
 
 Without `--write` it is a dry run. It copies the database file and its

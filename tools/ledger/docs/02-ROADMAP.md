@@ -145,4 +145,5 @@ transcribing by hand.
 | [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database         |
 | [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                         |
 | [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app             |
+| [lg-23](./work/lg-23-a-household-of-more-than-two.md)                   | a household of more than two people                     |
 | [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the policy opened to any proven address, if ever wanted |

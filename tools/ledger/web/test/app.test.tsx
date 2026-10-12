@@ -8,15 +8,18 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { AppError } from "@ledger/contract";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
 import { fetchHealth } from "../src/api/health.ts";
 import { fetchAutoFiled, fetchInbox } from "../src/api/inbox.ts";
+import { fetchMe } from "../src/api/me.ts";
 import { fetchPeople, fetchRules } from "../src/api/rules.ts";
 import { fetchRatios, fetchSalaries } from "../src/api/salaries.ts";
 import { App } from "../src/App.tsx";
 
 vi.mock("../src/api/health.ts", () => ({ fetchHealth: vi.fn() }));
+vi.mock("../src/api/me.ts", () => ({ fetchMe: vi.fn() }));
 vi.mock("../src/api/buckets.ts", () => ({ fetchBuckets: vi.fn() }));
 vi.mock("../src/api/salaries.ts", () => ({
   fetchSalaries: vi.fn(),
@@ -45,6 +48,11 @@ beforeEach(() => {
     version: "0.0.0",
     uptimeSec: 1,
     database: { open: true },
+    directory: { open: true },
+  });
+  vi.mocked(fetchMe).mockResolvedValue({
+    person: { id: "alex", email: "alex@example.test", household: "home" },
+    admin: false,
   });
   vi.mocked(fetchRules).mockResolvedValue([]);
   vi.mocked(fetchAutoFiled).mockResolvedValue([]);
@@ -189,4 +197,27 @@ test("the stats tab shows the history, with its one range above the charts", asy
     await screen.findByText("No payment came out of the mortgage bucket in this range."),
   ).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
+});
+
+test("an address in no household sees one page saying so, naming nobody, and no screens (lg-20)", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "No household" })).toBeTruthy();
+  expect(screen.queryByRole("navigation", { name: "Screens" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
+  const page = document.body.textContent ?? "";
+  expect(page).not.toMatch(/@|alex|sam|home\b/u);
+});
+
+test("any other failure of /api/me leaves the screens as they are (lg-20)", async () => {
+  vi.mocked(fetchInbox).mockResolvedValue([]);
+  vi.mocked(fetchMe).mockRejectedValue(new AppError("UNREACHABLE"));
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "Mortgage" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "No household" })).toBeNull();
 });

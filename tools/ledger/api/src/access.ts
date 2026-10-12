@@ -17,6 +17,10 @@
  * Every failure that is the token's fault is one `UNAUTHENTICATED`, with no
  * details on the payload: which check failed is logged for the operator and
  * never told to the caller, because that would tell a forger which part to fix.
+ *
+ * What a verified address is, is the household directory's to say (lg-20),
+ * asked on every request so that a membership change applies without a
+ * restart, and whether it is an admin is `LEDGER_ADMINS`'s.
  */
 
 import { createPublicKey, verify as verifySignature } from "node:crypto";
@@ -24,6 +28,7 @@ import type { JsonWebKeyInput, KeyObject } from "node:crypto";
 import { AppError } from "@ledger/contract";
 import type { Person } from "@ledger/contract";
 import type { AccessConfig } from "./config.ts";
+import type { Directory } from "./directory.ts";
 import type { AppLogger } from "./logger.ts";
 
 /** The one header this module reads. Node lower-cases header names. */
@@ -255,9 +260,21 @@ export class JwksCache {
   }
 }
 
+/**
+ * Who a request is from (lg-20): the address Access vouched for, whether it is
+ * an admin, and the person it is in its household — `null` for an admin who is
+ * a member of none. An address that is neither a member nor an admin never
+ * becomes one: it is refused at the hook.
+ */
+export interface Identity {
+  email: string;
+  admin: boolean;
+  person: Person | null;
+}
+
 export interface IdentityVerifier {
-  /** The person the request is from, or throws `UNAUTHENTICATED` / `FORBIDDEN`. */
-  identify(token: string | string[] | undefined): Promise<Person>;
+  /** Who the request is from, or throws `UNAUTHENTICATED` / `FORBIDDEN`. */
+  identify(token: string | string[] | undefined): Promise<Identity>;
 }
 
 /**
@@ -267,29 +284,37 @@ export interface IdentityVerifier {
  */
 export function createIdentityVerifier(options: {
   config: AccessConfig;
+  directory: Directory;
   fetch: Fetch;
   now: () => Date;
   logger: AppLogger;
 }): IdentityVerifier {
-  const { config, logger, now } = options;
+  const { config, directory, logger, now } = options;
 
-  const personFor = (email: string): Person => {
-    const id = config.people.get(email.toLowerCase());
-    if (id === undefined) {
-      // The address is the operator's to see, so the mapping can be fixed; it
-      // is not echoed back to the caller.
-      logger.info("access identity has no person", { email });
+  // Read from the directory on every request, never cached: a removal applies
+  // to the next request, not the next boot.
+  const identityFor = (email: string): Identity => {
+    const address = email.toLowerCase();
+    const admin = config.admins.has(address);
+    const membership = directory.membershipOf(address);
+    if (membership === undefined && !admin) {
+      // Access admits only listed addresses, so this is one the operator
+      // admitted and nobody filed, or one since removed. The operator sees it,
+      // so the directory can be fixed; it is not echoed back to the caller.
+      logger.info("access identity is in no household", { email });
       throw new AppError("FORBIDDEN");
     }
-    return { id, email };
+    const person: Person | null =
+      membership === undefined
+        ? null
+        : { id: membership.person, email, household: membership.household };
+    return { email, admin, person };
   };
 
   if (config.devIdentity !== undefined) {
-    const person = personFor(config.devIdentity);
-    logger.warn("DEV_IDENTITY is set; every request is this person and no token is read", {
-      person: person.id,
-    });
-    return { identify: async () => person };
+    const devIdentity = config.devIdentity;
+    logger.warn("DEV_IDENTITY is set; every request is this address and no token is read");
+    return { identify: async () => identityFor(devIdentity) };
   }
 
   const { team, audience } = config;
@@ -362,7 +387,7 @@ export function createIdentityVerifier(options: {
         logger.info("access token refused", { reason: error.reason });
         throw new AppError("UNAUTHENTICATED");
       }
-      return personFor(email);
+      return identityFor(email);
     },
   };
 }

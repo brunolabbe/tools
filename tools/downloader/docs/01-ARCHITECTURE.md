@@ -234,7 +234,7 @@ and their defaults.
 | `MAX_CONCURRENT_FRAME_GRABS`  | `2`          | preview-frame grabs in flight at once, server-wide — its own cap rather than a share of `MAX_CONCURRENT_PROBES`, because the probe gate is released before the grab runs and so never bounded it (measured: 12 grabs against a cap of 8). Defaults to `MAX_CONCURRENT_JOBS`, the other cap on concurrent ffmpegs. Past it the grab is skipped and the probe answers with no preview; there is no queue and no disabled value (`dl-56`)                                                                                                                                                                             |
 | `MAX_PROBES_PER_CLIENT`       | `2`          | the same cap as `MAX_JOBS_PER_CLIENT`, for probes against `MAX_CONCURRENT_PROBES`. `0` disables it (`dl-51`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `MAX_FILE_SIZE_MB`            | `4096`       | refused before the stream starts, from bitrate × duration; a stream that passes it anyway is cut and recorded as `SIZE_LIMIT_EXCEEDED` (`dl-53`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `OUTCOME_RETENTION_DAYS`      | `90`         | how long a `probe_outcomes` row survives the same sweep; a size bound, not a privacy one — the row carries a hostname and resolver timings, never a path, a query string or an address (`dl-57`)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `OUTCOME_RETENTION_DAYS`      | `90`         | how long a `probe_outcomes` row survives the same sweep, at least 1 (`0` is refused at boot, dl-107); a size bound, not a privacy one — the row carries a hostname and resolver timings, never a path, a query string or an address (`dl-57`)                                                                                                                                                                                                                                                                                                                                                                      |
 | `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow; capped at `50000`, so two probes fit before a download's first byte (`dl-53`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `SINGLE_CONNECTION_HOSTS`     | —            | hosts whose progressive files are never split into parallel ranged reads, each covering its subdomains: for an origin whose terms or anti-bot layer object. Every other origin that serves one connection slower than the video plays is read over 4, through the egress proxy, and one that refuses is remembered until restart (`dl-98`)                                                                                                                                                                                                                                                                         |
@@ -251,16 +251,24 @@ and their defaults.
 
 **What is kept about a visitor, and for how long** (`dl-54`; the page that says it
 to visitors is `web/public/terms.html`, and `api/test/log-fields.test.ts` pins the
-log fields it describes). The client address is on the `request` line of every
-request. The page URL is in the `jobs` row of a download, query string included —
-and again in a failed job's `error_json` — until the sweep deletes the row 14 days
-after it was made (`JOB_RETENTION_DAYS`, a constant, not a setting, because the
-page states it). A URL inside a log line's fields keeps its origin and path and loses its
-query; the `request` line's own `url` is the route called, and keeps that request's query by
-design (the page travels in a POST body, so it is never in it).
-`probe_outcomes` holds a hostname for `OUTCOME_RETENTION_DAYS`. The container's log
-is capped by size in `compose.downloader.prod.yaml`; Docker has no age limit, which
-`docs/02-DEPLOYMENT.md` § "Log retention" is about.
+log fields it describes). The client's **network** (a /24, or a /48 for IPv6, never
+the address; `api/src/log-address.ts`) is on the `request` line of every request,
+and the rate limits keep the address in memory only (IPv4 whole, IPv6 as its /64). The page URL is in the
+`jobs` row of a download, query string included — and again in a failed job's
+`error_json`, which has had its query stripped before it is stored — until the
+sweep **blanks it fifteen minutes after the job ends** (`FINISHED_JOB_CLEAR_AFTER_MS`,
+dl-107): `source_url`, the variant's media URL, the result's filename and the error's
+`details` (but for `reason` and `retryAfterSec`). The row itself, with its host,
+status, error code and times, goes 14 days after it was made (`JOB_RETENTION_DAYS`,
+a constant, not a setting, because the page states it). A URL inside a log line's
+fields is **cut to its origin**: path, query and any credential before the host are
+gone (`cutUrlsToOrigin`, `api/src/logger.ts`, dl-107); the `request` line's own
+`url` is the route called, and keeps that request's query by design (the page
+travels in a POST body, so it is never in it). `probe_outcomes` holds a hostname for
+`OUTCOME_RETENTION_DAYS`, which must be at least 1. The container's log is capped
+by size in `compose.downloader.prod.yaml`, about 7 days at the traffic it was sized
+for; Docker has no age limit, which `docs/02-DEPLOYMENT.md` § "Log retention" is
+about.
 
 ---
 

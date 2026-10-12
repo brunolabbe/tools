@@ -8,7 +8,7 @@ import { ROUTES } from "@ledger/contract";
 import type { InboxResponse, Rule, RuleDraft } from "@ledger/contract";
 import { createApp } from "../../src/server.ts";
 import type { App } from "../../src/server.ts";
-import { ALEX, accessConfig } from "./access.ts";
+import { ALEX, accessConfig, memberDirectory } from "./access.ts";
 import { renderPaste, withBalances } from "./paste.ts";
 import type { PasteRow } from "./paste.ts";
 
@@ -18,6 +18,7 @@ export async function startApp(
   now: () => Date = () => new Date("2026-10-03T09:30:00Z"),
 ): Promise<App> {
   return await createApp({
+    directory: memberDirectory(),
     config: {
       databasePath: ":memory:",
       logLevel: "silent",

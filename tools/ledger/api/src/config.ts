@@ -9,6 +9,7 @@ import path from "node:path";
 import process from "node:process";
 import { AppError } from "@ledger/contract";
 import { trustProxy } from "@webtools/core";
+import { readAddress } from "./directory.ts";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -18,6 +19,12 @@ export interface ApiConfig {
   port: number;
   /** A file path, or `:memory:` — which is what the tests use. */
   databasePath: string;
+
+  /**
+   * The household directory (lg-20): a SQLite file of its own, beside the books
+   * unless `DIRECTORY_PATH` says otherwise, and `:memory:` when the books are.
+   */
+  directoryPath: string;
 
   /**
    * Whether `X-Forwarded-For` may name the client.
@@ -52,15 +59,15 @@ export interface ApiConfig {
   /** `NODE_ENV=production`, which the image sets. Decides what may not be configured. */
   production: boolean;
 
-  /** Who may use the tool, and how a request proves it (lg-3). */
+  /** How a request proves who it is (lg-3), and who is an admin (lg-20). */
   access: AccessConfig;
 }
 
 /**
  * Cloudflare Access, as the API sees it. Every field is configuration and
  * nothing here is ever read from a request: the key set's host is built from
- * `team` alone, and the email-to-person map is the operator's, never a table
- * seeded from the repository.
+ * `team` alone. Who belongs to which household is not here at all: it is the
+ * household directory (lg-20), read on every request.
  */
 export interface AccessConfig {
   /**
@@ -70,11 +77,16 @@ export interface AccessConfig {
   team: string | undefined;
   /** The application's AUD tag, which every token must carry. */
   audience: string | undefined;
-  /** Lower-cased email address → person id. An address not here gets a 403. */
-  people: ReadonlyMap<string, string>;
+  /**
+   * `LEDGER_ADMINS`: lower-cased addresses that may manage the directory (lg-22
+   * is the first to act on it). An admin need not be a member of any household,
+   * and being one reads no books.
+   */
+  admins: ReadonlySet<string>;
   /**
    * Development only: every request is this address, and no token is read.
-   * Refused at boot in production mode, which is what keeps it out of the image.
+   * Refused at boot in production mode, which is what keeps it out of the image,
+   * and refused by `createApp` when the directory has no member by it.
    */
   devIdentity: string | undefined;
 }
@@ -86,6 +98,7 @@ export const API_DEFAULTS = {
   port: 8100,
   dataDir: "./storage/ledger",
   databaseFile: "ledger.db",
+  directoryFile: "directory.db",
   logLevel: "info",
   // Two people on a phone. A tap on the inbox is one write and a screen is a
   // handful of reads, so neither is near these; a script is.
@@ -145,29 +158,31 @@ function refuse(message: string): never {
   throw new AppError("INTERNAL", message);
 }
 
-/** `ACCESS_PEOPLE`: `address=person` pairs, comma-separated. */
-function people(raw: string | undefined): Map<string, string> {
-  const map = new Map<string, string>();
+/** `LEDGER_ADMINS`: addresses, comma-separated. */
+function admins(raw: string | undefined): Set<string> {
+  const set = new Set<string>();
   for (const [index, entry] of list(raw).entries()) {
-    const at = entry.indexOf("=");
-    const email = (at === -1 ? "" : entry.slice(0, at)).trim().toLowerCase();
-    const person = (at === -1 ? "" : entry.slice(at + 1)).trim();
-    // Positions, never the entry itself: the addresses are the household's,
-    // and the boot log is read by whoever reads the host's logs.
-    if (email === "" || person === "") {
-      refuse(`ACCESS_PEOPLE entry ${index + 1} is not of the form address=person.`);
-    }
-    if (map.has(email)) refuse(`ACCESS_PEOPLE names the address in entry ${index + 1} twice.`);
-    map.set(email, person);
+    const address = readAddress(entry);
+    // Positions, never the entry itself: the addresses are people's, and the
+    // boot log is read by whoever reads the host's logs.
+    if (address === undefined) refuse(`LEDGER_ADMINS entry ${index + 1} is not an address.`);
+    set.add(address);
   }
-  return map;
+  return set;
 }
 
 function loadAccessConfig(env: NodeJS.ProcessEnv): AccessConfig {
+  // Retired by lg-20. Refused rather than ignored, so a stale `.env` cannot
+  // look as if it still admits people: membership is the directory's now.
+  if (env["ACCESS_PEOPLE"] !== undefined) {
+    refuse(
+      "ACCESS_PEOPLE is retired: who belongs to which household is the directory's (npm run household:ledger). Remove it.",
+    );
+  }
   return {
     team: optionalString(env["ACCESS_TEAM"])?.toLowerCase(),
     audience: optionalString(env["ACCESS_AUD"]),
-    people: people(env["ACCESS_PEOPLE"]),
+    admins: admins(env["LEDGER_ADMINS"]),
     devIdentity: optionalString(env["DEV_IDENTITY"])?.toLowerCase(),
   };
 }
@@ -179,9 +194,6 @@ function loadAccessConfig(env: NodeJS.ProcessEnv): AccessConfig {
 function checkAccessConfig(access: AccessConfig, production: boolean): void {
   if (access.devIdentity !== undefined && production) {
     refuse("DEV_IDENTITY is set in production mode, where it would skip the Access check.");
-  }
-  if (access.devIdentity !== undefined && !access.people.has(access.devIdentity)) {
-    refuse("DEV_IDENTITY is not an address in ACCESS_PEOPLE, so every request would be refused.");
   }
   if ((access.team === undefined) !== (access.audience === undefined)) {
     refuse("ACCESS_TEAM and ACCESS_AUD are set together or not at all.");
@@ -200,11 +212,18 @@ export function loadApiConfig(
     rawDatabase === ":memory:"
       ? ":memory:"
       : (rawDatabase ?? path.resolve(API_DEFAULTS.dataDir, API_DEFAULTS.databaseFile));
+  const directoryPath =
+    overrides.directoryPath ??
+    optionalString(env["DIRECTORY_PATH"]) ??
+    (databasePath === ":memory:"
+      ? ":memory:"
+      : path.join(path.dirname(databasePath), API_DEFAULTS.directoryFile));
 
   const config: ApiConfig = {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     databasePath,
+    directoryPath,
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from.

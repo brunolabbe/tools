@@ -18,6 +18,7 @@ import { AppError } from "@downloader/contract";
 import { clientKey, type RateLimiter } from "@webtools/core/rate-limit";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { isWellFormedToken } from "./jobs/tokens.ts";
+import { shortenKey } from "./log-address.ts";
 import type { AppLogger } from "./logger.ts";
 
 export interface RateLimitHookOptions {
@@ -101,7 +102,11 @@ export function createRateLimitHook(
     if (decision.allowed) return;
 
     reply.header("Retry-After", String(decision.retryAfterSec));
-    logger.warn("rate limited", { scope, key, retryAfterSec: decision.retryAfterSec });
+    logger.warn("rate limited", {
+      scope,
+      key: shortenKey(key),
+      retryAfterSec: decision.retryAfterSec,
+    });
     throw new AppError("RATE_LIMITED", undefined, {
       details: { scope, retryAfterSec: decision.retryAfterSec },
     });

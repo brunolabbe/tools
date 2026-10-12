@@ -59,7 +59,7 @@ export function JobCard({
   if (job.status === "completed" && job.result) {
     return (
       <li className="job job--completed job--saved">
-        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} />
+        <CompletedResult result={job.result} title={title} thumbnailPath={job.thumbnailPath} />
       </li>
     );
   }
@@ -299,11 +299,26 @@ function LinkOffer({
   );
 }
 
+/**
+ * What the saved line names. The file's own name when the server still has it;
+ * the page title this browser kept when it does not, because the server blanks a
+ * finished job's filename fifteen minutes after it ends (dl-107) and a tab that
+ * was closed before the `completed` event never held it; and neither, with no
+ * dash left dangling, when this browser holds no title either.
+ */
+function savedLabel(filename: string, title: string | undefined): string {
+  const name = filename !== "" ? filename : (title ?? "");
+  return name.trim() === "" ? "Saved by your browser" : `Saved by your browser — ${name}`;
+}
+
 function CompletedResult({
   result,
+  title,
   thumbnailPath,
 }: {
   result: NonNullable<Job["result"]>;
+  /** The page title this browser kept for the job; see `savedLabel`. */
+  title: string | undefined;
   /** Required, not optional — `undefined` is a job recorded before dl-29. */
   thumbnailPath: string | null | undefined;
 }): React.JSX.Element {
@@ -316,7 +331,7 @@ function CompletedResult({
       <div className="result__headline">
         <Preview path={thumbnailPath} size="card" />
         <div className="result__meta">
-          <p className="result__filename">Saved by your browser — {result.filename}</p>
+          <p className="result__filename">{savedLabel(result.filename, title)}</p>
           {/* No second download: the file went to this browser and no copy
               exists to fetch again (dl-53). Downloading again is a new analysis. */}
           <p className="muted">

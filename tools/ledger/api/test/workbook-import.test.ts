@@ -29,19 +29,24 @@ import { enrollPeople } from "../src/people.ts";
 import { closedPeriods, currentLines } from "../src/periods.ts";
 import { currentRatios, currentSalaries } from "../src/salaries.ts";
 import { importStatement } from "../src/statements.ts";
+import { writeMemberDirectory } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import { history, render } from "./helpers/workbook.ts";
 import type { Fixture } from "./helpers/workbook.ts";
 
 const NOW = new Date("2026-10-07T12:00:00.000Z");
-const PEOPLE = "alex@example.test=alex,sam@example.test=sam";
 
 let dir: string;
 let databasePath: string;
+let directoryPath: string;
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "ledger-workbook-"));
   databasePath = path.join(dir, "books", "ledger.db");
+  // Outside the books' directory, so a test can still see that a refused
+  // import leaves no books directory behind.
+  directoryPath = path.join(dir, "directory.db");
+  writeMemberDirectory(directoryPath);
 });
 
 afterEach(() => {
@@ -64,7 +69,7 @@ async function run(...args: string[]): Promise<Ran> {
     stderr: (text) => {
       err += text;
     },
-    env: { DATABASE_PATH: databasePath, ACCESS_PEOPLE: PEOPLE },
+    env: { DATABASE_PATH: databasePath, DIRECTORY_PATH: directoryPath },
     cwd: dir,
     now: () => NOW,
   });
@@ -798,5 +803,26 @@ describe("the workbook against the rows already pasted", () => {
         .all(),
     ).toEqual([{ date: "2024-01-25" }]);
     db.close();
+  });
+});
+
+describe("--as resolves against the household directory (lg-20)", () => {
+  test("a name no member stands under is refused before anything is read", async () => {
+    const ran = await run(await workbook(), "--as", "casey", "--write");
+
+    expect(ran.code).toBe(2);
+    expect(ran.err).toContain('--as names "casey", who is not a member');
+    expect(ran.err).toContain("alex, sam");
+    expect(existsSync(databasePath)).toBe(false);
+  });
+
+  test("a directory that is not there is refused rather than created", async () => {
+    rmSync(directoryPath);
+
+    const ran = await run(await workbook(), "--as", "alex");
+
+    expect(ran.code).toBe(2);
+    expect(ran.err).toContain("household:ledger");
+    expect(existsSync(directoryPath)).toBe(false);
   });
 });
