@@ -312,6 +312,12 @@ of 183 (37 passed)`. The hidden node is an `<a>`, which the link check
     labelled \"Accetta\", is pressed" and "still presses a sticky header's notice
     labelled with an old phrasing": "still presses an old label on a cookie strip
     that is neither a dialog nor a fixed layer" (M18: 4 killers before, 1 after).
+    (Corrected at landing, 2026-10-12, after gate 1's low: that survivor stands
+    for the first two of the three, not for the last, "still presses a
+    sticky header's notice labelled with an old phrasing", the sticky header's
+    notice labelled "OK", which does not fail when `ok|okay` is dropped from
+    `CONSENT_TEXT_ANYWHERE`. Its survivor is `provoke.test.ts` "CONSENT_TEXT_ANYWHERE
+    still matches \"OK\"". See the last entry.)
     "an in-flow strip labelled \"Accetto e continua\" is pressed: false":
     "CONSENT_TEXT_ANYWHERE does not match \"Accetto e continua\"". "does not press
     a sticky header's notice labelled with a dl-82 phrasing" and "a sticky header
@@ -361,9 +367,14 @@ not match %j either` over REFUSED (M17). "does not press a sticky header's
     read first (C3), the all-zero body (C4), clip-720 and clip-1080 (C6), and
     "boxes but not a movie" (C7, with a new row, "a free box, then zeros is
     unknown"). The lone fragmented movie and the one beside two whole files fail
-    C5 in neither tree's browser test: their bodies are a megabyte, the `moof`
-    falls outside the 2 KB head, and the verdict is `unknown` with or without the
-    check. The unit row with a 1 KiB movie is the only thing that fails C5 either
+    C5 in neither tree's browser test: the sniff reads a head of
+    `SNIFF_HEAD_BYTES` (65536) and the `moof` ends at byte 585, but the 1 MB
+    `mdat` is cut off at the head, so `lastEnd !== head.length` and `sniffHead`
+    answers `unknown` with or without the check. (Corrected at landing,
+    2026-10-12, by the fixer after gate 1's low: this sentence first said "their
+    bodies are a megabyte, the `moof` falls outside the 2 KB head", which was
+    wrong about the head and the `moof`; the conclusion stands. See the last
+    entry.) The unit row with a 1 KiB movie is the only thing that fails C5 either
     way. The `moov`-after-`mdat` row of the Build's table is the gallery's third
     file, which stays.
   - Fixtures with no probe left were removed with their rows, and are in
@@ -445,35 +456,35 @@ that counts, so a slow player is not clicked past` 1948. `sameDocument` is
   2026-10-07 rewording of the Done-when line "a body the sniff cannot parse,
   including an all-zero one, is offered", not a row-specific decision.
 
-  | #   | Test at `d759b80e`                                                                           | Decision                                      | s    | Survivor                                                                                                          |
-  | --- | -------------------------------------------------------------------------------------------- | --------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------- |
-  | 1   | gate 1 › finds the stream behind a full-viewport overlay and leaves the newsletter alone     | dl-82 gate 1                                  | 2.79 | "reaches a bottom consent bar past a sticky header's notice", checkout row, `consent-scope` c-rows (M1)           |
-  | 2   | gate 1 › … behind a bottom bar …                                                             | dl-82 gate 1                                  | 2.79 | as row 1                                                                                                          |
-  | 3   | gate 1 › does not press a newsletter's dismiss button                                        | dl-82 gate 1                                  | 2.72 | "an in-flow strip labelled "Ho capito" is not pressed" (M1)                                                       |
-  | 4   | gate 1 › does not press a comment form's submit button                                       | dl-82 gate 1                                  | 2.74 | checkout row; `provoke.test.ts` "CONSENT_TEXT_ANYWHERE does not match "Yes, I agree"" (M1)                        |
-  | 5   | gate 1 › does not press a review's vote button                                               | dl-82 gate 1                                  | 2.74 | checkout row; "… does not match "Sono d'accordo"" (M1)                                                            |
-  | 6   | gate 2 › in-flow strip labelled "Accetto e continua" is pressed: false                       | dl-82 gate 2                                  | 2.72 | "CONSENT_TEXT_ANYWHERE does not match "Accetto e continua"" (M1)                                                  |
-  | 7   | gate 2 › in-flow strip labelled "Accetta" is pressed: true                                   | dl-82 gate 2                                  | 2.77 | "still presses an old label on a cookie strip…" (M18)                                                             |
-  | 8   | gate 2 › does not press the submit of a fixed checkout bar                                   | dl-82 gate 2 (vacuous for the wording rule)   | 2.74 | checkout row (M1); `c1`                                                                                           |
-  | 9   | gate 2 › … of a sticky checkout bar                                                          | dl-82 gate 2 (vacuous for the wording rule)   | 2.74 | as row 8                                                                                                          |
-  | 10  | gate 2 › sticky header's notice labelled with a dl-82 phrasing                               | dl-82 gate 2                                  | 2.75 | `c7` (M2, M4)                                                                                                     |
-  | 11  | gate 2 › sticky header's notice labelled with an old phrasing                                | dl-82 gate 2                                  | 2.81 | cookie-strip row (M18)                                                                                            |
-  | 12  | gate 2 › fixed bar that never says cookie or consent, "Accetta", is pressed: true            | dl-82 gate 2                                  | 2.80 | cookie-strip row (M18)                                                                                            |
-  | 13  | gate 3 › sticky header with a visible cookie link is not a container                         | dl-82 gate 3                                  | 2.74 | `c7`, `r1`, `r1b`, `r2b` (M4)                                                                                     |
-  | 14  | gate 3 › … with a display:none cookie link                                                   | dl-82 gate 3 (vacuous for visibility)         | 2.73 | `c7` (M2); `r5b`, `c15` (M5)                                                                                      |
-  | 15  | gate 3 › reaches a bottom consent bar past a sticky header that links a cookie policy        | dl-82 gate 3                                  | 2.79 | `c7`, "reaches a bottom consent bar past a sticky header's notice" (M4, M2)                                       |
-  | 16  | gate 3 › checkout submit in a bar whose prose says Italian 'consente'                        | dl-82 gate 3 (vacuous)                        | 2.73 | `CONSENT_WORDING` SILENT rows in `provoke.test.ts` (M6)                                                           |
-  | 17  | gate 3 › sticky header's notice whose prose says Swedish 'pannkakor'                         | dl-82 gate 3                                  | 2.75 | `CONSENT_WORDING` SILENT rows, `c8` (M7)                                                                          |
-  | 18  | gate 3 › app root whose footer says 'cookie' holds an h1 (dl-93, flipped from a1)            | dl-82 gate 3; owner, dl-93, 2026-10-10        | 2.74 | `consent-scope` `c13` (M3c)                                                                                       |
-  | 19  | gate 3 › app root whose footer only links a cookie policy                                    | dl-82 gate 3 (vacuous)                        | 2.75 | `c4`, `c15` (M4, M5)                                                                                              |
-  | 20  | gate 3 › docked checkout bar whose prose says 'cookie' is itself a form (flipped from a2)    | dl-82 gate 3; owner, dl-93, 2026-10-10        | 2.76 | `consent-scope` `c14` (M3b)                                                                                       |
-  | 21  | dl-83 › sign-up chips … (confirmation false)                                                 | dl-83 gate round 1                            | 2.74 | "not told to confirm ages…", "an Italian gate… not told to confirm" (M11)                                         |
-  | 22  | dl-81 › scrolls to the largest candidate, so a nav bar and an ad iframe do not take the slot | dl-81 gate 1                                  | 2.84 | `provoke.test.ts` SCROLL_SCRIPT rows, new ad-iframe row (M9)                                                      |
-  | 23  | `chunk-streams` › a lone numbered file with moov, mvex and then moof is offered              | dl-90, owner, 2026-10-10                      | 2.71 | `chunk-sniff.test.ts` "a whole movie written as fragmented MP4 … is not a chunk" (C5)                             |
-  | 24  | `chunk-streams` › beside two whole files in one directory, all three are offered             | dl-90, owner, 2026-10-10                      | 2.75 | as row 23, plus the faststart rows (C6)                                                                           |
-  | 25  | `chunk-streams` › an all-zero body is offered                                                | dl-90, owner, 2026-10-07 (reworded Done-when) | 2.75 | `chunk-sniff.test.ts` "an all-zero body is unknown", "a read that finds nothing, or throws, offers the file" (C4) |
-  | 26  | `chunk-streams` › a body that is boxes but not a movie is offered                            | dl-90, owner, 2026-10-07 (reworded Done-when) | 2.73 | new "a free box, then zeros is unknown" (C4, C7)                                                                  |
-  | 27  | `chunk-streams` › the whole file, read first, survives the init and media segments           | dl-90 gate 1 (low, read order)                | 2.72 | `chunk-sniff.test.ts` "a file read and found whole is kept when a fragment beside it is proven later" (C3)        |
+  | #   | Test at `d759b80e`                                                                           | Decision                                      | s    | Survivor                                                                                                                 |
+  | --- | -------------------------------------------------------------------------------------------- | --------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------ |
+  | 1   | gate 1 › finds the stream behind a full-viewport overlay and leaves the newsletter alone     | dl-82 gate 1                                  | 2.79 | "reaches a bottom consent bar past a sticky header's notice", checkout row, `consent-scope` c-rows (M1)                  |
+  | 2   | gate 1 › … behind a bottom bar …                                                             | dl-82 gate 1                                  | 2.79 | as row 1                                                                                                                 |
+  | 3   | gate 1 › does not press a newsletter's dismiss button                                        | dl-82 gate 1                                  | 2.72 | "an in-flow strip labelled "Ho capito" is not pressed" (M1)                                                              |
+  | 4   | gate 1 › does not press a comment form's submit button                                       | dl-82 gate 1                                  | 2.74 | checkout row; `provoke.test.ts` "CONSENT_TEXT_ANYWHERE does not match "Yes, I agree"" (M1)                               |
+  | 5   | gate 1 › does not press a review's vote button                                               | dl-82 gate 1                                  | 2.74 | checkout row; "… does not match "Sono d'accordo"" (M1)                                                                   |
+  | 6   | gate 2 › in-flow strip labelled "Accetto e continua" is pressed: false                       | dl-82 gate 2                                  | 2.72 | "CONSENT_TEXT_ANYWHERE does not match "Accetto e continua"" (M1)                                                         |
+  | 7   | gate 2 › in-flow strip labelled "Accetta" is pressed: true                                   | dl-82 gate 2                                  | 2.77 | "still presses an old label on a cookie strip…" (M18)                                                                    |
+  | 8   | gate 2 › does not press the submit of a fixed checkout bar                                   | dl-82 gate 2 (vacuous for the wording rule)   | 2.74 | checkout row (M1); `c1`                                                                                                  |
+  | 9   | gate 2 › … of a sticky checkout bar                                                          | dl-82 gate 2 (vacuous for the wording rule)   | 2.74 | as row 8                                                                                                                 |
+  | 10  | gate 2 › sticky header's notice labelled with a dl-82 phrasing                               | dl-82 gate 2                                  | 2.75 | `c7` (M2, M4)                                                                                                            |
+  | 11  | gate 2 › sticky header's notice labelled with an old phrasing                                | dl-82 gate 2                                  | 2.81 | `provoke.test.ts` "CONSENT_TEXT_ANYWHERE still matches "OK"" (corrected at landing; first said "cookie-strip row (M18)") |
+  | 12  | gate 2 › fixed bar that never says cookie or consent, "Accetta", is pressed: true            | dl-82 gate 2                                  | 2.80 | cookie-strip row (M18)                                                                                                   |
+  | 13  | gate 3 › sticky header with a visible cookie link is not a container                         | dl-82 gate 3                                  | 2.74 | `c7`, `r1`, `r1b`, `r2b` (M4)                                                                                            |
+  | 14  | gate 3 › … with a display:none cookie link                                                   | dl-82 gate 3 (vacuous for visibility)         | 2.73 | `c7` (M2); `r5b`, `c15` (M5)                                                                                             |
+  | 15  | gate 3 › reaches a bottom consent bar past a sticky header that links a cookie policy        | dl-82 gate 3                                  | 2.79 | `c7`, "reaches a bottom consent bar past a sticky header's notice" (M4, M2)                                              |
+  | 16  | gate 3 › checkout submit in a bar whose prose says Italian 'consente'                        | dl-82 gate 3 (vacuous)                        | 2.73 | `CONSENT_WORDING` SILENT rows in `provoke.test.ts` (M6)                                                                  |
+  | 17  | gate 3 › sticky header's notice whose prose says Swedish 'pannkakor'                         | dl-82 gate 3                                  | 2.75 | `CONSENT_WORDING` SILENT rows, `c8` (M7)                                                                                 |
+  | 18  | gate 3 › app root whose footer says 'cookie' holds an h1 (dl-93, flipped from a1)            | dl-82 gate 3; owner, dl-93, 2026-10-10        | 2.74 | `consent-scope` `c13` (M3c)                                                                                              |
+  | 19  | gate 3 › app root whose footer only links a cookie policy                                    | dl-82 gate 3 (vacuous)                        | 2.75 | `c4`, `c15` (M4, M5)                                                                                                     |
+  | 20  | gate 3 › docked checkout bar whose prose says 'cookie' is itself a form (flipped from a2)    | dl-82 gate 3; owner, dl-93, 2026-10-10        | 2.76 | `consent-scope` `c14` (M3b)                                                                                              |
+  | 21  | dl-83 › sign-up chips … (confirmation false)                                                 | dl-83 gate round 1                            | 2.74 | "not told to confirm ages…", "an Italian gate… not told to confirm" (M11)                                                |
+  | 22  | dl-81 › scrolls to the largest candidate, so a nav bar and an ad iframe do not take the slot | dl-81 gate 1                                  | 2.84 | `provoke.test.ts` SCROLL_SCRIPT rows, new ad-iframe row (M9)                                                             |
+  | 23  | `chunk-streams` › a lone numbered file with moov, mvex and then moof is offered              | dl-90, owner, 2026-10-10                      | 2.71 | `chunk-sniff.test.ts` "a whole movie written as fragmented MP4 … is not a chunk" (C5)                                    |
+  | 24  | `chunk-streams` › beside two whole files in one directory, all three are offered             | dl-90, owner, 2026-10-10                      | 2.75 | as row 23, plus the faststart rows (C6)                                                                                  |
+  | 25  | `chunk-streams` › an all-zero body is offered                                                | dl-90, owner, 2026-10-07 (reworded Done-when) | 2.75 | `chunk-sniff.test.ts` "an all-zero body is unknown", "a read that finds nothing, or throws, offers the file" (C4)        |
+  | 26  | `chunk-streams` › a body that is boxes but not a movie is offered                            | dl-90, owner, 2026-10-07 (reworded Done-when) | 2.73 | new "a free box, then zeros is unknown" (C4, C7)                                                                         |
+  | 27  | `chunk-streams` › the whole file, read first, survives the init and media segments           | dl-90 gate 1 (low, read order)                | 2.72 | `chunk-sniff.test.ts` "a file read and found whole is kept when a fragment beside it is proven later" (C3)               |
 
   **Totals.** Restoring all 27 (option D): 74.32 s, leaving 130.7 s of the 205 s.
   Restoring rows 18, 20, 23, 24 (B): 10.96 s, leaving 194.0 s. Restoring those
@@ -484,3 +495,36 @@ that counts, so a slow player is not clicked past` 1948. `sameDocument` is
   dl-92 rows, GEO, and the chunk rows for 12 chunks, 12 whole files and
   `clip-720`/`clip-1080`. Rows merged into a survivor keep their assertions and
   are not in the table.
+
+- 2026-10-12 — **Gate 1's two lows, _fixed at landing_** (the owner chose that
+  over landing as is, with no re-gate; ticket text only, no code changed).
+
+  **Question.** Gate 1 passed with two low findings, both wrong sentences in this
+  Log. Land it how?
+
+  **Options.** The lander corrects both (recommended); land as is.
+
+  **Choice.** The lander corrects both, no re-gate.
+
+  **Finding 1, low, no Done-when line depends on it.** The Log's reason why the
+  lone fragmented-movie probes could not fail C5 was false: "their bodies are a
+  megabyte, the `moof` falls outside the 2 KB head". The head is
+  `SNIFF_HEAD_BYTES` in `chunk-sniff.ts`, 65536 bytes, and the `moof` ends at byte
+  585; the 1 MB `mdat` is cut off, so `lastEnd !== head.length` and `sniffHead`
+  answers `unknown` whether the later-`moof` check is there or not. The
+  conclusion stands. Fixed in the `chunk-streams` bullet of the first built entry,
+  with the old words quoted and marked. Command, run at the landing tree:
+  `node --import tsx <scratch>/lonefrag-head.mts <tree>` printed
+  `SNIFF_HEAD_BYTES 65536 body 1049169`, `moof body@ 541 end 585`,
+  `lastEnd === head.length: false verdict: unknown`.
+
+  **Finding 2, low, `nfr:maintainability`.** The survivor column named "cookie-strip
+  row (M18)" for row 11, the sticky header's notice labelled "OK". Dropping
+  `ok|okay` from `CONSENT_TEXT_ANYWHERE` does not fail that row (the gate's W9: 0
+  of 9 in the dl-82 and dl-93 blocks). The survivor for the label half is
+  `provoke.test.ts` "CONSENT_TEXT_ANYWHERE still matches \"OK\"". Fixed in row 11
+  of the table and in the `browser-resolver` bullet that quotes it (M18), with the
+  old words marked. Command: with `ok|okay` removed from `CONSENT_TEXT_ANYWHERE`
+  in `provoke.ts`, `npx vitest run <provoke.test.ts>` failed
+  "CONSENT_TEXT_ANYWHERE still matches \"OK\"" and "… still matches \"Okay\"":
+  `Tests 2 failed | 262 passed (264)`. The source was restored afterwards.
