@@ -230,3 +230,37 @@ npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
     two mutants are caught only on some runs; no test runs the Windows `taskkill` branch;
     a preflight test step's wait is invisible. The red Windows `dl-98` ratio on 148b67a2 is
     not attributed to this branch.
+
+- 2026-10-12 — Round 2, after gate 2 at 98e3772a (FAIL: one new high from round 1's lines,
+  two lows). The gate withdrew its gate-1 reading of SIGTERM to npm's pid alone, so the
+  round-1 claim ("the same as `main`") stands.
+  - **High, a missing file was unlinked under the guard.** Reproduced with gate 2's
+    `release-race.mjs` against a copy of the tree with both busy-waits planted
+    (`MUTANT_GAP0_MS=1000 MUTANT_GAP_MS=1000`): before, `A said: test-gate: slot-0, 1 of 1
+runs active (pids 1836946): 11 workers`, `slot-0 after A finished: (none)`, `files: []`.
+    `inspect` reported a missing file as `live: false`, so a run that claimed the slot between
+    the guarded re-read and the unlink lost its lock. Fixed in code, which makes the
+    comment true: `inspect` now says `exists`, and the guard holder unlinks only a file it
+    found there and stale. That is sound: a path becomes free to a new claim only once it is
+    gone, and the only removals of a stale lock hold the guard, so a stale file that exists
+    cannot be replaced before the unlink. After, the gap now sits right after the guarded
+    re-read (the unlink it used to sit before no longer runs for a missing file), with
+    `TEST_GATE_WAIT_MS=3000` so A's wait is short: A waits (`waiting for a test slot: 1 runs
+active`), then falls back (`no test slot after 3 s; running anyway with 1 worker and no
+slot`), and `slot-0 after A finished: {"pid":…,"who":"second run"}` is the second run's
+    lock, intact. Test: "a lock released mid-reclaim is not unlinked after another run has
+    claimed it" (makes the claim at the guarded re-read, by wrapping `fs.readFileSync`); with
+    `if (state.exists && !state.live)` reverted to `if (!state.live)` it fails, with the zombie
+    mutant alongside it: `2 failed | 26 passed (28)`. `reclaim2.mjs` (two slots, 60 dead) and
+    `reclaim.mjs` (one slot: 60 dead, 30 empty, 30 garbage, 30 reused pid) all give `0 of N
+trials ran both at once`.
+  - **Low, the zombie rule had no test.** The `Z` check moved into `parseStartTime`, where
+    a stat-line fixture can reach it (a holder cannot be made a zombie from a test, since
+    node reaps what it spawns). Test: "a zombie has no start time: it has exited and holds
+    nothing"; fails with the check removed.
+  - **Low, the header misquoted gate 1.** It now reads: of 16 pairs launched 301 ms or more
+    apart, 13 were 11 and 5 workers and 3 were 5 and 5. "A third downloader run always
+    reaches the fallback" now says "usually", and that a slot freeing within 300 s gives the
+    third run a slot.
+  - **Left recorded, unfixed:** the guard double-delete (two runs removing the same
+    10 s-old guard); round 1's four lows.
