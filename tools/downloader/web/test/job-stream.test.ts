@@ -23,6 +23,7 @@ function stubJob(status: Job["status"] = "downloading"): Job {
       speedBps: null,
       etaSec: null,
       processedSec: null,
+      originConnections: null,
     },
     result: null,
     error: null,

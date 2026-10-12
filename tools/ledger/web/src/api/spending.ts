@@ -8,6 +8,7 @@
 
 import { ROUTES } from "@ledger/contract";
 import type {
+  PeriodLinesResponse,
   RowsResponse,
   SpendingCategoriesResponse,
   SpendingCategory,
@@ -88,7 +89,7 @@ export interface SpendingRowsQuery {
 
 /**
  * The bank rows the spending chart counted in a period, newest first. Card lines
- * are not rows and are not here.
+ * are not rows and are not here; `fetchSpendingLines` has them.
  */
 export async function fetchSpendingRows(
   query: SpendingRowsQuery,
@@ -100,6 +101,25 @@ export async function fetchSpendingRows(
   params.set("offset", String(query.offset));
   params.set("limit", String(query.limit));
   return await requestJson<RowsResponse>(`${ROUTES.rows}?${params.toString()}`, { signal });
+}
+
+/**
+ * The card lines the spending chart counted in a period, newest first (lg-19): the
+ * stored lines dated in it, which is all the chart counts of the cards. Asked for
+ * with the same query as the rows, so one filter serves both lists.
+ */
+export async function fetchSpendingLines(
+  query: SpendingRowsQuery,
+  signal?: AbortSignal,
+): Promise<PeriodLinesResponse> {
+  const params = new URLSearchParams({ to: query.to });
+  if (query.from !== null) params.set("from", query.from);
+  if (query.category !== null) params.set("spendingCategory", String(query.category));
+  params.set("offset", String(query.offset));
+  params.set("limit", String(query.limit));
+  return await requestJson<PeriodLinesResponse>(`${ROUTES.periodLines}?${params.toString()}`, {
+    signal,
+  });
 }
 
 /** The stored rows no spending category has been found for, newest first. */

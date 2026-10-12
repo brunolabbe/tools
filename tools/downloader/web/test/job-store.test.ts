@@ -29,6 +29,7 @@ function job(id: string, createdAt: string, status: Job["status"] = "downloading
       speedBps: 512,
       etaSec: 14,
       processedSec: 7,
+      originConnections: null,
     },
     result: null,
     error: null,
@@ -202,5 +203,24 @@ describe("a saved job is not kept (dl-109)", () => {
       storage.setItem(TITLES_STORAGE_KEY, raw);
       expect(loadTitles(storage)).toEqual({});
     }
+  });
+});
+
+describe("dl-108: a list saved before the connection count existed", () => {
+  test("still loads, with the count read as null (not measured)", () => {
+    const storage = createMemoryStorageStub();
+    const { originConnections: _absent, ...legacyProgress } = job(
+      "older",
+      "2026-08-05T10:00:00.000Z",
+    ).progress;
+    storage.setItem(
+      JOBS_STORAGE_KEY,
+      JSON.stringify([{ ...job("older", "2026-08-05T10:00:00.000Z"), progress: legacyProgress }]),
+    );
+    expect("originConnections" in legacyProgress).toBe(false);
+
+    const loaded = loadJobs(storage);
+    expect(loaded.map((entry) => entry.id)).toEqual(["older"]);
+    expect(loaded[0]?.progress.originConnections).toBeNull();
   });
 });

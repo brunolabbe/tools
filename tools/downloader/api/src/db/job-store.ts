@@ -149,6 +149,7 @@ export function initialProgress(stage: JobStatus = "queued"): JobProgress {
     speedBps: null,
     etaSec: null,
     processedSec: null,
+    originConnections: null,
   };
 }
 

@@ -13,10 +13,13 @@ import type {
   OpenPeriodResponse,
   PeriodLine,
   PeriodLineDraft,
+  PeriodLinesResponse,
   PeriodsResponse,
   RecurringItem,
   RecurringItemDraft,
   SalaryEntryResponse,
+  SpendingCategoriesResponse,
+  SpendingStatsResponse,
 } from "@ledger/contract";
 import type { App } from "../src/server.ts";
 import { SAM } from "./helpers/access.ts";
@@ -736,5 +739,194 @@ describe("a settlement's deposit, when the ratio changes after its period", () =
       depositCents: 8_333,
       netCents: 2_500,
     });
+  });
+});
+
+// lg-19: the stored lines of a span, for a closed period as well as the open one,
+// and a closed period's line given another spending category.
+describe("GET /api/period-lines, as the spending chart opens a period (lg-19)", () => {
+  async function categories(target: App): Promise<Map<string, number>> {
+    const { categories: all } = await get<SpendingCategoriesResponse>(
+      target,
+      ROUTES.spendingCategories,
+    );
+    return new Map(all.map((one) => [one.name, one.id]));
+  }
+
+  async function list(target: App, query: string): Promise<PeriodLinesResponse> {
+    return await get<PeriodLinesResponse>(target, `${ROUTES.periodLines}?${query}`);
+  }
+
+  /** September closed with three lines, a recurring item running through it, and one October line. */
+  async function closedSeptember(): Promise<{
+    target: App;
+    groceries: number;
+    household: number;
+    lines: PeriodLine[];
+  }> {
+    const target = await start("alex@example.test", ticking());
+    await ratio(target, "2026-01-01", 6_000_000, 4_000_000);
+    const names = await categories(target);
+    const groceries = names.get("Groceries") ?? 0;
+    const household = names.get("Household") ?? 0;
+    await post(target, ROUTES.recurring, {
+      personId: "alex",
+      monthlyCents: 2_000,
+      startDate: "2026-08-05",
+      endDate: null,
+      label: "Assurance",
+    });
+    const lines = [
+      await addLine(target, draft("sam", "2026-09-03", 4_500, { spendingCategoryId: groceries })),
+      await addLine(target, draft("alex", "2026-09-12", 3_000, { category: "Divers" })),
+      await addLine(target, draft("sam", "2026-09-20", 1_500, { spendingCategoryId: groceries })),
+    ];
+    await close(target, null, "2026-09-30");
+    await addLine(target, draft("alex", "2026-10-02", 900, { spendingCategoryId: household }));
+    return { target, groceries, household, lines };
+  }
+
+  test("lists a closed period's stored lines newest first, and neither the open period's nor a generated one", async () => {
+    const { target } = await closedSeptember();
+
+    const body = await list(target, "from=2026-09-01&to=2026-09-30");
+
+    expect(body.lines.map((line) => line.date)).toEqual(["2026-09-20", "2026-09-12", "2026-09-03"]);
+    expect(body.total).toBe(3);
+    // The recurring item has generated a line a month since August, and none is stored.
+    expect(body.lines.some((line) => line.category === "Assurance")).toBe(false);
+  });
+
+  test("a superseded line and a retired one are not listed, and the correction is, once", async () => {
+    const { target, lines } = await closedSeptember();
+    const [first, second] = lines as [PeriodLine, PeriodLine];
+    const corrected = await post<PeriodLine>(
+      target,
+      ROUTES.periodLine.replace(":id", String(first.id)),
+      draft("sam", "2026-09-03", 4_500, { note: "corrigé" }),
+    );
+    await post(target, ROUTES.periodLineRetire.replace(":id", String(second.id)), {});
+
+    const body = await list(target, "from=2026-09-01&to=2026-09-30");
+
+    expect(body.lines.map((line) => line.id).toSorted()).toEqual(
+      [corrected.id, lines[2]?.id].toSorted(),
+    );
+    expect(body.total).toBe(2);
+  });
+
+  test("a category keeps its own lines, and none keeps the uncategorised", async () => {
+    const { target, groceries } = await closedSeptember();
+
+    const own = await list(target, `from=2026-09-01&to=2026-09-30&spendingCategory=${groceries}`);
+    const none = await list(target, "from=2026-09-01&to=2026-09-30&spendingCategory=none");
+
+    expect(own.lines.map((line) => line.amountCents)).toEqual([1_500, 4_500]);
+    expect(none.lines.map((line) => line.amountCents)).toEqual([3_000]);
+  });
+
+  test("days narrow the list, both ends inclusive, and each end is open when left out", async () => {
+    const { target } = await closedSeptember();
+
+    expect((await list(target, "from=2026-09-12&to=2026-09-20")).lines).toHaveLength(2);
+    expect((await list(target, "to=2026-09-03")).lines).toHaveLength(1);
+    expect((await list(target, "from=2026-10-01")).lines.map((line) => line.date)).toEqual([
+      "2026-10-02",
+    ]);
+    expect((await list(target, "")).total).toBe(4);
+  });
+
+  test("offset and limit page the list, and the total does not move", async () => {
+    const { target } = await closedSeptember();
+    const url = "from=2026-09-01&to=2026-09-30";
+
+    const first = await list(target, `${url}&limit=2`);
+    const second = await list(target, `${url}&limit=2&offset=2`);
+    const past = await list(target, `${url}&limit=2&offset=3`);
+
+    expect(first.lines.map((line) => line.date)).toEqual(["2026-09-20", "2026-09-12"]);
+    expect(second.lines.map((line) => line.date)).toEqual(["2026-09-03"]);
+    expect(past.lines).toEqual([]);
+    expect([first.total, second.total, past.total]).toEqual([3, 3, 3]);
+  });
+
+  test.each([
+    "spendingCategory=groceries",
+    "spendingCategory=0",
+    "spendingCategory=0x3",
+    "spendingCategory=1e0",
+    "spendingCategory=%201",
+    "from=yesterday",
+    "from=2026-09-30&to=2026-09-01",
+    "offset=-1",
+    "offset=",
+    "limit=0",
+    "limit=501",
+    "scope=spending",
+  ])("%s is refused", async (query) => {
+    const { target } = await closedSeptember();
+
+    const response = await target.server.inject({
+      method: "GET",
+      url: `${ROUTES.periodLines}?${query}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  test("a closed period's line given another spending category leaves the settlement and the next close alone", async () => {
+    const { target, groceries, household, lines } = await closedSeptember();
+    const [first] = lines as [PeriodLine];
+    const settledBefore = await periods(target);
+    const nextBefore = (await open(target)).settlement;
+    const rowsBefore = target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get();
+
+    const corrected = await post<PeriodLine>(
+      target,
+      ROUTES.periodLine.replace(":id", String(first.id)),
+      { ...draft("sam", "2026-09-03", 4_500), spendingCategoryId: household },
+    );
+
+    // The closed period's recorded settlement is the same, to the last field.
+    expect(await periods(target)).toEqual(settledBefore);
+    // The correction follows the chain back to the first entry, which was before the
+    // close: it is not late, so it is not carried into the open period or its close.
+    const view = await open(target);
+    expect(view.lines.map((line) => [line.date, line.late])).toEqual([["2026-10-02", false]]);
+    expect(view.settlement).toEqual(nextBefore);
+    // It is a later line, not an edit: one more row, and the first is as it was.
+    expect(target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+      n: (rowsBefore as { n: number }).n + 1,
+    });
+    const original = target.context.db
+      .prepare("SELECT spending_category_id AS id FROM period_lines WHERE id = ?")
+      .get(first.id);
+    expect(original).toEqual({ id: groceries });
+    // The list and the chart both read it under the new category.
+    const listed = await list(
+      target,
+      `from=2026-09-01&to=2026-09-30&spendingCategory=${household}`,
+    );
+    expect(listed.lines.map((line) => line.id)).toEqual([corrected.id]);
+    const stats = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+    const september = stats.periods.find((one) => one.end === "2026-09-30");
+    expect(september?.categories.find((one) => one.categoryId === household)?.cents).toBe(4_500);
+    expect(september?.categories.find((one) => one.categoryId === groceries)?.cents).toBe(1_500);
+  });
+
+  test("every slice of a period is a list of its card lines, summing to it", async () => {
+    const { target } = await closedSeptember();
+    const stats = await get<SpendingStatsResponse>(target, ROUTES.statsSpending);
+    const september = stats.periods.find((one) => one.end === "2026-09-30");
+
+    expect(september?.categories.length).toBe(2);
+    for (const slice of september?.categories ?? []) {
+      const filter = slice.categoryId === null ? "none" : String(slice.categoryId);
+      const body = await list(target, `from=2026-09-01&to=2026-09-30&spendingCategory=${filter}`);
+      expect(
+        body.lines.reduce((sum, line) => sum + line.amountCents, 0),
+        filter,
+      ).toBe(slice.cents);
+    }
   });
 });

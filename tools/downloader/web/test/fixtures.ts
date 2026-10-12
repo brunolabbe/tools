@@ -181,6 +181,7 @@ export function progress(overrides: Partial<JobProgress> = {}): JobProgress {
     speedBps: null,
     etaSec: null,
     processedSec: null,
+    originConnections: null,
     ...overrides,
   });
 }

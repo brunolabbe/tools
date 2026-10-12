@@ -564,3 +564,23 @@ describe("probe_outcomes (dl-57)", () => {
     expect(readBack.error?.retryable).toBe(false);
   });
 });
+
+describe("progress_json from before dl-108", () => {
+  test("a row with no originConnections still reads back, with the count null", () => {
+    create("old-progress");
+    // The key is absent from every row an earlier build wrote.
+    const { originConnections: _absent, ...legacyProgress } = initialProgress("downloading");
+    const written = JSON.stringify(legacyProgress);
+    expect(written).not.toContain("originConnections");
+    db.prepare(`UPDATE jobs SET progress_json = ? WHERE id = ?`).run(written, "old-progress");
+
+    expect(store.get("old-progress").progress.originConnections).toBeNull();
+    expect(store.list().jobs.map((entry) => entry.progress.originConnections)).toEqual([null]);
+  });
+
+  test("a recorded count reads back as it was written", () => {
+    create("with-count");
+    store.recordProgress("with-count", { ...initialProgress("downloading"), originConnections: 4 });
+    expect(store.get("with-count").progress.originConnections).toBe(4);
+  });
+});
