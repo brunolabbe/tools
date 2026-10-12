@@ -186,8 +186,9 @@ export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {
  * variant, so a tab closed while a job ran and reopened after the clearing keeps
  * those. **It does not hold the filename**: that reaches the browser only on the
  * `completed` event, so a card saved before it has `result: null` and nothing to
- * keep, and the cleared row's `filename: ""` stands. The filename branch below
- * serves only a local copy that already completed.
+ * keep, and the cleared row's `filename: ""` stands: `JobCard` names the saved
+ * file by the title this browser kept instead, or by nothing at all. The filename
+ * branch below serves only a local copy that already completed.
  */
 export function reconcileJob(local: Job | undefined, remote: Job): Job {
   if (!local) return remote;

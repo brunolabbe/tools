@@ -29,6 +29,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { AppErrorPayload, Job } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
+import { reconcileJob } from "../src/lib/job-reducer.ts";
 import { ProgressMessages } from "../src/components/ProgressMessages.tsx";
 import type { StreamState } from "../src/lib/job-stream.ts";
 import { NOW, SOURCE_URL, errorPayload, job, result, variant } from "./fixtures.ts";
@@ -724,4 +725,47 @@ test("a progress message can lead with text instead of an icon, as dl-108's coun
   // Both lines in the one live region, so the second is announced when it appears.
   expect(items[0]?.parentElement).toBe(items[1]?.parentElement);
   expect(items[0]?.parentElement?.getAttribute("aria-live")).toBe("polite");
+});
+
+// ---------------------------------------------------------------------------
+// A reopened card whose filename the server has cleared (dl-107)
+// ---------------------------------------------------------------------------
+
+/**
+ * The state a restore produces: the tab was closed while the job ran, so the
+ * local copy is `downloading` with no result, and the server's copy of the
+ * finished job (fifteen minutes on) has had its filename blanked. The pair goes
+ * through `reconcileJob` exactly as `useJobs` does.
+ */
+function reopenedAfterClearing(): Job {
+  const local = job("downloading", { updatedAt: "2026-08-20T11:00:00.000Z" });
+  const cleared = job("completed", {
+    updatedAt: "2026-08-20T11:59:00.000Z",
+    sourceUrl: "",
+    variant: null,
+    result: result({ filename: "" }),
+  });
+  return reconcileJob(local, cleared);
+}
+
+test("a reopened card with a blank filename is named by the title this browser kept", () => {
+  mount(reopenedAfterClearing(), { title: "A sample recording" });
+
+  expect(screen.getByText("Saved by your browser — A sample recording")).toBeDefined();
+  expect(screen.queryByText(/—\s*$/u)).toBeNull();
+});
+
+test("and with no title kept either it reads without a dash, never a dash and nothing", () => {
+  mount(reopenedAfterClearing());
+
+  const line = screen.getByText("Saved by your browser");
+  expect(line.textContent).toBe("Saved by your browser");
+  expect(line.textContent).not.toContain("—");
+});
+
+test("a filename the server still has wins over the title", () => {
+  mount(job("completed"), { title: "A sample recording" });
+
+  expect(screen.getByText("Saved by your browser — a-sample-recording.mp4")).toBeDefined();
+  expect(screen.queryByText(/A sample recording/u)).toBeNull();
 });

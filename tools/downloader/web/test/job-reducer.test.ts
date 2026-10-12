@@ -273,8 +273,8 @@ describe("reconcileJob", () => {
       expect(next.sourceUrl).toBe(saved.sourceUrl);
       expect(next.variant).toEqual(chosen);
       expect(next.status).toBe("completed");
-      // The known gap, recorded rather than hidden: nothing local to keep, so the
-      // server's blank stands. A change that fills it should flip this line.
+      // Nothing local to keep, so the server's blank stands here. The card names
+      // the file by the title this browser kept instead (job-card.test.tsx).
       expect(next.result?.filename).toBe("");
     });
 

@@ -344,3 +344,21 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
     (no live call site), the 15 minutes depending on `GC_INTERVAL_MS`, and step 2
     copying the container's whole log directory (which in Docker's usual layout
     includes `config.v2.json`, not checked on the host).
+- 2026-10-12 — Round 1, owner's answers to the two open questions, both asked
+  through the coordinator and answered on 2026-10-12:
+  - **How a reopened card reads once the server has blanked its filename.**
+    Options: A, drop the dash ("Saved by your browser"); B, fall back to the page
+    title this browser kept per job ("Saved by your browser — <title>", persisted
+    under `downloader:titles:v1`); C, stop clearing `result.filename`, which
+    reverses part of decision 1A. **Chosen: B**, the recommended one. Built in
+    `JobCard.tsx` (`savedLabel`): the file's own name when the server still has
+    it, else the title, else "Saved by your browser" with no dash. Proven by
+    `web/test/job-card.test.tsx`, three tests at the end: a reopened card (a
+    `downloading` local copy reconciled with a cleared row, the state restore
+    produces) with a title and without one, and a filename that wins over the
+    title. `npx vitest run tools/downloader/web/test/job-card.test.tsx`: 48 of 48.
+  - **How the person in charge reads on the terms page.** Options: the title ("the
+    operator of this service, one person") or the owner's name. **Chosen: keep the
+    title**, the recommended one, until the lawyer answers question 1 (is a free
+    one-person service an "enterprise" under art. 1525). `terms.html` is unchanged
+    by this.
