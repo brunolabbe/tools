@@ -689,4 +689,6 @@ leg stays red on this merge; it is informational.
   `parallel-ranges.test.ts`) were replaced by a feeder-level unit test pinning
   `REFUSAL_STATUSES` (403, 429, 503) in
   [dl-112](./dl-112-engine-and-api-tests-wait-out-timers-they-do-not-test.md),
-  on the owner's answer of 2026-10-12. 429 stays as the end-to-end row.
+  on the owner's answer of 2026-10-12, who also ruled that a unit assertion
+  still counts as dl-98's "Cover 403 and 503 too": the coverage was kept, in
+  cheaper form, not dropped. 429 stays as the end-to-end row.

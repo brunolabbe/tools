@@ -223,3 +223,8 @@ origin saw
     the probe's verdict does not wait on the grab; it now says the probe route
     still waits for the grab before it replies and its status does not depend on
     the grab's result.
+
+- 2026-10-12 — **Gate 2's one low, _fixed at landing_** (the owner chose that
+  over leaving it recorded, with no re-gate): dl-98's Log line recorded the
+  replacement but not the owner's ruling that a unit assertion still counts as
+  its "Cover 403 and 503 too". The clause is added there.
