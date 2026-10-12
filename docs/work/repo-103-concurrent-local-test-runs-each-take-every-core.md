@@ -110,7 +110,7 @@ The gate needs no agent to coordinate and costs no tokens.
 
 ## Done when
 
-1. Two local `npm test -- --project downloader` runs started together each get
+1. Two local `npm test -- --project planner` runs started together each get
    about half the workers. A third waits with a visible message and then runs.
    Proof: the three outputs in the Log.
 2. A run killed with SIGKILL leaves a lock that the next run reclaims. A test
@@ -170,8 +170,63 @@ The gate needs no agent to coordinate and costs no tokens.
     so a wait message from a preflight test step is shown only if that step fails; the
     wait still ends in 5 minutes, so it cannot hang. A SIGKILL on the gate frees its slot
     while the vitest it started keeps running; the gate cannot catch that signal and
-    the next run does not count the orphan.
-  - **Not folded in:** `test:downloader`, `test:planner`, `test:ledger` and `test:repo`
-    in `package.json` still call `vitest run --project …` directly and are not gated.
-    Nothing in preflight or CI uses them and the brief does not name them; routing them
-    through the gate is one line each if wanted.
+    the next run does not count the orphan. (Round 1 narrows this: a SIGKILL to the
+    process group now takes vitest too; one to the gate's pid alone still orphans it.)
+  - **Not folded in (superseded by the owner's answer 4 in the round-1 entry below):**
+    `test:downloader`, `test:planner`, `test:ledger` and `test:repo` called
+    `vitest run --project …` directly and were not gated. They are gated in round 1.
+
+- 2026-10-12 — Round 1, after gate 1 at 148b67a2 (FAIL: two highs, two meds, four lows).
+  The owner answered four questions through the orchestrator the same day, each the
+  recommended option. Measurements below use a private `TEST_GATE_DIR` and gate 1's
+  scripts (`reclaim.mjs`, `reclaim2.mjs`, `sig.mjs`), run from its scratch directory
+  against this worktree. Load average 1 to 28 while they ran.
+  - **Answer 1, Done when 1 reworded to `--project planner`.** Options: reword to planner,
+    a gate runs the downloader as written, the owner runs it. The line now names
+    `npm test -- --project planner`; its proof is the planner runs of the first entry above
+    (5, 5 and 11 workers, 1305 of 1305 each) and gate 1's `two-real.mjs` run (5, 5 and 11,
+    1305 of 1305 each). A downloader run lasts longer than the wait, so its third run would
+    take the one-worker fallback; that is the wait bound below, not a defect.
+  - **High 1, two runs reclaiming one stale lock both held the slot.** Reproduced by
+    gate 1 (3 of 60 two-slot trials, 7 of 60 one-slot with a dead pid) and traced to
+    re-read-then-unlink: the run about to unlink deletes the fresh lock the other run
+    just created. Fixed atomically: a stale lock is removed only by the run holding
+    `slot-N.lock.reclaim`, an exclusive-create guard, and a run that cannot take it leaves
+    the slot to the holder and tries the next. A guard older than 10 s is a dead
+    reclaimer's and is removed. After:
+    `CAP=2 node reclaim2.mjs … 60 dead` gives `0 of 60 trials ran both at once`;
+    `reclaim.mjs` (one slot) gives 0 of 60 dead, 0 of 30 empty, 0 of 30 garbage,
+    0 of 30 reused pid. Tests: "a stale lock another run is reclaiming is left to it"
+    (fails with the guard check removed), "a guard left by a reclaimer that died is
+    removed, and the slot reclaimed", "the guard is not left behind by a reclaim". The
+    "before" figures are gate 1's; I did not re-run the old tree.
+  - **High 2, answer 2: keep 300 s and fix the text.** The script header and a new
+    paragraph under the root `CLAUDE.md` commands now say that two runs hold a slot, that
+    a third waits up to 300 s and then runs with one worker and no slot, that the lock is
+    per clone (in its `.git`, and a lock from another pid namespace is always stale) and
+    not per machine, and that a late arrival oversubscribes for the whole overlap. The
+    header's "briefly" and "machine-wide" are gone, and the one-worker downloader figure
+    (1043 s, gate 1) is recorded there.
+  - **Med, answer 3: dropped `detached` on POSIX.** `sig.mjs <tree> <dir> group SIGKILL 5000
+npm test -- --project planner` now gives `survivors after 4000 ms: 0`; the
+    lock stays (SIGKILL cannot be caught) and is reclaimed by the next run. SIGINT and
+    SIGTERM to the group: 0 survivors and an empty lock directory. SIGTERM forwarding walks
+    `/proc` for the child's descendants; Windows keeps `taskkill /T /F`. Test: "a SIGKILL to
+    the gate's process group leaves nothing running" (fails when `detached: true` is put
+    back). SIGTERM or SIGKILL to npm's pid alone still leaves the run going, as it does
+    on `main` with no gate: `AFTER_MS=60000 sig.mjs … pid SIGTERM` gives `survivors … 0`
+    and an empty lock directory because the run finishes and releases its slot. One
+    related fix: a zombie holder (exited, unreaped, as under a container's pid 1) read as
+    alive from `/proc/<pid>/stat`; `startTimeOf` now treats state `Z` as gone.
+  - **Med, answer 4: the `test:<tool>` scripts go through the gate.** `test:downloader`,
+    `test:planner`, `test:ledger` and `test:repo` are `node scripts/test-gate.mjs vitest run
+--project <tool>`; `npm run test:<tool> -- no-such-file-anywhere` prints
+    `test-gate: slot-0, 1 of 2 runs active (pids …): 11 workers` for each of the four.
+    In the root `CLAUDE.md` the package-wide line is now `npm test -- <package-dir>`
+    (replacing `npx vitest run <package-dir>`) and `npx vitest run <spec-file>` is named as
+    the one ungated call. `npx vitest run --project <tool>` stays an unguarded bypass, which
+    the header says.
+  - **Lows left recorded, not fixed:** an unwritable lock directory crashes `npm test`;
+    two mutants are caught only on some runs; no test runs the Windows `taskkill` branch;
+    a preflight test step's wait is invisible. The red Windows `dl-98` ratio on 148b67a2 is
+    not attributed to this branch.
