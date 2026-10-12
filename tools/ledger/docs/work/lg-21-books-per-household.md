@@ -287,3 +287,25 @@ deeply equal { n: 17 }`).
     `migrated: refuses its member at once, keeps the others served, and opens once unlocked`,
     `AssertionError: expected 503 to be 200`. Mutation removed:
     `Tests  10 passed (10)`.
+- 2026-10-12 — **Reconciled with `main` at `84c899e4`** (lg-19, #449), a merge,
+  by the fixer, and not gated: its correctness rests on the isolation sweep and
+  preflight. The compile failure was where the build's last Log line said it
+  would be.
+  - `GET periodLines` in `api/src/routes/periods.ts` reads
+    `listLines(booksOf(request), …)`, as `periods` and `periodOpen` beside it.
+    lg-19's `periods.test.ts` read `target.context.db` in one test, three
+    times; they read `homeBooks(target)` now. Nothing else of lg-19's reads the
+    books: `listLines` takes the handle as an argument.
+  - The sweep's read table gained `{ route: "periodLines", method: "GET", url: ROUTES.periodLines }`.
+    Before it, `npx vitest run tools/ledger/api`: `Tests  1 failed | 483 passed (484)`,
+    "covers every route the app answers" missing `GET /api/period-lines`. It
+    needed no choice the other rows do not show: no query, so every stored line
+    is listed, and the lines carry the household's word and cents.
+  - Planted leak (`periodLines` handed the other household's handle through a
+    temporary global, then restored): `npx vitest run tools/ledger/api/test/isolation.test.ts`
+    exit 1, `Tests  1 failed | 1 passed (2)`,
+    `"home GET periodLines shows away's Chalet, kim, 2227"`,
+    `"away GET periodLines shows home's Maison, sam, 3119"`. Restored,
+    `Tests  2 passed (2)`.
+  - `npx vitest run tools/ledger`: `Tests  904 passed (904)`, against 880 before
+    the merge; the 24 added are lg-19's, none of the 880 lost.
