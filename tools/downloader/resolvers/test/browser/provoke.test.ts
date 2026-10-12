@@ -566,28 +566,32 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () =
   const MENU_CEILING_MS = 4000;
   const COOKIE_CEILING_MS = 3200;
 
+  // Array rows with %s, not objects with $name: Vitest quotes a `$` value and cuts
+  // it at 40 characters, which gave the two cookie rows one title. The ceiling is
+  // the fourth element, so no placeholder reads it (a %d took the wrong argument
+  // in dl-118 and printed NaN).
   test.each([
-    {
-      name: "a shell's 18+ menu button",
-      pathname: "/age-false-shell-menu-button.html",
-      pressed: "/beacon/nav-18",
-      ceilingMs: MENU_CEILING_MS,
-    },
-    {
-      name: "a cookie sheet's View our 18 partners, closable panel",
-      pathname: "/age-false-cookie-sheet-closable.html",
-      pressed: "/beacon/view-partners",
-      ceilingMs: COOKIE_CEILING_MS,
-    },
-    {
-      name: "a cookie sheet's View our 18 partners, sticky panel",
-      pathname: "/age-false-cookie-sheet-sticky.html",
-      pressed: "/beacon/view-partners",
-      ceilingMs: COOKIE_CEILING_MS,
-    },
+    [
+      "a shell's 18+ menu button",
+      "/age-false-shell-menu-button.html",
+      "/beacon/nav-18",
+      MENU_CEILING_MS,
+    ],
+    [
+      "a cookie sheet's View our 18 partners, closable panel",
+      "/age-false-cookie-sheet-closable.html",
+      "/beacon/view-partners",
+      COOKIE_CEILING_MS,
+    ],
+    [
+      "a cookie sheet's View our 18 partners, sticky panel",
+      "/age-false-cookie-sheet-sticky.html",
+      "/beacon/view-partners",
+      COOKIE_CEILING_MS,
+    ],
   ])(
-    "$name: the blocked clicks wait for the cap, not 2000 ms",
-    async ({ pathname, pressed, ceilingMs }) => {
+    "%s: the blocked clicks wait for the cap, not 2000 ms",
+    async (_name, pathname, pressed, ceilingMs) => {
       server.requests.length = 0;
       let elapsedMs = Number.NaN;
       await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {

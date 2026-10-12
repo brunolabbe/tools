@@ -148,3 +148,44 @@ caps"` on the final test: `Tests  3 passed | 238 skipped (241)`, rows at
   - What the brief had wrong: none. The "four blocked clicks at 2000 ms" of the
     menu row is the two play sites, twice each, as dl-118's Log table says; each
     site alone is already 3.5 s over, which the 4000 ms ceiling is set to catch.
+
+- 2026-10-12 — **Gate 1's two lows, _fixed at landing_** (the owner chose that
+  over fixing the titles only or landing as is, with no re-gate). Asked "Land it
+  how?", with three options: "lander fixes both (recommended)", "fix titles
+  only" and "land as is". Chosen: the lander fixes both. Neither finding touched
+  a `Done when` line.
+  - **Row titles (maintainability).** Switching from `%s` to `$name` made Vitest
+    quote the value and cut it at 40 characters, so the two cookie rows printed
+    one title and a failing cookie row could not be told from the other, and
+    `-t "closable panel"` selected nothing and exited 0. Fixed by going back to
+    array rows with `%s` and the ceiling as a fourth element, so no placeholder
+    reads it (the dl-118 `%d` trap printed `NaN ms` when the ceiling was the
+    second element). The test body and the timed region are unchanged. Control,
+    at efada9ee before the fix: `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts -t "closable panel"`
+    gave `Tests  241 skipped (241)`, exit 0, and `-t "clickTimeoutMs caps"` gave
+    the cookie rows as `'a cookie sheet\'s View our 18 partner…': the blocked
+clicks wait for the cap, not 2000 ms`, twice. After the fix: `-t "closable
+panel"` gives `Tests  1 passed | 240 skipped (241)`, and `-t
+"clickTimeoutMs caps"` prints three distinct full names, with the rows at
+    2034, 2219 and 2136 ms and `Tests  3 passed | 238 skipped (241)`:
+    - `a shell's 18+ menu button: the blocked clicks wait for the cap, not 2000 ms`
+    - `a cookie sheet's View our 18 partners, closable panel: the blocked clicks wait for the cap, not 2000 ms`
+    - `a cookie sheet's View our 18 partners, sticky panel: the blocked clicks wait for the cap, not 2000 ms`
+  - **The Log's "no local number changes" (Log only).** The build entry's "Locally
+    the launch and navigation are about 0.1 s, so this changes no local number"
+    holds for an idle box and not for the Done-when 4 command under load, where
+    the first row pays the shared browser's cold launch and the base test file,
+    which timed the launch, read it as the cap. The change does more than that
+    sentence said: it keeps a loaded box's cold launch out of the number the
+    ceiling bounds. Control, here and not the gate's: 6 parallel copies of the
+    Done-when 4 command under 36 busy loops on a 12-CPU box, once with the base
+    file (`32f8a994`, kept as a temporary file beside the test and removed) and
+    once with this head's. Base: the menu row failed in 6 of 6 copies (per-test
+    4351, 4289, 4917, 3632, 4970, 4863 ms), and 10 of 18 rows failed in all
+    (`expected 4874`, `3044`, `3612`, `4859`, `3196`, `4913`, `4348`, `4277`,
+    `3176`, `3008 to be less than 3000`). Head: 0 of 18 rows failed,
+    every copy `Tests  3 passed | 238 skipped (241)`. The load was heavier than
+    the gate's (the gate saw the menu row fail in 4 of 6), so the numbers differ
+    and the direction is the same. The build entry's sentence is left as written;
+    this entry corrects it.
