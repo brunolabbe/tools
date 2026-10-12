@@ -1537,3 +1537,67 @@ test("checkBuild fails on a scripts/ diff when only core's suite fails", () => {
     "npm test -- --project core",
   ]);
 });
+
+// --- repo-101: a tool's markdown is not a tool's code ------------------------
+
+/**
+ * repo-101's Done when 1: a diff that is only markdown under a tool plans the
+ * build and nothing else. Gate records, Log entries and filed tickets all land
+ * this way, and each used to pay for a whole tool's suite.
+ */
+test("testPlan plans no npm test for a diff of only markdown under tools/ (repo-101)", () => {
+  expect(
+    testPlan(["tools/downloader/docs/work/dl-111-x.md", "tools/planner/docs/work/pl-1-x.md"]),
+  ).toEqual([["npm", ["run", "check"]]]);
+  expect(touchedTools(["tools/downloader/docs/work/dl-111-x.md"])).toEqual([]);
+});
+
+/**
+ * repo-101's Done when 2: one non-markdown path under a tool still plans that
+ * tool's project and `core`, whatever markdown sits beside it.
+ */
+test("testPlan still plans the tool and core for markdown mixed with one code path (repo-101)", () => {
+  expect(
+    testPlan(["tools/downloader/docs/work/dl-111-x.md", "tools/downloader/api/src/a.ts"]),
+  ).toEqual([
+    ["npm", ["run", "check"]],
+    ["npm", ["test", "--", "--project", "downloader"]],
+    ["npm", ["test", "--", "--project", "core"]],
+  ]);
+});
+
+/**
+ * Build step 1's rename case, through `preflight()` against a real repository,
+ * because the fault is in what `git diff --name-only` reports and not in
+ * `testPlan`. Rename detection is on by default and reports a rename as its
+ * destination only, so `git mv tools/downloader/src/a.ts tools/downloader/docs/a.md`
+ * listed a markdown file and nothing else, and the deleted source's suite was
+ * skipped. The same commit with `--no-renames` lists both sides.
+ */
+test("preflight plans the tool's suite for a .ts renamed to .md, since its source was deleted (repo-101)", () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo.dir, "release-please-config.json"), RP_CONFIG);
+  try {
+    repo.write("tools/downloader/src/a.ts", TLS);
+    repo.commitAll("base");
+    const base = repo.git("rev-parse", "HEAD");
+
+    fs.mkdirSync(path.join(repo.dir, "tools", "downloader", "docs"), { recursive: true });
+    repo.git("mv", "tools/downloader/src/a.ts", "tools/downloader/docs/a.md");
+    repo.commitAll("docs(downloader): move the source to a note");
+
+    const calls: string[] = [];
+    const results = preflight(repo.dir, {
+      base,
+      title: "docs(downloader): move the source to a note",
+      run: realRun,
+      buildRun: recordingRun(calls),
+      listOpenHeads: () => [],
+    });
+    expect(calls).toContain("npm test -- --project downloader");
+    expect(calls).toContain("npm test -- --project core");
+    expect(results.find((r) => r.name === "check")).toMatchObject({ ok: true, bit: 0 });
+  } finally {
+    repo.cleanup();
+  }
+});
