@@ -221,3 +221,22 @@ memberships` string in the command fails the directory scan; a dropped
       lg-21's isolation sweep and lg-22's authority sweep can take it too.
   - **Fold-in:** nothing else became free. lg-19 and lg-8 rebase onto the
     `Person` and `MeResponse` change; neither is touched here.
+- 2026-10-12 — The owner answered the three open decisions the build reported.
+  The builder recommended option A in all three; none of its recommendations
+  was overridden.
+  - **Two-person cap.** Options: (A) count every name the household ever held,
+    as built; (B) count current members only. The question carried the gate's
+    measurement: after sam's removal, a third name split the mortgage bucket
+    three ways with `lead` null, and period open/close returned 400 "Every ratio
+    in a settlement is between the same two people." Owner, verbatim: "There
+    should not have a cap count. A household could have 3, 4, 5 if needed. But,
+    we would need a way to manage persons in household, because it can change.
+    Usually very not often, but still. We can settle for now as built, but keep
+    that in mind, maybe fill a ticket?" So A stands for now, and the cap's
+    removal is filed as [lg-23](./lg-23-a-household-of-more-than-two.md).
+  - **Codes for the directory's other refusals.** Options: (A) core
+    `BAD_REQUEST`; (B) four new ledger codes. Owner chose **A**, as built.
+  - **Contract scope and audit.** Options: approve both as built; approve the
+    health field but add a `--by <address>` flag; remove the health field. Owner
+    chose **approve both**: `HealthResponse.directory: { open }` is approved as
+    an additive contract change, and the changed-by stays the literal `operator`.
