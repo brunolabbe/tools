@@ -19,7 +19,6 @@ const BODY = Buffer.alloc(PROGRESSIVE_FILE_BYTES);
 
 /** Pages keyed by pathname, each a bare `<video>` pointing at one media path. */
 const PAGES: Record<string, string> = {
-  "/named.html": "/media/clip-720.mp4",
   "/ranged.html": "/media/lecture.mp4",
 };
 

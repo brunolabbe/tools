@@ -93,6 +93,9 @@ describe("what a head of bytes says (dl-90)", () => {
     ["a WebM header", Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01])],
     ["text", ascii("<html><body>403 Forbidden</body></html>")],
     ["a box with a nonsense type", box("\u0001\u0002\u0003\u0004", zeros(16))],
+    // The body of `chunk-streams.test.ts`'s "boxes but not a movie" page, which
+    // dl-113 demoted to here: real boxes, none of them a movie.
+    ["a free box, then zeros", concat(box("free", ascii("not a movie")), zeros(SNIFF_HEAD_BYTES))],
   ])("%s is unknown", (_name, body) => {
     expect(sniffHead(body)).toBe("unknown");
   });
