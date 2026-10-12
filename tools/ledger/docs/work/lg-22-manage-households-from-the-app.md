@@ -118,3 +118,7 @@ a command on the host. The owner chose to manage it from the app
   the two identities lg-20 now lets through the hook without a household.
 - 2026-10-12 — Step 9 and Done-when 5 added from lg-20's gate 1 (F2, F6), which
   the owner chose to fold here rather than fix on lg-20.
+- 2026-10-12 — The owner answered lg-23's Question 4: "remove a member" removes
+  an address, and the person's name stays in the books. This ticket lands
+  before lg-23 and keeps refusing a third person name. lg-23 changes that test
+  when it lifts the cap.
