@@ -22,6 +22,15 @@ import { createFileToken } from "./tokens.ts";
 export const LINK_TTL_MS = 15 * 60_000;
 
 /**
+ * How long after a job ends the sweep blanks its page address, media URL, title
+ * and error URLs (dl-107, owner decision 1A). The link's own fifteen minutes: a
+ * tab closed while the job ran and reopened inside that window still finds the
+ * row whole, and the browser keeps what it already had after it (`reconcileJob`).
+ * A constant and not a setting, because the terms page states it.
+ */
+export const FINISHED_JOB_CLEAR_AFTER_MS = LINK_TTL_MS;
+
+/**
  * The time a streamed response may spend before its first byte, with margin.
  *
  * Cloudflare answers `524` when an origin sends nothing for 125 s (its Error 524
@@ -48,9 +57,10 @@ export function maxLinkWaitMs(probeTimeoutMs: number): number {
 }
 
 /**
- * How long a job's row, and with it the page URL it was made for, is kept
- * (dl-54, the owner's decision of 2026-09-13). A constant and not a setting,
- * because the terms page states it: a setting could make that page false.
+ * How long a job's row is kept (dl-54, the owner's decision of 2026-09-13): its
+ * host, status, error code and times. The page address and the other URLs in it
+ * go sooner, at `FINISHED_JOB_CLEAR_AFTER_MS` (dl-107). A constant and not a
+ * setting, because the terms page states it: a setting could make that page false.
  * `web/public/terms.html` says the same number, and `terms-page.test.ts` fails
  * when the two disagree.
  */

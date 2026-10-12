@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { REDACTED, ROUTES } from "@downloader/contract";
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "./context.ts";
+import { shortenAddress } from "./log-address.ts";
 import type { AppLogger } from "./logger.ts";
 
 declare module "fastify" {
@@ -202,7 +203,7 @@ export function registerRequestLogging(app: FastifyInstance, context: AppContext
       url: redactLoggedUrl(request.url),
       status: reply.statusCode,
       durationMs: Math.round(reply.elapsedTime),
-      ip: request.ip,
+      ip: shortenAddress(request.ip),
     };
     if (isNoisy(request)) request.logger.debug("request", fields);
     else request.logger.info("request", fields);
@@ -283,7 +284,7 @@ export function createFrameworkErrorHandler(context: AppContext) {
       method: request.method,
       url: redactRefusedUrl(request.url),
       status: error.statusCode ?? 500,
-      ip: request.ip,
+      ip: shortenAddress(request.ip),
       code: error.code,
     });
 

@@ -27,9 +27,9 @@
  * `details` alone once the gate found two more leaks the field-scoped version
  * missed — `egress-proxy.ts`'s `host`, and a `Referer` that is not inside
  * `details` at all): every string value anywhere in `fields`, however deeply
- * nested, is run through `redactUrlsInText` — the same substring matcher
- * `engine/src/ffmpeg/runner.ts` already uses for ffmpeg's own stderr, reused
- * here rather than written a second time. A resolver's own `AppError`
+ * nested, is run through a substring matcher (first `redactUrlsInText`, the one
+ * `engine/src/ffmpeg/runner.ts` uses for ffmpeg's own stderr; now
+ * `cutUrlsToOrigin`, below). A resolver's own `AppError`
  * routinely sets `details.url` to the page or media URL it was working on,
  * unredacted; `egress-proxy.ts` logs the full request target as `host`;
  * yt-dlp echoes a URL mid-sentence in `details.stderr`; and a `Referer`
@@ -41,11 +41,18 @@
  * without a fifth call site needing to remember anything. The accepted cost
  * is a walk of every field on every line, and every URL anywhere in a log
  * line loses its query string, including ones that carried nothing secret.
+ *
+ * Since dl-107 the matcher is this file's own, `cutUrlsToOrigin`, and it keeps
+ * less than `redactUrlsInText` did: **only the origin**. A page or media URL's
+ * path says what a visitor asked for, and with the address on the `request` line
+ * shortened to a network, the path on a sibling line sharing its `requestId` was
+ * the rest of the join (owner decision 6, 2026-10-12). `redactUrlsInText` itself
+ * is unchanged, because ffmpeg's stderr and a stored error use it for a different
+ * question (drop the credential, keep the shape) and its tests pin that.
  */
 
 import { redactRequestContext } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
-import { redactUrlsInText } from "@downloader/engine";
 import type { Logger } from "@downloader/engine";
 import { createLogger as createCoreLogger } from "@webtools/core/logger";
 import type { LogLevel } from "./config.ts";
@@ -90,6 +97,26 @@ const REDACT_PATHS = [
   "*.authorization",
 ];
 
+/**
+ * Every absolute `http(s)` URL in `text`, cut to its scheme and host.
+ *
+ * Not `redactUrl`, whose answer is the URL minus its query: this drops the path,
+ * the query and the fragment together, and **userinfo** too, since
+ * `https://user:pass@host/` carries a credential in front of the host. The
+ * authority ends at `/`, at `\` (a browser reads it as `/`), at `?` or at `#`, so
+ * `https://host?x=1` is cut as well. Text with no authority (`https://`) is left
+ * as it is.
+ */
+export function cutUrlsToOrigin(text: string): string {
+  return text.replaceAll(
+    /(https?:\/\/)([^\s/\\?#]*)\S*/giu,
+    (match, scheme: string, authority: string) => {
+      if (authority === "") return match;
+      return `${scheme}${authority.slice(authority.lastIndexOf("@") + 1)}`;
+    },
+  );
+}
+
 function isRequestContext(value: unknown): value is RequestContext {
   return (
     typeof value === "object" &&
@@ -104,7 +131,7 @@ function isRequestContext(value: unknown): value is RequestContext {
  * `host`, `details.url`, a URL embedded mid-sentence in `details.stderr`, a
  * `Referer` inside `requestContext.headers` after the structural pass below
  * has already run on it, an entry in an array. Text matching via
- * `redactUrlsInText`, not "is this string entirely a URL": a resolver's stderr
+ * `cutUrlsToOrigin`, not "is this string entirely a URL": a resolver's stderr
  * tail carries one as a substring of a longer sentence, and a whole-string
  * parse (dl-58's first cut, before the gate found two more leaks it missed)
  * left that case, and `host`, and `Referer`, all uncovered.
@@ -138,7 +165,7 @@ function isRequestContext(value: unknown): value is RequestContext {
  */
 function redactUrlsDeep(value: unknown, ancestors: Set<object> = new Set()): unknown {
   if (typeof value === "string") {
-    const redacted = redactUrlsInText(value);
+    const redacted = cutUrlsToOrigin(value);
     return redacted === value ? value : redacted;
   }
   if (value === null || typeof value !== "object") return value;
@@ -332,7 +359,7 @@ function safeFields(
  *
  * Three routes to a line are not `fields` at all (repo-85), and each is closed
  * here or in the adapter: the message string, through `redactMessage` set to
- * the same `redactUrlsInText`; the `bindings` option, which the adapter now
+ * the same `cutUrlsToOrigin`; the `bindings` option, which the adapter now
  * passes through `safeFields` as a child's always were; and an `Error`, whose
  * `message` and `stack` the object walk never reached and which `redactError`
  * copies as an `Error` so the line keeps its failure.
@@ -344,6 +371,6 @@ export function createLogger(options: LoggerOptions): AppLogger {
     bindings: options.bindings,
     redactPaths: REDACT_PATHS,
     redactFields: safeFields,
-    redactMessage: redactUrlsInText,
+    redactMessage: cutUrlsToOrigin,
   });
 }

@@ -255,3 +255,59 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
 - 2026-10-12 — Question 6 added and answered A when the owner asked whether
   the first five were the most the rules allow. The other further steps were
   offered and declined; the decision section records them and why.
+- 2026-10-12 — Built to 1A, 2A, 3A, 4A, 5A, 6A on branch `dl-107` from
+  `bb4d2044`. What the brief had wrong or left open, and what was done:
+  - **The contract change is a doc comment, not a schema change.** `sourceUrl`
+    and `filename` are `z.string()` in `api.ts` and already accept `""`, so a
+    cleared row parses with no edit to a schema. `Job.sourceUrl`, `Job.variant`
+    and `JobResult.filename` now say they are blank or null on a cleared row
+    (`contract/src/job.ts`), which is the change the owner approved.
+  - **`details` is cleared to its `reason` and `retryAfterSec`, not to nothing.**
+    The card reads `details.reason` to say a link expired
+    (`error-presentation.ts`), and a tab reopened after the clearing fetches the
+    row with the server's copy winning, so blanking the whole bag would turn
+    "link expired" into a bare "canceled". Only a short token (`[\w-]{1,40}`) or
+    a number survives under those two keys, too little room for an address. The
+    brief said "blanked"; Done-when 1 holds either way.
+  - **The address was on two more lines than the brief's inventory.**
+    `rate limited` logs the bucket's `key` (`ip:<address>`, or an IPv6 `/64`) and
+    `download refused: per-client cap reached` logs `clientKey(request.ip)`.
+    Both go through `shortenKey` now (`api/src/log-address.ts`); Done-when 2 names
+    only the `request` line, and it would have been met with these two still
+    writing the whole address.
+  - **`probe complete` carries no `requestId`** (`log-fields.test.ts` already
+    pinned that), so the brief's "row 2 shares that `requestId`" is true of
+    `request failed` and `request rejected` and not of the success line. The path
+    is cut from all of them regardless.
+  - **Row 2's cut covers the message, a child's bindings and an `Error`'s message
+    and stack too**, not only `fields`: the logger runs one function over all of
+    them (`createLogger`'s `redactMessage`, the `redactError` copy). A request
+    line's own absolute-form `url` (`http://host/api/files/<t>`, a scanner's
+    shape) is now cut to its origin like any other URL.
+  - **Row 9: refused at boot**, the first of the brief's two options. `0`, `-5`
+    and any override under 1 throw `INTERNAL` naming the variable; `abc` still
+    falls back to 90 as the other integers do. The sweep's `<= 0` branch is gone,
+    so the table cannot be told to keep everything by any route.
+  - **Row 7's redaction is at the one place the row is written**
+    (`JobStore#write`), through `redactUrlsInText` (the query goes, the path
+    stays while the row is live), not through the logger's `redactUrlsDeep`,
+    which is private, handles errors and cycles a stored payload cannot have,
+    and now cuts to the origin.
+  - **The log cap is `5m` x 5 and the figure was not re-measured.** The 6 KB a
+    visit comes from dl-54's measurement before two fields got shorter; the page
+    quotes the arithmetic's result (7), and `terms-page.test.ts` recomputes it
+    from the compose file, so a cap that moves without the page fails.
+  - **The hold procedure's commands were written from the compose files and not
+    run against a host**, and the deployment doc says so. The image keeps the
+    database at `/data/jobs.db` (`STORAGE_DIR`) with no write-ahead log, which
+    is what makes one file copy whole.
+  - **Question 5 is published with a title, not a name:** "the operator of this
+    service, one person", at the abuse alias. If the owner wants a name, it is
+    one line in `web/public/terms.html`.
+  - Existing tests whose assertions named a path were turned over, not deleted:
+    `logging.test.ts`, `logging-routes.test.ts`, `log-fields.test.ts` and
+    `egress-proxy.test.ts` now assert the origin and that the path is absent;
+    `probe-outcomes.test.ts` replaces "0 disables pruning" with the refusal;
+    `job-retention.test.ts`'s premise is the redacted `details.url`.
+  - **Fold-in:** none. dl-49 and dl-108 are the pieces this work makes nearer
+    and the dispatch holds both behind this ticket; neither was started.

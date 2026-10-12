@@ -62,7 +62,7 @@ describe("job retention", () => {
     }
   });
 
-  test("deletes the row, so the URL kept in a failed job's error goes too", async () => {
+  test("deletes the row, so the page address kept in a failed job's error goes too", async () => {
     const harness = await createHarness({ now: () => NOW });
     try {
       const { store } = harness.app.context;
@@ -87,9 +87,11 @@ describe("job retention", () => {
         },
         isoAgo(JOB_RETENTION_DAYS + 1),
       );
-      // The premise of deleting rather than clearing `source_url`: the same URL
-      // sits in a second column.
-      expect(store.get("failed").error?.details).toEqual({ url: SIGNED });
+      // The premise of deleting the row as well as clearing it: the address sits in
+      // a second column, minus its query since dl-107 stored errors are redacted.
+      expect(store.get("failed").error?.details).toEqual({
+        url: "https://site.example/watch/42?[redacted]",
+      });
 
       runSweep(harness.app.context);
 

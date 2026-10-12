@@ -41,6 +41,7 @@ import type { AppContext } from "../context.ts";
 import { toPublicPayload } from "../http-errors.ts";
 import { cancelError, maxLinkWaitMs, recordCanceled } from "../jobs/links.ts";
 import { isWellFormedToken } from "../jobs/tokens.ts";
+import { shortenKey } from "../log-address.ts";
 import { capabilityBucketKey, createRateLimitHook } from "../rate-limit.ts";
 
 /** What we tell a client to wait when a cap or the wait line refused it. */
@@ -157,7 +158,7 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
       if (releaseSlot === null) {
         reply.header("Retry-After", String(CAP_RETRY_AFTER_SEC));
         context.logger.warn("download refused: per-client cap reached", {
-          key,
+          key: shortenKey(key),
           limit: context.jobClientGate.limit,
         });
         throw refused(
