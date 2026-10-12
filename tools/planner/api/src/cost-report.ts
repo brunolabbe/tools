@@ -113,10 +113,38 @@ function isMetered(row: RunUsageRow): boolean {
 /** What the thinking line says about itself — see the paragraph in `renderCostReport`. */
 const THINKING_CAVEAT = [
   "A lower bound, not the run's total: it undercounts a run that mixed a reply with no",
-  "breakdown and one with, and a reply that fell back across several attempts. The one funded",
-  "run measured (574 replies, three models) showed neither — every reply reported a breakdown",
-  "and none fell back — so the gap has not been seen, which is not the same as ruled out.",
+  "breakdown and one with, and a reply that fell back across several attempts. The funded run",
+  "of 2026-10-12 (pl-40: 574 replies, three models) showed neither — every reply reported a",
+  "breakdown and none fell back — so the gap has not been seen, which is not the same as ruled out.",
 ];
+
+/**
+ * Thinking as a share of output, over the runs that reported **both** — one
+ * population for numerator and denominator.
+ *
+ * The thinking row above covers only the runs that reported a breakdown, while
+ * the output row covers every metered run; right after migration 12 every run
+ * that finished earlier is NULL in the first and not the second, so the two
+ * rows are not comparable and the thinking row can read larger than the output
+ * row it is part of. This is the figure that can be compared. `null` when no
+ * run reported both, or when their output sums to nothing to divide by — never
+ * a zero or a NaN standing in for "nobody said".
+ */
+export function thinkingShare(rows: readonly RunUsageRow[]): {
+  share: number | null;
+  runs: number;
+} {
+  let thinking = 0;
+  let output = 0;
+  let runs = 0;
+  for (const row of rows) {
+    if (row.thinking_tokens === null || row.output_tokens === null) continue;
+    thinking += row.thinking_tokens;
+    output += row.output_tokens;
+    runs += 1;
+  }
+  return { share: output > 0 ? thinking / output : null, runs };
+}
 
 const STATUS_ORDER = ["done", "failed", "canceled"];
 
@@ -203,6 +231,10 @@ export function renderCostReport(input: CostReportInput): string {
     `Thinking per run — part of the output above, already priced there, not an addition to the bill (${String(thinking.length)} of ${String(rows.length)} runs reported a breakdown)`,
   );
   lines.push(statRow("thinking", thinking));
+  const { share, runs: both } = thinkingShare(rows);
+  lines.push(
+    `  ${"share".padEnd(12)} ${share === null ? "—" : `${(share * 100).toFixed(1)}%`} of output: total thinking ÷ total output over the ${String(both)} run${both === 1 ? "" : "s"} that reported both`,
+  );
   for (const sentence of THINKING_CAVEAT) lines.push(`  ${sentence}`);
   lines.push("");
 

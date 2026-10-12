@@ -18,7 +18,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { percentile, renderCostReport, runReport } from "../src/cost-report.ts";
+import type { RunUsageRow } from "../src/cost-report.ts";
+import { percentile, renderCostReport, runReport, thinkingShare } from "../src/cost-report.ts";
 import { migrate } from "../src/db/schema.ts";
 
 const NOW = new Date("2026-09-14T12:00:00.000Z");
@@ -184,6 +185,21 @@ function tokenRow(output: string, label: string): string[] {
     .split(/\s+/);
 }
 
+/** A finished run that reported only its output and thinking counts, for the rows tests. */
+function usageRow(output: number | null, thinking: number | null): RunUsageRow {
+  return {
+    status: "done",
+    model: "m",
+    model_calls: 1,
+    input_tokens: null,
+    cache_read_tokens: null,
+    cache_write_tokens: null,
+    output_tokens: output,
+    thinking_tokens: thinking,
+    fallback_calls: 0,
+  };
+}
+
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "planner-cost-report-"));
   databasePath = path.join(dir, "planner.db");
@@ -239,6 +255,79 @@ describe("the cost report", () => {
 
     expect(stdout).toContain("(0 of 5 runs reported a breakdown)");
     expect(tokenRow(stdout, "thinking")).toEqual(["—", "—", "—"]);
+    // The share is a dash too, over zero runs — not 0.0% and not NaN%.
+    expect(stdout).toContain(
+      "share        — of output: total thinking ÷ total output over the 0 runs that reported both",
+    );
+    expect(stdout).not.toContain("NaN");
+  });
+
+  test("prints the share of output over the runs that reported both, so the comparison is one population", () => {
+    seed(SEED);
+    const { stdout } = report(["--days", "7"]);
+
+    // Runs 1, 3 and 4: 33,000 thinking of 160,000 output. Run 2 reported output
+    // and no breakdown, so its 40,000 is in the output row and not in the share.
+    expect(stdout).toContain(
+      "share        20.6% of output: total thinking ÷ total output over the 3 runs that reported both",
+    );
+  });
+
+  test("a window that mixes runs from before the migration with runs after it reads the share, not the narrower row", () => {
+    // Three runs finished before migration 12 (thinking NULL, output 100) and
+    // two after (output 1,000, thinking 900). The thinking row alone is 900
+    // against an output row whose p50 is 100 — "part of" a smaller number.
+    const text = renderCostReport({
+      rows: [
+        usageRow(100, null),
+        usageRow(100, null),
+        usageRow(100, null),
+        usageRow(1000, 900),
+        usageRow(1000, 900),
+      ],
+      days: 7,
+      since: "2026-09-07T12:00:00.000Z",
+      prices: {
+        inputPerMTok: undefined,
+        outputPerMTok: undefined,
+        cacheReadPerMTok: undefined,
+        cacheWritePerMTok: undefined,
+      },
+    });
+
+    expect(tokenRow(text, "output")).toEqual(["100", "1,000", "460"]);
+    expect(tokenRow(text, "thinking")).toEqual(["900", "900", "900"]);
+    expect(text).toContain("(2 of 5 runs reported a breakdown)");
+    expect(text).toContain("share        90.0% of output");
+    expect(text).toContain("over the 2 runs that reported both");
+  });
+
+  test("a real zero is a figure: it is kept in the row and the share, not read as unreported", () => {
+    // The deployed default reported zero thinking on every reply it was
+    // measured on, so zero is the common production value. One run at 0 and
+    // one at 120: a zero dropped as "no breakdown" would leave p50 at 120.
+    seed([
+      { ...metered(1, "done"), thinking: 0 },
+      { ...metered(2, "done"), thinking: 120 },
+    ]);
+    const { stdout } = report(["--days", "7"]);
+
+    expect(tokenRow(stdout, "thinking")).toEqual(["0", "120", "60"]);
+    expect(stdout).toContain("(2 of 2 runs reported a breakdown)");
+    // 120 of 60,000 output.
+    expect(stdout).toContain("share        0.2% of output");
+  });
+
+  test("the share is 0.0% for runs that all thought nothing, and a dash when there was no output to divide", () => {
+    expect(thinkingShare([usageRow(500, 0), usageRow(700, 0)])).toEqual({ share: 0, runs: 2 });
+    // Σ output is 0: no division, so no NaN and no Infinity.
+    expect(thinkingShare([usageRow(0, 0)])).toEqual({ share: null, runs: 1 });
+    expect(thinkingShare([])).toEqual({ share: null, runs: 0 });
+    // A run missing either half is not in the share.
+    expect(thinkingShare([usageRow(500, null), usageRow(null, 20)])).toEqual({
+      share: null,
+      runs: 0,
+    });
   });
 
   test("never prices thinking: the dollars are the four billed kinds, and no price is asked for it", () => {

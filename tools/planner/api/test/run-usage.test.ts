@@ -180,6 +180,24 @@ describe("a run records what it spent", () => {
     }
   });
 
+  test("a reply that reported zero thinking records zero, not null", async () => {
+    // The deployed default reported zero on every reply it was measured on, so
+    // this is the common production value, and `|| null` would erase it.
+    const provider = new MeteredProvider({ thinking: 0 });
+    const harness = await createRunHarness({ model: provider });
+    try {
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+      await runToCompletion(harness.app, run.id);
+
+      expect(provider.answered).toBeGreaterThan(1);
+      expect(usageRow(harness, run.id)).toEqual(expectedRow(provider.answered, 0, 0));
+      expect(usageRow(harness, run.id).thinking_tokens).toBe(0);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("a run no reply gave a thinking breakdown for records null, not zero", async () => {
     const provider = new MeteredProvider();
     const harness = await createRunHarness({ model: provider });
