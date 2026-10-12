@@ -215,6 +215,13 @@ export function stageAfter(
     case "refused":
     case "heartbeat":
       return current;
+    default: {
+      // `undefined` is a legitimate answer here ("clear the stage"), so unlike
+      // `applyJobEvent` a missing case would not be a type error on its own: this
+      // makes a new `JobEvent` member one.
+      const unhandled: never = event;
+      return unhandled;
+    }
   }
 }
 
