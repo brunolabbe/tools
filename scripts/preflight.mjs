@@ -25,7 +25,10 @@
  *     touches with a path that is not markdown (repo-101),
  *     `npm test -- --project <tool>` — read from the diff's own
  *     paths, never from a flag, so a forgotten `--project` cannot silently
- *     skip a tool's suite the way a hand-typed one can.
+ *     skip a tool's suite the way a hand-typed one can. When every path of the
+ *     tool is inside one of its packages the project narrows to the packages
+ *     those paths can reach (repo-102); any path outside a package runs the
+ *     whole project. CI always runs the whole project.
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
  *     `git show HEAD:<ticket>` — the same command
  *     `orchestrate-tickets/SKILL.md` step 9 names as this precondition today.
