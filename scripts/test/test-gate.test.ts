@@ -24,8 +24,8 @@ import type { ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { parseStartTime, startTimeOf, workersFor } from "../test-gate.mjs";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { claimSlot, parseStartTime, startTimeOf, workersFor } from "../test-gate.mjs";
 
 const GATE = path.resolve(import.meta.dirname, "..", "test-gate.mjs");
 
@@ -225,6 +225,12 @@ function reusedPidLock(slot: number): void {
 
 const slotFiles = () => fs.readdirSync(lockDir).filter((n) => n.startsWith("slot-"));
 
+/** A `/proc/<pid>/stat` line with the given state in field 3 and 4..52 after it. */
+function statLine(state: string): string {
+  const rest = Array.from({ length: 49 }, (_, i) => String(i + 4));
+  return `4242 (node) ${[state, ...rest].join(" ")}\n`;
+}
+
 describe("the arithmetic", () => {
   test("a lone run keeps every worker, a second halves them, a third gets a third", () => {
     expect(workersFor(12, 1)).toBe(11);
@@ -243,6 +249,13 @@ describe("the arithmetic", () => {
     const stat = `4242 (we ird) ) name) ${tail.join(" ")}\n`;
     expect(parseStartTime(stat)).toBe("22");
     expect(parseStartTime("no parenthesis")).toBeNull();
+  });
+
+  test("a zombie has no start time: it has exited and holds nothing", () => {
+    // A holder cannot be made a zombie from a test (node reaps what it spawns),
+    // so the state field is read off a line. `S` beside it keeps the check honest.
+    expect(parseStartTime(statLine("S"))).toBe("22");
+    expect(parseStartTime(statLine("Z"))).toBeNull();
   });
 });
 
@@ -461,6 +474,40 @@ describe.skipIf(!supported)("two runs reclaiming one stale lock", () => {
     expect(await gate.done).toEqual({ code: 0, signal: null });
     expect(gate.report().locks["slot-0.lock"]?.pid).toBe(gate.proc.pid);
     expect(slotFiles()).toEqual([]);
+  });
+
+  test("a lock released mid-reclaim is not unlinked after another run has claimed it", () => {
+    // The hole gate 2 found: the guarded re-read finds the file missing (its
+    // holder released it after our create failed), another run claims the free
+    // slot, and an unlink that treated "missing" like "stale" deletes that run's
+    // live lock. The claim between the re-read and the unlink cannot be timed
+    // from outside, so it is made at the re-read itself.
+    const file = path.join(lockDir, "slot-0.lock");
+    deadLock(0);
+    const real = fs.readFileSync;
+    let reads = 0;
+    const spy = vi.spyOn(fs, "readFileSync").mockImplementation((...args) => {
+      if (args[0] !== file) return Reflect.apply(real, fs, args);
+      reads += 1;
+      if (reads !== 2) return Reflect.apply(real, fs, args);
+      fs.rmSync(file); // the holder releases...
+      try {
+        return Reflect.apply(real, fs, args);
+      } finally {
+        liveLock(0); // ...and another run claims the slot before the unlink
+      }
+    });
+    let claimed: string | null;
+    try {
+      claimed = claimSlot(lockDir, 1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(reads).toBe(2);
+    expect(claimed).toBeNull();
+    const held = JSON.parse(fs.readFileSync(file, "utf8")) as { pid: number };
+    expect(held.pid).toBe(process.pid);
+    expect(slotFiles()).toEqual(["slot-0.lock"]);
   });
 
   test("the guard is not left behind by a reclaim", async () => {

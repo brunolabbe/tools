@@ -34,14 +34,17 @@
  *    going:** a run that starts alone keeps all 11 workers, so a second run that
  *    arrives more than the settle later gets 5 beside it, and the machine is
  *    oversubscribed (16 workers on 11 cores) for the whole time they overlap,
- *    not briefly. Measured: every one of 16 staggered pairs in 96 trials did.
+ *    not briefly. Measured (repo-103 gate 1): of 16 pairs launched 301 ms or
+ *    more apart, 13 were 11 and 5 workers and 3 were 5 and 5, because the gap
+ *    between two process launches is not the gap between their claims.
  *  - A third run waits, printing why every 15 s to stderr so an agent's Bash
  *    call does not look hung. The wait is bounded (`TEST_GATE_WAIT_MS`, 300 s)
  *    and ends in a run with one worker and **no slot**: it never deadlocks and
  *    never fails a run for having waited. So "at most two" holds only while
- *    runs are shorter than the wait. A third downloader run, which lasts
- *    minutes, always reaches the fallback and then runs beside the other two;
- *    a one-worker downloader run took 1043 s here.
+ *    runs are shorter than the wait, or a slot frees within it. A downloader
+ *    run lasts minutes, so a third one that arrives while both others are
+ *    mid-run usually reaches the fallback and then runs beside them; a
+ *    one-worker downloader run took 1043 s here.
  *
  * **A lock records the pid and the process start time.** A pid alone proves
  * nothing, because pids are reused: the start time (field 22 of
@@ -116,6 +119,10 @@ export function parseStartTime(stat) {
     .slice(close + 1)
     .trim()
     .split(/\s+/u);
+  // Field 3 is the state. A zombie has exited and is only waiting to be reaped:
+  // it runs nothing and holds no slot, and a parent that never reaps (a
+  // container's pid 1) would otherwise keep its lock live for ever.
+  if (fields[0] === "Z") return null;
   return fields[19] ?? null;
 }
 
@@ -127,12 +134,7 @@ export function parseStartTime(stat) {
  */
 export function startTimeOf(pid) {
   try {
-    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-    // A zombie has exited and is only waiting to be reaped: it runs nothing and
-    // holds no slot, and a parent that never reaps (a container's pid 1) would
-    // otherwise keep its lock live for ever.
-    if (stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z")) return null;
-    return parseStartTime(stat);
+    return parseStartTime(fs.readFileSync(`/proc/${pid}/stat`, "utf8"));
   } catch {
     return null;
   }
@@ -158,12 +160,13 @@ export function holderIsAlive(lock) {
 }
 
 /**
- * Read one lock. `null` is a stale lock — unreadable, unparsable and old, or
- * naming a process that is gone or has a different start time. A file that is
- * empty or half-written but young is a claim in progress and counts as live.
+ * Read one lock. A lock is stale when its file is unreadable, unparsable and
+ * old, or names a process that is gone or has a different start time; `exists`
+ * tells a missing file from a stale one. A file that is empty or half-written
+ * but young is a claim in progress and counts as live.
  *
  * @param {string} file
- * @returns {{live: boolean, pid: number | null, raw: string}}
+ * @returns {{live: boolean, pid: number | null, raw: string, exists: boolean}}
  */
 function inspect(file) {
   let raw;
@@ -172,7 +175,7 @@ function inspect(file) {
     raw = fs.readFileSync(file, "utf8");
     mtimeMs = fs.statSync(file).mtimeMs;
   } catch {
-    return { live: false, pid: null, raw: "" };
+    return { live: false, pid: null, raw: "", exists: false };
   }
   /** @type {{pid?: unknown, start?: unknown} | null} */
   let lock = null;
@@ -182,12 +185,13 @@ function inspect(file) {
     // fall through: unparsable
   }
   if (lock === null) {
-    return { live: Date.now() - mtimeMs < WRITING_GRACE_MS, pid: null, raw };
+    return { live: Date.now() - mtimeMs < WRITING_GRACE_MS, pid: null, raw, exists: true };
   }
   return {
     live: holderIsAlive(lock),
     pid: typeof lock.pid === "number" ? lock.pid : null,
     raw,
+    exists: true,
   };
 }
 
@@ -269,9 +273,11 @@ function takeGuard(guard) {
  * Take a free slot, reclaiming a stale one on the way. The create is exclusive,
  * so the filesystem picks the winner when two runs reach a free slot. A stale
  * lock is removed only by the run holding that slot's reclaim guard, which
- * re-reads the lock under it: the only thing that unlinks a slot file is a
- * reclaimer that has just seen it stale and cannot have anyone else replacing
- * it, so a live lock is never unlinked.
+ * re-reads the lock under it and unlinks only a file it found there and stale.
+ * A file that exists and is stale cannot be replaced before the unlink: the
+ * path is free to a new claim only once it is gone, and the only runs that
+ * remove a stale lock hold the guard, which this run does. A missing file is
+ * not unlinked, because whatever is at that path next is someone's live lock.
  *
  * @param {string} dir
  * @param {number} cap
@@ -291,7 +297,11 @@ export function claimSlot(dir, cap) {
     const guard = `${file}.reclaim`;
     if (!takeGuard(guard)) continue;
     try {
-      if (!inspect(file).live) {
+      // Unlink only a file that is there and stale. A missing one was released
+      // after the first create failed, and anything now at that path was put there
+      // by a run that is not us: unlinking it would delete a live lock.
+      const state = inspect(file);
+      if (state.exists && !state.live) {
         try {
           fs.unlinkSync(file);
         } catch {
