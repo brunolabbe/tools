@@ -5096,3 +5096,47 @@ Total $44.6497, active 6h03m08s (rates read 2026-10-10). The close-out fixer is 
 - Gate prompts naming the riskiest classifier inputs and a regression to plant in production code: dl-100's camelCase high and both dl-106 highs came from them.
 - A read-only sweep of every Windows leg since a date before answering "investigate the Windows failure": one file, one cause, already in flight, no duplicate agent dispatched.
 - Checking a worktree branch's unpushed commit by content (`21a599bb`, 11 of 11 Log lines on the ticket's tip) before deleting it.
+
+### Batch 2026-10-12 (tools-34, dl-111 dl-112 repo-99 repo-101) — base bb4d2044
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over four ids | 30s / 30s | 0 | $0.1112 |
+| #436 | open, ready | Haiku 5.5 / high | builder-mechanical | repo-101 build | 8m44s / 8m44s | 0 | $0.3224 |
+| #436 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | repo-101 gate 1 (narrow) | 7m23s / 7m21s | 0 | $1.3680 |
+| #436 | open, ready | Sonnet 5.5 / high | fixer | repo-101 landing (three lows at landing) | 3m34s / 3m29s | 0 | $0.4188 |
+| #437 | open, ready | Haiku 5.5 / high | builder-mechanical | repo-99 build, then hold behind dl-117 (maintenance) | 22m54s / 1h12m33s | 0 | $0.5719 |
+| #438 | open, ready | Sonnet 5.5 / high | builder-standard | dl-112 build, round 1 and landing | 32m07s / 2h13m55s | 0 | $3.4191 |
+| #438 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-112 gates 1 and 2 | 26m00s / 1h26m18s | 0 | $5.6719 |
+| #439 | open, ready | Sonnet 5.5 / high | builder-standard | dl-111 build and round 1, filed dl-118 | 13m12s / 2h15m58s | 1 | $2.6184 |
+| #439 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-111 gates 1 and 2 | 15m24s / 1h41m49s | 0 | $4.9712 |
+| #439 | open, ready | Sonnet 5.5 / high | fixer | dl-111 round 2 and landing | 2m42s / 21m50s | 0 | $0.5183 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h29m22s / 2h51m32s | 0 | $4.4288 |
+
+Total $24.4198, active 3h41m51s (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- repo-101 → #436: gate 1 PASS (narrow; lows only). Fixed at landing by owner choice: the comment overclaim, stale Log shas and the preflight.mjs header. Recorded: the untested `checkTitle` change. Open decision on `.md` under `packages/` and `scripts/`: owner chose leave it. CI attempt 1 red on an ffmpeg-static download 504, green on re-run.
+- repo-99 → #437, no gate. Six workers measured no faster: ubuntu `npm test` went 623 s → 626 s and Windows 626 s → 633/656 s, because `browser-resolver.test.ts` alone sets the wall clock. Owner chose to hold behind dl-117. Config withdrawn, Log and `depends_on: [dl-117]` landed, ticket left `ready`.
+- dl-112 → #438: gate 1 PASS (1 low), then a round for the owner's choice to replace the dl-98 403/503 rows with a feeder-level unit test (which overrode the builder's recommendation), then gate 2 PASS (1 low, fixed at landing by owner choice).
+- dl-111 → #439: gate 1 CONCERNS (med: Done when 1 was a whole-suite bound that six untouched tests break). Owner chose to reword it and file dl-118. Gate 2 CONCERNS (med: the reworded proof clause contradicted its own Log, 3 of 756; 2 low), fixed by a fixer in the round and landed with no gate 3. dl-118 filed.
+
+**Defects in the skill:**
+
+1. `roles/builder.md`, _Set up_, step 2 — `git checkout -b <branch> origin/<base>` makes the new branch track `origin/<base>`. Reproduction (repo-101): that command → `branch 'repo-101' set up to track 'origin/main'.`; `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n 'no-track'` → nothing.
+2. `roles/builder.md` and `roles/common.md` — neither mentions the `Co-Authored-By` trailer that the session's attribution reminder asks for, so the repo-101 builder rewrote three commits to add it and moved shas its Log had already cited. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -c Co-Authored-By` → `0`; the same for `common.md` → `0`.
+3. `roles/builder.md`, the preflight bullet — "It runs `npm run check`, the suite of every tool the diff touches". Once #436 merges, a markdown-only change under a tool plans no suite. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n 'every tool the diff touches'` → line 63.
+4. `roles/reviewer.md`, _What makes a gate worth its cost_, the second-tree bullet (`git archive <sha> | tar -x`, then `cp -a` the `node_modules`). It does not say that the farm's workspace links are relative, so an archived tree resolves to its own packages, which have no `dist`. It also gives no way to make a scratch tree that is a git repository. Reproduction (dl-111 and dl-112 gates): `ls -la node_modules/@downloader/` → `engine -> ../../tools/downloader/engine`; repo-101 gate: `git clone --local <worktree> <scratch>/clone` → `fatal: failed to create link … Invalid cross-device link`.
+5. `roles/reviewer.md`, _Read the pull request's CI_ — names `WebFetch` for a CodeQL failure only. A failed non-CodeQL leg in a run that is still in progress has no readable log. Reproduction (repo-101 gate 1): `gh run view 38261686797 --job 114853864306 --log-failed` → `run … is still in progress; logs will be available when it is complete`; the job page via WebFetch gave the failing step, but its log needs a sign-in. The orchestrator read it after the run finished: ffmpeg-static `statusCode: 504`.
+6. `review-ticket/gate.md`, _Severity and the gate_, `unproven (open decision)` — the rule is keyed to "the brief's Decision", and it has no case for a ticket with no Decision section, or for a test older than the branch that contradicts a literal acceptance line. Reproduction (dl-111 gate 1): `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n 'unproven (open decision)'` → line 164; dl-80's `elapsedMs >= 9000`, from before the branch, contradicts dl-111's first Done when 1, so the page, read literally, forces a FAIL.
+7. `roles/reviewer.md`, _When you are woken to re-gate_ — does not say whether a gate-1 low that comes back unfixed is carried as a new finding or only gets a verdict. dl-111 gate 2 counted it as both. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/reviewer.md | grep -n -i 'not fixed'` → nothing.
+8. `roles/fixer.md`, _Your report_ — "the new head sha from `git rev-parse HEAD`" does not say whether that is the fix commit or the commit `--land` made after it. Reproduction (dl-111 landing): fix commit `6565425b`, landing head `7524b62a`; `git show origin/main:.claude/skills/orchestrate-tickets/roles/fixer.md | grep -n 'new head sha'` → line 65.
+9. `roles/builder.md` / `roles/common.md` — nothing covers a named CI baseline run that skipped its suite. repo-99's dispatch named the push run at bb4d2044 as the "before", and that run tested nothing. Reproduction: `gh run view 38260368181 --json jobs --jq '.jobs[]|[.name,.conclusion]|@tsv'` → the test matrix `skipped`. The builder chose the parent's run 38252453296 on its own.
+
+**Worked, and worth keeping:**
+
+- Asking repo-99's builder to measure CI before any sibling merged gave a clean null result. The owner held the ticket on that number instead of landing a config that did nothing.
+- Gates planting their own production mutations, not the builder's, on test-speed tickets: every shortened dl-112 timing went red under its mutation, and dl-111's cap throw exposed the reworded line's false proof clause.
+- Lows fixed at landing by owner choice (four tickets, no re-gate), and a mechanical post-gate-2 round handed to a fixer with conditional ship authority (dl-111).
+- Reserving new ticket ids with a live peer orchestrator by message before filing (dl-118 here, lg-23 there).
