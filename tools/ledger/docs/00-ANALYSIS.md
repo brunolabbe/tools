@@ -483,6 +483,76 @@ entirely.
   Changing an address is safe; changing the name it maps to is not. Retiring a
   person is future work, for when someone first needs it.
 
+The list above describes the tool as built: one household. What follows is
+decided and not built yet; lg-20, lg-21 and lg-22 build it, and repo-98 is the
+later opening of the Access policy, if the owner ever wants the ledger open.
+
+### More than one household
+
+_Decided by the owner on 2026-10-12._ A second household, a couple with a joint
+account of their own, uses the same deployment with books of its own. Each
+household sees only its own books. The two-person domain is unchanged:
+a household is still exactly two people, a ratio and a settlement, and the
+directory holds it to that: at most two person names in a household, each
+behind any number of addresses. `books/src/ratio.ts` refuses a ratio that is
+not between two salaries and `books/src/buckets.ts` settles nothing but two,
+so a third name would break the books of whoever added it.
+
+**One SQLite file per household, not a household column.** Measured on
+`main` at `9d0e2ea6`, a column would have reached 15 tables, 9 views and 71
+prepared statements. Two existing unique indexes are global and would collide
+across households: `ratios_first` on the effective date and `periods_start` on
+the start date. A person id would have to grow a household, and every query
+written later would have to remember the filter, where one that forgot would
+show one household's bank rows to the other. One file per household changes
+none of the SQL. The request carries its own household's handle, and a request
+that has no handle for the other file cannot read it. The cost is on the host:
+each file is migrated at boot, and a backup takes the directory, not one file.
+Person names need only be unique inside a household, so the rule above that a
+name is permanent holds unchanged inside each file.
+
+**Membership is a database, not configuration.** A household's files cannot
+hold the list of who belongs where, so a small directory database beside them
+does. It holds households and members, appended and never edited like
+everything else here, each change naming the person who made it. It replaces
+`ACCESS_PEOPLE`. Which addresses are admins stays configuration
+(`LEDGER_ADMINS`), so changing it still needs the host, and nobody can lock the
+operator out from the screen.
+
+**Who manages membership.** An admin creates households and adds or removes
+any member. A household's own members can **add** a member to their household
+and can remove nobody: removing cuts a person off from their own records, so it
+goes through an admin. An admin manages the directory, and being an admin
+grants no reading of any household's books. An admin need not be a member of
+any household, so what a request carries is an address, whether it is an
+admin, and the membership it has, if any; every books route refuses an
+identity with no membership. An admin who adds themselves to a
+household can read it, as anyone with the host always could, so each household
+sees its own member history, including who added whom. A member who is refused
+an address — one in another household already, or a third person — is told
+only that it cannot be added: the reason would let any member ask whether an
+address uses the ledger.
+
+**Access keeps its allowlist, and the directory decides who is in.** The
+ledger's Access policy goes on admitting listed addresses — every household's
+members now, rather than two people — each added by the operator in the
+dashboard. The directory then says which household an admitted address is in,
+and refuses one it has no member for. Membership is in two places, and they
+drift closed: an address on one list and not the other is refused either way.
+The cost is one dashboard edit per new address, a few times in the tool's life.
+Opening the policy to any address that proves itself (`allow` with `everyone`)
+was weighed on 2026-10-12 and kept as the path for later, in repo-98, which
+waits on the owner wanting the ledger open. It would let a household admit its
+own member with nobody's dashboard, but every stranger who proved an address
+would reach the identity check and the admin routes and would take a Zero
+Trust seat, and once the plan's seats are used Cloudflare blocks every new
+sign-in, the next household's included, with seat expiration off by default.
+Replacing Access with an OIDC provider was weighed and rejected: Access already
+fronts Google, GitHub and a one-time PIN, so opening to anyone needs no
+provider of the ledger's own, and a provider in Access's place would let
+unauthenticated requests reach the origin and put a sign-in flow, sessions and
+CSRF protection into the ledger.
+
 ## 8. The one-off import
 
 The workbook holds everything since 2022, and the owner chose to import all of
