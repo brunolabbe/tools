@@ -126,15 +126,20 @@ export class Directory {
       | undefined;
   }
 
-  /** Every membership that stands, or one household's, by household then address. */
+  /**
+   * Every membership that stands, or one household's, by household then address.
+   * One household's is filtered in the SQL, not after reading everyone's: the
+   * identity hook asks for it on every request (lg-20's gate, F6; folded into
+   * lg-21, whose books path is that hook).
+   */
   members(household?: string): Member[] {
-    const all = this.#db
-      .prepare(
-        `SELECT address, household_id AS household, person FROM current_members
-         ORDER BY household_id, person, address`,
-      )
-      .all() as Member[];
-    return household === undefined ? all : all.filter((member) => member.household === household);
+    const select = `SELECT address, household_id AS household, person FROM current_members`;
+    const order = `ORDER BY household_id, person, address`;
+    return (
+      household === undefined
+        ? this.#db.prepare(`${select} ${order}`).all()
+        : this.#db.prepare(`${select} WHERE household_id = ? ${order}`).all(household)
+    ) as Member[];
   }
 
   /** The names a household's current members stand under, once each. */

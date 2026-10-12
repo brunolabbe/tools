@@ -37,8 +37,8 @@ export const BASE_URL = `http://127.0.0.1:${String(PORT)}`;
 const isCI = process.env["CI"] !== undefined;
 
 /**
- * A run starts from an empty database — never the developer's
- * `storage/ledger/ledger.db`, which a suite would write into and inherit from.
+ * A run starts from empty books — never the developer's
+ * `storage/ledger`, which a suite would write into and inherit from.
  * Removed rather than given a unique name so nothing accumulates across runs.
  */
 fs.rmSync(storage, { recursive: true, force: true });
@@ -91,7 +91,8 @@ export default defineConfig({
       HOST: "127.0.0.1",
       PORT: String(PORT),
       WEB_DIR: path.join(root, "web/dist/app"),
-      DATABASE_PATH: path.join(storage, "e2e.db"),
+      // The data directory: each household's books are a file in it (lg-21).
+      DATABASE_PATH: storage,
       LOG_LEVEL: "warn",
     },
   },

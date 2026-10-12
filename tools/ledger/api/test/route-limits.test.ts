@@ -215,3 +215,27 @@ describe("the routes that answer two verbs", () => {
     expect(second.statusCode).toBe(429);
   });
 });
+
+/** The hook, called for a person in a household (lg-21). */
+function callIn(hook: ReturnType<typeof hookFor>, household: string, person: string) {
+  const email = `${person}@${household}.test`;
+  const request = {
+    ip: "10.0.0.1",
+    identity: { email, admin: false, person: { id: person, email, household } },
+  } as unknown as FastifyRequest;
+  return hook(request, { header: vi.fn() } as unknown as FastifyReply);
+}
+
+// lg-21: a person is a name in a household, and two households can each have an
+// alex. The bucket is kept for the household and the name together.
+describe("the key, across households", () => {
+  test("is the household and the person, so two households' people with one name have a bucket each", async () => {
+    const hook = hookFor(new RateLimiter({ perMinute: 1 }));
+
+    await callIn(hook, "home", "alex");
+
+    await expect(callIn(hook, "home", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(callIn(hook, "away", "alex")).resolves.toBeUndefined();
+    await expect(callIn(hook, "away", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
+  });
+});

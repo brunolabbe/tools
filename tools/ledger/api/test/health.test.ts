@@ -100,3 +100,91 @@ describe("GET /api/health", () => {
     expect(body.directory).toEqual({ open: false });
   });
 });
+
+/** What the body names that it should not: a household, a file, or a field beyond the contract's. */
+function named(text: string): string[] {
+  const body = JSON.parse(text) as Record<string, unknown>;
+  const fields = [...Object.keys(body), ...Object.keys(body["database"] as object)];
+  const extra = fields.filter(
+    (field) =>
+      !["ok", "shuttingDown", "version", "uptimeSec", "database", "directory", "open"].includes(
+        field,
+      ),
+  );
+  const words = [HOUSEHOLD, "away", "households", ".db"].filter((word) => text.includes(word));
+  return [...extra, ...words];
+}
+
+// lg-21: every household's books are a file of their own, and health answers
+// for all of them at once, never naming one, counting them, or saying where.
+describe("GET /api/health, with a household's books each", () => {
+  const CHANGE = { by: "operator", at: new Date("2026-10-12T00:00:00Z") };
+
+  function withAway(file?: string) {
+    const directory = memberDirectory([[ALEX, "alex"]], file);
+    directory.addHousehold({ id: "away", name: "Away", ...CHANGE });
+    directory.addMember({ household: "away", address: "kim@away.test", person: "kim", ...CHANGE });
+    return directory;
+  }
+
+  test("is ok with every household's books open, and names none of them", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-health-"));
+    try {
+      app = await createApp({
+        directory: withAway(path.join(dir, "directory.db")),
+        config: { dataDir: dir, logLevel: "silent" },
+      });
+
+      const response = await app.server.inject({ method: "GET", url: ROUTES.health });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json<HealthResponse>()).toMatchObject({
+        ok: true,
+        database: { open: true },
+        directory: { open: true },
+      });
+      expect(named(response.body)).toEqual([]);
+      expect(response.body).not.toContain(dir);
+    } finally {
+      await app?.shutdown();
+      app = undefined;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("is not ok when any one household's books are closed, and does not say which", async () => {
+    app = await createApp({
+      directory: withAway(),
+      config: { dataDir: ":memory:", logLevel: "silent" },
+    });
+    app.books.of("away").close();
+
+    const response = await app.server.inject({ method: "GET", url: ROUTES.health });
+
+    expect(response.statusCode).toBe(503);
+    const body = response.json<HealthResponse>();
+    expect(body.ok).toBe(false);
+    expect(body.database).toEqual({ open: false });
+    expect(body.directory).toEqual({ open: true });
+    expect(named(response.body)).toEqual([]);
+  });
+
+  test("opens the books of a household added since boot, so it answers for that one too", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-health-"));
+    try {
+      const directory = memberDirectory([[ALEX, "alex"]], path.join(dir, "directory.db"));
+      app = await createApp({ directory, config: { dataDir: dir, logLevel: "silent" } });
+      directory.addHousehold({ id: "away", name: "Away", ...CHANGE });
+      expect(existsSync(householdBooksPath(dir, "away"))).toBe(false);
+
+      const response = await app.server.inject({ method: "GET", url: ROUTES.health });
+
+      expect(response.json<HealthResponse>().database).toEqual({ open: true });
+      expect(existsSync(householdBooksPath(dir, "away"))).toBe(true);
+    } finally {
+      await app?.shutdown();
+      app = undefined;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

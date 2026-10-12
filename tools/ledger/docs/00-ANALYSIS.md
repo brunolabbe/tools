@@ -490,9 +490,9 @@ entirely.
   changing the name it stands under is not. Retiring a person is future work,
   for when someone first needs it.
 
-The list above describes the tool as built, with the directory (lg-20) and one
-household. What follows is decided; lg-20 built its directory, lg-21 and lg-22
-build the rest, and repo-98 is the later opening of the Access policy, if the
+The list above describes the tool as built, with the directory (lg-20) and a
+books file per household (lg-21). What follows is decided; lg-20 built its
+directory, lg-21 the books per household, and lg-22 builds the rest, and repo-98 is the later opening of the Access policy, if the
 owner ever wants the ledger open.
 
 ### More than one household
