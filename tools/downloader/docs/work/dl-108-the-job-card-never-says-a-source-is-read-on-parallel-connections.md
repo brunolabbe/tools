@@ -187,6 +187,28 @@ New in the round's lines:
 - CI on `69d90d53`, read once: every check passes except `test (ubuntu-latest)` and `test (windows-latest, informational)`, both **still pending**.
 - NFR: security n/a · performance ✓ · reliability ✓ · maintainability: the `high` above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-12 · `69d90d53..ab68adb3` (the round: `bcd44289`; `32f8a994` is main's #455, merged in, not reviewed) · Opus 5.5, depth narrow
+
+- **Gate 2's high (the split sentence in `JobProgress.originConnections`)**: **fixed**. `contract/src/job.ts` now says "In a split it is the requests open, up to the configured connections, and moves between chunks (4, then 3); it is `0` at the closing snapshot, and `1` for the rest of the job once a split falls back." That is gate 2's wording, verbatim. Both probes were re-run at `ab68adb3`, and each matches a clause:
+  - split (`probe-split.sh`, `moov-end.mp4`, 500 kB/s per connection), 3 of 3 runs: `1, 4, 4, 4, 3, 0`. The count stays at or below the 4 configured, moves between chunks, and is `0` at the closing tick.
+  - refused split (`probe-fallback.sh`, `behaviour.refuse = "429"`), 3 of 3 runs: the fan-out `bytes=229424-360495` goes out, then 16 ticks of `1` and a closing `0`.
+- **The comments the fixer left alone**: each reason holds.
+  - The unsplit half of the same comment ("`1` while its one request is open and never more") is kept by the cap in `originConnectionsOf`.
+  - `originConnectionsOf`'s "the card reads 2 or more as…" describes `progressMessages()` in `JobCard.tsx` correctly.
+  - `FeederStats.openFetches` describes the raw count, which can reach 2 without a split, and that is what it is.
+  - The brief's Decision prose ("4, then 3, then 4") describes movement and states no bound. It is the owner's text in any case.
+  - The Log's round-1 F1 line ("`2` or more only in a split") means 2 or more implies a split. The cap keeps that.
+- **Gate 2's low (nothing holds the call site in `attempt`)**: recorded, unfixed by the severity floor. The round does not touch it.
+- **dropped** · The opening phrase "the requests to the origin open at the moment of the snapshot" reads `1` while two unsplit requests overlap, because of the cap. That is round-1 text gate 2 already reviewed, and the next clause states the cap. Out of this round.
+- **findings** · the round's lines returned 1; 0 carried, 1 dropped.
+- The round changes only a comment and the ticket. The engine, feeder and web are byte-identical to `69d90d53`, where the 9 affected spec files passed 213 of 213, `parallel-ranges.test.ts` 43 of 43, and `stream.test.ts -t dl-108` 4 of 79 (75 skipped).
+- CI, read once:
+  - at `ab68adb3`: `test (ubuntu-latest)` and `test (windows-latest, informational)` are **pending**, and so are `codeql`, `docker`, `e2e (direct)` and `e2e (sniffer)`. `check`, `changes`, `dependency-review` and pr-title `check` pass.
+  - at `69d90d53` (run `38299292422`), whose downloader code is identical: both test legs **passed**, so the timing-based `some(v === 1)` assertion held on Windows and on Ubuntu there.
+- NFR: security n/a · performance n/a · reliability n/a · maintainability ✓.
+
 ## Log
 
 **2026-10-12**: filed from the owner's question on a live job (Why). Shape and
