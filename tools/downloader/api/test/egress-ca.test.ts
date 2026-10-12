@@ -209,7 +209,8 @@ async function wiredApp(
     // The probe's thumbnail step grabs a frame when the source names no image,
     // and this fixture answers every path with the master playlist, so the
     // real grab runs to its 6 s timeout (6.8 s a test, measured). Nothing here
-    // is about thumbnails; a probe's verdict does not wait on the grab's result.
+    // is about thumbnails; the probe route still waits for the grab before it
+    // replies, but its status does not depend on the grab's result.
     grabFrame: async () => null,
     ...(logger === undefined ? {} : { logger }),
     config: {

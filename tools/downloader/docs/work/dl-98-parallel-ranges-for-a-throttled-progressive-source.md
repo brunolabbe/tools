@@ -684,3 +684,9 @@ on the same test and on the F9 test too, both in run 38141287195, attempt 2
 [dl-106](./dl-106-two-parallel-ranges-tests-fail-on-the-windows-leg-and-pass-on-linux.md)
 in this pull request with both attempts as the reproduction. The Windows
 leg stays red on this merge; it is informational.
+
+- 2026-10-12 — Its "Cover 403 and 503 too" refusal rows ("a 403", "a 503" in
+  `parallel-ranges.test.ts`) were replaced by a feeder-level unit test pinning
+  `REFUSAL_STATUSES` (403, 429, 503) in
+  [dl-112](./dl-112-engine-and-api-tests-wait-out-timers-they-do-not-test.md),
+  on the owner's answer of 2026-10-12. 429 stays as the end-to-end row.

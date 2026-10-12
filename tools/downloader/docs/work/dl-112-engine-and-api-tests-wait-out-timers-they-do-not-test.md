@@ -184,3 +184,42 @@ tools/downloader/engine/test/stream.test.ts -t "however the lines interleave"`
   the pull request's Windows leg has run (dl-106's 15.6 ms timer tick applies to
   the 4 MB/s fixture and the 300 ms stand-in exit; the dl-103 and "interleave"
   stand-ins are skipped there).
+
+- 2026-10-12 — **Round 2, the owner's answer.** Asked whether to keep dl-98's
+  "a 403" and "a 503" refusal rows or replace them with a unit test, the owner
+  chose **"Replace with a unit test"** on 2026-10-12, over "Keep the rows
+  (Recommended)", and decided that a unit assertion counts as covering 403 and
+  503 for dl-98. Relayed through the orchestrator.
+  - The two rows are removed from `parallel-ranges.test.ts`. In their place,
+    `test.each(["403", "429", "503"])` "a %s on a fan-out fetch is reported to
+    onRefused as a status refusal" starts a real `RangeFeeder` against the
+    fixture, reads its loopback as ffmpeg would, waits for `onRefused`, and
+    asserts `[{ host: "127.0.0.1", kind: "status" }]`, no fatal error, and that
+    the origin did refuse. 213 ms each. **429 stays as the end-to-end row** (the
+    owner named only 403 and 503): it keeps the fallback and the host memory
+    proven for the set, and it is in the new test too, so all three members of
+    `REFUSAL_STATUSES` are pinned. The reset, 200 and no-speed-up rows are
+    different mechanisms and stay.
+  - **Red without each member.** `REFUSAL_STATUSES` is
+    `engine/src/download/parallel-ranges.ts:177`, restored after each run. With
+    `new Set([403, 429])`, `npx vitest run
+tools/downloader/engine/test/parallel-ranges.test.ts -t "fan-out fetch is
+reported"` prints `× a 503 on a fan-out fetch is reported to onRefused as a
+status refusal 5010ms`, `Error: not within 5000 ms: no refusal reported;
+origin saw
+["bytes=0-","bytes=966656-1097727","bytes=1097728-1228799","bytes=1228800-1359871","bytes=835584-"]`
+    and `Tests 1 failed | 2 passed`. With `new Set([429, 503])` it prints `× a
+403 on a fan-out fetch …`, the same error and `Tests 1 failed | 2 passed`.
+    Unmutated: 3 of 3 pass.
+  - **Timing.** `parallel-ranges.test.ts` alone: 102.2 s before dl-112, 78.8 s
+    after round 1, 75.9 s now (39 of 39 tests). The two rows were 2.3 s each; the
+    three new tests are 0.2 s each.
+  - **Done when 3, the removed rows.**
+    `git log --oneline -S'kind: "a 403"' -- tools/downloader/engine/test/parallel-ranges.test.ts`
+    and the same with `"a 503"` each print only `72b47fe1` (dl-98, which added
+    them). The owner's answer above is what clears them, and dl-98's Log now
+    says so.
+  - Gate 1's one low, fixed: the `wiredApp` comment in `egress-ca.test.ts` said
+    the probe's verdict does not wait on the grab; it now says the probe route
+    still waits for the grab before it replies and its status does not depend on
+    the grab's result.

@@ -583,9 +583,11 @@ describe("dl-98: a progressive source throttled per connection", () => {
 
 describe("dl-98: a host that refuses parallel ranges", () => {
   const kinds: { kind: string; set: (b: Behaviour) => void }[] = [
+    // 403 and 503 are in dl-98's Decision 5 beside 429 and go through the same
+    // `REFUSAL_STATUSES` check, so their rows were replaced by the unit test
+    // below, on the owner's answer of 2026-10-12 (dl-112): 429 stays the
+    // end-to-end row for the set.
     { kind: "a 429", set: (b) => (b.refuse = "429") },
-    { kind: "a 403", set: (b) => (b.refuse = "403") },
-    { kind: "a 503", set: (b) => (b.refuse = "503") },
     { kind: "a reset", set: (b) => (b.refuse = "reset") },
     { kind: "a 200 to a range request", set: (b) => (b.refuse = "200") },
     {
@@ -622,6 +624,34 @@ describe("dl-98: a host that refuses parallel ranges", () => {
       const second = await run(engine, source);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
       expect(await packetDigests(second.file)).toEqual(expected);
+    },
+    SLOW,
+  );
+
+  // Each status Decision 5 names is remembered as a refusal, at the feeder, where
+  // `onRefused` is called with the kind. The set is `REFUSAL_STATUSES`; a status
+  // removed from it is a row that goes red here. The end-to-end rows above
+  // keep 429, the one that proves the fallback and the memory for the set.
+  test.each(["403", "429", "503"] as const)(
+    "a %s on a fan-out fetch is reported to onRefused as a status refusal",
+    async (status) => {
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
+      behaviour.refuse = status;
+      const { feeder, fatal, refused } = await feederFor("faststart.mp4");
+      // The loopback is read the way ffmpeg reads it: without a reader nothing
+      // is fetched. Closing the feeder ends the read, so it is not awaited to the end.
+      const read = readLoopback(feeder.url);
+      await until(
+        () => refused.length > 0,
+        5_000,
+        () => `no refusal reported; origin saw ${JSON.stringify(seen.map((entry) => entry.range))}`,
+      );
+      feeder.close();
+      await read;
+
+      expect(refused).toEqual([{ host: "127.0.0.1", kind: "status" }]);
+      expect(fatal).toEqual([]);
+      expect(seen.some((entry) => entry.refused)).toBe(true);
     },
     SLOW,
   );
