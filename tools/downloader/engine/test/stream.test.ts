@@ -2284,18 +2284,18 @@ describe("dl-108: an HLS job has no feeder in its path", () => {
   });
 });
 
-describe("dl-108 round 1: the count the card is given", () => {
-  type Stats = NonNullable<Parameters<typeof originConnectionsOf>[0]>;
-  const stats = (mode: Stats["mode"], openFetches: number): Stats => ({
-    mode,
-    maxHeldBytes: 0,
-    deliveredBytes: 0,
-    originRequests: 0,
-    maxConcurrentFetches: 0,
-    openFetches,
-    refusal: null,
-  });
+type FeederStatsOf = NonNullable<Parameters<typeof originConnectionsOf>[0]>;
+const stats = (mode: FeederStatsOf["mode"], openFetches: number): FeederStatsOf => ({
+  mode,
+  maxHeldBytes: 0,
+  deliveredBytes: 0,
+  originRequests: 0,
+  maxConcurrentFetches: 0,
+  openFetches,
+  refusal: null,
+});
 
+describe("dl-108 round 1: the count the card is given", () => {
   test("no feeder is null, never 0 or 1", () => {
     expect(originConnectionsOf(null)).toBeNull();
   });
