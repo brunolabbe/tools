@@ -409,3 +409,14 @@ that counts, so a slow player is not clicked past` 1948. `sameDocument` is
   Not measured: any other platform (the 7000 ms ceilings in the merged tests
   are the ones dl-95 already widened for Windows), and the cost of a
   `provokePlayback` case against a probe other than the 14 in `consent-scope`.
+
+- 2026-10-12 — Merged `origin/main` (`07acbb86`: dl-116, dl-118, repo-102) with
+  no conflict. dl-118 edited the dl-83 block and `provoke.test.ts`, which this
+  branch also edits, in different places. After `npm run build` and `npx tsc
+--build`, `npx vitest run` on the five files: `browser-resolver` 137 passed in
+  391.32 s, `consent-scope` 23 in 45.52 s, `chunk-streams` 3 in 9.43 s,
+  `provoke` 264 in 11.32 s (dl-118's cap block added 10 tests), `chunk-sniff` 33.
+  The durations in the first entry are the ones measured before the merge and
+  are this ticket's alone; the 391 s includes dl-118's saving. Before the
+  merge, `npm test -- --project downloader`: `Test Files 114 passed | 1 skipped
+(115)`, `Tests 2425 passed | 2 skipped (2427)`, 418.36 s, exit 0.
