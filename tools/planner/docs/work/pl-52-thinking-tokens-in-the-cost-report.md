@@ -164,6 +164,61 @@ should reflect what that run found, not guess ahead of it.
   proven on real v9, v10 and v11 databases) · maintainability — the two lows
   above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-12 · `942fec1a..6b4c64d5` (round 1: `d9e3e60b`, `6b4c64d5`) · Opus 5.5, depth full
+
+- **med · fixed** — the thinking row runs over a narrower population than the
+  output row. Owner's option (1): `thinkingShare` in `api/src/cost-report.ts`
+  divides Σ thinking by Σ output over the runs that reported both. Gate 1's
+  reproduction now prints
+  `share 90.0% of output … over the 2 runs that reported both` under the same
+  `output 100 1,000 460` and `thinking 900 900 900`, which is 1,800 ÷ 2,000 by
+  hand. Through the built `dist/report.js`, a v12 database (one run at 400
+  output and 0 thinking, one at 800 and 120, one metered run with no breakdown,
+  one scripted run) prints `10.0% … over the 2 runs`, which is
+  120 ÷ 1,200 by hand.
+  - Edge cases, run through `renderCostReport`: no run reporting both prints
+    `— … over the 0 runs`. Σ output = 0 prints `—` over 2 runs, with no `NaN`
+    or `Infinity` anywhere in the output. An empty window prints `—` over 0.
+  - Planted mutations:
+    - Summing output over every metered run while summing thinking only where
+      it was reported fails 4 of 21 tests in `cost-report.test.ts`, among them
+      › "a window that mixes runs from before the migration with runs after it
+      reads the share, not the narrower row".
+    - Dropping the `output > 0` guard fails › "the share is 0.0% for runs that
+      all thought nothing, and a dash when there was no output to divide".
+- **low · fixed** — a real zero had no test. Gate 1's two mutations each now
+  fail exactly one test, 1 of 660 api tests:
+  - `|| null` in `updateRunUsage` fails `api/test/run-usage.test.ts` › "a reply
+    that reported zero thinking records zero, not null".
+  - `.filter((value) => value !== 0)` on the report's sample fails
+    `api/test/cost-report.test.ts` › "a real zero is a figure: it is kept in the
+    row and the share, not read as unreported".
+- **low · fixed** — the caveat cited no run. It now reads "The funded run of
+  2026-10-12 (pl-40: 574 replies, three models)". The date is the run's, not
+  only its merge's. pl-40's Log entry "2026-10-12 — the paid run" says the run
+  started from `391af241` (pl-55 merged), and that commit is dated 2026-10-12
+  17:20 −0400. Its record merged as `27b8919d` at 19:02 −0400 the same day, so
+  the run fell between those two times. 574 and three models are unchanged from
+  gate 1's check.
+- **low** · new, in the round's Log commit · The Log's "Med, fixed" paragraph
+  says the report prints `share 31.3% of output … over the 2 runs that reported
+both`. No fixture or test produces 31.3%: `grep -rn "31.3"` over the test and
+  the source finds nothing, and the tests pin 20.6%, 90.0%, 0.2% and 0.0%. The
+  line is illustrative but reads as measured output. Fixing it at landing means
+  quoting a figure a test pins, e.g. 20.6% over 3 runs.
+- **dropped** · a share above 100% when a provider reports more thinking than
+  output (one run at 10 output and 50 thinking prints `500.0%`). No provider
+  here does that: `thinkingTokens` is a subset of `outputTokens` by the
+  contract of `ModelUsage`. No live call site.
+- **findings** · this round's hunt returned 2; 1 carried, 1 dropped. Nothing is
+  a `high`.
+- Gates at `6b4c64d5`: `npm run check` exit 0, and the planner project passed
+  1438 of 1438 tests across 77 files. On PR #467 at this head, `check`,
+  `docker`, `e2e`, CodeQL and `dependency-review` pass. The two unit `test`
+  legs (ubuntu and windows) were still pending when this section was written.
+
 ## Log
 
 ### 2026-09-19 — filed
