@@ -34,6 +34,7 @@ test("the footer links to a terms page that is a file in public/", async () => {
     cancelJob: vi.fn(),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
     openProbeEvents: vi.fn(() => ({ close: vi.fn() })),
+    openLink: vi.fn(),
   } satisfies ApiClient;
   vi.doMock("../src/api/client.ts", () => ({ USING_MOCK_API: false, api: client }));
   const { App } = await import("../src/App.tsx");

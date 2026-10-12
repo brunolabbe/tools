@@ -3,9 +3,12 @@ import type { Job } from "@downloader/contract";
 import {
   JOBS_STORAGE_KEY,
   MAX_PERSISTED_JOBS,
+  TITLES_STORAGE_KEY,
   clearJobs,
   loadJobs,
+  loadTitles,
   saveJobs,
+  saveTitles,
 } from "../src/lib/job-store.ts";
 import { createMemoryStorageStub } from "./helpers.ts";
 
@@ -154,5 +157,50 @@ describe("job persistence", () => {
     const storage = createMemoryStorageStub();
     saveJobs(storage, [{ ...job("a", "2026-08-05T10:00:00.000Z"), thumbnailPath: null }]);
     expect(loadJobs(storage)[0]?.thumbnailPath).toBeNull();
+  });
+});
+
+describe("a saved job is not kept (dl-109)", () => {
+  const AT = "2026-08-05T10:00:00.000Z";
+
+  test("a completed job is not written, and failed, canceled and live ones are", () => {
+    const storage = createMemoryStorageStub();
+    saveJobs(storage, [
+      job("live", AT, "downloading"),
+      job("saved", AT, "completed"),
+      job("failed", AT, "failed"),
+      job("canceled", AT, "canceled"),
+    ]);
+
+    const written = JSON.parse(storage.getItem(JOBS_STORAGE_KEY) ?? "[]") as { id: string }[];
+    expect(written.map((entry) => entry.id).toSorted()).toEqual(["canceled", "failed", "live"]);
+  });
+
+  test("a completed job saved before dl-109 is not read back", () => {
+    const storage = createMemoryStorageStub();
+    storage.setItem(
+      JOBS_STORAGE_KEY,
+      JSON.stringify([job("saved", AT, "completed"), job("failed", AT, "failed")]),
+    );
+    expect(loadJobs(storage).map((entry) => entry.id)).toEqual(["failed"]);
+  });
+
+  test("titles are kept only for the jobs the list still keeps", () => {
+    const storage = createMemoryStorageStub();
+    saveTitles(storage, { live: "Harbour timelapse", saved: "Night market", gone: "Ferry" }, [
+      job("live", AT, "downloading"),
+      job("saved", AT, "completed"),
+    ]);
+    expect(loadTitles(storage)).toEqual({ live: "Harbour timelapse" });
+  });
+
+  test("stored titles are untrusted: anything not a non-empty string is dropped", () => {
+    const storage = createMemoryStorageStub();
+    storage.setItem(TITLES_STORAGE_KEY, JSON.stringify({ a: "Kept", b: 3, c: "", d: null }));
+    expect(loadTitles(storage)).toEqual({ a: "Kept" });
+    for (const raw of ["not json", "[1,2]", "null", "7"]) {
+      storage.setItem(TITLES_STORAGE_KEY, raw);
+      expect(loadTitles(storage)).toEqual({});
+    }
   });
 });

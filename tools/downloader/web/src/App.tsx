@@ -49,68 +49,75 @@ export function App(): React.JSX.Element {
   const stageStream = useRef<EventStream | null>(null);
 
   const jobs = useJobs(api);
+  const { clearSaved } = jobs;
 
   useEffect(() => {
     applyTheme(theme);
     saveTheme(storage, theme);
   }, [theme, storage]);
 
-  const analyse = useCallback(async (candidate: string) => {
-    const parsed = sourceUrlSchema.safeParse(candidate);
-    if (!parsed.success) {
-      setPhase({ kind: "idle" });
-      setProbeError(localErrorPayload("INVALID_URL"));
-      return;
-    }
-    const token = probeToken.current + 1;
-    probeToken.current = token;
-    setProbeError(null);
-    setStartError(null);
-    setPhase({ kind: "analysing", url: parsed.data, startedAt: Date.now(), stage: null });
+  const analyse = useCallback(
+    async (candidate: string) => {
+      const parsed = sourceUrlSchema.safeParse(candidate);
+      if (!parsed.success) {
+        setPhase({ kind: "idle" });
+        setProbeError(localErrorPayload("INVALID_URL"));
+        return;
+      }
+      const token = probeToken.current + 1;
+      probeToken.current = token;
+      // A saved card is the confirmation for the page the visitor was on; moving
+      // on to another page is when it has been read (dl-109).
+      clearSaved();
+      setProbeError(null);
+      setStartError(null);
+      setPhase({ kind: "analysing", url: parsed.data, startedAt: Date.now(), stage: null });
 
-    // dl-43. Opened before the POST and named by this client, because the
-    // request that starts the probe is also the first thing that can produce a
-    // stage — there is no moment later at which subscribing would still catch
-    // the beginning. A stale stream from an abandoned probe is closed here
-    // rather than left to the server's channel timeout.
-    stageStream.current?.close();
-    const probeId = mintProbeId();
-    const stream = api.openProbeEvents(probeId, {
-      onOpen: () => {},
-      onEvent: (event) => {
-        if (probeToken.current !== token || event.type !== "stage") return;
-        // Only while analysing: a frame that arrives after the answer has no
-        // panel to reach, and must not resurrect one.
-        setPhase((current) =>
-          current.kind === "analysing"
-            ? { ...current, stage: { stage: event.stage, resolver: event.resolver } }
-            : current,
-        );
-      },
-      // Narration is decoration over a request that is still in flight. Losing
-      // it leaves the panel on its last honest line and changes nothing else.
-      onError: () => {},
-    });
-    stageStream.current = stream;
-
-    try {
-      const response = await api.probe({ url: parsed.data, probeId });
-      if (probeToken.current !== token) return;
-      setPhase({
-        kind: "probed",
-        url: parsed.data,
-        probe: response.probe,
-        cached: response.cached,
+      // dl-43. Opened before the POST and named by this client, because the
+      // request that starts the probe is also the first thing that can produce a
+      // stage — there is no moment later at which subscribing would still catch
+      // the beginning. A stale stream from an abandoned probe is closed here
+      // rather than left to the server's channel timeout.
+      stageStream.current?.close();
+      const probeId = mintProbeId();
+      const stream = api.openProbeEvents(probeId, {
+        onOpen: () => {},
+        onEvent: (event) => {
+          if (probeToken.current !== token || event.type !== "stage") return;
+          // Only while analysing: a frame that arrives after the answer has no
+          // panel to reach, and must not resurrect one.
+          setPhase((current) =>
+            current.kind === "analysing"
+              ? { ...current, stage: { stage: event.stage, resolver: event.resolver } }
+              : current,
+          );
+        },
+        // Narration is decoration over a request that is still in flight. Losing
+        // it leaves the panel on its last honest line and changes nothing else.
+        onError: () => {},
       });
-    } catch (error) {
-      if (probeToken.current !== token) return;
-      setPhase({ kind: "idle" });
-      setProbeError(AppError.from(error).toPayload());
-    } finally {
-      stream.close();
-      if (stageStream.current === stream) stageStream.current = null;
-    }
-  }, []);
+      stageStream.current = stream;
+
+      try {
+        const response = await api.probe({ url: parsed.data, probeId });
+        if (probeToken.current !== token) return;
+        setPhase({
+          kind: "probed",
+          url: parsed.data,
+          probe: response.probe,
+          cached: response.cached,
+        });
+      } catch (error) {
+        if (probeToken.current !== token) return;
+        setPhase({ kind: "idle" });
+        setProbeError(AppError.from(error).toPayload());
+      } finally {
+        stream.close();
+        if (stageStream.current === stream) stageStream.current = null;
+      }
+    },
+    [clearSaved],
+  );
 
   const abandonProbe = useCallback(() => {
     probeToken.current += 1;
@@ -125,7 +132,7 @@ export function App(): React.JSX.Element {
       setStarting(true);
       setStartError(null);
       try {
-        await jobs.start(phase.url, options);
+        await jobs.start(phase.url, options, phase.probe.title);
       } catch (error) {
         setStartError(AppError.from(error).toPayload());
       } finally {
@@ -203,16 +210,19 @@ export function App(): React.JSX.Element {
           </>
         )}
 
+        {/* Below the analysis panel, directly under the Download button just
+            pressed — where the eye already is. Above it, the new card landed
+            off screen, because the panel is scrolled to its bottom to press
+            the button (measured by dl-109's gate). */}
         <JobList
           jobs={jobs.jobs}
+          titles={jobs.titles}
           streamStates={jobs.streamStates}
-          watchedSteps={jobs.watchedSteps}
           refusals={jobs.refusals}
           onFollowLink={jobs.clearRefusal}
           onCancel={(id) => void jobs.cancel(id)}
           onRemove={jobs.remove}
           onRetry={retryJob}
-          onClearFinished={jobs.clearFinished}
         />
 
         {USING_MOCK_API && (

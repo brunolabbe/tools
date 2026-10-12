@@ -74,19 +74,9 @@ test("reduced motion stops the travel and leaves something a bar at 0% is not", 
   expect(still).toContain("repeating-linear-gradient");
 });
 
-test("the analyse line and the download's gates no longer share a rule", () => {
-  // They did until dl-43, so every visual change to one landed on the other by
-  // accident — which is why the download pipeline is drawn as gates and the
-  // analyse panel as a single line only after this split.
+test("the job card draws no step list, and the analyse panel no stage row (dl-43, dl-109)", () => {
+  // The analyse panel lost its five-stage row in dl-43; the job card lost its
+  // four steps in dl-109, the bar and the line under it being the progression.
   expect(CSS).not.toContain(".stages");
-  expect(CSS).not.toContain(".stages__item");
-
-  const gates = block(CSS, ".steps");
-  // Gated: equal columns, so the bar *is* the pipeline. It also stops the card
-  // moving when the active step goes bold, which the wrapping flex row did.
-  expect(gates).toMatch(/display:\s*grid/u);
-  expect(gates).toContain("grid-auto-columns: 1fr");
-  expect(block(CSS, ".steps__item")).toContain("border-top");
-  expect(block(CSS, ".steps__item--active")).toContain("border-top-color");
-  expect(block(CSS, ".steps__item--done")).toContain("border-top-color");
+  expect(CSS).not.toContain(".steps");
 });

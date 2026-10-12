@@ -25,4 +25,11 @@ export interface ApiClient {
    * emitted the moment the server starts resolving.
    */
   openProbeEvents: ProbeEventStreamFactory;
+  /**
+   * Opens a job's single-use link as a download, which is what starts the work
+   * (dl-53), so one press of the panel's Download both creates the job and
+   * fetches the file. It cannot report failure: the browser owns the download,
+   * and a refusal comes back over the job's event stream (dl-77).
+   */
+  openLink(href: string): void;
 }

@@ -67,13 +67,18 @@ would have held one tunnel. A page meant to explain a download should not need
    make the web side treat `undefined` as `null`. Pick one and test it with a
    row that lacks the key. `initialProgress()` sets it to `null`.
 5. **Web** (`web/src/components/JobCard.tsx`). While downloading, when
-   `originConnections` is 2 or more, show a short hint beside the speed, for
-   example "Reading on 4 connections. This source throttles each one." Show
-   nothing at 1 or `null`: the hint exists to explain a split, and "1
-   connection" on every job is noise. Make it reachable to a screen reader
-   (the `aria-live` hint paragraph is the precedent). Add the field to every
+   `originConnections` is 2 or more, add one **progress message** under the
+   bar: `progressMessages()` in `JobCard.tsx` builds the list that
+   `ProgressMessages.tsx` renders (dl-109), and this is one more entry in it,
+   after the status line, with the count as a text mark — `progressMessages`
+   takes only the status today, so widen it to see `progress.originConnections` —
+   `{ key: "connections", mark: { text: "4×" }, text: "Reading on 4 connections. This source throttles each one." }`.
+   The list is already the card's `aria-live` region, so the line is announced
+   when it appears. Show nothing at 1 or `null`: the line exists to explain a
+   split, and "1 connection" on every job is noise. Add the field to every
    mock in `web/src/api/scenarios.ts`, and add one mock scenario that splits,
-   so the mocked UI can show the hint.
+   so the mocked UI can show it. _(Rewritten by dl-109, 2026-10-12: the owner
+   placed this line among the progress messages, not beside the speed.)_
 6. **Tests.** Add them at the **end** of each suite; inserting mid-file moves
    other tickets' cited lines.
    - `engine/test/parallel-ranges.test.ts`: the throttled fixture's progress
@@ -81,7 +86,7 @@ would have held one tunnel. A page meant to explain a download should not need
      fixture's never exceed 1 and are never `null`.
    - `engine/test/stream.test.ts` or equivalent: an HLS job reports `null`
      throughout.
-   - `web/test/job-card.test.tsx`: the hint renders at 4, and is absent at 1
+   - `web/test/job-card.test.tsx`: the connections message renders at 4, and is absent at 1
      and at `null`.
    - The legacy-row case from step 4.
 
@@ -102,7 +107,7 @@ Traps worth knowing in advance:
    in the path reports `null` throughout.
 3. A persisted job whose `progress_json` predates the field still loads and
    renders, with the field read as `null`.
-4. The job card shows the hint at 2 or more connections and nothing at 1 or
+4. The job card shows the connections message at 2 or more connections and nothing at 1 or
    `null`, proven by `web/test/job-card.test.tsx`.
 
 ## Log

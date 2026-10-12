@@ -65,21 +65,25 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   await expect(chosen).toBeChecked();
 
   // --- Download ----------------------------------------------------------
-  await page.getByRole("button", { name: "Download", exact: true }).click();
+  // dl-53: creating the job hands out a single-use link, and following it is
+  // what re-probes, runs ffmpeg and streams the file to this browser as it is
+  // produced. The one press does both: no second Download on the card.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download", exact: true }).click(),
+  ]);
 
-  const job = page.getByRole("listitem").filter({ hasText: hls.masterUrl }).first();
+  // The card shows the page's title and host, not the address (dl-109), and
+  // this is the only job on the page.
+  const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
   await expect(job).toBeVisible();
-
-  // dl-53: creating the job does nothing but hand out a single-use link. The
-  // card offers it; following it is what re-probes, runs ffmpeg and streams the
-  // file to this browser as it is produced.
-  const link = job.getByRole("link", { name: "Download", exact: true });
-  await expect(link).toBeVisible();
-  const href = await link.getAttribute("href");
+  // On screen, not merely in the page: the panel is scrolled to its bottom to
+  // press Download, and a card placed above it landed out of view (dl-109).
+  await expect(job).toBeInViewport();
+  const href = new URL(download.url()).pathname;
   expect(href).toMatch(/^\/api\/files\//u);
 
   // --- The file ----------------------------------------------------------
-  const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
   const saved = await download.path();
   expect(await download.failure()).toBeNull();
   const body = await readFile(saved);
@@ -90,11 +94,11 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   expect(download.suggestedFilename()).toMatch(/\.mp4$/u);
 
   // The card followed the stream to its end over SSE, and the link is spent.
-  await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
+  await expect(job.getByText(/^Saved by your browser — /u)).toBeVisible({
     timeout: 120_000,
   });
   await expect(job.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
-  const again = await request.get(href ?? "");
+  const again = await request.get(href);
   expect(again.status()).toBe(410);
 
   // ffmpeg pulled the segments itself rather than just the playlist — the
@@ -105,7 +109,7 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   // Last, so it covers everything above: the whole journey ran under the CSP
   // and the browser refused none of it. Most of the directives already have a
   // louder witness here — a refused bundle is a blank page and a refused
-  // `EventSource` is a job that never reaches "Downloaded" — so what this adds is
+  // `EventSource` is a job that never reaches "Done" — so what this adds is
   // the quiet case: something the policy stopped that the UI shrugged off.
   expect(await cspViolationsOn(page)).toEqual([]);
 });

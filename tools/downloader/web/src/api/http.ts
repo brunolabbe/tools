@@ -113,6 +113,21 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
 
     cancelJob: (id: string) => request(ROUTES.cancelJob(id), jobResponseSchema, { method: "POST" }),
 
+    // The same `<a href download>` the job card offers, clicked for the visitor:
+    // no value on `download` so the name comes from `Content-Disposition`, and a
+    // refusal lands in the downloads list rather than navigating away from the
+    // card that explains it. If the browser blocks it, the card's link is still
+    // there to press.
+    openLink(href: string): void {
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "";
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+    },
+
     openJobEvents(jobId, handlers): EventStream {
       const source = new EventSource(url(ROUTES.jobEvents(jobId)));
       source.addEventListener("open", () => handlers.onOpen());

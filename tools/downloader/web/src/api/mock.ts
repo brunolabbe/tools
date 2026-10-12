@@ -410,6 +410,10 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       return { job: runtime.job };
     },
 
+    // Nothing to open: the mock serves no file, and `createJob` already plays
+    // the job out as though its link were opened at once.
+    openLink(): void {},
+
     openProbeEvents(probeId, handlers): EventStream {
       const stream: MockProbeStream = { handlers, closed: false };
       let streams = probeStreams.get(probeId);
