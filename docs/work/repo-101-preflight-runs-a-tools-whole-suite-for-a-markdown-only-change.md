@@ -128,3 +128,34 @@ mixed with one code path (repo-101)`. Before the fix the first fails with
 
     preflight passed (exit 0)
     ```
+
+  - Done when 3, the markdown-only branch. Its diff against `036e7ac6`, the
+    code commit, is this ticket file alone (`git diff --name-only
+036e7ac6...HEAD`). Run as `node scripts/preflight.mjs --base 036e7ac6
+--title "fix(repo): a tool's markdown does not plan its suite (repo-101)"`,
+    exit 0. The check job plans no tool suite, and the `ciCommands` check still
+    runs the status suite:
+
+    ```
+    == check ==
+    ok    npm run check
+
+    == ciCommands ==
+    ok    node scripts/check-lockfile-sync.mjs
+    ok    node scripts/status.mjs --json
+    ok    npx vitest run scripts/test/status.test.ts
+
+    == review ==
+    ok    no ticket on this branch is newly marked done
+
+    == title ==
+    ok    "fix(repo): a tool's markdown does not plan its suite (repo-101)" — type and paths agree
+
+    == mergeTree ==
+    comparing HEAD against 2 other open pull request head(s)
+    ok    #401 release-please--branches--main--components--ledger merges cleanly with HEAD
+    ok    #398 release-please--branches--main--components--downloader merges cleanly with HEAD
+    no conflicts with any other open pull request head
+
+    preflight passed (exit 0)
+    ```
