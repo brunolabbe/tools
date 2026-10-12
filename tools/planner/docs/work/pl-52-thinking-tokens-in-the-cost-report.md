@@ -172,7 +172,7 @@ Gate 1 graded `942fec1a` CONCERNS. Its one open decision was put to the owner
 
 **Med, fixed: the share line.** `thinkingShare` in `api/src/cost-report.ts` sums
 thinking and output over the runs where both are non-null, and the report prints
-`share  31.3% of output: total thinking ÷ total output over the 2 runs that
+`share  20.6% of output: total thinking ÷ total output over the 3 runs that
 reported both` under the thinking row. It is `—` when no run reported both or
 when their output sums to 0 (no division, no NaN), and `0.0%` when runs reported
 both and thought nothing. Tests in `cost-report.test.ts`: "prints the share of
@@ -195,3 +195,22 @@ second, also 1 of 660), each reverted afterwards.
 **Low, fixed: the caveat's citation.** It now reads "The funded run of 2026-10-12
 (pl-40: 574 replies, three models)", so the run can be found and the sentence
 can be seen to go stale when a second measurement exists.
+
+- 2026-10-12 — **Gate 2's one low, _fixed at landing_** (the owner chose that
+  over leaving it recorded; ticket text only, no code changed).
+
+  **Question.** Gate 2 passed with one low finding: the round-1 entry quotes the
+  share line as `31.3% … over the 2 runs`, a figure no test produces. Land it
+  how?
+
+  **Options.** Fix it at landing (recommended); leave it recorded.
+
+  **Choice.** Fix it at landing. The example is now `20.6% … over the 3 runs`,
+  the figure pinned by `cost-report.test.ts` "prints the share of output over
+  the runs that reported both, so the comparison is one population". Proof it is
+  in a test, and that 31.3 is in none, by two greps. First
+  `grep -n "20.6% of output" tools/planner/api/test/cost-report.test.ts`
+  prints line 272,
+  `"share        20.6% of output: total thinking ÷ total output over the 3 runs that reported both",`
+  and then `grep -rn "31\.3%" tools/planner/api/test tools/planner/api/src`
+  prints nothing, exit 1.
