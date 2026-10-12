@@ -10,6 +10,8 @@
 
 import { createRequire } from "node:module";
 import { AppError } from "@downloader/contract";
+import { DEFAULT_RECONNECT_DELAY_MAX_S } from "./ffmpeg/args.ts";
+import { DEFAULT_KILL_GRACE_MS } from "./ffmpeg/kill.ts";
 import type { ParallelRangeSettings } from "./download/parallel-ranges.ts";
 import { PARALLEL_RANGE_DEFAULTS } from "./download/parallel-ranges.ts";
 import type { Logger } from "./logger.ts";
@@ -59,6 +61,21 @@ export interface EngineConfig {
   singleConnectionHosts: readonly string[];
   /** How a slow progressive source is split (dl-98). The defaults are the owner's. */
   parallelRanges: ParallelRangeSettings;
+  /**
+   * The longest ffmpeg waits between two reconnect attempts, in whole seconds
+   * (`-reconnect_delay_max`). A cut it cannot heal costs about 11 s at the
+   * default 10 (waits of 0, 1, 3 and 7 s), which is the right cost for a visitor
+   * and an expensive one for a test of what happens *after* it gave up (dl-116).
+   * No environment variable and nothing in `api` sets it: production is 10.
+   */
+  reconnectDelayMaxS: number;
+  /**
+   * POSIX: how long a cancelled or timed-out ffmpeg's process group has to
+   * leave after SIGTERM before SIGKILL, in milliseconds. The same story as
+   * `reconnectDelayMaxS`: production is 3000, and only a test that is not about
+   * the window shortens it. Windows kills with `taskkill /T /F` and has no grace.
+   */
+  killGraceMs: number;
   logger: Logger;
 }
 
@@ -121,6 +138,8 @@ function hostList(raw: string | undefined): string[] {
 export const ENGINE_DEFAULTS = {
   maxFileSizeMb: 4096,
   stageTimeoutMs: 3_600_000,
+  reconnectDelayMaxS: DEFAULT_RECONNECT_DELAY_MAX_S,
+  killGraceMs: DEFAULT_KILL_GRACE_MS,
 } as const;
 
 /** Builds a config from explicit overrides, falling back to env, then defaults. */
@@ -142,6 +161,8 @@ export function loadEngineConfig(
     tlsCaFile: input.tlsCaFile ?? env["EGRESS_CA_FILE"] ?? env["FFMPEG_CA_FILE"] ?? undefined,
     singleConnectionHosts: input.singleConnectionHosts ?? hostList(env["SINGLE_CONNECTION_HOSTS"]),
     parallelRanges: { ...PARALLEL_RANGE_DEFAULTS, ...input.parallelRanges },
+    reconnectDelayMaxS: input.reconnectDelayMaxS ?? ENGINE_DEFAULTS.reconnectDelayMaxS,
+    killGraceMs: input.killGraceMs ?? ENGINE_DEFAULTS.killGraceMs,
     logger: input.logger ?? NOOP_LOGGER,
   };
 }

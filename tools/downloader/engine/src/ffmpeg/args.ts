@@ -96,6 +96,13 @@ export interface NetworkInputOptions {
   tlsCaFile?: string | undefined;
   /** Survive a dropped connection mid-stream instead of failing the whole job. */
   reconnect?: boolean;
+  /**
+   * With `reconnect`: the longest ffmpeg waits between two attempts, in whole
+   * seconds. Unset is `DEFAULT_RECONNECT_DELAY_MAX_S`. A failure costs the sum of
+   * the waits (about 0, 1, 3 and 7 s at 10), which a test that is not about the
+   * back-off lowers (dl-116); 0 still retries once, 1 retries twice.
+   */
+  reconnectDelayMaxS?: number | undefined;
   /** Socket read/write stall timeout. ffmpeg wants microseconds. */
   readTimeoutMs?: number;
   /** HLS only: segment URIs with unusual or absent extensions are common. */
@@ -105,6 +112,21 @@ export interface NetworkInputOptions {
 }
 
 const DEFAULT_READ_TIMEOUT_MS = 30_000;
+
+/** Production's ceiling on ffmpeg's reconnect back-off; see `reconnectDelayMaxS`. */
+export const DEFAULT_RECONNECT_DELAY_MAX_S = 10;
+
+/**
+ * The option is an integer count of seconds to ffmpeg, which refuses anything
+ * else for the whole run, so a fraction or a negative is rounded into range here
+ * rather than failing every download.
+ */
+function reconnectDelayMaxArg(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds)) {
+    return String(DEFAULT_RECONNECT_DELAY_MAX_S);
+  }
+  return String(Math.max(0, Math.trunc(seconds)));
+}
 
 /**
  * Whether this input will open the `tls` protocol at the top level, and so
@@ -162,7 +184,7 @@ export function buildNetworkInputArgs(url: string, options: NetworkInputOptions 
       "-reconnect_on_network_error",
       "1",
       "-reconnect_delay_max",
-      "10",
+      reconnectDelayMaxArg(options.reconnectDelayMaxS),
     );
   }
 
@@ -203,6 +225,7 @@ export const LOOPBACK_PROTOCOL_WHITELIST = "http,tcp";
 export function buildLoopbackInputArgs(
   url: string,
   readTimeoutMs = DEFAULT_READ_TIMEOUT_MS,
+  reconnectDelayMaxS?: number | undefined,
 ): string[] {
   return [
     "-protocol_whitelist",
@@ -216,7 +239,7 @@ export function buildLoopbackInputArgs(
     "-reconnect_on_network_error",
     "1",
     "-reconnect_delay_max",
-    "10",
+    reconnectDelayMaxArg(reconnectDelayMaxS),
     ...(readTimeoutMs > 0 ? ["-rw_timeout", String(readTimeoutMs * 1000)] : []),
     "-i",
     url,
