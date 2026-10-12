@@ -1,8 +1,8 @@
 /**
  * `npm run household:ledger` (lg-20): the directory from the host. It creates a
  * household, adds a member, removes one and lists them, against the file
- * `DIRECTORY_PATH` names, and refuses a second household until lg-21 gives each
- * one its own books.
+ * `DIRECTORY_PATH` names. Since lg-21 gave each household books of its own, it
+ * makes as many households as it is asked for.
  */
 
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -112,15 +112,18 @@ describe("the household command", () => {
     expect(ran.out).toContain(`  sam  ${SAM}`);
   });
 
-  // lg-21 removes this refusal, and this test with it.
-  test("refuses a second household until each household has books of its own (lg-21)", () => {
+  // lg-21: each household has books of its own, so a second one is allowed. What
+  // keeps them apart is `isolation.test.ts`.
+  test("creates a second household beside the first", () => {
     run("add", "home", "Home");
 
     const ran = run("add", "other", "Other");
 
-    expect(ran.code).toBe(1);
-    expect(ran.err).toContain("lg-21");
-    expect(read((directory) => directory.households())).toEqual([{ id: "home", name: "Home" }]);
+    expect(ran.code, ran.err).toBe(0);
+    expect(read((directory) => directory.households())).toEqual([
+      { id: "home", name: "Home" },
+      { id: "other", name: "Other" },
+    ]);
   });
 
   test("refuses a third person in a household, and says why", () => {

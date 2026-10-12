@@ -19,7 +19,7 @@ import type {
   SalaryEntryResponse,
 } from "@ledger/contract";
 import type { App } from "../src/server.ts";
-import { SAM } from "./helpers/access.ts";
+import { SAM, homeBooks } from "./helpers/access.ts";
 import { addRule, pasteStatement, startApp } from "./helpers/classification.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
@@ -339,7 +339,7 @@ describe("the open period", () => {
     ]);
     const view = await open(target, "?end=2026-09-30");
     expect(view.lines.map((line) => line.date)).toEqual(["2026-01-05", "2026-02-05", "2026-03-05"]);
-    const versions = target.context.db.prepare("SELECT count(*) AS n FROM recurring_items").get();
+    const versions = homeBooks(target).prepare("SELECT count(*) AS n FROM recurring_items").get();
     expect(versions).toEqual({ n: 2 });
   });
 
@@ -386,7 +386,7 @@ describe("lines", () => {
     await post(target, ROUTES.periodLineRetire.replace(":id", String(corrected.id)), {});
 
     expect((await open(target)).lines).toEqual([]);
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
       n: 3,
     });
     const again = await target.server.inject({
@@ -438,7 +438,7 @@ describe("lines", () => {
     expect(zero.json<ErrorResponse>().error.message).toBe(
       "The line is not valid: check amountCents.",
     );
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
       n: 0,
     });
   });

@@ -16,7 +16,7 @@ import { createRateLimitHook } from "../src/rate-limit.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { accessConfig, memberDirectory } from "./helpers/access.ts";
+import { accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { VERBS } from "./helpers/routes.ts";
 import { TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
 
@@ -34,7 +34,7 @@ async function startTight(): Promise<App> {
   app = await createApp({
     directory: memberDirectory(),
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       logLevel: "silent",
       access: accessConfig({ devIdentity: "alex@example.test" }),
       rateLimitReadsPerMinute: 1,
@@ -105,14 +105,14 @@ describe("the routes", () => {
     });
 
     expect(refused.statusCode).toBe(429);
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 1 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 1 });
   });
 
   test("a limit of zero turns the limiter off", async () => {
     app = await createApp({
       directory: memberDirectory(),
       config: {
-        databasePath: ":memory:",
+        dataDir: ":memory:",
         logLevel: "silent",
         access: accessConfig({ devIdentity: "alex@example.test" }),
         rateLimitReadsPerMinute: 0,

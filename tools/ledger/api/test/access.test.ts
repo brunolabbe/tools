@@ -51,7 +51,7 @@ async function start(
   const lines: string[] = [];
   app = await createApp({
     directory: memberDirectory(),
-    config: { databasePath: ":memory:", access: options.access ?? accessConfig() },
+    config: { dataDir: ":memory:", access: options.access ?? accessConfig() },
     logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
     now: () => clock.now,
     fetch: options.fetch ?? served.fetch,

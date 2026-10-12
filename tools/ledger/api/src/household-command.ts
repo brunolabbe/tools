@@ -7,8 +7,10 @@
  * is configured with (`DIRECTORY_PATH`), as the operator, and the API reads it
  * on every request, so a change applies without a restart.
  *
- * It never touches the books. A member's name is enrolled into the books'
- * `people` the next time the API sees anyone in their household (`people.ts`).
+ * It never touches the books. A household's books file is made by the API the
+ * first time it needs it (`books.ts`, lg-21), and a member's name is enrolled
+ * into its `people` the next time the API sees anyone in the household
+ * (`people.ts`).
  *
  * Exit status: 0 when the change was made or the list printed, 1 when the
  * directory refused the change, 2 when the command could not run at all.
@@ -31,14 +33,6 @@ Changes who belongs to which household, in the ledger's directory (DIRECTORY_PAT
 A household holds two people, each behind any number of addresses. Every
 address must also be on the ledger's Access policy, which is a dashboard edit.
 `;
-
-/**
- * Until lg-21 gives each household a books file of its own, the API opens one
- * file for every request, so a second household would read and write the
- * first one's books. lg-21 removes this refusal and its test together.
- */
-const ONE_HOUSEHOLD_UNTIL_LG21 =
-  "The ledger has one books file until each household gets its own (lg-21), so a second household would read the first one's books. Only one household can exist until then.";
 
 function usage(io: CommandIo, message: string): number {
   io.stderr(`${message}\n\n${USAGE}`);
@@ -114,10 +108,6 @@ export function runHouseholdCommand(argv: readonly string[], io: CommandIo): num
     switch (command) {
       case "add": {
         const [id = "", ...name] = args;
-        if (directory.households().length > 0) {
-          io.stderr(`${ONE_HOUSEHOLD_UNTIL_LG21}\n`);
-          return 1;
-        }
         const household = directory.addHousehold({ id, name: name.join(" "), ...change });
         io.stdout(`Created the household ${household.id}, "${household.name}".\n`);
         return 0;

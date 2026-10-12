@@ -40,6 +40,7 @@ import {
   rowId,
   startApp,
 } from "./helpers/classification.ts";
+import { homeBooks } from "./helpers/access.ts";
 
 let app: App | undefined;
 
@@ -143,9 +144,9 @@ describe("the list", () => {
       "Other",
     ]);
     // Rules are never seeded (the tool's CLAUDE.md); neither is the map.
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 0 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM rules").get()).toEqual({ n: 0 });
     expect(
-      target.context.db.prepare("SELECT count(*) AS n FROM spending_category_map").get(),
+      homeBooks(target).prepare("SELECT count(*) AS n FROM spending_category_map").get(),
     ).toEqual({ n: 0 });
   });
 
@@ -179,7 +180,7 @@ describe("the list", () => {
     expect(renamed).toMatchObject({ id: groceries, name: "Food" });
     expect((await categories(target)).map((category) => category.name)).toContain("Food");
     expect(
-      target.context.db
+      homeBooks(target)
         .prepare("SELECT name FROM spending_categories WHERE id = ? OR root_id = ? ORDER BY id")
         .all(groceries, groceries),
     ).toEqual([{ name: "Groceries" }, { name: "Food" }]);
@@ -275,12 +276,12 @@ describe("the map", () => {
       source: "map",
     });
     expect(
-      target.context.db
+      homeBooks(target)
         .prepare("SELECT spending_category_id AS id FROM spending_category_map ORDER BY rowid")
         .all(),
     ).toEqual([{ id: groceries }, { id: household }]);
     expect(
-      target.context.db.prepare("SELECT count(*) AS n FROM current_spending_category_map").get(),
+      homeBooks(target).prepare("SELECT count(*) AS n FROM current_spending_category_map").get(),
     ).toEqual({ n: 1 });
   });
 
@@ -357,7 +358,7 @@ describe("a rule's spending category, and a row's own", () => {
 
     expect(withdrawn.spendingCategory).toEqual({ id: pharmacy, source: "rule" });
     expect(
-      target.context.db
+      homeBooks(target)
         .prepare(
           "SELECT spending_category_id AS id, set_by AS by FROM spending_category_overrides ORDER BY rowid",
         )
@@ -434,7 +435,7 @@ describe("a rule's spending category, and a row's own", () => {
     await post(target, ROUTES.spendingCategoryRetire.replace(":id", String(pharmacy)), {});
 
     expect(
-      target.context.db
+      homeBooks(target)
         .prepare("SELECT retired, spending_category_id AS id FROM rules ORDER BY rowid")
         .all(),
     ).toEqual([
@@ -577,7 +578,7 @@ describe("a period line's spending category", () => {
 
     expect(corrected).toMatchObject({ spendingCategoryId: household, supersedes: first.id });
     expect(
-      target.context.db
+      homeBooks(target)
         .prepare("SELECT spending_category_id AS id FROM period_lines ORDER BY rowid")
         .all(),
     ).toEqual([{ id: groceries }, { id: household }]);
@@ -594,7 +595,7 @@ describe("a period line's spending category", () => {
     expect((await refused(target, ROUTES.periodLines, line(other))).code).toBe(
       "SPENDING_CATEGORY_NOT_FOUND",
     );
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM period_lines").get()).toEqual({
       n: 0,
     });
   });

@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   context.logger.info("listening", {
     host: config.host,
     port: config.port,
-    databasePath: config.databasePath,
+    dataDir: config.dataDir,
     directoryPath: config.directoryPath,
   });
 

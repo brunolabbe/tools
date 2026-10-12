@@ -8,7 +8,7 @@ import { ROUTES } from "@ledger/contract";
 import type { InboxResponse, Rule, RuleDraft } from "@ledger/contract";
 import { createApp } from "../../src/server.ts";
 import type { App } from "../../src/server.ts";
-import { ALEX, accessConfig, memberDirectory } from "./access.ts";
+import { ALEX, accessConfig, memberDirectory, homeBooks } from "./access.ts";
 import { renderPaste, withBalances } from "./paste.ts";
 import type { PasteRow } from "./paste.ts";
 
@@ -20,7 +20,7 @@ export async function startApp(
   return await createApp({
     directory: memberDirectory(),
     config: {
-      databasePath: ":memory:",
+      dataDir: ":memory:",
       logLevel: "silent",
       access: accessConfig({ devIdentity: person }),
     },
@@ -103,14 +103,14 @@ export interface StoredClassification {
 }
 
 export function classifications(target: App): StoredClassification[] {
-  return target.context.db
+  return homeBooks(target)
     .prepare("SELECT * FROM classifications ORDER BY id")
     .all() as StoredClassification[];
 }
 
 /** The stored row id for a description and an amount, which a paste does not hand back. */
 export function rowId(target: App, description: string, amountCents: number): number {
-  const found = target.context.db
+  const found = homeBooks(target)
     .prepare("SELECT id FROM statement_rows WHERE description = ? AND amount_cents = ?")
     .get(description, amountCents) as { id: number } | undefined;
   if (found === undefined) throw new Error(`no stored row for ${description}`);

@@ -17,12 +17,17 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 export interface ApiConfig {
   host: string;
   port: number;
-  /** A file path, or `:memory:` — which is what the tests use. */
-  databasePath: string;
+  /**
+   * `DATABASE_PATH`: the directory the books are kept in, one file per household
+   * at `households/<id>.db` (lg-21) — or `:memory:`, which gives each household
+   * an in-memory database of its own, and is what the tests use.
+   */
+  dataDir: string;
 
   /**
-   * The household directory (lg-20): a SQLite file of its own, beside the books
-   * unless `DIRECTORY_PATH` says otherwise, and `:memory:` when the books are.
+   * The household directory (lg-20): a SQLite file of its own, `directory.db` in
+   * the data directory unless `DIRECTORY_PATH` says otherwise, and `:memory:`
+   * when the books are. Never inside `households/` (lg-21).
    */
   directoryPath: string;
 
@@ -97,8 +102,9 @@ export const API_DEFAULTS = {
   // running every tool at once should not need any of them reconfigured.
   port: 8100,
   dataDir: "./storage/ledger",
-  databaseFile: "ledger.db",
   directoryFile: "directory.db",
+  /** Where each household's books file is, inside the data directory (lg-21). */
+  householdsDir: "households",
   logLevel: "info",
   // Two people on a phone. A tap on the inbox is one write and a screen is a
   // handful of reads, so neither is near these; a script is.
@@ -203,26 +209,43 @@ function checkAccessConfig(access: AccessConfig, production: boolean): void {
   }
 }
 
+/**
+ * The directory may not be one of the books (lg-20's gate, F4). Pointed at the
+ * books file, it once failed at boot and left that file half-migrated with both
+ * schemas' tables. Since lg-21 the books are a directory of files, and the one
+ * place the two can collide is `households/`, so anything in there is refused
+ * before a file is opened.
+ */
+function checkDirectoryPath(dataDir: string, directoryPath: string): void {
+  if (dataDir === ":memory:" || directoryPath === ":memory:") return;
+  const households = path.join(dataDir, API_DEFAULTS.householdsDir);
+  const relative = path.relative(households, path.resolve(directoryPath));
+  const outside =
+    relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  if (!outside) {
+    refuse(
+      "DIRECTORY_PATH is inside the households directory, where each household's books are kept. Put it elsewhere, such as directory.db in the data directory.",
+    );
+  }
+}
+
 export function loadApiConfig(
   overrides: Partial<ApiConfig> = {},
   env: NodeJS.ProcessEnv = process.env,
 ): ApiConfig {
-  const rawDatabase = overrides.databasePath ?? env["DATABASE_PATH"];
-  const databasePath =
-    rawDatabase === ":memory:"
-      ? ":memory:"
-      : (rawDatabase ?? path.resolve(API_DEFAULTS.dataDir, API_DEFAULTS.databaseFile));
+  const rawData = overrides.dataDir ?? optionalString(env["DATABASE_PATH"]);
+  const dataDir =
+    rawData === ":memory:" ? ":memory:" : path.resolve(rawData ?? API_DEFAULTS.dataDir);
   const directoryPath =
     overrides.directoryPath ??
     optionalString(env["DIRECTORY_PATH"]) ??
-    (databasePath === ":memory:"
-      ? ":memory:"
-      : path.join(path.dirname(databasePath), API_DEFAULTS.directoryFile));
+    (dataDir === ":memory:" ? ":memory:" : path.join(dataDir, API_DEFAULTS.directoryFile));
+  checkDirectoryPath(dataDir, directoryPath);
 
   const config: ApiConfig = {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
-    databasePath,
+    dataDir,
     directoryPath,
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     // Resolved so a relative WEB_DIR means the same thing wherever the process

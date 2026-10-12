@@ -26,6 +26,7 @@ import type {
 } from "@ledger/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
+import { booksOf } from "../identity.ts";
 import { rateLimitsFor } from "../rate-limit.ts";
 import { listRows, setSpendingCategoryOverride } from "../rows.ts";
 import {
@@ -79,8 +80,8 @@ export function registerSpendingCategoryRoutes(app: FastifyInstance, context: Ap
   // minute, as RATE_LIMITED" — that test, not this comment, is what holds it.
   // Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.spendingCategories, { onRequest: read }, async () => {
-    const body: SpendingCategoriesResponse = { categories: spendingCategories(context.db) };
+  app.get(ROUTES.spendingCategories, { onRequest: read }, async (request) => {
+    const body: SpendingCategoriesResponse = { categories: spendingCategories(booksOf(request)) };
     return body;
   });
 
@@ -116,8 +117,8 @@ export function registerSpendingCategoryRoutes(app: FastifyInstance, context: Ap
   // fails 1 of the 40 tests, "spendingCategoryMap refuses the second request in a
   // minute, as RATE_LIMITED". Measured 2026-10-10 on lg-15, base ad51f0b8.
   // codeql[js/missing-rate-limiting]
-  app.get(ROUTES.spendingCategoryMap, { onRequest: read }, async () => {
-    const body: SpendingCategoryMapResponse = { entries: spendingCategoryMap(context.db) };
+  app.get(ROUTES.spendingCategoryMap, { onRequest: read }, async (request) => {
+    const body: SpendingCategoryMapResponse = { entries: spendingCategoryMap(booksOf(request)) };
     return body;
   });
 
@@ -139,7 +140,7 @@ export function registerSpendingCategoryRoutes(app: FastifyInstance, context: Ap
 
   app.get(ROUTES.rows, { onRequest: read }, async (request) => {
     const query = parsed(rowsQuerySchema, request.query, "query");
-    const body: RowsResponse = listRows(context.db, {
+    const body: RowsResponse = listRows(booksOf(request), {
       ...(query.spendingCategory === "none" ? { uncategorised: true } : {}),
       ...(typeof query.spendingCategory === "number"
         ? { spendingCategoryId: query.spendingCategory }

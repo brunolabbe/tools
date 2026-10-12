@@ -15,7 +15,7 @@ import type {
   SalaryEntryResponse,
 } from "@ledger/contract";
 import type { App } from "../src/server.ts";
-import { SAM } from "./helpers/access.ts";
+import { SAM, homeBooks } from "./helpers/access.ts";
 import { startApp } from "./helpers/classification.ts";
 
 let app: App | undefined;
@@ -79,7 +79,7 @@ function records(target: App): {
   amount_cents: number;
   supersedes: number | null;
 }[] {
-  return target.context.db
+  return homeBooks(target)
     .prepare("SELECT id, person_id, year, amount_cents, supersedes FROM salaries ORDER BY id")
     .all() as ReturnType<typeof records>;
 }
@@ -115,7 +115,7 @@ describe("POST /api/salaries", () => {
         { personId: "sam", partsPerMillion: 400_000, salaryId: entered.salaries[1]?.id },
       ],
     });
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 0 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 0 });
   });
 
   test("a proposal's two shares sum to exactly 1 000 000", async () => {
@@ -211,7 +211,7 @@ describe("POST /api/ratios", () => {
     const second = await confirm(target, entered, "2025-01-01");
 
     expect(second).toEqual(first);
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 1 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 1 });
   });
 
   test("salaries from two different years are refused", async () => {
@@ -327,6 +327,6 @@ describe("a corrected salary", () => {
     expect(await inEffect(target, "2026-03-01")).toEqual(second);
     const all = await target.server.inject({ method: "GET", url: ROUTES.ratios });
     expect(all.json<RatiosResponse>().ratios).toEqual([second]);
-    expect(target.context.db.prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 2 });
+    expect(homeBooks(target).prepare("SELECT count(*) AS n FROM ratios").get()).toEqual({ n: 2 });
   });
 });

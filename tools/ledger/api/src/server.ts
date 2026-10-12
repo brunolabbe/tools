@@ -7,25 +7,21 @@
  * ports, timeouts or teardown races.
  */
 
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { AppError } from "@ledger/contract";
 import { RateLimiter } from "@webtools/core/rate-limit";
-import Database from "better-sqlite3";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { createIdentityVerifier } from "./access.ts";
 import type { Fetch } from "./access.ts";
+import { Books, checkDataDir } from "./books.ts";
 import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
-import { migrate } from "./db/schema.ts";
 import { Directory } from "./directory.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { registerIdentityCheck } from "./identity.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
-import { createEnroller } from "./people.ts";
 import { registerBucketRoutes } from "./routes/buckets.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerInboxRoutes } from "./routes/inbox.ts";
@@ -60,7 +56,12 @@ export interface App {
   server: FastifyInstance;
   context: AppContext;
   config: ApiConfig;
-  /** Stops intake and closes the books and the directory. */
+  /**
+   * Every household's books, for the tests to look inside. Not in the context:
+   * a route reads its books from `booksOf(request)` (lg-21).
+   */
+  books: Books;
+  /** Stops intake and closes every household's books and the directory. */
   shutdown(): Promise<void>;
 }
 
@@ -79,11 +80,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const logger = options.logger ?? createLogger({ level: config.logLevel });
   const now = options.now ?? (() => new Date());
 
-  if (config.databasePath !== ":memory:") {
-    // better-sqlite3 will not create the directory, and failing at boot with
-    // ENOENT on a path nobody chose explicitly is a poor first impression.
-    mkdirSync(path.dirname(config.databasePath), { recursive: true });
-  }
+  checkDataDir(config.dataDir);
   const directory = options.directory ?? Directory.open(config.directoryPath);
   const devIdentity = config.access.devIdentity;
   if (devIdentity !== undefined && directory.membershipOf(devIdentity) === undefined) {
@@ -94,21 +91,32 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       "DEV_IDENTITY is not a member of any household in the directory, so every request would be refused. Add it with npm run household:ledger.",
     );
   }
-  const db = new Database(config.databasePath);
-  migrate(db);
-  // Before any route can be asked who the household is (people.ts). Until
-  // lg-21 there is one books file and the host command allows one household,
-  // so every current member is that household's.
-  const enroll = createEnroller(db, now);
-  enroll(directory.people());
+  // A missing directory file is created empty, and then every request is
+  // refused with nothing at boot to say why: an unmounted volume or a wrong
+  // DIRECTORY_PATH would read as a service refusing everyone (lg-20's gate, F4).
+  if (directory.members().length === 0) {
+    logger.warn(
+      "the household directory has no members, so every request will be refused; add them with the household command",
+    );
+  }
+  // Every household's books, opened, migrated and enrolled before any route
+  // can be asked for them (books.ts).
+  const books = new Books({ dataDir: config.dataDir, directory, now, logger });
+  try {
+    books.openAll();
+  } catch (error: unknown) {
+    books.close();
+    directory.close();
+    throw error;
+  }
 
   let shuttingDown = false;
 
   const context: AppContext = {
     config,
     logger,
-    db,
     directory,
+    booksOpen: () => books.check(),
     rateLimits: {
       reads: new RateLimiter({ perMinute: config.rateLimitReadsPerMinute }),
       writes: new RateLimiter({ perMinute: config.rateLimitWritesPerMinute }),
@@ -140,9 +148,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       now,
       logger,
     }),
-    // A member added since boot, or since the last request, is enrolled the
-    // first time anyone in their household is seen.
-    { onMember: (person) => void enroll(directory.people(person.household)) },
+    // The caller's household's books, and only theirs. A household added since
+    // boot gets its file here, and a member added since the last request is
+    // enrolled the first time anyone in their household is seen.
+    { booksFor: (person) => books.forMember(person) },
   );
   registerHealthRoute(server, context);
   registerMeRoute(server, context);
@@ -166,12 +175,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     server,
     context,
     config,
+    books,
     async shutdown(): Promise<void> {
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info("shutting down");
       await server.close();
-      db.close();
+      books.close();
       directory.close();
       logger.info("shutdown complete");
     },

@@ -9,7 +9,7 @@ import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, PeopleResponse, Rule, RulesResponse } from "@ledger/contract";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
+import { ALEX, SAM, accessConfig, memberDirectory, homeBooks } from "./helpers/access.ts";
 import { MORTGAGE_RULE, TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
 
 let app: App | undefined;
@@ -30,7 +30,7 @@ async function listed(target: App): Promise<Rule[]> {
 }
 
 function versions(target: App): number {
-  return (target.context.db.prepare("SELECT count(*) AS n FROM rules").get() as { n: number }).n;
+  return (homeBooks(target).prepare("SELECT count(*) AS n FROM rules").get() as { n: number }).n;
 }
 
 describe("GET /api/rules", () => {
@@ -51,7 +51,7 @@ describe("GET /api/rules", () => {
   test("is behind the identity check", async () => {
     app = await createApp({
       directory: memberDirectory(),
-      config: { databasePath: ":memory:", logLevel: "silent", access: accessConfig() },
+      config: { dataDir: ":memory:", logLevel: "silent", access: accessConfig() },
     });
 
     const response = await app.server.inject({ method: "GET", url: ROUTES.rules });
@@ -127,7 +127,7 @@ describe("POST /api/rules/:id", () => {
     expect(edited.id).not.toBe(original.id);
     expect(await listed(target)).toEqual([edited]);
     // The version it replaced is still stored, exactly as it was.
-    const old = target.context.db
+    const old = homeBooks(target)
       .prepare("SELECT amount_cents FROM rules WHERE id = ?")
       .get(original.id);
     expect(old).toEqual({ amount_cents: 40000 });
@@ -218,7 +218,7 @@ describe("GET /api/people", () => {
         [ALEX, "alex"],
       ]),
       config: {
-        databasePath: ":memory:",
+        dataDir: ":memory:",
         logLevel: "silent",
         access: accessConfig({ devIdentity: SAM }),
       },
