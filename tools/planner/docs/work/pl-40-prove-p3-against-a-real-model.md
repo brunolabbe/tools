@@ -5,7 +5,7 @@ title: A real model has run the plan, and the bill it ran up is on record
 kind: work-package
 status: in-flight
 milestone: P3
-depends_on: [pl-39, pl-49]
+depends_on: [pl-39, pl-49, pl-55]
 difficulty: standard
 ---
 
@@ -222,7 +222,9 @@ maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
    a scratch directory, not to `fixtures/live/`. That is how the builder proves
    the harness, and it costs nothing.
 
-   The owner then runs it against `claude-opus-5` with their key. **The harness
+   The owner then runs it against the models and efforts
+   [pl-55](./pl-55-the-live-harness-prices-any-model.md) lists, with their key
+   (owner's decision of 2026-10-12, in the Log). **The harness
    may merge before the run, with `status: in-flight`.** The commit that checks
    in the records and the Log table moves it to `done`.
 
@@ -240,7 +242,8 @@ maxAttemptsPerSpecialist × maxOutputTokens`. The bound is then false as
   `api/test/live/`. Verified by listing what the `planner` project collects.
 - The Log quotes `count_tokens` figures for every rendered prompt, replacing this
   brief's chars/4 estimates, including the discovery block over the real capture.
-- Sets A–D have run against `claude-opus-5`, and their records are checked in
+- Sets A–D have run under each of the five model-and-effort pairs pl-55 lists,
+  and their records are checked in, one directory per pair,
   under `api/test/fixtures/live/`.
 - The Log carries one table covering every set. Per run it gives:
   - calls, input, output, thinking share of output (`ModelUsage.thinkingTokens`,
@@ -785,3 +788,24 @@ answer, and they are two different questions:**
 
 Sets A–D's real run should report both counts in its Log table, beside the
 thinking-share figure the column can now finally carry (pl-50 landed).
+
+### 2026-10-12 — owner decision: three models, and the run waits on pl-55
+
+**The run no longer measures `claude-opus-5` alone.** It measures Haiku 5.5,
+Sonnet 5.5 and Opus 5.5 at effort `low`, plus Haiku 5.5 at `medium` and `high`:
+five runs of sets A–D. All three models were released after the 2026-09-13
+choice, and their rates span about forty times, Haiku to Opus. The deployed
+default stays `claude-opus-5` until these numbers pick one, so **this Log's table
+gains a column for the model-and-effort pair, and its closing paragraph should
+recommend a default** on dollars and on reply quality, never on token counts,
+which do not compare across tokenizers. That choice is the owner's to make.
+
+**Why it now depends on pl-55:** the harness prices every dollar it reports from
+a hard-coded `OPUS_5_PRICES`, which would misprice four of the five runs. The
+owner asked that model, effort and prices all be variables, which `MODEL` and
+`MODEL_EFFORT` already are for the deployed service. pl-55 makes the harness read
+pl-49's `MODEL_PRICE_*` variables instead, records each run's effort and rates,
+and carries the five commands and the reasoning behind the effort choices.
+
+Gate 2's acceptance table and earlier entries still name `claude-opus-5`. They
+are left as written, because they record what was true when they ran.
