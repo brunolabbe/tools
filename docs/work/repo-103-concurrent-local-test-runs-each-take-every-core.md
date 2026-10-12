@@ -264,3 +264,19 @@ trials ran both at once`.
     third run a slot.
   - **Left recorded, unfixed:** the guard double-delete (two runs removing the same
     10 s-old guard); round 1's four lows.
+
+- 2026-10-12 — Fixed at landing, the owner's decision, no re-gate: gate 3's low (`inspect`
+  in `scripts/test-gate.mjs` set `exists: false` on any read error, so a stale lock the gate
+  could not read, mode 000 for one, was never unlinked and its slot starved). `exists` is
+  now false only on `ENOENT`; any other failure leaves it true with an empty `raw` and the
+  mtime deciding, and the JSDoc says so. Before:
+  `starve.sh <tree> a5b72ab9 98e3772a` printed, for the unreadable lock at a5b72ab9,
+  `no test slot after 2 s; running anyway with 1 worker and no slot` and
+  `left: ["slot-0.lock"]`. After, `starve.mjs` on this tree prints
+  `unreadable: exit 0; test-gate: slot-0, 1 of 1 runs active (pids 1939658): 11 workers`
+  (its trailing `chmod` throws `ENOENT` because the gate released the reclaimed file, the
+  script's own artifact). New test "a stale lock this user cannot read is reclaimed, not
+  left to starve its slot" fails with the fix reverted (`expected undefined` for the
+  slot-0 pid) and `npx vitest run scripts/test/test-gate.test.ts` gives 29 passed (29)
+  with it. A directory in the slot's place still starves, as on both earlier heads. The
+  other recorded lows stay unfixed.

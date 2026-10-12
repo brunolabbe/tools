@@ -162,20 +162,27 @@ export function holderIsAlive(lock) {
 /**
  * Read one lock. A lock is stale when its file is unreadable, unparsable and
  * old, or names a process that is gone or has a different start time; `exists`
- * tells a missing file from a stale one. A file that is empty or half-written
- * but young is a claim in progress and counts as live.
+ * is false only when the path is missing (ENOENT), which tells a released lock
+ * from a stale one. A file that cannot be read for any other reason still
+ * exists, so a stale one is reclaimed rather than starving its slot. A file
+ * that is empty or half-written but young is a claim in progress and counts as
+ * live.
  *
  * @param {string} file
  * @returns {{live: boolean, pid: number | null, raw: string, exists: boolean}}
  */
 function inspect(file) {
-  let raw;
-  let mtimeMs;
+  let raw = "";
+  let mtimeMs = 0;
   try {
-    raw = fs.readFileSync(file, "utf8");
     mtimeMs = fs.statSync(file).mtimeMs;
-  } catch {
-    return { live: false, pid: null, raw: "", exists: false };
+    raw = fs.readFileSync(file, "utf8");
+  } catch (err) {
+    if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
+      return { live: false, pid: null, raw: "", exists: false };
+    }
+    // Present but unreadable (mode 000, a directory): raw stays empty and the
+    // mtime decides, so a young one is a claim in progress and an old one is stale.
   }
   /** @type {{pid?: unknown, start?: unknown} | null} */
   let lock = null;

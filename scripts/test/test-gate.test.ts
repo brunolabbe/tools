@@ -374,6 +374,22 @@ describe.skipIf(!supported)("stale locks", () => {
     expect(gate.report().workers).toBe("11");
   });
 
+  // Root reads a mode-000 file anyway, so the case it guards cannot arise there.
+  test.skipIf(process.getuid?.() === 0)(
+    "a stale lock this user cannot read is reclaimed, not left to starve its slot",
+    async () => {
+      deadLock(0);
+      const file = path.join(lockDir, "slot-0.lock");
+      fs.chmodSync(file, 0o000);
+      const old = new Date(Date.now() - 60_000);
+      fs.utimesSync(file, old, old);
+      const gate = startGate({ TEST_GATE_WAIT_MS: "0" });
+      expect(await gate.done).toEqual({ code: 0, signal: null });
+      expect(gate.stderr()).not.toContain("no test slot");
+      expect(gate.report().locks["slot-0.lock"]?.pid).toBe(gate.proc.pid);
+    },
+  );
+
   test("a run killed with SIGKILL leaves a lock the next run reclaims", async () => {
     const hold = path.join(work, "release");
     const victim = startGate({ FAKE_HOLD: hold, FAKE_GRANDCHILD: "1" });
