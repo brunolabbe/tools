@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0](https://github.com/brunolabbe/tools/compare/ledger-v0.1.0...ledger-v0.2.0) (2026-10-12)
+
+
+### Features
+
+* **ledger:** file a row from three matching answers, and list it for review (lg-17) ([#408](https://github.com/brunolabbe/tools/issues/408)) ([7709411](https://github.com/brunolabbe/tools/commit/7709411e9b16ddf4457e571ace16d2b57cb6ba79))
+* **ledger:** history and stats, drawn as charts on a phone (lg-9) ([#416](https://github.com/brunolabbe/tools/issues/416)) ([817e7ce](https://github.com/brunolabbe/tools/commit/817e7cee24bb5a9bc3312bbc1bffa35ae2ab249f))
+* **ledger:** import the workbook's history, verified before it is written (lg-7) ([#396](https://github.com/brunolabbe/tools/issues/396)) ([55a0e9e](https://github.com/brunolabbe/tools/commit/55a0e9e4c9930762d3aaee5c01a62568ea2f7089))
+* **ledger:** open the bank rows behind a spending period and set their category (lg-18) ([#426](https://github.com/brunolabbe/tools/issues/426)) ([9d0e2ea](https://github.com/brunolabbe/tools/commit/9d0e2ea62f9f62d54058ad99550345be8400fac9))
+* **ledger:** spending categories on bank rows and period lines (lg-15) ([#406](https://github.com/brunolabbe/tools/issues/406)) ([d55a1f4](https://github.com/brunolabbe/tools/commit/d55a1f4269e45abf176bc6629eacd14dbc042616))
+* **ledger:** who belongs to which household, read from a directory database (lg-20) ([#441](https://github.com/brunolabbe/tools/issues/441)) ([b8a7819](https://github.com/brunolabbe/tools/commit/b8a78192355d617afdd13a00c3e9e24961e20356))
+
+
+### Fixes
+
+* **ledger:** keep the open spending rows through a failed read and past midnight (lg-18) ([#431](https://github.com/brunolabbe/tools/issues/431)) ([a0c52e2](https://github.com/brunolabbe/tools/commit/a0c52e23c58db6f4a09f6172497abaf1d1d20f43))
+
 ## 0.1.0 (2026-10-07)
 
 
