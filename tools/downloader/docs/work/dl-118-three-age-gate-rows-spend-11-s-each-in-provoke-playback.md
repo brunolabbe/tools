@@ -83,8 +83,7 @@ try {
 }
 ```
 
-Output from the dl-111 builder's run (round 0 of two; round 1 is within 100 ms
-of it on every page):
+Output from one run of the script above, by the dl-111 builder:
 
 ```
 /age-false-cookie-sheet-sticky.html
@@ -114,10 +113,17 @@ cookie-sheet rows and to 9.7 s (9.1 s) on the menu-button row; the control page'
 `provoke-playback` is 1.0 s. `network-quiet` is the 1.2 s `quietMs` and
 `settle-requests` is about 12 ms, so the time is neither the wait nor the cap.
 
-**Not measured:** where inside `provoke-playback` the 9 to 11 s goes. Gate 1 of
-dl-111 suspects clicks that a covering layer blocks, each waiting out Playwright's
-1500 to 2000 ms action timeout (`provoke.ts:1552`, `:1573`, `:1674`, `:1753`,
-`:1771`), but did not time it. That is step 1 below.
+**Not measured:** where inside `provoke-playback` the 9 to 11 s goes. The
+suspicion, untimed, is clicks that a covering layer blocks, each waiting out
+Playwright's 1500 to 2000 ms action timeout. Five sites were first suspected
+(`provoke.ts:1552`, `:1573`, `:1674`, `:1753`, `:1771`; gate 1 of dl-111 named
+no lines, so they are not its). Three of them cannot be the cause: `:1552` and
+`:1573` in `clickChosenVideo` and `:1674` in `clickPlayerBox` are `force: true`
+clicks, which skip Playwright's actionability wait, so a covering layer cannot
+make them sit out their timeout. The blockable clicks in this path are `provokeFrame`'s `clickVisible(…, PLAY_SELECTORS,
+{ timeoutMs: 2000, max: 3 })` (`:1771`, cited) and `clickByText(frame,
+PLAY_TEXT, 2000)` (`:1775`, not cited); `:1753` is the `dismissModal` call,
+which this note did not examine. That is step 1 below.
 
 ## Build
 

@@ -6,12 +6,9 @@
   </head>
   <body>
     <h1>Abandoned body</h1>
-    <!-- The one page that fetches a playlist and never reads it (dl-111). The
-         collector's body read for that request never completes, so the probe
-         ends on settle()'s cap instead of on the read. No other test reaches
-         that cap (dl-111 measured it), so a test that is not about the cap
-         does not wait for it. A few other pages still fetch without reading;
-         none is waited on. -->
+    <!-- The page for the one Chromium test that reaches settle()'s cap (dl-111):
+         it fetches a playlist and never reads it. Other pages also fetch
+         without reading, but no test waits on them. -->
     <button id="play" type="button">Play</button>
     <video id="v" width="640" height="360" muted playsinline controls></video>
     <p id="status">idle</p>

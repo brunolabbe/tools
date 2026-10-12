@@ -74,15 +74,19 @@ the abandoned-body cap without a browser.
 
 ## Done when
 
-1. No browser test other than the abandoned-body one reaches `settle()`'s cap.
-   Proof: a throw planted at the cap, run over the browser directory, fails that
-   one test and no other (output in the Log); the before and after per-test
-   durations for every fixture changed are in the Log as well. _(Reworded in
-   round 2, 2026-10-12; the first wording was "no browser test that is not
-   about the settle cap takes 3 s more than the baseline probe", which six
-   tests that wait on purpose or in provocation fail. See the Log.)_
-2. Exactly one browser test exercises an abandoned body on purpose, and its
-   name says so.
+1. No test that drives Chromium, other than the abandoned-body one, reaches
+   `settle()`'s cap. Proof: a throw planted at the cap, run over
+   `resolvers/test/browser`, fails that test and the two `sniff.test.ts` rows
+   that pin the cap with fake responses and no browser, and nothing else (3 of
+   756; output in the Log); the before and after per-test durations for every
+   fixture changed are in the Log as well. _(Reworded in round 2, 2026-10-12;
+   the first wording was "no browser test that is not about the settle cap
+   takes 3 s more than the baseline probe", which six tests that wait on
+   purpose or in provocation fail. See the Log. Narrowed again after gate 2 to
+   match the measurement: the directory holds tests that do not drive Chromium,
+   and the planted throw also fails two of them.)_
+2. Exactly one test that drives Chromium exercises an abandoned body on
+   purpose, and its name says so.
 3. `npm test -- --project downloader` passes, and every test this changes still
    asserts what it asserted before.
 
@@ -218,3 +222,23 @@ the abandoned-body cap without a browser.
     instead of "every other fixture reads what it fetches", which five pages
     contradict. The beacon count above is corrected: the cookie-sheet rows
     request two beacons, the menu-button row one.
+- 2026-10-12 — A round after gate 2 (CONCERNS, one med, two low), fixed by the
+  fixer.
+  - **Done when 1 and 2 narrowed to the measurement (med).** The planted throw
+    above failed 3 of 756: the abandoned-body test and two `sniff.test.ts` rows
+    that use fake responses and no browser. Done when 1 now says "no test that
+    drives Chromium, other than the abandoned-body one", names the two
+    `sniff.test.ts` rows in its proof, and gives "3 of 756"; Done when 2 says
+    "test that drives Chromium". The pasted output was not edited; it lists
+    1 + 0 + 0 + 0 + 2 = 3 failures.
+  - **Carried-over comment (low).** The comments in the new test and in
+    `abandoned-body.html` now say what was measured: no other Chromium test
+    reaches the cap, and the two failing `sniff.test.ts` rows use fake
+    responses; other pages also fetch without reading, but no test waits on them.
+  - **dl-118's "Not measured" paragraph (low).** It no longer credits gate 1 with
+    five suspected sites (gate 1 named no lines). It says three of the five are
+    `force: true` clicks that skip the actionability wait, names the blockable
+    clicks (`clickVisible` for `PLAY_SELECTORS`, `clickByText` for `PLAY_TEXT`),
+    and stays labelled unmeasured. Its "round 0 of two; round 1 is within 100 ms"
+    clause, which described a script the ticket does not paste, now reads "one
+    run of the script above".
