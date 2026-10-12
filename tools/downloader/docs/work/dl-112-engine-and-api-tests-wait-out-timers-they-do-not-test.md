@@ -137,6 +137,49 @@ assertions, keep a comment naming the gate finding they came from.
 - Not verified: the Log's claim that the four `later(5000, …)` dl-103 stand-ins are never reached. It explains a speed-up not taken; nothing correct rests on it.
 - NFR: security n/a (test-only diff, no `src` touched) · performance ✓ (measured above) · reliability ✓ (two together-runs, one shuffled run, one full project run, CI on both legs) · maintainability: the comment above.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-12 · `4244dc61..ae34955e` (one commit, `ae34955e`) · Opus 5.5, depth medium
+
+Scope: the round's own commit. It replaces dl-98's "a 403" and "a 503" rows in `parallel-ranges.test.ts` with a feeder-level `test.each` over 403, 429 and 503, on the owner's 2026-10-12 answer. It also logs that answer in dl-112 and dl-98 and rewords one comment in `egress-ca.test.ts`. No `src` file is touched.
+
+**Gate 1's finding**
+
+- **low**, the `wiredApp` comment in `egress-ca.test.ts`: **fixed**. It now reads "the probe route still waits for the grab before it replies, but its status does not depend on the grab's result". That matches `routes/probe.ts`, which awaits `captureThumbnail` before replying.
+
+**The new test**, `parallel-ranges.test.ts` › "a %s on a fan-out fetch is reported to onRefused as a status refusal". Mutations were planted in a copy of the head tree, and the refusal block was run under each:
+
+| Mutation                                                  | Result                                                               |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| none                                                      | 7 of 7 pass                                                          |
+| `REFUSAL_STATUSES` without 403                            | the 403 case fails; 1 failed, 6 passed                               |
+| without 503                                               | the 503 case fails; 1 failed, 6 passed                               |
+| without 429                                               | the 429 case and the "a 429" end-to-end row fail; 2 failed, 5 passed |
+| `#check` gives a 503 the kind `reset` instead of `status` | the 503 case fails; 1 failed, 6 passed                               |
+| `onRefused` reports `host:port` instead of the host       | all 7 fail, the new cases on their `host: "127.0.0.1"` assertion     |
+
+**Whether the fallback after a refusal is still exercised**
+
+- **Status refusals.** The "a 429" row still drives a status refusal end to end. It covers the fallback to one connection, identical media, open-ended requests after the last fan-out, and the remembered host. `#check` and `#fallBack` have no branch on which status it was: the only status-specific input is set membership, and the new test pins that.
+- **The continuation in `#fallBack`, skipped for every refusal kind.** Over the whole file, 2 of 39 fail: "a second read relaying a whole-file 200 is left to finish when the split falls back" and "F2: a fan-out fetch that sends its headers and then nothing falls back, and the job completes".
+- **The same skip for `status` refusals only.** Every row stays green at this head, including "a 429". It also stayed green at `4244dc61`, with "a 403" and "a 503" still present (6 of 6). So removing the rows lost no proof on this axis. The job still completes on one connection with identical media without that branch.
+
+**Records**
+
+- **dl-112's Log** says what the owner chose: "Replace with a unit test" over "Keep the rows (Recommended)", and that a unit assertion counts as covering 403 and 503 for dl-98. Neither more nor less.
+- **dl-112's Log, other claims:**
+  - `git log -S'kind: "a 403"'` and the same for `"a 503"` at the base each print only `72b47fe1` (dl-98), as stated.
+  - 39 of 39 tests confirmed. The file ran in 75.3 s here; the Log says 75.9 s.
+- **dl-98's new Log line** names the rows, what replaced them, the date and that 429 stays. It leaves out the part of the answer that matters to dl-98's own record: that the owner ruled a unit assertion still counts as dl-98's "Cover 403 and 503 too". See the low below.
+- **Done when 3** (no removed test had a gate or owner decision behind it) stays **verified**, on one ground: the two rows did have an owner decision behind them (dl-98's "Cover 403 and 503 too"), and the owner removed them by a later decision, recorded with its options in dl-112's Log. The gate records that and grants nothing.
+
+**Windows.** `test (windows-latest, informational)` passed on `ae34955e`, run 38271220330: 5109 passed, 24 skipped, and `parallel-ranges.test.ts` 39 tests in 77.2 s. `test (ubuntu-latest)` also passed on that sha.
+
+- **low** · no `Done when` line depends on it · dl-98's new Log line records the replacement but not the owner's ruling that a unit assertion covers 403 and 503. Read alone, it looks as if dl-98's owner-chosen coverage was dropped. Adding "the owner decided a unit assertion counts as covering 403 and 503" would make it say what was chosen.
+- **dropped** · the 429 row does not catch a `status`-only skip of `#fallBack`'s continuation. The skip escaped the removed rows too (shown above at `4244dc61`), so this round did not introduce it, and the user-visible fallback still holds under it.
+- **findings** · the hunt returned 2: 1 carried, 1 dropped. Nothing in this round is a `high`.
+- NFR: security n/a (test and docs only) · performance ✓ (75.3 s, 39 of 39) · reliability ✓ (both CI legs green on `ae34955e`) · maintainability: the low above.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed audit. The estimates are about 35 to
