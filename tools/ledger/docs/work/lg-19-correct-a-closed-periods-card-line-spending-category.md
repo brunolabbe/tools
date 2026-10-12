@@ -113,7 +113,8 @@ and correct a line's spending category.
     fix but changes what an existing route accepts and is outside this ticket's
     contract surface; F5 (the list vanishing when the chart's re-read fails) and F8
     (the live region) are in `Cards.tsx`/`Chart.tsx` and not made free by this work.
-    They stay recorded on lg-18.
+    Both were fixed by #431 (lg-18's Log), which is already in this branch's build
+    base.
   - **What the brief had wrong.** Nothing material. Its reproduction grep now prints
     the two files that hold the wrapper and its caller. Two things the brief did not
     say: a corrected line is stored with `source: 'manual'` whatever the line it
