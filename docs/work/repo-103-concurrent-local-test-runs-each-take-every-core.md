@@ -390,3 +390,13 @@ trials ran both at once`.
   slot-0 pid) and `npx vitest run scripts/test/test-gate.test.ts` gives 29 passed (29)
   with it. A directory in the slot's place still starves, as on both earlier heads. The
   other recorded lows stay unfixed.
+
+- 2026-10-12 — CodeQL alert from the landing fix 65a230e4, fixed in a follow-up commit by
+  the owner's decision, no re-gate. 65a230e4 moved `statSync` ahead of `readFileSync` in
+  `inspect()`, and CodeQL at 47c95880 read "Potential file system race condition" at
+  `scripts/test-gate.mjs:179` (a stat-then-read on one path). `inspect()` now reads first
+  and stats after: a read ENOENT or a stat ENOENT is a missing lock, any other read error
+  leaves `raw` empty, and any other stat failure keeps the mtime at 0, so the lock is
+  stale. `npx vitest run scripts/test/test-gate.test.ts` gives 29 passed (29), and
+  `starve.mjs` on this tree reclaims the mode-000 dead-pid lock. The new head's CodeQL
+  check is the reading.

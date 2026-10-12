@@ -166,7 +166,9 @@ export function holderIsAlive(lock) {
  * from a stale one. A file that cannot be read for any other reason still
  * exists, so a stale one is reclaimed rather than starving its slot. A file
  * that is empty or half-written but young is a claim in progress and counts as
- * live.
+ * live. The file is read first and its mtime taken after, from a stat that
+ * also reports a missing path; a stat that fails otherwise leaves the mtime at
+ * 0, which makes an unparsable lock old.
  *
  * @param {string} file
  * @returns {{live: boolean, pid: number | null, raw: string, exists: boolean}}
@@ -174,8 +176,9 @@ export function holderIsAlive(lock) {
 function inspect(file) {
   let raw = "";
   let mtimeMs = 0;
+  // Read first, then stat: a stat before the read is a check-then-use race on
+  // the path, and the stat only matters for what the read could not settle.
   try {
-    mtimeMs = fs.statSync(file).mtimeMs;
     raw = fs.readFileSync(file, "utf8");
   } catch (err) {
     if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
@@ -183,6 +186,14 @@ function inspect(file) {
     }
     // Present but unreadable (mode 000, a directory): raw stays empty and the
     // mtime decides, so a young one is a claim in progress and an old one is stale.
+  }
+  try {
+    mtimeMs = fs.statSync(file).mtimeMs;
+  } catch (err) {
+    if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
+      return { live: false, pid: null, raw: "", exists: false };
+    }
+    // Any other stat failure keeps mtime 0, so the lock is old and stale.
   }
   /** @type {{pid?: unknown, start?: unknown} | null} */
   let lock = null;
