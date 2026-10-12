@@ -1832,11 +1832,11 @@ test("testPlan on the real downloader: an api diff plans api only, a contract di
   ]);
   expect([...(graph?.values() ?? [])].every((p) => p.hasTests)).toBe(true);
 
-  const apiOnly = testPlan(["tools/downloader/api/src/server.ts"], REPO_ROOT)[1][1];
+  const apiOnly = testPlan(["tools/downloader/api/src/server.ts"], REPO_ROOT)[1]?.[1];
   expect(apiOnly).toEqual(["test", "--", "--project", "downloader", "tools/downloader/api/test/"]);
-  expect(apiOnly.join(" ")).not.toContain("resolvers");
+  expect((apiOnly ?? []).join(" ")).not.toContain("resolvers");
 
-  expect(testPlan(["tools/downloader/contract/src/index.ts"], REPO_ROOT)[1][1]).toEqual([
+  expect(testPlan(["tools/downloader/contract/src/index.ts"], REPO_ROOT)[1]?.[1]).toEqual([
     "test",
     "--",
     "--project",
@@ -1852,14 +1852,14 @@ test("testPlan on the real downloader: an api diff plans api only, a contract di
 });
 
 test("testPlan on the real tools: a leaf of planner and of ledger narrows the same way (repo-102)", () => {
-  expect(testPlan(["tools/planner/api/src/a.ts"], REPO_ROOT)[1][1]).toEqual([
+  expect(testPlan(["tools/planner/api/src/a.ts"], REPO_ROOT)[1]?.[1]).toEqual([
     "test",
     "--",
     "--project",
     "planner",
     "tools/planner/api/test/",
   ]);
-  expect(testPlan(["tools/ledger/books/src/a.ts"], REPO_ROOT)[1][1]).toEqual([
+  expect(testPlan(["tools/ledger/books/src/a.ts"], REPO_ROOT)[1]?.[1]).toEqual([
     "test",
     "--",
     "--project",
