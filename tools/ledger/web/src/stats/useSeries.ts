@@ -20,6 +20,8 @@ export type Series<T> =
  * states. A request superseded by a newer range is cancelled and never lands.
  * A failed `reload` keeps this range's answer on screen with the failure beside
  * it, so what is open under a chart is not unmounted by one bad read (lg-18 F5).
+ * Only a read the held answer predates: any other failure fails the card, as a
+ * card that never reloads has no way to say its figures are old.
  */
 export function useSeries<T>(
   fetcher: SeriesFetch<T>,
@@ -27,7 +29,7 @@ export function useSeries<T>(
   /** Changing it reads the series again over the same range, after a write beneath it. */
   reload = 0,
 ): Series<T> {
-  const [held, setHeld] = useState<{ range: StatsRange; data: T } | null>(null);
+  const [held, setHeld] = useState<{ range: StatsRange; reload: number; data: T } | null>(null);
   const [settled, setSettled] = useState<{ range: StatsRange; failure: string | null } | null>(
     null,
   );
@@ -38,7 +40,7 @@ export function useSeries<T>(
     void (async (): Promise<void> => {
       try {
         const data = await fetcher({ from, to }, controller.signal);
-        setHeld({ range: { from, to }, data });
+        setHeld({ range: { from, to }, reload, data });
         setSettled({ range: { from, to }, failure: null });
       } catch (error: unknown) {
         if (controller.signal.aborted) return;
@@ -49,9 +51,10 @@ export function useSeries<T>(
   }, [fetcher, from, to, reload]);
 
   const answered = settled !== null && settled.range.from === from && settled.range.to === to;
-  const heldHere = held !== null && held.range.from === from && held.range.to === to;
+  const heldBeforeReload =
+    held !== null && held.range.from === from && held.range.to === to && held.reload !== reload;
   if (answered && settled.failure !== null) {
-    if (held !== null && heldHere) {
+    if (held !== null && heldBeforeReload) {
       return { state: "ready", data: held.data, stale: false, failure: settled.failure };
     }
     return { state: "failed", message: settled.failure };

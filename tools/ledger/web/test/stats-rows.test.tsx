@@ -376,3 +376,23 @@ test("the readout's buttons are outside its live region, and its figures inside 
   const live = button.closest(".readout")?.querySelector("[aria-live]");
   expect(live?.textContent).toContain("Groceries");
 });
+
+test("a failed read with no write before it fails the card, on a new range or back on an old one", async () => {
+  const A = { from: "2026-01-01", to: "2026-02-28" };
+  const B = { from: "2026-02-01", to: "2026-02-28" };
+  const { rerender } = render(<SpendingCard range={A} />);
+  await screen.findByRole("slider");
+
+  vi.mocked(fetchSpendingStats).mockRejectedValue(
+    new AppError("UNREACHABLE", "The books are away."),
+  );
+  rerender(<SpendingCard range={B} />);
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
+  expect(screen.queryByRole("slider")).toBeNull();
+
+  // Back on the range read first: it was not written under, so its answer is not held.
+  rerender(<SpendingCard range={A} />);
+  await waitFor(() => expect(fetchSpendingStats).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The books are away."));
+  expect(screen.queryByRole("slider")).toBeNull();
+});

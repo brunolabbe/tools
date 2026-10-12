@@ -192,7 +192,8 @@ function TableView({ title, table }: { title: string; table: TableData }): React
 /** The readout as one sentence, for the live region: its figures without its buttons. */
 function spokenOf(readout: Readout): string {
   const rows = readout.rows.map((row) => `${row.label} ${row.value}`).join(", ");
-  return [`${readout.heading}: ${rows}.`, ...(readout.notes ?? [])].join(" ");
+  const notes = (readout.notes ?? []).map((note) => (/[.!?]$/.test(note) ? note : `${note}.`));
+  return [`${readout.heading}: ${rows}.`, ...notes].join(" ");
 }
 
 function ReadoutView({ readout }: { readout: Readout | null }): React.ReactElement {
