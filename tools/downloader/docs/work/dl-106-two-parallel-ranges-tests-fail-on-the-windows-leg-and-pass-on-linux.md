@@ -250,6 +250,40 @@ Every claim below was measured on Linux unless it names a Windows run. Mutation 
 - **Gates:** `npm run check` exit 0 at `4563c082`. `npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts`: 38 of 38. CI all green on `4563c082`.
 - **High:** yes, one. Its fix is the two lines above.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-12 · `4563c082..503af214` (one commit, `503af214`) · Opus 5.5, re-gate
+
+All runs below are on Linux, in scratch copies of the tree. The test file in each copy is the branch's own: `git hash-object` gives `1e0fc9c2`, the same blob as `503af214:tools/downloader/engine/test/parallel-ranges.test.ts`. Mutations are planted in `engine/src/download/parallel-ranges.ts`.
+
+**Gate 2's finding**
+
+- **high: both feeder stop tests read the count after the stop — fixed.**
+  - The feeder cancel test now reads `requestsAtStop` on the line before `controller.abort()`.
+  - The size-cap test records `originRequests` in an `onFatal` override, and `#fatal` calls `onFatal` before `close()`.
+  - Mutations, three stop tests only (`-t`):
+
+    | planted              | feeder cancel               | size cap                    | runs     |
+    | -------------------- | --------------------------- | --------------------------- | -------- |
+    | `begin-at-stop-sync` | fails, `expected 5 to be 4` | fails, `expected 6 to be 5` | 2 of 2   |
+    | `begin-after-stop-0` | fails                       | fails                       | 2 of 2   |
+    | none                 | pass                        | pass                        | 10 of 10 |
+
+    The failures come from `expectNothingOpenedSince`.
+
+**The round's own lines**
+
+- **The `onFatal` override still guards the fatal path.** The test now keeps its own `fatal` array, and it fails on each broken fatal path:
+  - `no-size-cap` (the cap is never enforced): `expected [] to have a length of 1 but got +0`.
+  - `fatal-skip-onFatal` (`#fatal` closes the feeder but never reports): the same message.
+  - `fatal-no-close` (`#fatal` reports but never closes the feeder): the test times out at 120 s, because the read never ends.
+- **F9 failing once on Linux: not reproduced, and not caused by this round.** I ran the whole file 16 times on the branch's file and 16 times on `4563c082`'s, four copies at a time under the same load: 38 of 38 in every run, at both. The round only edits the bodies of the two stop tests. It leaves no timer or handler behind: the `onFatal` closure belongs to a feeder that `afterEach` closes through `liveFeeders`. F9 had already failed before this round, on the Windows run of `8f282c87` (run 38168166619, run 11, during a runner stall). The one Linux failure stays unexplained.
+- **`expectNothingOpenedSince`'s doc comment is true of the code.** It says the count is read "ahead of `abort()`, or in `onFatal`, which runs ahead of `close()`", and both call sites do exactly that.
+- **low** · no `Done when` line depends on it · nfr:maintainability · The new Log entry says gate 2's held-bytes numbers were taken "under a 15.6 ms tick model of the judge's window". The model quantized the test file's `sleep()`, which paces the fixture's origin; the judge's window was not modelled. The numbers it quotes (median 3.16 and minimum 2.89 at 50; 3.50 and 3.41 at 100) are right.
+- **findings** · the hunt returned 1; 1 carried, 0 dropped.
+- **Gates:** `npm run check` exits 0 at `503af214`. `gh pr checks 424`, read once with the PR head at `503af214`: every check passes except `test (ubuntu-latest)` and `test (windows-latest, informational)`, which are **pending** on run 38185392126. This round does not touch the three tests Done when 2 names; its 25-run Windows series (run 38178371109) is on the file before this commit.
+- **High:** no.
+
 ## Log
 
 - 2026-10-11, filed in dl-98's pull request (#421). The owner was asked "How
