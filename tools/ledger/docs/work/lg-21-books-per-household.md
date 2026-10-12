@@ -217,3 +217,61 @@ deeply equal { n: 17 }`).
   - **lg-19** adds a route to `routes/periods.ts` on `context.db`. When it
     merges, the merge from `main` moves it onto `booksOf(request)` and adds it
     to the sweep's tables, which fails until it is.
+- 2026-10-12 — **The owner answered the build's open decision**, through the
+  orchestrator's `AskUserQuestion`: health keeps opening, and if missing
+  creating, the books of a household added since boot. The options were (A)
+  keep it, the builder's recommendation, and (B) health checks the files
+  already open only. Gate 1 had measured it first: a caller cannot choose what
+  is created, each household's file is made once, and the first probe costs
+  24 ms for one new household and 8.8 s for 500.
+- 2026-10-12 — Round 1, on gate 1's F1 (high), F2 and F3 (med). F4 to F6 (low)
+  stay recorded and unfixed.
+  - **F1, the sweep missed a write leak on the map and override routes.** The
+    finding held: the two households wrote in lockstep, so every id one named
+    was valid in the other's books, and no read lists a map entry for a bank
+    category the reader has no rows in. Two mechanisms now, each enough on its
+    own. After the writes the sweep reads every table of both files through
+    `app.books.of`: no table may hold the other household's marks, and each
+    table holds as many rows in one file as in the other, since both make the
+    same writes. And away writes a spare category and a spare row before
+    anything else, home after everything, so their ids differ and an id one
+    names is not the same record in the other's books.
+    - The gate's planted map leak (`pinned ??= booksOf(request)` on
+      `setSpendingCategoryMap`): `npx vitest run tools/ledger/api` exit 1,
+      `Tests  1 failed | 463 passed (464)`,
+      `away POST spendingCategoryMap: {"error":{"code":"SPENDING_CATEGORY_NOT_FOUND"…`.
+      The same leak on `setSpendingCategoryOverride`: exit 1, the same count,
+      `away POST spendingCategoryOverrides: … SPENDING_CATEGORY_NOT_FOUND`.
+    - With the spare category taken out, so that only the table check stands:
+      the map leak fails with `"home's spending_category_map holds away's Chalet"`
+      and `"spending_category_map holds 2 rows at home, 0 away"`, and the
+      override leak with `"spending_category_overrides holds 2 rows at home, 0 away"`.
+    - Gate 1's harness, rebuilt on this sweep (each of the 18 write routes
+      alone, away's request to that method and path handed home's handle):
+      `mutated 18 write routes, caught 18`. The table check reports a
+      mismatch on all 18 by itself. Control, nothing mutated:
+      `failure=undefined leaks=0 silent=0 stored=0`.
+  - **F2, the coverage test saw only `ROUTES`, `GET` and `POST`.** The list now
+    comes from `server.printRoutes`. It is a tree, four columns per level, so
+    each node's path is its ancestors' segments and its own. The `HEAD` Fastify
+    adds beside each `GET` is dropped, and any other method is kept. A
+    `GET /api/zz-leak` planted in `routes/rules.ts` fails "covers every route
+    the app answers…" with `- "GET /api/zz-leak"`, and so does a
+    `PUT ROUTES.rules`, with `- "PUT /api/rules"`. The parse gives the 41
+    pairs the tables hold, nested `:id/retire` paths included.
+  - **F3, a household's first open waited 5 s and answered 500.** Reproduced
+    with the gate's `lock.mts`. The fix: a request or a health probe opens
+    books without waiting. The connection starts with no timeout, migrations
+    run with `busy_timeout` at 0, and enrolment does not wait. A migration the
+    lock refuses closes the file and answers `TIMEOUT`. An enrolment it refuses
+    keeps the migrated handle, and `forMember` enrols on a later request. Boot
+    still waits, since nothing is served yet. `lock.mts` after the fix:
+    `S2 tom (first request of a household whose file is locked): { status: 504, ms: 2 }`,
+    `S2 anonymous health probe in the same state: { status: 200, ms: 1 }`
+    (the books are open, and only a name is not in them yet),
+    `S2 tom after unlock: { status: 200, ms: 2 }`; S1 is unchanged, alex 200
+    and sam 504 in 1 to 2 ms. New tests, last in `books.test.ts`: "migrated:
+    refuses its member at once…" and "not yet migrated: …", for a file the
+    import has migrated and for one still mid-migration in its transaction.
+    With both opens waiting again, both fail
+    (`expected 5045 to be less than 1000`, `expected 5009 to be less than 1000`).
