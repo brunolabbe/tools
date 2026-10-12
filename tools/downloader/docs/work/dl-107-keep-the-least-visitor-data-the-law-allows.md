@@ -3,7 +3,7 @@ id: dl-107
 tool: downloader
 title: Keep the least visitor data the law allows
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -247,6 +247,170 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
 6. No log line holds a page or media URL's path — proven by a test that logs
    a `details.url`, a nested `requestContext` URL and a URL inside a sentence,
    and finds only their origins.
+
+## Review
+
+**Gate: FAIL**: 2026-10-12 · `bb4d2044..dac72673` · Opus 5.5, depth full (`standard` ticket)
+
+| Done when                                                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A finished row loses page URL, media URL, title and error URL one sweep after the link's lifetime, and keeps host, status, error code and times | `api/test/visitor-data.test.ts` › "a finished job's row (dl-107)" › "one sweep after the link's lifetime blanks the four fields and keeps the rest" ✓. The `not.toContain` loop has companion assertions on non-empty values (`result`, `error`, `jobHost`, `finishedAt`, `createdAt`). The timing is held by "not before the link's lifetime is up, and never for a job still running", which went red when the sweep's grace was removed (M4) |
+| 2. No `request` line holds a full address, for both handlers and both families                                                                     | `visitor-data.test.ts` › "the address on a log line" › "a served request writes its network and not %s's address" and "a request the router refuses before any hook runs writes the same, for %s" (IPv4 and IPv6) ✓. Reverting `shortenAddress` in the served handler (M7) turned 4 tests red, and reverting it in the framework handler (M7b) turned 2 red                                                                                     |
+| 3. A stored `error_json` holds no query string                                                                                                     | `visitor-data.test.ts` › "a stored error holds no query string (dl-107)" › "at any depth, and inside a sentence, while the row is still live" ✓. It covers a nested object inside an array, a sentence and a top-level `url`, and went red when `redactStoredError` was removed (M8). Every write of `error_json` goes through `JobStore#write` or `clearFinishedBefore`, and the `INSERT` writes `NULL`                                        |
+| 4. `OUTCOME_RETENTION_DAYS=0` cannot keep rows for ever                                                                                            | `api/test/probe-outcomes.test.ts` › "probe_outcomes retention" › "0 cannot keep rows for ever: the service refuses to start on it (dl-107)" ✓. Red when the check became `days < 0` (M10)                                                                                                                                                                                                                                                       |
+| 5. The terms page states each period and its test fails when one disagrees                                                                         | `api/test/terms-page.test.ts` › "what it says" › "the retention it states are the ones the code applies" and "the minutes after which a finished download's addresses are erased are the sweep's" ✓. Both derive their values: setting `max-size` to `"10m"` turned 2 red (M6), and setting `FINISHED_JOB_CLEAR_AFTER_MS` to 20 minutes turned 1 red (M5)                                                                                       |
+| 6. No log line holds a page or media URL's path                                                                                                    | `visitor-data.test.ts` › "no log line holds a page's or a media file's path (dl-107)" › "a details.url, a nested requestContext URL and a URL inside a sentence are cut to their origins" ✓. It asserts exact origins, not only absence, and turned red when the cut kept the path (M9)                                                                                                                                                         |
+
+- **high** · `nfr:reliability` · no `Done when` line depends on it · **The hold
+  procedure copies one database file, and that file is incomplete.**
+  `docs/02-DEPLOYMENT.md`, "When a legal notice arrives", step 3, says "the
+  service uses no write-ahead log, so one file is the whole of it", and the
+  ticket's Log says the same. `migrate` in `api/src/db/schema.ts` runs
+  `db.pragma("journal_mode = WAL")`. So the rows committed most recently, which
+  are the ones a notice usually names, sit in `jobs.db-wal` until a checkpoint,
+  and `docker compose cp downloader:/data/jobs.db` leaves them behind.
+  Reproduction:
+  `node --import tsx /tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/walcopy.mts <worktree> /tmp/claude-1000/dl-107/wal`
+  opens a database through the real `migrate`, writes one job through
+  `JobStore`, and copies `jobs.db` alone:
+
+  ```
+  journal_mode: wal
+  files beside the live db: jobs.db, jobs.db-shm, jobs.db-wal
+  copy of jobs.db alone: jobs table present = { n: 0 } rows = SqliteError: no such table: jobs
+  live db rows = { n: 1 }
+  ```
+
+  Remedy: stop the service (`docker compose stop downloader`) and copy
+  `jobs.db`, `jobs.db-wal` and `jobs.db-shm` together. Copying the three while
+  the service runs can produce a torn copy. Correct the Log line too.
+
+- **high** · `nfr:maintainability` · no `Done when` line depends on it · **A
+  reopened tab loses the filename after all, and the comment says it keeps it.**
+  The comment on `reconcileJob` in `web/src/lib/job-reducer.ts` says a tab
+  "closed while a job ran and reopened after the clearing fetches the finished
+  row, and without this its card would lose its page and its filename". But a
+  card saved while the job ran is non-terminal and has `result: null`. The
+  filename only reaches the browser with the `completed` event, so there is no
+  local filename to keep. The restore path in `useJobs.ts` refetches
+  non-terminal jobs only, so the `filename` branch of `keepWhatWasCleared` never
+  runs from a restore. The branch's test,
+  `web/test/job-reducer.test.ts` › "a finished job the server has cleared
+  (dl-107)" › "keeps the page address, the variant and the filename the browser
+  already holds", starts from a local job that is already `completed`, a state
+  the restore path never sends to `reconcileJob`. The SSE route has the same
+  effect: it sends a cleared row's `completed` frame with `"filename":""`.
+  Reproduction:
+  `node --import tsx /tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/reconcile.mts <worktree>` passes a `downloading`
+  local job and a cleared remote job:
+
+  ```
+  {"sourceUrl":"https://site.example/watch/1","variant":{...},"result":{"filename":"","sizeBytes":10,...}}
+  card text: "Saved by your browser — "
+  ```
+
+  This happens whenever someone closes the tab while the browser is still
+  downloading and reopens it more than 15 minutes after the job ends.
+  `CompletedResult` in `JobCard.tsx` then renders the blank. Remedy: when
+  `filename === ""`, `CompletedResult` falls back to the title `useJobs`
+  already keeps per job (`titles`), or drops the dash. Fix the comment to match,
+  and give the test a `downloading`/`result: null` case. The brief's premise
+  that "the browser has its copy before the job finishes" is false for the
+  filename, so correct the ticket too.
+
+- **med** · `nfr:security` · no `Done when` line depends on it (Done when 2
+  names `request` lines only) · **No test on the branch covers the per-client
+  cap line's shortening, and nothing covers its IPv6 form.** Reverting
+  `shortenKey` on `download refused: per-client cap reached` in
+  `api/src/routes/files.ts` (M2) left `visitor-data`, `per-client-caps` and
+  `log-fields` all green. Only the gate's own test went red (1 failed | 52
+  passed). The `rate limited` line is covered for IPv4 only, by
+  `visitor-data.test.ts` › "a rate-limited request's line holds the network,
+  not the bucket's whole key". On the dispatch's positive control: reverting
+  `shortenKey` on the `rate limited` line (M1) turns that IPv4 test red. A
+  _full_ IPv6 address cannot reach that line through `clientKey`, so the
+  reverted line writes the `/64` (`2001:db8:1:1::/64`). Only the gate's IPv6
+  test catches that. Remedy: add the gate's two IPv6 cases from
+  `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/gate-dl107.test.ts` ("IPv6: two /64s in one /48 are two
+  buckets..." and "per-client job cap: a second /64 in the same /48 is
+  admitted...") to `visitor-data.test.ts`.
+
+- **low** · `nfr:security` · no live call site · `cutUrlsToOrigin` in
+  `api/src/logger.ts` keeps part of a password when the userinfo contains a raw
+  `/`, `?`, `#` or `\`. Before this change, `redactUrlsInText` turned such a
+  string into `[unparsable-url]`. From `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/logshapes.mts`:
+  `https://user:PA/SS4@host.example/p` → log `"https://user:PA"`, row
+  `"[unparsable-url]"`. Its doc comment says userinfo goes. Graded low because
+  WHATWG `URL` and Python's `urlsplit` both read these strings as host `user`,
+  port `PA` and reject them, and every URL that reaches a log here has passed
+  `new URL`. Remedy: when the match contains `@`, emit `[unparsable-url]` unless
+  `new URL(match)` parses, and take `.protocol` and `.host` from the parse.
+
+- **low** · `nfr:maintainability` · the terms page's "for 15 minutes after it
+  ends" is enforced by a sweep every `GC_INTERVAL_MS`, which is a setting (60 s
+  by default). The erasure therefore lands between 15 and 15 + interval
+  minutes, and an operator who sets a long interval makes the page false.
+  `JOB_RETENTION_MS` is a constant precisely so that no setting can do that.
+  Remedy: cap `gcIntervalMs` well under the clear window, or have the page say
+  "within a minute or two of".
+
+- **low** · `nfr:security` · the hold procedure's step 2 copies the container's
+  whole log _directory_. A Docker container directory also holds
+  `config.v2.json`, which contains the container's environment and therefore
+  its secrets. That layout comes from Docker's standard layout and was not
+  measured on the host. Remedy: copy only `*-json.log*`.
+
+- **low** · `nfr:maintainability` · `api/src/log-address.ts` copies
+  `v6Groups` out of `@webtools/core/rate-limit` rather than exporting it, and its
+  comment says "if a third appears, lift it". The root `CLAUDE.md` rule is to
+  lift on the second consumer. A reason is given, so this is low.
+
+- **low** · the terms page's "keep your whole address in the server's memory"
+  and the architecture doc's "the rate limits keep the whole address in memory"
+  are false for IPv6, where `clientKey` keeps the `/64`. Graded low because the
+  text overstates what is held rather than understating it.
+
+- **dropped** · the shortened key reaching the limiter or the per-client
+  count. Refuted: the gate's `gate-dl107.test.ts` admits two IPv6 `/64`s in one
+  `/48` and two IPv4 addresses in one `/24` as separate buckets and separate
+  cap counts (4 of 4 green). The harness was shown able to fail:
+  `limiter.check(shortenKey(key))` (M3) turned 3 red, including the existing
+  `rate-limit.test.ts` › "and an IPv6 client shares one bucket across its own
+  /64".
+- **dropped** · a finished job that is retried or re-probed and then cleared
+  while it runs. No such path exists: `JOB_TRANSITIONS` gives `completed`,
+  `failed` and `canceled` no exits, `downloading → probing` happens before
+  `finished_at` is set, and web's retry starts a new analysis from the card's
+  local `sourceUrl`. Measured over HTTP: a job's link opened at +14 min, after
+  one sweep, still streamed 200, and a job finished at +14 min was untouched by
+  the +16 min sweep and cleared by the +30 min one.
+- **dropped** · the `request` line keeps its own query
+  (`"url":"/api/files/[redacted]?sig=QSECRET"` for an absolute-form target).
+  This predates the branch, and the brief's step 9 keeps the request line's own
+  `url` on purpose. An absolute-form target with userinfo is otherwise cut to
+  `http://evil.example` on every line (4 shapes, `/tmp/claude-1000/-workspaces-tools/ff74705e-1546-4f73-a2fb-eda757f1240a/scratchpad/dl-107/gate-1/gate-absform.test.ts`).
+- **dropped** · scheme-less, protocol-relative, `wss://`, JSON-escaped and
+  percent-encoded URLs pass through the cut unchanged. `redactUrlsInText`
+  matched exactly the same population before (`https?://\S+`), so this is not
+  a regression of this branch.
+- **dropped** · an orchestrator `patch` landing on a terminal row after the
+  clear would re-add a variant. That needs a patch more than 15 minutes after a
+  cancel, and the run's abort signal ends long before that.
+- **findings** · the hunt returned 13: 8 carried, 5 dropped.
+- NFR: security: the per-client line is untested, and there is the userinfo
+  edge and the hold copy · performance: n/a, one unindexed `SELECT` (cost not measured)
+  per minute over at most 14 days of rows · reliability: the WAL hold copy ·
+  maintainability: the false `reconcileJob` comment and the copied `v6Groups`.
+- Invariants checked: no cross-tool import; `AppError("INTERNAL")` for the
+  config refusal, matching the other config errors; no shell; `redactUrl` and
+  `redactHeaders` ordering unchanged (structural redaction, then the walk); the
+  contract edit is doc comments only and carries the owner's approval; the new
+  spec is under the `api/test` glob and ran; `api` already depended on
+  `@downloader/engine`, so no Dockerfile line is owed; no `any`, no `console`.
+  Skipped as untouched: SSRF, process trees, faked progress, `printRoutes`.
+- CI on `dac72673`: every check green, including `test (ubuntu-latest)`,
+  `test (windows-latest, informational)`, `e2e (direct)`, `e2e (sniffer)`,
+  `docker` and `CodeQL`.
 
 ## Log
 
