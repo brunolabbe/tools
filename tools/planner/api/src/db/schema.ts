@@ -437,6 +437,24 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE plan_revisions ADD COLUMN brief_json TEXT;
   ALTER TABLE plan_revisions ADD COLUMN deadlines_json TEXT NOT NULL DEFAULT '[]';
   `,
+
+  // 12 — how much of a run's output was thinking (pl-52).
+  //
+  // A column beside the four migration 9 added, and not folded into
+  // `output_tokens`, because they are different kinds of thing: `output_tokens`
+  // is what the run was billed for, and this is **a subset of it** — the model
+  // writes its reasoning at the output rate, so these tokens are already in that
+  // column. A report that priced this column as well would bill them twice,
+  // which is why it is a column of its own: so a reader can see the share, and
+  // `cost-report.ts` can keep it out of what it prices.
+  //
+  // Nullable, and NULL is not zero, on migration 9's rule: a run written before
+  // this migration has no record, and neither does a run no provider reported a
+  // breakdown for. **A figure here is a lower bound** over the replies that
+  // reported one (`RunUsage.thinkingTokens`'s own doc comment), never a total.
+  `
+  ALTER TABLE plan_runs ADD COLUMN thinking_tokens INTEGER;
+  `,
 ];
 
 export function migrate(db: Database): void {

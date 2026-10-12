@@ -59,6 +59,9 @@ const UNDO_MIGRATION_11 = `
   ALTER TABLE plan_revisions DROP COLUMN brief_json;
 `;
 
+/** Migration 12, undone (pl-52). A plain `DROP COLUMN`: no trigger or index names it. */
+const UNDO_MIGRATION_12 = "ALTER TABLE plan_runs DROP COLUMN thinking_tokens;";
+
 describe("migrations", () => {
   test("a fresh database arrives at the current schema", () => {
     const db = new Database(":memory:");
@@ -75,7 +78,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     db.close();
   });
 
@@ -97,7 +100,7 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     db.close();
   });
 
@@ -132,6 +135,7 @@ describe("migrations", () => {
       END;
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_12}
       ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
@@ -143,7 +147,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
@@ -157,7 +161,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     db.close();
   });
@@ -170,6 +174,7 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_12}
       ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
@@ -185,7 +190,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     const row = db
       .prepare(`SELECT ${USAGE_COLUMNS.join(", ")} FROM plan_runs WHERE id = ?`)
@@ -217,7 +222,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -241,6 +246,7 @@ describe("migrations", () => {
     db.exec(`
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_12}
       ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       ${UNDO_MIGRATION_9}
@@ -257,7 +263,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     const row = db
       .prepare("SELECT coverage_json, reading_json FROM plan_revisions WHERE id = ?")
       .get("r") as { coverage_json: string; reading_json: string };
@@ -278,6 +284,7 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_12}
       ${UNDO_MIGRATION_11}
       ${UNDO_MIGRATION_10}
       PRAGMA user_version = 9;
@@ -304,7 +311,7 @@ describe("migration 10 — operations, run kinds and one live run (pl-44)", () =
     // migration back: that this does not throw is the trigger not firing.
     expect(() => migrate(db)).not.toThrow();
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     // Through the read paths, not the raw columns: `toRevision` and `toRun`
     // read the columns now, where pl-42 wrote literals.
     expect(selectPlan(db, "p")?.revisions.map((each) => each.operation)).toEqual([
@@ -416,6 +423,7 @@ describe("migration 11 — the brief per revision, and its deadlines (pl-47)", (
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
+      ${UNDO_MIGRATION_12}
       ${UNDO_MIGRATION_11}
       PRAGMA user_version = 10;
     `);
@@ -438,7 +446,7 @@ describe("migration 11 — the brief per revision, and its deadlines (pl-47)", (
     // trigger not firing.
     expect(() => migrate(db)).not.toThrow();
 
-    expect(userVersion(db)).toBe(11);
+    expect(userVersion(db)).toBe(12);
     expect(rawBrief(db, "r1")).toBeNull();
     const revision = selectPlan(db, "p")?.revisions[0];
     expect(revision?.brief).toEqual(brief);
@@ -506,6 +514,52 @@ describe("migration 11 — the brief per revision, and its deadlines (pl-47)", (
     );
 
     expect(() => selectPlan(db, "p")).toThrow(AppError);
+    db.close();
+  });
+});
+
+describe("migration 12 — thinking tokens on a run (pl-52)", () => {
+  /** A database wound back to `user_version = 11`, holding one finished run that was metered. */
+  function atVersionEleven(): Database.Database {
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec(`
+      ${UNDO_MIGRATION_12}
+      PRAGMA user_version = 11;
+    `);
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", "{}", NOW, NOW);
+    db.prepare(
+      `INSERT INTO plan_runs (id, plan_id, status, started_at, finished_at, output_tokens)
+       VALUES (?,?,?,?,?,?)`,
+    ).run("r", "p", "done", NOW, NOW, 500);
+    return db;
+  }
+
+  test("a fresh database's runs carry the column", () => {
+    const db = new Database(":memory:");
+    migrate(db);
+
+    expect(userVersion(db)).toBe(12);
+    expect(columns(db, "plan_runs")).toContain("thinking_tokens");
+    db.close();
+  });
+
+  test("a database at user_version = 11 reaches the column, and a run already there reads back NULL", () => {
+    // A run that finished before this migration was billed for output it never
+    // broke down, so the column is NULL rather than a zero that would read as
+    // "thought for nothing". Its other usage columns are left as they were.
+    const db = atVersionEleven();
+    expect(columns(db, "plan_runs")).not.toContain("thinking_tokens");
+
+    migrate(db);
+
+    expect(userVersion(db)).toBe(12);
+    expect(columns(db, "plan_runs")).toContain("thinking_tokens");
+    expect(
+      db.prepare("SELECT thinking_tokens, output_tokens FROM plan_runs WHERE id = ?").get("r"),
+    ).toEqual({ thinking_tokens: null, output_tokens: 500 });
     db.close();
   });
 });

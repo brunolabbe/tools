@@ -219,6 +219,7 @@ export function updateRunUsage(
             cache_read_tokens = ?,
             cache_write_tokens = ?,
             output_tokens = ?,
+            thinking_tokens = ?,
             fallback_calls = ?
       WHERE id = ?`,
   ).run(
@@ -228,6 +229,7 @@ export function updateRunUsage(
     record.usage.cacheReadTokens,
     record.usage.cacheWriteTokens,
     record.usage.outputTokens,
+    record.usage.thinkingTokens,
     record.usage.fallbackCalls,
     record.id,
   );

@@ -31,8 +31,13 @@ import Database from "better-sqlite3";
 import type { Database as SqliteDatabase } from "better-sqlite3";
 import { loadApiConfig, MODEL_PRICE_VARIABLES, type ModelPrices } from "./config.ts";
 
-/** The schema version that added the columns this reads — migration 9. */
-export const USAGE_SCHEMA_VERSION = 9;
+/**
+ * The schema version that added the last column this reads — migration 12
+ * (pl-52, `thinking_tokens`). The report opens the database read-only and
+ * never migrates it, so a database at 9, 10 or 11 has the other usage columns
+ * and would fail the query on this one; it is refused with a sentence instead.
+ */
+export const USAGE_SCHEMA_VERSION = 12;
 
 /** One finished run, as the report reads it. */
 export interface RunUsageRow {
@@ -43,6 +48,8 @@ export interface RunUsageRow {
   cache_read_tokens: number | null;
   cache_write_tokens: number | null;
   output_tokens: number | null;
+  /** A subset of `output_tokens`, never an addition to it — see `renderCostReport`. */
+  thinking_tokens: number | null;
   fallback_calls: number | null;
 }
 
@@ -51,7 +58,7 @@ export function selectFinishedRuns(db: SqliteDatabase, since: string): RunUsageR
   return db
     .prepare(
       `SELECT status, model, model_calls, input_tokens, cache_read_tokens,
-              cache_write_tokens, output_tokens, fallback_calls
+              cache_write_tokens, output_tokens, thinking_tokens, fallback_calls
          FROM plan_runs
         WHERE finished_at IS NOT NULL AND finished_at >= ?
         ORDER BY finished_at`,
@@ -78,6 +85,15 @@ function mean(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/**
+ * The kinds that are billed, each at a rate of its own.
+ *
+ * **`thinking_tokens` is deliberately not here.** It is a subset of
+ * `output_tokens`, which `outputPerMTok` already prices, so an entry for it
+ * would bill the same tokens twice — and this array is also what decides
+ * whether a run was metered and which prices must be set. It is printed apart,
+ * below the table.
+ */
 const TOKEN_KINDS = [
   { label: "input", column: "input_tokens", price: "inputPerMTok" },
   { label: "cache read", column: "cache_read_tokens", price: "cacheReadPerMTok" },
@@ -94,7 +110,28 @@ function isMetered(row: RunUsageRow): boolean {
   return TOKEN_KINDS.some((kind) => row[kind.column] !== null);
 }
 
+/** What the thinking line says about itself — see the paragraph in `renderCostReport`. */
+const THINKING_CAVEAT = [
+  "A lower bound, not the run's total: it undercounts a run that mixed a reply with no",
+  "breakdown and one with, and a reply that fell back across several attempts. The one funded",
+  "run measured (574 replies, three models) showed neither — every reply reported a breakdown",
+  "and none fell back — so the gap has not been seen, which is not the same as ruled out.",
+];
+
 const STATUS_ORDER = ["done", "failed", "canceled"];
+
+/** The counts one column holds, leaving out the runs that reported none. */
+function reported(rows: readonly RunUsageRow[], column: keyof RunUsageRow): number[] {
+  return rows.flatMap((row) => {
+    const value = row[column];
+    return typeof value === "number" ? [value] : [];
+  });
+}
+
+/** One row of a percentile table; an empty sample prints `—`, never a zero. */
+function statRow(label: string, values: readonly number[]): string {
+  return `  ${label.padEnd(12)} ${tokens(percentile(values, 50)).padStart(12)} ${tokens(percentile(values, 95)).padStart(12)} ${tokens(mean(values)).padStart(12)}`;
+}
 
 function tokens(value: number | null): string {
   return value === null ? "—" : Math.round(value).toLocaleString("en-US");
@@ -155,14 +192,18 @@ export function renderCostReport(input: CostReportInput): string {
     `  ${"kind".padEnd(12)} ${"p50".padStart(12)} ${"p95".padStart(12)} ${"mean".padStart(12)}`,
   );
   for (const kind of TOKEN_KINDS) {
-    const values = rows.flatMap((row) => {
-      const value = row[kind.column];
-      return value === null ? [] : [value];
-    });
-    lines.push(
-      `  ${kind.label.padEnd(12)} ${tokens(percentile(values, 50)).padStart(12)} ${tokens(percentile(values, 95)).padStart(12)} ${tokens(mean(values)).padStart(12)}`,
-    );
+    lines.push(statRow(kind.label, reported(rows, kind.column)));
   }
+  lines.push("");
+
+  // --- Thinking: a share of the output row above, printed apart so it cannot
+  // be mistaken for something to add. It is not in TOKEN_KINDS for that reason.
+  const thinking = reported(rows, "thinking_tokens");
+  lines.push(
+    `Thinking per run — part of the output above, already priced there, not an addition to the bill (${String(thinking.length)} of ${String(rows.length)} runs reported a breakdown)`,
+  );
+  lines.push(statRow("thinking", thinking));
+  for (const sentence of THINKING_CAVEAT) lines.push(`  ${sentence}`);
   lines.push("");
 
   // --- Dollars, only with every rate known.
@@ -233,7 +274,7 @@ function daysFrom(argv: readonly string[]): number | undefined {
  * **The database is opened read-only**, and never migrated: this runs beside a
  * live server, which is the only writer, and a second writer here — even one
  * that only set a pragma — could contend with it. A database older than
- * migration 9 is refused with a sentence, rather than failing on a missing
+ * migration 12 is refused with a sentence, rather than failing on a missing
  * column.
  */
 export function runReport(io: ReportProcess): number {
@@ -269,7 +310,7 @@ export function runReport(io: ReportProcess): number {
     const version = Number(db.pragma("user_version", { simple: true }));
     if (version < USAGE_SCHEMA_VERSION) {
       io.stderr(
-        `The database is at schema version ${String(version)}, and run costs are recorded from version ${String(USAGE_SCHEMA_VERSION)}. Start the planner once to migrate it.\n`,
+        `The database is at schema version ${String(version)}, and this report reads run costs from version ${String(USAGE_SCHEMA_VERSION)}. Start the planner once to migrate it.\n`,
       );
       return 1;
     }

@@ -1282,6 +1282,13 @@ already set in the image. It prints runs by status, and p50, p95 and the mean
 of each token kind per run. A run on `scripted` reports no counts, and is
 left out of those figures rather than counted as free.
 
+Under that table is a thinking row, [pl-52](../tools/planner/docs/work/pl-52-thinking-tokens-in-the-cost-report.md):
+the part of the output the model spent reasoning. **It is a share of the output
+row, already priced there, so it is never added to the dollars.** It is also a
+lower bound, and the report says so beside the row. A database older than
+schema version 12 is refused with a sentence until the planner has started once
+and migrated it.
+
 **Dollars need all four prices.** Set `MODEL_PRICE_INPUT_PER_MTOK`,
 `MODEL_PRICE_OUTPUT_PER_MTOK`, `MODEL_PRICE_CACHE_READ_PER_MTOK` and
 `MODEL_PRICE_CACHE_WRITE_PER_MTOK` — dollars per million tokens, from the

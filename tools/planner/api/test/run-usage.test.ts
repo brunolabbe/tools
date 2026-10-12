@@ -38,6 +38,7 @@ interface UsageRow {
   cache_read_tokens: number | null;
   cache_write_tokens: number | null;
   output_tokens: number | null;
+  thinking_tokens: number | null;
   fallback_calls: number | null;
 }
 
@@ -45,14 +46,18 @@ function usageRow(harness: RunHarness, runId: string): UsageRow {
   return harness.app.context.db
     .prepare(
       `SELECT model, model_calls, input_tokens, cache_read_tokens, cache_write_tokens,
-              output_tokens, fallback_calls
+              output_tokens, thinking_tokens, fallback_calls
          FROM plan_runs WHERE id = ?`,
     )
     .get(runId) as UsageRow;
 }
 
-/** The row `replies` replies of `PER_REPLY` add up to. */
-function expectedRow(replies: number, fallbacks = 0): UsageRow {
+/**
+ * The row `replies` replies of `PER_REPLY` add up to. `thinking` is what each
+ * reply reported of its output as reasoning, `null` for a provider that gave no
+ * breakdown (the default, as the scripted provider gives none).
+ */
+function expectedRow(replies: number, fallbacks = 0, thinking: number | null = null): UsageRow {
   return {
     model: "metered",
     model_calls: replies,
@@ -60,6 +65,7 @@ function expectedRow(replies: number, fallbacks = 0): UsageRow {
     cache_read_tokens: replies * PER_REPLY.cacheReadTokens,
     cache_write_tokens: replies * PER_REPLY.cacheWriteTokens,
     output_tokens: replies * PER_REPLY.outputTokens,
+    thinking_tokens: thinking === null ? null : replies * thinking,
     fallback_calls: fallbacks,
   };
 }
@@ -72,11 +78,11 @@ class MeteredProvider implements ModelProvider {
   readonly name = "metered";
   readonly model = "metered";
   readonly #inner = new ScriptedProvider();
-  readonly #options: { servedElsewhere?: string; blocks?: string };
+  readonly #options: { servedElsewhere?: string; blocks?: string; thinking?: number };
   readonly #blocked = deferred();
   answered = 0;
 
-  constructor(options: { servedElsewhere?: string; blocks?: string } = {}) {
+  constructor(options: { servedElsewhere?: string; blocks?: string; thinking?: number } = {}) {
     this.#options = options;
   }
 
@@ -101,7 +107,7 @@ class MeteredProvider implements ModelProvider {
     this.answered += 1;
     return {
       ...reply,
-      usage: { ...PER_REPLY },
+      usage: { ...PER_REPLY, thinkingTokens: this.#options.thinking ?? PER_REPLY.thinkingTokens },
       servedModel:
         specialist !== undefined && specialist === this.#options.servedElsewhere
           ? "another-model"
@@ -150,6 +156,41 @@ describe("a run records what it spent", () => {
       // One reply was served by another model, and it is counted apart as
       // well as in the totals.
       expect(usageRow(harness, run.id)).toEqual(expectedRow(provider.answered, 1));
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("a reply's thinking tokens are summed into the run's own column, a subset of output and not an addition", async () => {
+    // 20 of each reply's 50 output tokens were reasoning. The run's output
+    // column is still every reply's 50 — thinking is inside it, not on top.
+    const provider = new MeteredProvider({ thinking: 20 });
+    const harness = await createRunHarness({ model: provider });
+    try {
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+      const finished = await runToCompletion(harness.app, run.id);
+
+      expect(finished.status).toBe("done");
+      expect(provider.answered).toBeGreaterThan(1);
+      expect(usageRow(harness, run.id)).toEqual(expectedRow(provider.answered, 0, 20));
+      expect(usageRow(harness, run.id).output_tokens).toBe(provider.answered * 50);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("a run no reply gave a thinking breakdown for records null, not zero", async () => {
+    const provider = new MeteredProvider();
+    const harness = await createRunHarness({ model: provider });
+    try {
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+      await runToCompletion(harness.app, run.id);
+
+      const row = usageRow(harness, run.id);
+      expect(row.output_tokens).toBe(provider.answered * 50);
+      expect(row.thinking_tokens).toBeNull();
     } finally {
       await harness.close();
     }
@@ -252,6 +293,7 @@ describe("a run records what it spent", () => {
         cache_read_tokens: null,
         cache_write_tokens: null,
         output_tokens: null,
+        thinking_tokens: null,
         fallback_calls: null,
       });
     } finally {
