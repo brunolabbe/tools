@@ -516,51 +516,6 @@ code {
   min-height: 1.4em;
 }
 
-/*
- * Gated: five equal columns, so the bar is the pipeline rather than a caption
- * under one. `1fr` columns are also what keeps the card still — the active step
- * goes bold, and in the wrapping flex row this replaced that shifted every
- * label after it.
- */
-.steps {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: 0.35rem;
-  margin: 0.7rem 0 0.4rem;
-  padding: 0;
-  list-style: none;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.steps__item {
-  padding-top: 0.4rem;
-  border-top: 4px solid var(--surface-2);
-  border-radius: 2px;
-  overflow-wrap: anywhere;
-}
-
-.steps__item--active {
-  border-top-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/*
- * `active` outranks `done` at the call site, not here — a re-probing job is
- * *at* a gate it has already passed, and where it is now is the more useful of
- * the two facts. See `statusHighWaterMark` and `JobCard`.
- */
-.steps__item--done {
-  border-top-color: var(--ok);
-  color: var(--ok);
-}
-
-.steps__item--done::before {
-  content: "✓ ";
-}
-
 /* --- variant table --- */
 
 .tablewrap {
@@ -678,6 +633,133 @@ code {
 
 .job__titles {
   min-width: 0;
+}
+
+.job__subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * dl-109: the bar and the line under it are the card's progression, so the
+ * downloaded figure heads the bar rather than sitting in the stats grid.
+ */
+.job__meter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+}
+
+.job__figure {
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.job__figure .muted {
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.job__percent {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Every progress message under the bar, one line each (dl-109): the status
+ * line, then whatever explains it — dl-108's connection count is one of them.
+ */
+.job__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.job__message {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/*
+ * One badge for every message, whatever leads it: an icon for a status line, or
+ * a few characters such as dl-108's "4×".
+ */
+.job__mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.job__mark svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.jobs__note {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+}
+
+/* A saved job is one line (dl-109): the result row is the whole card. */
+.job--saved {
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.job--saved .result {
+  margin-top: 0;
+}
+
+/* #433's fallback, for a browser that blocked the link the page opened. */
+.offer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+  align-items: center;
+  margin-top: 0.8rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.offer__text {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.offer__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.offer__detail {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .stats {

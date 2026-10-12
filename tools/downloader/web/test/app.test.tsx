@@ -34,7 +34,7 @@ import type { ApiClient } from "../src/api/types.ts";
 import type { EventStreamHandlers } from "../src/lib/event-stream.ts";
 import { JOBS_STORAGE_KEY } from "../src/lib/job-store.ts";
 import { PROBE_STAGE_PENDING } from "../src/lib/probe-stages.ts";
-import { LINK, NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
+import { LINK, NOW, SOURCE_URL, job, probe, variant } from "./fixtures.ts";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -308,51 +308,12 @@ test("a probe that fails is reported with the taxonomy's own copy", async () => 
 });
 
 // ---------------------------------------------------------------------------
-// The live event stream, and the pipeline mark that rides on it (dl-20)
+// The live event stream
 // ---------------------------------------------------------------------------
 //
-// These are here rather than in `job-card.test.tsx` because the thing they have
-// to prove is not what the card renders for a given mark — that is asserted
-// there — but that a mark is *produced* by the frames and *arrives* at the card.
-// dl-18 shipped a correct rule that reached nobody watching a healthy stream,
-// and only a render driven from the wire, through the real `useJobs`, could have
-// said so. A component test cannot: it is handed the value whose journey is the
-// thing in question.
-
-/** The frames `#attempt` emits as it takes dl-9's `downloading → probing` edge. */
-const BACK_EDGE: JobEvent[] = [
-  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:30.000Z" },
-  {
-    type: "progress",
-    jobId: "job-1",
-    // `initialProgress("probing")`: the abandoned attempt's bytes are not
-    // progress towards this one, so the snapshot resets with the transition.
-    progress: progress({ stage: "probing", percent: null, downloadedBytes: 0 }),
-    at: "2026-08-20T11:59:31.000Z",
-  },
-];
-
-/** The forward half of a run, as the orchestrator emits it before anything expires. */
-const RUN_TO_DOWNLOADING: JobEvent[] = [
-  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:10.000Z" },
-  { type: "status", jobId: "job-1", status: "downloading", at: "2026-08-20T11:59:20.000Z" },
-  {
-    type: "progress",
-    jobId: "job-1",
-    progress: progress({ stage: "downloading", downloadedBytes: 41_000_000 }),
-    at: "2026-08-20T11:59:21.000Z",
-  },
-];
-
-/** Each pipeline step as `[label, state]`, off the class the stylesheet keys on. */
-function pipeline(): [string, string][] {
-  return within(screen.getByRole("list", { name: "Pipeline" }))
-    .getAllByRole("listitem")
-    .map((step): [string, string] => {
-      const modifier = [...step.classList].find((name) => name.startsWith("steps__item--"));
-      return [step.textContent ?? "", modifier?.slice("steps__item--".length) ?? "pending"];
-    });
-}
+// Until dl-109 this section proved dl-20's pipeline mark made the trip from the
+// frames to the card. The card has no step list now, so the mark and its tests
+// went with it; what is left is the helper the later tests drive a job with.
 
 /**
  * Mounts the app over a restored `downloading` job and hands back the stream
@@ -384,182 +345,6 @@ async function watchOneJob(
   await settle();
   return { fake, listeners };
 }
-
-test("a restored job driven over the back-edge by frames keeps Downloading marked done", async () => {
-  // The user in dl-18's Why: a healthy stream, a 20-minute download, and a
-  // signed URL that expired. Before dl-20 this render was byte-identical to a
-  // first probe's — "Downloading" went pending and the progress indicator
-  // retreated — because `attempts` is the only tell on a `Job` and no `JobEvent`
-  // carries it.
-  const downloading = job("downloading", { id: "job-1", attempts: 1 });
-  const { fake, listeners } = await watchOneJob(downloading, [downloading]);
-
-  expect(listeners).toHaveLength(1);
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "done"],
-    ["Downloading", "active"],
-    ["Downloaded", "pending"],
-  ]);
-
-  act(() => {
-    // The first connect is not a reconnect, so `onOpen` reconciles nothing.
-    listeners[0]?.onOpen();
-    for (const event of BACK_EDGE) listeners[0]?.onEvent(event);
-  });
-
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "active"],
-    ["Downloading", "done"],
-    ["Downloaded", "pending"],
-  ]);
-  // **This test does not prove the frames did it, and an earlier draft of this
-  // comment claimed it did.** `restore` reconciles before it attaches, so the one
-  // `getJob` below has already folded the restored `downloading` job into the
-  // mark — `reachedStep` reads `attempts` only for `probing`, so a `downloading`
-  // job returns step 2 whatever its counter says. The call asserted here as
-  // ruling the refetch out *is* the refetch. What this test holds is the
-  // restore-then-listen journey end to end; the frames carrying the mark on
-  // their own is the test below, which starts a job in this tab and never
-  // refetches at all.
-  expect(fake.client.getJob).toHaveBeenCalledTimes(1);
-});
-
-test("a job started in this tab, never refetched, gets its mark from the frames alone", async () => {
-  // The commonest journey there is: paste a URL, watch it run in the same tab.
-  // It goes through `start()`, which upserts the created job and attaches the
-  // stream — and never calls `mergeJob`. So `applyEvent`'s fold is the *only*
-  // thing that can carry the mark here, which is what makes this the test dl-20
-  // actually needed: with that fold neutralised, every other test in the repo
-  // stays green, this one included until it existed.
-  const created = job("queued", { id: "job-1" });
-  const listeners: EventStreamHandlers[] = [];
-  const fake = await mountApp(false, {
-    createJob: vi.fn(() => Promise.resolve({ job: created })),
-    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
-      listeners.push(handlers);
-      return { close: vi.fn() };
-    }),
-  });
-
-  analyse(SOURCE_URL);
-  await settle();
-  await act(async () => {
-    fake.probes[0]?.resolve({ probe: probe(), cached: false });
-    await Promise.resolve();
-  });
-  await settle();
-  fireEvent.click(screen.getByRole("button", { name: "Download" }));
-  await settle();
-
-  expect(listeners).toHaveLength(1);
-  // Nothing was ever fetched: the job in the list is the one `createJob`
-  // returned, and no reconcile has happened or will.
-  expect(fake.client.getJob).not.toHaveBeenCalled();
-  expect(pipeline()).toEqual([
-    ["Queued", "active"],
-    ["Re-analysing", "pending"],
-    ["Downloading", "pending"],
-    ["Downloaded", "pending"],
-  ]);
-
-  act(() => {
-    listeners[0]?.onOpen();
-    // The forward run, then the edge — every step of it from the wire.
-    for (const event of RUN_TO_DOWNLOADING) listeners[0]?.onEvent(event);
-  });
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "done"],
-    ["Downloading", "active"],
-    ["Downloaded", "pending"],
-  ]);
-
-  act(() => {
-    for (const event of BACK_EDGE) listeners[0]?.onEvent(event);
-  });
-
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "active"],
-    ["Downloading", "done"],
-    ["Downloaded", "pending"],
-  ]);
-  // Still nothing refetched, so `attempts` has been `1` on every copy of this
-  // job the client has ever held. The mark can only have come from the fold.
-  expect(fake.client.getJob).not.toHaveBeenCalled();
-});
-
-test("a reconnect that slept through the download stage keeps the refetch's word for it", async () => {
-  // dl-20's other half, and the one case where *neither* witness is redundant.
-  // The client is watching a first probe when the connection drops; while it is
-  // away the job downloads, the signed URL expires, and the server takes the
-  // back-edge. So the only frame the reconnect brings is the channel's opening
-  // snapshot — `status: probing` again — and this client never saw
-  // `downloading` at all.
-  //
-  // The refetch that follows the reconnect knows `attempts: 2`. It also *loses*:
-  // it was issued before the burst frame landed, so its snapshot is older and
-  // `reconcileJob` keeps the local copy, discarding the counter with it. That is
-  // the race dl-18's gate found and dl-20's Why records. What survives it is the
-  // mark, which is folded from the reconciled job rather than from the copy that
-  // won.
-  const probing = job("probing", { id: "job-1", attempts: 1 });
-  const refetched = job("probing", {
-    id: "job-1",
-    attempts: 2,
-    // Older than the frame already folded in, so `reconcileJob` drops it...
-    updatedAt: "2026-08-20T11:59:35.000Z",
-    // ...and this is how the card says which copy it is rendering.
-    variant: variant({ label: "Losing server copy" }),
-  });
-  const { fake, listeners } = await watchOneJob(probing, [probing, refetched]);
-
-  act(() => {
-    listeners[0]?.onOpen();
-  });
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "active"],
-    ["Downloading", "pending"],
-    ["Downloaded", "pending"],
-  ]);
-
-  // Drop the connection and let the backoff bring it back, which is what makes
-  // the second `onOpen` a reconnect and forces the refetch.
-  act(() => {
-    listeners[0]?.onError();
-    vi.advanceTimersByTime(2_000);
-  });
-  expect(listeners).toHaveLength(2);
-  await act(async () => {
-    listeners[1]?.onOpen();
-    // The burst beats the refetch it just triggered, which is what makes the
-    // local copy the newer one.
-    listeners[1]?.onEvent({
-      type: "status",
-      jobId: "job-1",
-      status: "probing",
-      at: "2026-08-20T11:59:40.000Z",
-    });
-    await Promise.resolve();
-  });
-  await settle();
-
-  expect(fake.client.getJob).toHaveBeenCalledTimes(2);
-  // The race was lost, which is the premise: the local copy won and the refetch
-  // is not what is on screen.
-  expect(screen.queryByRole("heading", { name: "Losing server copy" })).toBeNull();
-  expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
-  // And the discarded copy's `attempts: 2` came through it anyway.
-  expect(pipeline()).toEqual([
-    ["Queued", "done"],
-    ["Re-analysing", "active"],
-    ["Downloading", "done"],
-    ["Downloaded", "pending"],
-  ]);
-});
 
 // ---------------------------------------------------------------------------
 // The probe stage channel (dl-43)
@@ -733,13 +518,13 @@ test("a cancel the server refused leaves the card following the job it could not
     Promise.reject(new fake.AppError("INTERNAL", "Something went wrong on our end.")),
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
   await settle();
   await settle();
 
   expect(fake.client.cancelJob).toHaveBeenCalledWith("job-1");
   expect(screen.queryByText("Something went wrong")).toBeNull();
-  expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Stop" })).toBeDefined();
 
   // Still attached: a frame from the server still lands on the card.
   act(() => {
@@ -750,7 +535,7 @@ test("a cancel the server refused leaves the card following the job it could not
       at: "2026-09-07T10:00:05.000Z",
     });
   });
-  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
 });
 
 test("a cancel the server refused for a job that has since finished shows how it finished", async () => {
@@ -761,13 +546,13 @@ test("a cancel the server refused for a job that has since finished shows how it
     Promise.reject(new fake.AppError("INTERNAL", "Something went wrong on our end.")),
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
   await settle();
   await settle();
 
   expect(screen.queryByText("Something went wrong")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-  expect(screen.getAllByText("Downloaded").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  expect(screen.getByText(/^Saved by your browser — /u)).toBeDefined();
 });
 
 test("a cancel the server accepted before the job stopped keeps following it to canceled", async () => {
@@ -781,7 +566,7 @@ test("a cancel the server accepted before the job stopped keeps following it to 
     Promise.resolve({ job: probing }),
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
   await settle();
 
   act(() => {
@@ -792,7 +577,7 @@ test("a cancel the server accepted before the job stopped keeps following it to 
       at: "2026-09-07T10:00:05.000Z",
     });
   });
-  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
   expect(screen.getAllByText("Canceled").length).toBeGreaterThan(0);
 });
 
@@ -813,9 +598,8 @@ const REFUSED: JobEvent = {
 };
 
 test("a refused frame reaches the card, stays until the link is followed, and goes when the job leaves the queue", async () => {
-  // Through the real `useJobs` for the reason the pipeline mark is: the frame
-  // has to be folded in the hook and read three components down, and neither end
-  // can see whether it makes the trip.
+  // Through the real `useJobs`: the frame has to be folded in the hook and read
+  // three components down, and neither end can see whether it makes the trip.
   const queued = job("queued", { id: "job-1" });
   const { listeners } = await watchOneJob(queued, [queued]);
   expect(screen.queryByRole("alert")).toBeNull();
@@ -829,7 +613,7 @@ test("a refused frame reaches the card, stays until the link is followed, and go
   expect(within(notice).getByText("Wait 30 s before trying again.")).toBeDefined();
   // Still a queued job with a link it can use.
   expect(screen.getByRole("link", { name: "Download" })).toBeDefined();
-  expect(screen.getAllByText("Queued").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Starting").length).toBeGreaterThan(0);
 
   // Following the link starts a new attempt, and the answer to the last one is
   // no longer what the card should say. jsdom does not navigate an anchor, so
@@ -947,4 +731,82 @@ test("a job that could not be created opens nothing", async () => {
   expect(fake.client.createJob).toHaveBeenCalledTimes(1);
   expect(fake.client.openLink).not.toHaveBeenCalled();
   expect(screen.getByRole("alert")).toBeDefined();
+});
+
+// ---------------------------------------------------------------------------
+// The list holds what is live and what needs reading (dl-109)
+// ---------------------------------------------------------------------------
+
+test("a job started from the panel is titled with the page it came from", async () => {
+  const listeners: EventStreamHandlers[] = [];
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+
+  await pressDownload(fake);
+
+  // The probe panel says it too, so the card's own heading is the `h3`.
+  const card = screen.getByRole("heading", { name: "Downloads" }).closest("section");
+  expect(
+    within(card as HTMLElement).getByRole("heading", { level: 3, name: "A sample recording" }),
+  ).toBeDefined();
+});
+
+test("the Downloads card sits above the analysis panel", async () => {
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+  });
+
+  await pressDownload(fake);
+
+  // The card one press just created is the only sign the work is going on until
+  // the browser shows the download, so it must not be below a tall panel.
+  const downloads = screen.getByRole("heading", { name: "Downloads" });
+  const panel = screen.getByRole("heading", { level: 2, name: "A sample recording" });
+  expect(downloads.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("starting an analysis clears saved jobs and keeps live, failed and canceled ones", async () => {
+  const kept = [
+    job("downloading", { id: "job-live", variant: variant({ label: "Live one" }) }),
+    job("downloading", { id: "job-running", variant: variant({ label: "Still running" }) }),
+    job("failed", { id: "job-failed", variant: variant({ label: "Failed one" }) }),
+    job("canceled", { id: "job-canceled", variant: variant({ label: "Canceled one" }) }),
+  ];
+  const saved = job("completed", { id: "job-saved" });
+  // A completed job is never persisted, so it arrives the way it does in use:
+  // through the job's own stream, on a card this tab is following.
+  globalThis.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(kept));
+  const listeners = new Map<string, EventStreamHandlers>();
+  await mountApp(false, {
+    getJob: vi.fn((id: string) =>
+      Promise.resolve({ job: kept.find((candidate) => candidate.id === id) as Job }),
+    ),
+    openJobEvents: vi.fn((jobId: string, handlers: EventStreamHandlers) => {
+      listeners.set(jobId, handlers);
+      return { close: vi.fn() };
+    }),
+  });
+  await settle();
+  act(() => {
+    listeners.get("job-live")?.onEvent({
+      type: "completed",
+      jobId: "job-live",
+      result: saved.result as NonNullable<Job["result"]>,
+      at: "2026-08-20T12:00:30.000Z",
+    });
+  });
+  expect(screen.getByText(/^Saved by your browser — /u)).toBeDefined();
+
+  analyse(SOURCE_URL);
+  await settle();
+
+  expect(screen.queryByText(/^Saved by your browser — /u)).toBeNull();
+  expect(screen.getByRole("heading", { name: "Still running" })).toBeDefined();
+  expect(screen.getByRole("heading", { name: "Failed one" })).toBeDefined();
+  expect(screen.getByRole("heading", { name: "Canceled one" })).toBeDefined();
 });

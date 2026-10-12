@@ -200,7 +200,9 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
 
-  const job = page.getByRole("listitem").filter({ hasText: hls.watchUrl }).first();
+  // The card shows the page's title and host, not the address (dl-109), and
+  // this is the only job on the page.
+  const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
   await expect(job).toBeVisible();
 
   // --- The file -----------------------------------------------------------
@@ -210,7 +212,7 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   // Named by the server's `Content-Disposition`, which the link carries as an
   // attachment: the anchor's `download` attribute has no value of its own.
   expect(download.suggestedFilename()).toMatch(/\.mp4$/u);
-  await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
+  await expect(job.getByText(/^Saved by your browser — /u)).toBeVisible({
     timeout: PROBE_TIMEOUT_MS,
   });
 

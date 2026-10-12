@@ -44,13 +44,21 @@ as it is produced, and no copy is kept". The UI kept the earlier shape:
 3. **The saved row stays until the next analysis** — no timer.
 4. **A reload keeps live and failed jobs, never saved ones.** `localStorage`
    stays; `saveJobs` and `loadJobs` drop `completed`.
-5. **Keep the detail, restyle it.** The four steps stay (the owner considered
-   replacing them with the bar alone and chose to keep them). Steps read
-   **Starting → Re-analysing → Downloading → Done**. Under the bar, one
-   description line; then the known stats only — an unknown one is left out
+5. **No step list; the bar and the messages under it are the progression.**
+   The owner first chose to keep the four steps, then, on seeing the mocks,
+   asked for the indeterminate bar with its description instead — the
+   step-list answer had been a misreading of what they wanted. The status pill
+   reads **Starting → Re-analysing → Downloading → Done**. Under the bar, a box
+   of progress messages, one line each, each led by a small badge (an icon, or
+   text such as "4×"); then the known stats only — an unknown one is left out
    rather than shown as "—".
-6. **dl-108's hint goes on the new card**, under the stats; dl-108's Build step
-   5 is rewritten here to say so. dl-108 itself stays a separate ticket.
+6. **The line follows the status, not the re-probe's stages.** Narrating the
+   real stages needs a `JobEvent` frame the contract does not have; the owner
+   chose to file it as its own ticket and pull request after this one —
+   [dl-110](./dl-110-the-re-probe-narrates-nothing-on-the-job-card.md).
+7. **dl-108's connection count is one of the progress messages**, with "4×" as
+   its badge; dl-108's Build step 5 is rewritten here to say so. dl-108 itself
+   stays a separate ticket.
 
 ## Build
 
@@ -62,10 +70,12 @@ as it is produced, and no copy is kept". The UI kept the earlier shape:
 3. `App`: the Downloads card moves above the analysis panel, so the card a press
    just created is on screen during the wait.
 4. `JobCard`: title from the page, rendition and host under it; Stop, not
-   Cancel; a "Waiting" stat while preparing; the downloaded figure over the bar;
-   a saved job is the one-line `result` row; "Dismiss" on a failed or canceled
-   job; the #433 fallback link as a prompt ("Nothing in your browser's
-   downloads?").
+   Cancel; no step list, and with it the high-water-mark machinery that only
+   the list needed (`statusHighWaterMark`, `reachedStep`, `markWatched`,
+   `watchedSteps`); `ProgressMessages` under the bar; a "Waiting" stat while
+   preparing; the downloaded figure over the bar; a saved job is the one-line
+   `result` row; "Dismiss" on a failed or canceled job; the #433 fallback link
+   as a prompt ("Nothing in your browser's downloads?").
 5. `JobList`: no "Clear N finished"; while a job is live, "You can close this
    page — downloads continue in your browser."
 6. `error-presentation`: the `disconnected` copy stops naming a closed tab.
@@ -81,13 +91,15 @@ as it is produced, and no copy is kept". The UI kept the earlier shape:
 4. The job card is titled with the page title the job was started from, and
    falls back to the filename, then the rendition label. Proven in
    `job-card.test.tsx`.
-5. The step labels are Starting, Re-analysing, Downloading and Done; a live card
-   offers Stop; a failed or canceled card offers Dismiss and nothing named
-   "Remove from list"; the list has no "Clear finished". Proven in
-   `job-card.test.tsx`.
+5. The status labels are Starting, Re-analysing, Downloading and Done; the card
+   draws no step list; a live card offers Stop; a failed or canceled card
+   offers Dismiss and nothing named "Remove from list"; the list has no "Clear
+   finished". Proven in `job-card.test.tsx` and `status.test.ts`.
 6. An unknown speed, time left or segment count is not rendered. Proven in
    `job-card.test.tsx`.
-7. `npm run check`, the downloader unit suite and `e2e:downloader` pass.
+7. Every progress message leads with a badge hidden from assistive technology,
+   and the messages are one `aria-live` region. Proven in `job-card.test.tsx`.
+8. `npm run check`, the downloader unit suite and `e2e:downloader` pass.
 
 ## Log
 

@@ -67,13 +67,17 @@ would have held one tunnel. A page meant to explain a download should not need
    make the web side treat `undefined` as `null`. Pick one and test it with a
    row that lacks the key. `initialProgress()` sets it to `null`.
 5. **Web** (`web/src/components/JobCard.tsx`). While downloading, when
-   `originConnections` is 2 or more, show a short hint beside the speed, for
-   example "Reading on 4 connections. This source throttles each one." Show
-   nothing at 1 or `null`: the hint exists to explain a split, and "1
-   connection" on every job is noise. Make it reachable to a screen reader
-   (the `aria-live` hint paragraph is the precedent). Add the field to every
+   `originConnections` is 2 or more, add one **progress message** under the
+   bar: `progressMessages()` in `JobCard.tsx` builds the list that
+   `ProgressMessages.tsx` renders (dl-109), and this is one more entry in it,
+   after the status line, with the count as a text mark —
+   `{ key: "connections", mark: { text: "4×" }, text: "Reading on 4 connections. This source throttles each one." }`.
+   The list is already the card's `aria-live` region, so the line is announced
+   when it appears. Show nothing at 1 or `null`: the line exists to explain a
+   split, and "1 connection" on every job is noise. Add the field to every
    mock in `web/src/api/scenarios.ts`, and add one mock scenario that splits,
-   so the mocked UI can show the hint.
+   so the mocked UI can show it. _(Rewritten by dl-109, 2026-10-12: the owner
+   placed this line among the progress messages, not beside the speed.)_
 6. **Tests.** Add them at the **end** of each suite; inserting mid-file moves
    other tickets' cited lines.
    - `engine/test/parallel-ranges.test.ts`: the throttled fixture's progress

@@ -1,36 +1,32 @@
-import type { AppErrorPayload, Job } from "@downloader/contract";
+import { useState } from "react";
+import type { AppErrorPayload, Job, JobStatus } from "@downloader/contract";
+import { useElapsed } from "../hooks/useElapsed.ts";
 import { useNow } from "../hooks/useNow.ts";
 import { localErrorPayload } from "../lib/error-presentation.ts";
 import {
-  UNKNOWN,
   formatBytes,
   formatDuration,
   formatEta,
   formatExpiry,
-  formatPercent,
   formatSpeed,
 } from "../lib/format.ts";
 import type { StreamState } from "../lib/job-stream.ts";
-import {
-  STATUS_HINT,
-  STATUS_LABEL,
-  STATUS_ORDER,
-  statusHighWaterMark,
-  statusIndex,
-} from "../lib/status.ts";
+import { STATUS_HINT, STATUS_LABEL } from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
+import { ProgressMessages } from "./ProgressMessages.tsx";
+import type { MessageIcon, ProgressMessage } from "./ProgressMessages.tsx";
 import { Preview } from "./Preview.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
 
 interface JobCardProps {
   job: Job;
-  streamState: StreamState | undefined;
   /**
-   * The furthest pipeline step this client has *watched* the job hold, which the
-   * job record cannot report on its own once the back-edge has been taken. See
-   * `statusHighWaterMark`; `undefined` means nothing has been watched yet.
+   * The page title the job was started from, or `undefined` for a job started
+   * before dl-109 or restored without one. The job record has no title of its
+   * own — see `loadTitles`.
    */
-  watchedStep: number | undefined;
+  title: string | undefined;
+  streamState: StreamState | undefined;
   /**
    * Why the server last refused to start this job when its link was opened
    * (dl-77), or `undefined`. The browser reports that as a failed file and the
@@ -46,8 +42,8 @@ interface JobCardProps {
 
 export function JobCard({
   job,
+  title,
   streamState,
-  watchedStep,
   refusal,
   onFollowLink,
   onCancel,
@@ -55,19 +51,30 @@ export function JobCard({
   onRetry,
 }: JobCardProps): React.JSX.Element {
   const now = useNow(15_000);
+  const waitedMs = useElapsed(useStepStartedAt(job.status), 1_000);
+
+  // dl-109: a saved job is a one-line confirmation, not a card. Nothing on it
+  // can be acted on — the server kept no copy (dl-53) — and it leaves the list
+  // when the next analysis starts.
+  if (job.status === "completed" && job.result) {
+    return (
+      <li className="job job--completed job--saved">
+        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} />
+      </li>
+    );
+  }
+
   const active = job.status !== "completed" && job.status !== "failed" && job.status !== "canceled";
   const { progress } = job;
-  const title = job.variant?.label ?? job.result?.filename ?? job.sourceUrl;
-  // Where the job is, and how far it has been — two different questions once
-  // the `downloading → probing` back-edge exists. See `statusHighWaterMark`.
-  const currentStep = statusIndex(job.status);
-  const furthestStep = statusHighWaterMark(job, watchedStep ?? 0);
-  // dl-41: once a job is completed the preview leaves the head for the result
-  // panel, so a finished card shows the image once, beside the filename it now
-  // labels. This is the same expression the `CompletedResult` render below is
-  // guarded by, so the preview is in one place or the other — never in both,
-  // and never in neither.
-  const previewInResult = job.status === "completed" && job.result !== null;
+  const heading = title ?? job.result?.filename ?? job.variant?.label ?? job.sourceUrl;
+  // Neither part repeats the heading: a card titled by its rendition or by its
+  // address does not say it twice.
+  const subtitle = [
+    heading === job.variant?.label ? null : job.variant?.label,
+    heading === job.sourceUrl ? null : hostOf(job.sourceUrl),
+  ]
+    .filter((part): part is string => typeof part === "string" && part !== "")
+    .join(" · ");
 
   return (
     <li className={`job job--${job.status}`}>
@@ -76,10 +83,12 @@ export function JobCard({
             `space-between`, and this must be additive — a job from before dl-29,
             or one whose probe found no image, renders exactly as it did. */}
         <div className="job__headline">
-          {!previewInResult && <Preview path={job.thumbnailPath} size="card" />}
+          <Preview path={job.thumbnailPath} size="card" />
           <div className="job__titles">
-            <h3 className="job__title">{title}</h3>
-            <p className="muted url-echo">{job.sourceUrl}</p>
+            <h3 className="job__title">{heading}</h3>
+            <p className="muted job__subtitle" title={job.sourceUrl}>
+              {subtitle}
+            </p>
           </div>
         </div>
         <div className="pills">
@@ -98,83 +107,38 @@ export function JobCard({
           queued, which is the only state a refusal leaves it in. */}
       {job.status === "queued" && refusal && <ErrorPanel error={refusal} />}
 
+      {/* No step list (dl-109): the bar and the line under it are the
+          progression. The bar is indeterminate until bytes flow, so the
+          `downloading → probing` back-edge reads as the bar going indeterminate
+          again rather than as a step walked backwards. */}
       {active && (
         <>
-          <ol className="steps" aria-label="Pipeline">
-            {STATUS_ORDER.map((status, index) => {
-              // `active` is asked first: a re-probing job is *at* a step it has
-              // already been past, and where it is now outranks how far it got.
-              const state =
-                index === currentStep ? "active" : index <= furthestStep ? "done" : "pending";
-              return (
-                <li
-                  key={status}
-                  className={
-                    state === "pending" ? "steps__item" : `steps__item steps__item--${state}`
-                  }
-                  // The three states were CSS and nothing else — a colour and a
-                  // `::before` tick that a screen reader has no reason to read —
-                  // so the list announced five steps and no sense of which one
-                  // the job was on. `aria-current` names that one; the label
-                  // names the ones behind it, because a done step is otherwise
-                  // indistinguishable from a pending one by name.
-                  aria-current={state === "active" ? "step" : undefined}
-                  aria-label={state === "done" ? `${STATUS_LABEL[status]}, done` : undefined}
-                >
-                  {STATUS_LABEL[status]}
-                </li>
-              );
-            })}
-          </ol>
+          {job.status === "downloading" && (
+            <div className="job__meter">
+              <span className="job__figure">
+                {formatBytes(progress.downloadedBytes)}{" "}
+                {/* An expectation, not a measurement (dl-96), so it says so. */}
+                <span className="muted">
+                  {progress.totalBytes !== null
+                    ? `of ~${formatBytes(progress.totalBytes)}`
+                    : "· total not known yet"}
+                </span>
+              </span>
+              {progress.percent !== null && (
+                <span className="muted job__percent">{Math.round(progress.percent)}%</span>
+              )}
+            </div>
+          )}
           <ProgressBar
-            percent={progress.percent}
+            percent={job.status === "downloading" ? progress.percent : null}
             label={STATUS_LABEL[job.status]}
             {...(progress.speedBps !== null ? { valueText: formatSpeed(progress.speedBps) } : {})}
           />
-          <p className="muted" aria-live="polite">
-            {STATUS_HINT[job.status]}
-          </p>
-          <dl className="stats">
-            <div>
-              <dt>Progress</dt>
-              <dd>
-                {progress.percent !== null
-                  ? formatPercent(progress.percent)
-                  : progress.totalBytes === null
-                    ? "unknown total"
-                    : UNKNOWN}
-              </dd>
-            </div>
-            <div>
-              <dt>Downloaded</dt>
-              <dd>
-                {formatBytes(progress.downloadedBytes)}
-                {/* An expectation, not a measurement (dl-96), so it says so. */}
-                {progress.totalBytes !== null ? ` / ~${formatBytes(progress.totalBytes)}` : ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Speed</dt>
-              <dd>{formatSpeed(progress.speedBps)}</dd>
-            </div>
-            <div>
-              <dt>Remaining</dt>
-              <dd>{formatEta(progress.etaSec)}</dd>
-            </div>
-            <div>
-              <dt>Segments</dt>
-              <dd>
-                {progress.segmentsDone === null
-                  ? UNKNOWN
-                  : `${progress.segmentsDone}${progress.segmentsTotal === null ? "" : ` / ${progress.segmentsTotal}`}`}
-              </dd>
-            </div>
-          </dl>
+          {/* Directly under the bar (dl-109). dl-108's connection count is meant
+              to be one more message here, with its "4×" as the mark. */}
+          <ProgressMessages messages={progressMessages(job.status)} />
+          <Stats status={job.status} progress={progress} waitedMs={waitedMs} />
         </>
-      )}
-
-      {job.status === "completed" && job.result && (
-        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} />
       )}
 
       {job.status === "failed" && job.error && (
@@ -188,23 +152,114 @@ export function JobCard({
       )}
 
       <div className="job__actions">
-        {active && (
+        {active ? (
           <button type="button" className="button" onClick={() => onCancel(job.id)}>
-            Cancel
+            Stop
+          </button>
+        ) : (
+          <button type="button" className="button" onClick={() => onRemove(job.id)}>
+            Dismiss
           </button>
         )}
-        <button type="button" className="button button--quiet" onClick={() => onRemove(job.id)}>
-          Remove from list
-        </button>
       </div>
     </li>
   );
 }
 
 /**
- * The job's single-use link (dl-53). Following it is what starts the work:
- * the file streams to this browser as it is produced, and the card follows the
- * progress over the event stream meanwhile.
+ * Only what is known (dl-109). An unknown value used to render as "—" in a
+ * fixed grid of five, which on most jobs was a row of dashes; it is left out
+ * instead. The downloaded figure is not here — it heads the bar.
+ */
+function Stats({
+  status,
+  progress,
+  waitedMs,
+}: {
+  status: JobStatus;
+  progress: Job["progress"];
+  waitedMs: number;
+}): React.JSX.Element | null {
+  const rows: { term: string; value: string }[] = [];
+  if (status === "queued" || status === "probing") {
+    rows.push({ term: "Waiting", value: `${Math.floor(waitedMs / 1000)} s` });
+    if (progress.totalBytes !== null) {
+      rows.push({ term: "Expected size", value: `~${formatBytes(progress.totalBytes)}` });
+    }
+  } else {
+    if (progress.speedBps !== null)
+      rows.push({ term: "Speed", value: formatSpeed(progress.speedBps) });
+    if (progress.etaSec !== null)
+      rows.push({ term: "Remaining", value: formatEta(progress.etaSec) });
+    if (progress.segmentsDone !== null) {
+      rows.push({
+        term: "Segments",
+        value: `${progress.segmentsDone}${progress.segmentsTotal === null ? "" : ` / ${progress.segmentsTotal}`}`,
+      });
+    }
+  }
+  if (rows.length === 0) return null;
+  return (
+    <dl className="stats">
+      {rows.map((row) => (
+        <div key={row.term}>
+          <dt>{row.term}</dt>
+          <dd>{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const STATUS_ICON: Partial<Record<JobStatus, MessageIcon>> = {
+  queued: "link",
+  probing: "refresh",
+  downloading: "send",
+};
+
+/** The status line first, then whatever explains it. */
+function progressMessages(status: JobStatus): ProgressMessage[] {
+  const messages: ProgressMessage[] = [
+    { key: "status", mark: STATUS_ICON[status] ?? "send", text: STATUS_HINT[status] },
+  ];
+  if (status === "probing") {
+    messages.push({
+      key: "browser",
+      mark: "browser",
+      text: "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
+    });
+  }
+  return messages;
+}
+
+/**
+ * When this card first saw the job in its current status, while it is
+ * preparing; `null` otherwise. Measured here rather than read off the record:
+ * `updatedAt` moves on every progress frame, and `createdAt` says nothing about
+ * a re-probe on the back-edge. It is how long the visitor has watched this
+ * step, which is a fact — the same honesty `AnalysingPanel`'s clock relies on.
+ */
+function useStepStartedAt(status: JobStatus): number | null {
+  const [mark, setMark] = useState(() => ({ status, at: Date.now() }));
+  // Derived state, set during render: React re-renders at once with the new
+  // mark, before anything is painted with the old one.
+  if (mark.status !== status) setMark({ status, at: Date.now() });
+  return status === "queued" || status === "probing" ? mark.at : null;
+}
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The job's single-use link (dl-53), offered in case the browser blocked the
+ * one the page opened on the visitor's behalf (#433). Following it is what
+ * starts the work: the file streams to this browser as it is produced, and the
+ * card follows the progress over the event stream meanwhile.
  *
  * `download` with no value, so the name comes from the server's
  * `Content-Disposition` — the title is only known after the re-probe the link
@@ -223,11 +278,17 @@ function LinkOffer({
   const expiry = formatExpiry(link.expiresAt, now);
   if (expiry.expired) return <ErrorPanel error={localErrorPayload("FILE_EXPIRED")} />;
   return (
-    <div className="result__actions">
+    <div className="offer">
+      <div className="offer__text">
+        <p className="offer__title">Nothing in your browser's downloads?</p>
+        <p className="muted offer__detail">
+          Some browsers block a download the page starts on its own. Open it yourself — the link
+          works once · {expiry.label}.
+        </p>
+      </div>
       <a className="button button--primary" href={link.url} download onClick={onFollow}>
         Download
       </a>
-      <span className="muted result__expiry">works once · {expiry.label}</span>
     </div>
   );
 }
@@ -241,7 +302,7 @@ function CompletedResult({
   thumbnailPath: string | null | undefined;
 }): React.JSX.Element {
   return (
-    <div className="result">
+    <output className="result">
       {/* Grouped with the meta rather than added as a bare child of `.result`,
           which is `space-between`. Same reason as `card__headline` and
           `job__headline`. `result__headline` collapses to just the meta when
@@ -249,16 +310,17 @@ function CompletedResult({
       <div className="result__headline">
         <Preview path={thumbnailPath} size="card" />
         <div className="result__meta">
-          <p className="result__filename">{result.filename}</p>
+          <p className="result__filename">Saved by your browser — {result.filename}</p>
+          {/* No second download: the file went to this browser and no copy
+              exists to fetch again (dl-53). Downloading again is a new analysis. */}
           <p className="muted">
             {formatBytes(result.sizeBytes)} · {result.container.toUpperCase()}
-            {result.durationSec !== null ? ` · ${formatDuration(result.durationSec)}` : ""}
+            {result.durationSec !== null ? ` · ${formatDuration(result.durationSec)}` : ""} · the
+            server kept no copy
           </p>
         </div>
       </div>
-      {/* No second download: the file went to this browser and no copy exists
-          to fetch again (dl-53). Downloading again is a new analysis. */}
-      <p className="muted result__expiry">Saved by your browser. The server kept no copy.</p>
-    </div>
+      <span className="pill pill--completed">{STATUS_LABEL.completed}</span>
+    </output>
   );
 }

@@ -13,29 +13,24 @@ import type { ApiClient } from "../api/types.ts";
 import {
   applyJobEvent,
   isTerminal,
-  markWatched,
   reconcileJob,
   refusalAfter,
   upsertJob,
 } from "../lib/job-reducer.ts";
 import { createJobStream } from "../lib/job-stream.ts";
 import type { JobStream, StreamState } from "../lib/job-stream.ts";
-import { getBrowserStorage, loadJobs, saveJobs, sortJobs } from "../lib/job-store.ts";
+import {
+  getBrowserStorage,
+  loadJobs,
+  loadTitles,
+  saveJobs,
+  saveTitles,
+  sortJobs,
+} from "../lib/job-store.ts";
 
 export interface UseJobs {
   jobs: Job[];
   streamStates: Record<string, StreamState>;
-  /**
-   * How far along `STATUS_ORDER` this client has *watched* each job go, keyed by
-   * job id and absent until there is something to say. It travels beside the job
-   * rather than on it because `Job` is a contract type; `statusHighWaterMark`
-   * takes the two together. See `markWatched`.
-   *
-   * Entries for removed jobs are left behind, exactly as `streamStates` leaves
-   * its own: both are one small value per job id this tab has seen, and pruning
-   * them is code with nothing observable to assert against.
-   */
-  watchedSteps: Record<string, number>;
   /**
    * Why the server refused to start a job when its link was opened (dl-77), by
    * job id, while that is still the latest thing that happened to it. Kept beside
@@ -46,22 +41,30 @@ export interface UseJobs {
   refusals: Record<string, AppErrorPayload>;
   /** The visitor followed the link again: whatever it was refused for before is old news. */
   clearRefusal(id: string): void;
+  /** The page title each job was started from, by job id — see `loadTitles`. */
+  titles: Record<string, string>;
   /**
    * Creates the job and opens its single-use link, which is what starts the
    * work (dl-53) — so one press both makes the job and fetches the file.
    */
-  start(url: string, options: JobOptions): Promise<Job>;
+  start(url: string, options: JobOptions, title?: string): Promise<Job>;
   cancel(id: string): Promise<void>;
+  /** Dismisses one job — the way a failed or canceled card leaves the list. */
   remove(id: string): void;
-  clearFinished(): void;
+  /**
+   * Drops every completed job (dl-109). A saved card is a confirmation, not a
+   * record: it stays while the visitor is still looking at it and goes when
+   * they start on the next page. Failed and canceled jobs stay until dismissed.
+   */
+  clearSaved(): void;
 }
 
 export function useJobs(api: ApiClient): UseJobs {
   const storage = useMemo(() => getBrowserStorage(), []);
   const [jobs, setJobs] = useState<Job[]>(() => loadJobs(storage));
   const [streamStates, setStreamStates] = useState<Record<string, StreamState>>({});
-  const [watchedSteps, setWatchedSteps] = useState<Record<string, number>>({});
   const [refusals, setRefusals] = useState<Record<string, AppErrorPayload>>({});
+  const [titles, setTitles] = useState<Record<string, string>>(() => loadTitles(storage));
   const streams = useRef(new Map<string, JobStream>());
   const jobsRef = useRef(jobs);
 
@@ -69,29 +72,15 @@ export function useJobs(api: ApiClient): UseJobs {
 
   useEffect(() => {
     saveJobs(storage, jobs);
-  }, [jobs, storage]);
+    saveTitles(storage, titles, jobs);
+  }, [jobs, titles, storage]);
 
-  const watch = useCallback((jobId: string, ...seen: readonly Job[]) => {
-    setWatchedSteps((previous) => {
-      const current = previous[jobId] ?? 0;
-      const next = markWatched(current, ...seen);
-      return next === current ? previous : { ...previous, [jobId]: next };
+  const mergeJob = useCallback((remote: Job) => {
+    setJobs((previous) => {
+      const local = previous.find((candidate) => candidate.id === remote.id);
+      return sortJobs(upsertJob(previous, reconcileJob(local, remote)));
     });
   }, []);
-
-  const mergeJob = useCallback(
-    (remote: Job) => {
-      // A freshly fetched job carries `attempts`, which is the *other* witness
-      // to the back-edge and the only one a page load has. Folding it in here
-      // means the mark survives whichever copy `reconcileJob` goes on to pick.
-      watch(remote.id, remote);
-      setJobs((previous) => {
-        const local = previous.find((candidate) => candidate.id === remote.id);
-        return sortJobs(upsertJob(previous, reconcileJob(local, remote)));
-      });
-    },
-    [watch],
-  );
 
   const failLocally = useCallback((jobId: string, error: AppErrorPayload) => {
     setJobs((previous) =>
@@ -103,29 +92,23 @@ export function useJobs(api: ApiClient): UseJobs {
     );
   }, []);
 
-  const applyEvent = useCallback(
-    (jobId: string, event: JobEvent) => {
-      // Both ends of the move, because the move is the evidence: over the
-      // back-edge the step being left is `downloading` and the job that comes
-      // back says `probing`. `jobsRef` is assigned during render, so this is the
-      // same job the updater below is about to fold the event onto — and reading
-      // it here rather than inside the updater keeps that updater pure.
+  const applyEvent = useCallback((jobId: string, event: JobEvent) => {
+    if (event.type === "refused") {
+      // `jobsRef` is assigned during render, so this is the same job the
+      // updater below is about to fold the event onto — and reading it here
+      // rather than inside the updater keeps that updater pure.
       const before = jobsRef.current.find((job) => job.id === jobId);
-      if (before) watch(jobId, before, applyJobEvent(before, event));
-      if (event.type === "refused") {
-        setRefusals((previous) => {
-          const next = refusalAfter(previous[jobId], before, event);
-          return next === undefined || next === previous[jobId]
-            ? previous
-            : { ...previous, [jobId]: next };
-        });
-      }
-      setJobs((previous) =>
-        previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
-      );
-    },
-    [watch],
-  );
+      setRefusals((previous) => {
+        const next = refusalAfter(previous[jobId], before, event);
+        return next === undefined || next === previous[jobId]
+          ? previous
+          : { ...previous, [jobId]: next };
+      });
+    }
+    setJobs((previous) =>
+      previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
+    );
+  }, []);
 
   const attach = useCallback(
     (jobId: string, onListening?: () => void) => {
@@ -188,8 +171,9 @@ export function useJobs(api: ApiClient): UseJobs {
   }, [api, attach, failLocally, mergeJob]);
 
   const start = useCallback(
-    async (url: string, options: JobOptions): Promise<Job> => {
+    async (url: string, options: JobOptions, title?: string): Promise<Job> => {
       const { job } = await api.createJob({ url, options });
+      if (title) setTitles((previous) => ({ ...previous, [job.id]: title }));
       setJobs((previous) => sortJobs(upsertJob(previous, job)));
       // Not until the job's stream is listening: the server keeps no replay
       // log, so a link refused before then would lose its reason (dl-77) and
@@ -245,27 +229,27 @@ export function useJobs(api: ApiClient): UseJobs {
     [detach],
   );
 
-  const clearFinished = useCallback(() => {
+  const clearSaved = useCallback(() => {
     setJobs((previous) => {
       for (const job of previous) {
-        if (TERMINAL_STATUSES.has(job.status)) {
+        if (job.status === "completed") {
           streams.current.get(job.id)?.stop();
           streams.current.delete(job.id);
         }
       }
-      return previous.filter((job) => !TERMINAL_STATUSES.has(job.status));
+      return previous.filter((job) => job.status !== "completed");
     });
   }, []);
 
   return {
     jobs,
     streamStates,
-    watchedSteps,
     refusals,
     clearRefusal,
+    titles,
     start,
     cancel,
     remove,
-    clearFinished,
+    clearSaved,
   };
 }

@@ -73,7 +73,9 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
     page.getByRole("button", { name: "Download", exact: true }).click(),
   ]);
 
-  const job = page.getByRole("listitem").filter({ hasText: hls.masterUrl }).first();
+  // The card shows the page's title and host, not the address (dl-109), and
+  // this is the only job on the page.
+  const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
   await expect(job).toBeVisible();
   const href = new URL(download.url()).pathname;
   expect(href).toMatch(/^\/api\/files\//u);
@@ -89,7 +91,7 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   expect(download.suggestedFilename()).toMatch(/\.mp4$/u);
 
   // The card followed the stream to its end over SSE, and the link is spent.
-  await expect(job.getByText("Saved by your browser. The server kept no copy.")).toBeVisible({
+  await expect(job.getByText(/^Saved by your browser — /u)).toBeVisible({
     timeout: 120_000,
   });
   await expect(job.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
@@ -104,7 +106,7 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   // Last, so it covers everything above: the whole journey ran under the CSP
   // and the browser refused none of it. Most of the directives already have a
   // louder witness here — a refused bundle is a blank page and a refused
-  // `EventSource` is a job that never reaches "Downloaded" — so what this adds is
+  // `EventSource` is a job that never reaches "Done" — so what this adds is
   // the quiet case: something the policy stopped that the UI shrugged off.
   expect(await cspViolationsOn(page)).toEqual([]);
 });
