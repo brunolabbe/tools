@@ -114,3 +114,43 @@ Traps worth knowing in advance:
 
 **2026-10-12**: filed from the owner's question on a live job (Why). Shape and
 timing decided by the owner (Why, 1 and 2). Nothing built.
+
+**2026-10-12 (build)**: built on `dl-108`. What the brief had wrong or left open:
+
+1. **"Relay counts as `inFlight`" holds, with one edge.** `Fetch.inFlight` is
+   `started && !done && failure === null` (`parallel-ranges.ts`, class `Fetch`).
+   `#accept` builds the relay's `Fetch` and `#begin` sets `started`, so a relay
+   counts from the moment its request is sent until its body ends; a paused
+   relay still counts. The post-fallback continuation counts the same way once
+   `#begin` runs, and not during the wait for the dropped fetches to close. The
+   edge: once the relay's body has ended the count is a true `0`. Measured on
+   the fast-origin fixture, three runs gave `[1,1,1,0]` each time: the closing
+   `progress=end` tick lands after the relay. So **Done when 2 ("reports `1`
+   throughout") is not what the feeder says**: it reads 1 while it reads and 0
+   on the last tick. I kept the honest count rather than clamp it to 1, because
+   the field is documented as the requests open at the snapshot and the card
+   shows nothing below 2 either way. The timing test asserts "never more than
+   1, never null", and the relay's 1 is asserted directly on the feeder
+   (`openFetches` is 1 while it reads, 0 after it ends).
+2. **The persisted-row case was wider than the brief said.** Step 4 named only
+   `job-store.ts`, but the web keeps jobs in `localStorage` under
+   `downloader:jobs:v1`, and `loadJobs` keeps only records that parse
+   `jobSchema` (the comment on `thumbnailPath` in `contract/src/api.ts` records
+   what a bare `.nullable()` does there: it empties the list). The API's
+   `rowToJob` goes through the same schema. So neither "default it where the
+   row is read" nor "web treats undefined as null" covered all readers; the
+   one place that does (the row, `localStorage`, an event frame from an older
+   server during a deploy) is `jobProgressSchema`:
+   `z.number().nullable().default(null)`. With the `.default` removed, both
+   legacy-row tests fail (`web/test/job-store.test.ts` and
+   `api/test/job-store.test.ts`: 2 failed of 49); with it, 49 of 49.
+3. **The mocks are in `web/src/api/mock.ts`, not `scenarios.ts`.**
+   `scenarios.ts` holds only the script (`JobScript.splitAtTick`) and the new
+   `throttled` scenario; the progress objects are built in `mock.ts`
+   (`idleProgress`, `downloadProgress`).
+4. **Count source.** `FeederStats.openFetches` is `#inFlight()`. `stats()`
+   builds six scalar fields, so no separate accessor was warranted.
+5. **Fold-in.** None taken: nothing else specified became free. dl-110 edits
+   the same `progressMessages()` on its own branch and reconciles onto this one.
+6. **Not measured**: the rendered card in a browser. The web unit tests render
+   it in jsdom; no screenshot was taken.

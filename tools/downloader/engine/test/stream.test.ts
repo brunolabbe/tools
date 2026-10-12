@@ -2263,3 +2263,23 @@ describe("dl-103: an unanswered seek probe", () => {
     );
   }
 });
+
+describe("dl-108: an HLS job has no feeder in its path", () => {
+  test("reports originConnections as null on every snapshot, not as 0 or 1", async () => {
+    const samples: (number | null)[] = [];
+    const media = await engineWith().stream({
+      jobId: "dl-108-hls",
+      variant: hlsVariant("hls6", 6),
+      requestContext: CONTEXT,
+      onProgress: (progress) => samples.push(progress.originConnections),
+    });
+    media.body.resume();
+    await media.done;
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(
+      samples.every((value) => value === null),
+      JSON.stringify(samples),
+    ).toBe(true);
+  });
+});

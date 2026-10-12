@@ -871,6 +871,8 @@ async function attempt(
           speedBps: rate.bytesPerSecond(),
         }),
         downloadedBytes: sent,
+        // What reaches the origin, sampled when ffmpeg reports; null with no feeder.
+        originConnections: feeder === null ? null : feeder.stats().openFetches,
       });
     },
     onInfoLine: (line) => {

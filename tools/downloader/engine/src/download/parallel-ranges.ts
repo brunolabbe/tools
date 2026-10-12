@@ -144,6 +144,8 @@ export interface FeederStats {
   originRequests: number;
   /** The most ranged fetches in flight at once. */
   maxConcurrentFetches: number;
+  /** Requests to the origin open right now, a relay's included (dl-108). */
+  openFetches: number;
   refusal: { kind: RefusalKind; detail: string } | null;
 }
 
@@ -488,6 +490,7 @@ export class RangeFeeder {
       deliveredBytes: this.#delivered,
       originRequests: this.#originRequests,
       maxConcurrentFetches: this.#maxConcurrent,
+      openFetches: this.#inFlight(),
       refusal: this.#refusal,
     };
   }

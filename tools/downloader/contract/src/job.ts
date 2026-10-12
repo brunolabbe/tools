@@ -102,6 +102,19 @@ export interface JobProgress {
   etaSec: number | null;
   /** Seconds of media written so far — parsed from ffmpeg's `time=` output. */
   processedSec: number | null;
+  /**
+   * The requests to the origin open at the moment of the snapshot, the relay
+   * included (dl-108). `1` on a job the range feeder reads and has not split;
+   * `2` or more once it has, and it can move between chunks. It is a count of
+   * what reaches the origin, not of what ffmpeg has open to the loopback, and
+   * it is `0` in the gap between one request and the next.
+   *
+   * `null` when no feeder is in the path — HLS or DASH, a source that refused
+   * the seek probe, a host that allows one connection, a remembered refusal, a
+   * separate audio rendition, a live capture — which is "not measured", never
+   * `1`.
+   */
+  originConnections: number | null;
 }
 
 /**

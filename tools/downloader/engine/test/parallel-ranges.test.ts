@@ -1464,3 +1464,100 @@ describe("dl-98 round 2: a request that goes away is no longer measured", () => 
     SLOW,
   );
 });
+
+/** `run`, keeping the `originConnections` of every progress snapshot the job reported (dl-108). */
+async function runSampling(
+  engine: ReturnType<typeof engineWith>,
+  source: MediaVariant,
+): Promise<(number | null)[]> {
+  const samples: (number | null)[] = [];
+  runs += 1;
+  const media: MediaStream = await engine.stream({
+    jobId: `dl108-${runs}`,
+    variant: source,
+    requestContext: CONTEXT,
+    title: "dl108",
+    onProgress: (progress) => samples.push(progress.originConnections),
+  });
+  media.body.resume();
+  await media.done;
+  return samples;
+}
+
+describe("dl-108: the job's progress says how many connections reach the origin", () => {
+  test(
+    "a job the feeder splits reports 2 or more connections, and never more than it allows",
+    async () => {
+      behaviour.perConnectionBps = 500_000;
+      const samples = await runSampling(engineWith(), variant("moov-end.mp4"));
+      expect(counted().fanOut).toBeGreaterThan(4);
+      const most = Math.max(...samples.map((value) => value ?? 0));
+      // "Ever reached", not the value at an instant: a tick lands where it lands.
+      expect(most, JSON.stringify(samples)).toBeGreaterThanOrEqual(2);
+      // Four connections is the most the settings allow.
+      expect(most, JSON.stringify(samples)).toBeLessThanOrEqual(4);
+      expect(samples.every((value) => value !== null)).toBe(true);
+    },
+    SLOW,
+  );
+
+  test(
+    "a fast origin never reports more than one connection, and never null",
+    async () => {
+      behaviour.perConnectionBps = 4_000_000;
+      const samples = await runSampling(engineWith(), variant("faststart.mp4"));
+      expect(counted().fanOut).toBe(0);
+      expect(samples.length).toBeGreaterThan(0);
+      for (const value of samples) {
+        expect(value, JSON.stringify(samples)).not.toBeNull();
+        expect(value, JSON.stringify(samples)).toBeLessThanOrEqual(1);
+      }
+      // Not "always 1": the closing tick comes after the relay has ended, which
+      // is a true 0. That the relay counts as 1 while it reads is the next test.
+    },
+    SLOW,
+  );
+
+  test(
+    "a host listed as single-connection has no feeder, so the count is null throughout",
+    async () => {
+      behaviour.perConnectionBps = 4_000_000;
+      const samples = await runSampling(
+        engineWith({ singleConnectionHosts: ["127.0.0.1"] }),
+        variant("faststart.mp4"),
+      );
+      expect(counted().fanOut).toBe(0);
+      expect(samples.length).toBeGreaterThan(0);
+      expect(
+        samples.every((value) => value === null),
+        JSON.stringify(samples),
+      ).toBe(true);
+    },
+    SLOW,
+  );
+
+  test(
+    "the feeder counts its relay as one open connection, and none once the relay has ended",
+    async () => {
+      // No duration, so it never judges a split: this is the relay alone.
+      const { feeder } = await feederFor("faststart.mp4", { durationSec: () => null });
+      expect(feeder.stats().openFetches).toBe(0);
+      const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+        http
+          .get(feeder.url, { headers: { range: "bytes=0-" }, agent: false }, resolve)
+          .on("error", reject);
+      });
+      expect(feeder.stats().openFetches).toBe(1);
+      await new Promise<void>((resolve) => {
+        response.on("end", resolve);
+        response.resume();
+      });
+      await until(
+        () => feeder.stats().openFetches === 0,
+        5_000,
+        () => JSON.stringify(feeder.stats()),
+      );
+    },
+    SLOW,
+  );
+});

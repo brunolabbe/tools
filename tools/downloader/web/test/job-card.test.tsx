@@ -776,3 +776,42 @@ test("a whitespace-only title is no title: no trailing dash", () => {
   const line = screen.getByText("Saved by your browser");
   expect(line.textContent).toBe("Saved by your browser");
 });
+
+// ---------------------------------------------------------------------------
+// dl-108: a source read on parallel connections says so
+// ---------------------------------------------------------------------------
+
+test("a job read on 4 connections adds one message, after the status line, marked 4×", () => {
+  mount(job("downloading", { progress: { originConnections: 4 } }));
+
+  const lines = messages();
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toMatch(/^Sending the video/u);
+  expect(lines[1]).toBe("4×Reading on 4 connections. This source throttles each one.");
+  // It is the live region's own entry, so it is announced when it appears.
+  const region = screen.getByText(/Reading on 4 connections/u).closest("ul");
+  expect(region?.getAttribute("aria-live")).toBe("polite");
+});
+
+test("the message follows the count: 2 connections read 2, and it goes when the count falls to 1", () => {
+  mount(job("downloading", { progress: { originConnections: 2 } }));
+  expect(messages()[1]).toBe("2×Reading on 2 connections. This source throttles each one.");
+  cleanup();
+
+  mount(job("downloading", { progress: { originConnections: 1 } }));
+  expect(messages()).toHaveLength(1);
+});
+
+test("one connection, none open between requests, and not measured all say nothing", () => {
+  for (const originConnections of [1, 0, null]) {
+    mount(job("downloading", { progress: { originConnections } }));
+    expect(messages(), `originConnections ${String(originConnections)}`).toHaveLength(1);
+    expect(screen.queryByText(/connections/u)).toBeNull();
+    cleanup();
+  }
+});
+
+test("a job that is not downloading shows no connection message, whatever the count says", () => {
+  mount(job("probing", { progress: { originConnections: 4 } }));
+  expect(screen.queryByText(/Reading on 4 connections/u)).toBeNull();
+});
