@@ -191,6 +191,44 @@ The gate needs no agent to coordinate and costs no tokens.
 
 **Is anything a high?** Yes, one: the `claimSlot` comment's claim "a live lock is never unlinked". Changing the code to unlink only an existing stale file, or rewording the comment, clears it.
 
+### Gate 3
+
+**Gate: PASS** — 2026-10-12 · `98e3772a..a5b72ab9` (round: `c141646c`, `0815c12a`; `ed4ccb9f` is main's #457 via merge, not reviewed) · Opus 5.5, narrow
+
+| Done when                                                                                                          | Proof                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Two `npm test -- --project planner` runs started together each get about half; a third waits visibly, then runs | **verified**, as at gate 2. The sizing and wait code is untouched by the round.                                                          |
+| 2. A run killed with SIGKILL leaves a lock the next run reclaims                                                   | `scripts/test/test-gate.test.ts` › "a run killed with SIGKILL leaves a lock the next run reclaims" ✓                                     |
+| 3. On CI the gate changes nothing                                                                                  | Proven by PR #454's CI on `a5b72ab9`: `test (ubuntu-latest)` passed in 7m21s and `test (windows-latest, informational)` passed in 8m15s. |
+| 4. Step 7's tests pass, and `npm run check` passes                                                                 | 28 of 28 with `npx vitest run scripts/test/test-gate.test.ts`, and `npm run check` exits 0.                                              |
+
+**Gate 2's findings:**
+
+- **High (the `claimSlot` comment says "a live lock is never unlinked"): fixed.** The guarded branch now unlinks only when `state.exists && !state.live`, and the JSDoc says so.
+  - Reproduced at process level with `run3.sh`. It plants gate 2's first gap after the failed create, and the second gap right after the guarded re-read. Both gaps were 1000 ms and `TEST_GATE_WAIT_MS` was 3000.
+  - On this head, `release-race.mjs` gives `slot-0 after A finished: {"pid":1914700,...,"who":"second run"}`. Run A waited and then ran with no slot.
+  - With the fix reverted and the same gaps, it gives `A said: test-gate: slot-0, 1 of 1 runs active ...` and `slot-0 after A finished: (none)`.
+  - Moving the second gap from before the unlink to after the re-read keeps the same window: it sits between the guarded re-read and what is done with its result. It still reproduces the defect on the reverted code, and only that placement runs when the file is missing.
+- **The new test reaches the real window.** "a lock released mid-reclaim is not unlinked after another run has claimed it" replaces `fs.readFileSync` on the `node:fs` default export, which `scripts/test-gate.mjs` looks up at each call. At the guarded re-read (`reads === 2`), it removes the file and plants a live lock.
+  - It gets into the guarded block through a dead lock rather than a holder's release, but the window it exercises (file gone at the guarded re-read, then claimed before the unlink) is the one gate 2 found.
+  - Reverting the fix (`if (!state.live)`) turns this test red, and only this test: 1 failed, 27 passed.
+- **Low (zombie rule untested): fixed.** "a zombie has no start time: it has exited and holds nothing" goes red when the `Z` check is removed (1 failed, 27 passed). The `S` line beside it keeps the check honest.
+- **Low (header misquotes gate 1): fixed.** "of 16 pairs launched 301 ms or more apart, 13 were 11 and 5 workers and 3 were 5 and 5" matches gate 1's `race.mjs`: at 301 ms the result was `{"11/5":5,"5/5":3}`, and at 600 ms `{"11/5":8}`. The fallback is now described as what "usually" happens, with the condition stated.
+- **Low (two runs can both delete an old guard):** still recorded, not in this round.
+- **Reclaim stress on this head** (`reclaims.sh`): 0 of 60 dead-pid trials, 0 of 30 empty, 0 of 30 garbage, 0 of 30 reused-pid, and 0 of 60 with two slots. `many.mjs` (5 runs, 1 slot): 0 of 30 trials over cap, and no files left behind.
+
+**New in the round's lines:**
+
+- **low** · No live call site. The `exists` check introduced a slot that starves. `inspect` returns `exists: false` for **any** read error, not only a missing file. So a stale lock the gate cannot read is now never unlinked. That slot stays unusable until someone deletes the file, and `activeRuns` does not count it. A lock becomes unreadable when it is mode 600 and owned by another user, for example a root run with umask 077.
+  - Reproduction: `starve.sh <tree> a5b72ab9 98e3772a` plants a dead-pid lock with mode 000.
+  - At `98e3772a`: `slot-0, 1 of 1 runs active ...: 11 workers`, and the gate unlinked the file.
+  - At `a5b72ab9`: `no test slot after 2 s; running anyway with 1 worker and no slot`, with `left: ["slot-0.lock"]`.
+  - A directory in the slot's place starves on both heads, so that case is not new.
+  - The `inspect` JSDoc says `exists` "tells a missing file from a stale one", which misleads for this case. Fix: set `exists: false` only on `ENOENT`.
+- **findings** · The round returned 1 new finding, a low. None was dropped.
+
+**Is anything a high?** No.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed discussion. Depends on repo-102 only
