@@ -69,6 +69,19 @@ a command on the host. The owner chose to manage it from the app
    with its status in `api/src/http-errors.ts` (the ledger `CLAUDE.md`), for
    example an address already in another household. Use core's `FORBIDDEN` for a
    refusal of authority.
+9. **What lg-20's gate left on the directory's writers** (gate 1, F2 and F6). This
+   ticket adds the first writers in the app, so they are fixed here.
+   - **`INSERT OR REPLACE` gets past append-only** (F2). It deletes the old row
+     without firing the `DELETE` trigger (`recursive_triggers` is off), so a
+     membership's `add` can become a `remove` and a household can be renamed.
+     The source scan in `directory.test.ts` has the same blind spot, and misses a
+     quoted table too. Add a `BEFORE INSERT` trigger in `directory-schema.ts`
+     that refuses an `id` that already exists, and make the scan see `REPLACE`
+     and a quoted or qualified table name. Plant each and watch it go red.
+   - **The member lookup reads the whole directory** (F6). `Directory.people`
+     selects every current membership and filters in JavaScript, and the
+     identity hook calls it on every request: 10 ms at 6000 members, against
+     0.02 ms for `membershipOf`. Filter by household in the SQL.
 
 **Traps.**
 
@@ -88,7 +101,10 @@ a command on the host. The owner chose to manage it from the app
    household, and every route refuses an admitted address that is neither,
    with nothing changed. The Log records that it failed with one guard loosened.
 4. Every new route is rate limited (`route-limits.test.ts`).
-5. Gates green.
+5. The schema refuses an `INSERT OR REPLACE` over an existing membership or
+   household, and the source scan fails on a planted `REPLACE` and on a quoted
+   table (step 9).
+6. Gates green.
 
 ## Log
 
@@ -100,3 +116,5 @@ a command on the host. The owner chose to manage it from the app
   is one generic answer, because the specific one was an oracle over every
   address; admin routes get a limiter keyed on the address; and the sweep gains
   the two identities lg-20 now lets through the hook without a household.
+- 2026-10-12 — Step 9 and Done-when 5 added from lg-20's gate 1 (F2, F6), which
+  the owner chose to fold here rather than fix on lg-20.

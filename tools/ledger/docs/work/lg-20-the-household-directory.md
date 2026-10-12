@@ -312,3 +312,10 @@ memberships` string in the command fails the directory scan; a dropped
   - With it, the same command exits 0: `Tests  13 passed (13)`.
   - The ledger API project with the clause: `npx vitest run tools/ledger/api`
     exits 0, `Test Files  25 passed (25)`, `Tests  443 passed (443)`.
+- 2026-10-12 — The owner triaged F2 to F8 after the merge. **F3 is fixed** as
+  option (a): `.env.prod.example` and `docs/02-DEPLOYMENT.md` no longer say the
+  API refuses a stale `LEDGER_ACCESS_PEOPLE`, since compose never passes it.
+  **F4, F5 and F8 moved to lg-21's step 9, and F2 and F6 to lg-22's step 9**,
+  because those tickets rewrite the code each one is about. **F7 is dropped**:
+  lg-21 deletes `ledger.db` at deploy, so no books exist to be out of step with
+  the directory's names.
