@@ -6,7 +6,7 @@ kind: work-package
 status: ready
 milestone: null
 depends_on: [dl-109]
-difficulty: standard
+difficulty: hard
 ---
 
 # dl-110 — Narrate the re-probe's stages on the job card
@@ -17,12 +17,13 @@ Opening a job's link re-probes the page before ffmpeg starts (dl-53), and that
 is often the longest wait in a download: a browser-tier probe takes 10–20 s.
 The browser shows nothing until headers arrive, so the job card is the only
 sign the work is going on. Since [dl-109](./dl-109-the-job-list-still-describes-a-stored-file.md)
-the card shows it as an indeterminate bar and one progress message per status —
+the card shows it as an indeterminate bar and a status-level progress message —
 "Re-analysing the page for fresh stream links" — which stays fixed for the whole
 wait.
 
 The stages exist. The re-probe calls the same resolver chain as the first
-analysis (`registry.resolve` in `api/src/jobs/orchestrator.ts`, `#attempt`),
+analysis (`registry.resolve` in `api/src/jobs/orchestrator.ts`, in `#probe`,
+which `#attempt` calls),
 and the chain reports `resolver-start`, `page-load`, `provoke-playback`,
 `manifest-fetch` and the rest through `ResolveOptions.onStage`. The first
 analysis forwards them to `/api/probe/:id/events` (dl-43) and the analysis panel

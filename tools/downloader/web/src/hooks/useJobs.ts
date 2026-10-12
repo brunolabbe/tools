@@ -230,16 +230,13 @@ export function useJobs(api: ApiClient): UseJobs {
   );
 
   const clearSaved = useCallback(() => {
-    setJobs((previous) => {
-      for (const job of previous) {
-        if (job.status === "completed") {
-          streams.current.get(job.id)?.stop();
-          streams.current.delete(job.id);
-        }
-      }
-      return previous.filter((job) => job.status !== "completed");
-    });
-  }, []);
+    // The streams are stopped here rather than inside the updater, which must
+    // stay pure; `jobsRef` is the list this render saw.
+    for (const job of jobsRef.current) {
+      if (job.status === "completed") detach(job.id);
+    }
+    setJobs((previous) => previous.filter((job) => job.status !== "completed"));
+  }, [detach]);
 
   return {
     jobs,

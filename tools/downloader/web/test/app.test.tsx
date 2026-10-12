@@ -2,9 +2,9 @@
 
 /**
  * The app shell: the things about it that only exist at this level — the
- * mock-build banner, the probe race, and (dl-20) the pipeline mark, which is
- * folded in `useJobs` and read three components down in `JobCard`, so no test of
- * either end can see whether it makes the trip.
+ * mock-build banner, the probe race, and what `useJobs` folds and `JobCard`
+ * reads three components down (a refusal, a page title, the saved jobs an
+ * analysis clears), so no test of either end can see whether it makes the trip.
  *
  * See `progress-bar.test.tsx` for why the DOM arrives as a docblock rather than
  * a vitest project of its own.
@@ -756,18 +756,19 @@ test("a job started from the panel is titled with the page it came from", async 
   ).toBeDefined();
 });
 
-test("the Downloads card sits above the analysis panel", async () => {
+test("the Downloads card sits below the analysis panel, under the button just pressed", async () => {
   const fake = await mountApp(false, {
     createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
   });
 
   await pressDownload(fake);
 
-  // The card one press just created is the only sign the work is going on until
-  // the browser shows the download, so it must not be below a tall panel.
+  // The panel is scrolled to its bottom to press Download, so a card above it
+  // lands off screen (dl-109's gate measured it); below it, the card appears
+  // where the eye already is. `e2e/download.spec.ts` checks the viewport.
   const downloads = screen.getByRole("heading", { name: "Downloads" });
   const panel = screen.getByRole("heading", { level: 2, name: "A sample recording" });
-  expect(downloads.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(downloads.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
 });
 
 test("starting an analysis clears saved jobs and keeps live, failed and canceled ones", async () => {
@@ -809,4 +810,19 @@ test("starting an analysis clears saved jobs and keeps live, failed and canceled
   expect(screen.getByRole("heading", { name: "Still running" })).toBeDefined();
   expect(screen.getByRole("heading", { name: "Failed one" })).toBeDefined();
   expect(screen.getByRole("heading", { name: "Canceled one" })).toBeDefined();
+});
+
+test("a job's page title survives a reload, through the hook's own storage", async () => {
+  const started = job("downloading", { id: "job-1" });
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: job("queued", { id: "job-1" }) })),
+    getJob: vi.fn(() => Promise.resolve({ job: started })),
+  });
+  await pressDownload(fake);
+  cleanup();
+
+  // A fresh mount reads only what `useJobs` saved: the job and, beside it, its title.
+  await mountApp(false, { getJob: vi.fn(() => Promise.resolve({ job: started })) });
+  await settle();
+  expect(screen.getByRole("heading", { level: 3, name: "A sample recording" })).toBeDefined();
 });

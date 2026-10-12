@@ -301,12 +301,6 @@ code {
   font-weight: 600;
 }
 
-.button--quiet {
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-}
-
 /* --- url form --- */
 
 .urlform__label {
@@ -493,16 +487,13 @@ code {
 }
 
 /*
- * --- the analyse stage line, and the download's gated bar ---
+ * --- the analyse stage line ---
  *
- * One rule served both until dl-43, which is why they are apart now: the two
- * are no longer the same thing. The download's five statuses are a pipeline
- * that always runs in order, so they are drawn as gates. The analyse tiers are
- * a fallback chain in which exactly one succeeds, so there is nothing to gate —
- * a bar that filled as the chain degraded would report failure as progress —
- * and it is one line, replaced as the server reports a new stage.
- *
- * Sharing a selector meant every change to one landed on the other by accident.
+ * The analyse tiers are a fallback chain in which exactly one succeeds, so
+ * there is nothing to gate — a bar that filled as the chain degraded would
+ * report failure as progress — and it is one line, replaced as the server
+ * reports a new stage. The job card drew its statuses as gates until dl-109;
+ * it has a bar and progress messages now, styled under `--- jobs ---`.
  */
 
 /* The analyse panel: one line, and no list. */
@@ -817,17 +808,6 @@ code {
   margin: 0;
   font-weight: 600;
   overflow-wrap: anywhere;
-}
-
-.result__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.result__expiry {
-  font-size: 0.82rem;
 }
 
 /* --- notices --- */

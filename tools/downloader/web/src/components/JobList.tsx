@@ -32,9 +32,10 @@ export function JobList({
 }: JobListProps): React.JSX.Element | null {
   if (jobs.length === 0) return null;
 
-  // Not `queued`: its link has not been opened, so the browser holds nothing
-  // yet and closing the page would leave the link to expire unused.
-  const live = jobs.some((job) => job.status === "probing" || job.status === "downloading");
+  // Only once bytes flow. Before the first response header the browser holds
+  // a request, not a download, and Firefox cancels it with the tab (measured by
+  // dl-109's gate); a queued link has not even been opened.
+  const live = jobs.some((job) => job.status === "downloading");
 
   return (
     <section className="card" aria-labelledby="jobs-heading">

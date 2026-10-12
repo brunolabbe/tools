@@ -188,20 +188,6 @@ export function App(): React.JSX.Element {
           />
         )}
 
-        {/* Above the analysis, so the card one press just created is on screen
-            while the server prepares the file — the only sign it is working
-            until the browser shows the download (dl-109). */}
-        <JobList
-          jobs={jobs.jobs}
-          titles={jobs.titles}
-          streamStates={jobs.streamStates}
-          refusals={jobs.refusals}
-          onFollowLink={jobs.clearRefusal}
-          onCancel={(id) => void jobs.cancel(id)}
-          onRemove={jobs.remove}
-          onRetry={retryJob}
-        />
-
         {phase.kind === "analysing" && (
           <AnalysingPanel
             url={phase.url}
@@ -223,6 +209,21 @@ export function App(): React.JSX.Element {
             {startError && <ErrorPanel error={startError} onDismiss={() => setStartError(null)} />}
           </>
         )}
+
+        {/* Below the analysis panel, directly under the Download button just
+            pressed — where the eye already is. Above it, the new card landed
+            off screen, because the panel is scrolled to its bottom to press
+            the button (measured by dl-109's gate). */}
+        <JobList
+          jobs={jobs.jobs}
+          titles={jobs.titles}
+          streamStates={jobs.streamStates}
+          refusals={jobs.refusals}
+          onFollowLink={jobs.clearRefusal}
+          onCancel={(id) => void jobs.cancel(id)}
+          onRemove={jobs.remove}
+          onRetry={retryJob}
+        />
 
         {USING_MOCK_API && (
           <ScenarioHints

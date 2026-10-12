@@ -70,7 +70,8 @@ would have held one tunnel. A page meant to explain a download should not need
    `originConnections` is 2 or more, add one **progress message** under the
    bar: `progressMessages()` in `JobCard.tsx` builds the list that
    `ProgressMessages.tsx` renders (dl-109), and this is one more entry in it,
-   after the status line, with the count as a text mark —
+   after the status line, with the count as a text mark — `progressMessages`
+   takes only the status today, so widen it to see `progress.originConnections` —
    `{ key: "connections", mark: { text: "4×" }, text: "Reading on 4 connections. This source throttles each one." }`.
    The list is already the card's `aria-live` region, so the line is announced
    when it appears. Show nothing at 1 or `null`: the line exists to explain a
@@ -85,7 +86,7 @@ would have held one tunnel. A page meant to explain a download should not need
      fixture's never exceed 1 and are never `null`.
    - `engine/test/stream.test.ts` or equivalent: an HLS job reports `null`
      throughout.
-   - `web/test/job-card.test.tsx`: the hint renders at 4, and is absent at 1
+   - `web/test/job-card.test.tsx`: the connections message renders at 4, and is absent at 1
      and at `null`.
    - The legacy-row case from step 4.
 
@@ -106,7 +107,7 @@ Traps worth knowing in advance:
    in the path reports `null` throughout.
 3. A persisted job whose `progress_json` predates the field still loads and
    renders, with the field read as `null`.
-4. The job card shows the hint at 2 or more connections and nothing at 1 or
+4. The job card shows the connections message at 2 or more connections and nothing at 1 or
    `null`, proven by `web/test/job-card.test.tsx`.
 
 ## Log

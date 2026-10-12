@@ -66,7 +66,9 @@ export function JobCard({
 
   const active = job.status !== "completed" && job.status !== "failed" && job.status !== "canceled";
   const { progress } = job;
-  const heading = title ?? job.result?.filename ?? job.variant?.label ?? job.sourceUrl;
+  // No filename branch: a job only has a result once completed, and a
+  // completed job is the one-line saved row above, which names its file.
+  const heading = title ?? job.variant?.label ?? job.sourceUrl;
   // Neither part repeats the heading: a card titled by its rendition or by its
   // address does not say it twice.
   const subtitle = [

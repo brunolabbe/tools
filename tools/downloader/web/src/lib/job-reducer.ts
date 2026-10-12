@@ -148,7 +148,7 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
  * What the card should say about a refused link (dl-77), given what it said
  * before, the job as it stood and the event just received.
  *
- * Kept beside the job rather than on it, as the watched mark is: `Job` is a
+ * Kept beside the job rather than on it, as the page titles are: `Job` is a
  * contract type persisted in browsers, and a refusal is a moment, not a fact
  * about the job. Only a `refused` frame changes it, and only when it is news: a
  * job that has left `queued` has had its link taken, so a refusal arriving after

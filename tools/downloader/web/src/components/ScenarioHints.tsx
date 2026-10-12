@@ -22,7 +22,7 @@ export function ScenarioHints({ onPick }: ScenarioHintsProps): React.JSX.Element
       <p className="muted">
         The API is mocked. Any address gets the happy path; these produce specific outcomes. Three
         more states come from interaction rather than a URL: type nonsense for{" "}
-        <code>INVALID_URL</code>, press Cancel for <code>JOB_CANCELED</code>, and reload the page
+        <code>INVALID_URL</code>, press Stop for <code>JOB_CANCELED</code>, and reload the page
         mid-download for <code>JOB_NOT_FOUND</code> (the mock server forgets everything on reload).
       </p>
       <ul className="scenarios">

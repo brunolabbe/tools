@@ -77,6 +77,9 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   // this is the only job on the page.
   const job = page.getByRole("list", { name: "Downloads" }).locator(":scope > li").first();
   await expect(job).toBeVisible();
+  // On screen, not merely in the page: the panel is scrolled to its bottom to
+  // press Download, and a card placed above it landed out of view (dl-109).
+  await expect(job).toBeInViewport();
   const href = new URL(download.url()).pathname;
   expect(href).toMatch(/^\/api\/files\//u);
 

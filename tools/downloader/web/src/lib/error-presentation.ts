@@ -289,7 +289,7 @@ const CANCEL_REASON_PRESENTATION: Readonly<Record<string, { title: string; detai
     detail:
       // Not "a closed tab" (dl-109): a browser download outlives the page that
       // started it, and only the file connection closing cancels the job.
-      "The connection closed before the file finished — a lost network, a computer gone to sleep, or the download canceled in your browser. Nothing was kept; what your browser already saved plays up to where it stopped. Start it again from the page.",
+      "The connection closed before the file finished — a lost network, a computer gone to sleep, the download canceled in your browser, or this page closed before the download began. Nothing was kept; what your browser already saved plays up to where it stopped. Start it again from the page.",
   },
   "link-expired": {
     title: "Link expired",

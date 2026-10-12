@@ -26,7 +26,7 @@ import { ProgressBar } from "./ProgressBar.tsx";
  * 3 is in `styles.css`. There is deliberately **no gated bar here**: the
  * resolver tiers are a fallback chain in which exactly one succeeds, so a bar
  * that filled as the chain degraded would report failure as progress. The
- * download's pipeline is the opposite and gets one; see `JobCard`.
+ * job card's bar is the opposite — it fills with bytes sent; see `JobCard`.
  *
  * The elapsed seconds are still a clock, and still honest — they measure how
  * long the user has waited, which is a fact, not a claim about the server.

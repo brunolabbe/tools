@@ -29,6 +29,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { AppErrorPayload, Job } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
+import { ProgressMessages } from "../src/components/ProgressMessages.tsx";
 import type { StreamState } from "../src/lib/job-stream.ts";
 import { NOW, SOURCE_URL, errorPayload, job, result, variant } from "./fixtures.ts";
 
@@ -540,16 +541,15 @@ test("each card is handed its own stream state, looked up by job id", () => {
   expect(within(first as HTMLElement).queryByText("reconnecting…")).toBeNull();
 });
 
-test("the list says the page can be closed while a download is under way, and only then", () => {
+test("the list says the page can be closed once bytes flow, and only then", () => {
   const note = /You can close this page — downloads continue in your browser\./u;
-  for (const status of ["probing", "downloading"] as const) {
-    renderList([job(status)]);
-    expect(screen.getByText(note)).toBeDefined();
-    cleanup();
-  }
-  // A queued link has not been opened — closing the page would leave it unused —
-  // and a finished one has nothing left to continue.
-  for (const status of ["queued", "completed", "failed", "canceled"] as const) {
+  renderList([job("downloading")]);
+  expect(screen.getByText(note)).toBeDefined();
+  cleanup();
+  // Before the first byte the browser holds a request, not a download, and
+  // Firefox cancels it with the tab (dl-109's gate). A queued link has not been
+  // opened at all, and a finished job has nothing left to continue.
+  for (const status of ["queued", "probing", "completed", "failed", "canceled"] as const) {
     renderList([job(status)]);
     expect(screen.queryByText(note)).toBeNull();
     cleanup();
@@ -700,4 +700,28 @@ test("each stat keeps its own column, so an unknown one leaves a gap rather than
   expect(columnOf("Speed")).toBe("stats__col-2");
   expect(columnOf("Segments")).toBe("stats__col-3");
   expect(stat("Remaining")).toBeNull();
+});
+
+test("a progress message can lead with text instead of an icon, as dl-108's count will", () => {
+  render(
+    <ProgressMessages
+      messages={[
+        { key: "status", mark: "send", text: "Sending the video." },
+        { key: "connections", mark: { text: "4×" }, text: "Reading on 4 connections." },
+      ]}
+    />,
+  );
+
+  const items = screen.getAllByRole("listitem");
+  expect(items.map((item) => item.textContent)).toEqual([
+    "Sending the video.",
+    "4×Reading on 4 connections.",
+  ]);
+  const mark = items[1]?.querySelector(".job__mark");
+  expect(mark?.textContent).toBe("4×");
+  expect(mark?.getAttribute("aria-hidden")).toBe("true");
+  expect(mark?.querySelector("svg")).toBeNull();
+  // Both lines in the one live region, so the second is announced when it appears.
+  expect(items[0]?.parentElement).toBe(items[1]?.parentElement);
+  expect(items[0]?.parentElement?.getAttribute("aria-live")).toBe("polite");
 });
