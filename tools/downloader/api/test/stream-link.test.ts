@@ -199,6 +199,10 @@ describe("the link, with the stub engine over a real socket", () => {
   });
 
   test("a visitor who leaves while waiting for a slot cancels the waiting job", async () => {
+    // The first visitor's request is still open when the assertions are done.
+    // Left open, `dispose` waits 5 s for it (measured: the body takes 0.26 s,
+    // the teardown 5.0 s), and the wait is not what this test is about.
+    let firstGet: Promise<unknown> = Promise.resolve();
     let release: (() => void) | undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -214,7 +218,7 @@ describe("the link, with the stub engine over a real socket", () => {
       const origin = await listen(harness.app);
       const first = await post(harness.app);
       const second = await post(harness.app);
-      void get(origin, first.link?.url ?? "").catch(() => undefined);
+      firstGet = get(origin, first.link?.url ?? "").catch(() => undefined);
       await waitFor(
         () => harness?.app.context.queue.running,
         (n) => n === 1,
@@ -233,6 +237,7 @@ describe("the link, with the stub engine over a real socket", () => {
       expect(ended.error).toMatchObject({ details: { reason: "disconnected" } });
     } finally {
       release?.();
+      await firstGet;
     }
   });
 
@@ -585,8 +590,11 @@ describe("the link, with real ffmpeg behind it", () => {
   }, 60_000);
 
   test("an error after the first byte aborts the connection with the code on the job", async () => {
-    lateSegmentDelayMs = 10_000;
-    const { app, origin } = await realApp({ stageTimeoutMs: 4_000 });
+    // 2 s against 5 s: the 4 s and 10 s this used to hold, in the same ratio.
+    // The timeout still has to outlast the first fragment, which is what the
+    // `received.status` of 200 below proves.
+    lateSegmentDelayMs = 5_000;
+    const { app, origin } = await realApp({ stageTimeoutMs: 2_000 });
     const job = await post(app, `${fixtureOrigin}/hls11/master.m3u8`);
     const received = await get(origin, job.link?.url ?? "");
     expect(received.status).toBe(200);

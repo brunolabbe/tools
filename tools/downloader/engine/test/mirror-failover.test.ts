@@ -17,11 +17,12 @@
  * that tried the mirror, got the same 403, and gave up. Zero requests is the
  * only thing that says it never tried.
  *
- * dl-47 added a third: the same recovery driven by a variant the **yt-dlp tier**
- * produced, so the claim covers both producers rather than the one whose field
- * this suite was written for. It costs about eleven seconds, all of it ffmpeg's
- * own `-reconnect_delay_max 10` against the dead primary — measured 2026-09-08,
- * this file goes from 33.9 s over four tests to 45.2 s over five.
+ * The recovery case is driven by a variant the **yt-dlp tier** produced, not a
+ * hand-written one (dl-47): the engine cannot tell which tier a variant came
+ * from, and this is the one whose `alternateUrls` a producer really built. dl-45
+ * first wrote it with a plain HLS variant; that copy asserted nothing the
+ * tier-shaped one does not, and cost the same eleven seconds, all of it ffmpeg's
+ * own `-reconnect_delay_max 10` against the dead primary, so dl-112 removed it.
  */
 
 import { spawn } from "node:child_process";
@@ -286,40 +287,6 @@ test("the engine fails over to a yt-dlp mirror exactly as it does to an HLS one 
   expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(0);
   // And the loop stopped there: the second alternate was never dialled.
   expect(expired.requests).toHaveLength(before.expired);
-});
-
-test("a host that refuses the connection is failed over to the mirror", async () => {
-  const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 });
-
-  const before = mirror.requests.length;
-  const outcome = await streamToFile(engine, {
-    jobId: "mirror-ok",
-    variant: variant(deadOrigin),
-    requestContext: CONTEXT,
-    title: "failed over",
-    durationSec: CLIP_SECONDS,
-  });
-
-  // A finished file, not merely a promise that resolved.
-  expect(outcome.bytes).toBeGreaterThan(1000);
-  await runFfmpeg([
-    "-hide_banner",
-    "-nostdin",
-    "-loglevel",
-    "error",
-    "-xerror",
-    "-i",
-    outcome.path,
-    "-f",
-    "null",
-    "-",
-  ]);
-
-  // And it came from the second host: the playlist and its segments were all
-  // fetched from the mirror, which is the only origin still listening.
-  const served = mirror.requests.slice(before);
-  expect(served.some((request) => request.url.endsWith("index.m3u8"))).toBe(true);
-  expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(0);
 });
 
 test("an expired signed URL never reaches the mirror — it is expired there too", async () => {

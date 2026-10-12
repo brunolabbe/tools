@@ -117,6 +117,15 @@ const stalled: http.ServerResponse[] = [];
  */
 const MAX_CREDIT_MS = 25;
 
+/**
+ * A rate that is slow against a source declared 0.5 s long, whose 4 MB are read
+ * at about 8 MB/s as media: every test that needs "slow" and then reads the
+ * whole file to the end pays 4 MB over this rate, once per read. Four MB/s is
+ * half the media rate, where 1 and 2 MB/s were an eighth and a quarter of it
+ * and made the same claims at two to four times the cost (dl-112).
+ */
+const SLOW_AGAINST_HALF_A_SECOND = 4_000_000;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -512,7 +521,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
     async () => {
       // An origin that honours `Range` states the size in every `206`, so the
       // size is unknown only from one that does not; that one is never split.
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       behaviour.sizeless = true;
       const source = variant("faststart.mp4", { durationSec: 0.5, filesizeBytes: undefined });
       await run(engineWith(), source);
@@ -529,7 +538,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
   test(
     "a source of unknown duration stays on one connection; control: told its duration, it splits",
     async () => {
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       const untimed = variant("no-duration.mkv", { container: "mkv", durationSec: undefined });
       const ran = await run(engineWith(), untimed);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
@@ -545,7 +554,7 @@ describe("dl-98: a progressive source throttled per connection", () => {
   test(
     "an opted-out host stays on one connection, a subdomain of it too",
     async () => {
-      behaviour.perConnectionBps = 1_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       const source = variant("faststart.mp4", { durationSec: 0.5 });
       await run(engineWith({ singleConnectionHosts: ["127.0.0.1"] }), source);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
@@ -574,16 +583,18 @@ describe("dl-98: a progressive source throttled per connection", () => {
 
 describe("dl-98: a host that refuses parallel ranges", () => {
   const kinds: { kind: string; set: (b: Behaviour) => void }[] = [
+    // 403 and 503 are in dl-98's Decision 5 beside 429 and go through the same
+    // `REFUSAL_STATUSES` check, so their rows were replaced by the unit test
+    // below, on the owner's answer of 2026-10-12 (dl-112): 429 stays the
+    // end-to-end row for the set.
     { kind: "a 429", set: (b) => (b.refuse = "429") },
-    { kind: "a 403", set: (b) => (b.refuse = "403") },
-    { kind: "a 503", set: (b) => (b.refuse = "503") },
     { kind: "a reset", set: (b) => (b.refuse = "reset") },
     { kind: "a 200 to a range request", set: (b) => (b.refuse = "200") },
     {
       kind: "no speed-up at 4 (a per-client throttle)",
       set: (b) => {
         b.perConnectionBps = null;
-        b.sharedBps = 2_000_000;
+        b.sharedBps = SLOW_AGAINST_HALF_A_SECOND;
       },
     },
   ];
@@ -592,7 +603,7 @@ describe("dl-98: a host that refuses parallel ranges", () => {
     "$kind: the job completes on one connection, identical in media, and the next job opens one",
     async ({ set }) => {
       const expected = await reference("faststart.mp4");
-      behaviour.perConnectionBps = 2_000_000;
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
       set(behaviour);
       const engine = engineWith();
       const source = variant("faststart.mp4", { durationSec: 0.5 });
@@ -613,6 +624,34 @@ describe("dl-98: a host that refuses parallel ranges", () => {
       const second = await run(engine, source);
       expect(counted()).toEqual({ fanOut: 0, maxOpen: 1, requests: 2 });
       expect(await packetDigests(second.file)).toEqual(expected);
+    },
+    SLOW,
+  );
+
+  // Each status Decision 5 names is remembered as a refusal, at the feeder, where
+  // `onRefused` is called with the kind. The set is `REFUSAL_STATUSES`; a status
+  // removed from it is a row that goes red here. The end-to-end rows above
+  // keep 429, the one that proves the fallback and the memory for the set.
+  test.each(["403", "429", "503"] as const)(
+    "a %s on a fan-out fetch is reported to onRefused as a status refusal",
+    async (status) => {
+      behaviour.perConnectionBps = SLOW_AGAINST_HALF_A_SECOND;
+      behaviour.refuse = status;
+      const { feeder, fatal, refused } = await feederFor("faststart.mp4");
+      // The loopback is read the way ffmpeg reads it: without a reader nothing
+      // is fetched. Closing the feeder ends the read, so it is not awaited to the end.
+      const read = readLoopback(feeder.url);
+      await until(
+        () => refused.length > 0,
+        5_000,
+        () => `no refusal reported; origin saw ${JSON.stringify(seen.map((entry) => entry.range))}`,
+      );
+      feeder.close();
+      await read;
+
+      expect(refused).toEqual([{ host: "127.0.0.1", kind: "status" }]);
+      expect(fatal).toEqual([]);
+      expect(seen.some((entry) => entry.refused)).toBe(true);
     },
     SLOW,
   );

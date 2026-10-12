@@ -601,8 +601,12 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   });
 
   test("an error after the first byte cuts the connection and rejects `done` with its code", async () => {
-    lateSegmentDelayMs = 10_000;
-    const engine = engineWith({ stageTimeoutMs: 4_000 });
+    // The timeout must outlast the first fragment, which `received.status` and
+    // `bytes` below prove it did, and sit well inside the late segment's delay:
+    // 2 s against 5 s, the 4 s against 10 s this test used to hold, in the same
+    // ratio.
+    lateSegmentDelayMs = 5_000;
+    const engine = engineWith({ stageTimeoutMs: 2_000 });
     let media: MediaStream | undefined;
     const received = await exchange(
       "late-failure",
@@ -838,7 +842,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
    * script that writes the lines the proxy's refusal produces
    * (`api/test/two-origin-tls.test.ts` is the real one, end to end).
    */
-  async function standIn(lines: readonly string[]): Promise<string> {
+  async function standIn(lines: readonly string[], exitAfterMs = 5000): Promise<string> {
     const dir = await fs.mkdtemp(path.join(outputDir, "stand-in-"));
     const script = path.join(dir, "ffmpeg");
     await fs.writeFile(
@@ -848,7 +852,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
         "process.stdout.write(Buffer.alloc(4096, 1));",
         "setTimeout(() => {",
         `  for (const line of ${JSON.stringify(lines)}) process.stderr.write(line + "\\n");`,
-        "  setTimeout(() => process.exit(0), 5000);",
+        `  setTimeout(() => process.exit(0), ${exitAfterMs});`,
         "}, 100);",
         "",
       ].join("\n"),
@@ -957,6 +961,12 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     expect(Math.abs((probed.durationSec ?? 0) - 5)).toBeLessThan(TOLERANCE_SEC);
   }, 60_000);
 
+  // These two tests are decided when the stand-in exits ("no reconnect of the
+  // same connection answered", above), so the exit is all they wait for. It
+  // follows its lines on the same pipe, which delivers them first whatever the
+  // delay; 5 s of it only added 10 s to each test.
+  const EXIT_AFTER_LINES_MS = 300;
+
   test.skipIf(process.platform === "win32")(
     "an early end is matched to a reconnect by its own connection, however the lines interleave",
     async () => {
@@ -971,7 +981,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
         `[http @ ${address}] Will reconnect at 30028 in 0 second(s), error=Input/output error.`;
 
       const healed = [ended("0xa1"), ended("0xb2"), reconnect("0xb2"), reconnect("0xa1")];
-      const engineHealed = engineWith({ ffmpegPath: await standIn(healed) });
+      const engineHealed = engineWith({ ffmpegPath: await standIn(healed, EXIT_AFTER_LINES_MS) });
       const whole = await engineHealed.stream({
         jobId: "interleaved-healed",
         variant: hlsVariant("hls6", 6),
@@ -981,7 +991,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
       await expect(whole.done).resolves.toBeDefined();
 
       const oneLeft = [ended("0xa1"), ended("0xb2"), reconnect("0xb2")];
-      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft) });
+      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft, EXIT_AFTER_LINES_MS) });
       const cut = await engineCut.stream({
         jobId: "interleaved-cut",
         variant: hlsVariant("hls6", 6),
@@ -1024,7 +1034,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
       const audio = "0000019e45bad940";
 
       const healed = [ended(video), ended(audio), reconnect(audio), reconnect(video)];
-      const engineHealed = engineWith({ ffmpegPath: await standIn(healed) });
+      const engineHealed = engineWith({ ffmpegPath: await standIn(healed, EXIT_AFTER_LINES_MS) });
       const whole = await engineHealed.stream({
         jobId: "windows-healed",
         variant: hlsVariant("hls6", 6),
@@ -1034,7 +1044,7 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
       await expect(whole.done).resolves.toBeDefined();
 
       const oneLeft = [ended(video), ended(audio), reconnect(audio)];
-      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft) });
+      const engineCut = engineWith({ ffmpegPath: await standIn(oneLeft, EXIT_AFTER_LINES_MS) });
       const cut = await engineCut.stream({
         jobId: "windows-cut",
         variant: hlsVariant("hls6", 6),
@@ -1465,6 +1475,18 @@ function large(url: string, overrides: Partial<MediaVariant> = {}): MediaVariant
   };
 }
 
+/**
+ * The ~1 MB tail-`moov` fixture dl-102 and dl-103 both read, made once. Each
+ * block's `beforeAll` asks for it, so a run filtered to either block still
+ * has it, and neither block pays for the other's copy.
+ */
+let largeFixture: Promise<void> | undefined;
+async function ensureLargeFixture(): Promise<void> {
+  const { generateLargeProgressive } = await import("./helpers/media.ts");
+  largeFixture ??= generateLargeProgressive(path.join(fixtureRoot, "large"));
+  await largeFixture;
+}
+
 /** All 100 frames of the 4 s, 25 fps fixture, and `done` resolved with what was streamed. */
 function expectWhole(outcome: Outcome): void {
   expect(outcome).toMatchObject({ decodedFrames: 100 });
@@ -1506,14 +1528,13 @@ async function startRecordingProxy(refuse: boolean): Promise<FixtureServer> {
  * Imported here rather than at the top so this block moves no line above it.
  */
 describe("dl-102: an origin that ignores Range", () => {
-  let generateLargeProgressive: (dir: string) => Promise<void>;
   let decodedVideoFrames: (file: string) => Promise<{ frames: number }>;
   /** The whole file with a `200`, whatever was asked. Gated like `origin`. */
   let ignoring: FixtureServer;
 
   beforeAll(async () => {
-    ({ generateLargeProgressive, decodedVideoFrames } = await import("./helpers/media.ts"));
-    await generateLargeProgressive(path.join(fixtureRoot, "large"));
+    ({ decodedVideoFrames } = await import("./helpers/media.ts"));
+    await ensureLargeFixture();
     ignoring = await startFixtureServer(async (request, response) => {
       if (
         request.headers.referer !== CONTEXT.headers["Referer"] ||
@@ -1812,7 +1833,6 @@ const later = (ms: number, ...statements: string[]): string =>
  * Imported here rather than at the top so this block moves no line above it.
  */
 describe("dl-103: an unanswered seek probe", () => {
-  let generateLargeProgressive: (dir: string) => Promise<void>;
   let decodedVideoFrames: (file: string) => Promise<{ frames: number }>;
   /** Byte offset of the tail-`moov` fixture's `moov` box. */
   let moovAt: number;
@@ -1825,10 +1845,9 @@ describe("dl-103: an unanswered seek probe", () => {
   let blindCount = 0;
 
   beforeAll(async () => {
-    ({ generateLargeProgressive, decodedVideoFrames } = await import("./helpers/media.ts"));
-    const dir = path.join(fixtureRoot, "large-103");
-    await generateLargeProgressive(dir);
-    const tail = await fs.readFile(path.join(dir, "moov-end.mp4"));
+    ({ decodedVideoFrames } = await import("./helpers/media.ts"));
+    await ensureLargeFixture();
+    const tail = await fs.readFile(path.join(fixtureRoot, "large", "moov-end.mp4"));
     for (let at = 0; at < tail.length; at += tail.readUInt32BE(at)) {
       if (tail.toString("latin1", at + 4, at + 8) === "moov") moovAt = at;
     }
@@ -1933,7 +1952,7 @@ describe("dl-103: an unanswered seek probe", () => {
       answer = fault103;
       const outcome = await outcomeOf(
         `dl-103-${name.slice(0, 6).replace(/\W/gu, "")}`,
-        large(`${blind.origin}/large-103/moov-end.mp4`),
+        large(`${blind.origin}/large/moov-end.mp4`),
       );
       // Before the fix: `done` resolved with about 35 KB of which 0 of 100
       // frames decode.
@@ -1948,8 +1967,8 @@ describe("dl-103: an unanswered seek probe", () => {
     expectWhole(
       await outcomeOf(
         "dl-103-mirror",
-        large(`${blind.origin}/large-103/moov-end.mp4`, {
-          alternateUrls: [`${origin.origin}/large-103/moov-end.mp4`],
+        large(`${blind.origin}/large/moov-end.mp4`, {
+          alternateUrls: [`${origin.origin}/large/moov-end.mp4`],
         }),
       ),
     );
@@ -1962,16 +1981,14 @@ describe("dl-103: an unanswered seek probe", () => {
     // tail starts at the `moov` and stops half-way through it.
     let cut = false;
     fault = (pathname, _count, request, response, body) => {
-      if (!pathname.endsWith("/large-103/moov-end.mp4") || cut) return false;
+      if (!pathname.endsWith("/large/moov-end.mp4") || cut) return false;
       if (request.headers.range !== `bytes=${moovAt}-`) return false;
       cut = true;
       cutShort(request, response, body, 0.5);
       return true;
     };
     expect(moovAt).toBeGreaterThan(0);
-    expectWhole(
-      await outcomeOf("dl-103-heal-moov", large(`${origin.origin}/large-103/moov-end.mp4`)),
-    );
+    expectWhole(await outcomeOf("dl-103-heal-moov", large(`${origin.origin}/large/moov-end.mp4`)));
     expect(cut).toBe(true);
   }, 60_000);
 
@@ -2003,7 +2020,7 @@ describe("dl-103: an unanswered seek probe", () => {
       };
       const outcome = await outcomeOf(
         `dl-103-short-${percent}`,
-        large(`${blind.origin}/large-103/faststart.mp4`),
+        large(`${blind.origin}/large/faststart.mp4`),
       );
       expect(stoppedWith(outcome), JSON.stringify(outcome)).toBe("DOWNLOAD_FAILED");
     }, 60_000);
@@ -2124,7 +2141,7 @@ describe("dl-103: an unanswered seek probe", () => {
       async () => {
         const started = performance.now();
         const engine = engineWith({ ffmpegPath: await standIn103(standIn.statements) });
-        const variant = large(`${origin.origin}/large-103/moov-end.mp4`);
+        const variant = large(`${origin.origin}/large/moov-end.mp4`);
         const stopped = await engine
           .stream({ jobId: "dl-103-stand-in", variant, requestContext: CONTEXT })
           .then(
@@ -2220,7 +2237,7 @@ describe("dl-103: an unanswered seek probe", () => {
         })
           .stream({
             jobId: "dl-103-hold-end",
-            variant: large(`${origin.origin}/large-103/moov-end.mp4`),
+            variant: large(`${origin.origin}/large/moov-end.mp4`),
             requestContext: CONTEXT,
             signal: controller.signal,
           })
