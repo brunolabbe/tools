@@ -546,51 +546,75 @@ describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
 
 describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () => {
   // Each page puts a cover up that stays up, so each consent and play click is
-  // retried until its timeout. Uncapped that is 2000 ms a click: 8 s on the menu
-  // page and about 6 s on the cookie sheets, measured on 2026-10-12. Capped, a
-  // run is about 2.1 s; with the consent click alone left at 2000 ms the cookie
-  // sheets take about 4 s and the menu page does not move, which is why the
-  // cookie sheets are rows here and the ceiling sits between the two.
-  const CAPPED_CEILING_MS = 3000;
+  // retried until its timeout. Uncapped that is 2000 ms a click. Each row has its
+  // own ceiling (dl-119), because each catches a different regression and the
+  // two are not the same distance from a capped run. Measured on 2026-10-12, in
+  // the unit this test times (`provokePlayback` alone), 5 runs capped and 3 to 5
+  // with the regression planted:
+  //
+  // - the menu page: capped 1.9 to 2.1 s. The play clicks are the only blocked
+  //   ones there, twice each: one site uncapped is 5.5 to 5.7 s, both 9.2 to
+  //   9.4 s. The consent click is not blocked on this page, so it does not move
+  //   the row. The ceiling is 4000 ms, which catches either site alone.
+  // - the cookie sheets: capped 2.1 to 2.5 s. The consent click, once, uncapped
+  //   is 3.9 to 4.5 s; the gap is one 2000 ms wait less the 200 ms cap, so the
+  //   ceiling can only sit near the middle of it. 3200 ms leaves 0.7 s each way.
+  //
+  // Only `provokePlayback` is timed: browser launch, context and navigation are
+  // not what the cap bounds, and the one row dl-118's landing run saw slow on a
+  // Windows runner (3.6 s against 2.2 s for the same code) was the menu row.
+  const MENU_CEILING_MS = 4000;
+  const COOKIE_CEILING_MS = 3200;
 
   test.each([
-    ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
-    [
-      "a cookie sheet's View our 18 partners, closable panel",
-      "/age-false-cookie-sheet-closable.html",
-      "/beacon/view-partners",
-    ],
-    [
-      "a cookie sheet's View our 18 partners, sticky panel",
-      "/age-false-cookie-sheet-sticky.html",
-      "/beacon/view-partners",
-    ],
-  ])("%s: the blocked clicks wait for the cap, not 2000 ms", async (_name, pathname, pressed) => {
-    server.requests.length = 0;
-    const startedAt = Date.now();
-    await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
-      const context = await browser.newContext();
-      try {
-        const page = await context.newPage();
-        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
-        await provokePlayback(page, {
-          deadline: Date.now() + 15_000,
-          signal: new AbortController().signal,
-          confirmAge: true,
-          clickTimeoutMs: 200,
-        });
-      } finally {
-        await context.close();
-      }
-    });
-    const elapsedMs = Date.now() - startedAt;
+    {
+      name: "a shell's 18+ menu button",
+      pathname: "/age-false-shell-menu-button.html",
+      pressed: "/beacon/nav-18",
+      ceilingMs: MENU_CEILING_MS,
+    },
+    {
+      name: "a cookie sheet's View our 18 partners, closable panel",
+      pathname: "/age-false-cookie-sheet-closable.html",
+      pressed: "/beacon/view-partners",
+      ceilingMs: COOKIE_CEILING_MS,
+    },
+    {
+      name: "a cookie sheet's View our 18 partners, sticky panel",
+      pathname: "/age-false-cookie-sheet-sticky.html",
+      pressed: "/beacon/view-partners",
+      ceilingMs: COOKIE_CEILING_MS,
+    },
+  ])(
+    "$name: the blocked clicks wait for the cap, not 2000 ms",
+    async ({ pathname, pressed, ceilingMs }) => {
+      server.requests.length = 0;
+      let elapsedMs = Number.NaN;
+      await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+          const startedAt = Date.now();
+          await provokePlayback(page, {
+            deadline: Date.now() + 15_000,
+            signal: new AbortController().signal,
+            confirmAge: true,
+            clickTimeoutMs: 200,
+          });
+          elapsedMs = Date.now() - startedAt;
+        } finally {
+          await context.close();
+        }
+      });
 
-    // The press landed, which is what opened the cover. The ceiling shows the
-    // cap shortened the run; it is not a count of the clicks.
-    expect(server.requests).toContain(pressed);
-    expect(server.requests).not.toContain("/beacon/play");
-    expect(elapsedMs).toBeLessThan(CAPPED_CEILING_MS);
-  });
+      // The press landed, which is what opened the cover. The ceiling shows the
+      // cap shortened the run; it is not a count of the clicks.
+      expect(server.requests).toContain(pressed);
+      expect(server.requests).not.toContain("/beacon/play");
+      expect(elapsedMs).toBeLessThan(ceilingMs);
+    },
+  );
 });
 
 describe("cappedTimeout (dl-118)", () => {
