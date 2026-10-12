@@ -58,6 +58,17 @@ export async function addLine(draft: PeriodLineDraft): Promise<PeriodLine> {
   return await requestJson<PeriodLine>(ROUTES.periodLines, { method: "POST", body: draft });
 }
 
+/**
+ * The line as corrected, under a new id: the whole draft, as the API takes it. The
+ * line it replaces is kept, and it stays on time, so it is not carried into the next close.
+ */
+export async function correctLine(id: number, draft: PeriodLineDraft): Promise<PeriodLine> {
+  return await requestJson<PeriodLine>(withId(ROUTES.periodLine, id), {
+    method: "POST",
+    body: draft,
+  });
+}
+
 /** The line as it stood; its record is kept. */
 export async function retireLine(id: number): Promise<PeriodLine> {
   return await requestJson<PeriodLine>(withId(ROUTES.periodLineRetire, id), { method: "POST" });

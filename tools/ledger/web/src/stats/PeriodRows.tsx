@@ -4,10 +4,9 @@
  * category came from and can be given one of its own, which the chart then counts
  * under the new category.
  *
- * Only bank rows are here. The cards' lines are in the period's totals too, but a
- * line is corrected with a whole new line and nothing on the web does that for a
- * closed period yet (lg-19), so the list says so instead of leaving a gap that
- * looks like a short sum.
+ * The cards' lines are listed below the bank rows (lg-19), under the one filter, so a
+ * slice made only of card lines still has something to open. They are not rows: a
+ * line is corrected with a whole new line, which `PeriodLines` files.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -20,6 +19,7 @@ import {
   setRowSpendingCategory,
 } from "../api/spending.ts";
 import { RowSpending } from "../spending/RowSpending.tsx";
+import { PeriodLines } from "./PeriodLines.tsx";
 
 /** How many rows one tap of "Show more" brings. */
 const PAGE = 25;
@@ -28,7 +28,7 @@ type Filter = number | "none" | null;
 
 export interface PeriodRowsProps {
   /** The period as the chart drew it: its own days, and what to call it. */
-  period: { name: string; start: string | null; end: string; cardCents: number };
+  period: { name: string; start: string | null; end: string };
   /** The category the list starts on: one by id, `"none"`, or all of them. */
   category: Filter;
   /** Called after a row's category was written, so the chart can be read again. */
@@ -133,9 +133,7 @@ export function PeriodRows({
     <section className="card" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>Rows in {period.name}</h2>
       <p className="muted hint">
-        The bank rows this period counted as spending.
-        {period.cardCents !== 0 &&
-          ` The cards paid ${formatCents(period.cardCents)} in it too; those lines are not listed here, and their category cannot be changed from here.`}
+        The bank rows and the cards' lines this period counted as spending.
       </p>
       <label htmlFor={`${id}-filter`}>Spending category</label>
       <select
@@ -164,6 +162,7 @@ export function PeriodRows({
           {problem}
         </p>
       )}
+      <h3>Bank rows</h3>
       {load.state === "loading" && <p className="muted">Loading the rows…</p>}
       {load.state === "failed" && (
         <p className="bad" role="alert">
@@ -208,6 +207,14 @@ export function PeriodRows({
           )}
         </>
       )}
+      <PeriodLines
+        key={String(filter)}
+        start={start}
+        end={end}
+        filter={filter}
+        categories={categories}
+        onChanged={onChanged}
+      />
       <button type="button" className="secondary" onClick={onClose}>
         Close the rows
       </button>

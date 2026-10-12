@@ -35,6 +35,12 @@ export interface JobScript {
   dropStreamAt?: readonly number[];
   /** Nobody opens the link; the server cancels the job as expired (dl-53). */
   linkExpires?: boolean;
+  /**
+   * The download tick from which the origin is read on parallel connections
+   * (dl-108). Before it the job reports one; a script without it reports `null`,
+   * which is "no feeder in the path".
+   */
+  splitAtTick?: number;
 }
 
 /**
@@ -319,6 +325,14 @@ export const SCENARIOS: readonly Scenario[] = [
       "The event stream is cut twice mid-download. Watch the backoff, the reconnect, and the state jump forward when the job is re-fetched.",
     probeDelayMs: 1_200,
     job: { dropStreamAt: [3, 7] },
+  },
+  {
+    keyword: "throttled",
+    title: "Throttled source",
+    description:
+      "A source that is slow per connection. The job starts on one, then splits into four parallel reads and the card says so.",
+    probeDelayMs: 1_200,
+    job: { splitAtTick: 4 },
   },
   {
     keyword: "expired",
