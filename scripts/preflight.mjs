@@ -269,17 +269,34 @@ function scannableFiles(dir) {
  * Comments removed, so prose that names a sibling package (`@planner/intake`
  * in a docblock) is not read as a dependency on it: without this the planner's
  * `contract` "depends on" every other package and the narrowing is worth
- * nothing. Deliberately timid, so that a shape it does not recognise keeps its
- * text and yields an edge rather than losing one. A block comment only counts
- * when its opener starts a line, so a glob with a slash-star in the middle of a
- * line never opens one; `//` only counts when whitespace or the line start
- * precedes it, so the one in `http://` never does.
+ * nothing.
+ *
+ * **It removes only a comment it can prove is one, and keeps the text of
+ * anything else, because a lost line can hide a reader and a kept one only
+ * costs a test run.** Two shapes qualify, and nothing else:
+ *
+ *   - a line whose first non-blank characters are `//`, whole line. A `//`
+ *     after code is kept, since a string such as `"see //"` carries one and
+ *     deleting from it would take the rest of the line, a path literal
+ *     included, with it;
+ *   - a block comment that opens a line and is JSDoc-shaped: either it closes
+ *     on its opening line, or every line between the opener and the closer
+ *     starts with a star (and the closer is on a line of its own). A template
+ *     literal line that happens to begin with a slash-star is followed by
+ *     code, not star-led lines, so it never matches and the code below it
+ *     stays.
+ *
+ * A block comment with an unstarred body is therefore left in, and a sibling it
+ * names becomes an edge: wider, never narrower.
  *
  * @param {string} text
  * @returns {string}
  */
 function withoutComments(text) {
-  return text.replace(/^[ \t]*\/\*[\s\S]*?\*\//gmu, "").replace(/(^|\s)\/\/[^\n]*/gu, "$1");
+  return text
+    .replace(/^[ \t]*\/\*(?:(?!\*\/)[^\n])*\n(?:[ \t]*\*(?!\/)[^\n]*\n)*[ \t]*\*\//gmu, "")
+    .replace(/^[ \t]*\/\*(?:(?!\*\/)[^\n])*\*\//gmu, "")
+    .replace(/^[ \t]*\/\/[^\n]*/gmu, "");
 }
 
 /**
@@ -292,6 +309,25 @@ function escapeRegExp(text) {
 
 /** A relative path or `tools/…` path ending in one of these is code, and code is read through its own imports. */
 const CODE_FILE = /\.[cm]?[jt]sx?$/u;
+
+/** What a module specifier may omit, as bundler resolution lets a `web` package. */
+const CODE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+
+/**
+ * Whether a path in a source string is code: it ends in a code extension, or it
+ * is an extensionless specifier that resolves to a file on disk
+ * (`../../resolvers/test/helpers/mp4` for `mp4.ts`, or a directory's
+ * `index`). Anything else is read as data, and a data edge is scoped.
+ *
+ * @param {string} absolute
+ */
+function namesCode(absolute) {
+  if (CODE_FILE.test(absolute)) return true;
+  return CODE_EXTENSIONS.some(
+    (ext) =>
+      fs.existsSync(`${absolute}${ext}`) || fs.existsSync(path.join(absolute, `index${ext}`)),
+  );
+}
 
 /**
  * Record that a package depends on `other`, whole (`scope` is `""`) or only on
@@ -431,17 +467,16 @@ export function packageGraph(repo, tool) {
         if (pattern.test(text)) addEdge(dependsOn, other, "");
       }
       for (const match of text.matchAll(/(?:\.\.\/)+[\w@.\-/]*/gu)) {
-        const parts = path
-          .relative(root, path.resolve(path.dirname(file), match[0]))
-          .split(path.sep);
+        const target = path.resolve(path.dirname(file), match[0]);
+        const parts = path.relative(root, target).split(path.sep);
         if (!manifests.has(parts[0])) continue;
-        const named = parts.length > 1 && !CODE_FILE.test(parts[parts.length - 1]);
+        const named = parts.length > 1 && !namesCode(target);
         addEdge(dependsOn, parts[0], named ? parts.join("/") : "");
       }
       for (const match of text.matchAll(segmentPath)) {
         if (!manifests.has(match[1])) continue;
         const rest = match[2].split(/["'`\s,/]+/u).filter(Boolean);
-        const named = rest.length > 0 && !CODE_FILE.test(rest[rest.length - 1]);
+        const named = rest.length > 0 && !namesCode(path.join(root, match[1], ...rest));
         addEdge(dependsOn, match[1], named ? [match[1], ...rest].join("/") : "");
       }
     }
@@ -519,7 +554,9 @@ export function narrowedFilters(repo, tool, toolPaths) {
       for (const scope of scopes) {
         if (scope === "") continue;
         const read = `${prefix}${scope}`;
-        if (toolPaths.some((p) => p === read || p.startsWith(`${read}/`))) affected.add(dir);
+        // A prefix, not a path: a name built at run time (`hls-${n}.m3u8`) leaves
+        // only its literal head in the source, and the head must match the files.
+        if (toolPaths.some((p) => p.startsWith(read))) affected.add(dir);
       }
     }
   }

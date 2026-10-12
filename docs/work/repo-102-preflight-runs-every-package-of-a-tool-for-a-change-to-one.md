@@ -219,3 +219,70 @@ false` (every path edge whole-package) fails the data-scope test and the real
   to the reader's dependents); B, every cross-package path is a whole-package
   edge. **Chosen: A**, the recommended option and what `2c9c11e3` implements, so
   no code changed.
+- 2026-10-12 — Round 1 repairs after gate 1 (Opus) FAIL at `2c9c11e3`, one high
+  and five lows. Each finding was reproduced against the old code before it was
+  changed: the four new tests below fail on `2c9c11e3`'s `scripts/preflight.mjs`
+  (`npx vitest run scripts/test/preflight.test.ts -t repo-102`: 4 failed, 13
+  passed, with the old file restored) and pass on the new one.
+  - High, `withoutComments` lost text it could not prove was a comment — _fixed_.
+    A ` //` inside a string deleted the rest of its line, and a template-literal
+    line starting with `/*` deleted up to the next `*/` anywhere below, so either
+    could hide a reader. The `//` rule is now a whole line whose first non-blank
+    characters are `//`. For the block form the choice was between rewording the
+    docblock to what the old rule did and tightening the rule to what the
+    docblock said; I tightened the rule, keeping a block only when it is
+    JSDoc-shaped (it closes on its opening line, or every line between the opener
+    and the closer starts with a star). Rewording would have kept the hazard and
+    only described it, and the tightened rule costs nothing on this tree: the
+    dump of all three tools' graphs, every package, every edge and scope, is
+    byte-identical before and after (`diff` printed nothing, 15 lines each). A
+    block comment whose body lines carry no leading star is now kept, which can
+    only add an edge. Test: `packageGraph keeps a reader whose line holds a //
+inside a string, or follows a template line starting with a slash-star`, plus
+    `packageGraph still strips a whole-line // comment and a JSDoc block, but
+keeps an unstarred block`. The docblock now says what the code does.
+  - Low, a scope built from literal text longer than any file — _fixed_.
+    `narrowedFilters` matched a changed path against a scope as `p === read ||
+p.startsWith(read + "/")`; it is now `p.startsWith(read)`, which errs wide, so
+    `hls-${n}.m3u8` (scope `…/manifests/hls-`) fires on `…/hls-master.m3u8`. Test:
+    `packageGraph scopes a name built at run time by its literal head, and a
+changed file under that head fires the reader`.
+  - Low, an extensionless code import read as data — _fixed_. A relative or
+    segment path that names no code extension is now whole-package when
+    `<path>.ts` (or `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`) or
+    `<path>/index.<ext>` exists on disk (`namesCode`). Test: `packageGraph reads
+an extensionless specifier that resolves to a file as code, so the edge is the
+whole package`.
+  - Low, mutation survivors in `narrowedFilters` — _fixed_ by one test,
+    `testPlan widens for a file at the tool's root whose name begins with a
+package's, and ignores a package that owns no tests`. Deleting `if (slash < 0)
+return [];` now fails it (1 failed, 16 passed of the 17 repo-102 tests), and so
+    does ignoring `hasTests` (1 failed, 16 passed). The fixture gained `docsite`,
+    a workspace with no `test/` directory that depends on `engine`.
+  - Low, a computed specifier or a `..`-segment join is read by no scan —
+    _not fixed_. The finding states no fix, and none exists for text: a
+    specifier built at run time (`["@downloader", "contract"].join("/")`) cannot
+    be read from source. This is the gap the ticket's Why accepts: CI runs every
+    suite, so a coupling the graph misses shows up red on the pull request. It is
+    recorded here so the next reader knows the scan's reach: string literals and
+    literal heads, not computed values.
+  - Low, `tools/downloader/api/test/ytdlp-in-the-image.test.ts` › `pins()` — an
+    undeclared cross-package read, _named here, nothing filed_. It walks every
+    `.json`, `.ts`, `.mjs`, `.ya?ml`, `.sh` and `.toml` file in the repo,
+    every downloader package included, and "every pin names the same release"
+    asserts that they agree, so a yt-dlp version pin added under `web/src` is
+    read by an api test the graph does not link to `web`. The gate's
+    reproduction: `export const YTDLP_VERSION = "2020.01.01";` written to
+    `tools/downloader/web/src/pin-probe.ts` plans `tools/downloader/web/test/`
+    only, while `npx vitest run --project downloader
+tools/downloader/api/test/ytdlp-in-the-image.test.ts` fails (1 failed, 11
+    passed of 12). I did not re-run it. The trigger is hypothetical and a change
+    to engine or resolvers still runs api. Open decision, answered by the owner on
+    2026-10-12 and relayed by the coordinator. Question: what to do about this
+    read? Options: name it in the Log (the gate's recommendation), or name it in
+    the Log and file a ticket to move the assertion to a project that always
+    runs. **Chosen: name it in the Log, file nothing.**
+  - Low, `roles/builder.md` still says preflight runs "the suite of every tool the
+    diff touches" — _not fixed_. Role pages are changed only in the owner's
+    review session, which has logged it there; this branch does not edit
+    `roles/builder.md`.

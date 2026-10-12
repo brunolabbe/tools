@@ -1869,3 +1869,121 @@ test("testPlan on the real tools: a leaf of planner and of ledger narrows the sa
     "tools/ledger/web/test/",
   ]);
 });
+
+// --- repo-102 round 1: what the scan must not lose, and the guards it relies on ---
+
+/**
+ * Gate 1's high. A comment stripper that deletes more than a comment hides a
+ * reader, and a hidden reader is the one way this narrowing can skip a test it
+ * should have run. Both shapes below are code, not comments.
+ */
+test("packageGraph keeps a reader whose line holds a // inside a string, or follows a template line starting with a slash-star (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/p5.test.ts":
+      'const note = "see //"; export const P = new URL("../../web/public/", import.meta.url);\n',
+    "tools/foo/api/test/glob.test.ts": [
+      "export const glob = `",
+      "/*.json`;",
+      'export const P = new URL("../../web/test/fixtures/", import.meta.url);',
+      "/** end */",
+      "",
+    ].join("\n"),
+  });
+  try {
+    expect(planFor(["tools/foo/web/public/terms.html"], tree.dir)).toEqual([
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+    // api holds the template-literal reader; engine's read is of web/public only.
+    expect(planFor(["tools/foo/web/test/fixtures/a.json"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph still strips a whole-line // comment and a JSDoc block, but keeps an unstarred block (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/contract/src/a.ts": [
+      "// see ../../web/src/a.ts and @foo/web",
+      "/** @foo/engine in a one-line docblock */",
+      "/**",
+      " * @foo/api, ../../api/src/a.ts",
+      " */",
+      "/*",
+      "  @foo/web is named here, in a block whose body has no stars",
+      "*/",
+      "",
+    ].join("\n"),
+  });
+  try {
+    const edges = packageGraph(tree.dir, "foo")?.get("contract")?.dependsOn;
+    expect([...(edges?.keys() ?? [])]).toEqual(["web"]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph scopes a name built at run time by its literal head, and a changed file under that head fires the reader (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/b.test.ts":
+      "const f = `../../web/test/fixtures/manifests/hls-${n}.m3u8`;\n",
+    "tools/foo/api/test/b.test.ts": 'const f = "tools/foo/web/test/fixtures/page-" + n;\n',
+  });
+  try {
+    expect(planFor(["tools/foo/web/test/fixtures/manifests/hls-master.m3u8"], tree.dir)).toEqual([
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+    expect(planFor(["tools/foo/web/test/fixtures/page-1.html"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph reads an extensionless specifier that resolves to a file as code, so the edge is the whole package (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/helpers/mp4.ts": "export const mp4 = 1;\n",
+    "tools/foo/engine/test/helpers2/index.ts": "export const x = 1;\n",
+    // Bundler resolution lets a web test leave the extension off.
+    "tools/foo/web/test/c.test.ts":
+      'import { mp4 } from "../../engine/test/helpers/mp4";\nimport { x } from "../../engine/test/helpers2";\n',
+  });
+  try {
+    expect(packageGraph(tree.dir, "foo")?.get("web")?.dependsOn.get("engine")).toEqual(
+      new Set([""]),
+    );
+    expect(planFor(["tools/foo/engine/test/helpers/mp4.ts"], tree.dir)).toContain(
+      "tools/foo/web/test/",
+    );
+  } finally {
+    tree.cleanup();
+  }
+});
+
+/** Gate 1's mutation survivors: each guard below was deletable with every test green. */
+test("testPlan widens for a file at the tool's root whose name begins with a package's, and ignores a package that owns no tests (repo-102)", () => {
+  const tree = makeToolTree({
+    // `docsite` is a workspace with no test/ directory that depends on engine.
+    "tools/foo/docsite/package.json": pkg("docsite", ["engine"]),
+    "tools/foo/docsite/src/a.ts": "export {};\n",
+  });
+  try {
+    // `webs` is a root file; `rest.slice(0, -1)` would read it as the `web` package.
+    expect(planFor(["tools/foo/webs"], tree.dir)).toEqual([]);
+    // docsite is affected by an engine change but has no tests to filter on.
+    expect(planFor(["tools/foo/engine/src/a.ts"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/engine/test/",
+    ]);
+    // A change to docsite alone leaves nothing to run, so the whole tool runs.
+    expect(planFor(["tools/foo/docsite/src/a.ts"], tree.dir)).toEqual([]);
+  } finally {
+    tree.cleanup();
+  }
+});
