@@ -410,7 +410,7 @@ rows and period lines take a spending category from it too
 - A row with no category is never held for it.
 - lg-15 creates the list, and lg-10 reads it.
 
-### Who reads the receipt: local OCR first, a model when needed
+### Who reads the receipt: a model, measured against local OCR
 
 The owner asked whether this needs AI at all. A survey on 2026-09-27 (web
 research only; nothing was run on a real receipt yet) found:
@@ -437,16 +437,22 @@ research only; nothing was run on a real receipt yet) found:
   models at 82–87 % field accuracy on scanned receipts. The reconciliation
   check stays whatever reads.
 
-**Decided by the owner: measure first, then most likely a hybrid.**
+**Decided by the owner: measure first.** The expected outcome was a hybrid,
+with local OCR first and a model only when the arithmetic failed or items were
+wanted.
 
-- The first step of lg-8 runs 10–20 of the household's real receipts through
-  `ppu-paddle-ocr`, `tesseract.js` and a Claude model on the target machine.
-  It records accuracy per field, time and cost, and the owner picks with the
-  numbers.
-- The expected outcome is a hybrid. Local OCR reads every receipt's totals and
-  taxes, for free and without the photo leaving the house. A model is called
-  only when the arithmetic fails, or when the person wants items (to exclude
-  or charge one) or categories.
+**Measured, and decided by the owner on 2026-10-12: Claude Haiku 5.5 alone,
+with no local OCR.** Fourteen real photos held 13 printed receipts (the table
+is on [lg-8's Log](./work/lg-8-receipts.md)).
+
+- **Haiku 5.5 and Sonnet 5.5** both read subtotal, GST, QST and total right on
+  all 13.
+- **PaddleOCR v6 tiny** got 9 of 13, and **tesseract.js** none.
+- **No engine was ever wrong in a way the arithmetic check missed.**
+- **Haiku costs about 5¢ per 100 receipts.**
+- Since lg-10 reads items line by line, most receipts would reach the model
+  anyway. The local path would have added onnxruntime, a parser and a second
+  code path to save almost nothing.
 
 ### What a reader is trusted with
 
@@ -454,8 +460,9 @@ Whether it is OCR or a model, a reader turns printed text into fields, and a
 model may also propose a category. A person confirms both. No reader decides
 whether an item is shared, computes a share or a tax, or files anything.
 
-**The photo leaves the house only when a model is called.** The screen says so
-at that moment, not in a notice on the capture screen that nobody rereads.
+**The photo leaves the house only when the person asks for it to be read.** The
+screen says so at that moment, not in a notice on the capture screen that
+nobody rereads, and typing the receipt in by hand never sends it.
 
 ## 7. Identity
 
