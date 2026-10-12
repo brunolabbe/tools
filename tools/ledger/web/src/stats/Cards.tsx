@@ -600,7 +600,6 @@ function SpendingBody(props: {
             name: nameOf(shown),
             start: shown.start,
             end: shown.end,
-            cardCents: shown.cardCents,
           }}
           category={opened.category}
           onChanged={props.onChanged}

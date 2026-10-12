@@ -565,6 +565,43 @@ export const periodLineDraftSchema = z.strictObject({
   chargedTo: z.string().min(1).max(100).nullable(),
 }) satisfies z.ZodType<PeriodLineDraft>;
 
+/** A whole number written in digits and nothing else: `0x3` and `1e0` are not one. */
+const digits = z
+  .string()
+  .regex(/^\d{1,15}$/u)
+  .transform(Number);
+
+/**
+ * `GET /api/period-lines`: the stored lines that stand, dated in a span, newest
+ * first (lg-19). `from` and `to` are days, both inclusive, and each is open when
+ * left out. `spendingCategory` keeps the uncategorised (`none`) or one category's
+ * by id. `offset` and `limit` page the result (100 by default); `total` is how
+ * many match before either.
+ *
+ * Only lines a person entered or the workbook brought in are here. A recurring
+ * item's generated lines are not stored, and the spending chart does not count
+ * them, so a list over one period's days and one category sums to that slice's
+ * card share, which is how the chart's "Rows" button always has something to open.
+ */
+export const periodLinesQuerySchema = z
+  .strictObject({
+    spendingCategory: z.union([z.literal("none"), digits.refine((id) => id > 0)]).optional(),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+    offset: digits.optional(),
+    limit: digits.refine((count) => count >= 1 && count <= 500).optional(),
+  })
+  .refine((query) => query.from === undefined || query.to === undefined || query.from <= query.to, {
+    message: "from is after to",
+    path: ["from"],
+  });
+
+export interface PeriodLinesResponse {
+  lines: PeriodLine[];
+  /** How many lines match, before the limit. */
+  total: number;
+}
+
 /**
  * A fixed monthly item paid on a person's own card: insurance, Internet, a
  * subscription (lg-6). It generates one shared line a month, on its start's day
