@@ -308,7 +308,7 @@ function LinkOffer({
  */
 function savedLabel(filename: string, title: string | undefined): string {
   const name = filename !== "" ? filename : (title ?? "");
-  return name === "" ? "Saved by your browser" : `Saved by your browser — ${name}`;
+  return name.trim() === "" ? "Saved by your browser" : `Saved by your browser — ${name}`;
 }
 
 function CompletedResult({

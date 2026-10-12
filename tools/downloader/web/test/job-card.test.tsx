@@ -769,3 +769,10 @@ test("a filename the server still has wins over the title", () => {
   expect(screen.getByText("Saved by your browser — a-sample-recording.mp4")).toBeDefined();
   expect(screen.queryByText(/A sample recording/u)).toBeNull();
 });
+
+test("a whitespace-only title is no title: no trailing dash", () => {
+  mount(reopenedAfterClearing(), { title: "   " });
+
+  const line = screen.getByText("Saved by your browser");
+  expect(line.textContent).toBe("Saved by your browser");
+});

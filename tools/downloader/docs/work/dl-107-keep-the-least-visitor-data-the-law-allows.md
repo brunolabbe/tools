@@ -69,8 +69,9 @@ notice: a tab closed while a job ran, reopened after the clearing, fetches the
 finished row, and `reconcileJob` would replace the card's page URL with a blank
 unless it keeps the local copy's. **The filename is not like them** (corrected
 at gate 1): it reaches the browser only on the `completed` event, so a tab
-closed before that never holds it, and a cleared row's blank filename is all
-such a card can show. See the Log.
+closed before that never holds it, and a cleared row's blank filename leaves
+such a card with only the page title this browser persisted, and with no title
+held it reads "Saved by your browser" with no dash. See the Log.
 
 ## The law
 
@@ -362,3 +363,16 @@ Written for the options taken: 1A, 2A, 3A, 4A, 5A, 6A.
     title**, the recommended one, until the lawyer answers question 1 (is a free
     one-person service an "enterprise" under art. 1525). `terms.html` is unchanged
     by this.
+- 2026-10-12 — Landing, by the fixer, at the owner's instruction, with no
+  re-gate. Gate 2's lows 1 and 2 were **fixed at landing** by the owner's choice:
+  - **Low 1:** the Why's last sentence no longer says a cleared row's blank
+    filename is all such a card can show; it says the card falls back to the
+    persisted page title, and to "Saved by your browser" with no dash when no
+    title is held.
+  - **Low 2:** `savedLabel` tests the trimmed name, so a whitespace-only title
+    reads "Saved by your browser" with no trailing dash. Proven by the last test
+    in `web/test/job-card.test.tsx`: red without the trim (`Unable to find an
+element with the text: Saved by your browser`, 1 failed of 49), green with it
+    (49 of 49, `npx vitest run tools/downloader/web/test/job-card.test.tsx`).
+  - Gate 1's lows 4, 5 and 6 stay recorded and unfixed: the owner was offered
+    them and did not choose them.
