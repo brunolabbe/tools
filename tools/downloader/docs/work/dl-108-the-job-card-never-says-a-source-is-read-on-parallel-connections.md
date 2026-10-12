@@ -198,3 +198,16 @@ Findings and what changed:
   no reader depends on the precision and the card never shows below 2.
 - **Not measured**: whether a real source seeks while output is being written. F3's
   cap makes the answer matter only to the split's own count.
+
+**2026-10-12 (round 2, gate 2 at `69d90d53`)**: one `high`, the doc comment on
+`JobProgress.originConnections` said a split job "is `2` or more", which is not a
+lower bound. Measured by the gate's probes and reproduced here on the same head:
+a split of four connections on `moov-end.mp4` reads `1, 4, 4, 4, 3, 0`, the
+closing snapshot being `0` because `mode` is still `"parallel"`; and a split the
+origin refuses (`behaviour.refuse = "429"`) reads `1` for the rest of the job and
+a closing `0`, because `mode` is `"fallen-back"` and `originConnectionsOf` caps
+it. The comment now says that. Nothing else on the branch states the bound:
+`FeederStats.openFetches`, `originConnectionsOf` and this ticket's Decision prose
+say only that a split moves between chunks, and Done when 1 asks for `>= 2` at
+some tick of the split, which is what its test asserts. The gate's `low` (nothing
+holds the call site in `attempt`) stays recorded and unfixed.
