@@ -9,9 +9,10 @@
          The row's button is labelled with a phrasing dl-82 added, so only the
          consent-container rule can press it; pressing it removes the bar and
          mounts the player. The rows are the ticket's recall table: the ones that
-         must keep resolving (r3..r9) and the ones whose wording sits in a link, a
-         hidden node (r1, r1b, r2, r2b, r5b: lost, see dl-93's Log) or a compound
-         word (r7, r8). -->
+         must keep resolving (r5, r7, r9) and the ones whose wording sits in a link
+         or a hidden node (r1, r1b, r2, r2b, r5b: lost, see dl-93's Log). r3, r3b,
+         r4, r6 and r8 were rows too until dl-113; their wordings are strings in
+         provoke.test.ts. -->
     <h1>Consent bar</h1>
     <div id="player"></div>
     <div
@@ -32,18 +33,13 @@
           'Leggi la <span role="link" tabindex="0">cookie policy</span>. ' +
           BUTTON +
           "Ho capito</button>",
-        r3: "Cookie-Einstellungen " + BUTTON + "Ich stimme zu</button>",
-        r3b: "We use cookies. " + BUTTON + "Ho capito</button>",
-        r4: "Ta strona używa plików cookie. " + BUTTON + "Akceptuję</button>",
         r5: "We use cookies. " + BUTTON + "Ho capito</button>",
         r5b:
           '<span id="t" style="visibility: hidden">We use cookies.</span> ' +
           BUTTON +
           "Ho capito</button>",
-        r6: "Wir verwenden Cookies. " + BUTTON + "Ich stimme zu</button>",
         r7:
           "Wir verwenden Statistikcookies und Marketingcookies. " + BUTTON + "Ich stimme zu</button>",
-        r8: "Läs mer om kakorna på sajten. " + BUTTON + "Jag godkänner</button>",
         r9:
           '<div class="text"><p>We use cookies to personalise content.</p></div>' +
           '<div class="buttons"><div class="row">' +

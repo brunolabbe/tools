@@ -30,9 +30,9 @@ import type { ProgressiveServer } from "./helpers/progressive-server.ts";
 const PROBE_TIMEOUT_MS = 25_000;
 const TEST_TIMEOUT_MS = 90_000;
 /**
- * The floor the ten no-media tests pass as `emptyMinWaitMs` (dl-80): equal to
- * the resolver's own `MIN_WAIT_MS`, so the extended floor adds nothing and they
- * run for what they did before it existed. Their verdicts come from the page,
+ * The floor the no-media tests pass as `emptyMinWaitMs` (dl-80): equal to the
+ * resolver's own `MIN_WAIT_MS`, so the extended floor adds nothing and they run
+ * for what they did before it existed. Their verdicts come from the page,
  * not from how long the probe waited. A smaller value would not be "off" — it
  * would shorten the wait below the base rule's.
  */
@@ -69,10 +69,14 @@ async function probe(
   return await resolver.resolve(new URL(server.url(pathname)), resolveOptions);
 }
 
-async function probeError(pathname: string, resolver: BrowserResolver): Promise<AppError> {
+async function probeError(
+  pathname: string,
+  resolver: BrowserResolver,
+  resolveOptions: ResolveOptions = options(),
+): Promise<AppError> {
   let caught: unknown;
   try {
-    await probe(pathname, resolver);
+    await probe(pathname, resolver, resolveOptions);
   } catch (error) {
     caught = error;
   }
@@ -120,17 +124,9 @@ describe("BrowserResolver", () => {
       expect(result.resolver).toBe("browser");
       expect(result.drm.protected).toBe(false);
       expect(Date.parse(result.probedAt)).toBeGreaterThan(0);
-    },
-  );
 
-  test(
-    "hands back a request context the engine can replay",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe("/mse.html", resolver);
-
+      // The request context the engine replays: the same probe of the same page,
+      // once its own test (dl-113).
       const headers = result.requestContext.headers;
       // Missing Referer is the single most common cause of a later 403.
       expect(headers["Referer"]).toBe(server.url("/mse.html"));
@@ -140,17 +136,6 @@ describe("BrowserResolver", () => {
       expect(headers["Host"]).toBeUndefined();
       expect(headers["Content-Length"]).toBeUndefined();
       expect(headers["Accept-Encoding"]).toBeUndefined();
-    },
-  );
-
-  test(
-    "sends Accept-Language from the requested locale",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe("/mse.html", resolver, options({ locale: "fr-CA" }));
-      expect(result.requestContext.headers["Accept-Language"]).toContain("fr-CA");
     },
   );
 
@@ -228,9 +213,12 @@ describe("BrowserResolver", () => {
   test("works with the real parsers wired in", { timeout: TEST_TIMEOUT_MS }, async () => {
     // No injection: whatever dl-1 has landed is exercised for real.
     const resolver = new BrowserResolver({ pool, quietMs: 1200 });
-    const result = await probe("/mse.html", resolver);
+    // The one probe that asks for a locale (dl-113): the default-locale probe
+    // above only shows "en", which a fr-CA header also contains.
+    const result = await probe("/mse.html", resolver, options({ locale: "fr-CA" }));
     expect(result.variants.length).toBeGreaterThan(0);
     expect(result.variants[0]?.protocol).toBe("hls");
+    expect(result.requestContext.headers["Accept-Language"]).toContain("fr-CA");
   });
 
   test(
@@ -256,21 +244,6 @@ describe("BrowserResolver", () => {
       const error = await probeError("/mse.html", resolver);
       expectCode(error, "DRM_PROTECTED");
       expect(error.details?.["systems"]).toEqual(["fairplay"]);
-    },
-  );
-
-  test(
-    "reports NO_MEDIA_FOUND when the page has no video",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const resolver = new BrowserResolver({
-        pool,
-        quietMs: 1200,
-        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-      });
-      const error = await probeError("/no-media.html", resolver);
-      // The one verdict that lets the registry fall through to another resolver.
-      expectCode(error, "NO_MEDIA_FOUND");
     },
   );
 
@@ -347,19 +320,7 @@ describe("BrowserResolver", () => {
     );
 
     test(
-      "a document navigation (location.assign) never returns the other page's stream",
-      { timeout: TEST_TIMEOUT_MS },
-      async () => {
-        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
-        const error = await probeError("/guard-assign.html", resolver);
-
-        expectCode(error, "NO_MEDIA_FOUND");
-        expect(error.details?.["reason"]).toBe("navigated-away");
-      },
-    );
-
-    test(
-      "reports the departure to the injected logger, naming the step and both URLs",
+      "a document navigation (location.assign) never returns the other page's stream, and is reported to the injected logger, naming the step and both URLs",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
@@ -369,7 +330,10 @@ describe("BrowserResolver", () => {
           },
         };
         const resolver = new BrowserResolver({ pool, quietMs: 1200, logger });
-        await probeError("/guard-assign.html", resolver);
+        const error = await probeError("/guard-assign.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
 
         expect(warnings).toHaveLength(1);
         expect(warnings[0]?.message).toMatch(/left the landing page/i);
@@ -379,17 +343,6 @@ describe("BrowserResolver", () => {
         expect(["provoke-playback", "network-quiet"]).toContain(warnings[0]?.fields?.["step"]);
         expect(String(warnings[0]?.fields?.["landingUrl"])).toBe(server.url("/guard-assign.html"));
         expect(String(warnings[0]?.fields?.["departedTo"])).toBe(server.url("/mse.html"));
-      },
-    );
-
-    test(
-      "a redirect during load is not a departure, and the page still probes",
-      { timeout: TEST_TIMEOUT_MS },
-      async () => {
-        const hls = recordingHlsParser();
-        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-        const result = await probe("/guard-redirect", resolver);
-        expect(result.title).toContain("[blob]");
       },
     );
 
@@ -430,6 +383,10 @@ describe("BrowserResolver", () => {
       "the landing URL is the page reached after a redirect, not the one requested (dl-55, decision 2)",
       { timeout: TEST_TIMEOUT_MS },
       async () => {
+        // This is also a plain redirect during load, which once had a probe of its
+        // own (`/guard-redirect`, dl-113): a 302 that must not read as a departure
+        // and must still finish probing. The fragment-only test above stays apart,
+        // so a failure there names the fragment.
         // A `landingUrl` wrongly set to the requested URL would flag this
         // target's own fragment-only play as a departure — `/guard-redirect`
         // alone cannot tell the two apart, since nothing navigates again
@@ -829,14 +786,16 @@ describe("BrowserResolver", () => {
         },
       );
 
-      test.each([false, true])(
-        "sign-up chips whose one age candidate is negated press nothing and report AGE_CONFIRMATION_REQUIRED (confirmation %s)",
+      // Told to confirm, because with confirmation off nothing is ever pressed:
+      // that row (dl-113) proved nothing the age-gate tests above do not.
+      test(
+        "sign-up chips whose one age candidate is negated press nothing and report AGE_CONFIRMATION_REQUIRED",
         { timeout: TEST_TIMEOUT_MS },
-        async (confirmAge) => {
+        async () => {
           const resolver = new BrowserResolver({
             pool,
             quietMs: 1200,
-            confirmAge,
+            confirmAge: true,
             emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
           });
           server.requests.length = 0;
@@ -1045,15 +1004,10 @@ describe("BrowserResolver", () => {
     expectCode(error, "AUTH_REQUIRED");
   });
 
-  test("reports GEO_BLOCKED when the region is refused", { timeout: TEST_TIMEOUT_MS }, async () => {
-    const resolver = new BrowserResolver({
-      pool,
-      quietMs: 1200,
-      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-    });
-    const error = await probeError("/geo.html", resolver);
-    expectCode(error, "GEO_BLOCKED");
-  });
+  // GEO_BLOCKED, a page that says the programme is not available in your country,
+  // was a probe of `/geo.html` here until dl-113: `provoke.test.ts` reads that
+  // page's signals and classifies them, and `capture-rules.test.ts` pins the
+  // wording.
 
   test("reports UNREACHABLE when navigation fails", { timeout: TEST_TIMEOUT_MS }, async () => {
     const resolver = new BrowserResolver({ pool, quietMs: 1200 });
@@ -1116,9 +1070,18 @@ describe("stage narration", () => {
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      // The shipped 9 s floor, because this is also the probe of a page whose media
+      // arrives early (the dl-80 test of that name, merged here by dl-113): it
+      // must still use the standard quiet timeout, not the empty floor.
+      const resolver = new BrowserResolver({
+        pool,
+        hlsParser: hls.parser,
+        quietMs: 1200,
+        emptyMinWaitMs: 9000,
+      });
       const seen: ProbeStageEvent[] = [];
-      await probe(
+      const startTime = Date.now();
+      const result = await probe(
         "/mse.html",
         resolver,
         options({
@@ -1127,6 +1090,16 @@ describe("stage narration", () => {
           },
         }),
       );
+      const elapsedMs = Date.now() - startTime;
+
+      // Should have found media
+      expect(result.variants.length).toBeGreaterThan(0);
+
+      // Should have finished well before the 9 second floor, since it captures
+      // media immediately. The ceiling sits between what it must rule out (a
+      // floor applied anyway ends at or after 9000 ms) and a slow Windows
+      // runner, which took 4470 ms here against a usual 2.8 s (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
 
       expect(seen.every((event) => event.resolver === "browser")).toBe(true);
       const stages = seen.map((event) => event.stage);
@@ -1152,23 +1125,37 @@ describe("stage narration", () => {
       // The three phases after `settle-requests` are conditional on there being
       // something to fetch, parse and weigh. A narration that listed them
       // anyway would be back to describing a script rather than a probe.
+      //
+      // Also the page with no video that reports NO_MEDIA_FOUND, the one verdict
+      // that lets the registry fall through to another resolver, and the probe
+      // that overrides the empty floor (both merged here by dl-113). A floor of
+      // 500 ms is below the base rule's 1200 ms, so an override that was ignored
+      // would wait the shipped 9000 ms.
       const resolver = new BrowserResolver({
         pool,
         quietMs: 1200,
-        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
+        emptyMinWaitMs: 500,
       });
       const seen: ProbeStageEvent[] = [];
-      await expect(
-        probe(
-          "/no-media.html",
-          resolver,
-          options({
-            onStage: (event) => {
-              seen.push(event);
-            },
-          }),
-        ),
-      ).rejects.toThrow(AppError);
+      const startTime = Date.now();
+      const error = await probeError(
+        "/no-media.html",
+        resolver,
+        options({
+          timeoutMs: 15_000,
+          onStage: (event) => {
+            seen.push(event);
+          },
+        }),
+      );
+      const elapsedMs = Date.now() - startTime;
+
+      expectCode(error, "NO_MEDIA_FOUND");
+      // With a 500 ms floor and 1200 ms quiet timeout, NO_MEDIA_FOUND arrives
+      // in about 2.1 s. An ignored override would wait the default 9000 ms
+      // floor, so the ceiling only has to stay clear of that; 3000 ms did not
+      // survive a slow Windows runner, which took 3257 ms (dl-95).
+      expect(elapsedMs).toBeLessThan(7000);
 
       const stages = seen.map((event) => event.stage);
       expect(stages).toContain("settle-requests");
@@ -1197,33 +1184,24 @@ describe("the surface click reaches a player inside an open shadow root (dl-61)"
   );
 
   test(
-    "starts a shadow-root player inside a genuinely cross-origin frame",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      server.requests.length = 0;
-      // The same page, embedded from the secondary origin: the index branch of
-      // `clickChosenVideo`, not the marked-element one.
-      const result = await probe("/cross-origin-shadow.html", resolver);
-
-      expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
-      expect(server.requests).toContain("/media/related/master.m3u8");
-    },
-  );
-
-  test(
     "indexes candidates in the locator's own order, so a cross-origin click lands on the chosen one",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const hls = recordingHlsParser();
       const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      server.requests.length = 0;
+      // The same shadow-root player as above, embedded from the secondary origin:
+      // the index branch of `clickChosenVideo`, not the marked-element one. A
+      // test of that branch with a single video (dl-61's, removed by dl-113)
+      // proved only that a shadow-root player in a cross-origin frame starts at
+      // all, which this one cannot pass without.
       // The shadow host precedes a small light-DOM decoy. A candidate list in
       // tree order would hand `locator("video").nth()` the player's tree
       // position, which in the locator's order is the decoy.
       const result = await probe("/cross-origin-shadow-order.html", resolver);
 
       expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+      expect(server.requests).toContain("/media/related/master.m3u8");
     },
   );
 
@@ -1278,18 +1256,10 @@ describe("a progressive file is not demoted to a segment (dl-78)", () => {
     return await resolver.resolve(new URL(files.url(pathname)), options());
   }
 
-  test(
-    "a whole file with a resolution suffix in its name is offered",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probeFile("/named.html");
-
-      expect(result.variants[0]?.protocol).toBe("progressive");
-      expect(result.variants[0]?.url).toBe(files.url("/media/clip-720.mp4"));
-      expect(result.variants[0]?.filesizeBytes).toBe(PROGRESSIVE_FILE_BYTES);
-    },
-  );
-
+  // The whole file with a resolution suffix in its name, and no ranged answer,
+  // is pinned without a browser (dl-113): "a numeric id or a resolution suffix
+  // does not classify a request as a segment" and "keeps a lone numbered file"
+  // in `capture-rules.test.ts`.
   test(
     "a file whose server answers every Range request with a short 206 is offered at its real size",
     { timeout: TEST_TIMEOUT_MS },
@@ -1322,33 +1292,9 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
     },
   );
 
-  test(
-    "an HLS playlist served as application/octet-stream is an hls outcome",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe("/untyped-hls-octet.html", resolver);
-
-      expect(result.variants[0]?.protocol).toBe("hls");
-      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=3"));
-    },
-  );
-
-  test(
-    "a DASH manifest served as text/plain is a dash outcome",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const dash = recordingDashParser();
-      const resolver = new BrowserResolver({ pool, dashParser: dash.parser, quietMs: 1200 });
-      const result = await probe("/untyped-dash-text.html", resolver);
-
-      expect(result.variants[0]?.protocol).toBe("dash");
-      expect(result.variants[0]?.url).toBe(server.url("/api/manifest?id=1"));
-      expect(dash.calls[0]?.text).toContain("<MPD");
-    },
-  );
-
+  // An octet-stream playlist and a text/plain DASH manifest took the same path
+  // through the same sniff (dl-113): `isSniffable` and `sniffManifestKind` in
+  // `sniff.test.ts` pin the two types and the two kinds without a browser.
   test(
     "a probe that saw only segments says so in the error's reason",
     { timeout: TEST_TIMEOUT_MS },
@@ -1367,50 +1313,30 @@ describe("a manifest served with no recognisable type or extension (dl-79)", () 
       expect(error.details?.["segmentCount"]).toBe(2);
     },
   );
-
-  test(
-    "a page that requested no segments carries no such reason",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const resolver = new BrowserResolver({
-        pool,
-        quietMs: 1200,
-        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-      });
-      const error = await probeError("/untyped-no-segments.html", resolver);
-
-      expectCode(error, "NO_MEDIA_FOUND");
-      expect(error.details?.["reason"]).toBeUndefined();
-    },
-  );
+  // A page that requested no segments carries no such reason: "adds nothing when
+  // no segment was seen" in `sniff.test.ts` (dl-113).
 });
 
 describe("a consent dialog whose button no vendor selector matches (dl-82)", () => {
-  // Phrasings the text fallback did not know on `origin/main`, one per language
-  // the ticket names. The button is pressed by its label alone, so reaching the
-  // stream proves the label matched.
-  const LABELS = [
-    // A control: a phrasing `origin/main` already pressed, so a failure of the
-    // fixture itself cannot pass for a failure of the pattern.
-    "Accept all",
-    "Accetto e continua",
-    "Acconsento",
-    "Sono d'accordo",
-    "Ho capito",
-    "Agree and continue",
-    "Accept & close",
-    "Yes, I agree",
-  ];
-
-  test.each(LABELS)(
-    "presses %j and finds the stream behind it",
+  // One phrasing the text fallback did not know on `origin/main`, pressed by its
+  // label alone, so reaching the stream proves the label matched. The other seven
+  // of the ticket's eight (a control the fallback already pressed, and one per
+  // language) are anchored strings in `CONSENT_TEXT`'s KEPT and ADDED lists in
+  // `provoke.test.ts`: the button is found by that same pattern, so what a
+  // browser adds is the apostrophe in the accessible name, which this one carries
+  // (dl-113). The pagination link and vote button that merely start like a label
+  // ("Continua", "Sono d'accordo con questa recensione") are REFUSED rows there,
+  // for `CONSENT_TEXT` and for `CONSENT_TEXT_ANYWHERE`, the pattern that reaches
+  // outside a container.
+  test(
+    'presses "Sono d\'accordo" and finds the stream behind it',
     { timeout: TEST_TIMEOUT_MS },
-    async (label) => {
+    async () => {
       const hls = recordingHlsParser();
       const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
       server.requests.length = 0;
       const result = await probe(
-        `/consent-label.html?label=${encodeURIComponent(label)}`,
+        `/consent-label.html?label=${encodeURIComponent("Sono d'accordo")}`,
         resolver,
       );
 
@@ -1418,69 +1344,36 @@ describe("a consent dialog whose button no vendor selector matches (dl-82)", () 
       expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
     },
   );
-
-  test(
-    "presses neither a pagination link nor a vote button that merely starts like a consent label",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const resolver = new BrowserResolver({
-        pool,
-        quietMs: 1200,
-        emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-      });
-      server.requests.length = 0;
-      const error = await probeError("/consent-lookalikes.html", resolver);
-
-      expectCode(error, "NO_MEDIA_FOUND");
-      // `Continua` is a bare word and stays unlisted; the vote button's label
-      // is a sentence, which the anchored pattern must keep refusing.
-      expect(server.requests).not.toContain("/beacon/consent-continua");
-      expect(server.requests).not.toContain("/beacon/consent-vote");
-    },
-  );
 });
 
 describe("the widened consent labels are pressed only inside a consent container (dl-82 gate 1)", () => {
-  // A newsletter's "Ho capito" ahead of a consent dialog labelled "Accetta", a
-  // label the tier pressed before dl-82. A whole-frame match took the newsletter
-  // first: behind the overlay the press timed out, beside the bar it landed, and
-  // either way the consent button was never reached.
-  test.each([
-    ["a full-viewport overlay", "/consent-order-overlay.html"],
-    ["a bottom bar", "/consent-order-bar.html"],
-  ])(
-    "finds the stream behind %s and leaves the newsletter alone",
-    { timeout: TEST_TIMEOUT_MS },
-    async (_name, pathname) => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      server.requests.length = 0;
-      const result = await probe(pathname, resolver);
-
-      expect(server.requests).toContain("/beacon/consent-accepted");
-      expect(server.requests).not.toContain("/beacon/newsletter-hocapito");
-      expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
-    },
-  );
+  // Gate 1's first finding was a newsletter's "Ho capito" ahead of a consent
+  // dialog labelled "Accetta", a label the tier pressed before dl-82: a
+  // whole-frame match took the newsletter first, so the consent button was never
+  // reached (behind an overlay the press timed out, beside a bar it landed). Its
+  // two pages (a full-viewport overlay and a bottom bar) were probed here until
+  // dl-113; "reaches a bottom consent bar past a sticky header's notice" in the
+  // gate 2 block below is the same finding, a notice ahead of a bar, and it fails
+  // on the same fault, a widened label pressed anywhere in the frame.
 
   // Controls in the page's own flow whose whole label is a phrasing dl-82 added.
-  // Two are submit buttons, which act on the page when pressed.
-  test.each([
-    ["a newsletter's dismiss button", "/consent-falsepress-newsletter.html", "newsletter-hocapito"],
-    ["a checkout form's submit button", "/consent-falsepress-checkout.html", "terms-submit"],
-    ["a comment form's submit button", "/consent-falsepress-comment.html", "comment-yesiagree"],
-    ["a review's vote button", "/consent-falsepress-vote.html", "review-vote"],
-  ])("does not press %s", { timeout: TEST_TIMEOUT_MS }, async (_name, pathname, beacon) => {
+  // Two were submit buttons, which act on the page when pressed. The checkout form
+  // stays; the newsletter's dismiss button is the "Ho capito" row of the gate 2
+  // block, and a comment form's and a review's vote buttons were the same press
+  // by the same whole-frame match, pinned by the "CONSENT_TEXT_ANYWHERE does not
+  // match" rows over "Yes, I agree" and "Sono d'accordo" in `provoke.test.ts`
+  // (dl-113).
+  test("does not press a checkout form's submit button", { timeout: TEST_TIMEOUT_MS }, async () => {
     const resolver = new BrowserResolver({
       pool,
       quietMs: 1200,
       emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
     });
     server.requests.length = 0;
-    const error = await probeError(pathname, resolver);
+    const error = await probeError("/consent-falsepress-checkout.html", resolver);
 
     expectCode(error, "NO_MEDIA_FOUND");
-    expect(server.requests).not.toContain(`/beacon/${beacon}`);
+    expect(server.requests).not.toContain("/beacon/terms-submit");
   });
 
   test(
@@ -1522,65 +1415,33 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
     return { outcome, requests: [...server.requests] };
   }
 
-  // Row (i): a strip in the page's own flow. Unchanged from base, which pressed
-  // "Accetta" there and never pressed the other two.
-  test.each([
-    ["Ho capito", false],
-    ["Accetto e continua", false],
-    ["Accetta", true],
-  ])(
-    "an in-flow strip labelled %j is pressed: %j",
+  // Row (i): a strip in the page's own flow. Unchanged from base, which never
+  // pressed "Ho capito" there. The strip's "Accetto e continua" is the label's
+  // CONSENT_TEXT_ANYWHERE row in `provoke.test.ts`, and its "Accetta", which
+  // base did press, is the cookie strip in the gate 1 block above (dl-113).
+  test(
+    'an in-flow strip labelled "Ho capito" is not pressed',
     { timeout: TEST_TIMEOUT_MS },
-    async (label, pressed) => {
+    async () => {
       const { outcome, requests } = await press(
-        `/consent-flow-strip.html?label=${encodeURIComponent(label)}`,
+        `/consent-flow-strip.html?label=${encodeURIComponent("Ho capito")}`,
       );
-      if (pressed) {
-        expect(requests).toContain("/beacon/strip-accepted");
-        expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
-      } else {
-        expect(requests).not.toContain("/beacon/strip-accepted");
-        expectCode(outcome as AppError, "NO_MEDIA_FOUND");
-      }
-    },
-  );
 
-  // Row (ii): a checkout bar docked to the viewport, with a submit button.
-  test.each([
-    ["fixed", "/consent-checkout-docked.html"],
-    ["sticky", "/consent-checkout-docked.html?sticky"],
-  ])(
-    "does not press the submit button of a %s checkout bar that says nothing of consent",
-    { timeout: TEST_TIMEOUT_MS },
-    async (_name, pathname) => {
-      const { outcome, requests } = await press(pathname);
-
-      expect(requests).not.toContain("/beacon/checkout-submit");
+      expect(requests).not.toContain("/beacon/strip-accepted");
       expectCode(outcome as AppError, "NO_MEDIA_FOUND");
     },
   );
 
-  // Row (iii): a sticky header's notice. "Ho capito" is new and is left alone;
-  // "OK" is a label the old pattern pressed anywhere, and still is.
-  test(
-    "does not press a sticky header's notice labelled with a dl-82 phrasing",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const { requests } = await press("/consent-header-notice.html");
-
-      expect(requests).not.toContain("/beacon/header-notice");
-    },
-  );
-
-  test(
-    "still presses a sticky header's notice labelled with an old phrasing, as before dl-82",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const { requests } = await press("/consent-header-notice.html?label=OK");
-
-      expect(requests).toContain("/beacon/header-notice");
-    },
-  );
+  // Row (ii) was a checkout bar docked to the viewport, fixed or sticky, with a
+  // submit button, probed here until dl-113. Its bar was a `<form>`, which the
+  // form rule excludes before the bar's wording is read, so the row never tested
+  // the wording rule it was named for (the mutation is in the Log). A docked bar
+  // that is no form is `consent-scope.test.ts` c1.
+  //
+  // Row (iii) was a sticky header's notice. "Ho capito" is new and is left alone
+  // (c7 there, without a browser-resolver probe); "OK" is a label the old pattern
+  // pressed anywhere, and still is: the cookie strip in the gate 1 block above is
+  // the same whole-frame press.
 
   // Row (iii-b): the header's notice sits ahead of a bottom consent bar.
   test(
@@ -1637,141 +1498,42 @@ describe("a fixed or sticky layer is a consent container only when it speaks of 
   );
 
   // What the consent-wording rule gives up, pinned as accepted behaviour: a
-  // fixed consent bar whose text names neither cookies nor consent.
-  test.each([
-    ["Ho capito", false],
-    ["Accetta", true],
-  ])(
-    "a fixed bar that never says cookie or consent, labelled %j, is pressed: %j",
+  // fixed consent bar whose text names neither cookies nor consent, labelled with
+  // a phrasing dl-82 added, is not pressed. The same bar labelled "Accetta", which
+  // base pressed and the whole-frame match still does, was this block's second
+  // row until dl-113: it is the cookie strip's press again.
+  test(
+    'a fixed bar that never says cookie or consent, labelled "Ho capito", is not pressed',
     { timeout: TEST_TIMEOUT_MS },
-    async (label, pressed) => {
+    async () => {
       const { outcome, requests } = await press(
-        `/consent-bar-nowording.html?label=${encodeURIComponent(label)}`,
+        `/consent-bar-nowording.html?label=${encodeURIComponent("Ho capito")}`,
       );
-      if (pressed) {
-        expect(requests).toContain("/beacon/bar-accepted");
-        expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
-      } else {
-        expect(requests).not.toContain("/beacon/bar-accepted");
-        expectCode(outcome as AppError, "NO_MEDIA_FOUND");
-      }
+
+      expect(requests).not.toContain("/beacon/bar-accepted");
+      expectCode(outcome as AppError, "NO_MEDIA_FOUND");
     },
   );
 });
 
-describe("the wording that makes a layer a consent container is read from its visible prose, by word (dl-82 gate 3)", () => {
-  const MASTER = "/media/mse/master.m3u8";
-
-  async function visit(
-    pathname: string,
-  ): Promise<{ outcome: ProbeResult | AppError; requests: string[] }> {
-    const hls = recordingHlsParser();
-    const resolver = new BrowserResolver({
-      pool,
-      hlsParser: hls.parser,
-      quietMs: 1200,
-      emptyMinWaitMs: NO_EMPTY_FLOOR_MS,
-    });
-    server.requests.length = 0;
-    let outcome: ProbeResult | AppError;
-    try {
-      outcome = await probe(pathname, resolver);
-    } catch (error) {
-      expect(error).toBeInstanceOf(AppError);
-      outcome = error as AppError;
-    }
-    return { outcome, requests: [...server.requests] };
-  }
-
-  // A cookie link, shown or in a hidden menu, is not prose. Both pages equal
-  // base here: the header's "Ho capito" is not pressed.
-  test.each([
-    ["a visible", "link"],
-    ["a display:none", "hidden"],
-  ])(
-    "a sticky header with %s cookie link in its nav is not a container",
-    { timeout: TEST_TIMEOUT_MS },
-    async (_name, menu) => {
-      const { requests } = await visit(`/consent-header-notice.html?menu=${menu}`);
-
-      expect(requests).not.toContain("/beacon/header-notice");
-    },
-  );
-
-  // Gate 3's a3c: the same header ahead of a bottom consent bar. Base found the
-  // stream; so must this.
-  test(
-    "reaches a bottom consent bar past a sticky header that links a cookie policy",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const { outcome, requests } = await visit("/consent-header-then-bar.html?menu=link");
-
-      expect(requests).toContain("/beacon/consent-accepted");
-      expect(requests).not.toContain("/beacon/header-notice");
-      expect((outcome as ProbeResult).variants[0]?.url).toBe(server.url(MASTER));
-    },
-  );
-
-  // Gate 3's a4 and a5: a word that merely begins like a consent word.
-  test(
-    "does not press a checkout submit in a bar whose prose says Italian 'consente' (allows)",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const text = encodeURIComponent("Il pagamento sicuro consente di ordinare in un clic.");
-      const label = encodeURIComponent("Accetto e continua");
-      const { requests } = await visit(`/consent-checkout-docked.html?text=${text}&label=${label}`);
-
-      expect(requests).not.toContain("/beacon/checkout-submit");
-    },
-  );
-
-  test(
-    "does not press a sticky header's notice whose prose says Swedish 'pannkakor' (pancakes)",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const note = encodeURIComponent("Veckans recept: pannkakor.");
-      const label = encodeURIComponent("Acceptera alla");
-      const { requests } = await visit(`/consent-header-notice.html?note=${note}&label=${label}`);
-
-      expect(requests).not.toContain("/beacon/header-notice");
-    },
-  );
-
-  // dl-82 pinned these two as accepted costs: a1 and a2 pressed a widened label
-  // that base left alone. dl-93 flipped both to "press nothing" by the owner's
-  // decision of 2026-10-10 (a fixed layer that holds page content or is a form is
-  // no consent container through its wording), so base's behaviour is back.
-  test(
-    "a fixed app root whose footer says 'cookie' holds an h1, so it is no container and its first widened label is not pressed (dl-93, flipped from dl-82's a1)",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const { requests } = await visit("/consent-approot.html");
-
-      expect(requests).not.toContain("/beacon/newsletter-hocapito");
-    },
-  );
-
-  test(
-    "a fixed app root whose footer only links a cookie policy is not a container",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const { requests } = await visit("/consent-approot.html?footer=link");
-
-      expect(requests).not.toContain("/beacon/newsletter-hocapito");
-    },
-  );
-
-  test(
-    "a docked checkout bar whose prose says 'cookie' is itself a form, so it is no container and its submit is not pressed (dl-93, flipped from dl-82's a2)",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const text = encodeURIComponent("Your cart is kept in a cookie.");
-      const { requests } = await visit(`/consent-checkout-docked.html?text=${text}`);
-
-      expect(requests).not.toContain("/beacon/checkout-submit");
-    },
-  );
-});
+// Gate 3 of dl-82 (the wording that makes a layer a consent container is read from
+// its visible prose, by word) had seven probes here until dl-113. Each is pinned
+// where it needs no resolver, and the gate's finding and the owner's decision of
+// 2026-10-10 that flipped a1 and a2 are named on the surviving row:
+//
+// - a3, a sticky header with a cookie link in its nav, shown or in a hidden menu,
+//   and a3c, the same header ahead of a bottom bar: `consent-scope.test.ts` c7 and
+//   r1..r2b (a link's text is not prose), and the gate 2 block above for the bar.
+//   The hidden-menu row never read a node's visibility: its hidden node is an
+//   `<a>`, which the link check excludes first.
+// - a4, Italian "consente", and a5, Swedish "pannkakor": the "does not speak of
+//   consent" rows of `CONSENT_WORDING` in `provoke.test.ts`. The first probed
+//   the docked checkout `<form>`, which the form rule excludes before its wording
+//   is read.
+// - a1 and a2, flipped by dl-93 to "press nothing" by the owner's decision: c13
+//   and c14 in `consent-scope.test.ts`. A fixed root whose footer only links a
+//   cookie policy always held an `<h1>`, so the page-content rule decided first;
+//   c4 and c15 pin the link and the script text.
 
 describe("Empty media floor: pages with delayed players wait longer before NO_MEDIA_FOUND (dl-80)", () => {
   test(
@@ -1802,121 +1564,6 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
       // we got the result shortly after the player attached (6 s + ~1-2 s for quiet)
       // rather than waiting the full 9 seconds.
       expect(elapsedMs).toBeLessThan(9500);
-    },
-  );
-
-  test(
-    "a page with no media respects the empty floor and the deadline",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      // Use a manifest-less page with a short timeout to test the floor behavior
-      const hls = recordingHlsParser();
-      // Room for the floor: the wait's own deadline is the budget less the
-      // resolver's 4 s teardown reserve (`TEARDOWN_RESERVE_MS`, not exported),
-      // and a budget under floor plus page load ends TIMEOUT instead, which the
-      // test after this one pins.
-      const shortTimeoutMs = 20_000;
-      const teardownReserveMs = 4000;
-      const resolver = new BrowserResolver({
-        pool,
-        hlsParser: hls.parser,
-        quietMs: 1200,
-        emptyMinWaitMs: 9000,
-      });
-      // Read off the monotonic clock (dl-105): the wait counts from after page
-      // load, so a wall clock stepped back during the load lost time the wait
-      // never lost, and this lower bound read 8577 ms on a 10.6 s test. The
-      // last test in this file steps the clock on purpose and pins that.
-      const stopwatch = startStopwatch();
-
-      let caught: unknown;
-      try {
-        await resolver.resolve(
-          new URL(server.url("/no-media.html")),
-          options({ timeoutMs: shortTimeoutMs }),
-        );
-      } catch (error) {
-        caught = error;
-      }
-
-      const elapsedMs = stopwatch();
-      expect(caught).toBeInstanceOf(AppError);
-      const error = caught as AppError;
-      expectCode(error, "NO_MEDIA_FOUND");
-
-      // Should have waited at least the floor (9000 ms)
-      expect(elapsedMs).toBeGreaterThanOrEqual(9000);
-      // And no later than the wait's real deadline. This bound alone cannot
-      // see a floor that ignores the deadline (the floor ends first here); the
-      // last test in this block and `wait-for-quiet.test.ts`, where the deadline
-      // arrives first, carry that clause.
-      expect(elapsedMs).toBeLessThan(shortTimeoutMs - teardownReserveMs);
-    },
-  );
-
-  test(
-    "a page whose media arrives early still uses the standard quiet timeout",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      // The mse.html page loads media immediately, so it should not wait
-      // the full empty floor — just the standard quiet timeout
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({
-        pool,
-        hlsParser: hls.parser,
-        quietMs: 1200,
-        emptyMinWaitMs: 9000,
-      });
-      const startTime = Date.now();
-      const result = await probe("/mse.html", resolver);
-      const elapsedMs = Date.now() - startTime;
-
-      // Should have found media
-      expect(result.variants.length).toBeGreaterThan(0);
-
-      // Should have finished well before the 9 second floor, since it captures
-      // media immediately. The ceiling sits between what it must rule out (a
-      // floor applied anyway ends at or after 9000 ms, which the previous test
-      // asserts) and a slow Windows runner, which took 4470 ms here against a
-      // usual 2.8 s (dl-95).
-      expect(elapsedMs).toBeLessThan(7000);
-    },
-  );
-
-  test(
-    "the empty floor is overridable to allow tests to run quickly",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      // For tests expecting NO_MEDIA_FOUND, set emptyMinWaitMs to a short value
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({
-        pool,
-        hlsParser: hls.parser,
-        quietMs: 1200,
-        emptyMinWaitMs: 500, // Override to a short value for testing
-      });
-      const startTime = Date.now();
-
-      let caught: unknown;
-      try {
-        await resolver.resolve(
-          new URL(server.url("/no-media.html")),
-          options({ timeoutMs: 15000 }),
-        );
-      } catch (error) {
-        caught = error;
-      }
-
-      const elapsedMs = Date.now() - startTime;
-      expect(caught).toBeInstanceOf(AppError);
-      const error = caught as AppError;
-      expectCode(error, "NO_MEDIA_FOUND");
-
-      // With a 500 ms floor and 1200 ms quiet timeout, NO_MEDIA_FOUND arrives
-      // in about 2.1 s. An ignored override would wait the default 9000 ms
-      // floor, so the ceiling only has to stay clear of that; 3000 ms did not
-      // survive a slow Windows runner, which took 3257 ms (dl-95).
-      expect(elapsedMs).toBeLessThan(7000);
     },
   );
 
@@ -1954,22 +1601,13 @@ describe("Empty media floor: pages with delayed players wait longer before NO_ME
   );
 });
 
-describe("a master served from a route with no extension (dl-92)", () => {
-  test(
-    "outranks the variant it names, even when that variant is called index.m3u8",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const hls = recordingHlsParser();
-      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
-      const result = await probe("/extensionless-master.html", resolver);
-
-      // The master's two renditions, not the one variant playlist.
-      expect(result.variants[0]?.url).toBe(server.url("/api/playlist?id=4"));
-      expect(hls.calls[0]?.text).toContain("#EXT-X-STREAM-INF");
-      expect(result.variants).toHaveLength(2);
-    },
-  );
-});
+// A master served from a route with no extension outranks the variant it names,
+// even when that variant is called index.m3u8 (dl-92): this was a probe of
+// `/extensionless-master.html` until dl-113. The ranking is "an extensionless
+// route that names a master, requested first, beats a later variant named
+// index.m3u8" in `capture-rules.test.ts`, and the arrival order that ranking reads
+// is numbered by the collector, which "a slowly-read untyped master ranks above
+// the typed variant it names" in `sniff.test.ts` pins.
 
 describe("a player that waits for the visitor's first input (dl-81)", () => {
   /**
@@ -2004,21 +1642,12 @@ describe("a player that waits for the visitor's first input (dl-81)", () => {
     },
   );
 
-  test(
-    "scrolls to the largest candidate, so a nav bar and an ad iframe above the fold do not take the slot",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      server.requests.length = 0;
-      // Nothing on this page can be clicked, and the centre click does not
-      // scroll: only `SCROLL_SCRIPT` brings the lazily mounted shell into view,
-      // which is what makes this the resolver-level proof of choosing the
-      // largest candidate (a first-match scroll fails it, gate 1).
-      const result = await probe("/player-nav-first.html", resolverWith());
-
-      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
-      expect(server.requests).toContain("/media/related/master.m3u8");
-    },
-  );
+  // The resolver-level proof of choosing the largest candidate to scroll to (a
+  // first-match scroll failed it, gate 1) was a probe of `/player-nav-first.html`
+  // until dl-113. "brings the large shell into view, not the small nav bar that
+  // comes first" in `provoke.test.ts` runs `SCROLL_SCRIPT` on a page where the
+  // shell is below the fold and reads where it ended up, without the settle and
+  // the quiet wait around it.
 
   // The only candidate is a 300x50 header, and the page mounts its player at
   // `scrollY >= 300`. Where the header sits decides how far centring it moves
@@ -2235,17 +1864,8 @@ describe("a click-only player box beside a press that did not start a player (dl
     return new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200, emptyMinWaitMs });
   }
 
-  test(
-    "ctl=none: with no control at all, the box is clicked and the stream is found",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      server.requests.length = 0;
-      const result = await probe("/box-with-control.html?ctl=none", resolverWith());
-
-      expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
-      expect(server.requests).toContain("/beacon/box-clicked");
-    },
-  );
+  // `ctl=none`, no control at all, was the first row here until dl-113: every row
+  // below asserts the same box-clicked beacon and the same stream.
 
   // Pressed as before; not counted as a player having started, because
   // "Autoplay" and "display" do not start a word with "play".
@@ -2358,8 +1978,23 @@ describe("the empty floor is measured on a clock the system cannot step (dl-105)
       // the collector's activity stamp would sit ahead of the stepped clock and
       // the wait would stall on its quiet gate for the step plus quietMs,
       // passing the floor assertion with the floor deleted (gate 1 of dl-105).
+      //
+      // This is also the empty-floor-and-deadline probe of the dl-80 block, merged
+      // here by dl-113: a page with no media waits at least its floor and ends no
+      // later than the wait's own deadline. The wait is timed from the
+      // `network-quiet` stage, which is emitted immediately before it starts, to
+      // `settle-requests`, which follows it. The gate of dl-105 left one low finding
+      // open: this test's own floor was timed from before the page loaded, so it
+      // could not tell the wait's length from a slow load. A 3000 ms floor
+      // replaces that probe's 9000 ms; a floor ignored ends the wait at its quiet
+      // gate, about 1200 ms.
       const floorMs = 3000;
       const stepBackMs = 5000;
+      const timeoutMs = 20_000;
+      // The wait's deadline is the budget less the resolver's 4 s teardown reserve
+      // (`TEARDOWN_RESERVE_MS`, not exported), and a budget under floor plus page
+      // load ends TIMEOUT instead, which the last test of the dl-80 block pins.
+      const teardownReserveMs = 4000;
       const realNow = Date.now.bind(Date);
       let skewMs = 0;
       const wallClock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + skewMs);
@@ -2373,16 +2008,19 @@ describe("the empty floor is measured on a clock the system cannot step (dl-105)
           emptyMinWaitMs: floorMs,
         });
         const wallStart = Date.now();
-        const stopwatch = startStopwatch();
+        let waitStopwatch: (() => number) | undefined;
+        let waitedMs: number | undefined;
 
         let caught: unknown;
         try {
           await resolver.resolve(
             new URL(server.url("/no-media.html")),
             options({
-              timeoutMs: 20_000,
+              timeoutMs,
               onStage: (event) => {
                 if (event.stage === "page-load") skewMs = -stepBackMs;
+                if (event.stage === "network-quiet") waitStopwatch = startStopwatch();
+                if (event.stage === "settle-requests") waitedMs = waitStopwatch?.();
               },
             }),
           );
@@ -2391,15 +2029,21 @@ describe("the empty floor is measured on a clock the system cannot step (dl-105)
         }
 
         const wallElapsedMs = Date.now() - wallStart;
-        const elapsedMs = stopwatch();
         expectCode(caught as AppError, "NO_MEDIA_FOUND");
 
         // The step took: the clock the old assertion read lost the five
         // seconds. Without this the test could not tell a fixed measurement
         // from a step that never happened.
         expect(wallElapsedMs).toBeLessThan(floorMs);
-        // The clock that cannot be stepped saw the whole wait.
-        expect(elapsedMs).toBeGreaterThanOrEqual(floorMs);
+        // The clock that cannot be stepped saw the whole wait, and the wait lasted
+        // at least the floor.
+        expect(waitedMs).toBeDefined();
+        expect(waitedMs ?? 0).toBeGreaterThanOrEqual(floorMs);
+        // And no later than the wait's real deadline. This bound alone cannot
+        // see a floor that ignores the deadline (the floor ends first here); the
+        // last test of the dl-80 block and `wait-for-quiet.test.ts`, where the
+        // deadline arrives first, carry that clause.
+        expect(waitedMs ?? Infinity).toBeLessThan(timeoutMs - teardownReserveMs);
       } finally {
         wallClock.mockRestore();
       }
