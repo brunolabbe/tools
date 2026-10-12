@@ -5039,3 +5039,60 @@ Total $156.28 priced, active 12h57m, one gate unpriced (rates read 2026-10-10). 
 - Landers reading the gated head's CI by name before the landing push, and reading a red leg's job log to name the one failing file (#413, #415, #417).
 - Unstacking dl-98 with `git rebase --onto origin/main <old parent tip>` before its first push: no force-push, no conflicts.
 - Gate prompts that name a positive control to plant and one premise to "measure, not judge".
+
+### Batch 2026-10-11 (tools-59, five tickets: dl-104 dl-100 lg-18 dl-106 dl-105) — base 55214e6
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over six ready ids and dl-100 | 54s / 54s | 0 | $0.1837 |
+| #423 | merged | Sonnet 5.5 / high | builder-standard | dl-104 build | 2m24s / 21m24s | 0 | $0.3957 |
+| #423 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-104 gate 1 | 4m11s / 12m57s | 0 | $1.4279 |
+| #423 | merged | Sonnet 5.5 / high | fixer | dl-104 landing | 1m12s / 11m02s | 0 | $0.2343 |
+| #425 | merged | Sonnet 5.5 / high | builder-standard | dl-100 build (owner's option A) and round 1 | 25m07s / 2h01m36s | 1 | $3.0261 |
+| #425 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-100 gates 1 and 2 | 24m41s / 1h44m31s | 0 | $4.5427 |
+| #425 | merged | Sonnet 5.5 / high | fixer | dl-100 landing (two Done-when rewordings by owner) | 2m17s / 12m16s | 0 | $0.4049 |
+| #426 | merged | Sonnet 5.5 / high | builder-standard | lg-18 decisions (phase 1) and build, filed lg-19 | 9m34s / 49m36s | 0 | $1.8921 |
+| #426 | merged | Opus 5.5 / high | ticket-reviewer-opus | lg-18 gates 1 and 2 | 13m01s / 12m59s | 0 | $3.0706 |
+| #426 | merged | Sonnet 5.5 / high | fixer | lg-18 round 1 | 2m34s / 2m34s | 0 | $0.4446 |
+| #426 | merged | Sonnet 5.5 / high | fixer | lg-18 landing | 2m07s / 2m05s | 0 | $0.2415 |
+| #424 | open, ready | Sonnet 5.5 / high | builder-standard | dl-106 build, round 1, two Windows series | 1h18m52s / 5h58m31s | 1 | $7.2911 |
+| #424 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-106 gates 1, 2 and 3 (gate 2 raised a high) | 40m06s / 3h20m18s | 1 | $7.9129 |
+| #424 | open, ready | Sonnet 5.5 / high | fixer | dl-106 round 2 | 9m46s / 19m46s | 0 | $0.5365 |
+| #424 | open, ready | Sonnet 5.5 / high | fixer | dl-106 landing | 2m05s / 11m53s | 0 | $0.2565 |
+| #427 | open, ready | Sonnet 5.5 / high | builder-standard | dl-105 build | 7m35s / 27m32s | 0 | $1.1669 |
+| #427 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | dl-105 gate 1 | 11m48s / 27m35s | 0 | $2.4416 |
+| #427 | open, ready | Sonnet 5.5 / high | fixer | dl-105 landing (two meds fixed at landing by owner) | 5m06s / 14m13s | 0 | $0.5866 |
+| — | — | Opus 5.5 / high | Explore | read-only sweep of Windows-leg failures (owner-asked) | 1m44s / 1m44s | 0 | $0.3142 |
+| — | — | Opus 5.5 / high | orchestrator | the batch | 1h58m06s / 7h12m00s | 0 | $8.2793 |
+
+Total $44.6497, active 6h03m08s (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- dl-104 → #423: gate 1 PASS (1 low recorded: the two `directoryOf` copies have no test keeping them in step; owner chose leave recorded).
+- dl-100 → #425, `needs-decision` answered by the owner (option A): gate 1 FAIL (2 high: camelCase play controls no longer counted, a regression against main; Done-when 1 read literally contradicted by its own tests — owner reworded it; 2 med, 2 low), gate 2 CONCERNS (1 med open decision: `btnplay`/`videoplaybutton` not counted — owner reworded Done-when 2 and accepted the miss; owner chose to keep counting `play*` words; 2 low). Lows recorded.
+- lg-18 → #426, four owner decisions before the build (additive contract change to `GET /api/rows` approved): gate 1 FAIL (1 high: the contract doc comment claimed the list sums to its chart slice, false with card lines; 7 low), gate 2 CONCERNS (CI pending only). F2, F5, F6, F8 recorded; lg-19 filed with F4 in its Build.
+- dl-106 → #424: gate 1 FAIL (1 high: `afterStop()` blind to a request opened after the stop, ~3.1 s in the engine test; 1 low), gate 2 FAIL (1 high: the feeder tests read the request count after the stop), gate 3 PASS (1 low recorded). Owner answers: gate on a 1-in-25 Windows residual twice, "count, not time", held-bytes `measureMs` left at 50.
+- dl-105 → #427: gate 1 CONCERNS (2 med fixed at landing by owner choice: the new test stalled on the quiet gate rather than the floor; the Log misread the container clock, which steps forward 58–71 ms every 30 s; 1 low recorded). Owner chose to leave production on `Date.now()`.
+
+**Defects in the skill:**
+
+1. `roles/builder.md`, _Stopping on the ticket's own stop condition_ — says commit and push the Log entry when stopping, and does not say which wins when the dispatch says "do not push" (a two-phase decide-then-build dispatch). Reproduction (lg-18 phase 1): the builder committed `21a599bb` on its worktree branch and did not push; `git branch -r --contains 21a599bb` → empty. Its report names the tension.
+2. `roles/reviewer.md`, _What makes a gate worth its cost_ and _Reproduce, do not assess_ — say mutate in place on the detached tree while the dispatch says `Write` never touches the tree under review, and give no shape for a harness spec that needs the tool's vitest project. Reported by the lg-18 and dl-100 gates. Reproduction (lg-18 gate 1): `zz-gate-lg18.test.ts` written in the gate's scratch directory is outside every project's `include`; it ran only after `cp` into `tools/ledger/api/test/` and was removed after.
+3. `roles/reviewer.md`, _What makes a gate worth its cost_ — the second-tree recipe `git archive <sha> | tar -x` plus `cp -a node_modules` yields a tree with no `dist`, and the page does not say to rebuild, while `roles/common.md` says suites fail without `dist`. Reproduction: `git archive ba4fb1ec tools/downloader/engine | tar -t | grep -c '/dist/'` → `0` (`dist` is gitignored); the dl-106 gate used `tar` of the built worktree instead.
+4. `roles/reviewer.md`, _Read the pull request's CI_ — names `gh pr checks`, `gh pr view` and WebFetch for CodeQL, and neither how to read why a non-CodeQL leg failed nor how to grade an informational leg red in code the diff cannot reach when `main` has no reading of that leg. Reproduction: `gh run view 38165381820 --job <windows job id> --log-failed` printed the failing test names (dl-104 and dl-105 gates used it); main had no Windows test reading after dl-98 merged — runs 38156679700 (72b47fe1) cancelled, 38156698567 (55214e67) test job skipped — until 38181027103 (9d0e2ea6).
+5. `review-ticket/gate.md`, _Severity and the gate_ — offers no verdict for a Done-when line that reads two ways, one met and one contradicted by a test. dl-100 gate 1 graded the literal reading as a high carrying an open decision, and the owner reworded the line. Reproduction: the gate-1 row for Done-when 1 in https://github.com/brunolabbe/tools/pull/425#issuecomment-6113027460.
+6. `reference/records.md`, _Landing_ and _Rules for what the record says_ — `SKILL.md` step 6 says the record keeps a below-floor finding "marked _fixed at landing_", and `records.md` says nothing about where that mark goes, while "the lander changes no word of a section". Reproduction: `grep -n -i "fixed at landing" .claude/skills/orchestrate-tickets/reference/records.md` → no output. The dl-105 lander put the mark in the ticket's Log and the PR body.
+7. `roles/fixer.md`, _The work_ — no recipe for running a mutation check: where, and how to use a gate's script. Reproduction: the dl-105 lander noted `git checkout -- tools/downloader` between mutations would revert its uncommitted ticket edit (the ticket lives under that path); the dl-106 round-2 fixer found the gate's `mutate.mjs` copies `<side>-test.ts` from the gate's own scratch over the test file, so run as given it would test `proposed-test.ts`, not the branch's file.
+8. `roles/builder.md`, _Before you report_ — no rule for a reproduction that only another OS can give. The dl-106 builder pushed a branch-only workflow (`.github/workflows/dl106-probe.yml`) before its draft PR existed, unprompted in round 0 and on the orchestrator's conditions in round 1. Reproduction: `git show --stat 60001f1d` → `ci(repo): temporary Windows series workflow for dl-106`, adding a file under `.github/workflows/`, deleted in `e80d47ed`.
+9. `roles/builder.md`, _Before you report_ — no rule for a Done-when bar that is infeasible at its stated cost. Reproduction (dl-105): one whole-file run of `browser-resolver.test.ts` took 614.55 s (builder) and 619.00 s (gate), so "10 consecutive runs of the whole file and of the project" is ~3.4 h; the line's own "or the Log says why" escape carried it.
+10. `roles/builder.md` — no recipe for waiting on a pull request's checks after a push. Reproduction (dl-106 builder): `until ! gh pr checks <n> | grep -q pending; do …; done` returns at once while no check has registered, because `grep` finds nothing in an empty list.
+11. `roles/builder.md`, _Set up_ — `git checkout -b <branch> origin/<base>` leaves the branch tracking `origin/main`, so a bare `git push` targets `main`. Reproduction (dl-106, dl-100 builders): `branch 'dl-106-parallel-ranges-windows' set up to track 'origin/main'.`
+12. Seen again, already in the 2026-10-10 entry: defect 2 (merge subject rejected — dl-106 builder merging moved main mid-round), defect 3 (`git log --no-merges` lists main's commits as the round — `git log --no-merges --oneline ba4fb1ec..4563c082` → 5c1d3a22, a918133d, 9d0e2ea6 among the round), defects 10 and 12 (`--land` runs preflight past the 600 s foreground wait — dl-100, dl-105, dl-106 landers).
+
+**Worked, and worth keeping:**
+
+- Holding an owner question until a gate had measured it: dl-106's held-bytes residual (judge ratio against the floor under a tick model), dl-105's production clock (50 forward steps in 1500 s), dl-100's `play*` words (12 controls at main, head and whole-word).
+- Gate prompts naming the riskiest classifier inputs and a regression to plant in production code: dl-100's camelCase high and both dl-106 highs came from them.
+- A read-only sweep of every Windows leg since a date before answering "investigate the Windows failure": one file, one cause, already in flight, no duplicate agent dispatched.
+- Checking a worktree branch's unpushed commit by content (`21a599bb`, 11 of 11 Log lines on the ticket's tip) before deleting it.
