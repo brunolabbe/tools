@@ -3,7 +3,7 @@ id: repo-102
 tool: repo
 title: Preflight runs every package's tests in a tool when only one package and its dependents can be affected
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [repo-101]
 difficulty: standard
@@ -104,6 +104,124 @@ reaching `main`.
    it.
 3. The Log records how preflight's test step changed on one real api-only
    branch: its wall time and test count, before and after.
+
+## Review
+
+**Gate: FAIL** — 2026-10-12 · `b7069eca..2c9c11e3` · Opus 5.5, depth standard
+
+| Done when                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Real downloader: an api-only diff plans api and not resolvers; a `contract` diff plans all five, against the real `package.json` files | `scripts/test/preflight.test.ts` › "testPlan on the real downloader: an api diff plans api only, a contract diff plans all five (repo-102)" ✓. The api plan equals `--project downloader tools/downloader/api/test/` and contains no `resolvers`. The contract plan equals the unfiltered `--project downloader`. The graph's keys are the five packages, and each has `test/`. Two mutations turn it red: dropping the reverse-dependency closure, and `testPlan` ignoring `repo`. |
+| 2. Any path that belongs to no package plans the whole tool, and a test proves it                                                         | `scripts/test/preflight.test.ts` › "testPlan plans the whole tool for any path that belongs to no package (repo-102)" ✓. It covers six orphan shapes, each alone and each beside an api path. "testPlan runs the whole tool when it cannot read the tree, and when no repo is given (repo-102)" covers the unreadable tree. One of the two guards is untested (low, below).                                                                                                         |
+| 3. The Log records wall time and test count, before and after, on one real api-only change                                                | **verified**. The Log has the table. Re-measured at `2c9c11e3`: `npm test -- --project downloader` ran 116 files (115 passed, 1 skipped) and 2,502 tests (2,500 passed, 2 skipped) in 561 s wall. `npm test -- --project downloader tools/downloader/api/test/` ran 54 files (53 passed, 1 skipped) and 839 tests (837 passed, 2 skipped) in 30.06 s (vitest Duration). The Log ran `e7db59c1`'s paths on this tree, not a branch carrying that commit, and says so.                |
+
+- **high** · no `Done when` line depends on it · the `withoutComments`
+  docblock in `scripts/preflight.mjs` states a bound the code does not keep:
+  "Deliberately timid, so that a shape it does not recognise keeps its text and
+  yields an edge rather than losing one." Code inside a string or a template
+  literal loses its text in two cases. First, a ` //` inside a string deletes
+  the rest of its line. Second, a template-literal line that starts with `/*`
+  deletes everything up to the next `*/` anywhere below it. Either one hides a
+  reader. Reproduction, in a disposable copy of the tree:
+  `tools/downloader/engine/test/p5.test.ts` =
+  `const note = "see //"; export const P = new URL("../../web/public/", import.meta.url);`.
+  Then `testPlan(["tools/downloader/web/public/terms.html"], tree)` plans
+  `--project downloader tools/downloader/api/test/ tools/downloader/web/test/`,
+  without engine. The template form is
+  ``export const glob = `\n/*.json`;`` followed by a `new URL("../../web/test/fixtures/", …)`
+  line and a `/** end */` docblock. Planning `tools/downloader/web/test/fixtures/a.json`
+  then gives `tools/downloader/web/test/` alone. **No live instance.**
+  `@babel/parser`'s comment ranges, used as a second stripper over all 600
+  scannable files of the three tools, gave zero edge differences. The fix is
+  cheap. Strip `//` only at line start, `/^[ \t]*\/\/[^\n]*/gmu` in place of
+  `/(^|\s)\/\/[^\n]*/gu`. Measured: the real graph is identical for all three
+  tools, and P5 then plans api, engine and web. For the block form, either word
+  the docblock to what the rule does, or keep a block only when its body is
+  JSDoc-shaped.
+- **low** · no `Done when` line depends on it · `packageGraph` decides a scope
+  from the literal text, not from what is on disk. In both cases below a
+  plausible shape loses a reader. First, a filename prefix builds a scope
+  longer than any file. ``new URL(`../../resolvers/test/fixtures/manifests/hls-${n}.m3u8`, …)``
+  in an engine test scopes the edge to `resolvers/test/fixtures/manifests/hls-`.
+  `narrowedFilters` requires `p === read || p.startsWith(read + "/")`, so a
+  change to `…/manifests/hls-master.m3u8` plans api, resolvers and web, without
+  engine. The segment form `"tools/downloader/resolvers/test/fixtures/page-" + n`
+  does the same. Second, an extensionless code import, legal under the `web`
+  packages' Bundler resolution, is read as data:
+  `import … from "../../resolvers/test/helpers/mp4"` in a web test scopes to
+  `resolvers/test/helpers/mp4`. A change to `mp4.ts` then plans api and
+  resolvers, without web. No live instance: the real scoped edges are
+  `web/public`, `resolvers/test/fixtures` and one complete fixture file name.
+  The remedy is `p.startsWith(read)` (it errs wide), plus treating a
+  path that resolves to an existing code file (`<path>.ts`, `<path>/index.ts`)
+  as whole-package.
+- **low** · no `Done when` line depends on it · positive control: the scan
+  does not read a computed specifier or a `..`-segment join, and a new edge of
+  either shape is caught by no local test. CI catches it, which is the backstop
+  the owner accepted. Planted in a copy: a package `tools/downloader/probe`
+  with no declared dependencies, whose test runs
+  `await import(["@downloader", "contract"].join("/"))`. A contract change then
+  plans five filters without probe. When the real `terms-page.test.ts` read is
+  rewritten as `path.join(import.meta.dirname, "..", "..", "web", "public")`,
+  a `web/public` change plans web alone. That one is caught:
+  "testPlan on the real downloader…" fails on
+  `expected undefined to deeply equal Set{ 'web/public' }`, because the test
+  pins the existing edge. The other two plants (extensionless import, filename
+  prefix) left all 12 repo-102 tests green.
+- **low** · no `Done when` line depends on it · a real read across packages
+  that neither the graph nor the Log's enumeration ("Three reads that no
+  manifest declares") has. `tools/downloader/api/test/ytdlp-in-the-image.test.ts`
+  › `pins()` walks every `.json`/`.ts`/`.mjs`/`.ya?ml`/`.sh`/`.toml` file in the
+  repo, every downloader package included, and "every pin names the same
+  release" asserts that they agree. Reproduction: write
+  `export const YTDLP_VERSION = "2020.01.01";` to
+  `tools/downloader/web/src/pin-probe.ts`. `testPlan` plans
+  `--project downloader tools/downloader/web/test/` only, while
+  `npx vitest run --project downloader tools/downloader/api/test/ytdlp-in-the-image.test.ts`
+  gives `1 failed | 11 passed (12)`. The trigger is hypothetical, and an engine
+  or resolvers change still runs api. The Log should name the read. Moving that
+  assertion to a project that always runs is a separate ticket.
+- **low** · `nfr:maintainability` · two guards in `narrowedFilters` survive
+  mutation, out of 12 single mutations run against the 12 repo-102 tests.
+  Deleting `if (slash < 0) return [];` leaves all 12 green, because the next
+  guard catches every tool-root name the fixture uses. With it deleted,
+  `tools/downloader/webs` plans `tools/downloader/web/test/` alone. Ignoring
+  `hasTests` also leaves all 12 green, because no fixture package lacks `test/`.
+- **low** · `nfr:maintainability` · on `main`, `roles/builder.md`'s preflight
+  bullet says preflight runs "the suite of every tool the diff touches". After
+  this change it runs a subset of that suite. This is the stale sentence that
+  CLAUDE.md's "do it now" covers. The Log notes it and leaves it.
+- **dropped** · a workspace renamed in its `package.json` drops its
+  dependents' edges, because the graph is read from the post-change tree. Any
+  workspace rename changes `package-lock.json`, which is shared config, so the
+  full `npm test` runs; without an install, CI's `npm ci` fails. Not a gap.
+- **dropped** · a filter that matches no file. `npm test -- --project downloader tools/downloader/nope/test/`
+  exits 1, so it fails closed. A zero-match filter beside others drops nothing,
+  because only a package with no tests yields one.
+- **dropped** · the ledger `api` → `web{web/dist/app}` edge, a false scoped
+  edge from a string in `config.test.ts`. `dist` is never in a diff, so it never
+  fires.
+- **dropped** · out of range · `terms-page.test.ts` reads
+  `compose.downloader.prod.yaml`, and `ytdlp-in-the-image.test.ts` reads
+  `.github/workflows/`. A diff that touches only repo-root files plans no
+  downloader suite. That is `touchedTools` (repo-101), not this diff.
+- **findings** · the hunt returned 10; 6 carried (1 high, 5 low), 4 dropped.
+- Filters, enumerated: for each of the 15 packages, `vitest list --filesOnly`
+  with its `tools/<tool>/<pkg>/test/` filter equals the files of that package
+  in the unfiltered listing (downloader 116, planner 77, ledger 50). Runs:
+  planner intake plan, 39 files and 621 tests (33 + 6); ledger books plan, 49
+  files and 855 tests (25 + 11 + 13).
+- Edges, independently: manifests, tsconfig `references`, vite configs,
+  `new URL`/`path.join`/`import.meta` sites and directory walks in all 15
+  packages. Every edge `packageGraph` returns was found, and nothing else was
+  found except the pin scan above.
+- CI on `3fbf841e` (`2c9c11e3` plus seven Log lines): check, test
+  (ubuntu-latest), CodeQL, codeql and dependency-review pass; test
+  (windows-latest, informational) pending.
+- NFR: security ✓ (argv spawn with `shell: false` unchanged; the new arguments
+  are `tools/<tool>/<dir>/test/`) · performance ✓ (api-only 561 s → 30 s
+  measured) · reliability: fails open on every unplaced path; the misses are
+  above · maintainability: above.
 
 ## Log
 
