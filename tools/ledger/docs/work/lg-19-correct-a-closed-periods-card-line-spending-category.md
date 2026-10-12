@@ -72,3 +72,53 @@ and correct a line's spending category.
 
 - 2026-10-11 — Filed from lg-18's phase 1, at the owner's choice of "bank rows only"
   for that ticket. Reproduction above run on the lg-18 branch: no output.
+
+- 2026-10-12 — Built on `07acbb86`. **Contract choice, made by the builder as the
+  Build assigns it: the list carries the card lines, and `SpendingStatsResponse` is
+  unchanged.** The alternative put each slice's card share in the response so the
+  notice and the button could say the right thing. It was not taken for three
+  reasons. (1) The list is needed anyway, and once it carries the lines a slice made
+  only of card lines opens something real, so the share would only have served a
+  notice that no longer exists: F4's message ("No bank row matches", beside the whole
+  period's card total) is gone, and the card total is not shown on the list at all.
+  (2) `SpendingStatsResponse` is read by every chart, and the stats screen's other
+  consumers would carry a field they do not draw; the new route is additive and
+  touches nothing that exists. (3) The list and the slice cannot drift, because both
+  read `current_period_lines`: the test "every slice of a period is a list of its card
+  lines, summing to it" asserts it for each slice of a period, uncategorised
+  included. The cost is two lists under one filter, one of which says "No bank row
+  matches." while the other has lines; each list now says what it is.
+  - **Read.** `GET /api/period-lines?from&to&spendingCategory&offset&limit`
+    (`ROUTES.periodLines`, the path the `POST` already has, as `recurring` has two
+    verbs), answering `PeriodLinesResponse { lines, total }`, newest first. Narrowed
+    in SQL, category included, since a line's category is its own column. Generated
+    lines are not stored and not listed. The query schema takes digits only, so
+    `0x3`, `1e0`, ` 1` and an empty `offset` are 400 here; `rowsQuerySchema` still
+    lets them through (lg-18's F6, not touched, see below).
+  - **Write.** No new route. `correctLine(id, draft)` in `web/src/api/periods.ts`
+    posts to `ROUTES.periodLine`; `PeriodLines` files the line again whole with only
+    `spendingCategoryId` changed.
+  - **The reason no override table is needed, proved.** `api/test/periods.test.ts` ›
+    "a closed period's line given another spending category leaves the settlement
+    and the next close alone": the closed periods read back equal to the last field,
+    the open period lists only its own October line with `late: false`, its
+    `settlement` is equal to what it was before the correction, one `period_lines` row
+    was added and the first still carries its old category. Mutation: with
+    `firstEntered` no longer following the chain (`earliest = step` removed), that
+    test fails together with the two existing lateness tests (3 of 47 in the file).
+  - **Where.** `web/src/stats/PeriodLines.tsx`, rendered by `PeriodRows` under the
+    bank rows, keyed on the filter so a new category starts at the first page.
+    `PeriodRows` no longer takes `cardCents`.
+  - **Not folded in, and why.** lg-18's F6 (`rowsQuerySchema` coercion) is one line to
+    fix but changes what an existing route accepts and is outside this ticket's
+    contract surface; F5 (the list vanishing when the chart's re-read fails) and F8
+    (the live region) are in `Cards.tsx`/`Chart.tsx` and not made free by this work.
+    They stay recorded on lg-18.
+  - **What the brief had wrong.** Nothing material. Its reproduction grep now prints
+    the two files that hold the wrapper and its caller. Two things the brief did not
+    say: a corrected line is stored with `source: 'manual'` whatever the line it
+    replaces was (`insertLine` writes the literal), so a corrected workbook line loses
+    that label, and a workbook line whose note is longer than 500 characters or whose
+    category is longer than 100 would be refused by `periodLineDraftSchema` on
+    correction (400 naming the field). Neither was measured against a real
+    workbook; the import has no such limit on what it stores.

@@ -14,12 +14,14 @@ import {
   closePeriodRequestSchema,
   openPeriodQuerySchema,
   periodLineDraftSchema,
+  periodLinesQuerySchema,
   recurringItemDraftSchema,
 } from "@ledger/contract";
 import type {
   ClosedPeriod,
   OpenPeriodResponse,
   PeriodLine,
+  PeriodLinesResponse,
   PeriodsResponse,
   RecurringItem,
   RecurringResponse,
@@ -34,6 +36,7 @@ import {
   closedPeriods,
   correctLine,
   currentRecurring,
+  listLines,
   openPeriod,
   retireLine,
 } from "../periods.ts";
@@ -93,6 +96,20 @@ export function registerPeriodRoutes(app: FastifyInstance, context: AppContext):
       bodyOf(closePeriodRequestSchema, request, "close"),
     );
     return closed;
+  });
+
+  // The stored lines dated in a span, for a closed period as well as the open
+  // one: `periodOpen` starts at the last close and lists only what it holds.
+  app.get(ROUTES.periodLines, { onRequest: read }, async (request) => {
+    const query = periodLinesQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      throw new AppError(
+        "BAD_REQUEST",
+        "from and to are days, written yyyy-mm-dd; spendingCategory, offset and limit are whole numbers.",
+      );
+    }
+    const body: PeriodLinesResponse = listLines(context.db, query.data);
+    return body;
   });
 
   app.post(ROUTES.periodLines, { onRequest: write }, async (request) => {
