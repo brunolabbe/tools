@@ -128,6 +128,34 @@ The branch does what the owner's answers of 2026-10-12 say, and what I could con
 
 **Hand-back scripts** (scratch directory `gate-1`, not committed): `run-gate.sh <tree> <out-dir> [M1|M2|M4]` runs the real-run spec on any tree and removes it; `mutate.mjs <tree> <name>` applies M1, M2 or M4; `old-tab.test.ts` is the old-tab spec for a base tree; `zz-attack-body.tsx` holds the nine `useJobs` sequences (assemble with the head of `web/test/app.test.tsx` and its `watchOneJob`).
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-12 · `d1370584..58761234` (head `587612343b04cccf80a38a57a5b4dc2769ca5a76`; the round is `68d6d936`, `a830a5ec`, `d0d566a1`, and the merge `58761234` brings in main's `32f8a994` (lg-8 docs), which I left out) · Sonnet 5.5, depth full for the round's lines
+
+Nothing I found is a `high`, and no `med` is left, so no third gate. The unit matrix on PR #453 was still running when I read it once (below); no `Done when` line depends on it alone.
+
+**Verdicts on gate 1's findings**
+
+- **`med` — nothing asserted that a job's stage frames reach only that job: fixed.** `api/test/pipeline.test.ts` › "a job's stage frames reach only its own subscribers, with another job probing" parks two jobs in `probing` on two latches (`maxConcurrentJobs: 2`, `maxJobsPerClient: 0`), subscribes a listener per job, and asserts each listener's `stage` frames exactly: job a's are `resolver-start` and `page-load` with a's id, job b's are `resolver-start` and `ytdlp-run` with b's id. Both expected lists are non-empty, so it cannot pass on silence. I ran it on the head and under both mutations, in the test and in my harness:
+  - At the head: `pipeline.test.ts` 31 of 31; the harness (`run-gate.sh`, no mutation) 7 of 7. The new test also passed once alone with the order shuffled.
+  - **M1** (the hub delivers a job's stage frame to every job's subscribers): `pipeline.test.ts` 1 failed / 30 passed (31), the new test; the extra frames in job a's list are job b's `resolver-start` and `ytdlp-run`, which is what the fixer reported. The harness failed `R1` (1 failed / 7).
+  - **M2** (the orchestrator forwards each stage for every job in the store): `pipeline.test.ts` 1 failed / 30 passed (31), the new test; job a's list gains `resolver-start` and `ytdlp-run` keyed to a. The harness failed `R1` (1 failed / 7). Gate 1's six suites passed M2 (207 of 207); this one does not.
+  - Each mutation was restored with `git checkout` of the head's file and the tree is clean.
+- **`med`, Done when 3 — the line's wording was stale: fixed.** The ticket's line now reads "While re-analysing, the card's status line stays first, the latest stage's text is the second message above the browser note, and before any stage arrives the card shows the status line and the browser note only", which is the sentence gate 1 stated. Re-traced against the tests: `web/test/app.test.tsx` › "a re-analysing card narrates the latest stage under its status line, and drops it when the job moves on" asserts `[status line, browser note]` before any stage, then `[status line, "Trying a real browser", browser note]` and `[status line, "Loading the page", browser note]`; `web/test/job-card.test.tsx` › "a re-analysing card puts the latest stage under the status line, above the browser note" asserts the same three-message order. Every clause of the new line is asserted. **proven.** The web and contract suites pass at the head: 343 of 343 across 24 files.
+- **`low` — `stageAfter` had no compile-time exhaustiveness guard: fixed, with one new `low` below.** With the `probed`, `refused` and `heartbeat` cases deleted, `npx tsc --noEmit -p tools/downloader/web/tsconfig.json` now exits 1 with `error TS2322: Type '{ type: "probed"; … } | { type: "refused"; … } | { type: "heartbeat"; … }' is not assignable to type 'never'`, the fixer's code. With them in place `npm run check` exits 0.
+- **`low` — `stageAfter` and `useJobs` ignore `event.jobId` and `event.at`: not fixed, deliberately, and recorded.** Unchanged since gate 1: no live call site, and the isolation test now pins the server end, so the client is no longer the only thing keeping a foreign frame off a card.
+
+**New in the lines this round touched**
+
+- **low** · `nfr:reliability` · **The new `default` branch of `stageAfter` returns the frame itself as the stage.** It ends `const unhandled: never = event; return unhandled;`. That compiles, and it is unreachable in a green tree (a new `JobEvent` member is now a type error, and the transport drops an unknown type before it reaches the hook). But if a frame of a type the switch does not handle ever got there, for instance a test casting one in, the result is that frame object, which `probeStageText` would then read as a stage. Reproduce: `TMPDIR=<short dir> node --import tsx <scratch>/gate-2/default-branch.mts <tree>` prints `held -> {"type":"from-the-future","jobId":"j","at":"2026-10-12T12:00:00.000Z"}` and `is the frame itself: true`, where before the round the switch fell through to an implicit `undefined` (clear the stage), by reading it; I did not run the old file. No live call site. Fix, fully stated: keep the `never` assignment, which is what makes a missing case a type error, and return `undefined` after it, so an impossible frame clears the stage as it did.
+- **dropped** · the Log's round entry says "the three `app.test.tsx` assertions were right and unchanged"; the file has two tests and five assertions on the card's message order. The count is loose wording in a Log; the assertions are unchanged, which I checked in the round's diff (`app.test.tsx` is not in it).
+- **findings** · the round's lines returned 2 candidates; 1 carried (`low`), 1 dropped.
+- Invariants walked for the round's diff: no contract edit, no cross-tool import, no new error code, no new test file to register, no workspace dependency, no `Dockerfile` change, style (`npm run check` exits 0 at the head). The round's diff outside the ticket is two files, `api/test/pipeline.test.ts` and `web/src/lib/job-reducer.ts`; the `contract` `dist` from gate 1 is unaffected, so no rebuild was needed.
+
+**PR #453 at head `587612343b04cccf80a38a57a5b4dc2769ca5a76`, read once.** The head matches. Passing: `CodeQL`, `codeql`, `check` (both), `changes`, `dependency-review`, `docker`, `e2e (direct)`, `e2e (sniffer)`. Pending when I read it: `test (ubuntu-latest)` and `test (windows-latest, informational)`. No `Done when` line is proven only by those legs: the new isolation test and the reworded line's assertions ran here, and the head's `check` job passed. Whoever lands this should read the two unit legs green on this head first.
+
+**Unmeasured:** the two pending unit legs; the full downloader project locally.
+
 ## Log
 
 **2026-10-12**: filed from the owner's question during dl-109. Nothing built.
