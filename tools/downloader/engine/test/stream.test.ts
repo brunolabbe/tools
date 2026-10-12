@@ -604,9 +604,11 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     // The timeout must outlast the first fragment, which `received.status` and
     // `bytes` below prove it did, and sit well inside the late segment's delay:
     // 2 s against 5 s, the 4 s against 10 s this test used to hold, in the same
-    // ratio.
+    // ratio. The time-out is followed by the kill grace on a stuck ffmpeg, 3 s
+    // by default and 0.3 s here (dl-116): what is asserted is the TIMEOUT, not
+    // how long the SIGTERM is given.
     lateSegmentDelayMs = 5_000;
-    const engine = engineWith({ stageTimeoutMs: 2_000 });
+    const engine = engineWith({ stageTimeoutMs: 2_000, killGraceMs: 300 });
     let media: MediaStream | undefined;
     const received = await exchange(
       "late-failure",
@@ -735,11 +737,12 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
   async function streamed(
     label: string,
     variant: MediaVariant,
+    config: EngineConfigInput = {},
   ): Promise<{
     received: Received;
     done: Promise<unknown> | undefined;
   }> {
-    const engine = engineWith();
+    const engine = engineWith(config);
     let media: MediaStream | undefined;
     const received = await exchange(
       label,
@@ -788,16 +791,25 @@ describe("dl-53: streaming each rendition to a real HTTP client", () => {
     // ffmpeg finding the index at the end; it stops at 40%, and every reconnect
     // finds the URL gone (a 404 — a signed link expiring mid-download — rather
     // than a reset, only because ffmpeg gives up on it in 11 s rather than 55).
+    // The engine is given a back-off ceiling of 0 (dl-116), so ffmpeg gives up
+    // after its one immediate retry instead of after 0, 1, 3 and 7 s; the retry
+    // is still asserted below.
+    let refusedReconnects = 0;
     fault = (pathname, count, request, response, body) => {
       if (!pathname.endsWith("/prog9/moov-end.mp4") || count < 4) return false;
       if (count === 4) cutShort(request, response, body, 0.4);
-      else response.writeHead(404).end();
+      else {
+        refusedReconnects += 1;
+        response.writeHead(404).end();
+      }
       return true;
     };
-    const { received, done } = await streamed("prog-cut", prog9());
+    const { received, done } = await streamed("prog-cut", prog9(), { reconnectDelayMaxS: 0 });
     expect(received.status).toBe(200);
     expect(received.aborted).toBe(true);
     await expect(done).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+    // A failure with no reconnect attempted is a different one.
+    expect(refusedReconnects).toBeGreaterThanOrEqual(1);
   }, 60_000);
 
   test("control: a progressive body cut once and resumed on reconnect completes whole", async () => {

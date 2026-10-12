@@ -280,7 +280,7 @@ interface Received {
  */
 async function startEngine(
   proxyUrl: string,
-  tlsOptions: { tlsVerify?: boolean; tlsCaFile?: string } = {},
+  tlsOptions: { tlsVerify?: boolean; tlsCaFile?: string; reconnectDelayMaxS?: number } = {},
 ): Promise<{ download(request: StreamRequest): Promise<Received> }> {
   const engine = createEngine({
     proxyUrl,
@@ -310,7 +310,12 @@ function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
  * stdout, so a test can read the result back. Everything a test here asserts
  * on — the whitelist, the TLS flags — is untouched.
  */
-function manifestArgs(options: { destPath: string; tlsCaFile?: string; tlsVerify?: boolean }): {
+function manifestArgs(options: {
+  destPath: string;
+  tlsCaFile?: string;
+  tlsVerify?: boolean;
+  reconnectDelayMaxS?: number;
+}): {
   args: string[];
 } {
   const { args } = buildStreamArgs({
@@ -322,6 +327,9 @@ function manifestArgs(options: { destPath: string; tlsCaFile?: string; tlsVerify
     subtitles: [],
     ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
     ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
+    ...(options.reconnectDelayMaxS === undefined
+      ? {}
+      : { reconnectDelayMaxS: options.reconnectDelayMaxS }),
   });
   const toFile = [...args];
   toFile[toFile.length - 1] = options.destPath;
@@ -387,7 +395,9 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
     const proxy = await startPinnedProxy();
     const destPath = path.join(storageDir, "whitelist-check.mp4");
 
-    const { args } = manifestArgs({ destPath });
+    // A back-off ceiling of 0 (dl-116): ffmpeg retries the refused open at 0, 1,
+    // 3 and 7 s otherwise, 11 s to learn what the first attempt already said.
+    const { args } = manifestArgs({ destPath, reconnectDelayMaxS: 0 });
 
     const whitelistAt = args.indexOf("-protocol_whitelist") + 1;
     const whitelist = args[whitelistAt];
@@ -452,7 +462,9 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
 describe("ffmpeg verifies the certificates it is encrypting to", () => {
   test("a download from an origin ffmpeg has no CA for fails, as a certificate problem", async () => {
     const proxy = await startPinnedProxy();
-    const engine = await startEngine(proxy.url);
+    // The back-off ceiling is 0 (dl-116): the refusal is the same on every
+    // attempt, and the default 10 spends 11 s on retrying it.
+    const engine = await startEngine(proxy.url, { reconnectDelayMaxS: 0 });
 
     const before = origin.requests.length;
     const failure = await engine.download(downloadRequest("untrusted-chain")).then(
@@ -466,7 +478,8 @@ describe("ffmpeg verifies the certificates it is encrypting to", () => {
     // "it failed" would pass just as happily with the origin switched off,
     // which is the failure this one exists to be distinguished from.
     // The real line on this machine is `Peer certificate failed verification`,
-    // five times over — once per reconnect attempt. Asserted as the word rather
+    // once per attempt (five at the default back-off, fewer at the 0 above).
+    // Asserted as the word rather
     // than the sentence because the sentence is the TLS backend's, and CI runs
     // a second ffmpeg build on Windows; `code` above is the strict half.
     expect(String(failure?.details?.["stderr"] ?? "")).toMatch(/certificate/iu);

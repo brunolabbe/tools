@@ -63,6 +63,12 @@ export interface FfmpegRunOptions {
   maxOutputBytes?: number | undefined;
   failureCode?: FfmpegFailureCode | undefined;
   stderrTailBytes?: number | undefined;
+  /**
+   * POSIX only: how long a cancelled run's process group has to leave after
+   * SIGTERM before SIGKILL. Unset is `DEFAULT_KILL_GRACE_MS`; a test that
+   * cancels a job and does not test the grace passes less (dl-116).
+   */
+  killGraceMs?: number | undefined;
   logger?: Logger | undefined;
 }
 
@@ -276,7 +282,10 @@ function launch(options: FfmpegRunOptions): Launched {
     // promise, and a stuck ffmpeg is bounded by the stage timeout above it.
     const killQuietly = async (targetPid: number): Promise<void> => {
       try {
-        await killProcessTree(targetPid, { logger });
+        await killProcessTree(targetPid, {
+          logger,
+          ...(options.killGraceMs === undefined ? {} : { graceMs: options.killGraceMs }),
+        });
       } catch {
         logger.warn("could not kill the ffmpeg process tree", { pid: targetPid });
       }
