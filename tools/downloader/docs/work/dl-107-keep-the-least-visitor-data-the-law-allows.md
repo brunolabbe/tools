@@ -3,7 +3,7 @@ id: dl-107
 tool: downloader
 title: Keep the least visitor data the law allows
 kind: work-package
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -113,9 +113,11 @@ Art. 5 if they applied.
 3. Does routing visitors through Cloudflare (US) trigger the s. 17 assessment?
 4. Would Bill C-22's schedule of core providers reach it, if enacted?
 
-## The decision
+## The decision — all five answered by the owner on 2026-10-12
 
-Five questions. Each option names what it costs.
+**Every question took its recommended option, A.** 1A includes approving the
+contract change it names: `Job.sourceUrl` may be empty on a cleared row. The
+options not taken stay below, so the reasons can be read later.
 
 **1 — The download record's URLs and title (rows 4–7).**
 
@@ -178,7 +180,7 @@ The analysis-outcome record (row 9) holds nobody and stays at 90 days. Its
 
 ## Build
 
-Written for the recommended options; adjust to the answers.
+Written for the options taken: 1A, 2A, 3A, 4A, 5A.
 
 1. Rows 4–7: in `runSweep` ([server.ts](../../api/src/server.ts)), a new
    `JobStore` statement clears the four fields on rows whose `finished_at` is
@@ -217,3 +219,7 @@ Written for the recommended options; adjust to the answers.
 - 2026-10-12 — Filed as `needs-decision` from the owner's question about two
   hours. The inventory was read at `7a331e0`; the legal floors come from a
   research pass on the same day, with sources, and are not legal advice.
+- 2026-10-12 — All five decisions answered by the owner, each option A, with
+  1A's contract change approved; moved to `ready`. The first push and pull
+  request were refused by a permission prompt and retried with the owner's
+  approval.
