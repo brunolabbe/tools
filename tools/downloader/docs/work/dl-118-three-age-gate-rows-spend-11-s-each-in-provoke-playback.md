@@ -3,7 +3,7 @@ id: dl-118
 tool: downloader
 title: The three dl-83 accepted-residue rows spend about 11 s each in provoke-playback
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -147,6 +147,47 @@ which this note did not examine. That is step 1 below.
 2. Either the three rows drop below 5 s each with the same assertions, or the Log
    says which assertion the time buys.
 3. `npm test -- --project downloader` passes.
+
+## Review
+
+**Gate: PASS** — 2026-10-12 · `d759b80e..53509ff7` · Opus 5.5, depth standard
+
+| Done when                                                      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The Log holds the per-step timing for the three pages       | **verified**: the Log's step-1 table lists five blocked clicks on each cookie-sheet page and four on the menu-button page. Checked by a second method: the brief's `stages.mts` under `DEBUG=pw:api` on `/age-false-cookie-sheet-sticky.html` shows five `locator.click failed` of 2000 ms each, and `provoke-playback` running 605 → 11696 ms uncapped                                                                                                                                                                                                                          |
+| 2. The three rows drop below 5 s each with the same assertions | **verified**: the diff changes only the resolver construction (`confirming(BLOCKED_CLICK_MS)`) and a comment, so the three assertions are unchanged. Across 12 local runs, several under 4 concurrent copies, 12 CPU burners or `taskset` to 2 CPUs with 4 burners, the rows took: closable 4513–4876 ms, sticky 4408–4601 ms, menu button 3989–4168 ms. On PR #447 at this head, `test (ubuntu-latest)` measured 4369 / 4361 / 3977 ms and `test (windows-latest, informational)` 4395 / 4406 / 4024 ms. Nothing asserts the 5 s, so this verdict holds only for the runs above |
+| 3. `npm test -- --project downloader` passes                   | **verified**: 2460 passed, 2 skipped (2462 tests); 114 files passed, 1 skipped (115); 536 s, run beside the row-timing load above. `test (ubuntu-latest)` passes on #447 at this head                                                                                                                                                                                                                                                                                                                                                                                            |
+
+The rows still prove what their names say at the 300 ms cap. Each regression below was planted on the detached tree and then restored:
+
+- With the age press removed from `provokeFrame`, all 3 rows fail (`expected undefined to be an instance of AppError`: the stream is found).
+- With play pressed through the cover by `dispatchEvent("click")`, all 3 rows fail.
+- With the menu cover clearing itself 1000 ms after the press, the menu-button row fails.
+
+The new cap test can fail. With `cappedTimeout` made to ignore the cap, `provoke.test.ts` › "four blocked play clicks cost 4 x the cap, not 4 x 2000 ms" fails with `expected 9303 to be less than 5000`. At head it takes 2036–2511 ms.
+
+- **low** · no live call site · `cappedTimeout` in `resolvers/src/browser/provoke.ts` passes `0` and `NaN` through to Playwright. Playwright reads a timeout of 0 or NaN as "no timeout", so the cap removes the bound instead of lowering it. Both `clickTimeoutMs` doc comments call the option "an upper bound". A negative cap makes every consent and play click fail at once. A value above 2000 is clamped to 2000, which is correct. Reproduction: `node --import tsx edge.mts <tree>` clicks a button under a fixed cover:
+  - `cap=0 -> timeout 0: 6001 ms, STILL WAITING at 6000 ms`
+  - `cap=NaN -> timeout NaN: 6000 ms, STILL WAITING`
+  - `cap=-1 -> timeout -1: 2 ms, Timeout -1ms exceeded`
+  - `cap=5000 -> timeout 2000: 2001 ms`
+  - `cap=undefined -> 2004 ms`
+
+  End to end, `stages.mts <tree> 0 /age-false-shell-menu-button.html` returns `28041 ms, error TIMEOUT` where the uncapped run returns `NO_MEDIA_FOUND` in 10.8 s. The only callers pass 300 and 200, and `api/src/resolvers.ts` never sets the option. Remedy: treat a non-finite or non-positive cap as unset.
+
+- **low** · `nfr:maintainability` · the consent click's cap is not tested. Restoring `dismissConsent(frame, 2000, scriptable)` alone leaves the cap test and all 3 rows green, while the cookie-sheet rows slow to 6254 and 6215 ms, above Done when 2's 5 s. Done when 2 is met at this head; this is the missing guard that would keep it met. Remedy: run the cap test on a cookie-sheet page as well.
+- **low** · `nfr:maintainability` · no test checks that the uncapped wait is still 2000 ms. With `cappedTimeout` planted to `Math.min(timeoutMs, cap ?? 300)`, a 300 ms cap for every caller, all 757 of 757 tests in `npx vitest run tools/downloader/resolvers/test/browser` stay green. The `2000` literal it replaces was never pinned either. Exporting `cappedTimeout` and unit-testing `undefined`, `0`, `NaN`, a negative value and 5000 would cover this finding and the first one.
+- **low** · the cap test's title, "four blocked play clicks cost 4 x the cap", claims more than it asserts. The assertion is a 5000 ms ceiling, which proves the cap shortens the run (see the control above). It does not prove the cost is four times the cap.
+- **dropped** · the suspicion that the rows' 0.5 s margin under 5 s fails on CI. CI measured all three rows under 4.41 s on both legs at this head. The worst local reading, under contention, was 4876 ms. Most of a row's time is fixed waits (`quietMs` 1200, the empty floor 1200, the 900 ms sleep between passes, five 300 ms caps), so CPU load moves it by about 0.3 s. No test asserts the 5 s, so CI cannot go red on it either way.
+- **findings** · the hunt returned 5; 4 carried, 1 dropped.
+- Scope: provoke.ts's hunks touch neither `isPlayPress` nor `startsWord`. All four hunks in `browser-resolver.test.ts` fall inside the "false candidates and the press … (dl-83)" block. `confirming()` with no argument passes no cap, so the other rows in that block are unchanged. dl-113 and dl-114 have no open pull request, so the merge with them was not measured.
+- Default unchanged:
+  - On the code: modal close 1500 and age press 2000 are literal in `provokeFrame` and `revisitOverlays` on every path; only the consent, play-selector and play-text sites read `blockable`.
+  - Measured: uncapped `stages.mts` on the three pages gives 13001, 12915 and 10774 ms, matching the brief's 12969, 12971 and 10899.
+  - `api/src/resolvers.ts` never sets the option.
+- Invariants: no cross-tool import, no new throw, no spawn, no new log line, no URL handling, contract untouched, no new package or test registration, no new dependency. Style is clean, and `npm run check` exits 0. Not applicable: routes, progress, Dockerfile.
+- F9 in `engine/test/parallel-ranges.test.ts` did not fail in this gate's full run. It is not graded against this branch.
+- NFR: security n/a · performance ✓ (rows 12.9/12.9/10.8 s down to 4.4/4.4/4.0 s on this box) · reliability: the 0/NaN cap above, otherwise ✓ · maintainability: above.
 
 ## Log
 
