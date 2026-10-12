@@ -3,7 +3,7 @@ id: dl-113
 tool: downloader
 title: About 50 browser probes repeat another probe or a unit test, and four cannot fail
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [dl-111]
 difficulty: standard
@@ -160,6 +160,60 @@ Already unit-tested in `chunk-sniff.test.ts`:
    the question are in the Log.)
 4. Before and after durations for the three files, from a local run, are in the
    Log, and `npm test -- --project downloader` passes.
+
+## Review
+
+**Gate: PASS** — 2026-10-12 · `07acbb86..df0ac687` (build base `d759b80e`) · Opus 5.5, depth standard
+
+Done-when 3 is graded against the owner's rewording of 2026-10-12: "No gate finding or owner decision loses its test; the Log names the survivor".
+
+| Done when                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Every removed test is in the Log with what covers it now                     | **verified**: I listed the removals from the diff (46 in `browser-resolver`, r3/r3b/r4/r6/r8 in `consent-scope`, 8 in `chunk-streams`). Each one is named in the Log with a surviving test and its file. I grepped every cited test name in the files it names, and each one exists.                                                                                                                                                  |
+| 2. Every vacuous verdict acted on has its mutation recorded                     | **verified**: the Log records M2/M3b (docked checkout), M5 (display:none link), M6 (consente) and M4/M3c (footer link), each with the run that passed. I reproduced two of them at `d759b80e` with my own mutations. G3 (`consent\p{L}*`) leaves the 'consente' row passing and fails 3 `CONSENT_WORDING` rows. O5 (a script's text counted as prose) leaves the footer-link row passing.                                             |
+| 3. No gate finding or owner decision loses its test; the Log names the survivor | **verified**: I ran 26 mutations of my own at `d759b80e` and at the head (table below). No mutation that a removed row caught is left without a surviving test that catches it. Positive control: O1 and O2 (the dl-93 app-root rule) fail `consent-scope.test.ts` › "c13, accepted cost: a consent notice in the flow of a fixed root that holds an h1 is no longer pressed" at the head. One Log survivor is misnamed (low, below). |
+| 4. Durations in the Log; `npm test -- --project downloader` passes              | **verified**: the before and after durations for the three files are in the Log. At `df0ac687`, `npm test -- --project downloader` gives `Test Files 116 passed \| 1 skipped (117)`, `Tests 2488 passed \| 2 skipped (2490)`, 406.91 s, exit 0. `npm run check` exits 0. CI is green on `47c485cf`, which differs from `df0ac687` only in the ticket file.                                                                            |
+
+**Mutations.** Each one was applied to `d759b80e`, rebuilt with `tsc --build` in contract, and to the head; "killers" means the tests that failed.
+
+| id       | mutation                                                      | removed rows that failed at `d759b80e`      | surviving tests that fail at head                                                                                 |
+| -------- | ------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| O1       | `h1` dropped from `PAGE_CONTENT`                              | a1 app root (dl-93 flip)                    | c13                                                                                                               |
+| O2       | `n.querySelector(PAGE_CONTENT)` → `n.matches(...)`            | a1 app root                                 | c13                                                                                                               |
+| O3       | `n.matches('form')` → `n.querySelector('form') !== null`      | a2 docked form (dl-93 flip)                 | c11, c14                                                                                                          |
+| O4       | `checkVisibility()` with no options                           | none                                        | r5b                                                                                                               |
+| O5       | a script's text counted as prose                              | none (the footer-link row is vacuous)       | c15 (new)                                                                                                         |
+| G1       | `<a>` no longer excluded from prose                           | gate 3 visible link, a3c                    | c1, c4, c5, c6, c7, c10, r1, r1b                                                                                  |
+| G2       | `kakor` loses its word start                                  | 'pannkakor'                                 | 4 `CONSENT_WORDING` SILENT rows                                                                                   |
+| G3       | `consent\p{L}*`                                               | none (the 'consente' row is vacuous)        | 3 `CONSENT_WORDING` rows                                                                                          |
+| W2       | the container pass scoped to `body`                           | gate 1 bottom bar, a3c                      | "reaches a bottom consent bar past a sticky header's notice", "presses a consent bar before a newsletter dialog…" |
+| W6       | `^` dropped from `CONSENT_TEXT_ANYWHERE`                      | comment form, fixed and sticky checkout, a2 | the checkout row, c1, c2, c3, c10, 11 `provoke` rows                                                              |
+| W8       | `sono d'accordo` added to `CONSENT_TEXT_ANYWHERE`             | vote button                                 | "CONSENT_TEXT_ANYWHERE does not match \"Sono d'accordo\""                                                         |
+| W9       | `ok\|okay` dropped from `CONSENT_TEXT_ANYWHERE`               | header notice "OK"                          | "…still matches \"OK\"" and "\"Okay\""                                                                            |
+| L1/L2/L3 | APOS typographic only / `&` dropped / `yes,?` dropped         | the matching LABELS rows                    | the `CONSENT_TEXT` "matches" rows (L1 also the kept "Sono d'accordo" probe)                                       |
+| X1       | `clickChosenVideo(frame, true)`                               | none (cross-origin shadow passed)           | none: equivalent                                                                                                  |
+| S1       | the `SCROLL_SCRIPT` call removed from `provokeFrame`          | nav-first plus 5 kept                       | 5 kept dl-81 rows, `provoke` dl-69                                                                                |
+| U1       | sniffed manifest always recorded as `hls`                     | DASH text/plain                             | `sniff` "an untyped, extensionless body beginning <MPD is a dash hit"                                             |
+| Q2       | the resolver passes no page text to `classifyFailure`         | not run at base                             | BOT_CHALLENGE and the dl-48 age row (full file)                                                                   |
+| K1       | the later-`moof` check in `sniffHead` removed                 | none (lonefrag and wholefrag passed)        | `chunk-sniff` "a whole movie written as fragmented MP4…"                                                          |
+| K2       | `lastEnd === head.length` → `"fragment"`                      | none                                        | `chunk-sniff` "an mvex moov followed by bytes that are not a box…"                                                |
+| K4       | a file that was read is still dropped beside a fragment       | mixed                                       | `chunk-sniff` "a file read and found whole is kept…"                                                              |
+| F1–F4    | floor ignored / −1000 ms / ×0.85 / wait started 1500 ms early | dl-80 floor row (F1 only)                   | the dl-105 row: waited 1205, 2014, 2610 and 1605 ms against `≥ 3000`. With no mutation the row passes.            |
+
+The fold-in is stronger than what it replaced. F2, F3 and F4 pass every floor test at `d759b80e`. At the head they fail the dl-105 row.
+
+**Scope and the merge.** The diff from `07acbb86` touches only `tools/downloader/resolvers/test/**` and the ticket. No `src` file differs from `main`. The dl-118 code is all still there and none of it is changed against `main`: `BLOCKED_CLICK_MS`, `confirming(clickTimeoutMs?)` and its use in the residue rows, the `clickTimeoutMs caps the clicks…` block and the `cappedTimeout (dl-118)` block in `provoke.test.ts`.
+
+**Removed fixtures.** Nothing else in `tools/`, `packages/`, `scripts/` or `.github/` reads the 13 pages, `media/extless/`, `/guard-redirect`, `/cross-origin-shadow.html`, `/named.html`, `?id=3`, `?id=4` or `/api/manifest?1`. `web/test/fixtures.ts` reads only `*.variants.json`. `media/untyped/media.m3u8` and `media/dash/manifest.mpd` still have readers.
+
+- **low** · no `Done when` line depends on it · The Log's reason why the lone fragmented-movie probes could not fail C5 is false. It says "their bodies are a megabyte, the `moof` falls outside the 2 KB head". The sniff's head is `SNIFF_HEAD_BYTES` in `chunk-sniff.ts`, 65536 bytes, and the `moof` ends at byte 585. The real reason is that the 1 MB `mdat` is cut off, so `lastEnd !== head.length` and `sniffHead` answers `unknown` whether the later-`moof` check is there or not. The conclusion (the e2e rows never guarded it) holds; K1 confirms it. Reproduction: `node --import tsx <scratch>/lonefrag-head.mts <tree>` prints `SNIFF_HEAD_BYTES 65536 … moof body@ 541 end 585 / lastEnd === head.length: false verdict: unknown`.
+- **low** · `nfr:maintainability` · Done-when 3's survivor column names "cookie-strip row (M18)" for row 11 (the sticky header's notice labelled "OK"). That row does not fail when `ok|okay` is dropped from `CONSENT_TEXT_ANYWHERE` (W9: 0 of 9 failed in the dl-82/dl-93 blocks at head). The survivor for the label half is `provoke.test.ts` › "CONSENT_TEXT_ANYWHERE still matches \"OK\"". Both halves are guarded; the Log names one of them.
+- **dropped** · X1: no test catches it at either sha. It is equivalent, because Playwright evaluates scripts in a cross-origin frame too. Nothing was lost.
+- **dropped** · K3 (`prefixBytes: 512` in `#readHead`): no test catches it at either sha (11 of 11 and 36 of 36 pass). The gap was there before this branch and is outside its scope.
+- **dropped** · Q1 (`bodyText: ""` only): neutral, because `classifyFailure` also reads `html`. Q2 replaced it.
+- **dropped** · the c-rows now run `provokePlayback` without the resolver's `revisitOverlays`. That function never presses consent text: `revisitOverlays` in `provoke.ts` calls only `dismissModal` and `confirmAgeGate`.
+- **findings** · the hunt returned 6; 2 carried, 4 dropped.
+- NFR: security n/a (tests only) · performance ✓ (`browser-resolver` 137 tests in 403 s at head) · reliability ✓ (the floor test is now timed from the wait itself) · maintainability — the two lows above.
 
 ## Log
 
