@@ -12,28 +12,60 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import type { AccessConfig } from "../../src/config.ts";
+import { Directory } from "../../src/directory.ts";
 
 export const TEAM = "household-test";
 export const AUDIENCE = "aud-tag-for-the-ledger-test";
 export const ISSUER = `https://${TEAM}.cloudflareaccess.com`;
 export const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`;
 
-/** Invented addresses, mapped to invented people. */
+/** Invented addresses, for invented people. */
 export const ALEX = "alex@example.test";
 export const SAM = "sam@example.test";
 export const STRANGER = "stranger@example.test";
+/** An admin who is a member of no household (lg-20). */
+export const ADMIN = "admin@example.test";
+
+/** The invented household the members below belong to. */
+export const HOUSEHOLD = "home";
 
 export function accessConfig(overrides: Partial<AccessConfig> = {}): AccessConfig {
   return {
     team: TEAM,
     audience: AUDIENCE,
-    people: new Map([
-      [ALEX, "alex"],
-      [SAM, "sam"],
-    ]),
+    admins: new Set([ADMIN]),
     devIdentity: undefined,
     ...overrides,
   };
+}
+
+/**
+ * An in-memory household directory holding one household, `HOUSEHOLD`, with
+ * these members — alex and sam by default. Handed to `createApp` as its
+ * `directory`, which closes it on shutdown.
+ */
+export function memberDirectory(
+  members: readonly (readonly [address: string, person: string])[] = [
+    [ALEX, "alex"],
+    [SAM, "sam"],
+  ],
+  file = ":memory:",
+): Directory {
+  const directory = Directory.open(file);
+  const change = { by: "operator", at: new Date("2026-10-01T00:00:00Z") };
+  directory.addHousehold({ id: HOUSEHOLD, name: "The test household", ...change });
+  for (const [address, person] of members) {
+    directory.addMember({ household: HOUSEHOLD, address, person, ...change });
+  }
+  return directory;
+}
+
+/** The same household written to a directory file, closed, for the commands that read one. */
+export function writeMemberDirectory(
+  file: string,
+  members?: readonly (readonly [address: string, person: string])[],
+): void {
+  memberDirectory(members, file).close();
 }
 
 export interface TestKey {

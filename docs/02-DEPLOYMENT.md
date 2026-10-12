@@ -228,11 +228,11 @@ CLOUDFLARE_API_TOKEN=… node scripts/cloudflare-setup.mjs \
 ```
 
 `--email` is the one address every tool's Allow policy admits. `--ledger-email`
-is the second person the ledger's policy admits, and only the ledger's — see
-[its section of step 2](#the-ledgers-two-people-and-still-no-bypass). The script
+is a second address the ledger's policy admits, and only the ledger's — see
+[its section of step 2](#the-ledgers-every-households-addresses-and-still-no-bypass). The script
 refuses to create the ledger's application without it, and ignores it once the
-application exists: it never rewrites a policy, so changing either address later
-is a dashboard edit.
+application exists: it never rewrites a policy, so changing either address
+later, or adding another household's, is a dashboard edit.
 
 That prints a plan and writes nothing. `--apply` makes the changes. It is
 idempotent — a second run reports `nothing to do` — so it is also the way to
@@ -328,9 +328,9 @@ has authentication of its own:
 - **The planner** has no owner model, so every visitor reads and edits everyone's
   plans — and once it runs a real model, every visitor spends your token budget.
   The detail is [below](#the-planners-no-bypass-rule-ever).
-- **The ledger** holds a household's bank history, and the Access identity is the
+- **The ledger** holds households' bank history, and the Access identity is the
   only identity it has. The detail is
-  [below](#the-ledgers-two-people-and-still-no-bypass).
+  [below](#the-ledgers-every-households-addresses-and-still-no-bypass).
 
 For each tool this host runs, **Access → Applications → Add an application →
 Self-hosted**:
@@ -414,24 +414,39 @@ email on it was the only thing hiding that. See that ticket's Log if
 unauthenticated endpoint is a stranger spending your token budget, with
 `MAX_OUTPUT_TOKENS` capping one reply and nothing capping the number of replies.
 
-### The ledger's: two people, and still no Bypass
+### The ledger's: every household's addresses, and still no Bypass
 
-The one application, with **two** addresses on its Allow policy rather than one:
-the account it keeps is shared by the two people it belongs to, and both use the
-tool. Add the second on the ledger's policy only — adding it to `--email`, or to
-another tool's policy, hands that person the other tools too.
+The one application, with **every household's addresses** on its Allow policy:
+each household that uses the ledger is two people with books of their own, and
+each of them may sign in from more than one address. The setup script creates
+the policy with two, `--email` and `--ledger-email`, and never rewrites a policy,
+so every other address is added here, in the dashboard: **Access → Applications
+→ ledger → its Allow policy → Include → Emails**. Add each on the ledger's policy
+only — adding one to `--email`, or to another tool's policy, hands that person
+the other tools too.
 
+- **Access admits; the household directory decides.** Access lets a listed
+  address reach the ledger. The directory on the ledger's volume says which
+  household it is in and as whom, and refuses one it has no member for — that
+  address gets a page saying it belongs to no household. So membership is in two
+  places, and they drift closed: an address on one list and not the other is
+  refused either way. Add a member with the household command
+  ([the ledger's section](#the-ledger)), then add its address here.
 - **No Bypass rule, ever**, for the planner's first reason and a stronger one:
   nothing in the ledger is a capability link, and what it holds is bank history.
 - **Access is its identity, not only its gate.** The tool has no login of its
   own; who imported a statement or paid a receipt is the address Access puts on
   the request. The API verifies Access's signed token on every API route but
   `/api/health`, so the loopback port answers health and refuses the rest. It
-  needs the team name, the application's AUD tag and the address-to-person
-  list — `LEDGER_ACCESS_TEAM`, `LEDGER_ACCESS_AUD` and `LEDGER_ACCESS_PEOPLE`
-  in `.env` — and `compose.ledger.prod.yaml` refuses to start without them.
+  needs the team name and the application's AUD tag — `LEDGER_ACCESS_TEAM` and
+  `LEDGER_ACCESS_AUD` in `.env` — and `compose.ledger.prod.yaml` refuses to
+  start without them. `LEDGER_ADMINS`, optional, names the addresses that may
+  manage the directory. `LEDGER_ACCESS_PEOPLE` is retired: the directory
+  replaced it, and the API refuses to start with `ACCESS_PEOPLE` set.
 - **Never "widen it" to public**, below. The next section is about tools whose
-  data is nobody's in particular; this one's is two named people's.
+  data is nobody's in particular; this one's is named households'. Opening the
+  ledger's policy to any address that proves itself is repo-98, deferred until
+  the owner wants the ledger open, and is not something to do from this page.
 
 ### When you want it genuinely public
 
@@ -529,9 +544,11 @@ looks:
   was never handed out, and the CI gate asked only for `/api/health`, which
   answered perfectly throughout. That gate now greps the document for the
   bundle's root element, and this is the deployed equivalent of the same check.
-- **ledger** — open it from a phone, as each of the two people, and check both
-  get past the login. A policy with one address on it looks exactly like a
-  working one to the person whose address it is.
+- **ledger** — open it from a phone, as each member of each household, and
+  check each gets past the login to their own books. A policy or a directory
+  missing an address looks exactly like a working one to everyone else: the
+  missing one sees Access refuse them, or the page saying they belong to no
+  household.
 
 ---
 
@@ -1285,8 +1302,27 @@ reaches outside the host. Two things are its own:
   statement either person imported, and of the history carried over from the
   spreadsheet it replaces. `docker compose down` without `-v` leaves it alone;
   back it up as you would that spreadsheet, and more often.
-- **Its login admits two people**, and is also how it knows which of them is
-  asking — [step 2](#the-ledgers-two-people-and-still-no-bypass) has the policy.
+- **Its login admits every household's addresses, and the household directory
+  says whose they are** — [step 2](#the-ledgers-every-households-addresses-and-still-no-bypass) has the
+  policy. The directory is `/data/directory.db` on the same volume, read on every
+  request, so a change applies without a restart. Until the app has a screen for
+  it (lg-22) it is written from the host, inside the running container:
+
+  ```bash
+  F="-f compose.prod.yaml -f compose.ledger.prod.yaml"
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js add <household> <display name>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js member <household> <address> <person>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js remove <address>
+  docker compose $F exec ledger node tools/ledger/api/dist/household-ledger.js list
+  ```
+
+  A household id is one lowercase word; a household holds two people, each
+  behind any number of addresses, and a name it has held stays one of its two.
+  Until each household has books of its own (lg-21) the command refuses a second
+  household. **On the first deploy of this release the directory is empty**, so
+  everyone sees the "no household" page until the household and its members
+  are added; and delete `LEDGER_ACCESS_PEOPLE` from `.env`, which nothing reads
+  any more. `--as` in the workbook import names a person the directory holds.
 
 There is no model behind it yet. Reading receipts will be one, behind a seam of
 its own with an offline default, and it will get a section here when it lands.

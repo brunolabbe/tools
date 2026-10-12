@@ -14,9 +14,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   BAD_REQUEST: 400,
   INVALID_URL: 400,
   // lg-3: no token, or one that did not verify — then a verified address the
-  // configuration maps to nobody. Both 403, never 401, by the owner's decision:
-  // a 401 must carry a `WWW-Authenticate` scheme, and Access has none a client
-  // could answer. The codes still tell the two apart.
+  // household directory has no member for (lg-20). Both 403, never 401, by
+  // the owner's decision: a 401 must carry a `WWW-Authenticate` scheme, and
+  // Access has none a client could answer. The codes still tell the two apart.
   UNAUTHENTICATED: 403,
   FORBIDDEN: 403,
   BLOCKED_TARGET: 403,
@@ -52,6 +52,9 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   RATIO_NOT_IN_EFFECT: 422,
   // lg-15: a spending category named that is not in the list (never was, or retired).
   SPENDING_CATEGORY_NOT_FOUND: 404,
+  // lg-20: a third person named into a household of two, which is a conflict
+  // with what the directory holds rather than a request it could not read.
+  HOUSEHOLD_FULL: 409,
 };
 
 /**

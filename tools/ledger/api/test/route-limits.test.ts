@@ -16,7 +16,8 @@ import { createRateLimitHook } from "../src/rate-limit.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { accessConfig } from "./helpers/access.ts";
+import { accessConfig, memberDirectory } from "./helpers/access.ts";
+import { VERBS } from "./helpers/routes.ts";
 import { TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
 
 let app: App | undefined;
@@ -26,50 +27,12 @@ afterEach(async () => {
   app = undefined;
 });
 
-/** Every route the API answers, with the verb a request to it takes. */
-const VERBS = {
-  health: ["GET", ROUTES.health],
-  me: ["GET", ROUTES.me],
-  statements: ["POST", ROUTES.statements],
-  rules: ["GET", ROUTES.rules],
-  rule: ["POST", ROUTES.rule.replace(":id", "1")],
-  ruleRetire: ["POST", ROUTES.ruleRetire.replace(":id", "1")],
-  inbox: ["GET", ROUTES.inbox],
-  autoFiled: ["GET", ROUTES.autoFiled],
-  classifications: ["POST", ROUTES.classifications],
-  people: ["GET", ROUTES.people],
-  buckets: ["GET", ROUTES.buckets],
-  salaries: ["POST", ROUTES.salaries],
-  ratios: ["POST", ROUTES.ratios],
-  periods: ["GET", ROUTES.periods],
-  periodOpen: ["GET", ROUTES.periodOpen],
-  periodClose: ["POST", ROUTES.periodClose],
-  periodLines: ["POST", ROUTES.periodLines],
-  periodLine: ["POST", ROUTES.periodLine.replace(":id", "1")],
-  periodLineRetire: ["POST", ROUTES.periodLineRetire.replace(":id", "1")],
-  recurring: ["POST", ROUTES.recurring],
-  recurringItem: ["POST", ROUTES.recurringItem.replace(":id", "1")],
-  spendingCategories: ["GET", ROUTES.spendingCategories],
-  spendingCategory: ["POST", ROUTES.spendingCategory.replace(":id", "1")],
-  spendingCategoryRetire: ["POST", ROUTES.spendingCategoryRetire.replace(":id", "1")],
-  spendingCategoryMap: ["GET", ROUTES.spendingCategoryMap],
-  spendingCategoryOverrides: ["POST", ROUTES.spendingCategoryOverrides],
-  rows: ["GET", ROUTES.rows],
-  statsMortgagePayments: ["GET", ROUTES.statsMortgagePayments],
-  statsSalaries: ["GET", ROUTES.statsSalaries],
-  statsContributions: ["GET", ROUTES.statsContributions],
-  statsMortgageOwn: ["GET", ROUTES.statsMortgageOwn],
-  statsBuffer: ["GET", ROUTES.statsBuffer],
-  statsSpending: ["GET", ROUTES.statsSpending],
-  statsFixedItems: ["GET", ROUTES.statsFixedItems],
-  statsSettlements: ["GET", ROUTES.statsSettlements],
-} as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;
-
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
 
 /** Both buckets hold one token, so the second request of either kind is the one refused. */
 async function startTight(): Promise<App> {
   app = await createApp({
+    directory: memberDirectory(),
     config: {
       databasePath: ":memory:",
       logLevel: "silent",
@@ -147,6 +110,7 @@ describe("the routes", () => {
 
   test("a limit of zero turns the limiter off", async () => {
     app = await createApp({
+      directory: memberDirectory(),
       config: {
         databasePath: ":memory:",
         logLevel: "silent",
@@ -183,9 +147,13 @@ function hookFor(limiter: RateLimiter) {
 
 /** Just what the hook reads: who the request is from, and somewhere to put headers. */
 function call(hook: ReturnType<typeof hookFor>, person: string | null, ip: string) {
+  const email = `${person ?? "nobody"}@example.test`;
   const request = {
     ip,
-    person: person === null ? null : { id: person, email: `${person}@example.test` },
+    identity:
+      person === null
+        ? null
+        : { email, admin: false, person: { id: person, email, household: "home" } },
   } as unknown as FastifyRequest;
   const reply = { header: vi.fn() } as unknown as FastifyReply;
   return hook(request, reply);
