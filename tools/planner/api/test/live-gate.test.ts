@@ -13,8 +13,23 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { assertLiveRunConsent, parseCli, runCeilingUsd } from "./live/run.ts";
+import { assertLiveRunConsent, livePricesFor, parseCli, runCeilingUsd } from "./live/run.ts";
+import type { LivePrices } from "./live/run.ts";
 import type { RunBudget } from "@planner/agent";
+import { loadApiConfig, MODEL_PRICE_VARIABLES } from "../src/config.ts";
+
+/**
+ * Opus 5's public rates, which the filing's golden ceilings below were worked
+ * out at. A fixture, not the harness's: since pl-55 the harness reads its rates
+ * from `MODEL_PRICE_*` and holds none itself, and the arithmetic these tests pin
+ * is the same at any rate.
+ */
+const OPUS_5_RATES: LivePrices = {
+  inputPerMTok: 5,
+  outputPerMTok: 25,
+  cacheReadPerMTok: 0.5,
+  cacheWritePerMTok: 6.25,
+};
 
 /**
  * The first gate's own mutation, reproduced literally: `outputCeilingTokens`
@@ -69,7 +84,7 @@ describe("runCeilingUsd", () => {
     // complaint: 783 + (783 + 8,000) = 9,566 per specialist, x5 = 47,830
     // tokens, $0.23915 at $5/MTok. Total $2.23915, which the filing rounds to
     // $2.24 and this test pins to the cent.
-    const ceiling = runCeilingUsd(productionBudget, 783);
+    const ceiling = runCeilingUsd(productionBudget, 783, OPUS_5_RATES);
     expect(ceiling).toBeCloseTo(2.0 + 0.23915, 5);
     expect(Number(ceiling.toFixed(2))).toBe(2.24);
   });
@@ -78,7 +93,7 @@ describe("runCeilingUsd", () => {
     // Output is unchanged (still 80,000 tokens, $2.00). Input per specialist
     // is 10,700 + (10,700 + 8,000) = 29,400, x5 = 147,000 tokens, $0.735 at
     // $5/MTok. Total $2.735.
-    const ceiling = runCeilingUsd(productionBudget, 10_700);
+    const ceiling = runCeilingUsd(productionBudget, 10_700, OPUS_5_RATES);
     expect(ceiling).toBeCloseTo(2.0 + 0.735, 5);
     // $2.735 exactly, which floating-point rounding prints as "$2.73" rather
     // than "$2.74" — confirmed against the gate's own independent arithmetic.
@@ -90,7 +105,7 @@ describe("runCeilingUsd", () => {
     // 10,700 + (10,700 + 512) = 21,912, x5 = 109,560 tokens, $0.5478. Total
     // $0.6758.
     const setDBudget = { ...productionBudget, maxOutputTokens: 512 };
-    const ceiling = runCeilingUsd(setDBudget, 10_700);
+    const ceiling = runCeilingUsd(setDBudget, 10_700, OPUS_5_RATES);
     expect(ceiling).toBeCloseTo(0.128 + 0.5478, 5);
   });
 
@@ -98,6 +113,7 @@ describe("runCeilingUsd", () => {
     const oneAttemptOutputOnly = runCeilingUsd(
       { ...productionBudget, maxAttemptsPerSpecialist: 1 },
       0,
+      OPUS_5_RATES,
     );
     expect(oneAttemptOutputOnly).toBeCloseTo((5 * 8_000 * 25) / 1_000_000, 6);
     expect(oneAttemptOutputOnly).toBeCloseTo(1.0, 6);
@@ -108,33 +124,33 @@ describe("runCeilingUsd", () => {
     // means reading it back out of the golden-value tests above instead:
     // $2.23915 (A) minus $0.23915 (its input line) is $2.00 exactly, and
     // that arithmetic is independently checked by the two golden tests.
-    const twoAttempts = runCeilingUsd(productionBudget, 783);
+    const twoAttempts = runCeilingUsd(productionBudget, 783, OPUS_5_RATES);
     const twoAttemptsInputLine = 5 * (783 + (783 + 8_000)) * (5 / 1_000_000);
     expect(twoAttempts - twoAttemptsInputLine).toBeCloseTo(2.0, 6);
   });
 
   test("a run with only one attempt per specialist has no echoed re-ask input", () => {
     const oneAttempt = { ...productionBudget, maxAttemptsPerSpecialist: 1 };
-    const ceiling = runCeilingUsd(oneAttempt, 1_000);
+    const ceiling = runCeilingUsd(oneAttempt, 1_000, OPUS_5_RATES);
     const expectedInputUsd = (5 * 1_000 * 5) / 1_000_000;
     const expectedOutputUsd = (5 * 1 * 8_000 * 25) / 1_000_000;
     expect(ceiling).toBeCloseTo(expectedInputUsd + expectedOutputUsd, 6);
   });
 
   test("grows with worstInputTokensPerCall, so a corridor-shaped set prices higher than a bare one", () => {
-    const bare = runCeilingUsd(productionBudget, 783);
-    const corridor = runCeilingUsd(productionBudget, 10_700);
+    const bare = runCeilingUsd(productionBudget, 783, OPUS_5_RATES);
+    const corridor = runCeilingUsd(productionBudget, 10_700, OPUS_5_RATES);
     expect(corridor).toBeGreaterThan(bare);
   });
 
   test("a smaller maxOutputTokens (set D's shape) lowers the ceiling", () => {
-    const full = runCeilingUsd(productionBudget, 10_700);
-    const edge = runCeilingUsd({ ...productionBudget, maxOutputTokens: 512 }, 10_700);
+    const full = runCeilingUsd(productionBudget, 10_700, OPUS_5_RATES);
+    const edge = runCeilingUsd({ ...productionBudget, maxOutputTokens: 512 }, 10_700, OPUS_5_RATES);
     expect(edge).toBeLessThan(full);
   });
 
   test("a mutant that drops the re-ask's echoed input term is caught (regression for the first gate's MED 2)", () => {
-    const real = runCeilingUsd(productionBudget, 783);
+    const real = runCeilingUsd(productionBudget, 783, OPUS_5_RATES);
     const mutant = mutantCeiling(productionBudget, 783);
     expect(mutant).toBeCloseTo(1.01958, 4); // matches the gate's own reported "$1.02"
     expect(real).not.toBeCloseTo(mutant, 2);
@@ -183,5 +199,94 @@ describe("parseCli", () => {
     expect(() => parseCli(["--out", "/tmp/x", "--max-usd", "nope"])).toThrow(
       /must be a positive number/,
     );
+  });
+});
+
+describe("runCeilingUsd follows the rates it is given (pl-55)", () => {
+  const productionBudget = {
+    maxSpecialists: 5,
+    maxOutputTokens: 8_000,
+    maxAttemptsPerSpecialist: 2,
+  };
+
+  test("the same budget at a synthetic rate prices its own token counts, not Opus 5's", () => {
+    // B-shaped: 80,000 output tokens and 147,000 input tokens (the $2.73
+    // golden test's counts), at $0.10 in and $0.50 out: $0.04 + $0.0147.
+    const rates: LivePrices = {
+      inputPerMTok: 0.1,
+      outputPerMTok: 0.5,
+      cacheReadPerMTok: 0.01,
+      cacheWritePerMTok: 0.125,
+    };
+    expect(runCeilingUsd(productionBudget, 10_700, rates)).toBeCloseTo(0.04 + 0.0147, 9);
+  });
+
+  test("scaling every rate by k scales the ceiling by k", () => {
+    const base = runCeilingUsd(productionBudget, 783, OPUS_5_RATES);
+    for (const k of [0.02, 0.4, 3]) {
+      const scaled: LivePrices = {
+        inputPerMTok: OPUS_5_RATES.inputPerMTok * k,
+        outputPerMTok: OPUS_5_RATES.outputPerMTok * k,
+        cacheReadPerMTok: OPUS_5_RATES.cacheReadPerMTok * k,
+        cacheWritePerMTok: OPUS_5_RATES.cacheWritePerMTok * k,
+      };
+      expect(runCeilingUsd(productionBudget, 783, scaled)).toBeCloseTo(base * k, 9);
+    }
+  });
+
+  test("zero rates are a zero ceiling, so nothing in it still reads a constant", () => {
+    const zero: LivePrices = {
+      inputPerMTok: 0,
+      outputPerMTok: 0,
+      cacheReadPerMTok: 0,
+      cacheWritePerMTok: 0,
+    };
+    expect(runCeilingUsd(productionBudget, 10_700, zero)).toBe(0);
+  });
+});
+
+describe("livePricesFor (pl-55)", () => {
+  const ALL_FOUR = {
+    [MODEL_PRICE_VARIABLES.inputPerMTok]: "0.1",
+    [MODEL_PRICE_VARIABLES.outputPerMTok]: "0.5",
+    [MODEL_PRICE_VARIABLES.cacheReadPerMTok]: "0.01",
+    [MODEL_PRICE_VARIABLES.cacheWritePerMTok]: "0.125",
+  };
+
+  test("under anthropic, refuses with one rate unset and names that variable", () => {
+    for (const variable of Object.values(MODEL_PRICE_VARIABLES)) {
+      const env: NodeJS.ProcessEnv = { MODEL_PROVIDER: "anthropic", ...ALL_FOUR };
+      delete env[variable];
+      const config = loadApiConfig({}, env);
+      expect(() => livePricesFor(config)).toThrow(`Refusing: ${variable} is unset.`);
+    }
+  });
+
+  test("under anthropic with none set, names all four", () => {
+    const config = loadApiConfig({}, { MODEL_PROVIDER: "anthropic" });
+    expect(() => livePricesFor(config)).toThrow(
+      `Refusing: ${Object.values(MODEL_PRICE_VARIABLES).join(", ")} are unset.`,
+    );
+  });
+
+  test("under anthropic with all four set, returns them", () => {
+    const config = loadApiConfig({}, { MODEL_PROVIDER: "anthropic", ...ALL_FOUR });
+    expect(livePricesFor(config)).toEqual({
+      inputPerMTok: 0.1,
+      outputPerMTok: 0.5,
+      cacheReadPerMTok: 0.01,
+      cacheWritePerMTok: 0.125,
+    });
+  });
+
+  test("under scripted with none set, returns zeros — the keyless run needs nothing", () => {
+    const config = loadApiConfig({}, {});
+    expect(config.modelProvider).toBe("scripted");
+    expect(livePricesFor(config)).toEqual({
+      inputPerMTok: 0,
+      outputPerMTok: 0,
+      cacheReadPerMTok: 0,
+      cacheWritePerMTok: 0,
+    });
   });
 });
