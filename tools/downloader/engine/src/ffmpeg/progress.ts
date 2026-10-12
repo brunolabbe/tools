@@ -279,5 +279,8 @@ export function toJobProgress(
     speedBps: context.speedBps,
     etaSec,
     processedSec,
+    // Not measured here: only the stream engine knows whether a feeder is in
+    // the path, and it overrides this.
+    originConnections: null,
   };
 }

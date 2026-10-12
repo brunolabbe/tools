@@ -143,6 +143,7 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
           speedBps: 1024,
           etaSec: 1,
           processedSec: 30,
+          originConnections: null,
         });
       }
 
