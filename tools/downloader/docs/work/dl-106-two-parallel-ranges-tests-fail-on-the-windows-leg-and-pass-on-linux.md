@@ -487,7 +487,8 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
 'fallen-back' to be 'parallel'`, above). Options: "Leave it at 50
     (Recommended)" (the builder's recommendation; gate 2 gave none), "Raise
     measureMs to 100" and "speedupFloor: 0". Chosen: **Leave it at 50.** Gate 2's
-    measured numbers for it, under a 15.6 ms tick model of the judge's window:
+    measured numbers for it, under a 15.6 ms tick model of the test origin's
+    `sleep()` (the judge's window was not modelled):
     the split-to-single rate ratio has median 3.16 and minimum 2.89 at
     `measureMs` 50, and 3.50 and 3.41 at 100, against a floor of 1.5. The residual
     stays attributed to runner stalls, as above, and is not proved.
@@ -512,3 +513,7 @@ tools/downloader/engine/test/parallel-ranges.test.ts`), the cancel/size-cap
     8 of 8 passes. The one F9 failure is unexplained and not chased: no Windows
     series was run on this change, which is a test-file edit in two tests, so the
     24-of-25 series above is of the file before it.
+- 2026-10-12, a phrase in the 2026-10-11 entry above corrected: gate 2's
+  held-bytes numbers came from a tick model of the test file's `sleep()`, which
+  paces the fixture's origin, not of the judge's window (gate 3's low). The
+  numbers themselves were right and are unchanged.

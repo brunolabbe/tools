@@ -9,7 +9,7 @@
  *      trailer, the bumper or an ad slate.
  */
 
-import { isChunkName, isNumberedName } from "./media-match.ts";
+import { directoryOf, isChunkName, isNumberedName } from "./media-match.ts";
 import type { NetworkHit } from "./types.ts";
 
 const MASTER_NAME = /(?:master|main|index|manifest|playlist|stream|video)[^/]*\.(?:m3u8?|mpd)$/i;
@@ -66,20 +66,6 @@ export function scoreHit(hit: NetworkHit, pageUrl: string): number {
   if (pageOrigin !== undefined && originOf(hit.url) === pageOrigin) score += 20;
 
   return score;
-}
-
-/**
- * `origin + directory`: the same path on another host is another directory, so an
- * ad host's `/media/init.mp4` does not vouch for the page CDN's `/media/5.mp4`
- * (dl-104). The same key `chunk-sniff.ts` uses since dl-90.
- */
-function directoryOf(raw: string): string {
-  try {
-    const url = new URL(raw);
-    return `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)}`;
-  } catch {
-    return raw.slice(0, raw.lastIndexOf("/") + 1);
-  }
 }
 
 /**

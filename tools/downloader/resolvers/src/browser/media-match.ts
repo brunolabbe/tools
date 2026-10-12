@@ -51,6 +51,21 @@ export function isChunkName(raw: string): boolean {
   return SEGMENT_NAME.test(path) || CHUNK_EXTENSION.test(path);
 }
 
+/**
+ * `origin + directory`, the key two chunks share when they are one stream's: the
+ * same path on another host is another directory, so an ad host's
+ * `/media/init.mp4` does not vouch for the page CDN's `/media/5.mp4` (dl-90,
+ * dl-104). `rankHits` and the chunk sniff group by it, and must agree.
+ */
+export function directoryOf(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)}`;
+  } catch {
+    return raw.slice(0, raw.lastIndexOf("/") + 1);
+  }
+}
+
 /** Ad networks, analytics and beacon hosts. Their `.mp4`s are pre-roll, not content. */
 const DENIED_HOST_SUFFIXES: readonly string[] = [
   "doubleclick.net",
