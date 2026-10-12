@@ -66,6 +66,12 @@ detail and the numbers behind each.
     filing is marked and can be reviewed.
 - **Both people use it, identified by Cloudflare Access** — two addresses on one
   policy, and no login of the tool's own.
+  - _Amended on 2026-10-12:_ **more than one household**, each with books of its
+    own, in one deployment. Each household has its own SQLite file. Membership
+    lives in a directory database that admins and members manage from the app,
+    and members can add but not remove. Access stays and admits anyone who
+    proves an address, and the directory decides who is in. Still no login of
+    the tool's own. The reasons and the measurements are in `00-ANALYSIS.md` §7.
 
 ## Phase 0 — Scaffold ✅
 
@@ -130,3 +136,12 @@ transcribing by hand.
 | ------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | [lg-9](./work/lg-9-history-and-stats.md)                                             | the charts, over every history                  |
 | [lg-18](./work/lg-18-show-a-filed-rows-spending-category-where-it-can-be-changed.md) | a filed row's category, where it can be changed |
+
+## Phase 6 — More than one household
+
+| Ticket                                                                  | What                                                 |
+| ----------------------------------------------------------------------- | ---------------------------------------------------- |
+| [lg-20](./work/lg-20-the-household-directory.md)                        | who belongs to which household, from a database      |
+| [lg-21](./work/lg-21-books-per-household.md)                            | one file of books per household                      |
+| [lg-22](./work/lg-22-manage-households-from-the-app.md)                 | households and members managed from the app          |
+| [repo-98](../../../docs/work/repo-98-open-the-ledgers-access-policy.md) | the ledger's Access policy admits any proven address |

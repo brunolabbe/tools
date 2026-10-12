@@ -483,6 +483,60 @@ entirely.
   Changing an address is safe; changing the name it maps to is not. Retiring a
   person is future work, for when someone first needs it.
 
+The list above describes the tool as built: one household. What follows is
+decided and not built yet; lg-20, lg-21 and lg-22 build it, and repo-98 opens
+the Access policy.
+
+### More than one household
+
+_Decided by the owner on 2026-10-12._ A second household, a couple with a joint
+account of their own, uses the same deployment with books of its own. Each
+household sees only its own books. The two-person domain is unchanged:
+a household is still exactly two people, a ratio and a settlement.
+
+**One SQLite file per household, not a household column.** Measured on
+`main` at `9d0e2ea6`, a column would have reached 15 tables, 9 views and 71
+prepared statements. Two existing unique indexes are global and would collide
+across households: `ratios_first` on the effective date and `periods_start` on
+the start date. A person id would have to grow a household, and every query
+written later would have to remember the filter, where one that forgot would
+show one household's bank rows to the other. One file per household changes
+none of the SQL. The request carries its own household's handle, and a request
+that has no handle for the other file cannot read it. The cost is on the host:
+each file is migrated at boot, and a backup takes the directory, not one file.
+Person names need only be unique inside a household, so the rule above that a
+name is permanent holds unchanged inside each file.
+
+**Membership is a database, not configuration.** A household's files cannot
+hold the list of who belongs where, so a small directory database beside them
+does. It holds households and members, appended and never edited like
+everything else here, each change naming the person who made it. It replaces
+`ACCESS_PEOPLE`. Which addresses are admins stays configuration
+(`LEDGER_ADMINS`), so changing it still needs the host, and nobody can lock the
+operator out from the screen.
+
+**Who manages membership.** An admin creates households and adds or removes
+any member. A household's own members can **add** a member to their household
+and can remove nobody: removing cuts a person off from their own records, so it
+goes through an admin. An admin manages the directory, and being an admin
+grants no reading of any household's books. An admin who adds themselves to a
+household can read it, as anyone with the host always could, so each household
+sees its own member history, including who added whom.
+
+**Access proves the address and the ledger decides who is in.** The ledger's
+Access policy admits anyone who proves an address (`allow` with `everyone`,
+which is not a Bypass: an unauthenticated request still stops at Cloudflare),
+and the directory refuses an address it has no member for. Keeping the
+allowlist on Access would have left membership in two places, and a household
+could not add its own member without the operator's dashboard. Replacing Access
+with an OIDC provider was weighed and rejected: it gives the same
+membership-in-one-place, but it lets unauthenticated requests reach the
+origin, and it puts a sign-in flow, sessions and CSRF protection into the
+ledger. The cost of the open policy is that the identity check and the admin
+routes are now reachable by any stranger who proves an address. Each user who
+signs in also takes a Zero Trust seat, so the plan's seat limit applies to
+strangers too.
+
 ## 8. The one-off import
 
 The workbook holds everything since 2022, and the owner chose to import all of
