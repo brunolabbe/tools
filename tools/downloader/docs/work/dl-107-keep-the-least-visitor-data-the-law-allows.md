@@ -630,3 +630,11 @@ element with the text: Saved by your browser`, 1 failed of 49), green with it
     (49 of 49, `npx vitest run tools/downloader/web/test/job-card.test.tsx`).
   - Gate 1's lows 4, 5 and 6 stay recorded and unfixed: the owner was offered
     them and did not choose them.
+- 2026-10-12 — The owner triaged lows 4, 5 and 6 after the merge. **Low 6 is
+  fixed**: step 2 of the hold procedure in `docs/02-DEPLOYMENT.md` copies only
+  the `<id>-json.log*` files, not their directory, so `config.v2.json` and the
+  secrets in it stay out of the hold copy. The `find` was tried on a mock
+  container directory: it copied the three log files and left `config.v2.json`
+  and `hostconfig.json` behind. **Lows 4 and 5 stay unfixed**: 4 has no input
+  that reaches it, and 5 is off by a minute unless an operator sets a long
+  `GC_INTERVAL_MS`.
