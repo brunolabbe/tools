@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { classifyFailure } from "../../src/browser/classify.ts";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import {
+  cappedTimeout,
   CONSENT_TEXT,
   CONSENT_TEXT_ANYWHERE,
   CONSENT_WORDING,
@@ -544,19 +545,34 @@ describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
 });
 
 describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () => {
-  // The menu button opens a full-screen menu over the play button, so each play
-  // click is retried until its timeout. Uncapped, the four of them (two passes,
-  // a selector and a label each) wait 8 s between them, measured on 2026-10-12.
-  test("four blocked play clicks cost 4 x the cap, not 4 x 2000 ms", async () => {
+  // Each page puts a cover up that stays up, so each consent and play click is
+  // retried until its timeout. Uncapped that is 2000 ms a click: 8 s on the menu
+  // page and about 6 s on the cookie sheets, measured on 2026-10-12. Capped, a
+  // run is about 2.1 s; with the consent click alone left at 2000 ms the cookie
+  // sheets take about 4 s and the menu page does not move, which is why the
+  // cookie sheets are rows here and the ceiling sits between the two.
+  const CAPPED_CEILING_MS = 3000;
+
+  test.each([
+    ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
+    [
+      "a cookie sheet's View our 18 partners, closable panel",
+      "/age-false-cookie-sheet-closable.html",
+      "/beacon/view-partners",
+    ],
+    [
+      "a cookie sheet's View our 18 partners, sticky panel",
+      "/age-false-cookie-sheet-sticky.html",
+      "/beacon/view-partners",
+    ],
+  ])("%s: the blocked clicks wait for the cap, not 2000 ms", async (_name, pathname, pressed) => {
     server.requests.length = 0;
     const startedAt = Date.now();
     await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
       const context = await browser.newContext();
       try {
         const page = await context.newPage();
-        await page.goto(server.url("/age-false-shell-menu-button.html"), {
-          waitUntil: "domcontentloaded",
-        });
+        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
         await provokePlayback(page, {
           deadline: Date.now() + 15_000,
           signal: new AbortController().signal,
@@ -569,10 +585,26 @@ describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () =
     });
     const elapsedMs = Date.now() - startedAt;
 
-    // The press landed, which is what opened the cover; and the cap held with
-    // room to spare against the 8 s it replaces.
-    expect(server.requests).toContain("/beacon/nav-18");
+    // The press landed, which is what opened the cover. The ceiling shows the
+    // cap shortened the run; it is not a count of the clicks.
+    expect(server.requests).toContain(pressed);
     expect(server.requests).not.toContain("/beacon/play");
-    expect(elapsedMs).toBeLessThan(5000);
+    expect(elapsedMs).toBeLessThan(CAPPED_CEILING_MS);
+  });
+});
+
+describe("cappedTimeout (dl-118)", () => {
+  // The cap only lowers a wait. Playwright reads a timeout of 0 or NaN as "no
+  // timeout", so a cap of either passed through would lift the bound instead.
+  test.each([
+    { name: "unset", cap: undefined, expected: 2000 },
+    { name: "300", cap: 300, expected: 300 },
+    { name: "5000, above the wait", cap: 5000, expected: 2000 },
+    { name: "0", cap: 0, expected: 2000 },
+    { name: "NaN", cap: Number.NaN, expected: 2000 },
+    { name: "negative", cap: -1, expected: 2000 },
+    { name: "Infinity", cap: Number.POSITIVE_INFINITY, expected: 2000 },
+  ])("a cap of $name leaves a 2000 ms wait at $expected ms", ({ cap, expected }) => {
+    expect(cappedTimeout(2000, cap)).toBe(expected);
   });
 });

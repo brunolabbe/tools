@@ -150,8 +150,9 @@ export interface BrowserResolverOptions {
   emptyMinWaitMs?: number;
   /**
    * dl-118: an upper bound, in ms, on how long a consent or play click waits
-   * for a covering layer to clear. Unset, they wait 2000 ms as always. Only a
-   * test that puts a cover up and expects it to stay should set it.
+   * for a covering layer to clear. Unset, they wait 2000 ms as always, and a
+   * value that is not a positive finite number counts as unset. Only a test
+   * that puts a cover up and expects it to stay should set it.
    */
   clickTimeoutMs?: number;
   /**

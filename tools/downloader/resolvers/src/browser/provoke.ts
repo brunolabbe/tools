@@ -1728,10 +1728,15 @@ async function provokeInput(
 /**
  * A click's wait, held to `cap` when one is given (dl-118). Absent, the wait is
  * `timeoutMs` as written, so a caller that never sets the cap sees the old
- * behaviour exactly.
+ * behaviour exactly. A cap that is not a positive finite number is treated as
+ * absent: Playwright reads a timeout of 0 or NaN as "no timeout", so passing
+ * one through would remove the bound instead of lowering it, and a negative
+ * one would fail every click at once.
  */
-function cappedTimeout(timeoutMs: number, cap: number | undefined): number {
-  return cap === undefined ? timeoutMs : Math.min(timeoutMs, cap);
+export function cappedTimeout(timeoutMs: number, cap: number | undefined): number {
+  return cap === undefined || !Number.isFinite(cap) || cap <= 0
+    ? timeoutMs
+    : Math.min(timeoutMs, cap);
 }
 
 /**
@@ -1826,8 +1831,9 @@ export async function provokePlayback(
      * An upper bound on the wait of the consent and play clicks (dl-118). A
      * click Playwright finds covered is retried until its timeout, 2000 ms
      * here, so a layer that stays up costs a probe that wait on every such
-     * click. Unset by default; a test sets it to stop paying for a cover it
-     * put there on purpose.
+     * click. Unset by default, and a value that is not a positive finite number
+     * counts as unset; a test sets it to stop paying for a cover it put there
+     * on purpose.
      */
     clickTimeoutMs?: number | undefined;
   },
