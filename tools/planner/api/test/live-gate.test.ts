@@ -12,10 +12,21 @@
  * `PLANNER_LIVE_RUN=1` in CI just to import it, and it does not.
  */
 
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
 import { describe, expect, test } from "vitest";
-import { assertLiveRunConsent, livePricesFor, parseCli, runCeilingUsd } from "./live/run.ts";
+import {
+  assertLiveRunConsent,
+  livePricesFor,
+  observedUsd,
+  parseCli,
+  runCeilingUsd,
+} from "./live/run.ts";
 import type { LivePrices } from "./live/run.ts";
-import type { RunBudget } from "@planner/agent";
+import type { RunBudget, RunUsage } from "@planner/agent";
 import { loadApiConfig, MODEL_PRICE_VARIABLES } from "../src/config.ts";
 
 /**
@@ -289,4 +300,76 @@ describe("livePricesFor (pl-55)", () => {
       cacheWritePerMTok: 0,
     });
   });
+});
+
+describe("observedUsd follows the rates it is given (pl-55 gate 1)", () => {
+  // The scripted run reports `null` usage, so no run here can see a rate
+  // `observedUsd` ignores: only a golden over all four token kinds can. The
+  // dollars are worked by hand, per MTok.
+  // `thinkingTokens` is a share of `outputTokens`, already priced there, so a
+  // non-zero one must add nothing.
+  const usage: RunUsage = {
+    calls: 10,
+    inputTokens: 12_345,
+    outputTokens: 6_789,
+    thinkingTokens: 2_000,
+    cacheReadTokens: 4_000,
+    cacheWriteTokens: 1_500,
+    fallbackCalls: 0,
+  };
+
+  test("at 2 / 10 / 0.2 / 2.5: 24,690 + 67,890 + 800 + 3,750 micro-dollars", () => {
+    const rates = {
+      inputPerMTok: 2,
+      outputPerMTok: 10,
+      cacheReadPerMTok: 0.2,
+      cacheWritePerMTok: 2.5,
+    };
+    expect(observedUsd(usage, rates)).toBeCloseTo(0.09713, 9);
+  });
+
+  test("at 4 / 20 / 0.2 / 5: 49,380 + 135,780 + 800 + 7,500 micro-dollars", () => {
+    const rates = {
+      inputPerMTok: 4,
+      outputPerMTok: 20,
+      cacheReadPerMTok: 0.2,
+      cacheWritePerMTok: 5,
+    };
+    expect(observedUsd(usage, rates)).toBeCloseTo(0.19346, 9);
+  });
+});
+
+describe("main() refuses on an unset rate before it builds a provider (pl-55 gate 1)", () => {
+  // `livePricesFor` alone cannot prove the ordering: moving it below
+  // `createModelProvider` leaves every test above green. With both a rate and
+  // the key missing, whichever refusal prints is the one that ran first.
+  const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
+  const SCRIPT = path.resolve(import.meta.dirname, "live/run.ts");
+
+  test("names the unset MODEL_PRICE_* variable, not the missing key", () => {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const name of Object.keys(env)) {
+      if (name.startsWith("MODEL") || name.startsWith("ANTHROPIC_")) delete env[name];
+    }
+    Object.assign(env, {
+      PLANNER_LIVE_RUN: "1",
+      MODEL_PROVIDER: "anthropic",
+      [MODEL_PRICE_VARIABLES.inputPerMTok]: "1",
+      [MODEL_PRICE_VARIABLES.cacheReadPerMTok]: "0.1",
+      [MODEL_PRICE_VARIABLES.cacheWritePerMTok]: "1.25",
+    });
+    const outDir = mkdtempSync(path.join(os.tmpdir(), "pl-55-refusal-"));
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ["--import", "tsx", SCRIPT, "--out", path.join(outDir, "records")],
+        { cwd: REPO_ROOT, env, encoding: "utf8", shell: false },
+      );
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`Refusing: ${MODEL_PRICE_VARIABLES.outputPerMTok} is unset.`);
+      expect(result.stderr).not.toContain("ANTHROPIC_API_KEY");
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

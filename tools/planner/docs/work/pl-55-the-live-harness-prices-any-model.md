@@ -191,3 +191,32 @@ table above. So the only obstacle is the harness's
 hard-coded rates. The filing session began folding the price change in and
 stopped at the owner's request: the change goes through its own ticket. Nothing
 was changed in code.
+
+### 2026-10-12 — built (PR #458)
+
+Built on Opus 5.5 in one session, gated by Sonnet 5.5. `OPUS_5_PRICES` is gone.
+`livePricesFor(config)` takes `Pick<ApiConfig, "modelProvider" |
+"modelPrices">`, so its tests build the config through `loadApiConfig` from an
+env and exercise pl-49's parser too. It returns `LivePrices`, which is
+`ModelPrices` with every rate a `number`. Under `anthropic` it names _every_
+unset variable in one refusal, not only the first. `main()` also prints the
+effort and rates on its header line, so a run's terminal output states them as
+the records do.
+
+The brief had one gap. It asked for a test that the ceiling follows its rates,
+but said nothing about `observedUsd`, which prices every record and the session
+total. Gate 1 showed that no test held it: literal `5` and `25` in its body
+left every test green, and the scripted run cannot see a rate because its usage
+is `null`. The Done-when grep does not match `input * 5` either. Gate 1 also
+showed that no test held `main()`'s ordering: moving `livePricesFor` below
+`createModelProvider` left every test green. Both were `low`, and both were
+fixed after the gate, by tests only. One is a hand-worked golden for
+`observedUsd` at two rate sets over all four token kinds. The other is a
+subprocess test that runs `run.ts` with one rate and the key both missing, and
+asserts which refusal prints. Each was shown red under its mutant and green
+without it. No code under test changed, so they were not re-gated.
+
+For pl-40's owner run: a rate explicitly set to `0` under `anthropic` is
+accepted, because pl-49's parser accepts any non-negative rate, and four zeros
+make the spend stop inert. Read the rates off the pricing page, as the brief
+says.
