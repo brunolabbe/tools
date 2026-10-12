@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.0](https://github.com/brunolabbe/tools/compare/downloader-v0.8.1...downloader-v0.9.0) (2026-10-12)
+
+
+### Features
+
+* **downloader:** keep the least visitor data the law allows (dl-107) ([#440](https://github.com/brunolabbe/tools/issues/440)) ([e107bb7](https://github.com/brunolabbe/tools/commit/e107bb79cf6f3829886e9048fa773dbd1f17dc1e))
+* **downloader:** one press to download, and a job card for a file that streams (dl-109) ([#433](https://github.com/brunolabbe/tools/issues/433)) ([f52848a](https://github.com/brunolabbe/tools/commit/f52848a4bda5a9140de058a71182e9ed51abd56f))
+* **downloader:** read a slow progressive source over four parallel ranges (dl-98) ([#421](https://github.com/brunolabbe/tools/issues/421)) ([72b47fe](https://github.com/brunolabbe/tools/commit/72b47fe1380a884ee89d34e62dc66ed59ecca180))
+
+
+### Fixes
+
+* **downloader:** count a play press only when its own attribute starts a word with play (dl-100) ([#425](https://github.com/brunolabbe/tools/issues/425)) ([a918133](https://github.com/brunolabbe/tools/commit/a918133dfd24f34c2510e3a5c2e023e1a6b07547))
+* **downloader:** drop numbered chunks proven fragmented by their own bytes (dl-90) ([#415](https://github.com/brunolabbe/tools/issues/415)) ([a756962](https://github.com/brunolabbe/tools/commit/a756962d52c36a8f077f483b3e4b0e94f602fa34))
+* **downloader:** key a chunk's directory by origin so another host cannot vouch (dl-104) ([#423](https://github.com/brunolabbe/tools/issues/423)) ([5c1d3a2](https://github.com/brunolabbe/tools/commit/5c1d3a2273767d420a6de2b7da22d36cf6874741))
+* **downloader:** name consent compounds and keep page layers out of consent scope (dl-93) ([#413](https://github.com/brunolabbe/tools/issues/413)) ([c72770e](https://github.com/brunolabbe/tools/commit/c72770e385bd43799b959a4963749b3efacf1a4e))
+* **downloader:** reach a player that waits for input or sits in another site's frame (dl-81) ([#390](https://github.com/brunolabbe/tools/issues/390)) ([1101aff](https://github.com/brunolabbe/tools/commit/1101aff86119a57e637215e1a9f7f6b327a589a4))
+* **downloader:** refuse a tail-moov MP4 from an origin that ignores Range (dl-102) ([#404](https://github.com/brunolabbe/tools/issues/404)) ([8bcd5f9](https://github.com/brunolabbe/tools/commit/8bcd5f9ae2136824ff04316b22304a218baaa013))
+* **downloader:** refuse an unseekable source on ffmpeg's partial file behind the probe (dl-103) ([#417](https://github.com/brunolabbe/tools/issues/417)) ([df94156](https://github.com/brunolabbe/tools/commit/df941568d6e2a9600294a535a53dc98c184acec4))
+* **downloader:** refuse WebM for a source whose codecs nothing declares (dl-99) ([#394](https://github.com/brunolabbe/tools/issues/394)) ([5a02d57](https://github.com/brunolabbe/tools/commit/5a02d574b8a7c0c66ec98ac1fa699b114103fca9))
+* **downloader:** stream the manifest re-fetch and stop at a cap (dl-97) ([#395](https://github.com/brunolabbe/tools/issues/395)) ([4a217e4](https://github.com/brunolabbe/tools/commit/4a217e495679f13f3c0a3bf2025f8ce6e5159786))
+* **downloader:** weigh renditions without reading whole bodies (dl-101) ([#403](https://github.com/brunolabbe/tools/issues/403)) ([08be69b](https://github.com/brunolabbe/tools/commit/08be69bddc5c87cb87a3d9e506caa5019a507f81))
+
 ## [0.8.1](https://github.com/brunolabbe/tools/compare/downloader-v0.8.0...downloader-v0.8.1) (2026-10-07)
 
 
