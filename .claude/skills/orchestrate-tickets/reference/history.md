@@ -5176,3 +5176,57 @@ Total $30.8002, active 2h35m49s (rates read 2026-10-10). The close-out fixer is 
 - Two orchestrators on one checkout: at intake the peer listed every file its open branches touched, and each reserved its new ticket ids by message (dl-118, lg-23) before using them. No branch of either batch conflicted.
 - Asking a gate to measure the premise of a builder's open decision before the owner was asked (lg-20's cap: what a third name does to buckets and period close). The owner answered on the measurement.
 - A builder told to stop if the only fix shows less than main does stopped with three priced options instead of choosing (dl-107 finding 2).
+
+### Batch 2026-10-12 (tools-38 / tools-67, lg-19 dl-108 dl-110 lg-21 repo-103) — base 07acbb86
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over seven ready ids, dl-113 as an occupied lane | 1m03s / 1m03s | 0 | $0.1850 |
+| #449 | merged | Sonnet 5.5 / high | builder-standard | lg-19 build | 7m21s / 7m19s | 0 | $1.4922 |
+| #449 | merged | Opus 5.5 / high | ticket-reviewer-opus | lg-19 gate 1 | 9m09s / 9m05s | 0 | $3.2959 |
+| #449 | merged | Sonnet 5.5 / high | fixer | lg-19 landing (F4 at landing) | 2m33s / 2m31s | 0 | $0.3217 |
+| #451 | merged | Sonnet 5.5 / high | builder-standard | dl-108 build and round 1 | 12m27s / 52m44s | 0 | $2.2473 |
+| #451 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-108 gates 1, 2 and 3 | 22m57s / 53m50s | 0 | $4.7209 |
+| #451 | merged | Sonnet 5.5 / high | fixer | dl-108 round 2 | 2m59s / 12m43s | 0 | $0.3519 |
+| #451 | merged | Sonnet 5.5 / high | fixer | dl-108 landing | 1m41s / 11m25s | 0 | $0.2813 |
+| #453 | open, ready | Opus 5.5 / high | builder-hard | dl-110 contract proposal, then build | 17m56s / 27m38s | 0 | $5.3889 |
+| #453 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-110 gates 1 and 2 | 21m35s / 39m18s | 0 | $4.4093 |
+| #453 | open, ready | Sonnet 5.5 / high | fixer | dl-110 round 1 | 3m25s / 12m53s | 0 | $0.5648 |
+| #453 | open, ready | Sonnet 5.5 / high | fixer | dl-110 merge of main (dl-108) and landing | 5m26s / 27m12s | 0 | $0.8062 |
+| #452 | open, ready | Opus 5.5 / high | builder-hard | lg-21 build and round 1 | 38m39s / 1h03m21s | 0 | $17.6825 |
+| #452 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | lg-21 gates 1 and 2 | 33m58s / 47m15s | 0 | $6.9003 |
+| #452 | open, ready | Sonnet 5.5 / high | fixer | lg-21 merge of main (lg-19) and landing | 9m56s / 29m15s | 0 | $1.2085 |
+| #454 | open, ready | Sonnet 5.5 / high | builder-standard | repo-103 build, rounds 1 and 2 | 23m07s / 2h19m30s | 0 | $3.6162 |
+| #454 | open, ready | Opus 5.5 / high | ticket-reviewer-opus | repo-103 gates 1, 2 and 3 | 44m44s / 1h59m02s | 0 | $7.7150 |
+| #454 | open, ready | Sonnet 5.5 / high | fixer | repo-103 landing, killed mid-preflight with the session | 2m30s / 9m19s | 0 | $0.4275 |
+| #454 | open, ready | Sonnet 5.5 / high | fixer | repo-103 finish landing, CodeQL follow-up | 8m47s / 49m59s | 0 | $0.7184 |
+| — | — | Opus 5.5 / high | orchestrator | the batch, across the crash | 2h11m10s / 3h39m27s | 0 | $11.6319 |
+
+Total $73.9658, active 6h41m22s (rates read 2026-10-10). The orchestrator row is a floor.
+
+**Tickets:**
+
+- lg-19 → #449 (merged d78ac287): gate 1 CONCERNS. F1 (med) was re-asked after lg-21's brief showed the books empty, and the owner chose to record it unfixed. F2 (med) and F3 (low) recorded; F4 (low) fixed at landing by owner choice.
+- dl-108 → #451 (merged 84c899e4): gate 1 FAIL (F1 high; F2 and F3 med answered by the owner, rewording Done when 2; F4 and F5 low fixed in round). Gate 2 FAIL (new high, a doc comment). Gate 3 PASS (narrow); gate 2's low recorded.
+- dl-110 → #453 (ready): four contract decisions answered by the owner before the build. Gate 1 CONCERNS (two med and one low fixed in round; one low recorded). Gate 2 PASS; its new low fixed at landing by owner choice. The merge of main bringing in dl-108 was ungated.
+- lg-21 → #452 (ready): the health decision answered by the owner ("keep"). Gate 1 FAIL (F1 high: two write routes leaked past the isolation sweep; F2 and F3 med fixed; F4–F6 low recorded). Gate 2 CONCERNS (N2 fixed at landing; N1 and N3 recorded). The merge of main bringing in lg-19 was ungated, and its periodLines move was proven by a planted leak.
+- repo-103 → #454 (ready): gate 1 FAIL (two high, two med; four owner answers, one rewording Done when 1 to planner). Gate 2 FAIL (new high in the round's reclaim guard). Gate 3 PASS (narrow); its new low fixed at landing by owner choice. That fix introduced a CodeQL high, fixed in a follow-up commit by owner choice with no re-gate.
+
+**Defects in the skill:**
+
+1. `SKILL.md`, _If the session dies_ — assumes the subagents die with the session. When the VS Code/WSL link crashed, the old CLI process outlived it, and a resumed conversation ran as a second orchestrator beside it. Reproduction: `ps -o pid,lstart,args -p 1151927` at 21:27 → alive (started 18:46:03), with child `node scripts/review-record.mjs --land docs/work/repo-103-…` (pid 1941780). `ListAgents` from the new session listed `tools-38 [db4bee] · busy`, the old session's own name. It exited about 21:28, killing its lander after the push.
+2. `reference/records.md`, _Landing_ — has no recovery for a `--land` killed during its post-push preflight. The records are committed and pushed and `status: done` is set, but no comments are posted and the PR is not ready, and a second `--land` would splice a second `## Review`. Reproduction: `git log --oneline a5b72ab9..3656aa18` on repo-103 → `dd1ee71f`, `c48f3606`, `3656aa18` record commits; `gh pr view 454 --json comments --jq '.comments|length'` at that point → `0`.
+3. `reference/records.md`, _Landing_ — says a post-push preflight failure "ends 'Nothing to undo — fix what it names'". A mergeTree failure against a sibling that conflicts with the base itself is not within the lander's reach, and no page says the orchestrator decides. Reproduction: `git merge-tree --write-tree --name-only 84c899e4 58761234` → conflicts in `JobCard.tsx`, `job-card.test.tsx` and `mock-api.test.ts`. That failed both lg-21's and repo-103's landings, neither of which touches a downloader path.
+4. `SKILL.md`, step 6, the fixed-at-landing path ("no re-gate") — nothing requires reading the landing head's `CodeQL` check before `gh pr ready`, and a below-floor fix applied there introduced a new high alert. Reproduction: repo-103's landing fix `65a230e4` → the `CodeQL` check at `47c95880` failed with "Potential file system race condition" at `scripts/test-gate.mjs:179` (check run 115018515127). The same check passed at the gated `a5b72ab9`.
+5. `SKILL.md` step 6, and `reference/records.md` — a fixed-at-landing Log line is asked to name its commit, which a commit cannot contain. Reproduction: lg-19 needed two commits, `f2ae0c89` (fix) and `f677ad23` (the Log line naming it). On repo-103, `git show origin/repo-103:docs/work/repo-103-concurrent-local-test-runs-each-take-every-core.md | grep -c 65a230e4` → `0`.
+6. `review-ticket/gate.md`, _Severity and the gate_ — has no verdict for a Done-when line whose named proof the dispatch forbids running. Reproduction: `git show origin/main:.claude/skills/review-ticket/gate.md | grep -n "unproven (scope)"` → `161: … a line the dispatch removed from the branch's scope`, the only case. repo-103's Done when 1 (three concurrent `--project downloader` runs, unsafe on a shared box) had to be graded plain `unproven`, which forced a FAIL.
+7. `SKILL.md`, _Decisions_ — rewords an "every" acceptance line before dispatch, but says nothing of a line whose proof is unsafe on the shared machine. Reproduction: repo-103's Done when 1 named three concurrent downloader runs. Gate 1 measured a one-worker downloader run at `1043 s` wall, against the gate's 300 s wait, so the third run always reaches the fallback. The owner reworded the line to planner after gate 1.
+8. `review-ticket/gate.md`, step 5 — enumerates routes with `printRoutes({ includeHooks: true })`, which prints a radix tree with HEAD folded in, not a (method, path) list. Reproduction: lg-21 gate 1 had to count by hand; the builder's later parse needed `printRoutes({ commonPrefix: false })` plus ancestor reconstruction (`tools/ledger/api/test/isolation.test.ts` at `0c05f4ea`).
+9. `roles/builder.md`, _Before you report_ — names `npx oxlint` before preflight, but not `npm run build`. Reproduction (lg-19): `npx vitest run` and `npx oxlint` green while `npm run build` failed with `src/routes/periods.ts(111,61): error TS2379` under `exactOptionalPropertyTypes`, caught only by `npm run check`.
+
+**Worked, and worth keeping:**
+
+- Re-asking an answered question when a sibling's brief changed its premise. lg-19 F1's "measure the books" became vacuous once lg-21 recorded that the books were empty.
+- Holding a landing on a preflight mergeTree failure instead of waiving it. Both blocked landings cleared once dl-110 merged main, with no rule bent.
+- Having the gate measure a builder's open decision before it went to the owner (lg-21 health, dl-108 F2/F3), so each question carried numbers.
+- Coordinating seams and ids with a peer by message: dl-119 and dl-120 claimed by the peer, and dl-120 stacked on dl-108's landed head as a draft.
