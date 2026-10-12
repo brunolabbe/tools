@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Abandoned body</title>
+  </head>
+  <body>
+    <h1>Abandoned body</h1>
+    <!-- The page for the one Chromium test that reaches settle()'s cap (dl-111):
+         it fetches a playlist and never reads it. Other pages also fetch
+         without reading, but no test waits on them. -->
+    <button id="play" type="button">Play</button>
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              // Never read: this is the abandoned body.
+              return fetch("/media/hls/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("play").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>
