@@ -42,6 +42,7 @@ import type {
   PeriodLine,
   PeriodLineDraft,
   PeriodLineSource,
+  PeriodLinesResponse,
   RatioShare,
   RecurringItem,
   RecurringItemDraft,
@@ -140,6 +141,46 @@ export function currentLines(db: Database): PeriodLine[] {
   return (
     db.prepare("SELECT * FROM current_period_lines ORDER BY date, id").all() as LineColumns[]
   ).map(toLine);
+}
+
+/**
+ * The lines that stand and are dated in a span, newest first, with how many
+ * match before the page (lg-19). The span, the category and the page are all
+ * narrowed in SQL: a line's category is its own column, unlike a row's.
+ */
+export function listLines(
+  db: Database,
+  query: {
+    from?: string | undefined;
+    to?: string | undefined;
+    /** `"none"` keeps the uncategorised; a number keeps that category's. */
+    spendingCategory?: number | "none" | undefined;
+    offset?: number | undefined;
+    limit?: number | undefined;
+  },
+): PeriodLinesResponse {
+  const filter = query.spendingCategory;
+  const kind = filter === undefined ? 0 : filter === "none" ? 1 : 2;
+  const where = `(? IS NULL OR date >= ?) AND (? IS NULL OR date <= ?)
+    AND (? = 0 OR (? = 1 AND spending_category_id IS NULL) OR spending_category_id = ?)`;
+  const bound = [
+    query.from ?? null,
+    query.from ?? null,
+    query.to ?? null,
+    query.to ?? null,
+    kind,
+    kind,
+    typeof filter === "number" ? filter : null,
+  ];
+  const counted = db
+    .prepare(`SELECT COUNT(*) AS n FROM current_period_lines WHERE ${where}`)
+    .get(...bound) as { n: number };
+  const found = db
+    .prepare(
+      `SELECT * FROM current_period_lines WHERE ${where} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?`,
+    )
+    .all(...bound, query.limit ?? 100, query.offset ?? 0) as LineColumns[];
+  return { lines: found.map(toLine), total: counted.n };
 }
 
 function requireLinePeople(context: PeriodContext, draft: PeriodLineDraft): void {

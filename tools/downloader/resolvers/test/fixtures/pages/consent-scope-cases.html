@@ -8,7 +8,9 @@
     <!-- dl-93 gate 1: one fixed or sticky layer per ?case=, from the gate's own
          pages (c1..c14). A press of the layer's widened label beacons
          /beacon/bad, a press of a control that is not the one under test
-         /beacon/other. The spec says per case which of them must be silent. -->
+         /beacon/other. The spec says per case which of them must be silent.
+         c15 (dl-113) is not one of the gate's: it is dl-82 gate 3's script-text
+         case, which no row pinned once dl-93's page-content rule took its page. -->
     <h1>Gate page</h1>
     <div id="player"></div>
     <div style="height: 400px"></div>
@@ -80,6 +82,13 @@
         c14:
           '<form onsubmit="event.preventDefault()" style="' + FIXED + '">We use cookies. ' +
           '<button type="button" onclick="' + OTHER + '">Ho capito</button></form>',
+        // c15: a fixed layer with no landmark whose only "cookie" text is an inline
+        // script's. A script is not rendered, so it is not prose; the layer says
+        // nothing of consent and its newsletter's label is not pressed.
+        c15:
+          '<div style="' + FIXED + '"><div class="newsletter">Iscriviti! ' +
+          '<button type="button" onclick="' + BAD + '">Ho capito</button></div>' +
+          '<script>void document.cookie;<\/script></div>',
       };
       var c = new URLSearchParams(location.search).get("case");
       document.getElementById("host").innerHTML = CASES[c];

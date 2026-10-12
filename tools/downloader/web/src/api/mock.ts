@@ -47,6 +47,8 @@ const TICK_MS = 480;
 /** The server's fixed link lifetime (dl-53). */
 const LINK_TTL_MS = 15 * 60_000;
 const FALLBACK_TOTAL_BYTES = 240 * 1024 * 1024;
+/** The API's default `parallelRanges.connections`, for the scenario that splits. */
+const SPLIT_CONNECTIONS = 4;
 
 interface Step {
   /** Milliseconds after job creation. */
@@ -239,6 +241,13 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
         totalBytes,
         durationSec,
         script.indeterminate === true,
+        // One connection until the split, then the fan-out (dl-108); null when
+        // the script has no feeder in its path, as most real sources do not.
+        script.splitAtTick === undefined
+          ? null
+          : tick >= script.splitAtTick
+            ? SPLIT_CONNECTIONS
+            : 1,
       );
       steps.push({
         atMs: t,
@@ -508,6 +517,7 @@ function idleProgress(): JobProgress {
     speedBps: null,
     etaSec: null,
     processedSec: null,
+    originConnections: null,
   };
 }
 
@@ -516,6 +526,7 @@ function downloadProgress(
   totalBytes: number | null,
   durationSec: number | null,
   indeterminate: boolean,
+  originConnections: number | null,
 ): JobProgress {
   const scale = totalBytes ?? FALLBACK_TOTAL_BYTES;
   const downloadedBytes = Math.round(scale * fraction);
@@ -534,6 +545,7 @@ function downloadProgress(
         ? null
         : Math.max(0, Math.round((totalBytes * remaining) / speedBps)),
     processedSec: durationSec === null ? null : Math.round(durationSec * fraction),
+    originConnections,
   };
 }
 

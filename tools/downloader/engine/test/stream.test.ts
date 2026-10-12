@@ -34,7 +34,7 @@ import { createEngine } from "../src/index.ts";
 import type { Logger } from "../src/logger.ts";
 import { NOOP_LOGGER } from "../src/logger.ts";
 import { assertContainerCanHold } from "../src/mux.ts";
-import { buildStreamArgs, expectedOutputBytes } from "../src/stream.ts";
+import { buildStreamArgs, expectedOutputBytes, originConnectionsOf } from "../src/stream.ts";
 import type { MediaStream } from "../src/index.ts";
 import type { FixtureServer } from "./helpers/http.ts";
 import { startFixtureServer } from "./helpers/http.ts";
@@ -2262,4 +2262,54 @@ describe("dl-103: an unanswered seek probe", () => {
       30_000,
     );
   }
+});
+
+describe("dl-108: an HLS job has no feeder in its path", () => {
+  test("reports originConnections as null on every snapshot, not as 0 or 1", async () => {
+    const samples: (number | null)[] = [];
+    const media = await engineWith().stream({
+      jobId: "dl-108-hls",
+      variant: hlsVariant("hls6", 6),
+      requestContext: CONTEXT,
+      onProgress: (progress) => samples.push(progress.originConnections),
+    });
+    media.body.resume();
+    await media.done;
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(
+      samples.every((value) => value === null),
+      JSON.stringify(samples),
+    ).toBe(true);
+  });
+});
+
+type FeederStatsOf = NonNullable<Parameters<typeof originConnectionsOf>[0]>;
+const stats = (mode: FeederStatsOf["mode"], openFetches: number): FeederStatsOf => ({
+  mode,
+  maxHeldBytes: 0,
+  deliveredBytes: 0,
+  originRequests: 0,
+  maxConcurrentFetches: 0,
+  openFetches,
+  refusal: null,
+});
+
+describe("dl-108 round 1: the count the card is given", () => {
+  test("no feeder is null, never 0 or 1", () => {
+    expect(originConnectionsOf(null)).toBeNull();
+  });
+
+  test("outside a split it never exceeds 1, even with two requests open (F3)", () => {
+    expect(originConnectionsOf(stats("single", 2))).toBe(1);
+    expect(originConnectionsOf(stats("single", 1))).toBe(1);
+    expect(originConnectionsOf(stats("single", 0))).toBe(0);
+    // After a fallback there is the one continuation, and the card says nothing.
+    expect(originConnectionsOf(stats("fallen-back", 2))).toBe(1);
+  });
+
+  test("in a split it is the count itself", () => {
+    expect(originConnectionsOf(stats("parallel", 4))).toBe(4);
+    expect(originConnectionsOf(stats("parallel", 3))).toBe(3);
+  });
 });

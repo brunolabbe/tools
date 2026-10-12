@@ -213,6 +213,11 @@ export const jobProgressSchema = z.object({
   speedBps: z.number().nullable(),
   etaSec: z.number().nullable(),
   processedSec: z.number().nullable(),
+  // `.default(null)` and not a bare `.nullable()`, for the reason `thumbnailPath`
+  // gives below: this key is absent from every progress already persisted, in
+  // the API's `progress_json` and under `downloader:jobs:v1` in browsers, and
+  // both read through `jobSchema`, which would reject the record outright (dl-108).
+  originConnections: z.number().nullable().default(null),
 }) satisfies z.ZodType<JobProgress>;
 
 // A result persisted before dl-53 still carries `downloadUrl` and `expiresAt`.

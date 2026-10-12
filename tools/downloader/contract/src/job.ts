@@ -103,6 +103,22 @@ export interface JobProgress {
   etaSec: number | null;
   /** Seconds of media written so far — parsed from ffmpeg's `time=` output. */
   processedSec: number | null;
+  /**
+   * The requests to the origin open at the moment of the snapshot, the relay
+   * included (dl-108). A job the range feeder has not split reads `1` while its
+   * one request is open and never more; `0` when none is open, which includes
+   * the closing snapshot, after the body has ended. In a split it is the
+   * requests open, up to the configured connections, and moves between chunks
+   * (4, then 3); it is `0` at the closing snapshot, and `1` for the rest of the
+   * job once a split falls back. It is a count of what reaches the origin, not
+   * of what ffmpeg has open to the loopback.
+   *
+   * `null` when no feeder is in the path — HLS or DASH, a source that refused
+   * the seek probe, a host that allows one connection, a remembered refusal, a
+   * separate audio rendition, a live capture — which is "not measured", never
+   * `1`.
+   */
+  originConnections: number | null;
 }
 
 /**

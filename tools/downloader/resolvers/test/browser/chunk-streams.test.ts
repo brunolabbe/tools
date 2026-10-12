@@ -7,12 +7,28 @@
  * real boxes (`test/helpers/mp4.ts`) wherever a verdict depends on what the sniff
  * reads: an all-zero body has no box, and the sniff drops only on positive
  * evidence of a fragment.
+ *
+ * Three probes stay: the one page whose playlist was never captured (dl-90's
+ * end-to-end claim), the gallery whose head reads really happen over HTTP, and
+ * the abort. The other eight were demoted by dl-113, each to the unit test that
+ * made the same assertion on the same bodies, in `chunk-sniff.test.ts`: twelve
+ * chunks cost one head read ("one proven fragment drops its whole directory and
+ * the rest are never requested"), twelve whole files cost at most the cap ("a
+ * directory with no proof keeps everything, and reads no more than the cap"), a
+ * whole file read first survives later chunks ("a file read and found whole is
+ * kept when a fragment beside it is proven later"), an all-zero body, or a read
+ * that finds nothing, is offered ("a read that finds nothing, or throws, offers
+ * the file" and "an all-zero body is unknown"), a boxes-but-not-a-movie body is
+ * offered ("a free box, then zeros is unknown"), a lone movie written as
+ * fragmented MP4 is offered, alone or beside two whole files ("a whole movie
+ * written as fragmented MP4 ... is not a chunk"), and clip-720.mp4 with
+ * clip-1080.mp4 stay whole ("a faststart file is not: its moov has no mvex" and
+ * the numbered-name rows of "which hits the sniff may read").
  */
 
 import { AppError } from "@downloader/contract";
 import type { ProbeResult } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { MAX_SNIFF_READS } from "../../src/browser/chunk-sniff.ts";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
 import { startChunkServer } from "./helpers/chunk-server.ts";
@@ -76,17 +92,6 @@ describe("numbered chunks with no captured manifest are not offered (dl-90)", ()
       expect(error.code).toBe("NO_MEDIA_FOUND");
     },
   );
-
-  test(
-    "twelve chunks cost one head read, not twelve: a proven fragment settles its directory",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const error = await probeError("/manychunks.html");
-
-      expect(error.code).toBe("NO_MEDIA_FOUND");
-      expect(files.headReads()).toHaveLength(1);
-    },
-  );
 });
 
 describe("numbered whole files are still offered (dl-90)", () => {
@@ -103,99 +108,6 @@ describe("numbered whole files are still offered (dl-90)", () => {
       ]);
       // The sniff really read each one, or "offered" proves only that it did not run.
       expect(files.headReads()).toHaveLength(3);
-    },
-  );
-
-  test(
-    "clip-720.mp4 and clip-1080.mp4 stay whole files",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/resolutions.html");
-
-      expect(urls(result).toSorted()).toEqual([
-        files.url("/res/clip-1080.mp4"),
-        files.url("/res/clip-720.mp4"),
-      ]);
-      expect(files.headReads()).toHaveLength(2);
-    },
-  );
-
-  test(
-    "an all-zero body is offered: no box is no evidence",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/zero.html");
-
-      expect(urls(result).toSorted()).toEqual([files.url("/zero/1.mp4"), files.url("/zero/2.mp4")]);
-      expect(files.headReads().length).toBeGreaterThan(0);
-    },
-  );
-
-  test(
-    "a body that is boxes but not a movie is offered",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/other.html");
-
-      expect(urls(result).toSorted()).toEqual([
-        files.url("/other/1.mp4"),
-        files.url("/other/2.mp4"),
-      ]);
-    },
-  );
-
-  test(
-    "reads are capped: twelve whole files cost at most the cap and all twelve are offered",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/manywhole.html");
-
-      expect(result.variants).toHaveLength(12);
-      expect(files.headReads().length).toBeGreaterThan(0);
-      expect(files.headReads().length).toBeLessThanOrEqual(MAX_SNIFF_READS);
-    },
-  );
-});
-
-describe("a whole movie written as fragmented MP4 is offered (dl-90, owner 2026-10-10)", () => {
-  test(
-    "a lone numbered file with moov, mvex and then moof is offered, not dropped as a chunk",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/lonefrag.html");
-
-      expect(urls(result)).toEqual([files.url("/lf/839201.mp4")]);
-      // The sniff read it and let it go, rather than not looking.
-      expect(files.headReads()).toHaveLength(1);
-    },
-  );
-
-  test(
-    "beside two whole files in one directory, all three are offered",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/wholefrag.html");
-
-      expect(urls(result).toSorted()).toEqual([
-        files.url("/wf/1.mp4"),
-        files.url("/wf/2.mp4"),
-        files.url("/wf/3.mp4"),
-      ]);
-    },
-  );
-});
-
-describe("a file the sniff read and found whole is kept beside a fragment (dl-90)", () => {
-  test(
-    "the whole file, read first, survives the init and media segments that follow it",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const result = await probe("/mixed.html");
-
-      expect(urls(result)).toEqual([files.url("/mx/1.mp4")]);
-      // It was read, which is what makes keeping it a decision and not an accident:
-      // the media segment settled the directory only afterwards.
-      expect(files.headReads().map((entry) => entry.pathname)).toContain("/mx/1.mp4");
     },
   );
 });

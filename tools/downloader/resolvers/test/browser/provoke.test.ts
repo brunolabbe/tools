@@ -355,6 +355,14 @@ describe("CONSENT_TEXT (dl-82)", () => {
   test.each(ADDED)("CONSENT_TEXT_ANYWHERE does not match %j", (label) => {
     expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
   });
+
+  // The pagination link "Continua" and the review vote "Sono d'accordo con questa
+  // recensione" were pressed in a browser until dl-113 (the dl-82 lookalikes
+  // page); the pattern that reaches outside a container refuses every sentence and
+  // bare word this one does.
+  test.each(REFUSED)("CONSENT_TEXT_ANYWHERE does not match %j either", (label) => {
+    expect(CONSENT_TEXT_ANYWHERE.test(label)).toBe(false);
+  });
 });
 
 describe("CONSENT_WORDING (dl-82 gate 2)", () => {
@@ -386,6 +394,11 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     // dl-93: "cookie" needs no word start, because German and Swedish compound it.
     "Wir verwenden Statistikcookies und Marketingcookies.",
     "Läs mer om kakorna på sajten.",
+    // The wordings of consent-scope's r4 and r6 rows (dl-113). r3, r7 and r8 are
+    // "Cookie-Einstellungen", "Statistikcookies" and "kakorna" above; these two were
+    // the ones no row here carried.
+    "Ta strona używa plików cookie.",
+    "Wir verwenden Cookies.",
     "Vi använder kakorn.",
     // dl-93, at landing (gate 2): the compounds a7f47bd2's bare "cookie" matched
     // and the first named list did not.
@@ -410,7 +423,10 @@ describe("CONSENT_WORDING (dl-82 gate 2)", () => {
     "Iscriviti alla newsletter per ricevere le offerte.",
     "Home",
     "",
-    // dl-82 gate 3: ordinary words that merely begin like a consent word.
+    // dl-82 gate 3: ordinary words that merely begin like a consent word. The
+    // gate's a4 (Italian "consente", in a docked checkout bar) and a5 (Swedish
+    // "pannkakor", in a sticky header's note) were also probed in a browser until
+    // dl-113; their fixture sentences are these two rows.
     "Il pagamento sicuro consente di ordinare.",
     "Il pagamento è consentito.",
     "I partner consentono l'ordine.",
@@ -542,55 +558,142 @@ describe("SCROLL_SCRIPT targets the largest candidate (dl-81)", () => {
     expect(placement.top).toBeLessThan(placement.height);
     expect(placement.bottom).toBeGreaterThan(0);
   });
+
+  // Gate 1's page, once probed through the whole resolver (dl-113): the first
+  // match is a 300x250 ad iframe and a nav bar, both already in view, and the real
+  // shell, the largest candidate, sits 3000 px down.
+  test("brings the large shell into view, not the ad iframe and nav bar above the fold", async () => {
+    const placement = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url("/player-nav-first.html"), {
+            waitUntil: "domcontentloaded",
+          });
+          await page.evaluate<boolean>(SCROLL_SCRIPT);
+          return await page.evaluate<{ top: number; bottom: number; height: number }>(
+            `(() => {
+              var rect = document.querySelector('.player-shell').getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom, height: window.innerHeight };
+            })()`,
+          );
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    expect(placement.top).toBeLessThan(placement.height);
+    expect(placement.bottom).toBeGreaterThan(0);
+  });
+});
+
+describe("a page that refuses the visitor's region is GEO_BLOCKED (dl-113)", () => {
+  // `capture-rules.test.ts` pins the wording against a hand-made signals object;
+  // this reads the signals off the page, which is what the resolver-level probe of
+  // the same page added, without launching the whole probe.
+  test("reads the refusal off the page and classifies it", async () => {
+    const verdict = await pool.withBrowser(
+      { signal: new AbortController().signal },
+      async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          const url = server.url("/geo.html");
+          await page.goto(url, { waitUntil: "domcontentloaded" });
+          return classifyFailure({
+            ...(await readSignals(page)),
+            finalUrl: url,
+            status: 200,
+            quietReached: true,
+          });
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    expect(verdict.code).toBe("GEO_BLOCKED");
+  });
 });
 
 describe("clickTimeoutMs caps the clicks a covering layer blocks (dl-118)", () => {
   // Each page puts a cover up that stays up, so each consent and play click is
-  // retried until its timeout. Uncapped that is 2000 ms a click: 8 s on the menu
-  // page and about 6 s on the cookie sheets, measured on 2026-10-12. Capped, a
-  // run is about 2.1 s; with the consent click alone left at 2000 ms the cookie
-  // sheets take about 4 s and the menu page does not move, which is why the
-  // cookie sheets are rows here and the ceiling sits between the two.
-  const CAPPED_CEILING_MS = 3000;
+  // retried until its timeout. Uncapped that is 2000 ms a click. Each row has its
+  // own ceiling (dl-119), because each catches a different regression and the
+  // two are not the same distance from a capped run. Measured on 2026-10-12, in
+  // the unit this test times (`provokePlayback` alone), 5 runs capped and 3 to 5
+  // with the regression planted:
+  //
+  // - the menu page: capped 1.9 to 2.1 s. The play clicks are the only blocked
+  //   ones there, twice each: one site uncapped is 5.5 to 5.7 s, both 9.2 to
+  //   9.4 s. The consent click is not blocked on this page, so it does not move
+  //   the row. The ceiling is 4000 ms, which catches either site alone.
+  // - the cookie sheets: capped 2.1 to 2.5 s. The consent click, once, uncapped
+  //   is 3.9 to 4.5 s; the gap is one 2000 ms wait less the 200 ms cap, so the
+  //   ceiling can only sit near the middle of it. 3200 ms leaves 0.7 s each way.
+  //
+  // Only `provokePlayback` is timed: browser launch, context and navigation are
+  // not what the cap bounds, and the one row dl-118's landing run saw slow on a
+  // Windows runner (3.6 s against 2.2 s for the same code) was the menu row.
+  const MENU_CEILING_MS = 4000;
+  const COOKIE_CEILING_MS = 3200;
 
+  // Array rows with %s, not objects with $name: Vitest quotes a `$` value and cuts
+  // it at 40 characters, which gave the two cookie rows one title. The ceiling is
+  // the fourth element, so no placeholder reads it (a %d took the wrong argument
+  // in dl-118 and printed NaN).
   test.each([
-    ["a shell's 18+ menu button", "/age-false-shell-menu-button.html", "/beacon/nav-18"],
+    [
+      "a shell's 18+ menu button",
+      "/age-false-shell-menu-button.html",
+      "/beacon/nav-18",
+      MENU_CEILING_MS,
+    ],
     [
       "a cookie sheet's View our 18 partners, closable panel",
       "/age-false-cookie-sheet-closable.html",
       "/beacon/view-partners",
+      COOKIE_CEILING_MS,
     ],
     [
       "a cookie sheet's View our 18 partners, sticky panel",
       "/age-false-cookie-sheet-sticky.html",
       "/beacon/view-partners",
+      COOKIE_CEILING_MS,
     ],
-  ])("%s: the blocked clicks wait for the cap, not 2000 ms", async (_name, pathname, pressed) => {
-    server.requests.length = 0;
-    const startedAt = Date.now();
-    await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
-      const context = await browser.newContext();
-      try {
-        const page = await context.newPage();
-        await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
-        await provokePlayback(page, {
-          deadline: Date.now() + 15_000,
-          signal: new AbortController().signal,
-          confirmAge: true,
-          clickTimeoutMs: 200,
-        });
-      } finally {
-        await context.close();
-      }
-    });
-    const elapsedMs = Date.now() - startedAt;
+  ])(
+    "%s: the blocked clicks wait for the cap, not 2000 ms",
+    async (_name, pathname, pressed, ceilingMs) => {
+      server.requests.length = 0;
+      let elapsedMs = Number.NaN;
+      await pool.withBrowser({ signal: new AbortController().signal }, async (browser) => {
+        const context = await browser.newContext();
+        try {
+          const page = await context.newPage();
+          await page.goto(server.url(pathname), { waitUntil: "domcontentloaded" });
+          const startedAt = Date.now();
+          await provokePlayback(page, {
+            deadline: Date.now() + 15_000,
+            signal: new AbortController().signal,
+            confirmAge: true,
+            clickTimeoutMs: 200,
+          });
+          elapsedMs = Date.now() - startedAt;
+        } finally {
+          await context.close();
+        }
+      });
 
-    // The press landed, which is what opened the cover. The ceiling shows the
-    // cap shortened the run; it is not a count of the clicks.
-    expect(server.requests).toContain(pressed);
-    expect(server.requests).not.toContain("/beacon/play");
-    expect(elapsedMs).toBeLessThan(CAPPED_CEILING_MS);
-  });
+      // The press landed, which is what opened the cover. The ceiling shows the
+      // cap shortened the run; it is not a count of the clicks.
+      expect(server.requests).toContain(pressed);
+      expect(server.requests).not.toContain("/beacon/play");
+      expect(elapsedMs).toBeLessThan(ceilingMs);
+    },
+  );
 });
 
 describe("cappedTimeout (dl-118)", () => {

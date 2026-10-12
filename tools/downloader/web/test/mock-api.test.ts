@@ -557,3 +557,24 @@ describe("the job's re-probe narrates its stages (dl-110)", () => {
     expect(applyJobEvents(job, events)).toEqual((await api.getJob(job.id)).job);
   });
 });
+
+function counts(events: readonly JobEvent[]): (number | null)[] {
+  return events.flatMap((event) =>
+    event.type === "progress" && event.progress.stage === "downloading"
+      ? [event.progress.originConnections]
+      : [],
+  );
+}
+
+describe("the throttled scenario reports a split (dl-108)", () => {
+  test("one connection, then four; the default scenario never claims a count", async () => {
+    const throttled = counts((await run(scenarioUrl("throttled"))).events);
+    expect(throttled[0]).toBe(1);
+    expect(throttled.at(-1)).toBe(4);
+    expect(throttled.every((value) => value === 1 || value === 4)).toBe(true);
+
+    const plain = counts((await run(scenarioUrl(""))).events);
+    expect(plain.length).toBeGreaterThan(0);
+    expect(plain.every((value) => value === null)).toBe(true);
+  });
+});

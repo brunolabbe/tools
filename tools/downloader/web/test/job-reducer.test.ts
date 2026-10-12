@@ -35,6 +35,7 @@ function progress(overrides: Partial<JobProgress> = {}): JobProgress {
     speedBps: 500,
     etaSec: 2,
     processedSec: 30,
+    originConnections: null,
     ...overrides,
   };
 }

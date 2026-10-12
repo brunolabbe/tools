@@ -144,9 +144,12 @@ export function JobCard({
             label={STATUS_LABEL[job.status]}
             {...(progress.speedBps !== null ? { valueText: formatSpeed(progress.speedBps) } : {})}
           />
-          {/* Directly under the bar (dl-109). dl-108's connection count is meant
-              to be one more message here, with its "4×" as the mark. */}
-          <ProgressMessages messages={progressMessages(job.status, stage)} />
+          {/* Directly under the bar (dl-109). The connection count (dl-108) is
+              one more message here, with its "4×" as the mark. */}
+          <ProgressMessages
+            messages={progressMessages(job.status, stage, progress.originConnections)}
+          />
+
           <Stats status={job.status} progress={progress} waitedMs={waitedMs} />
         </>
       )}
@@ -240,6 +243,7 @@ const STATUS_ICON: Partial<Record<JobStatus, MessageIcon>> = {
 function progressMessages(
   status: JobStatus,
   stage: ProbeStageEvent | undefined,
+  originConnections: number | null,
 ): ProgressMessage[] {
   const messages: ProgressMessage[] = [
     { key: "status", mark: STATUS_ICON[status] ?? "send", text: STATUS_HINT[status] },
@@ -252,6 +256,15 @@ function progressMessages(
       key: "browser",
       mark: "browser",
       text: "Your browser shows the file in its downloads once the first bytes arrive. Until then, this card is the only sign it is working.",
+    });
+  }
+  // Only a split is worth saying: "1 connection" on every job would be noise,
+  // and `null` is "not measured", which is not a count to show.
+  if (status === "downloading" && originConnections !== null && originConnections >= 2) {
+    messages.push({
+      key: "connections",
+      mark: { text: `${originConnections}×` },
+      text: `Reading on ${originConnections} connections. This source throttles each one.`,
     });
   }
   return messages;

@@ -40,6 +40,7 @@ function progress(): JobProgress {
     speedBps: null,
     etaSec: null,
     processedSec: null,
+    originConnections: null,
   };
 }
 
