@@ -218,9 +218,11 @@ export function stageAfter(
     default: {
       // `undefined` is a legitimate answer here ("clear the stage"), so unlike
       // `applyJobEvent` a missing case would not be a type error on its own: this
-      // makes a new `JobEvent` member one.
+      // makes a new `JobEvent` member one. What it returns is still `undefined`,
+      // never the frame: a frame that somehow got past the type clears the stage.
       const unhandled: never = event;
-      return unhandled;
+      void unhandled;
+      return undefined;
     }
   }
 }
