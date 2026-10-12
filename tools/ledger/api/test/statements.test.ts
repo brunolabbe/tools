@@ -8,7 +8,7 @@ import type { ErrorResponse, ImportStatementReport } from "@ledger/contract";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, SAM, accessConfig } from "./helpers/access.ts";
+import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
 import { renderPaste, withBalances } from "./helpers/paste.ts";
 import type { PasteRow } from "./helpers/paste.ts";
 
@@ -22,6 +22,7 @@ afterEach(async () => {
 /** Whoever the development identity names is the caller; no token is needed. */
 async function startApp(person: string = ALEX): Promise<App> {
   app = await createApp({
+    directory: memberDirectory(),
     config: {
       databasePath: ":memory:",
       logLevel: "silent",
@@ -404,6 +405,7 @@ describe("POST /api/statements", () => {
   test("a refusal is logged by code, never with the bank text its details carry", async () => {
     const lines: string[] = [];
     app = await createApp({
+      directory: memberDirectory(),
       config: {
         databasePath: ":memory:",
         access: accessConfig({ devIdentity: ALEX }),
@@ -611,6 +613,7 @@ describe("an over-long paste and a busy database", () => {
     let other: Database.Database | undefined;
     try {
       app = await createApp({
+        directory: memberDirectory(),
         config: {
           databasePath,
           logLevel: "silent",

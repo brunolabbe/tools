@@ -156,3 +156,68 @@ one file until [lg-21](./lg-21-books-per-household.md).
   let an admin be in no household, which is now the identity's admin flag with
   `personOf` failing closed; and that nothing capped a household at the two
   people the books can settle, which is now step 1's cap.
+- 2026-10-12 — Built on `lg-20` from `main` at `bb4d2044`. The directory is
+  `api/src/directory.ts` over its own migrations in
+  `api/src/db/directory-schema.ts`; the identity check reads it on every request
+  (`createIdentityVerifier` in `api/src/access.ts`, `personOf` and `identityOf`
+  in `api/src/identity.ts`); the host command is `api/src/household-command.ts`;
+  the web's page is `web/src/NoHousehold.tsx`. `Person` gains `household`,
+  `MeResponse` gains `admin`, `HealthResponse` gains `directory` (the brief's
+  trap asked for it), and `HOUSEHOLD_FULL` (409) is the one new ledger code.
+  - Each `Done when` test was made to fail first by loosening what it guards,
+    one at a time, with the source restored after each: a verifier that caches
+    membership fails "once removed, is refused on the next request, without a
+    restart"; a `personOf` that lets a null person through fails "is
+    identified, and refused by /api/me as by every books route"; a `DELETE FROM
+memberships` string in the command fails the directory scan; a dropped
+    update trigger fails "the schema refuses an UPDATE or a DELETE"; a cap of
+    three in the code fails three tests, in the trigger one; dropping the
+    second-household refusal, the `ACCESS_PEOPLE` refusal, the `DEV_IDENTITY`
+    check, or keying the page on `UNAUTHENTICATED`, each fails its own test.
+  - The dev flow, run through npm against scratch files: `add`, `member`, a
+    refused second `add` (exit 1), `list`; then the built API with
+    `DEV_IDENTITY` answered `/api/me` with
+    `{"person":{"id":"alex","email":"alex@example.test","household":"home"},"admin":false}`,
+    health with `"database":{"open":true},"directory":{"open":true}`, `/api/people`
+    with `["alex","sam"]` after `member home sam@… sam` without a restart, and
+    403 `FORBIDDEN` for alex after `remove` without a restart. Boot refused
+    `ACCESS_PEOPLE=x` and a `DEV_IDENTITY` the directory lacked, each naming it.
+  - **What the brief had wrong, or left open.**
+    - _Enrolled when a member is added_: the host command is another process
+      and never touches the books, so the API enrols. Boot enrols every current
+      member's name, and the identity hook enrols the caller's household's names
+      it has not seen (`createEnroller` in `api/src/people.ts`, remembering what
+      the table holds so a request with nothing new writes nothing). So a member
+      added from the host is in `/api/people` from the next request anyone in
+      the household makes.
+    - _At most two person names_ is counted over every name the household has
+      **ever** held, not only its current members': the books keep a name once
+      they hold it (§7, a name is permanent) and settle between two people, so a
+      third name after a removal would break them all the same. A removed name
+      may come back under any address. Recorded as an open decision for the
+      owner in the report; the trigger and the check are one line each to change.
+    - The directory's other refusals — an id that is not a word, a household
+      that exists or does not, an address already in one, removing one in none —
+      are core's `BAD_REQUEST` with a sentence for the operator, because only the
+      host command can reach them; lg-22 step 8 adds a ledger code with the
+      route that first throws one. The cap is the one the brief named as a
+      ledger code.
+    - The existing source scan in `classification-schema.test.ts` already
+      covered the new files. The directory's own scan
+      (`directory.test.ts`) also asserts it read the schema, the class and the
+      command, and the schema refuses an `UPDATE` or `DELETE` itself, with
+      triggers.
+    - A household id also refuses `con`, `prn`, `aux` and `nul`, which Windows
+      will not open as `<id>.db` once lg-21 makes it a file name.
+    - `/api/me` refuses an admin in no household, as every books route does,
+      so `MeResponse.person` stays non-null; the web shows the no-household page
+      on that `FORBIDDEN`, and leaves the shell on any other failure.
+    - The host command signs its changes `operator`, never an address.
+    - `00-ANALYSIS.md` §7 said a request with no valid token gets a 401; it has
+      been a 403 since lg-3, by the owner's decision. Corrected with the rest of
+      §7.
+    - The route table `route-limits.test.ts` walked is now
+      `api/test/helpers/routes.ts`, shared with the identity suite's walk;
+      lg-21's isolation sweep and lg-22's authority sweep can take it too.
+  - **Fold-in:** nothing else became free. lg-19 and lg-8 rebase onto the
+    `Person` and `MeResponse` change; neither is touched here.

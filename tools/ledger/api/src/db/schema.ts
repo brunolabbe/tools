@@ -491,10 +491,23 @@ export function configure(db: Database): void {
  * workbook import, lg-7, migrates inside the transaction it may refuse).
  */
 export function applyMigrations(db: Database, target: number = MIGRATIONS.length): void {
+  applyMigrationList(db, MIGRATIONS, target);
+}
+
+/**
+ * The loop itself, over any list: the household directory (lg-20) is a file of
+ * its own with migrations of its own, numbered from 1 in its own
+ * `user_version`, and applied the same way.
+ */
+export function applyMigrationList(
+  db: Database,
+  migrations: readonly string[],
+  target: number = migrations.length,
+): void {
   const current = Number((db.pragma("user_version", { simple: true }) as number) ?? 0);
   const nested = db.inTransaction;
-  for (let version = current; version < Math.min(target, MIGRATIONS.length); version++) {
-    const statement = MIGRATIONS[version];
+  for (let version = current; version < Math.min(target, migrations.length); version++) {
+    const statement = migrations[version];
     if (statement === undefined) continue;
     db.exec(nested ? "SAVEPOINT migration" : "BEGIN");
     try {

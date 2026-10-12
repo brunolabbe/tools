@@ -9,7 +9,7 @@ import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse, PeopleResponse, Rule, RulesResponse } from "@ledger/contract";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { SAM, accessConfig } from "./helpers/access.ts";
+import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
 import { MORTGAGE_RULE, TRANSFER_RULE, addRule, startApp } from "./helpers/classification.ts";
 
 let app: App | undefined;
@@ -50,6 +50,7 @@ describe("GET /api/rules", () => {
 
   test("is behind the identity check", async () => {
     app = await createApp({
+      directory: memberDirectory(),
       config: { databasePath: ":memory:", logLevel: "silent", access: accessConfig() },
     });
 
@@ -209,19 +210,17 @@ describe("POST /api/rules/:id/retire", () => {
 });
 
 describe("GET /api/people", () => {
-  test("lists the configured people, once each and in order", async () => {
+  test("lists the household's people, once each and in order", async () => {
     app = await createApp({
+      directory: memberDirectory([
+        [SAM, "sam"],
+        ["sam.work@example.test", "sam"],
+        [ALEX, "alex"],
+      ]),
       config: {
         databasePath: ":memory:",
         logLevel: "silent",
-        access: accessConfig({
-          devIdentity: SAM,
-          people: new Map([
-            ["sam@example.test", "sam"],
-            ["sam.work@example.test", "sam"],
-            ["alex@example.test", "alex"],
-          ]),
-        }),
+        access: accessConfig({ devIdentity: SAM }),
       },
     });
 

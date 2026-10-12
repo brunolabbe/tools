@@ -21,6 +21,7 @@ async function main(): Promise<void> {
     host: config.host,
     port: config.port,
     databasePath: config.databasePath,
+    directoryPath: config.directoryPath,
   });
 
   let shuttingDown = false;

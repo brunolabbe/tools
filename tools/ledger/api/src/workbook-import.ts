@@ -57,10 +57,10 @@ import type { RuleContext } from "./rules.ts";
 import { confirmRatio, enterSalaries } from "./salaries.ts";
 
 export interface WorkbookImportOptions {
-  /** Whoever runs the import: the configured name everything it writes is recorded under. */
+  /** Whoever runs the import: the name in the directory everything it writes is recorded under. */
   personId: string;
-  /** The configured people, enrolled as a boot would enrol them. */
-  configured: readonly string[];
+  /** The household's current members' names (lg-20), enrolled as a boot would enrol them. */
+  members: readonly string[];
   corrections: Corrections;
   /** Whether this is meant as the import itself, which only changes what the report says. */
   write: boolean;
@@ -583,13 +583,13 @@ function run(
   sheets: readonly Sheet[],
   options: WorkbookImportOptions,
 ): { ok: boolean; report: string } {
-  enrollPeople(db, options.configured, options.now());
+  enrollPeople(db, options.members, options.now());
   const people = knownPeople(db);
   const reading = readWorkbook(sheets, { people, corrections: options.corrections });
   const problems = [...reading.problems];
   if (!people.includes(options.personId)) {
     problems.push(
-      `--as names "${options.personId}", who is not one of the household (${people.join(", ") || "nobody is configured"}).`,
+      `--as names "${options.personId}", who is not one of the household (${people.join(", ") || "nobody is in the directory"}).`,
     );
   }
   alreadyHeld(db, problems);
