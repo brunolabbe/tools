@@ -25,7 +25,10 @@
  *     touches with a path that is not markdown (repo-101),
  *     `npm test -- --project <tool>` — read from the diff's own
  *     paths, never from a flag, so a forgotten `--project` cannot silently
- *     skip a tool's suite the way a hand-typed one can.
+ *     skip a tool's suite the way a hand-typed one can. When every path of the
+ *     tool is inside one of its packages the project narrows to the packages
+ *     those paths can reach (repo-102); any path outside a package runs the
+ *     whole project. CI always runs the whole project.
  *   - check 3 reads a ticket's frontmatter and its `## Review` heading off
  *     `git show HEAD:<ticket>` — the same command
  *     `orchestrate-tickets/SKILL.md` step 9 names as this precondition today.
@@ -231,16 +234,354 @@ export function scriptsTouched(diffPaths) {
   return diffPaths.some((p) => p.startsWith("scripts/"));
 }
 
+// --- repo-102: a tool's suite narrows to the packages a change can reach ------
+
+/** Directories a package scan never enters: installed or generated, not the package's own code. */
+const SCAN_SKIP_DIRS = new Set(["node_modules", "dist", ".git"]);
+
+/** Source files whose text can name another package. Data files are not read. */
+const SCAN_FILE = /\.[cm]?[jt]sx?$/u;
+
+/**
+ * @param {string} dir
+ * @returns {string[]} every scannable file under `dir`, absolute
+ */
+function scannableFiles(dir) {
+  const found = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!SCAN_SKIP_DIRS.has(entry.name)) found.push(...scannableFiles(full));
+    } else if (SCAN_FILE.test(entry.name)) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+/**
+ * Comments removed, so prose that names a sibling package (`@planner/intake`
+ * in a docblock) is not read as a dependency on it: without this the planner's
+ * `contract` "depends on" every other package and the narrowing is worth
+ * nothing.
+ *
+ * **It removes only a comment it can prove is one, and keeps the text of
+ * anything else, because a lost line can hide a reader and a kept one only
+ * costs a test run.** Two shapes qualify, and nothing else:
+ *
+ *   - a line whose first non-blank characters are `//`, whole line. A `//`
+ *     after code is kept, since a string such as `"see //"` carries one and
+ *     deleting from it would take the rest of the line, a path literal
+ *     included, with it;
+ *   - a block comment that opens a line and is JSDoc-shaped: either it closes
+ *     on its opening line, or every line between the opener and the closer
+ *     starts with a star (and the closer is on a line of its own). A template
+ *     literal line that happens to begin with a slash-star is followed by
+ *     code, not star-led lines, so it never matches and the code below it
+ *     stays.
+ *
+ * A block comment with an unstarred body is therefore left in, and a sibling it
+ * names becomes an edge: wider, never narrower.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function withoutComments(text) {
+  return text
+    .replace(/^[ \t]*\/\*(?:(?!\*\/)[^\n])*\n(?:[ \t]*\*(?!\/)[^\n]*\n)*[ \t]*\*\//gmu, "")
+    .replace(/^[ \t]*\/\*(?:(?!\*\/)[^\n])*\*\//gmu, "")
+    .replace(/^[ \t]*\/\/[^\n]*/gmu, "");
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+/** A relative path or `tools/…` path ending in one of these is code, and code is read through its own imports. */
+const CODE_FILE = /\.[cm]?[jt]sx?$/u;
+
+/** What a module specifier may omit, as bundler resolution lets a `web` package. */
+const CODE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+
+/**
+ * Whether a path in a source string is code: it ends in a code extension, or it
+ * is an extensionless specifier that resolves to a file on disk
+ * (`../../resolvers/test/helpers/mp4` for `mp4.ts`, or a directory's
+ * `index`). Anything else is read as data, and a data edge is scoped.
+ *
+ * @param {string} absolute
+ */
+function namesCode(absolute) {
+  if (CODE_FILE.test(absolute)) return true;
+  return CODE_EXTENSIONS.some(
+    (ext) =>
+      fs.existsSync(`${absolute}${ext}`) || fs.existsSync(path.join(absolute, `index${ext}`)),
+  );
+}
+
+/**
+ * Record that a package depends on `other`, whole (`scope` is `""`) or only on
+ * the files under `scope`, a path relative to the tool's root. A whole
+ * dependency absorbs every narrower one.
+ *
+ * @param {Map<string, Set<string>>} dependsOn
+ * @param {string} other
+ * @param {string} scope
+ */
+function addEdge(dependsOn, other, scope) {
+  const scopes = dependsOn.get(other) ?? new Set();
+  dependsOn.set(other, scopes);
+  if (scope === "") {
+    scopes.clear();
+    scopes.add("");
+  } else if (!scopes.has("")) {
+    scopes.add(scope);
+  }
+}
+
+/**
+ * One tool's packages and what each depends on, read from the tree at `repo`
+ * and never written out (repo-102). A package is a direct child of
+ * `tools/<tool>/` that has a `package.json`, which is exactly the set
+ * `vitest.config.ts` globs as `tools/<tool>/*` plus `/test/`.
+ *
+ * **Three kinds of edge, because the declarations are not the whole of what a
+ * test depends on.**
+ *
+ *   1. A workspace named in `dependencies`, `devDependencies`,
+ *      `peerDependencies` or `optionalDependencies`. `devDependencies` count:
+ *      `planner/agent` lists `@planner/itinerary` there and its tests need it.
+ *   2. A package's own files naming another package of the tool, by
+ *      `@<tool>/<name>` or by a relative path that resolves into it
+ *      (`../../engine/test/helpers/media.ts`, `new URL("../../web/public/", …)`,
+ *      `"../../resolvers/test/fixtures/…"`). A path is resolved from the file
+ *      that holds it, so a hostile `../../../etc/passwd` in a test of
+ *      path-sanitising lands outside every package and adds nothing.
+ *   3. A `tools/<tool>/<package>` path built from segments, which is what a
+ *      helper does when it walks up from the working directory rather than
+ *      from `import.meta.url` (`join("tools", "downloader", "resolvers", …)`).
+ *
+ * **A path that names data is an edge to that path, not to the package.** A
+ * test that reads `resolvers/test/fixtures/x.json` can be broken by a change to
+ * that file, and by nothing else in `resolvers`; making it depend on the whole
+ * package would run `engine` for every resolver edit and give back the 741 s
+ * this ticket exists to save. A path that names code (a `.ts`, `.mjs`…), or
+ * the package root, or anything the scan cannot tell, is an edge to the whole
+ * package. So is every declared dependency.
+ *
+ * The edges are returned as `dependsOn: Map<dir, Set<scope>>`, where the scope
+ * `""` means the whole package.
+ *
+ * Kinds 2 and 3 read text with comments removed (`withoutComments`). Whatever
+ * that misses, a string that merely mentions a sibling package, adds an edge,
+ * which only ever costs time and never hides a test: the direction this must
+ * err in.
+ *
+ * Returns `null` when the tool has no readable package at `repo`, so the caller
+ * widens to the whole tool.
+ *
+ * @param {string} repo
+ * @param {string} tool
+ * @returns {Map<string, {hasTests: boolean, dependsOn: Map<string, Set<string>>}> | null}
+ */
+export function packageGraph(repo, tool) {
+  const root = path.join(repo, "tools", tool);
+  /** @type {fs.Dirent[]} */
+  let entries;
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  /** @type {Map<string, string>} */
+  const nameToDir = new Map();
+  /** @type {Map<string, Record<string, unknown>>} */
+  const manifests = new Map();
+  for (const entry of entries) {
+    if (!entry.isDirectory() || SCAN_SKIP_DIRS.has(entry.name)) continue;
+    try {
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(root, entry.name, "package.json"), "utf8"),
+      );
+      manifests.set(entry.name, manifest);
+      nameToDir.set(typeof manifest.name === "string" ? manifest.name : entry.name, entry.name);
+    } catch {
+      // not a package: no package.json, or one that is not JSON — the caller
+      // widens to the whole tool for any path under it.
+    }
+  }
+  if (manifests.size === 0) return null;
+
+  // `tools/<tool>/<package>` then any number of `/segment` or `", "segment`
+  // continuations. The continuation is that strict so a prose word after a
+  // closing quote is never read as part of the path: an over-long scope would
+  // match no changed file, which is the one way this can lose a test.
+  const joint = `(?:/|["'\`]\\s*,\\s*["'\`])`;
+  const segmentPath = new RegExp(
+    `tools${joint}${escapeRegExp(tool)}${joint}([\\w-]+)((?:${joint}[\\w.-]+)*)`,
+    "gu",
+  );
+
+  const graph = new Map();
+  for (const [dir, manifest] of manifests) {
+    /** @type {Map<string, Set<string>>} */
+    const dependsOn = new Map();
+    for (const field of [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      "optionalDependencies",
+    ]) {
+      for (const name of Object.keys(
+        /** @type {Record<string, unknown>} */ (manifest[field] ?? {}),
+      )) {
+        const other = nameToDir.get(name);
+        if (other !== undefined) addEdge(dependsOn, other, "");
+      }
+    }
+
+    const pkgRoot = path.join(root, dir);
+    const namePatterns = [...nameToDir].map(([name, other]) => /** @type {const} */ ([
+      new RegExp(`${escapeRegExp(name)}(?![\\w-])`, "u"),
+      other,
+    ]));
+    for (const file of scannableFiles(pkgRoot)) {
+      let text;
+      try {
+        text = fs.readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
+      text = withoutComments(text);
+      for (const [pattern, other] of namePatterns) {
+        if (pattern.test(text)) addEdge(dependsOn, other, "");
+      }
+      for (const match of text.matchAll(/(?:\.\.\/)+[\w@.\-/]*/gu)) {
+        const target = path.resolve(path.dirname(file), match[0]);
+        const parts = path.relative(root, target).split(path.sep);
+        if (!manifests.has(parts[0])) continue;
+        const named = parts.length > 1 && !namesCode(target);
+        addEdge(dependsOn, parts[0], named ? parts.join("/") : "");
+      }
+      for (const match of text.matchAll(segmentPath)) {
+        if (!manifests.has(match[1])) continue;
+        const rest = match[2].split(/["'`\s,/]+/u).filter(Boolean);
+        const named = rest.length > 0 && !namesCode(path.join(root, match[1], ...rest));
+        addEdge(dependsOn, match[1], named ? [match[1], ...rest].join("/") : "");
+      }
+    }
+    dependsOn.delete(dir);
+
+    let hasTests = false;
+    try {
+      hasTests = fs.statSync(path.join(pkgRoot, "test")).isDirectory();
+    } catch {
+      // no test directory: this package owns no unit tests.
+    }
+    graph.set(dir, { hasTests, dependsOn });
+  }
+  return graph;
+}
+
+/**
+ * The `vitest` path filters that narrow one tool's project to the packages a
+ * diff can reach, or `[]` for "run the whole project" (repo-102).
+ *
+ * The packages to run are the ones the diff changed, everything that depends
+ * on a changed package as a whole, transitively, and anything that reads a
+ * path the diff changed (a scoped edge, `packageGraph`). A scoped edge fires on
+ * the diff's own paths and does not spread: reading a changed fixture does not
+ * change the reader's code, so the reader's dependents are not affected.
+ *
+ * **It fails open: any path it cannot place in a package widens to the whole
+ * tool** — a file at the tool's root, `e2e/`, a `Dockerfile`, a playwright
+ * config, a package that no longer exists. A narrowing is only ever drawn from
+ * a diff every path of which is inside a package this tree can still read.
+ *
+ * Each filter ends in `/test/` so it matches that package's tests and no
+ * sibling whose name begins the same way; vitest treats a positional argument
+ * as a substring of the test file's path.
+ *
+ * @param {string} repo
+ * @param {string} tool
+ * @param {string[]} toolPaths  non-markdown diff paths under `tools/<tool>/`
+ * @returns {string[]}
+ */
+export function narrowedFilters(repo, tool, toolPaths) {
+  const graph = packageGraph(repo, tool);
+  if (graph === null) return [];
+
+  const prefix = `tools/${tool}/`;
+  /** @type {Set<string>} packages whose code the diff changed, then their whole-package dependents */
+  const changed = new Set();
+  for (const p of toolPaths) {
+    const rest = p.slice(prefix.length);
+    const slash = rest.indexOf("/");
+    if (slash < 0) return [];
+    const dir = rest.slice(0, slash);
+    if (!graph.has(dir)) return [];
+    changed.add(dir);
+  }
+
+  // Transitive reverse dependencies along whole-package edges only.
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [dir, { dependsOn }] of graph) {
+      if (changed.has(dir)) continue;
+      for (const [other, scopes] of dependsOn) {
+        if (scopes.has("") && changed.has(other)) {
+          changed.add(dir);
+          grew = true;
+          break;
+        }
+      }
+    }
+  }
+
+  const affected = new Set(changed);
+  for (const [dir, { dependsOn }] of graph) {
+    for (const scopes of dependsOn.values()) {
+      for (const scope of scopes) {
+        if (scope === "") continue;
+        const read = `${prefix}${scope}`;
+        // A prefix, not a path: a name built at run time (`hls-${n}.m3u8`) leaves
+        // only its literal head in the source, and the head must match the files.
+        if (toolPaths.some((p) => p.startsWith(read))) affected.add(dir);
+      }
+    }
+  }
+
+  const testable = [...graph].filter(([, { hasTests }]) => hasTests).map(([dir]) => dir);
+  const hit = testable.filter((dir) => affected.has(dir)).toSorted();
+  if (hit.length === 0 || hit.length === testable.length) return [];
+  return hit.map((dir) => `${prefix}${dir}/test/`);
+}
+
 /**
  * `npm run check`, plus whichever `npm test` a diff's own paths call for: the
  * full suite when shared config moved, the `repo` project when `scripts/`
  * moved, one project per tool the diff touches, and `core` after those (repo-90)
  * — all read from the diff's own paths, never from a flag.
  *
+ * With `repo`, a tool's project narrows to the packages the diff reaches
+ * (`narrowedFilters`, repo-102). Without it, every touched tool runs whole,
+ * which is also what a tree that cannot be read gives.
+ *
  * @param {string[]} diffPaths
+ * @param {string} [repo]
  * @returns {[string, string[]][]}
  */
-export function testPlan(diffPaths) {
+export function testPlan(diffPaths, repo) {
   const commands = [["npm", ["run", "check"]]];
   if (sharedConfigTouched(diffPaths)) {
     commands.push(["npm", ["test"]]);
@@ -250,7 +591,15 @@ export function testPlan(diffPaths) {
   const projects = scriptsTouched(diffPaths) ? ["repo", ...tools] : tools;
   // `core` last, whenever code moved: its source scans read every file under scripts/ and tools/ (repo-90)
   for (const project of projects.length > 0 ? [...projects, "core"] : projects) {
-    commands.push(["npm", ["test", "--", "--project", project]]);
+    const filters =
+      repo !== undefined && tools.includes(project)
+        ? narrowedFilters(
+            repo,
+            project,
+            diffPaths.filter((p) => p.startsWith(`tools/${project}/`) && !p.endsWith(".md")),
+          )
+        : [];
+    commands.push(["npm", ["test", "--", "--project", project, ...filters]]);
   }
   return commands;
 }
@@ -294,7 +643,7 @@ export function runBuildCommand(command, args, options = {}) {
  */
 export function checkBuild(repo, diffPaths, run = runBuildCommand) {
   const out = [];
-  for (const [command, args] of testPlan(diffPaths)) {
+  for (const [command, args] of testPlan(diffPaths, repo)) {
     const label = `${command} ${args.join(" ")}`;
     try {
       run(command, args, { cwd: repo });
