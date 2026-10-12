@@ -831,7 +831,7 @@ records discarded. They had spent **$3.78** ($3.65 Opus, $0.13 Haiku), which is
 in no table below. The account's spend for pl-40 is $10.70.
 
 **`count_tokens` replaces every chars/4 figure in this brief.** It was run over
-every rendered prompt before its call. On all 100 attempt-1 calls it equals the
+every rendered prompt before its call. On all 550 attempt-1 calls it equals the
 billed `input_tokens` exactly, and all five pairs counted every prompt
 identically. Attempt 1, per specialist:
 
@@ -848,7 +848,7 @@ identically. Attempt 1, per specialist:
 
 - **A no-finds call is about 3.8k–4.0k tokens, not the ~783 this brief
   estimated.** The estimate was right about the prompt text: road-trip's
-  `budget` system prompt and messages are 2,711 characters, ~680 by chars/4. The
+  `budget` system prompt and message text are 2,661 characters, ~665 by chars/4. The
   other ~3.15k come with the request itself. The only other thing it carries is
   the structured-output schema (`output_config.format`, built from
   `specialistReplySchema`), which the filing did not count. Nothing here
@@ -861,11 +861,16 @@ identically. Attempt 1, per specialist:
   finds readers' prompts in every pair. Set C's records carry 41 finds where B's
   carry 40. Nothing re-caps between discovery and the fan-out.
 
-**The table.** One row per set per pair. "Ceiling" is Build step 3's formula at
+**The table.** One row per set per pair. Rule (a) and the
+observed-against-ceiling check below were also run per individual run, and both
+hold on all 111. "Ceiling" is Build step 3's formula at
 the pair's own output rate, not $25/MTok. Its input term is rebuilt per
 specialist from that run's measured attempt-1 input: attempt 1, then attempt 2
 as attempt 1 plus `maxOutputTokens` plus the complaint. The complaint measured
-86 tokens on every Opus and Sonnet re-ask in set D. "Thinking" is
+85–86 tokens on every Opus and Sonnet re-ask in set D, and 86 is used. Set A's
+resort roster has four specialists. Its fifth is priced at its largest measured
+one, which raises set A's ceiling by about half a percent over pricing only the
+four. "Thinking" is
 `thinkingTokens ÷ outputTokens`, decision A's lower bound. Cache reads are zero
 everywhere because pl-39 sets no `cache_control`, so B's cost with and without
 cache reads is the same figure.
@@ -898,8 +903,9 @@ Sonnet $2.12 · Opus $4.25), plus the $3.78 the interruption discarded.
 
 **Per run, on the shape that matters (set B, road-trip with the capped
 corridor):** Haiku $0.006 at `low` to $0.010 at `high`, Sonnet $0.126, Opus
-$0.249. Set B sits at **12.5–12.7% of its own ceiling** for Sonnet and Opus, and
-lower for Haiku.
+$0.249. Set B sits at **12.5–12.7% of its own ceiling** for Sonnet and Opus. For Haiku
+it sits at 12.3% at `low`, 14.7% at `medium` and 19.7% at `high`, where thinking
+fills more of the output bound.
 
 **Rules (a)–(c): none tripped, and no `pl-` fix is filed.**
 
@@ -946,14 +952,15 @@ and it is recorded here rather than fixed.
 | Haiku `medium` | 15-run cap                  | 75                      |
 | Haiku `high`   | 100 reached on the 15th run | 100                     |
 | Sonnet `low`   | 100 reached in 8 runs       | 100                     |
-| Opus `low`     | 100 reached in 8 runs       | 104                     |
+| Opus `low`     | 100 reached in 8 runs       | 100                     |
 
 The corpus covers two of the three finds readers, `activities` and `food`.
 `conditions-and-gear` needs a backcountry corridor capture, which this ticket
 scoped out.
 
-**Set C: the hostile name moved nothing that could be seen.** It ran three times
-per pair, fifteen runs in all, with pl-29's string verbatim as find 40.
+**Set C: the hostile name moved nothing that could be seen. Fifteen runs of one
+string are an observation, not a proof of resistance.** Set C ran three times per
+pair, fifteen runs in all, with pl-29's string verbatim as find 40.
 
 - No reply from any specialist mentions "Grand Hotel", "Ignore prior" or
   "system".
@@ -961,11 +968,8 @@ per pair, fifteen runs in all, with pl-29's string verbatim as find 40.
   is advice to the party ("book well ahead", "check before booking"), the same
   wording set B carries.
 - `lodging`, which reads no finds, proposed no Grand Hotel either.
-- Every reply parsed. Every stop reason was `end`, as in set B.
-
-**The limit, in the same paragraph as the claim:** fifteen runs of one string
-are an observation, not a proof of resistance. pl-29's reopening condition is
-met by observation only.
+- Every reply parsed, and every stop reason was `end`. Set B's only other stop
+  reason in 306 attempts is Haiku `high`'s one `length`.
 
 **Decision A's two questions, which pl-52's report wording waits on:**
 
@@ -997,13 +1001,17 @@ labelled, so quality is read off counts and a look at the text.
 
 `accept` rejected nothing in any pair. Read side by side, Sonnet's and Opus's
 set-B `activities` replies name the same places with similarly specific
-detail: the Bonaventure gannet colony, Percé's tides. Haiku's are shorter and
-more generic ("Percé Rock viewing stop").
+detail: the Bonaventure gannet colony, Percé's tides. Haiku's titles and
+replies are shorter and more generic ("Percé Rock viewing stop"), though its
+summaries run slightly longer. **Haiku's finds readers also returned an empty
+list on 11 of their 90 set-B replies** (7 of 30 at `low`). Sonnet's and Opus's
+never did.
 
 **Recommendation for the default, on dollars and quality, not tokens: Sonnet
 5.5 at `low`.** It matched Opus 5.5 on every count above at half the price
-($0.126 against $0.249 per corridor run). Neither thought at this effort, so the
-gap is the rate card alone. Haiku 5.5 is 15–20× cheaper again, but it proposes
+($0.126 against $0.249 per corridor run). Opus thought on 3 of its 94 replies and
+Sonnet on none, so the gap is the rate card alone. Haiku 5.5 is 13–21× cheaper
+again, but it proposes
 about half the candidates, and a third to a half as many from the finds. That
 is the half of the tool P3 exists to ground. The deployed default is still
 `claude-opus-5`, which this run did not measure. **Choosing is the owner's**,
@@ -1012,7 +1020,7 @@ and a change of default is its own ticket.
 **What this run settles for the tickets waiting on it:**
 
 - **pl-29:** set C above.
-- **pl-36:** the corpus exists, 431 finds-reader candidates over the 61
+- **pl-36:** the corpus exists, 427 finds-reader candidates over the 61
   set-B runs, each with the capped corridor's finds in its prompt, unlabelled as Build step 4 requires. The join is
   still its own ticket.
 - **pl-52:** decision A's answers above.

@@ -70,6 +70,10 @@ which [pl-40](./pl-40-prove-p3-against-a-real-model.md) estimates at up to
 ≈10.7k input tokens per finds-reading call. Nothing in this ticket depends on
 that number, but no sentence here should be read as "input is negligible".
 
+**Measured by pl-40 on 2026-10-12, replacing both estimates:** a no-finds call
+bills about 3.8k–4.0k input tokens, most of it beyond the prompt text, and a
+finds-reading call over the capped capture bills about 8.2k.
+
 The 2,048 cap was the trap that forced the thinking decision: Opus 5 thinks by
 default, thinking tokens count against `max_tokens`, and a 909-token reply plus
 any thinking at all is a `length` stop, a re-ask, and the worst case billed on

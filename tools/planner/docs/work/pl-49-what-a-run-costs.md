@@ -25,8 +25,9 @@ for the owner's own bill.
 - **pl-39's figure is an estimate, not a reading.** About $0.07 for a mean run
   and $2.30 in the worst case, from characters ÷ 4 over fixture briefs with no
   discovery block. A corridor run reads finds, and
-  [pl-40](./pl-40-prove-p3-against-a-real-model.md) estimates up to ≈10.7k
-  input tokens per finds-reading call.
+  [pl-40](./pl-40-prove-p3-against-a-real-model.md) estimated up to ≈10.7k
+  input tokens per finds-reading call. Its run measured about 8.2k with pl-41's
+  cap in place, and about 3.9k for a call with no finds.
 - **The run already adds its tokens up, and the total is dropped.**
   `agent/src/orchestrator.ts:381` "function tally(" returns
   `{ calls, inputTokens, outputTokens }` as `FanOutResult.usage`.

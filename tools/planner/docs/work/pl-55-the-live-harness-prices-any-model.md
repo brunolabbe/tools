@@ -167,7 +167,9 @@ noise to average away.
 
 **Token counts do not compare across the three models.** Their tokenizers differ, so
 `count_tokens` over the same prompt gives different numbers. pl-40's comparison
-is in dollars and in reply quality, never in tokens.
+is in dollars and in reply quality, never in tokens. (pl-40's run found the
+opposite on these prompts: all 44 counted identically on all three models. The
+rule to compare in dollars stands anyway.)
 
 **Effort defaults differ (`medium` on Opus 5.5 and Haiku 5.5, `high` on Sonnet
 5.5), and none of the three can run without thinking the way `disabled` once did.**
