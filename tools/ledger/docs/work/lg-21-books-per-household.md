@@ -73,6 +73,28 @@ the other. A request that holds only its own household's file cannot do that.
    `booksOf(request)`, never from a handle of its own. In
    `docs/02-DEPLOYMENT.md`'s ledger section, say that a backup takes the whole
    data directory.
+9. **What lg-20's gate left on the boot and enrol path** (gate 1, F4, F5 and F8).
+   This ticket rewrites both, so they are fixed here rather than on lg-20.
+   - **A missing directory file looks healthy** (F4). It is created empty, health
+     answers `ok`, and every request is 403 with nothing at boot to say why: an
+     unmounted volume or a wrong `DIRECTORY_PATH` reads as a service refusing
+     everyone. Log a `warn` at boot when the directory holds no household.
+   - **The directory and the books can be pointed at one file** (F4). Today
+     `DIRECTORY_PATH` equal to `DATABASE_PATH` fails at boot and leaves the file
+     half-migrated with both schemas' tables. Once `DATABASE_PATH` is the data
+     directory, refuse at config a `DIRECTORY_PATH` inside `households/`.
+   - **A failed enrol fails the read** (F5). The identity hook enrols a newly
+     added name on the request path. When the books cannot take that write (the
+     import command holds the lock), every request from the household returns
+     500 after the 5 s `busy_timeout`, spent on the event loop, not only the new
+     member's. A failed enrol refuses only the person it could not enrol; the
+     household's other members are served.
+   - **Nothing crosses a process** (F8). "A removal takes effect without a
+     restart" is asserted on the one `Directory` the app and the test share, but
+     the documented path is the household command, a second process, writing a
+     file the API has open. Test it with two connections on a temp file. Also run
+     the household command (`add`, `member`, `list`, `remove`) inside the image in
+     `ledger.yml`, beside the image's boot.
 
 **Traps.**
 
@@ -92,7 +114,11 @@ the other. A request that holds only its own household's file cannot do that.
 4. Health reports the directory and every household file without naming any; a
    test proves it.
 5. The import command writes only to the named household's file; a test proves it.
-6. Gates green, including the ledger image's boot.
+6. Gates green, including the ledger image's boot and the household command run
+   inside the image.
+7. Step 9 holds, and a test proves each part: the boot warning, the config
+   refusal, a write-locked books file that refuses only the unenrolled person, and
+   a removal made from a second connection that the next request sees.
 
 ## Log
 
@@ -101,3 +127,6 @@ the other. A request that holds only its own household's file cannot do that.
   migrates it.
 - 2026-10-12 — Reviewed: lg-20 now lets an admin with no household through the
   identity hook, so `booksOf` is named as refusing that identity.
+- 2026-10-12 — Step 9 and Done-when 7 added, and Done-when 6 widened, from
+  lg-20's gate 1 (F4, F5, F8), which the owner chose to fold here rather than
+  fix on lg-20.

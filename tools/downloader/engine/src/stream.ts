@@ -366,6 +366,8 @@ export interface StreamArgsOptions {
   liveDurationSec?: number | null | undefined;
   tlsVerify?: boolean | undefined;
   tlsCaFile?: string | undefined;
+  /** `EngineConfig.reconnectDelayMaxS`, for every network input; unset is production's. */
+  reconnectDelayMaxS?: number | undefined;
 }
 
 /** Exported for tests: the full argv for one attempt, without spawning anything. */
@@ -377,6 +379,7 @@ export function buildStreamArgs(options: StreamArgsOptions): {
   const tls = {
     ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
     ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
+    reconnectDelayMaxS: options.reconnectDelayMaxS,
   };
   const args: string[] = [...GLOBAL_ARGS, ...STREAM_PROGRESS_ARGS];
   const maps: StreamMap[] = [];
@@ -397,7 +400,7 @@ export function buildStreamArgs(options: StreamArgsOptions): {
             hlsAllowAllExtensions: hls,
             ...tls,
           })
-        : buildLoopbackInputArgs(options.loopbackUrl)),
+        : buildLoopbackInputArgs(options.loopbackUrl, undefined, options.reconnectDelayMaxS)),
     );
     if (variant.hasVideo && !options.audioOnly) {
       maps.push({ inputIndex, kind: "video", streamIndex: 0, optional: true });
@@ -784,6 +787,7 @@ async function attempt(
         liveDurationSec: context.liveDurationSec,
         tlsVerify: config.tlsVerify,
         tlsCaFile: config.tlsCaFile,
+        reconnectDelayMaxS: config.reconnectDelayMaxS,
       });
     } catch (error: unknown) {
       feeder?.close();
@@ -850,6 +854,7 @@ async function attempt(
     timeoutMs: config.stageTimeoutMs,
     maxOutputBytes: config.maxFileSizeBytes,
     proxyUrl: config.proxyUrl,
+    killGraceMs: config.killGraceMs,
     failureCode: "DOWNLOAD_FAILED",
     logger,
     onProgress: (snapshot) => {

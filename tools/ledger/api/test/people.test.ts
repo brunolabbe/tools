@@ -1,8 +1,8 @@
 /**
- * The `people` table and migration 3 (lg-5). A person's id is the configured
- * name, so the person ids lg-4 already stored on rules and classifications still
- * name someone; and the configuration fills the table at boot, never the
- * repository.
+ * The `people` table and migration 3 (lg-5). A person's id is the name the
+ * household directory holds (lg-20), so the person ids lg-4 already stored on
+ * rules and classifications still name someone; and the directory fills the
+ * table at boot and as members are added, never the repository.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -15,7 +15,7 @@ import type { PeopleResponse } from "@ledger/contract";
 import { migrate } from "../src/db/schema.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
-import { ALEX, SAM, accessConfig } from "./helpers/access.ts";
+import { ALEX, SAM, accessConfig, memberDirectory } from "./helpers/access.ts";
 import {
   TRANSFER_RULE,
   addRule,
@@ -39,7 +39,7 @@ function people(target: App): string[] {
 }
 
 describe("the people table", () => {
-  test("a fresh database with no configuration has no people: nothing is seeded", () => {
+  test("a fresh database with an empty directory has no people: nothing is seeded", () => {
     const db = new Database(":memory:");
     migrate(db);
 
@@ -47,19 +47,17 @@ describe("the people table", () => {
     db.close();
   });
 
-  test("boot adds each configured person once, and GET /api/people reads the table", async () => {
+  test("boot adds each member's name once, and GET /api/people reads the table", async () => {
     app = await createApp({
+      directory: memberDirectory([
+        [SAM, "sam"],
+        ["sam.work@example.test", "sam"],
+        [ALEX, "alex"],
+      ]),
       config: {
         databasePath: ":memory:",
         logLevel: "silent",
-        access: accessConfig({
-          devIdentity: SAM,
-          people: new Map([
-            ["sam@example.test", "sam"],
-            ["sam.work@example.test", "sam"],
-            ["alex@example.test", "alex"],
-          ]),
-        }),
+        access: accessConfig({ devIdentity: SAM }),
       },
     });
 
@@ -97,21 +95,19 @@ describe("the people table", () => {
     expect(named.every((row) => people(app as App).includes(row.person_id))).toBe(true);
   });
 
-  test("a person the configuration stops naming stays, so their rows still name someone", async () => {
+  test("a person the directory stops holding stays, so their rows still name someone", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "ledger-people-"));
     const databasePath = path.join(dir, "ledger.db");
     try {
       app = await createApp({
+        directory: memberDirectory(),
         config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
       await app.shutdown();
 
       app = await createApp({
-        config: {
-          databasePath,
-          logLevel: "silent",
-          access: accessConfig({ devIdentity: ALEX, people: new Map([[ALEX, "alex"]]) }),
-        },
+        directory: memberDirectory([[ALEX, "alex"]]),
+        config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
 
       expect(people(app)).toEqual(["alex", "sam"]);
@@ -220,6 +216,7 @@ describe("upgrading a database lg-4 wrote", () => {
       old.close();
 
       app = await createApp({
+        directory: memberDirectory(),
         config: { databasePath, logLevel: "silent", access: accessConfig({ devIdentity: ALEX }) },
       });
 

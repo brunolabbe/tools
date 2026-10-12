@@ -88,6 +88,14 @@ async function killTreePosix(pid: number, graceMs: number): Promise<void> {
   signalGroup("SIGKILL");
 }
 
+/**
+ * How long a process group gets between SIGTERM and SIGKILL. Production
+ * behaviour: ffmpeg needs the moment to finish its trailer. The engine takes it
+ * as an option (`killGraceMs`) only so a test that cancels a job need not wait it
+ * out (dl-116); nothing in production passes another.
+ */
+export const DEFAULT_KILL_GRACE_MS = 3000;
+
 export interface KillTreeOptions {
   /** How long the POSIX branch waits after SIGTERM before SIGKILL. */
   graceMs?: number;
@@ -103,6 +111,6 @@ export async function killProcessTree(pid: number, options: KillTreeOptions = {}
   if (IS_WINDOWS) {
     await killTreeWindows(pid, logger);
   } else {
-    await killTreePosix(pid, options.graceMs ?? 3000);
+    await killTreePosix(pid, options.graceMs ?? DEFAULT_KILL_GRACE_MS);
   }
 }

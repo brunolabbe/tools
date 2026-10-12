@@ -39,6 +39,7 @@ import {
   extractCheckJobCommands,
   isTicketPath,
   mergeTreeConflicts,
+  packageGraph,
   parseArgs,
   parseMergeTreeConflicts,
   assertSpawnable,
@@ -1599,5 +1600,394 @@ test("preflight plans the tool's suite for a .ts renamed to .md, since its sourc
     expect(results.find((r) => r.name === "check")).toMatchObject({ ok: true, bit: 0 });
   } finally {
     repo.cleanup();
+  }
+});
+
+// --- repo-102: a tool's suite narrows to the packages a change can reach ------
+
+function pkg(name: string, deps: string[] = []) {
+  return JSON.stringify({
+    name: `@foo/${name}`,
+    dependencies: Object.fromEntries(deps.map((d) => [`@foo/${d}`, "*"])),
+  });
+}
+
+/**
+ * A throwaway tool tree: `contract` <- `engine` <- `api`, and a `web` that
+ * depends on `contract` alone, the shape of the downloader without its names.
+ * Every package has a `test/` directory, as `vitest.config.ts`'s glob needs.
+ */
+function makeToolTree(extra: Record<string, string> = {}) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-tool-")));
+  const files: Record<string, string> = {
+    "tools/foo/contract/package.json": pkg("contract"),
+    "tools/foo/engine/package.json": pkg("engine", ["contract"]),
+    "tools/foo/api/package.json": pkg("api", ["contract", "engine"]),
+    "tools/foo/web/package.json": pkg("web", ["contract"]),
+    "tools/foo/contract/test/a.test.ts": "export {};\n",
+    "tools/foo/engine/test/a.test.ts": "export {};\n",
+    "tools/foo/api/test/a.test.ts": "export {};\n",
+    "tools/foo/web/test/a.test.ts": "export {};\n",
+    ...extra,
+  };
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.join(dir, path.dirname(file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), content);
+  }
+  return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** The filters planned after `--project foo`: `[]` is the whole project, `null` is no such command. */
+function planFor(paths: string[], repo: string): string[] | null {
+  const command = testPlan(paths, repo).find(([, args]) => args.includes("foo"));
+  return command ? command[1].slice(command[1].indexOf("foo") + 1) : null;
+}
+
+test("testPlan plans only the leaf package for a change to it (repo-102)", () => {
+  const tree = makeToolTree();
+  try {
+    expect(planFor(["tools/foo/api/src/a.ts"], tree.dir)).toEqual(["tools/foo/api/test/"]);
+    expect(planFor(["tools/foo/web/src/a.ts"], tree.dir)).toEqual(["tools/foo/web/test/"]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("testPlan plans every package for a change to contract, as the tool's whole project (repo-102)", () => {
+  const tree = makeToolTree();
+  try {
+    // All four packages are affected, so the plan is the unfiltered project
+    // CI runs, not four filters that spell the same thing.
+    expect(planFor(["tools/foo/contract/src/a.ts"], tree.dir)).toEqual([]);
+    expect(testPlan(["tools/foo/contract/src/a.ts"], tree.dir)).toEqual([
+      ["npm", ["run", "check"]],
+      ["npm", ["test", "--", "--project", "foo"]],
+      ["npm", ["test", "--", "--project", "core"]],
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("testPlan plans engine and api for a change to engine, and not web or contract (repo-102)", () => {
+  const tree = makeToolTree();
+  try {
+    expect(planFor(["tools/foo/engine/src/a.ts"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/engine/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("testPlan plans the whole tool for any path that belongs to no package (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/Dockerfile": "FROM scratch\n",
+    "tools/foo/e2e/a.spec.ts": "export {};\n",
+    "tools/foo/tsconfig.json": "{}\n",
+    "tools/foo/src/loose.ts": "export {};\n",
+  });
+  try {
+    for (const orphan of [
+      "tools/foo/Dockerfile",
+      "tools/foo/playwright.config.ts",
+      "tools/foo/e2e/a.spec.ts",
+      "tools/foo/tsconfig.json",
+      "tools/foo/src/loose.ts",
+      "tools/foo/gone/src/deleted.ts", // a package that no longer exists
+    ]) {
+      expect(planFor([orphan], tree.dir)).toEqual([]);
+      // Alongside a path that would narrow, the orphan still wins.
+      expect(planFor(["tools/foo/api/src/a.ts", orphan], tree.dir)).toEqual([]);
+    }
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("testPlan runs the whole tool when it cannot read the tree, and when no repo is given (repo-102)", () => {
+  expect(planFor(["tools/foo/api/src/a.ts"], "/nonexistent/repo")).toEqual([]);
+  expect(testPlan(["tools/foo/api/src/a.ts"])[1]).toEqual([
+    "npm",
+    ["test", "--", "--project", "foo"],
+  ]);
+});
+
+test("packageGraph adds an edge for a test import the manifests do not declare (repo-102)", () => {
+  const tree = makeToolTree({
+    // web declares only contract, but its test borrows engine's helper.
+    "tools/foo/web/test/b.test.ts": 'import { media } from "../../engine/test/helpers/media.ts";\n',
+    "tools/foo/engine/test/helpers/media.ts": "export const media = 1;\n",
+  });
+  try {
+    expect(packageGraph(tree.dir, "foo")?.get("web")?.dependsOn.get("engine")).toEqual(
+      new Set([""]),
+    );
+    // So an engine change now reaches web, which the manifests alone would not say.
+    expect(planFor(["tools/foo/engine/src/a.ts"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph counts a devDependency on a workspace and a bare @tool/package import (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/web/package.json": JSON.stringify({
+      name: "@foo/web",
+      dependencies: { "@foo/contract": "*" },
+      devDependencies: { "@foo/engine": "*" },
+    }),
+    "tools/foo/contract/test/b.test.ts": 'import { x } from "@foo/api";\n',
+  });
+  try {
+    const graph = packageGraph(tree.dir, "foo");
+    expect([...(graph?.get("web")?.dependsOn.keys() ?? [])].toSorted()).toEqual([
+      "contract",
+      "engine",
+    ]);
+    expect([...(graph?.get("contract")?.dependsOn.keys() ?? [])]).toEqual(["api"]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph does not read a comment's mention of a sibling as a dependency (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/contract/src/a.ts": [
+      "/**",
+      " * Lives in `@foo/engine`, see ../../engine/src/a.ts and tools/foo/api/src/b.ts.",
+      " */",
+      "// and `@foo/web`, ../../web/src/a.ts",
+      "export const url = 'http://example.test/';",
+      "",
+    ].join("\n"),
+  });
+  try {
+    expect(packageGraph(tree.dir, "foo")?.get("contract")?.dependsOn.size).toBe(0);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph scopes a path that names data to that path, so a source change does not spread to its reader (repo-102)", () => {
+  const tree = makeToolTree({
+    // engine reads a fixture of web by relative path, api walks up to a
+    // directory of web's with segments, as a helper under jsdom must.
+    "tools/foo/engine/test/b.test.ts": 'const f = "../../web/test/fixtures/x.json";\n',
+    "tools/foo/api/test/b.test.ts": 'const d = join("tools", "foo", "web", "public");\n',
+  });
+  try {
+    const graph = packageGraph(tree.dir, "foo");
+    expect(graph?.get("engine")?.dependsOn.get("web")).toEqual(
+      new Set(["web/test/fixtures/x.json"]),
+    );
+    expect(graph?.get("api")?.dependsOn.get("web")).toEqual(new Set(["web/public"]));
+    // A source change in web runs web alone: neither reader reads its source.
+    expect(planFor(["tools/foo/web/src/a.ts"], tree.dir)).toEqual(["tools/foo/web/test/"]);
+    // The fixture and the directory each fire their own reader, and only it.
+    expect(planFor(["tools/foo/web/test/fixtures/x.json"], tree.dir)).toEqual([
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+    expect(planFor(["tools/foo/web/public/logo.svg"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("checkBuild hands testPlan the repo it is checking, so the narrowing reaches the spawned command (repo-102)", () => {
+  const tree = makeToolTree();
+  try {
+    const calls: string[] = [];
+    const result = checkBuild(tree.dir, ["tools/foo/api/src/a.ts"], recordingRun(calls));
+    expect(result.ok).toBe(true);
+    expect(calls).toContain("npm test -- --project foo tools/foo/api/test/");
+  } finally {
+    tree.cleanup();
+  }
+});
+
+/**
+ * Done when 1, against this checkout's real manifests and not a fixture. The
+ * downloader has five packages; a change to `api` alone must plan `api` and
+ * not `resolvers`, and a change to `contract` must plan all five (so it plans
+ * the project unfiltered).
+ */
+test("testPlan on the real downloader: an api diff plans api only, a contract diff plans all five (repo-102)", () => {
+  const graph = packageGraph(REPO_ROOT, "downloader");
+  expect([...(graph?.keys() ?? [])].toSorted()).toEqual([
+    "api",
+    "contract",
+    "engine",
+    "resolvers",
+    "web",
+  ]);
+  expect([...(graph?.values() ?? [])].every((p) => p.hasTests)).toBe(true);
+
+  const apiOnly = testPlan(["tools/downloader/api/src/server.ts"], REPO_ROOT)[1]?.[1];
+  expect(apiOnly).toEqual(["test", "--", "--project", "downloader", "tools/downloader/api/test/"]);
+  expect((apiOnly ?? []).join(" ")).not.toContain("resolvers");
+
+  expect(testPlan(["tools/downloader/contract/src/index.ts"], REPO_ROOT)[1]?.[1]).toEqual([
+    "test",
+    "--",
+    "--project",
+    "downloader",
+  ]);
+  // The declared edges, read from the real package.json files.
+  expect([...(graph?.get("api")?.dependsOn.keys() ?? [])]).toEqual(
+    expect.arrayContaining(["contract", "engine", "resolvers"]),
+  );
+  // And the two that no manifest declares but a test reads by path.
+  expect(graph?.get("engine")?.dependsOn.has("resolvers")).toBe(true);
+  expect(graph?.get("api")?.dependsOn.get("web")).toEqual(new Set(["web/public"]));
+});
+
+test("testPlan on the real tools: a leaf of planner and of ledger narrows the same way (repo-102)", () => {
+  expect(testPlan(["tools/planner/api/src/a.ts"], REPO_ROOT)[1]?.[1]).toEqual([
+    "test",
+    "--",
+    "--project",
+    "planner",
+    "tools/planner/api/test/",
+  ]);
+  expect(testPlan(["tools/ledger/books/src/a.ts"], REPO_ROOT)[1]?.[1]).toEqual([
+    "test",
+    "--",
+    "--project",
+    "ledger",
+    "tools/ledger/api/test/",
+    "tools/ledger/books/test/",
+    "tools/ledger/web/test/",
+  ]);
+});
+
+// --- repo-102 round 1: what the scan must not lose, and the guards it relies on ---
+
+/**
+ * Gate 1's high. A comment stripper that deletes more than a comment hides a
+ * reader, and a hidden reader is the one way this narrowing can skip a test it
+ * should have run. Both shapes below are code, not comments.
+ */
+test("packageGraph keeps a reader whose line holds a // inside a string, or follows a template line starting with a slash-star (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/p5.test.ts":
+      'const note = "see //"; export const P = new URL("../../web/public/", import.meta.url);\n',
+    "tools/foo/api/test/glob.test.ts": [
+      "export const glob = `",
+      "/*.json`;",
+      'export const P = new URL("../../web/test/fixtures/", import.meta.url);',
+      "/** end */",
+      "",
+    ].join("\n"),
+  });
+  try {
+    expect(planFor(["tools/foo/web/public/terms.html"], tree.dir)).toEqual([
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+    // api holds the template-literal reader; engine's read is of web/public only.
+    expect(planFor(["tools/foo/web/test/fixtures/a.json"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph still strips a whole-line // comment and a JSDoc block, but keeps an unstarred block (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/contract/src/a.ts": [
+      "// see ../../web/src/a.ts and @foo/web",
+      "/** @foo/engine in a one-line docblock */",
+      "/**",
+      " * @foo/api, ../../api/src/a.ts",
+      " */",
+      "/*",
+      "  @foo/web is named here, in a block whose body has no stars",
+      "*/",
+      "",
+    ].join("\n"),
+  });
+  try {
+    const edges = packageGraph(tree.dir, "foo")?.get("contract")?.dependsOn;
+    expect([...(edges?.keys() ?? [])]).toEqual(["web"]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph scopes a name built at run time by its literal head, and a changed file under that head fires the reader (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/b.test.ts":
+      "const f = `../../web/test/fixtures/manifests/hls-${n}.m3u8`;\n",
+    "tools/foo/api/test/b.test.ts": 'const f = "tools/foo/web/test/fixtures/page-" + n;\n',
+  });
+  try {
+    expect(planFor(["tools/foo/web/test/fixtures/manifests/hls-master.m3u8"], tree.dir)).toEqual([
+      "tools/foo/engine/test/",
+      "tools/foo/web/test/",
+    ]);
+    expect(planFor(["tools/foo/web/test/fixtures/page-1.html"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/web/test/",
+    ]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test("packageGraph reads an extensionless specifier that resolves to a file as code, so the edge is the whole package (repo-102)", () => {
+  const tree = makeToolTree({
+    "tools/foo/engine/test/helpers/mp4.ts": "export const mp4 = 1;\n",
+    "tools/foo/engine/test/helpers2/index.ts": "export const x = 1;\n",
+    // Bundler resolution lets a web test leave the extension off.
+    "tools/foo/web/test/c.test.ts": 'import { mp4 } from "../../engine/test/helpers/mp4";\n',
+    // The directory form is read by a different package, so one edge cannot
+    // stand in for the other: a whole-package edge absorbs a scoped one.
+    "tools/foo/contract/test/d.test.ts": 'import { x } from "../../engine/test/helpers2";\n',
+  });
+  try {
+    expect(packageGraph(tree.dir, "foo")?.get("web")?.dependsOn.get("engine")).toEqual(
+      new Set([""]),
+    );
+    expect(packageGraph(tree.dir, "foo")?.get("contract")?.dependsOn.get("engine")).toEqual(
+      new Set([""]),
+    );
+    // Contract now reads engine as a whole, and every package depends on contract.
+    expect(planFor(["tools/foo/engine/test/helpers/mp4.ts"], tree.dir)).toEqual([]);
+  } finally {
+    tree.cleanup();
+  }
+});
+
+/** Gate 1's mutation survivors: each guard below was deletable with every test green. */
+test("testPlan widens for a file at the tool's root whose name begins with a package's, and ignores a package that owns no tests (repo-102)", () => {
+  const tree = makeToolTree({
+    // `docsite` is a workspace with no test/ directory that depends on engine.
+    "tools/foo/docsite/package.json": pkg("docsite", ["engine"]),
+    "tools/foo/docsite/src/a.ts": "export {};\n",
+  });
+  try {
+    // `webs` is a root file; `rest.slice(0, -1)` would read it as the `web` package.
+    expect(planFor(["tools/foo/webs"], tree.dir)).toEqual([]);
+    // docsite is affected by an engine change but has no tests to filter on.
+    expect(planFor(["tools/foo/engine/src/a.ts"], tree.dir)).toEqual([
+      "tools/foo/api/test/",
+      "tools/foo/engine/test/",
+    ]);
+    // A change to docsite alone leaves nothing to run, so the whole tool runs.
+    expect(planFor(["tools/foo/docsite/src/a.ts"], tree.dir)).toEqual([]);
+  } finally {
+    tree.cleanup();
   }
 });

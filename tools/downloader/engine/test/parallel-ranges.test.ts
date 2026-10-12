@@ -663,7 +663,10 @@ describe("dl-98: cancelling a split job", () => {
     async () => {
       behaviour.perConnectionBps = 500_000;
       const controller = new AbortController();
-      const media = await engineWith().stream({
+      // A kill grace of 300 ms (dl-116): ffmpeg reading a throttled loopback is
+      // killed on the grace's SIGKILL, which at the default 3 s was most of this
+      // test's time and none of what it proves.
+      const media = await engineWith({ killGraceMs: 300 }).stream({
         jobId: "dl98-cancel",
         variant: variant("faststart.mp4"),
         requestContext: CONTEXT,
@@ -676,7 +679,8 @@ describe("dl-98: cancelling a split job", () => {
       controller.abort();
       // This test has no feeder to count requests on, so it measures in time: from
       // 100 ms after the abort, taken now and not after `media.done`, which
-      // settles about 3 s later and would blind everything before it (dl-106). A
+      // settles a kill grace later (3 s in production, 0.3 s above) and would
+      // blind everything before it (dl-106). A
       // fetch the feeder had written to a socket in the turn of the abort reaches
       // the origin a few ms later (3 ms on Linux) and is closed on arrival.
       const measuredFrom = performance.now() + 100;

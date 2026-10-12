@@ -165,7 +165,7 @@ export class RateLimiter {
 }
 
 /** Expands `::` into eight groups. Null when the literal will not parse. */
-function v6Groups(address: string): number[] | null {
+export function v6Groups(address: string): number[] | null {
   const [head = "", tail] = address.split("::");
   const headParts = head === "" ? [] : head.split(":");
   const tailParts = tail === undefined || tail === "" ? [] : tail.split(":");

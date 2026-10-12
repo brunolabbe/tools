@@ -41,6 +41,14 @@ import { startFixtureServer } from "./helpers/http.ts";
 
 const FFMPEG = resolveFfmpegPath();
 const CLIP_SECONDS = 2;
+/**
+ * ffmpeg retries a dead primary at 0, 1, 3 and 7 s, about 11 s, before the engine
+ * hears of it (`-reconnect_delay_max 10`). What is under test is what the engine
+ * does *after* ffmpeg gave up, so the dead-primary tests cap the wait at 0: one
+ * immediate retry, then the failure (dl-116). The default is pinned in
+ * `ffmpeg-args.test.ts`.
+ */
+const SHORT_BACK_OFF = { reconnectDelayMaxS: 0 };
 
 const CONTEXT: RequestContext = {
   headers: { Referer: "https://player.example/watch/45", "User-Agent": "Mozilla/5.0 (Fixture)" },
@@ -253,7 +261,7 @@ test("the engine fails over to a yt-dlp mirror exactly as it does to an HLS one 
   // variant came from and must not — this test exists because "the field is
   // populated" and "a download really recovers" are different claims, and only
   // the second one is worth anything to a user.
-  const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024 });
+  const engine = createEngine({ maxFileSizeBytes: 64 * 1024 * 1024, ...SHORT_BACK_OFF });
 
   const fromTier = ytdlpMirroredVariant();
   const before = { mirror: mirror.requests.length, expired: expired.requests.length };
@@ -320,7 +328,7 @@ test("the last candidate's own failure is what reaches the caller", async () => 
   // the *second* host's, which is the half that would be silently lost if the
   // loop remembered the first error instead. It also proves the loop stops:
   // there is no third candidate and no third request.
-  const engine = createEngine();
+  const engine = createEngine(SHORT_BACK_OFF);
 
   const before = { mirror: mirror.requests.length, expired: expired.requests.length };
   await expect(
@@ -341,7 +349,7 @@ test("the last candidate's own failure is what reaches the caller", async () => 
 });
 
 test("with no mirror to try, a dead host fails as it always did", async () => {
-  const engine = createEngine();
+  const engine = createEngine(SHORT_BACK_OFF);
 
   const alone = { ...variant(deadOrigin) };
   delete alone.alternateUrls;

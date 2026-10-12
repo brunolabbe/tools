@@ -39,3 +39,19 @@ describe("the CA bundle ffmpeg is given", () => {
     expect(loadEngineConfig({}, {}).tlsCaFile).toBeUndefined();
   });
 });
+
+describe("the two timers a test may shorten (dl-116)", () => {
+  // Production is whatever this returns with nothing passed and an empty
+  // environment: `api` passes neither, and no variable sets either.
+  test("are 10 s of reconnect back-off and a 3000 ms kill grace by default", () => {
+    const config = loadEngineConfig({}, {});
+    expect(config.reconnectDelayMaxS).toBe(10);
+    expect(config.killGraceMs).toBe(3000);
+  });
+
+  test("an explicit value is taken, 0 included", () => {
+    const config = loadEngineConfig({ reconnectDelayMaxS: 0, killGraceMs: 0 }, {});
+    expect(config.reconnectDelayMaxS).toBe(0);
+    expect(config.killGraceMs).toBe(0);
+  });
+});
