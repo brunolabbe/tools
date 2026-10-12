@@ -110,6 +110,13 @@ let originUrl: string;
 /** A response the fixture holds open and silent; ended in `afterEach`. */
 const stalled: http.ServerResponse[] = [];
 
+/**
+ * What a throttled origin may owe a client after a late wake-up: one Windows
+ * timer tick (15.6 ms) and some. More would let a stall come out as a burst
+ * that a 50 ms speed-up window reads as a faster origin.
+ */
+const MAX_CREDIT_MS = 25;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -129,15 +136,32 @@ async function send(
   while (offset < body.length && !response.destroyed) {
     const slice = body.subarray(offset, offset + behaviour.slice);
     offset += slice.length;
+    // A throttle is a bucket that refills at the rate, not a timer per slice
+    // (dl-106). On Windows a timer fires on a ~15.6 ms tick when nothing else
+    // on the machine has asked for finer, so `sleep(4)` takes 15.6 ms and a
+    // fixture that sleeps once per 16 KiB slice cannot go faster than about
+    // 1 MB/s, whatever rate it was told: a "4 MB/s" origin read 1.4 MB/s there,
+    // slower than the media it was meant to outrun, and a "2 MB/s per client"
+    // origin read 1.1 MB/s on one connection and 2 on four, a 1.8x speed-up that
+    // the feeder rightly kept. So a late wake-up writes every slice that fell
+    // due while it slept, and the schedule is not reset to `now`; what a stall
+    // may bank is capped, so a reader that paused is not answered with a burst.
     if (bps.shared !== null) {
       const now = performance.now();
-      sharedNext = Math.max(sharedNext, now) + (slice.length * 1000) / bps.shared;
-      // oxlint-disable-next-line no-await-in-loop
-      await sleep(Math.max(0, sharedNext - now));
+      sharedNext = Math.max(sharedNext, now - MAX_CREDIT_MS) + (slice.length * 1000) / bps.shared;
+      if (sharedNext > now) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(sharedNext - now);
+      }
     } else if (bps.perConnection !== null) {
-      next += (slice.length * 1000) / bps.perConnection;
-      // oxlint-disable-next-line no-await-in-loop
-      await sleep(Math.max(0, next - performance.now()));
+      next =
+        Math.max(next, performance.now() - MAX_CREDIT_MS) +
+        (slice.length * 1000) / bps.perConnection;
+      const wait = next - performance.now();
+      if (wait > 0) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(wait);
+      }
     }
     if (response.destroyed) return;
     if (!response.write(slice)) {
@@ -314,6 +338,21 @@ async function until(condition: () => boolean, ms: number, explain: () => string
     // oxlint-disable-next-line no-await-in-loop
     await sleep(10);
   }
+}
+
+/**
+ * "Opens no more", counted and not timed (dl-106). `requestsAtStop` is what the
+ * feeder had begun when it stopped, read before the stop closes it (ahead of
+ * `abort()`, or in `onFatal`, which runs ahead of `close()`), so a request the
+ * stop itself begins is counted against it. A fetch it had written to a socket in the
+ * turn that stopped it reaches the origin a few ms later (3 ms, 1 run in 20 on
+ * Linux) and is among that count; one opened afterwards, whenever it arrives, is
+ * not, and neither the origin's tally nor the feeder's may exceed it. Call it
+ * after the test has waited long enough for a late request to have landed.
+ */
+function expectNothingOpenedSince(feeder: RangeFeeder, requestsAtStop: number): void {
+  expect(feeder.stats().originRequests).toBe(requestsAtStop);
+  expect(seen.length).toBeLessThanOrEqual(requestsAtStop);
 }
 
 afterEach(() => {
@@ -596,11 +635,16 @@ describe("dl-98: cancelling a split job", () => {
       await sleep(700);
       expect(maxOpen).toBe(4);
       controller.abort();
-      const canceledAt = performance.now();
+      // This test has no feeder to count requests on, so it measures in time: from
+      // 100 ms after the abort, taken now and not after `media.done`, which
+      // settles about 3 s later and would blind everything before it (dl-106). A
+      // fetch the feeder had written to a socket in the turn of the abort reaches
+      // the origin a few ms later (3 ms on Linux) and is closed on arrival.
+      const measuredFrom = performance.now() + 100;
       await expect(media.done).rejects.toMatchObject({ code: "JOB_CANCELED" });
       await sleep(500);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > canceledAt)).toEqual([]);
+      expect(seen.filter((entry) => entry.at > measuredFrom)).toEqual([]);
     },
     SLOW,
   );
@@ -766,7 +810,13 @@ describe("dl-98: the feeder's own limits", () => {
       const body = Buffer.alloc(40 * 1024 * 1024);
       for (let index = 0; index < body.length; index += 4) body.writeUInt32BE(index, index);
       files["forty.bin"] = body;
-      behaviour.perConnectionBps = 40_000_000;
+      // A throttle well under what this process can copy, which 40 MB/s is not:
+      // that was only ever the rate asked for. The fixture's sleep per slice
+      // delivered 13 MB/s on Linux and 1.4 on Windows. Delivered in full (dl-106)
+      // the 2 MB the reader takes before it pauses went by in under the 50 ms
+      // window, so the split waited for the pause to end, and 4 connections
+      // were not 1.5x one that was already limited by the CPU, so it fell back.
+      behaviour.perConnectionBps = 10_000_000;
       const { feeder } = await feederFor("forty.bin", {
         // The owner's 4 connections of 4 MB, and only the window shortened.
         settings: { ...PARALLEL_RANGE_DEFAULTS, measureMs: 50 },
@@ -800,11 +850,21 @@ describe("dl-98: the feeder's own limits", () => {
     async () => {
       behaviour.perConnectionBps = 4_000_000;
       const limit = 1024 * 1024;
-      const { feeder, fatal } = await feederFor("moov-end.mp4", { maxBytes: limit });
+      const fatal: AppError[] = [];
+      let requestsAtStop = -1;
+      let running: RangeFeeder | null = null;
+      const { feeder } = await feederFor("moov-end.mp4", {
+        maxBytes: limit,
+        onFatal: (error) => {
+          requestsAtStop = running?.stats().originRequests ?? -1;
+          fatal.push(error);
+        },
+      });
+      running = feeder;
       const read = await readLoopback(feeder.url);
-      const stoppedAt = performance.now();
       const stats = feeder.stats();
-      await sleep(300);
+      const measuredFrom = performance.now() + 100;
+      await sleep(400);
 
       expect(fatal).toHaveLength(1);
       expect(fatal[0]?.code).toBe("SIZE_LIMIT_EXCEEDED");
@@ -814,7 +874,11 @@ describe("dl-98: the feeder's own limits", () => {
       expect(stats.mode).toBe("parallel");
       expect(stats.deliveredBytes).toBeGreaterThan(limit);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > stoppedAt)).toEqual([]);
+      expectNothingOpenedSince(feeder, requestsAtStop);
+      // The feeder began 5 and the origin saw 4: one was aborted before it
+      // connected, so a count cannot tell a late request from that slack. This
+      // test also looks in time, from 100 ms after the stop (dl-106).
+      expect(seen.filter((entry) => entry.at > measuredFrom)).toEqual([]);
     },
     SLOW,
   );
@@ -835,14 +899,16 @@ describe("dl-98: the feeder's own limits", () => {
         10_000,
         () => JSON.stringify({ open, stats: feeder.stats() }),
       );
+      // Read before the abort: close() runs inside it, and a request it began
+      // would otherwise be in the count it is compared against.
+      const requestsAtStop = feeder.stats().originRequests;
       controller.abort();
-      const canceledAt = performance.now();
       const read = await reading;
       await sleep(300);
 
       expect(read.complete).toBe(false);
       expect(open).toBe(0);
-      expect(seen.filter((entry) => entry.at > canceledAt)).toEqual([]);
+      expectNothingOpenedSince(feeder, requestsAtStop);
     },
     SLOW,
   );
