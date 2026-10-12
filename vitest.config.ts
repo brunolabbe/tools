@@ -15,17 +15,6 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    // More workers, on CI only (repo-99). Most of this suite's wall time is
-    // waiting — timers, sockets, child processes — so vitest's default of
-    // cores - 1 (three on the four-vCPU runner) leaves CI's cores idle. A CI
-    // runner hosts one job, so extra workers cost it nothing. A developer
-    // machine is shared, and an orchestrator runs several reviewers on it at
-    // once, so it keeps vitest's default and never gets the bump.
-    //
-    // At the root, not per project: vitest 4 resolves a project's worker count
-    // from the project's own maxWorkers, then the root's, then the core count
-    // (resolveMaxWorkers in vitest's cli-api chunk), and no project sets one.
-    ...(process.env.CI ? { maxWorkers: 6 } : {}),
     projects: [
       {
         test: {

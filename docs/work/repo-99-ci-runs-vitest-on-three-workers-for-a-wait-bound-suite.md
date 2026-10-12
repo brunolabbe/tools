@@ -5,7 +5,7 @@ title: CI runs vitest on three workers for a suite that spends most of its time 
 kind: chore
 status: ready
 milestone: null
-depends_on: []
+depends_on: [dl-117]
 difficulty: mechanical
 ---
 
@@ -106,3 +106,13 @@ CI only**. Local runs keep vitest's default.
   half) cannot exist yet; it is an `awaiting` row at landing. Not ticked.
 - Not folded in: nothing this change makes free is small enough to fold. The
   split of `browser-resolver.test.ts` is dl-117's, and the speed-up waits on it.
+- 2026-10-12 — The owner decided the open question above, relayed by the
+  orchestrator. Question: what happens to PR #437, given that six workers
+  measured no faster because `browser-resolver.test.ts` sets the wall clock.
+  Options offered: hold behind dl-117 (recommended); land at six as specified;
+  fold into dl-117; lower to four and re-measure. Chosen: **hold behind dl-117**.
+  Consequences: `depends_on` now names dl-117; the `maxWorkers` change is
+  reverted, so the branch's only net change is this ticket file; the
+  measurements above stay here as the record for whoever measures the number
+  once dl-117 has split the file. `status` stays `ready`, so the ticket reads as
+  blocked by its dependency rather than done.
