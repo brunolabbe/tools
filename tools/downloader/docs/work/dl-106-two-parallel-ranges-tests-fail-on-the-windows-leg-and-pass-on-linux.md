@@ -166,6 +166,90 @@ dl-98 exists to get right.
 - Invariants: the diff is one test file and the ticket, so only style applies (no `any`, no `console`, `node:` builtins) ✓. The rest are skipped as out of the diff's reach.
 - NFR: security n/a · performance n/a (three tests 100 ms longer) · reliability — the high above · maintainability — the low above.
 
+### Gate 2
+
+**Gate: FAIL** — 2026-10-11 · `ba4fb1ec..4563c082` (the round: `539911a4`, `60001f1d`, `e80d47ed`; the merge of `main` excluded) · Opus 5.5, re-gate
+
+Every claim below was measured on Linux unless it names a Windows run. Mutation runs use the three stop tests only (`-t`), with mutations planted in the feeder source by the gate's `mutate.mjs`. "Engine" is › "a cancel after the first byte closes every origin connection and opens no more". "Feeder cancel" is › "a cancel stops the relay and every ranged fetch, and nothing is fetched after it". "Size cap" is › "the size cap counts reassembled bytes, relayed and fetched, and stops every fetch".
+
+**Gate 1's findings**
+
+- **high: `afterStop()` blind to the defect — fixed for the engine test, not fixed for the two feeder tests.** The engine test now measures from `abort()` + 100 ms, taken before `await media.done`.
+  - A request planted 150, 300 or 2000 ms after the stop fails the engine test, 2 of 2 runs each. At `ba4fb1ec` it passed at 300 and at 2000.
+  - A request at 0 or 50 ms passes it: that is the 100 ms window remedy (a) accepted.
+  - The feeder tests' counts have a gap, which is the new high below.
+- **low: the `8f282c87` series did not run the landing file — fixed.**
+  - Run 38178371109 is `dl106-probe` at `60001f1d`. It prints `test blob fd4af9bb…` and `engine tree fb219f77…`; `git rev-parse 4563c082:<same paths>` gives the same two hashes.
+  - `git diff 60001f1d 4563c082 -- tools/downloader/engine` prints nothing, and the Log now says which series ran which file.
+
+**Round findings**
+
+- **high** · no `Done when` line depends on it · nfr:reliability · **Both feeder tests take the count just _after_ the stop, so a request the stop itself begins is in the count, and all three stop tests pass with it.**
+  - Where the count is read:
+    - The feeder cancel test reads `requestsAtStop` after `controller.abort()`. `abort()` runs `RangeFeeder.close()` synchronously.
+    - The size-cap test passes `stats.originRequests` from `feeder.stats()` taken after `readLoopback` resolves, which is after `#fatal` has closed the feeder.
+  - `expectNothingOpenedSince` documents `requestsAtStop` as "what the feeder had begun when it stopped", but neither call site reads it at the stop.
+  - Every origin request goes through `#begin`, the only caller of `#request`, and `#begin` is what increments `originRequests`.
+  - **Reproduction.** `mutate.mjs begin-at-stop-sync` makes `close()` call `#begin` once more per open serve, after dropping them. It is counted, as any real request would be.
+
+    | test file         | engine                   | feeder cancel                 | size cap                                    |
+    | ----------------- | ------------------------ | ----------------------------- | ------------------------------------------- |
+    | `55214e67` (base) | fail                     | fail                          | fail (1 of 1 run)                           |
+    | `4563c082` (head) | pass                     | pass                          | pass (2 of 2 runs)                          |
+    | proposed fix      | pass (its 100 ms window) | **fail** `expected 5 to be 4` | **fail** `expected 6 to be 5` (2 of 2 runs) |
+
+  - **The fix, fully stated and measured.** Applying it produces `proposed-test.ts` (made by `make-proposed.mjs`):
+    - In the feeder cancel test, read `requestsAtStop` on the line _before_ `controller.abort()`.
+    - In the size-cap test, pass `feederFor` an `onFatal` that records `feeder.stats().originRequests` and then pushes the error. `#fatal` calls `onFatal` before `close()`. Pass that number to `expectNothingOpenedSince`.
+
+    Results with the fix:
+    - Unmutated: 10 of 10 runs clean.
+    - `begin-after-stop-0` still fails both feeder tests, 2 of 2 runs.
+    - The size cap's extra time check can stay.
+
+  - **Not a departure to (b).** The builder's slack is real: `open-at-stop`, which bypasses `#begin` and is uncounted, passes the size-cap count at head and with the fix alike, 2 of 2 runs each. But no code path opens a request outside `#begin`. With the count read at the stop, the size cap is counted as remedy (a) asked, and its time check is extra cover, not a substitute.
+- **dropped** · "The feeder cancel test passes at N = 2000" is the test's horizon, not a gap. It ends about 300 ms after the read resolves, and the base file passes the same mutation there too (`open-after-stop-2000`, base: only the engine test fails, 2 of 2 runs). A request that late lands in a later test: at gate 1, N = 600 failed the proxy test's `proxy.forwarded` length.
+- **dropped** · The size cap's `sleep(300)` → `sleep(400)` narrows nothing. Its time check now spans 100–400 ms after the stats read, against base's 0–300 ms. That is the same 300 ms window length and the same end as `ba4fb1ec`, and the count check gets 100 ms more. `open-after-stop-300` fails the size cap 2 of 2 runs; `open-after-stop-2000` passes it at base and head alike.
+- **findings** · the hunt returned 3; 1 carried, 2 dropped.
+
+**Builder's claims**
+
+- **The mutation table: reproduced, and it misses the counted case.**
+
+  | planted  | engine | feeder cancel       | size cap |
+  | -------- | ------ | ------------------- | -------- |
+  | N = 0    | pass   | fail                | pass     |
+  | N = 50   | pass   | fail                | pass     |
+  | N = 150  | fail   | fail                | fail     |
+  | N = 300  | fail   | fail in 1 of 2 runs | fail     |
+  | N = 2000 | fail   | pass                | pass     |
+
+  At N = 300 the feeder cancel test sits at its horizon.
+
+- **The base flake stays removed.** Unmutated head, three stop tests: 15 of 15 runs pass. Base was 4 of 15 failing at gate 1.
+- **Windows.**
+  - Run 38178371109 prints `final 1..13: PASS`, `final 14: FAIL` (held-bytes, `expected 'fallen-back' to be 'parallel'`), `final 15..25: PASS` and `failed runs: 1 of 25`.
+  - The PR's leg on `4563c082` (run 38182242267, `success`): `parallel-ranges.test.ts (38 tests)` ✓, `Tests 5105 passed | 24 skipped (5129)`.
+  - `git ls-tree 4563c082 .github/workflows` has no `dl106-probe.yml`. `git diff --name-only origin/main...4563c082` lists the ticket and the test file only.
+
+**Open decision (the builder's): the held-bytes residual on Windows.** The measurements are for the owner to choose on; no recommendation.
+
+- Setup: the speed-up ratio is the judge's `rate / singleRate` at its one split verdict, read from a stderr probe line. The tick model quantizes the test's `sleep()` up to 15.6 ms. 20 runs per row, four configurations at once:
+
+  | `measureMs` | tick model | runs passing | ratio (min / median / max) | one-connection rate |
+  | ----------- | ---------- | ------------ | -------------------------- | ------------------- |
+  | 50          | none       | 20 of 20     | 3.61 / 3.72 / 3.84         | 10.1–10.7 MB/s      |
+  | 50          | 15.6 ms    | 20 of 20     | 2.89 / 3.16 / 3.38         | not reported        |
+  | 100         | none       | 20 of 20     | 3.64 / 3.89 / 3.95         | not reported        |
+  | 100         | 15.6 ms    | 20 of 20     | 3.41 / 3.50 / 3.66         | not reported        |
+
+- The floor is 1.5, so the judge never comes near it here. A fallback needs the split's own window to stretch by ratio / 1.5. At the tick model's medians that is a pause of about 55 ms inside a 50 ms window, or about 133 ms inside a 100 ms one. That is arithmetic on these medians, not a Windows measurement.
+- The heldWhilePaused ≥ 12 MB assertion held at 100 ms in 40 of 40 runs.
+- Option 3 (`speedupFloor: 0`) would make the test's `stats.mode` assertion unable to fail on a fallback.
+
+- **Gates:** `npm run check` exit 0 at `4563c082`. `npx vitest run tools/downloader/engine/test/parallel-ranges.test.ts`: 38 of 38. CI all green on `4563c082`.
+- **High:** yes, one. Its fix is the two lines above.
+
 ## Log
 
 - 2026-10-11, filed in dl-98's pull request (#421). The owner was asked "How
