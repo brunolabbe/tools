@@ -208,3 +208,52 @@ which this note did not examine. That is step 1 below.
   - The cap itself, `provoke.test.ts` "clickTimeoutMs caps the clicks a covering
     layer blocks (dl-118)": one page, four blocked play clicks, `clickTimeoutMs:
 200`, finishes in under 5 s where the uncapped run above takes 8 s of waits.
+
+- 2026-10-12 — **Gate 1's four lows, _fixed at landing_, by the owner's choice**
+  (asked: "Land it how?"; options: "lander applies all four (recommended)",
+  "apply lows 1 and 3 only", "land as is"; chosen: the lander applies all four,
+  with no re-gate). Commit `dd639f8c`, on top of the gated head `53509ff7`. The
+  cap test in the builder's entry above ("one page, four blocked play clicks,
+  under 5 s") is superseded by items 2 and 4 below. Each guard was shown red
+  against the code it guards, from this worktree:
+  1. _`cappedTimeout` passed a cap of 0 or NaN through, which Playwright reads as
+     no timeout_ (and a negative cap fails every click at once). It now treats a
+     cap that is not a positive finite number as unset, and stays an upper bound
+     only; it is exported, and the option's two doc comments say so. Guarded by
+     `cappedTimeout (dl-118)` in `provoke.test.ts`, seven rows: unset, 300, 5000,
+     0, NaN, -1, Infinity. With the body put back to
+     `cap === undefined ? timeoutMs : Math.min(timeoutMs, cap)`,
+     `npx vitest run tools/downloader/resolvers/test/browser/provoke.test.ts -t
+cappedTimeout`:
+     `× a cap of '0'` (`expected +0 to be 2000`), `× 'NaN'` (`expected NaN to be
+2000`), `× 'negative'` (`expected -1 to be 2000`), `Tests  3 failed | 4
+passed | 234 skipped (241)`.
+  2. _The consent click's cap was untested._ The cap test is now a `test.each`
+     over the menu page and both cookie-sheet pages. With `dismissConsent(frame,
+2000, scriptable)` restored in `provokeFrame` and nothing else changed, the
+     same command with `-t "dl-118"`:
+     `✓ a shell's 18+ menu button … 2028ms`, `× … closable panel … 4022ms`
+     (`expected 4020 to be less than 3000`), `× … sticky panel … 3929ms`
+     (`expected 3927 to be less than 3000`), `Tests  2 failed | 8 passed | 231
+skipped (241)`. With the fix in place the three rows ran 2011, 2213 and 2155 ms,
+     all green. The menu page does not move, which is why the cookie sheets are rows: the
+     ceiling sits between about 2.2 s capped and about 4 s with the consent click
+     alone uncapped.
+  3. _No test checked that the uncapped wait is still 2000 ms._ The same seven
+     rows: `unset -> 2000` and `5000 -> 2000`. With the body planted as
+     `Math.min(timeoutMs, cap ?? 300)`: `× a cap of 'unset'` (`expected 300 to be
+2000`) and the three non-positive rows, `Tests  4 failed | 3 passed | 234
+skipped (241)`.
+  4. _The cap test's title claimed 4 x the cap._ It now reads "the blocked clicks
+     wait for the cap, not 2000 ms", and its comment says the ceiling shows the cap
+     shortened the run and is not a count of the clicks.
+
+  After the fixes, with the fix in place: `npx vitest run
+tools/downloader/resolvers/test/browser/provoke.test.ts`: `Tests  241 passed
+(241)`; `npx vitest run
+tools/downloader/resolvers/test/browser/browser-resolver.test.ts -t "accepted
+residue"`: `Tests  5 passed | 178 skipped (183)`, the three rows at 4387 ms
+  (closable), 4368 ms (sticky) and 4015 ms (menu button), under Done when 2's 5 s.
+  `provoke.ts` and `browser.ts` change only `cappedTimeout` and two doc comments;
+  `isPlayPress`, `startsWord` and the dl-83 block of `browser-resolver.test.ts`
+  are untouched by this commit.
