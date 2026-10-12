@@ -3,7 +3,7 @@ id: pl-52
 tool: planner
 title: Give the run-cost report its own thinking-token column
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [pl-40]
 difficulty: standard
@@ -83,6 +83,86 @@ should reflect what that run found, not guess ahead of it.
 - A mutation that joins `thinkingTokens` into `TOKEN_KINDS` (double-billing
   it) is caught by an existing or new dollar-total assertion.
 - `npm run check` and `npm test -- --project planner` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-12 · `34c2cba4..942fec1a` · Opus 5.5, depth full
+
+| Done when                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Migration test: a fresh DB and one at the previous migration both reach the column, `NULL` for every pre-existing row | `api/test/migrations.test.ts` › "a fresh database's runs carry the column" and › "a database at user_version = 11 reaches the column, and a run already there reads back NULL" (asserts `{ thinking_tokens: null, output_tokens: 500 }` after `migrate`) ✓. The gate also built real databases at 9, 10 and 11 from the `schema.ts` that shipped each, migrated v9 and v11 with the branch: every other `plan_runs` column was unchanged, and `thinking_tokens` was `NULL` on every row |
+| `updateRunUsage` writes `thinking_tokens`; a case reads back a non-null figure and a `null` one                       | `api/test/run-usage.test.ts` › "a reply's thinking tokens are summed into the run's own column, a subset of output and not an addition" (`expectedRow(answered, 0, 20)`) and › "a run no reply gave a thinking breakdown for records null, not zero" ✓. The `?? 0` mutation in `updateRunUsage` fails 4 of 655 api tests, this one among them                                                                                                                                           |
+| `cost-report.test.ts`: mixed rows print the triple, unpriced, with the caveat; all-`null` prints `—`                  | `api/test/cost-report.test.ts` › "prints thinking as its own row over the runs that reported it, and says it is a lower bound" (`["8,000", "20,000", "11,000"]`, checked by hand: nearest-rank over 5,000 / 8,000 / 20,000), › "prints a dash, not a zero, when no run in the window reported a thinking breakdown", and › "never prices thinking: …" for "unpriced" ✓. Treating `null` as 0 in the report fails the first two                                                          |
+| A mutation joining thinking into `TOKEN_KINDS` is caught by a dollar-total assertion                                  | Planted: 3 of 17 fail in `cost-report.test.ts` — › "never prices thinking: …" and › "with every price set, …" (total reads `$18.3250`, not `$17.5000`), and › "with every price unset, …" ✓                                                                                                                                                                                                                                                                                             |
+| `npm run check` and `npm test -- --project planner` pass                                                              | verified at this head: check exit 0 ("All matched files use the correct format"); planner 1433 of 1433, 77 files. PR #467 CI all green on 942fec1a, Windows leg included                                                                                                                                                                                                                                                                                                                |
+
+- **med** · open decision · no `Done when` line depends on it · **The thinking
+  row's percentiles run over a narrower population than the output row it calls
+  itself "part of", and can read larger than it.** `reported` drops a `NULL`
+  per column, so the output row covers every metered run and the thinking row
+  only those that reported a breakdown. Every run that finished before
+  migration 12 is `NULL`, so for the first `--days` after the deploy the window
+  mixes the two populations. Reproduction:
+  `node --import tsx <scratch>/checks.mts <worktree> <scratch>` renders five
+  runs, three before the deploy (output 100, thinking `NULL`) and two after
+  (output 1,000, thinking 900):
+  `output 100 1,000 460` above
+  `thinking 900 900 900 … (2 of 5 runs reported a breakdown)`. The header gives
+  the count but does not say why the two rows are not comparable, under a
+  heading saying the thinking figure is part of the output figure. The cache
+  rows already drop `NULL` per column, but none of them claims to be a subset of
+  another row. **Options:** (1, recommended) also print the share
+  `Σ thinking ÷ Σ output` over the runs that reported both, the figure pl-40's
+  table used, so the comparison is made over one population. It is a few lines
+  and one assertion. (2) Add one sentence to the header saying the triple covers
+  only the N runs that reported a breakdown and is not comparable to the output
+  row. Wording only. (3) Accept as is: the "N of M" count is the disclosure.
+- **low** · `nfr:maintainability` · **A real zero has no test, and it will be
+  the common production value.** The deployed default is
+  `claude-sonnet-5-5` at `low` (`API_DEFAULTS` in `api/src/config.ts`), which
+  pl-40's Log measured reporting zero thinking on all 94 replies. With both
+  mutations below planted, all 655 api tests pass:
+  `record.usage.thinkingTokens || null` in `updateRunUsage`, and
+  `.filter((value) => value !== 0)` on the report's `thinking` sample
+  (`node <scratch>/mutate2.mjs <worktree> zero-to-null-persist`, then
+  `zero-dropped-report`, then `npx vitest run tools/planner/api/test`). The
+  code is right today. A v12 database with one run at 0 and one at 120 printed
+  `thinking 0 120 60 … (2 of 4 runs reported a breakdown)` through
+  `dist/report.js`. No fixture pins it: the `THINKING` seed has no 0, and
+  `MeteredProvider` is never given `thinking: 0`.
+- **low** · `nfr:maintainability` · `THINKING_CAVEAT` in
+  `api/src/cost-report.ts` ships "The one funded run measured (574 replies,
+  three models)" in operator output, with no ticket id or date to find that run
+  by. It goes stale the day a second measurement exists. Every figure in it is
+  true against pl-40's Log (see dropped).
+- **dropped** · `USAGE_SCHEMA_VERSION` moving to 12 gates something wrongly.
+  `runReport` in `api/src/cost-report.ts` is its only reader, and the only
+  `user_version` reader outside tests besides `migrate`. Through the built
+  `dist/report.js`, real databases at 9, 10 and 11 are each refused with exit 1
+  and the sentence. 12 reads with exit 0, and v9 and v11 read after the
+  branch's `migrate`, printing `—` / "0 of 2". With the constant put back at 9,
+  › "a database at migration 11 … is refused too" fails with
+  `SqliteError: no such column: thinking_tokens`, as the Log says.
+- **dropped** · `UNDO_MIGRATION_12` unfaithful. A base-built v11 schema and a
+  branch-built one wound back by it are identical across `sqlite_master` and
+  every table's `table_info`.
+- **dropped** · caveat or Log figures that differ from pl-40. 574 is the sum of
+  pl-40's Calls column (128 + 128 + 130 + 94 + 94). The three models are
+  Haiku, Sonnet and Opus 5.5. "Every one of the 574 replies reported
+  `thinkingTokens`" and "Zero fallbacks in 574 replies" are both in its Log.
+  "Nearly every reply" at zero for Sonnet and Opus at `low` matches 94 of 94
+  and 91 of 94.
+- **dropped** · Done when 2's "(a scripted run)": the `null` case wraps the
+  scripted provider in `MeteredProvider` with a `null` breakdown rather than
+  running it bare. The line's intent (a run with no breakdown persists `NULL`)
+  is asserted, and the `?? 0` mutation is caught. Not a defect.
+- **findings** · the hunt returned 6; 3 carried, 3 dropped.
+- Invariants: contract untouched, no new error code, no spawn, no logging of
+  URLs or headers, style clean (check green). Route enumeration, Dockerfile and
+  test registration skipped: the diff touches none of them.
+- NFR: security n/a · performance n/a · reliability ✓ (additive migration
+  proven on real v9, v10 and v11 databases) · maintainability — the two lows
+  above.
 
 ## Log
 
