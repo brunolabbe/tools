@@ -295,13 +295,14 @@ describe("the first open of a household whose books another process holds locked
 
   test.each([
     // The import --write, which made and migrated the file and is writing it.
-    ["migrated", (db: Database.Database) => migrate(db)],
+    // Its books are kept open with only a name missing, so the probe is 200.
+    ["migrated", (db: Database.Database) => migrate(db), 200],
     // The import --write into new books: configured, its migration still in
-    // its own transaction.
-    ["not yet migrated", (db: Database.Database) => configure(db)],
+    // its own transaction. Not open, so the probe only has to not be a 500.
+    ["not yet migrated", (db: Database.Database) => configure(db), null],
   ])(
     "%s: refuses its member at once, keeps the others served, and opens once unlocked",
-    async (_name, prepare) => {
+    async (_name, prepare, healthStatus) => {
       const { target, other } = await lockedAway(prepare);
       try {
         const kim = await timed(async () => await send(target, KIM, ROUTES.me));
@@ -313,6 +314,9 @@ describe("the first open of a household whose books another process holds locked
         expect(kim.status).toBe(504);
         expect(alex.status).toBe(200);
         expect(health.status).not.toBe(500);
+        // (gate 2, N2) The migrated handle was kept: a refusal that closed the
+        // file would answer 503 here and still not be a 500.
+        if (healthStatus !== null) expect(health.status).toBe(healthStatus);
         expect(Math.max(kim.ms, health.ms, alex.ms)).toBeLessThan(1000);
 
         other.prepare("ROLLBACK").run();

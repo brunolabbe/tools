@@ -275,3 +275,15 @@ deeply equal { n: 17 }`).
     import has migrated and for one still mid-migration in its transaction.
     With both opens waiting again, both fail
     (`expected 5045 to be less than 1000`, `expected 5009 to be less than 1000`).
+- 2026-10-12 — **Gate 2's N2 fixed at landing**, in the commit that changes
+  `books.test.ts`: the "migrated" case of "the first open of a household whose
+  books another process holds locked" now asserts the probe answers `200`; the
+  "not yet migrated" case keeps `not.toBe(500)`, since its books are not open.
+  The other findings (F4, F5, F6, N1, N3) stay recorded and unfixed.
+  - With `Books.#open` closing the file and throwing `busy(error)` on a refused
+    enrolment, before the change: `npx vitest run tools/ledger/api/test/books.test.ts tools/ledger/api/test/health.test.ts`
+    `Test Files  2 passed (2)`, `Tests  18 passed (18)`. After the change, same
+    mutation, `books.test.ts`: `Tests  1 failed | 9 passed (10)`,
+    `migrated: refuses its member at once, keeps the others served, and opens once unlocked`,
+    `AssertionError: expected 503 to be 200`. Mutation removed:
+    `Tests  10 passed (10)`.
