@@ -126,3 +126,52 @@ The gate needs no agent to coordinate and costs no tokens.
   Building it after them avoids rebasing the same lines three times. The
   overlap figures exclude runs started in the background and the owner's own
   terminal runs, so they understate contention somewhat.
+
+- 2026-10-12 — Built (`scripts/test-gate.mjs`, `scripts/test/test-gate.test.ts`, root
+  `test` script). Measured on the shared 12-core machine at a load average of 13 to 19,
+  four other builders running, so the durations below are noise-inflated and only the
+  worker counts and the waiting are the result.
+  - **Done when 1.** Three `npm test -- --project planner` runs, started at 0 s, 0 s and
+    2 s (planner rather than downloader: the same path through `npm test`, without five
+    minutes of Chromium on a busy box). Output lines, from the three logs:
+    - run 0: `test-gate: slot-0, 2 of 2 runs active (pids 1218694, 1218688): 5 workers`
+    - run 1: `test-gate: slot-1, 2 of 2 runs active (pids 1218694, 1218688): 5 workers`
+    - run 2: three lines `test-gate: waiting for a test slot: 2 runs active (pids 1218694,
+1218688); waited 0 s | 15 s | 30 s of at most 300 s`, then
+      `test-gate: slot-1, 1 of 2 runs active (pids 1219098): 11 workers`.
+    - All three ended `Test Files 77 passed (77)`, `Tests 1305 passed (1305)`. A process
+      sampler counted the vitest worker processes under each run at its peak: 6 under
+      each of the first two, 12 under the third and, alone, 12 under a lone run. That
+      count includes one process that is not a pool worker (11 + 1, 5 + 1), so the
+      ratio is the evidence, not the absolute figure. Wall time: 36.9 s and 36.8 s for
+      the two sharing runs, 15.4 s of run time for the third once alone, 13.2 s for a lone
+      run measured first; the sharing runs are slower per run and the box was loaded.
+  - **Done when 2.** `scripts/test/test-gate.test.ts`, "a run killed with SIGKILL leaves a
+    lock the next run reclaims". It also asserts the lock is still there after the kill,
+    held by a pid that no longer exists, so the reclaim is the next run's doing.
+  - **Done when 3 is not measurable from the branch.** Locally, "under CI the child's
+    environment gains no worker count and no lock is taken" proves `CI=true` adds nothing
+    and prints nothing, and "`vitest` resolves to the installed package and runs" proves
+    the CI path still reaches a real vitest. The comparison with `main`'s CI run is the
+    PR's CI, which the gate has not seen yet. repo-99 is not on `main` (no `maxWorkers`
+    in `vitest.config.ts` or `ci.yml` at 07acbb86), so there is no setting of it to
+    check survives; the gate's `CI` branch never touches the child's environment.
+  - **Mutations**, each making the named test fail and the rest pass: comparing only
+    "is the pid alive" fails the reused-pid test; signalling the child's pid instead of
+    its group fails the process-tree test (its grandchild survives).
+  - **The brief had nothing wrong that mattered.** Two adjustments, both to the
+    mechanism and not to the contract: the settle (300 ms, then count) is not in the
+    brief but is what makes "two runs started together each get half" true, since
+    otherwise the first to claim counts one and keeps all 11; and `vitest` is spawned as
+    `process.execPath` plus the package's `bin` entry, because a bare `vitest` is a
+    `.cmd` shim on Windows that `shell: false` cannot start, and the gate wraps
+    `npm test` on the Windows CI leg too.
+  - **Other things that came up.** Preflight runs `npm test` with its output captured,
+    so a wait message from a preflight test step is shown only if that step fails; the
+    wait still ends in 5 minutes, so it cannot hang. A SIGKILL on the gate frees its slot
+    while the vitest it started keeps running; the gate cannot catch that signal and
+    the next run does not count the orphan.
+  - **Not folded in:** `test:downloader`, `test:planner`, `test:ledger` and `test:repo`
+    in `package.json` still call `vitest run --project …` directly and are not gated.
+    Nothing in preflight or CI uses them and the brief does not name them; routing them
+    through the gate is one line each if wanted.

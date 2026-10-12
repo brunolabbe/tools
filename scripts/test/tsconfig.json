@@ -29,6 +29,7 @@
     "../agent-cost.mjs",
     "../review-record.mjs",
     "../preflight.mjs",
+    "../test-gate.mjs",
     "../check-lockfile-sync.mjs",
     "../../.claude/scripts/check-farm-freshness.mjs"
   ],

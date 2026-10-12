@@ -51,7 +51,7 @@ inside the tool, and lift it when something else actually needs it.
 ```bash
 npm install                   # workspaces
 npm run check                 # lint + format check + typecheck — must pass before done
-npm test                      # vitest, every project
+npm test                      # vitest, every project; at most two run at once on a machine, workers split (scripts/test-gate.mjs)
 npm test -- --project <tool>  # just one tool's suite — seconds, not a minute
 npx vitest run <package-dir>  # just one package, e.g. tools/downloader/api
 npm run lint:fix              # oxlint --fix
