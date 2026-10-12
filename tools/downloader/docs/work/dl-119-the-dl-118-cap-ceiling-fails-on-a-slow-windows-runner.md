@@ -3,7 +3,7 @@ id: dl-119
 tool: downloader
 title: The dl-118 cap test's one 3000 ms ceiling failed a slow Windows runner
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-118]
 difficulty: standard
@@ -90,6 +90,26 @@ pull request).
 "clickTimeoutMs caps"`.
 5. Nothing outside the dl-118 cap block of `provoke.test.ts` changes, other than
    this ticket.
+
+## Review
+
+**Gate: PASS** — 2026-10-12 · `32f8a994...efada9ee` · Opus 5.5, depth narrow (acceptance plus four named attacks; invariant sweep skipped by dispatch)
+
+| Done when                                                                                   | Proof                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each row carries its own ceiling; cookie and menu differ                                 | **verified**: the `test.each` in `resolvers/test/browser/provoke.test.ts` › "clickTimeoutMs caps the clicks a covering layer blocks (dl-118)" gives each row a `ceilingMs` (`MENU_CEILING_MS` 4000, `COOKIE_CEILING_MS` 3200), and the assertion reads `expect(elapsedMs).toBeLessThan(ceilingMs)`                                              |
+| 2. Each row fails with its own regression planted; Log records each                         | **verified**, reproduced by the gate at 3 runs each: consent click uncapped fails both cookie rows (3880 to 4006 ms) and passes the menu row (1872 to 2118); play-selector click uncapped fails all three rows (menu 5469 to 5635); play-text click uncapped fails all three rows (menu 5480 to 5607). The Log records each plant and its times |
+| 3. Log records each ceiling's margin against capped and regression, measured more than once | **verified**: the Log's margin bullet and table (5 capped runs, 3 to 5 per plant). The gate's own numbers are in the report and agree within load                                                                                                                                                                                               |
+| 4. The three rows pass capped (`-t "clickTimeoutMs caps"`)                                  | **proven**: `Tests 3 passed \| 238 skipped (241)` on 1 unmodified local run and 23 instrumented ones (5 sequential, 18 in parallel under load); the whole file passes 241 of 241; `test (ubuntu-latest)` and `test (windows-latest, informational)` both pass on efada9ee, Windows rows 1965, 2195 and 2190 ms                                  |
+| 5. Nothing outside the dl-118 cap block changes, other than this ticket                     | **verified**: `git diff --stat 32f8a994...HEAD` shows 2 files, and the test hunk lies between the cap `describe` and `describe("cappedTimeout (dl-118)")`. `git merge-tree --write-tree origin/dl-113 origin/dl-119` merges cleanly (tree 4ee4a387), and the merged file holds both dl-113's GEO_BLOCKED block and `MENU_CEILING_MS`            |
+
+- **low** · no `Done when` line depends on it · nfr:maintainability. Switching from `%s` to `$name` changed the row titles. Vitest formats a `$` value as a quoted string and truncates it at 40 characters. The two cookie rows now print the **same** title, `'a cookie sheet\'s View our 18 partner…': the blocked clicks wait for the cap, not 2000 ms`, both locally and in this head's Windows log. A failing cookie row can no longer be told from the other, which is the distinction this ticket's Reproduction relied on. A `-t` filter on the old name now selects nothing and exits 0: `-t "closable panel"` gives `Tests 241 skipped (241)`, exit 0, at efada9ee, and `Tests 1 failed | 240 skipped` with the base test file. Remedy: go back to array rows with `%s` and add the ceiling as a fourth element.
+- **low** · Log only · The Log says "Locally the launch and navigation are about 0.1 s, so this changes no local number". That holds for an idle box. It does not hold for the Done-when 4 command under load, where the first row pays the shared browser's cold launch. With the base test file, 6 parallel copies under 36 busy loops failed the menu row 4 of 6 times (`expected 3161`, `3181`, `3060`, `3042 to be less than 3000`). Under the same load the head's timed region never put a menu reading above 2737 ms in 30 runs. The change does more than the Log claims.
+- **dropped** · the dispatch suspected that the cookie rows' 0.7 s margins would not hold under load. Measured: capped cookie readings go from 2075–2110 ms idle to a maximum of 2712 ms at 6 copies plus 12 busy loops, which leaves at least 0.49 s. Under 36 busy loops the consent regression goes **up**, to 4024–4281 ms, so load widens that side of the gap. None of 48 contended cookie readings crossed 3200. The test comment's "0.7 s each way" is its own idle measurement and is not false. Recorded as a measurement, not a defect.
+- **dropped** · I checked whether moving the timer leaves a capped wait outside the timed region. It does not. All three `blockable` uses (`dismissConsent`, `clickVisible(PLAY_SELECTORS)`, `clickByText(PLAY_TEXT)`) are in `provokeFrame`, whose only caller is `provokePlayback`, and the timer brackets exactly that call. `elapsedMs` starts as `NaN`, so a path that never assigns it fails the assertion.
+- **findings** · the hunt returned 4; 2 carried (both low), 2 dropped.
+- Positive control: with the base, launch-inclusive timer the failure shape reproduces locally (see the second low). With `MENU_CEILING_MS` set back to 3000 and the head's timer, 6 copies under 36 busy loops all pass, menu 2205 to 2448 ms. On this box only launch time could push the menu row over 3000. **Unmeasured:** what made the Windows menu reading 3584 ms. In a full-file run the file-level pool's browser is already up, so cold launch is not shown to be the Windows cause.
+- NFR: security n/a · performance ✓ (still well under the 8–13 s uncapped run) · reliability ✓ (contended spread above) · maintainability — the first low.
 
 ## Log
 
