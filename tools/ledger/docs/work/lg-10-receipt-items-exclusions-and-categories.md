@@ -21,8 +21,8 @@ _Categories_).
 
 ## Build
 
-1. **Extend the model reader** (lg-8), which is called when the person wants items
-   or categories, to return, as cents:
+1. **Extend the model reader** (lg-8, Claude Haiku 5.5 since the 2026-10-12
+   measurement) to return, as cents:
    - lines of `{ text, price, taxable, deposit? }`;
    - the subtotal, GST, QST and total;
    - a proposed category per line.
