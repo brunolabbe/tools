@@ -851,6 +851,37 @@ function startsWord(value: string, token: string): boolean {
 }
 
 /**
+ * The attributes `isPlayPress` reads off a pressed element, in the order it
+ * reads them: one per distinct `PLAY_LOOSE_SELECTORS` attribute. The rule also
+ * reads `class` and `id` for the library classes and the id `play`, and both are
+ * in this list because a loose selector reads each. Exported so the table in
+ * `test/browser/play-press.test.ts` builds its input from the list the read
+ * uses, and an attribute dropped here shows up there (dl-114).
+ */
+export const PLAY_PRESS_ATTRIBUTES: readonly string[] = [
+  ...new Set(PLAY_LOOSE_SELECTORS.map((entry) => entry.attribute)),
+];
+
+/**
+ * The decision `isPlayPress` makes, over the attribute values it read from the
+ * pressed element (null or absent: the element has no such attribute), so a
+ * table can drive it without a browser (dl-114). A library's own class or the
+ * id `play` counts; so does any attribute of `PLAY_LOOSE_SELECTORS` holding a
+ * word that starts with that selector's token.
+ *
+ * Exported for `test/browser/play-press.test.ts` and for nothing else.
+ */
+export function attributesMarkPlayPress(read: ReadonlyMap<string, string | null>): boolean {
+  const classes = (read.get("class") ?? "").split(/\s+/);
+  if (PLAY_LIBRARY_CLASSES.some((name) => classes.includes(name))) return true;
+  if (read.get("id") === "play") return true;
+  return PLAY_LOOSE_SELECTORS.some((entry) => {
+    const value = read.get(entry.attribute);
+    return value !== null && value !== undefined && startsWord(value, entry.token);
+  });
+}
+
+/**
  * Whether the press of a `PLAY_SELECTORS` match **counts as starting a player**
  * (dl-100), as opposed to merely being pressed. Pressing "Autoplay" or a
  * `display-name` stays as it was; counting it would hold back `provokeInput`'s
@@ -865,20 +896,13 @@ function startsWord(value: string, token: string): boolean {
  */
 async function isPlayPress(target: Locator): Promise<boolean> {
   try {
-    const attributes = [...new Set(PLAY_LOOSE_SELECTORS.map((entry) => entry.attribute))];
     const read = new Map<string, string | null>();
     await Promise.all(
-      attributes.map(async (name) => {
+      PLAY_PRESS_ATTRIBUTES.map(async (name) => {
         read.set(name, await target.getAttribute(name, { timeout: 500 }));
       }),
     );
-    const classes = (read.get("class") ?? "").split(/\s+/);
-    if (PLAY_LIBRARY_CLASSES.some((name) => classes.includes(name))) return true;
-    if (read.get("id") === "play") return true;
-    return PLAY_LOOSE_SELECTORS.some((entry) => {
-      const value = read.get(entry.attribute);
-      return value !== null && value !== undefined && startsWord(value, entry.token);
-    });
+    return attributesMarkPlayPress(read);
   } catch {
     // Gone already: the press below fails too, and nothing is counted.
     return false;
