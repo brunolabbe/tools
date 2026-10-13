@@ -339,8 +339,9 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
 
     A new test pins the list to the five names the rows can set, so adding a sixth
     attribute to the read forces a row for it. What stays uncovered is a fault in
-    Playwright's own `getAttribute` in a real page: only `ctl=jw` (a class) and
-    the pages that count through `id="play"` cover it, thinly.
+    Playwright's own `getAttribute` in a real page: only `ctl=jw` (a class) can
+    fail on a broken read, and no browser row fails on a broken `id`,
+    `aria-label`, `title` or `data-testid` read.
 
   - **Owner's answer 3, on the gate's low finding, which I reproduced rather than
     transcribed.** Three places said `xo` stays out of the attribute rule because
@@ -360,3 +361,12 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     rescaled third test is measured on Windows once. The leg is red only on the
     pre-existing dl-121 3x test (2.993 against 3). This replaces "Windows
     unmeasured" above.
+  - **Gate 2's high was fixed** (gate 2, Opus 5.5, on `f8f8819e`). The header of
+    `play-press.test.ts` and "Owner's answer 2" above both said the pages that
+    count through `id="play"` cover Playwright's `getAttribute` thinly. They do
+    not: with `read.set("id", null)` planted after the `Promise.all` in
+    `isPlayPress`, `browser-resolver.test.ts` passed 120 of 120, while with
+    `read.set("class", null)` planted `-t "ctl=jw"` fails. Both places now say
+    that only `ctl=jw` (a class) can fail on a broken read, and that no browser
+    row fails on a broken `id`, `aria-label`, `title` or `data-testid` read.
+    Text only; no code changed.

@@ -12,8 +12,9 @@
  * `provoke.ts` runs the same selector press, with `isPlayPress`, in every frame.
  *
  * What the table cannot see is Playwright's own `getAttribute` in a real page.
- * That is covered thinly by the browser rows that remain: `ctl=jw` counts
- * through a class, and the pages that count through `id="play"`.
+ * Only `ctl=jw`, which counts through a class, can fail on a broken read; no
+ * browser row fails on a broken `id`, `aria-label`, `title` or `data-testid`
+ * read.
  */
 
 import { describe, expect, test } from "vitest";
