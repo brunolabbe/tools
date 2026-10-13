@@ -158,7 +158,7 @@ The answers are above. Build after lg-22 has merged.
    stays `v3` for two people, and a household of two reads and closes unchanged.
 3. **The mortgage bucket**: `lead` is the person with most and their margin
    over the next (Question 2 A). `proposalFor` proposes for N salaries.
-4. **The directory.** A directory migration 2 drops the cap's trigger (migration
+4. **The directory.** The next free directory migration (migration 2 is lg-22's) drops the cap's trigger (migration
    1 stays as shipped, appended never edited), the class stops counting names,
    `HOUSEHOLD_FULL` leaves `@ledger/contract` (approved with the answers) and
    the host command's text changes. lg-20's tests for the cap change with it,
@@ -203,3 +203,21 @@ The answers are above. Build after lg-22 has merged.
   lg-22, because Question 4 put it first. Build 5 and Done when 5 are new and
   carry Question 3. Question 4's recommendation came from the session that
   asked, not from the filing.
+- 2026-10-13 — Build 4 said "a directory migration 2" for the cap's trigger, but
+  migration 2 is lg-22's and is on `main`. Corrected to "the next free directory
+  migration (migration 2 is lg-22's)", which is the number lg-24 also uses, so
+  whichever lands second takes the next free one. Command and output at the
+  correction, on `origin/main`:
+  `git show origin/main:tools/ledger/api/src/db/directory-schema.ts | grep -n -i 'migration'`
+  ```
+  5: * migrations numbered from 1 in its own `user_version`. The books' migrations
+  17:import { applyMigrationList, configure } from "./schema.ts";
+  20: * Each entry is one irreversible step. Never edit a shipped migration — append
+  23:const DIRECTORY_MIGRATIONS: readonly string[] = [
+  123:/** Brings a directory up to `target`, every migration by default. */
+  124:export function migrateDirectory(db: Database, target: number = DIRECTORY_MIGRATIONS.length): void {
+  126:  applyMigrationList(db, DIRECTORY_MIGRATIONS, target);
+  ```
+  The grep does not show the number itself. Migration 2 is the entry commented
+  `// 2 — a record is never replaced (lg-20's gate, F2; lg-22).` in the array
+  above, and the comment has no word "migration" for the grep to match.
