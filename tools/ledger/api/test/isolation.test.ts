@@ -23,19 +23,27 @@
  * later cannot be left out of the sweep (gate 1, F2).
  */
 
-import { describe, expect, test } from "vitest";
+import { Buffer } from "node:buffer";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterAll, describe, expect, test } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type {
   ClassificationRecord,
   PeriodLine,
+  ReadReceiptResponse,
+  Receipt,
   RecurringItem,
   Rule,
   RowsResponse,
   SalaryEntryResponse,
   SpendingCategory,
 } from "@ledger/contract";
+import type { ReceiptReader } from "@ledger/receipts";
 import type { Directory } from "../src/directory.ts";
 import { createLogger } from "../src/logger.ts";
+import { filePhotoStore } from "../src/receipt-photos.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
 import {
@@ -221,8 +229,16 @@ function twoHouseholds(): Directory {
   return directory;
 }
 
+/** Where the sweep's receipt photos are kept: files, so whose directory each is in can be read. */
+const PHOTOS = mkdtempSync(path.join(tmpdir(), "ledger-isolation-"));
+
+afterAll(() => {
+  rmSync(PHOTOS, { recursive: true, force: true });
+});
+
 async function start(): Promise<App> {
   return await createApp({
+    photos: filePhotoStore(PHOTOS),
     directory: twoHouseholds(),
     config: {
       dataDir: ":memory:",
@@ -234,8 +250,28 @@ async function start(): Promise<App> {
     logger: createLogger({ level: "silent" }),
     now: () => NOW,
     fetch: jwksFetch(() => [KEY]).fetch,
+    receiptReader: echoReader,
   });
 }
+
+/**
+ * A photo carrying its household's word after a JPEG's first bytes, and a fake
+ * reader (lg-8) that proposes whatever word the photo it was handed carries: a
+ * read handed the other household's photo shows that household's word.
+ */
+function photoOf(household: Household): Buffer {
+  return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(household.word)]);
+}
+
+const echoReader: ReceiptReader = {
+  model: "fake",
+  async read(photo) {
+    const merchant = Buffer.from(photo.bytes.subarray(4)).toString("utf8");
+    return [
+      { merchant, date: "2026-07-20", subtotal: 12_345, gst: null, qst: null, total: 12_345 },
+    ];
+  },
+};
 
 async function call(
   app: App,
@@ -266,6 +302,7 @@ interface Written {
   salaryIds?: number[];
   recurringId?: number;
   lineId?: number;
+  receiptId?: number;
 }
 
 interface Write {
@@ -577,6 +614,64 @@ const WRITES: Write[] = [
       await post(app, h, ROUTES.periodLines, lineDraft(h, "2026-09-10", written), "periodLines");
     },
   },
+  {
+    route: "receipts",
+    async run(app, h, written) {
+      const receipt = await post<Receipt>(app, h, ROUTES.receipts, photoOf(h), this.route);
+      written.receiptId = receipt.id;
+    },
+  },
+  {
+    route: "receiptRead",
+    async run(app, h, written) {
+      const url = ROUTES.receiptRead.replace(":id", String(written.receiptId));
+      const read = await post<ReadReceiptResponse>(app, h, url, undefined, this.route);
+      // The photo read is the household's own.
+      expect(read.proposals[0]?.proposal.merchant).toBe(h.word);
+    },
+  },
+  {
+    route: "receiptFile",
+    async run(app, h, written) {
+      const proposal = {
+        merchant: `${h.word} Marché`,
+        date: "2026-09-12",
+        subtotal: h.lineCents,
+        gst: null,
+        qst: null,
+        total: h.lineCents,
+      };
+      const url = ROUTES.receiptFile.replace(":id", String(written.receiptId));
+      await post(
+        app,
+        h,
+        url,
+        {
+          part: 1,
+          proposal,
+          destination: {
+            to: "line",
+            date: "2026-09-12",
+            amountCents: h.lineCents,
+            spendingCategoryId: written.categoryId ?? null,
+            note: `${h.word} reçu`,
+            chargedTo: null,
+          },
+        },
+        this.route,
+      );
+      // A second receipt, on the row it documents.
+      const second = await post<Receipt>(app, h, ROUTES.receipts, photoOf(h), "receipts");
+      const [boutique] = await rowIdOf(app, h, `Inconnu /${h.word} Boutique`);
+      await post(
+        app,
+        h,
+        ROUTES.receiptFile.replace(":id", String(second.id)),
+        { part: 1, proposal, destination: { to: "row", rowId: boutique } },
+        this.route,
+      );
+    },
+  },
 ];
 
 function lineDraft(h: Household, date: string, written: Written) {
@@ -624,6 +719,13 @@ const READS: {
   { route: "statsSpending", method: "GET", url: ROUTES.statsSpending },
   { route: "statsFixedItems", method: "GET", url: ROUTES.statsFixedItems },
   { route: "statsSettlements", method: "GET", url: ROUTES.statsSettlements },
+  // Which receipt is named does not matter to the rows offered; both households
+  // have a first one.
+  {
+    route: "receiptMatches",
+    method: "GET",
+    url: `${ROUTES.receiptMatches.replace(":id", "1")}?amountCents=12345&date=2026-07-20`,
+  },
 ];
 
 /**
@@ -701,6 +803,32 @@ function storedLeaks(app: App): string[] {
   return found;
 }
 
+/**
+ * A receipt photo kept outside its household's directory (lg-8): each
+ * household's directory holds exactly the photos its own receipts name. A photo
+ * saved under the other household's directory and loaded from there shows
+ * through no read, since every photo's name is new.
+ */
+function photoLeaks(app: App): string[] {
+  const found: string[] = [];
+  for (const household of [HOME, AWAY]) {
+    const named = (
+      app.books.of(household.id).prepare("SELECT photo FROM receipts ORDER BY photo").all() as {
+        photo: string;
+      }[]
+    ).map((row) => row.photo);
+    const directory = path.join(PHOTOS, "receipts", household.id);
+    const kept = existsSync(directory) ? readdirSync(directory).toSorted() : [];
+    if (named.length === 0) found.push(`${household.id} has no receipts to compare`);
+    if (JSON.stringify(kept) !== JSON.stringify(named)) {
+      found.push(
+        `${household.id}'s photos are ${kept.join(", ")}, its receipts name ${named.join(", ")}`,
+      );
+    }
+  }
+  return found;
+}
+
 describe("the isolation sweep", () => {
   test("covers every route the app answers, so a route added later cannot be left out", async () => {
     const app = await start();
@@ -765,6 +893,7 @@ describe("the isolation sweep", () => {
       expect(leaks).toEqual([]);
       expect(silent).toEqual([]);
       expect(storedLeaks(app)).toEqual([]);
+      expect(photoLeaks(app)).toEqual([]);
     } finally {
       await app.shutdown();
     }

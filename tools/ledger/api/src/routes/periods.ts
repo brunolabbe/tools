@@ -44,7 +44,7 @@ import {
 import { rateLimitsFor } from "../rate-limit.ts";
 import { ruleContext } from "./rules.ts";
 
-function idOf(request: FastifyRequest, what: string): number {
+export function idOf(request: FastifyRequest, what: string): number {
   const raw = (request.params as { id?: unknown }).id;
   const id = typeof raw === "string" && /^\d{1,15}$/u.test(raw) ? Number(raw) : 0;
   if (id < 1) throw new AppError("BAD_REQUEST", `A ${what} is named by its number.`);
@@ -61,7 +61,7 @@ interface Schema<T> {
 }
 
 /** The body, or a refusal naming the fields that were wrong and none of their values. */
-function bodyOf<T>(schema: Schema<T>, request: FastifyRequest, what: string): T {
+export function bodyOf<T>(schema: Schema<T>, request: FastifyRequest, what: string): T {
   const body = schema.safeParse(request.body);
   if (!body.success) {
     const fields = [...new Set(body.error.issues.map((issue) => String(issue.path[0] ?? "body")))];

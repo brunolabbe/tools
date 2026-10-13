@@ -63,6 +63,18 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   // lg-20: a third person named into a household of two, which is a conflict
   // with what the directory holds rather than a request it could not read.
   HOUSEHOLD_FULL: 409,
+  // lg-8: an upload that is not an image is a media type refused; a receipt
+  // filed once is a conflict with what is stored; no model configured is the
+  // service unable to do this one thing, which retrying will not change until
+  // the operator sets a key; a model that answered without a reading is the
+  // photo, not the request.
+  RECEIPT_NOT_AN_IMAGE: 415,
+  RECEIPT_NOT_FOUND: 404,
+  RECEIPT_ALREADY_FILED: 409,
+  RECEIPT_READER_UNCONFIGURED: 503,
+  RECEIPT_UNREADABLE: 422,
+  // Gate 1, F3: a row documented once, like a receipt filed once.
+  ROW_ALREADY_DOCUMENTED: 409,
 };
 
 /**

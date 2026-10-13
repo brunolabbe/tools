@@ -196,11 +196,12 @@ function insertLine(
   draft: PeriodLineDraft,
   supersedes: number | null,
   retired: boolean,
+  source: PeriodLineSource = "manual",
 ): PeriodLine {
   const result = context.db
     .prepare(
       `INSERT INTO period_lines (person_id, date, amount_cents, category, spending_category_id, note, source, charged_to, supersedes, retired, entered_at, entered_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       draft.personId,
@@ -209,6 +210,7 @@ function insertLine(
       draft.category,
       draft.spendingCategoryId,
       draft.note,
+      source,
       draft.chargedTo,
       supersedes,
       retired ? 1 : 0,
@@ -230,12 +232,21 @@ function standingLine(db: Database, id: number): PeriodLine {
   return toLine(found);
 }
 
-export function addLine(context: PeriodContext, draft: PeriodLineDraft): PeriodLine {
+/**
+ * A new line. `source` is `manual` for a person's own entry; a receipt filed on
+ * confirmation adds its line as `receipt` (lg-8), inside the filing's own
+ * transaction, where this one is a savepoint.
+ */
+export function addLine(
+  context: PeriodContext,
+  draft: PeriodLineDraft,
+  source: PeriodLineSource = "manual",
+): PeriodLine {
   requireLinePeople(context, draft);
   return context.db
     .transaction(() => {
       requireSpendingCategory(context.db, draft.spendingCategoryId);
-      return insertLine(context, draft, null, false);
+      return insertLine(context, draft, null, false, source);
     })
     .immediate();
 }

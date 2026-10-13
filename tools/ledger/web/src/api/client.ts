@@ -24,15 +24,19 @@ export interface RequestOptions {
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, signal } = options;
 
+  // A photo goes as its own bytes (lg-8); anything else as JSON.
+  const raw = body instanceof Blob;
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers: {
         accept: "application/json",
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...(body === undefined
+          ? {}
+          : { "content-type": raw ? body.type || "application/octet-stream" : "application/json" }),
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: raw ? body : JSON.stringify(body) }),
       // `null`, not `undefined`: `RequestInit.signal` is nullable rather than
       // optional, and `exactOptionalPropertyTypes` holds us to the difference.
       signal: signal ?? null,

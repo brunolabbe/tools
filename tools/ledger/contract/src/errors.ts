@@ -20,8 +20,9 @@
  * parser's (lg-1) and the fifth arrived with the page's footer (lg-14); the two
  * after them are the store's (lg-2), the next two are the rules' and the
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
- * periods' (lg-6), the next is the spending categories' (lg-15), and the last
- * five are the household directory's (lg-20, and lg-22's four ahead of it).
+ * periods' (lg-6), the next is the spending categories' (lg-15), the next
+ * five are the household directory's (lg-20, and lg-22's four ahead of it),
+ * and the last six are the receipts' (lg-8).
  */
 
 import {
@@ -157,6 +158,39 @@ export const LEDGER_ERROR_CODES = [
    * a person already in the household is not a third person.
    */
   "HOUSEHOLD_FULL",
+  // --- Receipts (lg-8) ---
+  /**
+   * The upload's first bytes are not a JPEG, a PNG or a WebP image, whatever it
+   * was named or sent as: those are what the model reads and a camera makes.
+   */
+  "RECEIPT_NOT_AN_IMAGE",
+  /** The receipt named was never uploaded to this household's books. */
+  "RECEIPT_NOT_FOUND",
+  /**
+   * That receipt in the photo — its part — was filed already, as a line or on a
+   * row, by the other person meanwhile or by a second tap: filing it again would
+   * count it twice. A read raises it too, for a photo with any of its receipts
+   * filed, since the screen that filed one holds the others' proposals (gate 2,
+   * N4).
+   */
+  "RECEIPT_ALREADY_FILED",
+  /**
+   * No model is configured to read receipts (no `ANTHROPIC_API_KEY`), so the
+   * photo stays in the house and the receipt is typed by hand instead.
+   */
+  "RECEIPT_READER_UNCONFIGURED",
+  /**
+   * The model answered without a reading: it declined, ran out of room, or sent
+   * something that is not one. The same photo would most likely fail again, so
+   * the receipt is typed by hand rather than retried.
+   */
+  "RECEIPT_UNREADABLE",
+  /**
+   * The joint-account row named already has a receipt documenting it: the other
+   * person photographed the same purchase, most likely. One row, one receipt
+   * (gate 1, F3); the caller files this one as a line, or not at all.
+   */
+  "ROW_ALREADY_DOCUMENTED",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -197,6 +231,15 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   HOUSEHOLD_NOT_FOUND: "There is no such household.",
   MEMBER_NOT_FOUND: "That address is not a member of this household.",
   HOUSEHOLD_FULL: "A household holds two people, and this one already has both.",
+  RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
+  RECEIPT_NOT_FOUND: "There is no such receipt.",
+  RECEIPT_ALREADY_FILED:
+    "That receipt in the photo is filed already. It may have been filed since it was loaded; a photo with one filed is not read again.",
+  RECEIPT_READER_UNCONFIGURED:
+    "Reading receipts is not set up on this server. Type the receipt in instead.",
+  RECEIPT_UNREADABLE: "The receipt could not be read. Type it in instead.",
+  ROW_ALREADY_DOCUMENTED:
+    "That row already has a receipt. It may have been attached since it was offered.",
 };
 
 /**

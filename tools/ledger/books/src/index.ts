@@ -5,7 +5,8 @@
  * whose it is, with the ratio derived from the salaries (lg-5); and periods of
  * personal-card spending, with the settlement closing one computes (lg-6); and
  * the spending category a bank row has (lg-15); and what a person answered
- * before, offered (lg-16) or filed on (lg-17); and the history's series (lg-9).
+ * before, offered (lg-16) or filed on (lg-17); and the history's series (lg-9);
+ * and whether a receipt adds up, and which rows it may document (lg-8).
  */
 
 export { formatCents, parseAmountCents, parseTypedAmountCents } from "./amount.ts";
@@ -72,6 +73,8 @@ export type {
   SpendingSpan,
   StatRow,
 } from "./stats.ts";
+export { RECEIPT_MATCH_DAYS, checkReceipt, matchReceipt } from "./receipts.ts";
+export type { MatchableRow, RowMatch } from "./receipts.ts";
 export { parseStatement } from "./statement.ts";
 export type { ParsedStatement, StatementRow } from "./statement.ts";
 export {
