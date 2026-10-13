@@ -143,7 +143,8 @@ failed`).
     by the orchestrator, which read one of the readings itself. It does not share
     this cause. That test compares the wall time of two whole ffmpeg jobs, with
     no reader that stops and no pause, and this branch does not change it. It
-    was not measured here.
+    was not measured here. It has since been filed as
+    [dl-121](./dl-121-the-3x-parallel-ranges-test-fails-on-the-windows-leg.md).
   - **Fold-in decision.** dl-114 item 3 plans to export `Meter`, unit-test its
     pause arithmetic, and shrink the third F9 test. This branch makes none of
     that free, so it is not folded in. Its Build gains one bullet, in this
