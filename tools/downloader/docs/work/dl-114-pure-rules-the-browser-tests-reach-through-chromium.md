@@ -547,7 +547,14 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     `read.set("class", null)` planted `-t "ctl=jw"` fails. Both places now say
     that only `ctl=jw` (a class) can fail on a broken read, and that no browser
     row fails on a broken `id`, `aria-label`, `title` or `data-testid` read.
-    Text only; no code changed. **Owner's answer 4**, on that high: the owner
-    chose, 2026-10-13, to fix it and then run a narrow third gate (the
-    alternatives were not part of this fixer's dispatch, so they are not
-    recorded here). Gate 3 read `e3f65f8e` and passed it.
+    Text only; no code changed. **Owner's answer 4**, on that high. The
+    question (2026-10-13): "dl-114 second review found one high: the new
+    play-press.test.ts header and its Log entry say the browser rows still cover
+    the `id` read … The fix is fully stated … How do we close it?" The options:
+    (a) fix, then a narrow third review (recommended): a fixer strikes the
+    clause, the same reviewer checks only that commit, then the fixer lands,
+    following the skill's rule that a high in the second review triggers a
+    third; (b) fix and land, no third review: the fixer strikes the clause
+    exactly as stated and lands if preflight passes and the diff touches only
+    those two places, with the record marking the high fixed at landing.
+    **Chosen: (a).** Gate 3 read `e3f65f8e` and passed it.
