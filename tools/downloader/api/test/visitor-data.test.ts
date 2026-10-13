@@ -39,6 +39,12 @@ import type { Harness, HarnessOptions } from "./helpers.ts";
 
 type Line = Record<string, unknown> & { msg: string };
 
+// dl-124: a request id is a random UUID unless the caller supplies one, and a
+// UUID is hex, so it can contain `aaaa`, `bbbb` or `cccc` — the interface ids the
+// IPv6 test below uses. Pinning one that does makes the collision happen on every
+// run instead of about one run in a hundred.
+const HEX_RUN_REQUEST_ID = "f74250e2-bbbb-4ab7-9146-1d93423997db";
+
 describe("shortenAddress", () => {
   test.each([
     ["203.0.113.77", "203.0.113.0/24"],
@@ -175,6 +181,7 @@ describe("the address on a log line", () => {
             method: "POST",
             url: ROUTES.probe,
             payload: { url: SOURCE_URL },
+            headers: { "x-request-id": HEX_RUN_REQUEST_ID },
             remoteAddress,
           });
           statuses.push(response.statusCode);
@@ -187,7 +194,14 @@ describe("the address on a log line", () => {
     expect(statuses).toEqual([200, 200, 429, 429]);
     const limited = lines.filter((line) => line.msg === "rate limited");
     expect(limited.map((line) => line["key"])).toEqual(["2001:db8:1::/48", "2001:db8:1::/48"]);
-    expect(raw).not.toMatch(/2001:db8:1:1|2001:db8:1:2|aaaa|bbbb|cccc/u);
+    // The request id is the one thing taken out before the leak check, and only
+    // after the lines are shown to carry it: the check below keeps its bare
+    // `aaaa|bbbb|cccc`, so an interface id leaking on its own is still caught.
+    const served = lines.filter((line) => line.msg === "request");
+    expect(served.map((line) => line["requestId"])).toEqual(statuses.map(() => HEX_RUN_REQUEST_ID));
+    expect(raw.replaceAll(HEX_RUN_REQUEST_ID, "")).not.toMatch(
+      /2001:db8:1:1|2001:db8:1:2|aaaa|bbbb|cccc/u,
+    );
   });
 
   test.each([
