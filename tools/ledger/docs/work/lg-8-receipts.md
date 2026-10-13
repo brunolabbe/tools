@@ -186,3 +186,103 @@ Seconds per model read remain unmeasured until the reader is built.
 - Done-when 4 now tests the arithmetic check, not an OCR parser.
 - The same decision is recorded in analysis §6 and the roadmap. lg-10's step 1
   no longer says the model is called only for items.
+
+### 2026-10-13 — built: the reader, the check, three routes and a screen
+
+**What was built.**
+
+- `receipts`: `createModelReader({ provider: "anthropic", apiKey, model })`,
+  `claude-haiku-5-5` by default, behind the `ReceiptReader` seam. It sends the
+  photo as uploaded, with the measured harness's prompt less the items, the
+  deposits and the handwritten amounts, and the schema as
+  `output_config.format`. It validates the answer itself, and refuses a
+  refusal, a reading cut short, and anything that is not a reading, as
+  `RECEIPT_UNREADABLE`. It reads no environment.
+- `books`: `checkReceipt`, which flags and never corrects, and `matchReceipt`,
+  the rows for exactly the charge within `RECEIPT_MATCH_DAYS` (5) either way.
+- `api`: `POST /api/receipts` keeps the photo and reads nothing; only
+  `POST /api/receipts/:id/read` calls the reader; `GET …/matches` offers rows;
+  `POST …/file` is the confirmation and the only write to the books. Migration 8
+  adds `receipts` and `receipt_filings`. Photos are files at
+  `<data>/receipts/<household>/<uuid>.<ext>`.
+- `web`: a Receipt tab. The model is named beside "Read it", with the sentence
+  that the photo leaves the house.
+
+**How a receipt files into lg-21's per-household books.** The code left one
+answer: every step runs on `booksOf(request)`, the caller's household's books.
+The photo goes in that household's directory, which `personOf(request)`
+names. The isolation sweep now takes all four routes, and it compares each
+household's photo directory with the photos its own receipts name. With the
+household hard-coded to `home` in `routes/receipts.ts`, that comparison fails
+(`npx vitest run tools/ledger/api/test/isolation.test.ts` → 1 failed, "home's
+photos are …, away's photos are ,"). Every read still passed, since every
+photo's name is new.
+
+**The key.** `ANTHROPIC_API_KEY`, read in `api/src/config.ts`
+(`loadReceiptReaderConfig`) and passed to the reader. With none set, a read is
+refused as `RECEIPT_READER_UNCONFIGURED` (503) and typing still files. No
+checked-in compose file names it. It reaches the container the way the
+planner's does, through a host-only override file. `docs/02-DEPLOYMENT.md`
+gained a "Reading receipts with a model" section, in place of the sentence
+that promised one. `ANTHROPIC_CUSTOM_HEADERS` beside a key refuses to boot,
+as it does for the planner.
+
+**Done-when, with the test that proves each.**
+
+1. The measurement table and the owner's choice are on this Log (2026-10-12).
+2. `api/test/receipts.test.ts`, "a read proposal, edited and confirmed, becomes
+   a period line for whoever uploaded it". Sam confirms Alex's receipt with a
+   tip, and the line is Alex's, `source = 'receipt'`, entered by Sam.
+3. Same file, "a proposal matching a stored joint-account row is offered, and
+   confirming it attaches the receipt and adds no line".
+4. `books/test/receipts.test.ts`: "passes a proposal whose parts add up…",
+   "flags a total a cent off", "flags a wrong tax, even when the parts still
+   add up", and "flags %s not read, and guesses nothing" (three cases).
+5. `api/test/receipts.test.ts`, "reaches the model only when the person asks…".
+   The counting reader stays at 0 calls through the upload and the matches,
+   and reaches 1 on the read.
+6. Same file, "refuses %s as RECEIPT_NOT_AN_IMAGE…" (four cases) and "refuses
+   a photo over the cap…". Setting the route's `bodyLimit` to 1 MiB fails "takes
+   a photo past the 1 MiB…" (1 of 24); dropping the byte check fails 4 of 24.
+7. Same file, "files nothing: a read proposal waits for the person", and the
+   first upload test.
+
+**Measured.**
+
+- `npx vitest run` on the four new receipt suites, one file at a time: 18 of 18
+  (`books`), 15 of 15 (`receipts`), 24 of 24 (`api`), and 8 of 8 (`web`).
+- `npm test -- --project ledger`: 56 files, 978 of 978.
+- `npx vitest run packages/core/test/image-closure.test.ts`: 7 of 7. With the
+  runtime `receipts/dist` line deleted from the `Dockerfile`, it fails 1 of 7,
+  naming that line.
+
+**What the brief had wrong, or left open.**
+
+- **The upload answers with the model**, as `reader` (`UploadedReceipt`). The
+  screen has to name where the photo goes before it is sent, and only the API
+  knows which model reads, or whether one does.
+- **A handwritten note gives no proposal.** The measured prompt listed its
+  amounts, but a note is not a receipt, and there is no total to propose. The
+  person types it in. lg-10 can add `handwritten_amounts` back if wanted.
+- **The check flags; it does not block filing.** Step 3 says it "flags a
+  proposal and never corrects one". A typed receipt with no subtotal, or a
+  note, would otherwise be impossible to file. This is put to the owner as an
+  open decision in the builder's report.
+- **"Within a few days" is 5 days either way** (`RECEIPT_MATCH_DAYS`), and the
+  match is on the amount charged, which the form starts at the total. A tip
+  changes the charge, and the person edits it there.
+- **A row a receipt already documents is not offered again.** A receipt is
+  filed once (`RECEIPT_ALREADY_FILED`, 409).
+- **Five error codes arrived:** `RECEIPT_NOT_AN_IMAGE` (415),
+  `RECEIPT_NOT_FOUND` (404), `RECEIPT_ALREADY_FILED` (409),
+  `RECEIPT_READER_UNCONFIGURED` (503) and `RECEIPT_UNREADABLE` (422). A model
+  that is busy or unreachable answers core's `UNREACHABLE`, and a key the API
+  refuses answers `INTERNAL`, with its status logged.
+- **Seconds per read are still unmeasured**: no key was used here either, and
+  no test reaches a model.
+- **The photo is never served back**, and there is no list of receipts not yet
+  filed. Neither is in the brief. An unfiled receipt is a kept photo, and the
+  person takes it again.
+
+**Fold-ins.** None was free. lg-10 extends this reader and is left to its own
+ticket, as the dispatch said.

@@ -1363,10 +1363,10 @@ refused, and a receipt is typed in instead, which never needed one. Photos are
 kept on the volume, at `/data/receipts/<household>/`, so the backup of `/data`
 above covers them.
 
-| Variable            | Value                        | Required                      |
-| ------------------- | ---------------------------- | ----------------------------- |
-| `ANTHROPIC_API_KEY` | the key                      | no — **a secret**, see below  |
-| `RECEIPT_MODEL`     | `claude-haiku-5-5` (default) | no                            |
+| Variable            | Value                        | Required                     |
+| ------------------- | ---------------------------- | ---------------------------- |
+| `ANTHROPIC_API_KEY` | the key                      | no — **a secret**, see below |
+| `RECEIPT_MODEL`     | `claude-haiku-5-5` (default) | no                           |
 
 The key reaches the process the way the planner's does ([A real model behind
 the planner](#a-real-model-behind-the-planner)): in the host's `.env`, passed
