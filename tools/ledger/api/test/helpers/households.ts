@@ -57,25 +57,37 @@ export async function startHouseholds(
   return { app, directory };
 }
 
-export type Method = "GET" | "POST";
+export type Method = "GET" | "HEAD" | "POST";
 
+/**
+ * One request as `email`. A `POST` sends `payload`, `{}` by default; a string
+ * is sent as it is, as JSON, on any method, so a body that does not parse can be
+ * sent too (lg-22's gate 1, F1).
+ */
 export async function send(
   app: App,
   email: string,
   method: Method,
   url: string,
-  payload?: Record<string, unknown>,
+  payload?: Record<string, unknown> | string,
 ) {
+  const token = signToken({
+    key: KEY,
+    nowSec: Math.floor(NOW.getTime() / 1000),
+    claims: { email },
+  });
+  if (typeof payload === "string") {
+    return await app.server.inject({
+      method,
+      url,
+      headers: { "cf-access-jwt-assertion": token, "content-type": "application/json" },
+      payload,
+    });
+  }
   return await app.server.inject({
     method,
     url,
-    headers: {
-      "cf-access-jwt-assertion": signToken({
-        key: KEY,
-        nowSec: Math.floor(NOW.getTime() / 1000),
-        claims: { email },
-      }),
-    },
+    headers: { "cf-access-jwt-assertion": token },
     ...(method === "POST" ? { payload: payload ?? {} } : {}),
   });
 }

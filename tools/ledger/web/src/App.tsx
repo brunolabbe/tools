@@ -63,12 +63,16 @@ export function App(): React.ReactElement {
       .then(setMe)
       .catch(async (error: unknown) => {
         if (controller.signal.aborted || AppError.from(error).code !== "FORBIDDEN") return;
-        // An admin in no household, or nobody the ledger knows.
+        // An admin in no household, or nobody the ledger knows: only the admin
+        // list's FORBIDDEN says the second. Any other failure of it leaves the
+        // shell, as /api/me's own does (lg-22's gate 1, F2).
         try {
           await fetchAdminHouseholds(controller.signal);
           if (!controller.signal.aborted) setAdminOnly(true);
-        } catch {
-          if (!controller.signal.aborted) setInNoHousehold(true);
+        } catch (adminError: unknown) {
+          if (!controller.signal.aborted && AppError.from(adminError).code === "FORBIDDEN") {
+            setInNoHousehold(true);
+          }
         }
       });
     return () => controller.abort();

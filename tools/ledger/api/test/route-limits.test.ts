@@ -290,7 +290,7 @@ describe("the key, on an admin route", () => {
     await expect(callAs(hook, "member@example.test", false)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
-    expect(limiter.check("admin:member@example.test").allowed).toBe(true);
+    expect(limiter.check("@admin:member@example.test").allowed).toBe(true);
     await expect(
       callAs(adminHook(new RateLimiter({ perMinute: 0 })), "member@example.test", false),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -307,5 +307,26 @@ describe("the key, on an admin route", () => {
 
     expect(lines.some((line) => line.includes("rate limited"))).toBe(true);
     expect(lines.join("\n")).not.toContain("admin@example.test");
+  });
+});
+
+// lg-22's gate 1, F4: a person's key is `<household>:<name>`, a household may be
+// called `admin` and a name is free text, so an admin's key must be one no
+// household and name can spell.
+describe("the key, on an admin route, against a person's", () => {
+  test("is never a person's, even in a household called admin under the admin's address as a name", async () => {
+    const limiter = new RateLimiter({ perMinute: 1 });
+    const personHook = createRateLimitHook({
+      limiter,
+      logger: createLogger({ level: "silent" }),
+      scope: "test",
+    });
+
+    await callIn(personHook, "admin", "admin@example.test");
+    await expect(callIn(personHook, "admin", "admin@example.test")).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+    });
+
+    await expect(callAs(adminHook(limiter), "admin@example.test", true)).resolves.toBeUndefined();
   });
 });

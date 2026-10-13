@@ -67,9 +67,14 @@ function personKey(request: FastifyRequest): BucketKey {
   return { key, logged: key };
 }
 
-/** An admin's address (lg-22), which no log line carries. */
+/**
+ * An admin's address (lg-22), which no log line carries. Behind an `@`, which
+ * no household id can hold (`[a-z]+`), so no person's key — a household called
+ * `admin` with a member named like the admin's address included — is ever an
+ * admin's (lg-22's gate 1, F4).
+ */
 function adminKey(request: FastifyRequest): BucketKey {
-  return { key: `admin:${adminOf(request)}`, logged: undefined };
+  return { key: `@admin:${adminOf(request)}`, logged: undefined };
 }
 
 type Hook = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;

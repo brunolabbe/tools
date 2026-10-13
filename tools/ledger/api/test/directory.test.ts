@@ -380,6 +380,14 @@ describe("a record is never replaced", () => {
       "UPDATE OR ROLLBACK memberships SET person = 1",
       "UPDATE memberships SET person = 1",
       'DELETE FROM "memberships"',
+      // lg-22's gate 1, F3: what SQLite reads that a table-shaped pattern missed.
+      "UPDATE 'memberships' SET person = 1",
+      "UPDATE memberships AS m SET person = 1",
+      "UPDATE memberships INDEXED BY memberships_address SET person = 1",
+      "INSERT INTO households (id, name) VALUES ('home', 'x') ON CONFLICT (id) DO UPDATE SET name = 1",
+      "INSERT INTO households (id) VALUES ('home') ON CONFLICT DO UPDATE SET name = 1",
+      "DELETE /* c */ FROM memberships",
+      "UPDATE\n  memberships\n  SET person = 1",
     ]) {
       expect(WRITES_IN_PLACE.test(planted), planted).toBe(true);
     }

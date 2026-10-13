@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppError } from "@ledger/contract";
 import type { InboxRow } from "@ledger/contract";
 import { fetchBuckets } from "../src/api/buckets.ts";
@@ -282,3 +282,21 @@ test("an admin in no household sees the admin's screen alone, and no books (lg-2
   expect(screen.queryByRole("heading", { name: "Mortgage" })).toBeNull();
   expect(screen.queryByRole("heading", { name: "No household" })).toBeNull();
 });
+
+// lg-22's gate 1, F2: only the admin list's FORBIDDEN means nobody the ledger
+// knows. Any other failure of it leaves the shell, as /api/me's own does.
+test.each(["UNREACHABLE", "RATE_LIMITED", "INTERNAL"] as const)(
+  "a %s from the admin list after /api/me's FORBIDDEN leaves the shell, not 'No household' (lg-22)",
+  async (code) => {
+    vi.mocked(fetchInbox).mockResolvedValue([]);
+    vi.mocked(fetchMe).mockRejectedValue(new AppError("FORBIDDEN"));
+    vi.mocked(fetchAdminHouseholds).mockRejectedValue(new AppError(code));
+
+    render(<App />);
+
+    expect(await screen.findByRole("navigation", { name: "Screens" })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(fetchAdminHouseholds)).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole("heading", { name: "No household" })).toBeNull();
+  },
+);

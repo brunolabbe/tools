@@ -11,15 +11,24 @@
  *   (`adminOf`), who need not be in any household: every household and its
  *   members, a new household, and adding or removing any member.
  *
- * Every guard runs before the body is read, so a refusal is the same 403 for
- * any request. Every change is a record the directory appends, signed with the
- * address that made it. A new household's books are made the way lg-21 makes
+ * Every guard runs in the route's `onRequest` hooks, before the body is
+ * parsed, so a refusal is the same 403 whatever the request carries — a body
+ * that does not parse included (lg-22's gate 1, F1): the admin's in
+ * `adminRead`/`adminWrite`, which ask `adminOf` for the bucket's key, and a
+ * household's in `asMember`, ahead of its rate limit. Each handler asks again,
+ * so a hook taken off fails closed. Every change is a record the directory
+ * appends, signed with the address that made it. A new household's books are made the way lg-21 makes
  * any household's: the first time a request or a probe needs them.
  *
  * **A member is told only that an address cannot be added**, whether it is in a
  * household already or would be a third person (`MEMBER_NOT_ADDED`): the reason
- * would let any member ask whether an address uses the ledger. An admin is told
- * which.
+ * would let any member ask which household holds an address. An admin is told
+ * which. What it does not hide is that an address is taken at all: a free
+ * address added under a name the household already holds succeeds, so success
+ * and refusal tell a member whether an address is in some household. The owner
+ * accepted that on 2026-10-13 (lg-22's gate 1, F6): any answer that tells an
+ * add from a refusal carries it, and an add that succeeds is a record naming
+ * the member who made it.
  */
 
 import {
@@ -60,11 +69,16 @@ function namedHousehold(directory: Directory, id: string): Household {
 
 const ADD_MEMBER_SHAPE = "Send an address and the person's name it stands under.";
 
+/** A household route's guard, as a hook: the caller is a member of the household the path names. */
+async function asMember(request: FastifyRequest): Promise<void> {
+  memberOf(request, householdIdOf(request));
+}
+
 export function registerHouseholdRoutes(app: FastifyInstance, context: AppContext): void {
   const { read, write, adminRead, adminWrite } = rateLimitsFor(context);
   const { directory } = context;
 
-  app.get(ROUTES.household, { onRequest: read }, async (request) => {
+  app.get(ROUTES.household, { onRequest: [asMember, read] }, async (request) => {
     const id = householdIdOf(request);
     memberOf(request, id);
     const body: HouseholdResponse = {
@@ -75,7 +89,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
     return body;
   });
 
-  app.post(ROUTES.householdMembers, { onRequest: write }, async (request) => {
+  app.post(ROUTES.householdMembers, { onRequest: [asMember, write] }, async (request) => {
     const id = householdIdOf(request);
     const caller = memberOf(request, id);
     const draft = addMemberRequestSchema.safeParse(request.body);
@@ -101,7 +115,7 @@ export function registerHouseholdRoutes(app: FastifyInstance, context: AppContex
   });
 
   // The admin's. The hooks ask `adminOf` for the bucket's key, so a non-admin
-  // is refused there; each handler asks again, so a hook taken off fails closed.
+  // is refused there.
   app.get(ROUTES.adminHouseholds, { onRequest: adminRead }, async (request) => {
     adminOf(request);
     const body: AdminHouseholdsResponse = {

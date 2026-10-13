@@ -47,7 +47,11 @@ a command on the host. The owner chose to manage it from the app
    that the address cannot be added**, whichever the reason: the reason would
    let any member ask whether an address uses the ledger. An admin is told
    which. An address that changes household is a removal by an admin, then an
-   add.
+   add. _What this hides is which household holds an address, not that one
+   does: an add that succeeds and one that is refused still tell the two apart,
+   which any answer distinguishing them would. The owner accepted that on
+   2026-10-13 (gate 1, F6); an add that succeeds is a record naming the member
+   who made it._
 5. **Every new route takes a rate limit** (`rateLimitsFor(context).write`/`.read`),
    or `api/test/route-limits.test.ts` fails. An admin route is keyed on the
    admin's address, since an admin may have no person (lg-20), and
@@ -221,3 +225,70 @@ a command on the host. The owner chose to manage it from the app
     `api/src/rules.ts` takes it red (`+ "rules.ts"`). The books have no
     `BEFORE INSERT` triggers, and adding them is a migration per table that
     nothing asked for, so it was not folded.
+- 2026-10-13 — **The owner answered four questions**, through the orchestrator:
+  1. How a household route picks its household. Options: (A) the id in the
+     path, checked by `memberOf`; (B) the household taken from the identity, as
+     `booksOf` takes the books. **Chosen: A**, the builder's recommendation.
+  2. How the web finds an admin in no household. Options: (A) on `/api/me`'s
+     `FORBIDDEN`, ask for the admin's list, with no change to `MeResponse`;
+     (B) `/api/me` answers `person: null` for them, a contract change. **Chosen:
+     A**, the builder's recommendation.
+  3. Gate 1's F1, the household guard running after the body is parsed.
+     Options: (a) reword the comment and this Log; (b) run `memberOf` in an
+     `onRequest` hook for the two household routes and add an invalid-JSON
+     probe per household route to the sweep. **Chosen: (b)**, the gate's
+     recommendation.
+  4. Gate 1's F6, a member's add telling success from refusal, so whether an
+     address is in some household. Options: (a) accept it and say so in the
+     ledger `CLAUDE.md` and this brief; (b) an admin approves every member's
+     add, reversing the 2026-10-12 choice; (c) a tighter write limit on that
+     route. **Chosen: (a)**, the gate's recommendation.
+- 2026-10-13 — Round 1, on gate 1's F1 (high) and F2 to F6 (low).
+  - **F1.** The finding held: the household routes asked `memberOf` in the
+    handler, after Fastify parsed the body, so an invalid body answered 400
+    where the earlier entry above says every guard runs before the body is
+    read. Now a route-level `onRequest` hook, `asMember`, asks it ahead of the
+    rate limit, and the handler asks again. The sweep sends every household and
+    admin route a body that does not parse, as every identity that must be
+    refused. With the hook taken off the add route (the guard back in the
+    handler alone), `npx vitest run tools/ledger/api/test/authority.test.ts`:
+    exit 1, `Tests  1 failed | 12 passed (13)`, "refuses a member of the other
+    household, and changes nothing",
+    `+ "POST /api/households/home/members: 400 {\"error\":{\"code\":\"BAD_REQUEST\",…`.
+    The same run before the fix gave the same line. Restored, `13 passed (13)`.
+    Taking the hook off the `GET` route leaves the sweep green: Fastify does not
+    parse a `GET`'s body, so the guard is ahead of anything a body can do there
+    either way; the hook is on it so both routes refuse the same way.
+  - **F2.** The finding held. `App.tsx` sent any failure of the admin list to
+    "No household"; only `FORBIDDEN` goes there now. Three new tests in
+    `web/test/app.test.tsx` (an `UNREACHABLE`, `RATE_LIMITED` and `INTERNAL`
+    from the admin list after `/api/me`'s `FORBIDDEN`) failed first, exit 1,
+    `Tests  3 failed | 12 passed (15)`, and pass after.
+  - **F3.** The finding held. `api/test/helpers/append-only.ts` no longer reads
+    a table between the keywords: any `UPDATE … SET` within one statement, an
+    upsert's `DO UPDATE`, a `DELETE` and its `FROM` with only space or comments
+    between them, and `OR REPLACE` / `REPLACE INTO`. The gate's spellings and a
+    multi-line `UPDATE` are in the scan's own test, which failed first
+    (`UPDATE 'memberships' SET person = 1: expected false to be true`). Planted
+    one at a time in `src/directory.ts`, each takes `directory.test.ts`'s scan
+    red, `Tests  1 failed | 15 skipped (16)`, `+ "directory.ts"`:
+    `UPDATE 'memberships' SET …`, `UPDATE memberships AS m SET …`, an
+    `ON CONFLICT (id) DO UPDATE SET …`, and `DELETE /* c */ FROM memberships`.
+    `DELETE` and `FROM` with anything between them, which the gate did not ask
+    for, flagged prose in three comments of `db/schema.ts` and
+    `db/directory-schema.ts`, so between them there may be only space and SQL
+    comments. `OR REPLACE` still matches prose, as the gate noted: a false alarm
+    there fails the scan loudly, so it stays and the comment says so.
+  - **F4.** The finding held, as a test: a person hook and the admin hook on one
+    limiter, household `admin`, person `admin@example.test` — the admin's first
+    request was refused `RATE_LIMITED`. Of the gate's two remedies, the key
+    prefix: an admin's key is `@admin:<address>`, and `@` is in no household
+    id, so no person's key can spell it. Reserving `admin` as a household id
+    would have been a directory rule for a rate limiter's sake. The new test
+    passes after. A person named like an address still puts that name in their
+    own `rate limited` log line, as any name is; that is the name, not the
+    admin's key.
+  - **F5.** `HEAD` is in the sweep's method list, with a `HEAD` probe on both
+    `GET` routes and its control.
+  - **F6.** Documented, per the owner's answer: the ledger `CLAUDE.md`, step 4
+    of this brief, and the header of `api/src/routes/households.ts`.

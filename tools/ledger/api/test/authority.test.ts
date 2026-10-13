@@ -37,7 +37,7 @@ interface Probe {
   method: Method;
   /** The path, aimed at home, the household whose records the sweep guards. */
   url: string;
-  payload?: Record<string, unknown>;
+  payload?: Record<string, unknown> | string;
 }
 
 const at = (route: RouteName): string => ROUTES[route].replace(":id", HOUSEHOLD);
@@ -46,6 +46,7 @@ const NEW_ADDRESS = "casey@example.test";
 /** Every household route, each a request a member of home would see succeed. */
 const HOUSEHOLD_PROBES: Probe[] = [
   { route: "household", method: "GET", url: at("household") },
+  { route: "household", method: "HEAD", url: at("household") },
   {
     route: "householdMembers",
     method: "POST",
@@ -57,6 +58,7 @@ const HOUSEHOLD_PROBES: Probe[] = [
 /** Every admin route, each a request an admin would see succeed. */
 const ADMIN_PROBES: Probe[] = [
   { route: "adminHouseholds", method: "GET", url: at("adminHouseholds") },
+  { route: "adminHouseholds", method: "HEAD", url: at("adminHouseholds") },
   {
     route: "adminHouseholds",
     method: "POST",
@@ -76,6 +78,19 @@ const ADMIN_PROBES: Probe[] = [
     payload: { address: SAM },
   },
 ];
+
+/**
+ * Each route again with a body that does not parse (lg-22's gate 1, F1): a guard
+ * that ran in the handler, after the body is parsed, would answer these 400
+ * rather than 403. No identity sees them succeed, so they have no control.
+ */
+const MALFORMED = "{ not json";
+const malformed = (probes: readonly Probe[]): Probe[] =>
+  probes
+    .filter((probe) => probe.method !== "HEAD")
+    .map((probe) => ({ ...probe, payload: MALFORMED }));
+const HOUSEHOLD_MALFORMED = malformed(HOUSEHOLD_PROBES);
+const ADMIN_MALFORMED = malformed(ADMIN_PROBES);
 
 const isAdminRoute = (route: RouteName) => ROUTES[route].startsWith(`${API_PREFIX}/admin/`);
 const isHouseholdRoute = (route: RouteName) =>
@@ -102,7 +117,11 @@ async function sweep({ app, directory }: Harness, email: string, probes: readonl
   const admitted: string[] = [];
   for (const probe of probes) {
     const response = await send(app, email, probe.method, probe.url, probe.payload);
-    const code = response.statusCode === 403 ? response.json<ErrorResponse>().error.code : null;
+    // A HEAD is answered with no body, so its status is all there is to read.
+    const code =
+      response.statusCode !== 403 || probe.method === "HEAD"
+        ? "FORBIDDEN"
+        : response.json<ErrorResponse>().error.code;
     if (response.statusCode !== 403 || code !== "FORBIDDEN") {
       admitted.push(
         `${probe.method} ${probe.url}: ${String(response.statusCode)} ${response.body}`,
@@ -127,7 +146,7 @@ describe("the sweep", () => {
     expect(routes.length).toBe(5);
     expect(new Set(probes.map((probe) => probe.route))).toEqual(new Set(routes));
     for (const route of routes) {
-      for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE"] as const) {
+      for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const) {
         const answered = app.server.hasRoute({ method, url: ROUTES[route] });
         const probed = probes.some((probe) => probe.route === route && probe.method === method);
         expect(probed, `${method} ${ROUTES[route]}`).toBe(answered);
@@ -170,7 +189,7 @@ describe("every admin route", () => {
   test("refuses a member who is no admin, and changes nothing", async () => {
     const target = await start();
 
-    const result = await sweep(target, ALEX, ADMIN_PROBES);
+    const result = await sweep(target, ALEX, [...ADMIN_PROBES, ...ADMIN_MALFORMED]);
 
     expect(result).toEqual({ admitted: [], directoryChanged: false, booksChanged: false });
   });
@@ -180,7 +199,7 @@ describe("every household route", () => {
   test("refuses a member of the other household, and changes nothing", async () => {
     const target = await start();
 
-    const result = await sweep(target, KIM, HOUSEHOLD_PROBES);
+    const result = await sweep(target, KIM, [...HOUSEHOLD_PROBES, ...HOUSEHOLD_MALFORMED]);
 
     expect(result).toEqual({ admitted: [], directoryChanged: false, booksChanged: false });
   });
@@ -188,7 +207,7 @@ describe("every household route", () => {
   test("refuses an admin in no household, and changes nothing", async () => {
     const target = await start();
 
-    const result = await sweep(target, ADMIN, HOUSEHOLD_PROBES);
+    const result = await sweep(target, ADMIN, [...HOUSEHOLD_PROBES, ...HOUSEHOLD_MALFORMED]);
 
     expect(result).toEqual({ admitted: [], directoryChanged: false, booksChanged: false });
   });
@@ -208,6 +227,8 @@ describe("every route", () => {
         })),
       ...HOUSEHOLD_PROBES,
       ...ADMIN_PROBES,
+      ...HOUSEHOLD_MALFORMED,
+      ...ADMIN_MALFORMED,
     ];
 
     const result = await sweep(target, STRANGER, everyRoute);

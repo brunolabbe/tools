@@ -96,10 +96,15 @@ header of its own. Only `adminOf` reads the admin flag: being an admin reads no
 books. **The directory is managed from the app** (lg-22, `api/src/routes/households.ts`):
 the admin routes under `/api/admin/` ask `adminOf`, and a household's own routes
 under `/api/households/:id` ask `memberOf`, which refuses a member of another
-household and an admin in none. A member adds and never removes, and is told only
-that an address cannot be added (`MEMBER_NOT_ADDED`), never why: the reason would
-say whether an address uses the ledger. `api/test/authority.test.ts` walks every
-one of those routes as each identity that must be refused.
+household and an admin in none; both guards run in the route's `onRequest`
+hooks, before the body is parsed. A member adds and never removes, and is told
+only that an address cannot be added (`MEMBER_NOT_ADDED`), never why: the reason
+would say which household holds it. **It does not hide that an address is
+taken** — a free address added under a name the household holds succeeds — and
+the owner accepted that on 2026-10-13: any answer that tells an add from a
+refusal carries it, and an add that succeeds is a record naming the member who
+made it. `api/test/authority.test.ts` walks every one of those routes as each
+identity that must be refused.
 
 **A route reads its books from `booksOf(request)`, never from a handle of its
 own** (lg-21). Each household's books are a SQLite file of their own,
