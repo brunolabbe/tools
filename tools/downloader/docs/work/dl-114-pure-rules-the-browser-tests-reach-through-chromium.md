@@ -55,6 +55,53 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
    - Keep one integration test, scaled down: `measureMs` from 4000 to about
      1000, pause from 8 s to about 2 s, sleep from 12 s to about 3 s. Read
      dl-106 first: its Windows timer-tick findings govern how far it can shrink.
+   - Read dl-120 too: the loopback limits the shrink as well. When a test's
+     reader stops, the kernel's socket buffers take several megabytes before
+     the feeder pauses the origin, and all of that fill is measured origin
+     time. A window shorter than the fill closes before the pause it is meant
+     to contain. The amounts, measured on Linux, are not an upper bound:
+     - with the stopped reader's origin at 4 MB/s, 5.2 MB at the least
+       (dl-120's builder, `probe-busy24-10.log`, 24 busy loops spread over the
+       cores) to 7.8 MB;
+     - with it unthrottled, 7.5 to 10.45 MB (dl-120's builder, 23 busy loops on
+       the test's core) and 6.3 to 10.45 MB (dl-120's gate 2, 11 and 23 loops).
+
+     What sets the fill's time is the rate the fixture actually _delivers_,
+     not the rate it was asked for, and a starved process delivers a fraction
+     of it: at 23 busy loops on one core, an 8 MB/s origin with a 2 s window
+     failed 4 of 15. dl-120's way out for the two-reader helper
+     `pausedThenRead` is to leave the reader that stops unthrottled (set
+     `behaviour.perConnectionBps = null` before its request, since the fixture
+     takes the rate per request) and throttle only the reader being measured.
+     The fill's cost to the window is then small at the median (522 ms in
+     the builder's 23-loop series), but it is not bounded. At 23 busy loops it
+     reached about 1.1 s in gate 2's series and 1.6 s in the builder's, and at
+     47 it reached about 2 s (gate 2).
+     - **Unmeasured:** whether the third F9 test can take the same remedy. Its
+       one reader both stops and is measured, and nobody has measured whether
+       an unthrottled reader keeps that test meaningful.
+
+   - **Assert the meter's gap rule, whichever it is.** `Meter.record` adds
+     `now - lastAt - paused`. Once `release()` has emptied the members, nothing
+     is paused and nothing is being read, so the whole gap until the next
+     request's first byte counts as origin time, with no bytes in it. dl-120's
+     gate reproduced it (owner's decision, 2026-10-12: record it here, and
+     change no production line in dl-120). The setup: an 8 MB/s origin against
+     5 MB/s of media, A read for 0.5 s and closed, B started `gapMs` later and
+     read for 4 s:
+
+     | gapMs | judged rate               | mode after 4 s                              |
+     | ----- | ------------------------- | ------------------------------------------- |
+     | 0     | 7956671 B/s               | single                                      |
+     | 300   | 6782876 B/s               | single                                      |
+     | 1000  | 3994964 B/s, `added=1006` | **parallel** (a fast origin, wrongly split) |
+
+     The options the gate gave: (a) leave it, since first-byte latency is
+     arguably the origin's; (b) have `release()` of the last member call
+     `interrupt()`, which drops the gap and B's first chunk as well. That
+     choice is the owner's, not dl-114's builder's. Ask it before writing the
+     assertion, then pin whichever rule is chosen with a unit test on the
+     exported `Meter`.
 
 ## Done when
 
