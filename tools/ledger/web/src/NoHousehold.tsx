@@ -1,7 +1,7 @@
 /**
  * What an address Access admits and the household directory does not sees
- * (lg-20): one filed by nobody yet, one since removed, or an admin who is in no
- * household. It names nobody and nothing — not the address, not a household,
+ * (lg-20): one filed by nobody yet, or one since removed. An admin in no
+ * household sees the admin's screen instead (lg-22). It names nobody and nothing — not the address, not a household,
  * not who runs the ledger — because whoever reads it holds none of the books.
  */
 
