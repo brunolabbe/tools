@@ -64,6 +64,7 @@ kind: fix
 status: done
 milestone: null
 depends_on: [dl-5]
+difficulty: standard
 ---
 
 # dl-8 — Pin vetted addresses into the socket

@@ -22,6 +22,13 @@ export const API_PREFIX = "/api";
 export const ROUTES = {
   health: `${API_PREFIX}/health`,
   me: `${API_PREFIX}/me`,
+  // lg-22: a household's members and their history, for its own members; and the
+  // directory, for an admin. Neither reads any books.
+  household: `${API_PREFIX}/households/:id`,
+  householdMembers: `${API_PREFIX}/households/:id/members`,
+  adminHouseholds: `${API_PREFIX}/admin/households`,
+  adminMembers: `${API_PREFIX}/admin/households/:id/members`,
+  adminMemberRemove: `${API_PREFIX}/admin/households/:id/members/remove`,
   statements: `${API_PREFIX}/statements`,
   // lg-4: the rules, the inbox of unclassified rows, and who the rules may name.
   rules: `${API_PREFIX}/rules`,
@@ -92,6 +99,82 @@ export interface Person {
 export interface MeResponse {
   person: Person;
   admin: boolean;
+}
+
+/** A household, as the directory names it (lg-20). */
+export interface HouseholdSummary {
+  id: string;
+  name: string;
+}
+
+/** An address in a household now, and the person's name it stands under (lg-22). */
+export interface HouseholdMember {
+  address: string;
+  person: string;
+}
+
+/**
+ * One change to who belongs to a household (lg-22): an address added under a
+ * person's name, or removed. `by` is the address that made it, or `operator`
+ * for the host command; `at` is when, as an ISO timestamp.
+ */
+export interface MembershipRecord {
+  address: string;
+  person: string;
+  action: "add" | "remove";
+  at: string;
+  by: string;
+}
+
+/**
+ * `GET /api/households/:id`, for its own members: who belongs now, and every
+ * change, oldest first. Never another household's.
+ */
+export interface HouseholdResponse {
+  household: HouseholdSummary;
+  members: HouseholdMember[];
+  history: MembershipRecord[];
+}
+
+/** `POST /api/households/:id/members` and its admin twin: an address, as a person. */
+export interface AddMemberRequest {
+  address: string;
+  person: string;
+}
+
+export const addMemberRequestSchema = z.strictObject({
+  address: z.string().min(1).max(320),
+  person: z.string().min(1).max(64),
+}) satisfies z.ZodType<AddMemberRequest>;
+
+/** `POST /api/admin/households/:id/members/remove`: the address to take out. */
+export interface RemoveMemberRequest {
+  address: string;
+}
+
+export const removeMemberRequestSchema = z.strictObject({
+  address: z.string().min(1).max(320),
+}) satisfies z.ZodType<RemoveMemberRequest>;
+
+/** `POST /api/admin/households`: a new household, with no members yet. */
+export interface CreateHouseholdRequest {
+  id: string;
+  name: string;
+}
+
+export const createHouseholdRequestSchema = z.strictObject({
+  id: z.string().min(1).max(32),
+  name: z.string().min(1).max(80),
+}) satisfies z.ZodType<CreateHouseholdRequest>;
+
+/** A household and its members, as an admin sees it. */
+export interface AdminHousehold extends HouseholdSummary {
+  members: HouseholdMember[];
+}
+
+/** `GET /api/admin/households`: every household, for an admin only. */
+export interface AdminHouseholdsResponse {
+  households: AdminHousehold[];
 }
 
 /** `POST /api/statements`: an AccèsD paste, exactly as the clipboard held it. */

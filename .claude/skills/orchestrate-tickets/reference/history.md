@@ -5313,3 +5313,27 @@ Total $68.6722, active 8h55m19s (rates read 2026-10-10). The close-out fixer is 
 - Cross-session coordination by message only: each new id claimed with the live peer before filing, flake evidence relayed both ways and marked unverified, and the peer filed dl-121 so it was not filed twice.
 - Cutting dl-120 from a peer's landed, frozen head, then moving it onto main before its first commit once the peer's PR merged.
 - After the host died, `board.md` plus one `git log`/`git status` per surviving worktree was enough to resume the one live builder by `SendMessage`, with its measurements intact.
+
+### Batch 2026-10-13 (tools-a1, dl-122 filed after the pl-52 merge) — base 6d879b2
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #470 | open, ready | Haiku 5.5 / high | builder-mechanical | dl-122 filing (maintenance) | 3m44s / 3m28s | 0 | $0.0578 |
+| #470 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-122 gate 1, narrow | 12m06s / 12m06s | 0 | $1.6227 |
+| #470 | open, ready | Sonnet 5.5 / high | fixer | dl-122 six lows, owner's answer, probe onto the thread | 4m50s / 4m40s | 0 | $0.5820 |
+| — | — | Opus 5.5 / high | orchestrator | this continuation (floor: session $4.3258 less the $1.9847 in the entry above) | — | 0 | $2.3411 |
+
+Total $4.6036 (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- dl-122 → #470, filed from main's push CI at 6d879b2 (#467's merge), whose informational Windows leg failed the dl-118 menu row at 4286 ms against dl-119's 4000: gate 1 PASS (narrow; F1–F6 low, fixed in the PR by owner choice). The gate measured 1 failure in 39 Windows readings since #456, and the owner chose option 1 (observe the click timeout) with that figure in hand; `ready`. Record on the thread, no `--land`.
+
+**Defects in the skill:**
+
+1. `roles/fixer.md`, the landing steps — never says that a filing which leaves its ticket `ready` or `needs-decision` gets no `--land`, which `reference/records.md` does say. A fixer given ship authority on such a PR has only the `--land` route on its own page. Reproduction: `grep -n -i "no record\|leaves its ticket\|gets no" .claude/skills/orchestrate-tickets/roles/fixer.md` → exit 1; `grep -n 'gets no `--land`' .claude/skills/orchestrate-tickets/reference/records.md` → `53:  or `needs-decision`, gets no `--land`: its gate's full report goes on the pull`.
+2. `roles/reviewer.md`, _Returning the gate_ — says "The lander commits that file as it stands", while `review-ticket/gate.md` says a filing's section "goes on the pull request thread, not into the file". A gate on a filing reads two answers (raised by dl-122's gate). Reproduction: `grep -n "commits that file as it stands" .claude/skills/orchestrate-tickets/roles/reviewer.md` → line 80; `grep -n "goes on the pull request thread, not into the file" .claude/skills/review-ticket/gate.md` → line 21.
+
+**Worked, and worth keeping:**
+
+- Gating a filing before asking the owner its decision: the narrow gate measured all 39 Windows readings of the row, so the owner chose between the options knowing the failure was one outlier, not on the builder's two readings.

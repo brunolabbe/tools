@@ -104,6 +104,20 @@ const DIRECTORY_MIGRATIONS: readonly string[] = [
   CREATE TRIGGER households_never_deleted BEFORE DELETE ON households
     BEGIN SELECT RAISE(ABORT, 'a household is appended, never deleted'); END;
   `,
+  // 2 — a record is never replaced (lg-20's gate, F2; lg-22).
+  `
+  -- SQLite's REPLACE conflict resolution deletes the row in the way without
+  -- firing a DELETE trigger (recursive_triggers is off), so the triggers above
+  -- let an add become a removal and a household be renamed. A record whose id
+  -- is taken is refused before any conflict is resolved, which is also what an
+  -- upsert meets first.
+  CREATE TRIGGER memberships_never_replaced BEFORE INSERT ON memberships
+    WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM memberships WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a membership record is appended, never replaced'); END;
+  CREATE TRIGGER households_never_replaced BEFORE INSERT ON households
+    WHEN EXISTS (SELECT 1 FROM households WHERE id = NEW.id)
+    BEGIN SELECT RAISE(ABORT, 'a household is appended, never replaced'); END;
+  `,
 ];
 
 /** Brings a directory up to `target`, every migration by default. */

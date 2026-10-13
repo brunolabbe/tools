@@ -10,6 +10,12 @@ import { ROUTES } from "@ledger/contract";
 export const VERBS = {
   health: ["GET", ROUTES.health],
   me: ["GET", ROUTES.me],
+  // lg-22: the test household's own, and the admin's.
+  household: ["GET", ROUTES.household.replace(":id", "home")],
+  householdMembers: ["POST", ROUTES.householdMembers.replace(":id", "home")],
+  adminHouseholds: ["GET", ROUTES.adminHouseholds],
+  adminMembers: ["POST", ROUTES.adminMembers.replace(":id", "home")],
+  adminMemberRemove: ["POST", ROUTES.adminMemberRemove.replace(":id", "home")],
   statements: ["POST", ROUTES.statements],
   rules: ["GET", ROUTES.rules],
   rule: ["POST", ROUTES.rule.replace(":id", "1")],

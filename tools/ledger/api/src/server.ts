@@ -26,6 +26,7 @@ import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerBucketRoutes } from "./routes/buckets.ts";
 import { registerHealthRoute } from "./routes/health.ts";
+import { registerHouseholdRoutes } from "./routes/households.ts";
 import { registerInboxRoutes } from "./routes/inbox.ts";
 import { registerMeRoute } from "./routes/me.ts";
 import { registerPeriodRoutes } from "./routes/periods.ts";
@@ -168,6 +169,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   );
   registerHealthRoute(server, context);
   registerMeRoute(server, context);
+  registerHouseholdRoutes(server, context);
   registerStatementRoutes(server, context);
   registerRuleRoutes(server, context);
   registerInboxRoutes(server, context);

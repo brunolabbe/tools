@@ -110,3 +110,26 @@ export function identityOf(request: FastifyRequest): Identity {
   if (request.identity === null) throw new AppError("UNAUTHENTICATED");
   return request.identity;
 }
+
+/**
+ * The admin a route is serving, as their lower-cased address (lg-22). Throws
+ * `FORBIDDEN` for anyone the operator did not list in `LEDGER_ADMINS`, so a
+ * route that asks fails closed. Being an admin grants the directory and
+ * nothing else: an admin reads a household's books only as its member.
+ */
+export function adminOf(request: FastifyRequest): string {
+  const identity = identityOf(request);
+  if (!identity.admin) throw new AppError("FORBIDDEN");
+  return identity.email.toLowerCase();
+}
+
+/**
+ * The member of `household` a route is serving (lg-22). `FORBIDDEN` for
+ * everyone else — a member of another household, and an admin in none, whom
+ * `personOf` already refuses — whatever else the request carries.
+ */
+export function memberOf(request: FastifyRequest, household: string): Person {
+  const person = personOf(request);
+  if (person.household !== household) throw new AppError("FORBIDDEN");
+  return person;
+}

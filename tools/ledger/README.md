@@ -86,8 +86,10 @@ address is in is the household directory's to say.
 Who belongs to which household, and as whom, is the household directory
 (lg-20): a SQLite file beside the books (`DIRECTORY_PATH`, by default
 `directory.db` in the data directory, `DATABASE_PATH`), read on every request, so
-a change applies without a restart. Until the app has a screen for it (lg-22), it is
-written from the host:
+a change applies without a restart. An admin (`LEDGER_ADMINS`) manages it from the
+app's admin screen, and a household's members can add a member from their household
+screen but remove nobody (lg-22). The first household and its first member, and any
+recovery, are written from the host:
 
 ```bash
 npm run household:ledger -- add <household> <display name>        # one lowercase word, then a name

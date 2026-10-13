@@ -430,8 +430,11 @@ the other tools too.
   household it is in and as whom, and refuses one it has no member for — that
   address gets a page saying it belongs to no household. So membership is in two
   places, and they drift closed: an address on one list and not the other is
-  refused either way. Add a member with the household command
-  ([the ledger's section](#the-ledger)), then add its address here.
+  refused either way. Add a member from the ledger's admin screen or with the
+  household command ([the ledger's section](#the-ledger)) — or a household's
+  member adds one from their own household screen — then add its address here.
+  The admin screen lists every household's addresses, to check this policy
+  against.
 - **No Bypass rule, ever**, for the planner's first reason and a stronger one:
   nothing in the ledger is a capability link, and what it holds is bank history.
 - **Access is its identity, not only its gate.** The tool has no login of its
@@ -1334,8 +1337,12 @@ reaches outside the host unless it is given a key to read receipts
 - **Its login admits every household's addresses, and the household directory
   says whose they are** — [step 2](#the-ledgers-every-households-addresses-and-still-no-bypass) has the
   policy. The directory is `/data/directory.db` on the same volume, read on every
-  request, so a change applies without a restart. Until the app has a screen for
-  it (lg-22) it is written from the host, inside the running container:
+  request, so a change applies without a restart. An admin (`LEDGER_ADMINS`)
+  manages it from the app's admin screen, and a household's members can add a
+  member, but remove nobody, from their household screen (lg-22). An admin need
+  be in no household, so with one set the first household can be made from the
+  app too. Without one, and for any recovery, it is written from the host,
+  inside the running container:
 
   ```bash
   F="-f compose.prod.yaml -f compose.ledger.prod.yaml"

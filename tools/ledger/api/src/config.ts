@@ -105,8 +105,8 @@ export interface AccessConfig {
   /** The application's AUD tag, which every token must carry. */
   audience: string | undefined;
   /**
-   * `LEDGER_ADMINS`: lower-cased addresses that may manage the directory (lg-22
-   * is the first to act on it). An admin need not be a member of any household,
+   * `LEDGER_ADMINS`: lower-cased addresses that may manage the directory, from
+   * the admin routes (lg-22). An admin need not be a member of any household,
    * and being one reads no books.
    */
   admins: ReadonlySet<string>;

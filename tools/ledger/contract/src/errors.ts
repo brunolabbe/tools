@@ -21,8 +21,8 @@
  * after them are the store's (lg-2), the next two are the rules' and the
  * inbox's (lg-4), the next is the salaries' (lg-5), the next four are the
  * periods' (lg-6), the next is the spending categories' (lg-15), the next
- * is the household directory's (lg-20), and the last six are the receipts'
- * (lg-8).
+ * five are the household directory's (lg-20, and lg-22's four ahead of it),
+ * and the last six are the receipts' (lg-8).
  */
 
 import {
@@ -133,6 +133,24 @@ export const LEDGER_ERROR_CODES = [
    */
   "SPENDING_CATEGORY_NOT_FOUND",
   // --- The household directory (lg-20) ---
+  // lg-22: managing it from the app. An admin is told why an address cannot be
+  // added; a member is told only that it cannot, whatever the reason.
+  /**
+   * The address is a member of a household already, this one or another. An
+   * address is in one household at a time: moving it is a removal, then an add.
+   * Only an admin is told this.
+   */
+  "ADDRESS_ALREADY_A_MEMBER",
+  /**
+   * What a member is told when the address they asked to add cannot be added,
+   * whether it is in a household already or would be a third person. The
+   * reason would let any member ask whether an address uses the ledger.
+   */
+  "MEMBER_NOT_ADDED",
+  /** The household named is not in the directory. */
+  "HOUSEHOLD_NOT_FOUND",
+  /** The address named is not a member of the household named, or of any. */
+  "MEMBER_NOT_FOUND",
   /**
    * The household already has two people, and the address names a third. The
    * books are two people's: a ratio is between two salaries and a settlement is
@@ -207,6 +225,11 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
     "No ratio is in effect on the period's last day. Confirm one on the salaries screen first.",
   SPENDING_CATEGORY_NOT_FOUND:
     "There is no such spending category in the list. It may have been retired since the list was loaded.",
+  ADDRESS_ALREADY_A_MEMBER:
+    "That address already belongs to a household. Remove it there before adding it here.",
+  MEMBER_NOT_ADDED: "That address cannot be added to this household.",
+  HOUSEHOLD_NOT_FOUND: "There is no such household.",
+  MEMBER_NOT_FOUND: "That address is not a member of this household.",
   HOUSEHOLD_FULL: "A household holds two people, and this one already has both.",
   RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
   RECEIPT_NOT_FOUND: "There is no such receipt.",
