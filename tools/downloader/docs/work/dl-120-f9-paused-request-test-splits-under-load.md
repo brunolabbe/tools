@@ -91,7 +91,8 @@ tools/downloader/engine` prints nothing, so the measurements taken at dl-108's
       writing. The window closed on A alone before the pause held. The meter
       then judged a 3.8 MB/s origin against 10 MB/s of media and split, which
       is the right decision for that origin.
-  - **The fix is in the test.** `pausedThenRead` now uses an 8 MB/s origin
+  - **The fix is in the test** (superseded by the round 2 entry below, which
+    leaves A unthrottled instead). `pausedThenRead` now uses an 8 MB/s origin
     against 20 MB/s of media, the same 0.4 ratio. The same buffers (7.5 to
     9.2 MB at that rate) fill in 0.92 to 1.08 s of active time
     (`pause … active=919` to `active=1083`, 12 runs, 11 busy loops), about 0.9 s
@@ -155,3 +156,53 @@ failed`).
   - `difficulty: standard`: finding the cause needed instrumenting the feeder
     and choosing between a meter defect and a test assumption. The fix is two
     numbers in one test helper.
+- 2026-10-13, round 2, after gate 1 (CONCERNS: one med, three lows, all five
+  Done-when lines verified at fa0a03cf).
+  - **Owner's decisions, 2026-10-12** (asked by the orchestrator; both were the
+    gate's recommendations):
+    1. On the med, "the fix cuts the failure but does not remove it": doubling
+       the rate left the fill's cost to the rate the fixture _delivers_, and at
+       23 busy loops on one core the head failed 4 of 15 (gate 1's series). The
+       options were "accept as built (A)" and "unthrottle reader A (B)".
+       **Chosen: B.**
+    2. On the low "the meter charges the gap between a released request and the
+       next one's first byte as origin time": the options were "a note on
+       dl-114" (recommended), "a separate ticket" and "leave it". **Chosen: a
+       bullet on dl-114's `Meter` unit-test item**, with the gate's
+       reproduction table. No production line changes here, so Done when 5
+       holds.
+  - **What changed.** In `pausedThenRead`, `behaviour.perConnectionBps` is
+    `null` before A's request and `4_000_000` before B's, since the fixture
+    takes the rate per request. The media stays at `size / 20_000_000`, so B is
+    0.2 of the media rate and splits. A fills the loopback at the socket's own
+    speed. Its bytes raise the rate the meter judges, but across the 23-loop
+    series below the split judged 4.4 to 7.5 MB/s against a 20 MB/s bitrate. The 4 s wait, B's 4.5 s
+    bound and the assertions are unchanged. The comment above the helper now
+    describes this design, and dl-114's bullet now says _delivered_ rate and
+    names the unthrottled reader as the way out (the two wording lows).
+  - **(a) The head under 23 busy loops on core 11** (`pinned.sh … 20 … 23`,
+    instrumented the same way as before, load average 2.9 to 28): **20 of 20
+    passed**. A's held pause came at `active=257` to `active=1604` (median 522;
+    one run at 1604, the rest at most 1067), with 7.5 to
+    10.4 MB taken by the loopback. The split came at
+    `rate=4409707` to `7545930`, `bitrate=20000000`.
+  - **(b) The one-flag meter mutation** (`mutate.sh`, head test file, load
+    average 17.7 decaying to 7.2 with no loops of mine running): "both" →
+    **`Tests 2 failed`**. The two parts alone gave the same results as at the
+    base: `no-release` → both pass; `any-paused` → "left open" fails.
+  - **(c) Each half alone:**
+    - each test alone, idle (load average 2.6 to 6.7): "closed" 5 of 5 and "left
+      open" 5 of 5;
+    - the change's first half alone (A unthrottled, B left unthrottled too),
+      idle (load average 1.9 to 2.1): **2 of 2 runs fail both tests** with
+      `expected null not to be null`. B is never slow, so it never splits: B's
+      throttle is what makes the test able to pass;
+    - the change's second half alone (B at 4 MB/s, A throttled at 4 MB/s too),
+      23 loops (load average 1.6 to 28.8): **7 of 10 runs fail** with `expected
+'parallel' to be 'single'`. A's unthrottling is what removes the flake.
+  - **Done when 2 and 3 again, uninstrumented, at the head:** 11 loops, **20 of
+    20** (load average 12.2 to 20.8). Alone, "closed" passed 10 of 10 (load
+    average 4.6 to 10.8). The whole file: `Tests 43 passed (43)` in 79.67 s.
+  - No other session's `vitest` was running when the 23-loop, half-2 and
+    11-loop series started (`ps -eo pid,args | grep vitest` printed nothing). I
+    did not check before the shorter idle runs.

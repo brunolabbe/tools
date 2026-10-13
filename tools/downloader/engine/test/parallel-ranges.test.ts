@@ -1332,22 +1332,26 @@ describe("dl-98 round 2: what gate 2 found", () => {
   /**
    * Gate 2's `stuckpause.mts`, shortened. A reads 200 KB and stops, so the
    * loopback's buffers fill and the feeder pauses A's origin; then B reads
-   * from another offset at full speed. The origin is 8 MB/s a connection
-   * against 20 MB/s of media, so B is slow and should be split.
+   * from another offset at full speed. B's origin is 4 MB/s against 20 MB/s
+   * of media, so B is slow and should be split.
    *
-   * The pause has to engage inside the 2 s window, or the meter closes the
-   * window on A alone and rightly splits before B exists (dl-120). What it
-   * waits on is the loopback: the kernel's socket buffers between the feeder
-   * and a stopped A took 5.2 to 7.8 MB before the feeder's writes blocked,
-   * the larger under CPU contention, so at 4 MB/s A was the origin's for up to
-   * 1.99 s of the 2, and the tests split in 5 of 20 runs on a shared core. At
-   * 8 MB/s the same buffers (7.5 to 9.2 MB) take about 1 s. The ratio of
-   * origin to media is the 0.4 it was.
+   * A's origin is not throttled (dl-120). Its pause has to engage inside the
+   * 2 s window, or the meter closes the window on A alone and splits before B
+   * exists. What the pause waits on is the loopback: the kernel's socket
+   * buffers between the feeder and a stopped A take several megabytes (5.2 to
+   * 10.4 MB measured on Linux) before the feeder's writes block, and no Node
+   * API sizes them. Throttled, that fill cost the window whatever rate the
+   * fixture managed to deliver in a starved process, and a run split whenever
+   * it delivered too little. Unthrottled, A fills them at the socket's own
+   * speed. Its bytes still count, and they raise the rate the meter judges,
+   * but B at 4 MB/s keeps it far below the media's 20 (4.4 to 7.5 MB/s at the
+   * split, measured with 23 busy loops on the test's core).
    */
   async function pausedThenRead(closeA: boolean): Promise<{ splitAfterMs: number | null }> {
     const size = 60_000_000;
     files["stuck.bin"] = Buffer.alloc(size, 9);
-    behaviour.perConnectionBps = 8_000_000;
+    // The fixture takes the rate when a request arrives: A's is unthrottled.
+    behaviour.perConnectionBps = null;
     const { feeder } = await feederFor("stuck.bin", {
       settings: { ...PARALLEL_RANGE_DEFAULTS, chunkBytes: 1024 * 1024, measureMs: 2_000 },
       durationSec: () => size / 20_000_000,
@@ -1368,6 +1372,7 @@ describe("dl-98 round 2: what gate 2 found", () => {
     if (closeA) a.destroy();
     await sleep(300);
 
+    behaviour.perConnectionBps = 4_000_000;
     const started = performance.now();
     let splitAfterMs: number | null = null;
     const b = http.get(feeder.url, { headers: { range: "bytes=30000000-" }, agent: false });
