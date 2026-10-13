@@ -40,8 +40,8 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
    - Then delete these rows:
      - 2252: the five controls that do not count, other than `autoplay`;
      - 2280: the five controls that count, other than `jw`, `watch` and `xo` —
-       `watch` takes the label path and `xo` is in a frame, so neither reaches
-       this rule;
+       `watch` and `xo` carry no attribute mark and take the label path
+       (`clickByText`), so neither reaches this rule;
      - 2323: camel-testid and camel-title (the camel-case branch at about
        `provoke.ts:853`).
    - The 2323 label row is already deleted by dl-113 if it acted on it. If not,
@@ -298,3 +298,65 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     but the attribute rule it exercised (`aria-label=Play` alone) is the `label`
     entry in the table, which is what makes the deletion safe. The ticket's
     scaling for the third F9 test did not work as written (above).
+- 2026-10-13 — Round 1, after gate 1 returned CONCERNS on `81daba51`. Three
+  owner answers and one measurement.
+  - **Owner's answer 1, on the open F9 decision.** The question: the two
+    `pausedThenRead` F9 tests are unchanged and each fails on a different meter
+    mutation; what to do with them? The options were (1) leave both, (2) delete
+    both (about 12 s saved, the feeder's `pause`/`release` wiring then rests on
+    the third test alone), (3) file a measurement ticket for a shorter sleep.
+    **Chosen: (1), leave both**, the builder's recommendation and the gate's. The
+    gate measured why: with the meter paused on any member rather than every
+    member, `-t F9` fails "F9: a paused request left open does not stop the meter
+    for one that is reading" (`expected null not to be null`), a wiring fault the
+    unit table cannot see. Nothing changed for it.
+  - **Owner's answer 2, on the gate's medium finding.** The finding: only the
+    table tests the attribute decision now, and its `read()` helper supplied all
+    five attributes whatever `isPlayPress` reads, so nothing checked the read. The
+    gate nulled `isPlayPress`'s `title`, `data-testid` and `id` reads and left
+    `attributesMarkPlayPress` alone: `browser-resolver.test.ts` passed 120 of 120
+    while 14 press verdicts flipped (all on `id="play"` pages). The options were
+    (1) export the attribute list `isPlayPress` reads and build the table's
+    `read()` from it (no browser time; catches a dropped attribute, not a fault
+    in Playwright's `getAttribute`), (2) restore one browser row whose only mark
+    is `id` (`ctl=id-play`, 3 to 12 s), (3) accept it. **Chosen: (1).** Built:
+    `PLAY_PRESS_ATTRIBUTES` in `provoke.ts` is the list `isPlayPress` now reads
+    by, with the same values in the same order as before (one per distinct
+    `PLAY_LOOSE_SELECTORS` attribute), and `play-press.test.ts` builds each row's
+    input from it. It is exported for that test only; `index.ts` did not change.
+    **It can fail**: with one attribute filtered out of the list in `src`, the
+    table fails and names the rows that lose their mark (restored afterwards;
+    `git diff` shows only the export):
+
+    | Attribute dropped from the read list | Failing rows (of 26)                                                         |
+    | ------------------------------------ | ---------------------------------------------------------------------------- |
+    | `id`                                 | `id-button`, `id-play`, and the pin test                                     |
+    | `title`                              | `camel-title`, `title`, `display-name with a Player title`, and the pin test |
+    | `data-testid`                        | `testid-word`, `camel-testid`, and the pin test                              |
+    | `class`                              | `jw`, `vjs`, `ytp`, `plyr`, `class-btn`, and the pin test                    |
+    | `aria-label`                         | `carousel`, `label`, `Playlist`, `Player`, and the pin test                  |
+    | none (restored)                      | 0 failed of 26                                                               |
+
+    A new test pins the list to the five names the rows can set, so adding a sixth
+    attribute to the read forces a row for it. What stays uncovered is a fault in
+    Playwright's own `getAttribute` in a real page: only `ctl=jw` (a class) and
+    the pages that count through `id="play"` cover it, thinly.
+
+  - **Owner's answer 3, on the gate's low finding, which I reproduced rather than
+    transcribed.** Three places said `xo` stays out of the attribute rule because
+    it "presses in a frame": the header of `play-press.test.ts`, the comment above
+    the counting rows in `browser-resolver.test.ts`, and this brief (Build item 2).
+    The reason was wrong. `provoke.ts` runs `clickVisible(frame, PLAY_SELECTORS,
+{ countPress: isPlayPress })` in every frame, and `xo`'s `cta-inner.html` has
+    only `<button onclick=...>Watch now</button>`, with no attribute mark, so it
+    matches `PLAY_TEXT` through `clickByText`; `watch` is an `<a href="#later">`
+    with the same property. Reworded in all three places. **The brief's sentence
+    is corrected in place** (Build item 2: "`watch` and `xo` carry no attribute
+    mark and take the label path (`clickByText`)"). The test header also named
+    `player-poster-icon-grid.html` as if it still existed; it now says it is
+    deleted.
+  - **Measured by the orchestrator from CI on `81daba51`**: all three F9 tests
+    passed on the Windows leg, in 6053, 6369 and 3533 ms (run 38337572439), so the
+    rescaled third test is measured on Windows once. The leg is red only on the
+    pre-existing dl-121 3x test (2.993 against 3). This replaces "Windows
+    unmeasured" above.

@@ -1867,8 +1867,10 @@ describe("a click-only player box beside a press that did not start a player (dl
   // What a press that counts still does. The rule that decides which presses
   // count is tabled in `play-press.test.ts`; the rows kept here are the ones that
   // reach the browser by another road. `jw` proves the library-class branch,
-  // since `jw-icon-display` holds no "play" at all; `watch` takes the visible-text
-  // path, and `xo` presses in a frame, so neither reaches the attribute rule.
+  // since `jw-icon-display` holds no "play" at all. `watch` and `xo` ("Watch
+  // now", in a frame) carry no attribute mark, so they take the visible-text path
+  // and neither reaches the attribute rule; a frame alone would not keep them out,
+  // since the selector press runs in every frame.
   // `testid-word`, `class-btn`, `id-button`, `id-play` and `carousel` stood here
   // until dl-114.
   test.each([

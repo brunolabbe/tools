@@ -1,28 +1,43 @@
 /**
  * dl-114: the attribute rule behind "a press that counts" (dl-100), without a
- * browser. `isPlayPress` reads five attributes off the pressed element and
- * hands them to `attributesMarkPlayPress`; these rows are those attribute sets.
- * Each row that was a probe of its own through Chromium carries the `ctl=` name
- * of its fixture (`box-with-control.html`, `player-poster-icon-grid.html`); the
+ * browser. `isPlayPress` reads the attributes in `PLAY_PRESS_ATTRIBUTES` off the
+ * pressed element and hands them to `attributesMarkPlayPress`; these rows are
+ * those attribute sets, built from that same list. Each row that was a probe of
+ * its own through Chromium carries the `ctl=` name of its fixture
+ * (`box-with-control.html`, or the deleted `player-poster-icon-grid.html`); the
  * rows `browser-resolver.test.ts` keeps stand here too, so the table is the
- * whole rule. `watch` is not here: the `Watch` link takes the visible-text path,
- * and `xo` is a press in a frame, so neither reaches this rule.
+ * whole rule. `watch` and `xo` are not here: the `Watch` link and `xo`'s "Watch
+ * now" button carry no attribute mark, so they take the visible-text path
+ * (`clickByText`) and never reach this rule. A frame is not the reason:
+ * `provoke.ts` runs the same selector press, with `isPlayPress`, in every frame.
+ *
+ * What the table cannot see is Playwright's own `getAttribute` in a real page.
+ * That is covered thinly by the browser rows that remain: `ctl=jw` counts
+ * through a class, and the pages that count through `id="play"`.
  */
 
 import { describe, expect, test } from "vitest";
-import { attributesMarkPlayPress } from "../../src/browser/provoke.ts";
+import { PLAY_PRESS_ATTRIBUTES, attributesMarkPlayPress } from "../../src/browser/provoke.ts";
 
-type Attributes = Partial<Record<"aria-label" | "title" | "data-testid" | "class" | "id", string>>;
+const ATTRIBUTE_NAMES = ["aria-label", "title", "data-testid", "class", "id"] as const;
+type Attributes = Partial<Record<(typeof ATTRIBUTE_NAMES)[number], string>>;
 
-/** What `isPlayPress` hands over: every attribute it reads, null where the element has none. */
+/**
+ * What `isPlayPress` hands over: the attributes it reads, from the list it reads
+ * them by, null where the element has none. An attribute dropped from that list
+ * is therefore absent here too, and the rows that depend on it fail.
+ */
 function read(attributes: Attributes): ReadonlyMap<string, string | null> {
   return new Map<string, string | null>(
-    (["aria-label", "title", "data-testid", "class", "id"] as const).map((name) => [
-      name,
-      attributes[name] ?? null,
-    ]),
+    PLAY_PRESS_ATTRIBUTES.map((name) => [name, attributes[name as keyof Attributes] ?? null]),
   );
 }
+
+describe("PLAY_PRESS_ATTRIBUTES", () => {
+  test("is the five attributes the rows below can set, so a row cannot name one the read lacks", () => {
+    expect(PLAY_PRESS_ATTRIBUTES.toSorted()).toEqual(ATTRIBUTE_NAMES.toSorted());
+  });
+});
 
 describe("attributesMarkPlayPress: controls that are pressed but do not count", () => {
   test.each([
