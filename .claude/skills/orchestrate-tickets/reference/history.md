@@ -5253,3 +5253,63 @@ Total $7.2535, active 46m25s (rates read 2026-10-10). The close-out fixer is not
 
 - Resuming the builder for the round and again for the landing: one agent across build, round 1 and landing came to $1.8855, and the owner's "fixed at landing" low rode in the landing dispatch.
 - The gate dating the caveat's run from the commits that bracket it (391af241 at 17:20, 27b8919d at 19:02), not from the merge, when the orchestrator flagged the date as unverified.
+
+### Batch 2026-10-12 (tools-9e / tools-98, dl-113 dl-116 dl-118 repo-102, then dl-119 and dl-120 filed) — base d759b80e
+
+| PR | Status | Model / effort | Agent | Task | Active / wall | Cold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | Sonnet 5.5 / medium | seam-mapper | intake over five ready ids | 38s / 38s | 0 | $0.1390 |
+| #450 | merged | Sonnet 5.5 / high | builder-standard | dl-113 build and the Done-when 3 cost table | 43m12s / 1h48m57s | 0 | $8.8634 |
+| #450 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-113 gate 1 | 26m12s / 1h14m55s | 0 | $6.0256 |
+| #450 | merged | Sonnet 5.5 / high | fixer | dl-113 landing (two Log lows) | 3m05s / 10m28s | 0 | $0.5550 |
+| #446 | merged | Sonnet 5.5 / high | builder-standard | dl-116 build | 19m44s / 28m59s | 0 | $2.2631 |
+| #446 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-116 gate 1 | 11m50s / 44m00s | 0 | $3.8698 |
+| #446 | merged | Sonnet 5.5 / high | fixer | dl-116 landing | 1m08s / 11m10s | 0 | $0.2208 |
+| #447 | merged | Sonnet 5.5 / high | builder-standard | dl-118 measurement and build | 8m42s / 27m16s | 0 | $1.0370 |
+| #447 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-118 gate 1 | 18m37s / 43m51s | 0 | $2.7804 |
+| #447 | merged | Sonnet 5.5 / high | fixer | dl-118 landing (four lows) | 5m46s / 14m56s | 0 | $0.8168 |
+| #445 | merged | Sonnet 5.5 / high | builder-standard | repo-102 build, round 1 and landing | 23m36s / 1h05m27s | 0 | $3.6107 |
+| #445 | merged | Opus 5.5 / high | ticket-reviewer-opus | repo-102 gates 1 and 2 | 21m25s / 47m23s | 0 | $6.0995 |
+| #445–#447 | merged | Sonnet 5.5 / high | fixer | post three tickets' gate reports to their threads | 45s / 45s | 0 | $0.1506 |
+| #456 | merged | Sonnet 5.5 / high | builder-standard | dl-119 file and build | 14m29s / 23m57s | 0 | $0.7737 |
+| #456 | merged | Opus 5.5 / high | ticket-reviewer-opus | dl-119 gate 1 (narrow) | 11m33s / 11m33s | 0 | $1.9620 |
+| #456 | merged | Sonnet 5.5 / high | fixer | dl-119 landing (two lows) | 7m10s / 23m53s | 0 | $0.5954 |
+| #461 | open, ready | Opus 5.5 / high | builder-hard | dl-120 file, build, round 1 and landing (resumed after the host died) | 57m48s / 4h50m31s | 1 | $10.0652 |
+| #461 | open, ready | Sonnet 5.5 / xhigh | ticket-reviewer-sonnet | dl-120 gates 1 and 2 | 2h04m10s / 3h03m18s | 0 | $3.7791 |
+| — | — | Opus 5.5 / high | orchestrator | the batch (one host death, resumed as tools-98) | 2h15m28s / 7h58m11s | 1 | $15.0650 |
+
+Total $68.6722, active 8h55m19s (rates read 2026-10-10). The close-out fixer is not in the table.
+
+**Tickets:**
+
+- dl-116 → #446: gate 1 PASS (3 low, recorded unfixed by owner choice).
+- dl-118 → #447: the builder stopped at measurement, owner chose option A (an optional `clickTimeoutMs` cap); gate 1 PASS (4 low, fixed at landing by owner choice). The landing's tightened 3000 ms ceiling flaked on a Windows leg, which became dl-119.
+- repo-102 → #445: gate 1 FAIL (1 high: `withoutComments` dropped text inside strings and template literals; 5 low), gate 2 PASS (2 low, fixed at landing by owner choice); the `..`-join gap and the `roles/builder.md` bullet recorded unfixed.
+- dl-113 → #450: owner reworded Done-when 3 on the builder's 27-row cost table; gate 1 PASS (2 low, fixed at landing by owner choice).
+- dl-119 → #456, filed this batch from a peer session's Windows reading on #449: gate 1 PASS (narrow; 2 low, fixed at landing by owner choice).
+- dl-120 → #461, filed this batch for the F9 flake, owner chose "file and build now" over the orchestrator's "file only": gate 1 CONCERNS (1 med: the fix cut the flake but did not remove it; 3 low), gate 2 PASS (3 low, fixed at landing by owner choice). dl-121 (the dl-98 3× Windows flake) was filed by tools-38, not here.
+
+**Defects in the skill:**
+
+1. `reference/records.md`, _Landing_, and `reference/dispatching.md`, _Routing a round_ — require each gate's full report on the PR thread and hand the lander the gate files, but a gate cannot write its report to a file, so the lander has nothing to post unless the orchestrator writes it from the returned text. Reproduction: a `SendMessage` to each of three finished gates (dl-116, dl-118, repo-102) asking it to write its report to `<scratch>/<id>/gate-1/report.md` → each replied with the harness refusal `Subagents should return findings as text, not write report files.`, and `wc -l` on the path → `No such file or directory`.
+2. `roles/builder.md`, _Scope_ against _Before you report_ — line 39 says "A ticket you file and fix inside this branch stays `in-flight`" while line 83 says never `in-flight`, "whatever the dispatch says". Two builders that filed a ticket (dl-119, dl-120) each had to pick one. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n "in-flight"` → lines 39 and 83.
+3. `roles/builder.md`, _Stopping on the ticket's own stop condition_ — covers a stop written in the Build section, not one the dispatch imposes ("measure, then stop and report before changing production code"). dl-118's builder treated the two alike, committed its Log entry and pushed so the worktree survived. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n -i "stop condition"` → line 43 only, and it names "a Build step".
+4. `roles/builder.md`, _Before you report_, the preflight bullet — still says preflight runs "the suite of every tool the diff touches", which repo-102 (#445) made false: it now runs the packages a change can reach. Reproduction: `git show origin/main:.claude/skills/orchestrate-tickets/roles/builder.md | grep -n "every tool the diff touches"` → line 63.
+5. `roles/builder.md`, _Before you report_, the merge bullet — recurred from the 2026-10-10 entry's item 2, twice more. Reproduction (dl-119): `git merge origin/main -m "merge: origin/main into dl-119"` → `"merge" is not a known type`, `Not committing merge`; `git commit -m "Merge remote-tracking branch 'origin/main' into dl-119"` passed.
+6. `roles/reviewer.md`, the CI bullet under _What makes a gate worth its cost_ ("still-running check on the head you are gating") — does not cover a ticket-only commit landing on top of the gated sha while the gate works, so CI never runs on the gated sha and a literal reading leaves the CI line `unproven (gate)` for good. Hit by the dl-116 and dl-113 gates. Reproduction: `gh pr view 446 --json headRefOid` → `ed154808…` while gating `07af7430`; `git diff --stat 07af7430 ed154808` → `1 file changed, 9 insertions(+)`, the ticket.
+7. `roles/reviewer.md`, the same bullet — names `gh pr checks` and `gh pr view`, neither of which shows per-test durations, which a timing Done-when line needs. Reproduction (dl-118 gate): `gh run view --job 114934373522 --log | grep "pressed where play is a click"` → `… closable panel is pressed where play is a click, and nothing plays  4369ms`.
+8. `roles/reviewer.md`, the `git archive <sha> | tar -x` plus `cp -a` second-tree recipe (line 48) — gives no build step, and the archive has no `dist`, so a tool suite cannot run in it. Reproduction (repo-102 gate): `readlink tree2/node_modules/@downloader/engine` → `../../tools/downloader/engine`; `npx vitest run --project downloader tools/downloader/api/test/config.test.ts` in that tree → `Error: Failed to resolve entry for package "@downloader/contract"`, `Tests no tests`, exit 1. The dl-113 gate ran `npx tsc --build` in `contract` to get past it.
+9. `roles/reviewer.md`, _What you are not given, on purpose_ (line 30, "`## Log` and stop there") — gives no command, and the obvious one reads past the heading. Reproduction (dl-120 gate 1): `sed -n 1,80p tools/downloader/docs/work/dl-120-f9-paused-request-test-splits-under-load.md` → printed the `## Log` heading and its first lines. `awk '/^## Log/{exit} {print}' <ticket>` stops at it.
+10. `roles/reviewer.md`, _When you are woken to re-gate_, and `SKILL.md` step 8 — recurred from the 2026-10-10 entry's item 3. Reproduction (dl-120 gate 2): `git log --no-merges --oneline fa0a03cf..cbdf2168` → 11 lines, 9 of them main's, for a two-commit round.
+11. `roles/common.md`, _Preflight runs longer than a foreground call allows_ (line 79) — names preflight but not `review-record.mjs --land`, which runs preflight inside it. Reproduction (dl-119 landing): `node scripts/review-record.mjs --land <ticket> <gate file> --base origin/main --status done --title "<title>" --branch dl-119` → `Command did not complete within its 120s timeout and was moved to the background`, then later `--land: landed.`, exit 0.
+12. `SKILL.md`, _If the session dies_ — names `git log <last known sha>..HEAD` and `git status --short` per worktree, but not the agent's own background runs that outlive it, nor an index that no longer matches the working tree. Reproduction (dl-120, resumed after the host died): a `pinned.sh … 20 head-pin11` series started before the crash was still running at resume (pid 1930365, 541 s old) and straddled the branch reset; `git status` showed the test file staged (`M `) where the builder's `git apply` had left it unstaged, so `git checkout -- <file>` restored the fix from the index instead of reverting it.
+13. `.claude/rules/testing.md` — says nothing about `vi.useFakeTimers` and child processes: a SIGKILLed child stays a zombie, alive to `process.kill(pid, 0)`, until the event loop reaps it, which a fake clock never does. Reproduction (dl-116 builder): its first kill-grace pin checked liveness with `kill(pid, 0)` and passed under a `DEFAULT_KILL_GRACE_MS = 1000` mutation; `git show origin/main:.claude/rules/testing.md | grep -n -i "useFakeTimers\|zombie"` → nothing.
+14. `scripts/next-id.mjs` — reports a clash for any id named in an open PR's title, not only the PR's own ticket. Reproduction: `node scripts/next-id.mjs dl` at 32f8a994 → `clash: dl-118 is claimed by PR#456, merged`, where #456 was dl-119's PR, titled "give each dl-118 cap row its own ceiling".
+15. `scripts/preflight.mjs`, the `mergeTree` check — exits 16 for open heads "this checkout does not have" right after a `git fetch origin`, when release-please force-updates its branches in between. Reproduction (dl-118 builder): first preflight → `mergeTree` exit 16 naming the two release-please heads; a second `git fetch origin` and preflight → all heads merge cleanly.
+
+**Worked, and worth keeping:**
+
+- Asking a builder for the cost of each reading before putting a Done-when interpretation to the owner (dl-113: 27 rows, 74 s against 11 s against 0 s); the owner chose with the numbers.
+- Cross-session coordination by message only: each new id claimed with the live peer before filing, flake evidence relayed both ways and marked unverified, and the peer filed dl-121 so it was not filed twice.
+- Cutting dl-120 from a peer's landed, frozen head, then moving it onto main before its first commit once the peer's PR merged.
+- After the host died, `board.md` plus one `git log`/`git status` per surviving worktree was enough to resume the one live builder by `SendMessage`, with its measurements intact.
