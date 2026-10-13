@@ -204,6 +204,72 @@ isPlayPress })` in every frame, and the gate's read log shows `embed-inner`'s
   reliability: the rescaled third F9 test is unmeasured on Windows (dl-106),
   and the Windows leg was still running at gating · maintainability: above.
 
+### Gate 2
+
+**Gate: FAIL** — 2026-10-13 · `81daba51..f8f8819e` (the round is f39185ab; the merge of `main` at 32929437 was not reviewed) · Opus 5.5, depth standard
+
+| Done when                                     | Proof                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each deleted row maps to one table entry   | `resolvers/test/browser/play-press.test.ts` and `same-document.test.ts`, unchanged in substance from gate 1, and now 26 of 26 and 17 of 17 ✓                                                                                                                                                                                              |
+| 2. Production behaviour unchanged             | **verified** — `PLAY_PRESS_ATTRIBUTES` is the same `[...new Set(PLAY_LOOSE_SELECTORS.map(…))]` that `isPlayPress` used to build on each call, now built once at module load. The values, their order, the `Promise.all` and `attributesMarkPlayPress` are all unchanged. The only round change in `browser-resolver.test.ts` is a comment |
+| 3. Nothing new re-exported from an `index.ts` | **verified** — no `index.ts` or `package.json` in `81daba51..f8f8819e`; `PLAY_PRESS_ATTRIBUTES` is exported from `provoke.ts` only                                                                                                                                                                                                        |
+| 4. Durations in the Log                       | **verified** at gate 1; the round adds the Windows F9 timings, which the gate read from run 38337572439 (6053, 6369 and 3533 ms, as logged)                                                                                                                                                                                               |
+
+Gate 1's findings:
+
+- **med, the untested DOM read: fixed, with option (1) as the owner chose.**
+  `isPlayPress` now reads by `PLAY_PRESS_ATTRIBUTES`, and the table's `read()`
+  builds from the same list. Dropping `id` from the list fails 3 of 26
+  (`is the five attributes …`, `id-button`, `id-play`). Dropping `title` fails 4
+  of 26 (that same pin test, `camel-title`, `title`,
+  `display-name with a Player title`). Restored: 26 of 26.
+  **Residue.** The gate nulled the `id` result after the `Promise.all`, leaving
+  the list alone. `play-press.test.ts` and `provoke.test.ts` then passed 290 of
+  290, and `browser-resolver.test.ts` passed 120 of 120 in 338.05 s. This is the
+  gap option (1) knowingly left: anything inside `isPlayPress`'s read body, of
+  which Playwright's `getAttribute` is the main part. It is not a new gap.
+- **low, the xo reason: fixed.** All three rewordings match the code:
+  - `provoke.ts` calls `clickVisible(frame, PLAY_SELECTORS, { countPress: isPlayPress })` in every frame;
+  - `cta-inner.html`'s only control is `<button onclick=…>Watch now</button>`;
+  - `watch` is an `<a href="#later">` with no attribute mark.
+- **dropped, the box-xo-embed test: the explanation is corrected.** dl-123's
+  filer measured that `clickByText(PLAY_TEXT)` presses the same button. The gate
+  did not dispute that with a command. Gate 1's mutation flipped only
+  `isPlayPress`'s verdict and left `labelClicked` alone, which fits the filer's
+  account. Gate 1's 1.5 s timing explanation was wrong.
+
+New in the round:
+
+- **high** · shipped text that is false against the code · The new header of
+  `play-press.test.ts` says Playwright's `getAttribute` "is covered thinly by the
+  browser rows that remain: `ctl=jw` counts through a class, and the pages that
+  count through `id="play"`". The round's Log says the same ("only `ctl=jw` (a
+  class) and the pages that count through `id="play"` cover it, thinly"). The
+  `id` half is false:
+  - With `read.set("id", null)` planted after the `Promise.all` in
+    `isPlayPress`, `browser-resolver.test.ts` passed `Tests 120 passed (120)`.
+    Gate 1's mutation (`title`, `data-testid` and `id` nulled) gave the same
+    result while flipping 14 `id="play"` verdicts.
+  - The `class` half is true: with `read.set("class", null)` planted, `-t "ctl=jw"`
+    fails `ctl=jw is a press that counts, so the box is not clicked`
+    (`expected undefined to be an instance of AppError`). Restored, it passes.
+
+  Remedy, fully stated: in the test header and in the Log bullet, strike "and
+  the pages that count through `id="play"`". Then say that only `ctl=jw`
+  (class) can fail on a broken read, and that no browser row fails on a broken
+  `id`, `aria-label`, `title` or `data-testid` read. — owner chose fix then a
+  narrow gate 3, 2026-10-13; fixed in a6c7254b, verified by gate 3
+
+- **findings** · the round's hunt returned 1; 1 carried (high), 0 dropped. Of
+  gate 1's: med fixed, low fixed, the dropped finding's explanation corrected.
+- dl-105's flaky "a wall clock stepped back before the wait …": f39185ab cannot
+  affect it. The round's only runtime change builds an identical list once
+  instead of on every call, and that test's code and helpers are untouched.
+- CI on f8f8819e, read once: `check` (CI), `check` (pr-title), `changes`,
+  `dependency-review` and `e2e (sniffer)` passed. Still in progress and unread:
+  `test (ubuntu-latest)`, `test (windows-latest, informational)`,
+  `e2e (direct)`, `docker` and `codeql`.
+
 ## Log
 
 - 2026-10-12 — Filed from the suite-speed audit. The estimate is about 25 s
