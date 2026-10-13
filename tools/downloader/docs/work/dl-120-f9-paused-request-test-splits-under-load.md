@@ -156,7 +156,8 @@ failed`).
     is left alone.
   - `difficulty: standard`: finding the cause needed instrumenting the feeder
     and choosing between a meter defect and a test assumption. The fix is two
-    numbers in one test helper.
+    numbers in one test helper. (Superseded by the round 2 entry below, which
+    sets A's and B's rates separately.)
 - 2026-10-13, round 2, after gate 1 (CONCERNS: one med, three lows, all five
   Done-when lines verified at fa0a03cf).
   - **Owner's decisions, 2026-10-12** (asked by the orchestrator; both were the
@@ -207,3 +208,27 @@ failed`).
   - No other session's `vitest` was running when the 23-loop, half-2 and
     11-loop series started (`ps -eo pid,args | grep vitest` printed nothing). I
     did not check before the shorter idle runs.
+- 2026-10-13 — **Gate 2's three lows, _fixed at landing_.** The owner was asked
+  "Land it how?" with the options "lander fixes wording (recommended)" and "land
+  as is", and chose **the lander fixes the wording, with no re-gate**. Only
+  comments and docs change. No test logic and no number the test asserts moves,
+  and nothing was re-measured.
+  1. dl-114's loopback bullet said the fill "costs the window little whatever
+     the kernel takes". It now says the cost is small at the median (522 ms, the
+     builder's 23-loop series) and not bounded: about 1.1 s at 23 loops in gate
+     2's series and 1.6 s in the builder's, and about 2 s at 47 (gate 2). The
+     bullet names the remedy as fitting the two-reader `pausedThenRead`. It
+     marks as **unmeasured** whether the third F9 test, whose one reader both
+     stops and is measured, stays meaningful with that reader unthrottled. The
+     over-long joined line is reflowed.
+  2. The test comment's "5.2 to 10.4 MB" and "4.4 to 7.5 MB/s at the split" now
+     give both measurements with their source and load. The held fills with A
+     unthrottled were 7.5 to 10.45 MB (builder, 23 loops) and 6.3 to 10.45 MB
+     (gate 2, 11 and 23 loops). The split rates at 23 loops were 4.4 to
+     7.5 MB/s (builder) and 5.8 to 8.6 MB/s (gate 2). The 5.2 MB is real, but
+     it was measured with A throttled at 4 MB/s
+     (`DL120 pause t=4862 active=1284 bytes=5160960 received=5177344` in the
+     builder's `probe-busy24-10.log`). So it now appears only in dl-114's
+     bullet, under that condition.
+  3. The round 1 entry's "The fix is two numbers in one test helper" is marked
+     superseded by the round 2 entry, not deleted.
