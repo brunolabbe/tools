@@ -3,7 +3,7 @@ id: dl-114
 tool: downloader
 title: Three pure rules are tested only by driving Chromium or ffmpeg, because none of them is exported
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [dl-112, dl-113]
 difficulty: standard
@@ -122,6 +122,87 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
    the Log says why.
 4. Before and after durations for browser-resolver and parallel-ranges are in
    the Log.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-13 · `2cb4e734..81daba51` · Opus 5.5, depth standard
+
+| Done when                                     | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Each deleted row maps to one table entry   | `resolvers/test/browser/same-document.test.ts` › "sameDocument" rows `adding ?start=`, `adding ?autoplay=`, `adding another key …`, `the same two keys in the other order …`; `resolvers/test/browser/play-press.test.ts` › the `display`, `autoplay-cls`, `autoplay-id`, `autoplay-camel`, `display-cls` rows (`toBe(false)`) and the `testid-word`, `class-btn`, `id-button`, `id-play`, `carousel`, `camel-testid`, `camel-title`, `label` rows (`toBe(true)`) ✓. The gate enumerated the population from the diff: 17 rows deleted from `browser-resolver.test.ts`, 17 matched, each with the fixture's own attributes or URLs as input and the same verdict. Mapping is in the Log |
+| 2. Production behaviour unchanged             | **verified** — the `src` diff is three `export` keywords and `isPlayPress`'s tail moved verbatim into `attributesMarkPlayPress`, still inside the same `try`; same order, same short-circuits, the one call site of each rule unchanged. Local: `parallel-ranges.test.ts` 43 of 43, `browser-resolver.test.ts` 120 of 120 (under a read-path mutation that changes no outcome, below). CI `test (ubuntu-latest)` SUCCESS on 81daba51; `test (windows-latest, informational)` in progress, unread                                                                                                                                                                                        |
+| 3. Nothing new re-exported from an `index.ts` | **verified** — neither `index.ts` is in the diff, both re-export by name, and both `package.json` `exports` map only `"."` to `dist/index`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 4. Before and after durations in the Log      | **verified** — both specs, both sides, `npx vitest run <spec>`, same test counts at head. The gate's head runs agree: browser-resolver 343.0 s for 120 tests, parallel-ranges 70.8 s for 43                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+- **med** · no `Done when` line depends on it · **open decision** · Only the
+  table tests the attribute decision now, and the table's own `read()` helper
+  always supplies all five attributes. So nothing checks the read that
+  `isPlayPress` makes in a real page. The gate made `isPlayPress` null its
+  `title`, `data-testid` and `id` reads, left `attributesMarkPlayPress`
+  untouched, and logged every read. Result: `browser-resolver.test.ts` passed
+  120 of 120 in 343.0 s, while the mutation flipped 14 press verdicts from true
+  to false (`guard-*`, `box-xo-embed`, `abandoned-body`, all on `id="play"`). In
+  the whole suite, no row reads a non-null `title` or `data-testid`. Every
+  counting `aria-label` read sits on a page that also carries `id="play"` or a
+  library class. Only `ctl=jw` (class) can fail on a broken read, and that was
+  not run. Before dl-114, `id-play`, `testid-word` and `camel-title` were each
+  the only mark on their element. Options: (1) export the attribute list
+  `isPlayPress` reads, and have the table's `read()` build from it. That costs
+  no browser time and catches an attribute dropped from the read. It does not
+  catch a fault in Playwright's `getAttribute`. (2) Restore one browser row
+  whose only mark is `id` (`ctl=id-play`). That costs 3 to 12 s and covers the
+  `id` read for real. (3) Accept it. **Recommended: (1)**, because the read is
+  one generic `Promise.all` over that list, and the list is the part that can
+  drift. — owner chose (1), 2026-10-13; fixed in f39185ab
+- **open decision** · no `Done when` line depends on it · Build item 3 says
+  "Keep one integration test, scaled down". The branch keeps all three F9
+  integration tests and scales only the third. The two `pausedThenRead` tests
+  still `sleep(4_000)`, and the Log leaves deleting them to the owner. The
+  gate's measurement: with the meter paused on any member rather than every
+  member, `-t F9` fails "F9: a paused request left open does not stop the meter
+  for one that is reading" (`expected null not to be null`, 10350 ms), so that
+  test guards wiring the unit table cannot. The Log's matching claim for the
+  other `pausedThenRead` test was not re-run. Options: (1) keep both, which is
+  about 10 s; (2) delete both, as the brief read. **Recommended: (1).** — owner
+  chose (1) keep both, 2026-10-13
+- **low** · `nfr:maintainability` · Three places say `xo` does not reach the
+  attribute rule because it "presses in a frame": the header of
+  `play-press.test.ts`, the comment above the counting rows in
+  `browser-resolver.test.ts`, and the brief. The conclusion holds but the reason
+  is wrong. `provoke.ts` runs `clickVisible(frame, PLAY_SELECTORS, { countPress:
+isPlayPress })` in every frame, and the gate's read log shows `embed-inner`'s
+  `id="play"` read through `isPlayPress` inside a frame. `xo`
+  (`box-xo-cta.html`) stays out of the rule because its "Watch now" button has
+  no attribute mark and takes `clickByText`. — owner chose fix, 2026-10-13;
+  fixed in f39185ab
+- **dropped** · out of the reviewed range · "a Play press in a frame from
+  another site still holds back the box click …" (`browser-resolver.test.ts`)
+  passed while the mutation above flipped its press to not-counted. Its
+  manifest is captured at 1.5 s, before any box click, so its title claims more
+  than its outcome depends on. This is a test dl-114 did not touch, and is a
+  candidate ticket rather than a finding here. — filed as dl-123 (#477,
+  628d7efa); the filing measured the explanation wrong: `clickByText(PLAY_TEXT)`
+  presses the same button and sets `labelClicked`, so the 1.5 s timing is not
+  what holds it (gate 2 accepted the correction)
+- **findings** · the hunt returned 4; 3 carried (1 med, 1 open decision, 1
+  low), 1 dropped.
+- Positive controls: (a) with option (b) planted (`release` of the last member
+  calls `interrupt()`), `parallel-ranges-meter.test.ts` failed 5 of 15,
+  including all three `a gap of N ms` rows. (b) With a closed reader kept as a
+  member (`release` no longer deletes from members), `-t F9` failed the third
+  F9 test 5 of 5 (`expected 'parallel' to be 'single'`). Restored, it passed 5
+  of 5. All ten runs had the Chromium suite running beside them.
+- Fixtures: no reference remains in `tools/`, `packages/` or `scripts/` to
+  `player-poster-icon-grid.html`, to the removed `rewrite=` modes or to the
+  removed `ctl=` modes, outside dl-114's tables and the historical Logs of
+  dl-55 and dl-100.
+- Invariants: only test registration (the new files sit under existing `test/`
+  globs, and CI `check` passed) and style apply. Skipped as untouched: tool
+  imports, `AppError`, shell, redaction, SSRF, progress, contract, Dockerfile,
+  routes.
+- NFR: security n/a · performance ✓ (about 62 s and 9 s off the two specs) ·
+  reliability: the rescaled third F9 test is unmeasured on Windows (dl-106),
+  and the Windows leg was still running at gating · maintainability: above.
 
 ## Log
 
