@@ -18,7 +18,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { percentile, renderCostReport, runReport } from "../src/cost-report.ts";
+import type { RunUsageRow } from "../src/cost-report.ts";
+import { percentile, renderCostReport, runReport, thinkingShare } from "../src/cost-report.ts";
 import { migrate } from "../src/db/schema.ts";
 
 const NOW = new Date("2026-09-14T12:00:00.000Z");
@@ -41,6 +42,8 @@ interface SeedRun {
   model: string | null;
   calls: number | null;
   tokens: [number, number, number, number] | null;
+  /** The reasoning share of the output above (pl-52); null when no reply gave one. */
+  thinking: number | null;
   fallbackCalls: number | null;
 }
 
@@ -48,6 +51,19 @@ interface SeedRun {
  * Run k (1–4) spends 100,000k input, 1,000,000k cache read, 40,000k cache write
  * and 20,000k output — $1.75k at `ALL_PRICES`.
  */
+/**
+ * What run k reported of its output as thinking. Run 2 reported none, so the
+ * window mixes runs with a breakdown and a run without — the case the report's
+ * caveat is about — and the three figures that remain (5,000, 20,000, 8,000)
+ * give a p50, a p95 and a mean that are three different numbers.
+ */
+const THINKING: Record<number, number | null> = {
+  1: 5_000,
+  2: null,
+  3: 20_000,
+  4: 8_000,
+};
+
 /**
  * When run k finished — deliberately not in k order. `selectFinishedRuns` sorts
  * by `finished_at`, so dates that rose with k would hand the percentile its
@@ -68,6 +84,7 @@ function metered(k: number, status: string, fallbackCalls = 0): SeedRun {
     model: "claude-opus-5",
     calls: 5,
     tokens: [100_000 * k, 1_000_000 * k, 40_000 * k, 20_000 * k],
+    thinking: THINKING[k] ?? null,
     fallbackCalls,
   };
 }
@@ -85,6 +102,7 @@ const SEED: SeedRun[] = [
     model: "scripted",
     calls: 5,
     tokens: null,
+    thinking: null,
     fallbackCalls: 0,
   },
   // Outside a seven-day window, and large enough to move every figure if it
@@ -96,6 +114,7 @@ const SEED: SeedRun[] = [
     model: "claude-opus-5",
     calls: 5,
     tokens: [90_000_000, 90_000_000, 90_000_000, 90_000_000],
+    thinking: 90_000_000,
     fallbackCalls: 9,
   },
   // Not finished, so not in any window.
@@ -106,6 +125,7 @@ const SEED: SeedRun[] = [
     model: null,
     calls: null,
     tokens: null,
+    thinking: null,
     fallbackCalls: null,
   },
 ];
@@ -119,8 +139,9 @@ function seed(runs: readonly SeedRun[]): void {
   const insert = db.prepare(
     `INSERT INTO plan_runs
        (id, plan_id, status, started_at, finished_at, model, model_calls,
-        input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, fallback_calls)
-     VALUES (?, 'p', ?, 'then', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, thinking_tokens,
+        fallback_calls)
+     VALUES (?, 'p', ?, 'then', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const run of runs) {
     insert.run(
@@ -130,6 +151,7 @@ function seed(runs: readonly SeedRun[]): void {
       run.model,
       run.calls,
       ...(run.tokens ?? [null, null, null, null]),
+      run.thinking,
       run.fallbackCalls,
     );
   }
@@ -163,6 +185,21 @@ function tokenRow(output: string, label: string): string[] {
     .split(/\s+/);
 }
 
+/** A finished run that reported only its output and thinking counts, for the rows tests. */
+function usageRow(output: number | null, thinking: number | null): RunUsageRow {
+  return {
+    status: "done",
+    model: "m",
+    model_calls: 1,
+    input_tokens: null,
+    cache_read_tokens: null,
+    cache_write_tokens: null,
+    output_tokens: output,
+    thinking_tokens: thinking,
+    fallback_calls: 0,
+  };
+}
+
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "planner-cost-report-"));
   databasePath = path.join(dir, "planner.db");
@@ -194,6 +231,117 @@ describe("the cost report", () => {
     expect(tokenRow(stdout, "cache read")).toEqual(["2,000,000", "4,000,000", "2,500,000"]);
     expect(tokenRow(stdout, "cache write")).toEqual(["80,000", "160,000", "100,000"]);
     expect(tokenRow(stdout, "output")).toEqual(["40,000", "80,000", "50,000"]);
+  });
+
+  test("prints thinking as its own row over the runs that reported it, and says it is a lower bound", () => {
+    seed(SEED);
+    const { stdout } = report(["--days", "7"]);
+
+    // Runs 1, 3 and 4 reported a breakdown; run 2 and the scripted run did not.
+    expect(stdout).toContain(
+      "Thinking per run — part of the output above, already priced there, not an addition to the bill (3 of 5 runs reported a breakdown)",
+    );
+    expect(tokenRow(stdout, "thinking")).toEqual(["8,000", "20,000", "11,000"]);
+    expect(stdout).toContain("A lower bound, not the run's total");
+    expect(stdout).toContain("a reply that fell back across several attempts");
+    expect(stdout).toContain("the gap has not been seen, which is not the same as ruled out");
+    // The output row is what was billed, and is the same figure it was before.
+    expect(tokenRow(stdout, "output")).toEqual(["40,000", "80,000", "50,000"]);
+  });
+
+  test("prints a dash, not a zero, when no run in the window reported a thinking breakdown", () => {
+    seed(SEED.map((run) => ({ ...run, thinking: null })));
+    const { stdout } = report(["--days", "7"]);
+
+    expect(stdout).toContain("(0 of 5 runs reported a breakdown)");
+    expect(tokenRow(stdout, "thinking")).toEqual(["—", "—", "—"]);
+    // The share is a dash too, over zero runs — not 0.0% and not NaN%.
+    expect(stdout).toContain(
+      "share        — of output: total thinking ÷ total output over the 0 runs that reported both",
+    );
+    expect(stdout).not.toContain("NaN");
+  });
+
+  test("prints the share of output over the runs that reported both, so the comparison is one population", () => {
+    seed(SEED);
+    const { stdout } = report(["--days", "7"]);
+
+    // Runs 1, 3 and 4: 33,000 thinking of 160,000 output. Run 2 reported output
+    // and no breakdown, so its 40,000 is in the output row and not in the share.
+    expect(stdout).toContain(
+      "share        20.6% of output: total thinking ÷ total output over the 3 runs that reported both",
+    );
+  });
+
+  test("a window that mixes runs from before the migration with runs after it reads the share, not the narrower row", () => {
+    // Three runs finished before migration 12 (thinking NULL, output 100) and
+    // two after (output 1,000, thinking 900). The thinking row alone is 900
+    // against an output row whose p50 is 100 — "part of" a smaller number.
+    const text = renderCostReport({
+      rows: [
+        usageRow(100, null),
+        usageRow(100, null),
+        usageRow(100, null),
+        usageRow(1000, 900),
+        usageRow(1000, 900),
+      ],
+      days: 7,
+      since: "2026-09-07T12:00:00.000Z",
+      prices: {
+        inputPerMTok: undefined,
+        outputPerMTok: undefined,
+        cacheReadPerMTok: undefined,
+        cacheWritePerMTok: undefined,
+      },
+    });
+
+    expect(tokenRow(text, "output")).toEqual(["100", "1,000", "460"]);
+    expect(tokenRow(text, "thinking")).toEqual(["900", "900", "900"]);
+    expect(text).toContain("(2 of 5 runs reported a breakdown)");
+    expect(text).toContain("share        90.0% of output");
+    expect(text).toContain("over the 2 runs that reported both");
+  });
+
+  test("a real zero is a figure: it is kept in the row and the share, not read as unreported", () => {
+    // The deployed default reported zero thinking on every reply it was
+    // measured on, so zero is the common production value. One run at 0 and
+    // one at 120: a zero dropped as "no breakdown" would leave p50 at 120.
+    seed([
+      { ...metered(1, "done"), thinking: 0 },
+      { ...metered(2, "done"), thinking: 120 },
+    ]);
+    const { stdout } = report(["--days", "7"]);
+
+    expect(tokenRow(stdout, "thinking")).toEqual(["0", "120", "60"]);
+    expect(stdout).toContain("(2 of 2 runs reported a breakdown)");
+    // 120 of 60,000 output.
+    expect(stdout).toContain("share        0.2% of output");
+  });
+
+  test("the share is 0.0% for runs that all thought nothing, and a dash when there was no output to divide", () => {
+    expect(thinkingShare([usageRow(500, 0), usageRow(700, 0)])).toEqual({ share: 0, runs: 2 });
+    // Σ output is 0: no division, so no NaN and no Infinity.
+    expect(thinkingShare([usageRow(0, 0)])).toEqual({ share: null, runs: 1 });
+    expect(thinkingShare([])).toEqual({ share: null, runs: 0 });
+    // A run missing either half is not in the share.
+    expect(thinkingShare([usageRow(500, null), usageRow(null, 20)])).toEqual({
+      share: null,
+      runs: 0,
+    });
+  });
+
+  test("never prices thinking: the dollars are the four billed kinds, and no price is asked for it", () => {
+    seed(SEED);
+    const priced = report(["--days", "7"], ALL_PRICES).stdout;
+    // The same total the next test pins; 33,000 thinking tokens would add
+    // $0.8250 to it at the output rate if they were priced as well.
+    expect(priced).toContain("total $17.5000");
+    expect(priced).not.toContain("$18.3250");
+
+    const unpriced = report(["--days", "7"], {}).stdout;
+    expect(unpriced).toContain(
+      "MODEL_PRICE_INPUT_PER_MTOK, MODEL_PRICE_CACHE_READ_PER_MTOK, MODEL_PRICE_CACHE_WRITE_PER_MTOK, MODEL_PRICE_OUTPUT_PER_MTOK are not set",
+    );
   });
 
   test("with every price set, prints dollars per run and in total, and says whose prices they are", () => {
@@ -288,6 +436,20 @@ describe("the cost report", () => {
     expect(Number(after.pragma("user_version", { simple: true }))).toBe(8);
     expect(after.pragma("journal_mode", { simple: true })).toBe("delete");
     after.close();
+  });
+
+  test("a database at migration 11 has the usage columns but not thinking_tokens, and is refused too", () => {
+    // Without the bump, `selectFinishedRuns` would throw "no such column" here.
+    const db = new Database(databasePath);
+    migrate(db);
+    db.exec("ALTER TABLE plan_runs DROP COLUMN thinking_tokens; PRAGMA user_version = 11;");
+    db.close();
+
+    const { code, stdout, stderr } = report(["--days", "7"]);
+
+    expect(code).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("schema version 11");
   });
 
   test("does not create a database that is not there", () => {
