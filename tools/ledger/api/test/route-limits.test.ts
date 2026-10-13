@@ -12,7 +12,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { ROUTES } from "@ledger/contract";
 import type { ErrorResponse } from "@ledger/contract";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { createRateLimitHook } from "../src/rate-limit.ts";
+import type { AppContext } from "../src/context.ts";
+import { createRateLimitHook, rateLimitsFor } from "../src/rate-limit.ts";
 import { createLogger } from "../src/logger.ts";
 import { createApp } from "../src/server.ts";
 import type { App } from "../src/server.ts";
@@ -29,14 +30,21 @@ afterEach(async () => {
 
 const LIMITED = Object.entries(VERBS).filter(([name]) => name !== "health");
 
-/** Both buckets hold one token, so the second request of either kind is the one refused. */
+/**
+ * Both buckets hold one token, so the second request of either kind is the one
+ * refused. alex is an admin as well as a member, so the admin routes (lg-22)
+ * admit the first request too.
+ */
 async function startTight(): Promise<App> {
   app = await createApp({
     directory: memberDirectory(),
     config: {
       dataDir: ":memory:",
       logLevel: "silent",
-      access: accessConfig({ devIdentity: "alex@example.test" }),
+      access: accessConfig({
+        devIdentity: "alex@example.test",
+        admins: new Set(["alex@example.test"]),
+      }),
       rateLimitReadsPerMinute: 1,
       rateLimitWritesPerMinute: 1,
     },
@@ -207,6 +215,8 @@ describe("the routes that answer two verbs", () => {
     ["rules", ROUTES.rules],
     ["spendingCategories", ROUTES.spendingCategories],
     ["spendingCategoryMap", ROUTES.spendingCategoryMap],
+    // lg-22: the admin's list of households, whose POST creates one.
+    ["adminHouseholds", ROUTES.adminHouseholds],
   ])("POST %s refuses the second request in a minute too", async (_name, url) => {
     const target = await startTight();
 
@@ -238,5 +248,64 @@ describe("the key, across households", () => {
     await expect(callIn(hook, "home", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
     await expect(callIn(hook, "away", "alex")).resolves.toBeUndefined();
     await expect(callIn(hook, "away", "alex")).rejects.toMatchObject({ code: "RATE_LIMITED" });
+  });
+});
+
+/** The admin hook, called for an identity (lg-22). */
+function callAs(hook: ReturnType<typeof hookFor>, email: string, admin: boolean) {
+  const request = {
+    ip: "10.0.0.1",
+    identity: { email, admin, person: null },
+  } as unknown as FastifyRequest;
+  return hook(request, { header: vi.fn() } as unknown as FastifyReply);
+}
+
+/** The admin routes' write hook, over one limiter, logging into `lines`. */
+function adminHook(limiter: RateLimiter, lines: string[] = []) {
+  return rateLimitsFor({
+    rateLimits: { reads: limiter, writes: limiter },
+    logger: createLogger({ level: "debug", write: (line) => void lines.push(line) }),
+  } as unknown as AppContext).adminWrite;
+}
+
+// lg-22: an admin may be in no household, so has no person to key a bucket on.
+// The admin routes' hook keys on the admin's address, refuses anyone else before
+// it spends a token, and never writes the address into the log.
+describe("the key, on an admin route", () => {
+  test("is the admin's address, so two admins in no household have a bucket each", async () => {
+    const hook = adminHook(new RateLimiter({ perMinute: 1 }));
+
+    await callAs(hook, "admin@example.test", true);
+
+    await expect(callAs(hook, "admin@example.test", true)).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+    });
+    await expect(callAs(hook, "other.admin@example.test", true)).resolves.toBeUndefined();
+  });
+
+  test("refuses a non-admin as FORBIDDEN, spending nothing, with the limits on or off", async () => {
+    const limiter = new RateLimiter({ perMinute: 1 });
+    const hook = adminHook(limiter);
+
+    await expect(callAs(hook, "member@example.test", false)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(limiter.check("admin:member@example.test").allowed).toBe(true);
+    await expect(
+      callAs(adminHook(new RateLimiter({ perMinute: 0 })), "member@example.test", false),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  test("logs a refusal without the address", async () => {
+    const lines: string[] = [];
+    const hook = adminHook(new RateLimiter({ perMinute: 1 }), lines);
+
+    await callAs(hook, "admin@example.test", true);
+    await expect(callAs(hook, "admin@example.test", true)).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+    });
+
+    expect(lines.some((line) => line.includes("rate limited"))).toBe(true);
+    expect(lines.join("\n")).not.toContain("admin@example.test");
   });
 });

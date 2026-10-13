@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { describe, expect, test } from "vitest";
 import { migrate } from "../src/db/schema.ts";
+import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
 function open(): Database.Database {
   const db = new Database(":memory:");
@@ -159,7 +160,7 @@ describe("the books are only ever appended to", () => {
 
     expect(sources.length).toBeGreaterThan(10);
     const offenders = sources
-      .filter(([, text]) => /\b(UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/iu.test(text))
+      .filter(([, text]) => WRITES_IN_PLACE.test(text))
       .map(([file]) => file);
     expect(offenders).toEqual([]);
   });

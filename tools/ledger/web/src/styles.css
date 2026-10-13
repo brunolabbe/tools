@@ -233,15 +233,36 @@ select {
 }
 
 .rule-form,
-.answer {
+.answer,
+.member-form {
   display: grid;
   gap: 0.5rem;
 }
 
 .rule-form label,
-.answer label {
+.answer label,
+.member-form label {
   font-size: 0.875rem;
   color: var(--muted);
+}
+
+/* lg-22: a household's members and history, one per line, an address wrapping
+   anywhere rather than pushing a phone's screen wide. */
+.members {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.members li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
 }
 
 .hint {

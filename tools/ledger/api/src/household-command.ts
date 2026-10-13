@@ -2,8 +2,8 @@
  * `npm run household:ledger -- <add | member | remove | list> …` (lg-20).
  *
  * The household directory from the host: how the first household and its
- * members exist before lg-22 gives an admin a screen, and how the operator
- * recovers if that screen is ever out of reach. It writes the directory the API
+ * members exist before anyone can sign in to the admin's screen (lg-22), and
+ * how the operator recovers if that screen is ever out of reach. It writes the directory the API
  * is configured with (`DIRECTORY_PATH`), as the operator, and the API reads it
  * on every request, so a change applies without a restart.
  *

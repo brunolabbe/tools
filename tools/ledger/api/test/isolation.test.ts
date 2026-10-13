@@ -293,6 +293,20 @@ async function rowIdOf(app: App, household: Household, description: string): Pro
 
 /** Every write route, in an order each one's prerequisites are met in. */
 const WRITES: Write[] = [
+  // lg-22: a second address for the household's other person, in the directory.
+  {
+    route: "householdMembers",
+    async run(app, h) {
+      const domain = h.caller.slice(h.caller.indexOf("@"));
+      await post(
+        app,
+        h,
+        ROUTES.householdMembers.replace(":id", h.id),
+        { address: `${h.other}.second${domain}`, person: h.other },
+        this.route,
+      );
+    },
+  },
   {
     route: "spendingCategories",
     async run(app, h, written) {
@@ -578,8 +592,14 @@ function lineDraft(h: Household, date: string, written: Written) {
 }
 
 /** Every read route, with whatever query makes it show the household's records. */
-const READS: { route: RouteName; method: Method; url: string }[] = [
+const READS: {
+  route: RouteName;
+  method: Method;
+  url: string | ((household: Household) => string);
+}[] = [
   { route: "me", method: "GET", url: ROUTES.me },
+  // lg-22: the household's members and history, its own and no other's.
+  { route: "household", method: "GET", url: (h) => ROUTES.household.replace(":id", h.id) },
   { route: "rules", method: "GET", url: ROUTES.rules },
   { route: "inbox", method: "GET", url: ROUTES.inbox },
   { route: "autoFiled", method: "GET", url: ROUTES.autoFiled },
@@ -691,6 +711,12 @@ describe("the isolation sweep", () => {
         ...READS.map((read) => `${read.method} ${ROUTES[read.route]}`),
         // Reads no books, and is answered with no identity at all.
         `GET ${ROUTES.health}`,
+        // The directory, for an admin, which reads no books either; these
+        // callers are no admins. authority.test.ts sweeps them (lg-22).
+        `GET ${ROUTES.adminHouseholds}`,
+        `POST ${ROUTES.adminHouseholds}`,
+        `POST ${ROUTES.adminMembers}`,
+        `POST ${ROUTES.adminMemberRemove}`,
       ];
 
       expect(swept.toSorted()).toEqual(answered);
@@ -724,7 +750,8 @@ describe("the isolation sweep", () => {
         [AWAY, HOME],
       ] as const) {
         for (const read of READS) {
-          const response = await call(app, own, read.method, read.url);
+          const url = typeof read.url === "string" ? read.url : read.url(own);
+          const response = await call(app, own, read.method, url);
           const where = `${own.id} ${read.method} ${read.route}`;
           expect(response.status, `${where}: ${response.body}`).toBe(200);
           const shown = marks(other).filter((mark) => response.body.includes(mark));

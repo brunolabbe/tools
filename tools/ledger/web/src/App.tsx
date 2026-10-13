@@ -12,15 +12,23 @@
  * An address the household directory does not hold sees none of it (lg-20):
  * `/api/me` answers `FORBIDDEN`, and the shell gives way to one page saying so.
  * Any other failure leaves the shell, where each screen says what went wrong.
+ *
+ * lg-22: a member gets a household tab, and an admin an admin tab. An admin in
+ * no household is refused by `/api/me` like a stranger, so the shell asks for
+ * the admin's list before it says "no household": answered, the admin's screen
+ * is the whole of the shell, with no books tab at all.
  */
 
 import { useEffect, useState } from "react";
 import { AppError } from "@ledger/contract";
-import type { HealthResponse } from "@ledger/contract";
+import type { HealthResponse, MeResponse } from "@ledger/contract";
+import { Admin } from "./admin/Admin.tsx";
 import { fetchHealth } from "./api/health.ts";
+import { fetchAdminHouseholds } from "./api/households.ts";
 import { fetchInbox } from "./api/inbox.ts";
 import { fetchMe } from "./api/me.ts";
 import { Home } from "./home/Home.tsx";
+import { Household } from "./household/Household.tsx";
 import { Inbox } from "./inbox/Inbox.tsx";
 import { NoHousehold } from "./NoHousehold.tsx";
 import { Periods } from "./periods/Periods.tsx";
@@ -30,20 +38,39 @@ import { Spending } from "./spending/Spending.tsx";
 import { Stats } from "./stats/Stats.tsx";
 import { StatementPaste } from "./statements/StatementPaste.tsx";
 
-type Tab = "home" | "stats" | "period" | "paste" | "inbox" | "rules" | "spending" | "salaries";
+type Tab =
+  | "home"
+  | "stats"
+  | "period"
+  | "paste"
+  | "inbox"
+  | "rules"
+  | "spending"
+  | "salaries"
+  | "household"
+  | "admin";
 
 export function App(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("home");
   const [waiting, setWaiting] = useState<number | null>(null);
   const [inNoHousehold, setInNoHousehold] = useState(false);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [adminOnly, setAdminOnly] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchMe(controller.signal).catch((error: unknown) => {
-      if (!controller.signal.aborted && AppError.from(error).code === "FORBIDDEN") {
-        setInNoHousehold(true);
-      }
-    });
+    fetchMe(controller.signal)
+      .then(setMe)
+      .catch(async (error: unknown) => {
+        if (controller.signal.aborted || AppError.from(error).code !== "FORBIDDEN") return;
+        // An admin in no household, or nobody the ledger knows.
+        try {
+          await fetchAdminHouseholds(controller.signal);
+          if (!controller.signal.aborted) setAdminOnly(true);
+        } catch {
+          if (!controller.signal.aborted) setInNoHousehold(true);
+        }
+      });
     return () => controller.abort();
   }, []);
 
@@ -56,6 +83,21 @@ export function App(): React.ReactElement {
       .catch(() => undefined);
     return () => controller.abort();
   }, [tab]);
+
+  if (adminOnly) {
+    return (
+      <div className="shell">
+        <header>
+          <h1>Ledger</h1>
+          <p className="muted">Admin</p>
+        </header>
+        <main>
+          <Admin />
+        </main>
+        <Health />
+      </div>
+    );
+  }
 
   if (inNoHousehold) {
     return (
@@ -102,6 +144,20 @@ export function App(): React.ReactElement {
         <button type="button" aria-pressed={tab === "salaries"} onClick={() => setTab("salaries")}>
           Salaries
         </button>
+        {me !== null && (
+          <button
+            type="button"
+            aria-pressed={tab === "household"}
+            onClick={() => setTab("household")}
+          >
+            Household
+          </button>
+        )}
+        {me?.admin === true && (
+          <button type="button" aria-pressed={tab === "admin"} onClick={() => setTab("admin")}>
+            Admin
+          </button>
+        )}
       </nav>
       <main>
         {tab === "home" && <Home />}
@@ -112,6 +168,8 @@ export function App(): React.ReactElement {
         {tab === "rules" && <Rules />}
         {tab === "spending" && <Spending />}
         {tab === "salaries" && <Salaries />}
+        {tab === "household" && me !== null && <Household id={me.person.household} />}
+        {tab === "admin" && me?.admin === true && <Admin />}
       </main>
       <Health />
     </div>

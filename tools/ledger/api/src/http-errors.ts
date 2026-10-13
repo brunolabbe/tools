@@ -52,6 +52,14 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   RATIO_NOT_IN_EFFECT: 422,
   // lg-15: a spending category named that is not in the list (never was, or retired).
   SPENDING_CATEGORY_NOT_FOUND: 404,
+  // lg-22: an address that is a member already, told to an admin, and the one
+  // answer a member gets for any address that cannot be added — both conflicts
+  // with what the directory holds; and a household or a member named that is
+  // not there.
+  ADDRESS_ALREADY_A_MEMBER: 409,
+  MEMBER_NOT_ADDED: 409,
+  HOUSEHOLD_NOT_FOUND: 404,
+  MEMBER_NOT_FOUND: 404,
   // lg-20: a third person named into a household of two, which is a conflict
   // with what the directory holds rather than a request it could not read.
   HOUSEHOLD_FULL: 409,

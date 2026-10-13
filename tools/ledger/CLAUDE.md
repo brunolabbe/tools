@@ -92,8 +92,14 @@ request: the address, whether it is an admin (`LEDGER_ADMINS`), and its
 household and person, or none for an admin in no household. An address that is
 neither member nor admin is refused at the hook. A route reads the caller with
 `personOf(request)`, which refuses an identity with no household — never from a
-header of its own. Only lg-22's `adminOf` reads the admin flag: being an admin
-reads no books.
+header of its own. Only `adminOf` reads the admin flag: being an admin reads no
+books. **The directory is managed from the app** (lg-22, `api/src/routes/households.ts`):
+the admin routes under `/api/admin/` ask `adminOf`, and a household's own routes
+under `/api/households/:id` ask `memberOf`, which refuses a member of another
+household and an admin in none. A member adds and never removes, and is told only
+that an address cannot be added (`MEMBER_NOT_ADDED`), never why: the reason would
+say whether an address uses the ledger. `api/test/authority.test.ts` walks every
+one of those routes as each identity that must be refused.
 
 **A route reads its books from `booksOf(request)`, never from a handle of its
 own** (lg-21). Each household's books are a SQLite file of their own,
@@ -113,7 +119,9 @@ it catches.
 `{ onRequest: rateLimitsFor(context).read }` or `.write` from
 `api/src/rate-limit.ts`, over core's token bucket, keyed on the household and
 the person `personOf(request)` gives, and not the address — two households can
-each have an alex (lg-21). A route added without one is unlimited, and
+each have an alex (lg-21). An admin route takes `.adminRead` or `.adminWrite`
+instead, keyed on the admin's address, since an admin may have no person; it asks
+`adminOf` first and never logs the address (lg-22). A route added without one is unlimited, and
 `api/test/route-limits.test.ts` walks `ROUTES` so that it fails instead.
 
 **Never log a request's headers.** Behind Access every request carries a signed
