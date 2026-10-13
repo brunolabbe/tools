@@ -5,8 +5,9 @@
  * It replaces `ACCESS_PEOPLE`. Membership lives in a database the app reads on
  * every request, so a change applies without a restart and can later be made
  * from the app (lg-22); which addresses are admins stays configuration
- * (`LEDGER_ADMINS`, in `config.ts`). Today it is written only by the host
- * command (`household-command.ts`).
+ * (`LEDGER_ADMINS`, in `config.ts`). It is written by the host command
+ * (`household-command.ts`) and, from lg-22, by the app's admin and household
+ * routes (`routes/households.ts`), each change signed by whoever made it.
  *
  * Every write is checked here first, so a refusal carries a sentence an
  * operator can act on, and again by the schema's triggers
@@ -55,6 +56,15 @@ export interface Member {
 
 /** The household and the name an address stands under, or nothing. */
 export type Membership = Pick<Member, "household" | "person">;
+
+/** One change to a household's membership, as the directory recorded it (lg-22). */
+export interface MembershipChange {
+  address: string;
+  person: string;
+  action: "add" | "remove";
+  at: string;
+  by: string;
+}
 
 interface Change {
   /** Who made it: an address, or `OPERATOR`. */
@@ -116,6 +126,20 @@ export class Directory {
     return row;
   }
 
+  /**
+   * Every change to one household's membership, oldest first: who was added or
+   * removed, under which name, by whom and when. Filtered in the SQL, so no
+   * other household's record is ever read for it.
+   */
+  history(household: string): MembershipChange[] {
+    return this.#db
+      .prepare(
+        `SELECT address, person, action, changed_at AS at, changed_by AS by
+         FROM memberships WHERE household_id = ? ORDER BY id`,
+      )
+      .all(household) as MembershipChange[];
+  }
+
   households(): Household[] {
     return this.#db.prepare("SELECT id, name FROM households ORDER BY id").all() as Household[];
   }
@@ -168,9 +192,11 @@ export class Directory {
   }
 
   /**
-   * Adds an address to a household under a person's name. Refused when the
-   * address is in a household already — this one included — and, as
-   * `HOUSEHOLD_FULL`, when the name would be the household's third.
+   * Adds an address to a household under a person's name. Refused as
+   * `ADDRESS_ALREADY_A_MEMBER` when the address is in a household already —
+   * this one included — and as `HOUSEHOLD_FULL` when the name would be the
+   * household's third. Both sentences are for an admin or the operator; a
+   * member is told neither (`routes/households.ts`).
    */
   addMember(member: { household: string; address: string; person: string } & Change): Member {
     const address = readAddress(member.address);
@@ -180,11 +206,12 @@ export class Directory {
     return this.#db
       .transaction(() => {
         if (this.household(member.household) === undefined) {
-          refuse(`There is no household "${member.household}".`);
+          throw new AppError("HOUSEHOLD_NOT_FOUND", `There is no household "${member.household}".`);
         }
         const standing = this.membershipOf(address);
         if (standing !== undefined) {
-          refuse(
+          throw new AppError(
+            "ADDRESS_ALREADY_A_MEMBER",
             `That address already belongs to the household "${standing.household}", as ${standing.person}. Remove it first.`,
           );
         }
@@ -202,14 +229,24 @@ export class Directory {
       .immediate();
   }
 
-  /** Takes an address out of its household. Returns the membership it ended. */
-  removeMember(member: { address: string } & Change): Member {
+  /**
+   * Takes an address out of its household — out of `household`, when one is
+   * named, and refused if it is not there, so a screen that has gone stale
+   * cannot remove an address from a household it has since moved to. Returns
+   * the membership it ended.
+   */
+  removeMember(member: { address: string; household?: string } & Change): Member {
     const address = readAddress(member.address);
     if (address === undefined) refuse("That is not an email address.");
     return this.#db
       .transaction(() => {
         const standing = this.membershipOf(address);
-        if (standing === undefined) refuse("That address belongs to no household.");
+        if (standing === undefined) {
+          throw new AppError("MEMBER_NOT_FOUND", "That address belongs to no household.");
+        }
+        if (member.household !== undefined && standing.household !== member.household) {
+          throw new AppError("MEMBER_NOT_FOUND");
+        }
         const removed = { address, ...standing };
         this.#record(removed, "remove", member);
         return removed;

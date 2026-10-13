@@ -13,6 +13,7 @@ import { AppError } from "@ledger/contract";
 import { migrateDirectory } from "../src/db/directory-schema.ts";
 import { Directory, isHouseholdId } from "../src/directory.ts";
 import { ALEX, SAM } from "./helpers/access.ts";
+import { WRITES_IN_PLACE } from "./helpers/append-only.ts";
 
 const AT = new Date("2026-10-12T12:00:00Z");
 const CHANGE = { by: "operator", at: AT };
@@ -122,10 +123,10 @@ describe("membership", () => {
       code(() =>
         directory.addMember({ household: "other", address: ALEX, person: "x", ...CHANGE }),
       ),
-    ).toBe("BAD_REQUEST");
+    ).toBe("ADDRESS_ALREADY_A_MEMBER");
     expect(
       code(() => directory.addMember({ household: "home", address: ALEX, person: "a", ...CHANGE })),
-    ).toBe("BAD_REQUEST");
+    ).toBe("ADDRESS_ALREADY_A_MEMBER");
 
     const db = raw();
     insert(db, { address: ALEX, person: "alex" });
@@ -141,7 +142,7 @@ describe("membership", () => {
       code(() =>
         directory.addMember({ household: "nowhere", address: ALEX, person: "alex", ...CHANGE }),
       ),
-    ).toBe("BAD_REQUEST");
+    ).toBe("HOUSEHOLD_NOT_FOUND");
     expect(() => insert(raw(), { address: ALEX, person: "alex", household: "nowhere" })).toThrow(
       /FOREIGN KEY/u,
     );
@@ -214,7 +215,9 @@ describe("membership", () => {
       person: "alex",
     });
     expect(directory.membershipOf(ALEX)).toBeUndefined();
-    expect(code(() => directory.removeMember({ address: ALEX, ...CHANGE }))).toBe("BAD_REQUEST");
+    expect(code(() => directory.removeMember({ address: ALEX, ...CHANGE }))).toBe(
+      "MEMBER_NOT_FOUND",
+    );
 
     directory.addMember({ household: "home", address: ALEX, person: "alex", ...CHANGE });
     expect(directory.membershipOf(ALEX)).toEqual({ household: "home", person: "alex" });
@@ -282,7 +285,7 @@ describe("the directory is only ever appended to", () => {
       expect.arrayContaining(["db/directory-schema.ts", "directory.ts", "household-command.ts"]),
     );
     const offenders = sources
-      .filter(([, text]) => /\b(UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/iu.test(text))
+      .filter(([, text]) => WRITES_IN_PLACE.test(text))
       .map(([file]) => file);
     expect(offenders).toEqual([]);
   });
@@ -309,5 +312,95 @@ describe("a household id and a NUL byte", () => {
     }
     expect(db.prepare("SELECT count(*) AS n FROM households").get()).toEqual({ n: 1 });
     db.close();
+  });
+});
+
+// lg-20's gate, F2, fixed in lg-22: SQLite's REPLACE deletes the row it
+// conflicts with without firing a DELETE trigger, so the UPDATE and DELETE
+// triggers alone let an add become a removal and a household be renamed.
+describe("a record is never replaced", () => {
+  test("the schema refuses an INSERT OR REPLACE over an existing membership or household", () => {
+    const db = raw();
+    insert(db, { address: ALEX, person: "alex" });
+    insert(db, { address: SAM, person: "sam" });
+
+    for (const statement of [
+      `INSERT OR REPLACE INTO memberships (id, address, household_id, person, action, changed_at, changed_by)
+       VALUES (1, '${ALEX}', 'home', 'alex', 'remove', 'x', 'raw')`,
+      `REPLACE INTO memberships (id, address, household_id, person, action, changed_at, changed_by)
+       VALUES (2, '${SAM}', 'home', 'someone', 'add', 'x', 'raw')`,
+      `INSERT OR REPLACE INTO households (id, name, created_at, created_by)
+       VALUES ('home', 'Elsewhere', 'x', 'raw')`,
+      `INSERT INTO households (id, name, created_at, created_by)
+       VALUES ('home', 'Elsewhere', 'x', 'raw') ON CONFLICT (id) DO UPDATE SET name = excluded.name`,
+    ]) {
+      expect(() => db.exec(statement), statement).toThrow(/appended, never replaced/u);
+    }
+
+    expect(db.prepare("SELECT id, action, person FROM memberships ORDER BY id").all()).toEqual([
+      { id: 1, action: "add", person: "alex" },
+      { id: 2, action: "add", person: "sam" },
+    ]);
+    expect(db.prepare("SELECT id, name FROM households").all()).toEqual([
+      { id: "home", name: "Home" },
+    ]);
+    // A new record still goes in.
+    insert(db, { address: ALEX, person: "alex", action: "remove" });
+    db.close();
+  });
+
+  test("a directory made before the trigger takes it on its next open", () => {
+    const db = new Database(":memory:");
+    migrateDirectory(db, 1);
+    db.exec(
+      "INSERT INTO households (id, name, created_at, created_by) VALUES ('home', 'Home', 'x', 'operator')",
+    );
+
+    migrateDirectory(db);
+
+    expect(() =>
+      db.exec(
+        "INSERT OR REPLACE INTO households (id, name, created_at, created_by) VALUES ('home', 'Elsewhere', 'x', 'raw')",
+      ),
+    ).toThrow(/appended, never replaced/u);
+    expect(db.pragma("user_version", { simple: true })).toBe(2);
+    db.close();
+  });
+
+  test("the source scan sees a REPLACE and a table quoted or behind its schema", () => {
+    for (const planted of [
+      "INSERT OR REPLACE INTO memberships (id) VALUES (1)",
+      "insert or replace into households (id) values ('home')",
+      "REPLACE INTO memberships (id) VALUES (1)",
+      'UPDATE "memberships" SET person = 1',
+      "UPDATE `households` SET name = 1",
+      "UPDATE [memberships] SET person = 1",
+      "UPDATE main.memberships SET person = 1",
+      'UPDATE "main"."households" SET name = 1',
+      "UPDATE OR ROLLBACK memberships SET person = 1",
+      "UPDATE memberships SET person = 1",
+      'DELETE FROM "memberships"',
+      // lg-22's gate 1, F3: what SQLite reads that a table-shaped pattern missed.
+      "UPDATE 'memberships' SET person = 1",
+      "UPDATE memberships AS m SET person = 1",
+      "UPDATE memberships INDEXED BY memberships_address SET person = 1",
+      "INSERT INTO households (id, name) VALUES ('home', 'x') ON CONFLICT (id) DO UPDATE SET name = 1",
+      "INSERT INTO households (id) VALUES ('home') ON CONFLICT DO UPDATE SET name = 1",
+      "DELETE /* c */ FROM memberships",
+      "UPDATE\n  memberships\n  SET person = 1",
+      // lg-22's gate 2, N1: a comment inside the REPLACE, as inside the DELETE.
+      "REPLACE /* c */ INTO memberships (id) VALUES (1)",
+      "INSERT OR /* c */ REPLACE /* c */ INTO memberships (id) VALUES (1)",
+      "INSERT OR -- c\n REPLACE INTO memberships (id) VALUES (1)",
+    ]) {
+      expect(WRITES_IN_PLACE.test(planted), planted).toBe(true);
+    }
+    for (const innocent of [
+      "INSERT INTO memberships (address) VALUES (?)",
+      "a household is appended, never replaced",
+      "the schema refusing an `UPDATE` or a `DELETE`",
+    ]) {
+      expect(WRITES_IN_PLACE.test(innocent), innocent).toBe(false);
+    }
   });
 });
