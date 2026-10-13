@@ -357,3 +357,29 @@ with no cap, and F8, a provider `400` or `408` answering `INTERNAL`.
 **What the first entry said that is no longer so.** "A receipt is filed once"
 now means once per part. A row a receipt documents is refused a second one,
 where before it was only left out of the offers.
+
+### 2026-10-13 — gate 2's four lows, fixed at landing
+
+**Decided by the owner, 2026-10-13.** _Gate 2 passed with four lows, N1–N4.
+Should they be fixed?_ The options were to apply them at landing with no
+re-gate, or to leave them recorded. **Chosen: apply them at landing, with no
+re-gate.** The orchestrator recommended it.
+
+- **N1 — the server does not know how many receipts a photo holds.** _Fixed at
+  landing._ The contract's comment on `ReceiptFiling` now says that "once" is
+  per part. It also says the part is the person's word, since a read stores
+  nothing, and that storing the count would buy nothing.
+- **N2 — a reader can propose more receipts than can be filed.** _Fixed at
+  landing._ The read route answers at most `MAX_RECEIPTS_PER_PHOTO` (10)
+  proposals.
+  - Red: "answers no more proposals than a photo can file", with a fake reader
+    returning 11, failed with `expected [ …(11) ] to have a length of 10 but
+got 11`.
+- **N3 — nothing asserts the unique index on `row_id`.** _Fixed at landing._
+  `api/test/schema.test.ts` now has "refuse a second filing on a row a receipt
+  already documents", which inserts two filings for one row.
+  - Red: with a plain index in place of the unique one, it failed with
+    `expected [Function] to throw an error`.
+- **N4 — stale words on `RECEIPT_ALREADY_FILED`.** _Fixed at landing._ Its
+  comment and its default message now speak of one receipt in the photo being
+  filed, and of a read refused for a photo with one filed.

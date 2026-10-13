@@ -92,13 +92,20 @@ export interface CheckedProposal {
 
 /**
  * How many receipts one photo may hold and each be filed (gate 1, F2): far past
- * the two side by side lg-8 measured.
+ * the two side by side lg-8 measured. A read answers no more proposals than this
+ * (gate 2, N2).
  */
 export const MAX_RECEIPTS_PER_PHOTO = 10;
 
 /**
  * What filed a receipt: a period line, or a joint-account row it documents.
  * A photo holding more than one receipt files each as its own `part`, once.
+ *
+ * "Once" is per part, and the part is the person's word: a read stores nothing,
+ * so the server does not know how many receipts a photo holds, and any part
+ * from 1 to `MAX_RECEIPTS_PER_PHOTO` may be filed (gate 2, N1). That is no new
+ * capability — `POST /api/period-lines` adds any line — and the screen files
+ * each receipt it offers once. Storing the count would buy nothing more.
  */
 export interface ReceiptFiling {
   id: number;

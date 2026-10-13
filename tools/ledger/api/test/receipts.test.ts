@@ -11,7 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { MAX_RECEIPT_PHOTO_BYTES, ROUTES } from "@ledger/contract";
+import { MAX_RECEIPT_PHOTO_BYTES, MAX_RECEIPTS_PER_PHOTO, ROUTES } from "@ledger/contract";
 import type {
   ErrorResponse,
   OpenPeriodResponse,
@@ -755,5 +755,30 @@ describe("the paid route (gate 1, F4)", () => {
 
     expect(seen.signal).toBeInstanceOf(AbortSignal);
     await vi.waitFor(() => expect(seen.aborted).toBe(true), { timeout: 2_000 });
+  });
+});
+
+// --- Gate 2's findings (lg-8) ---
+
+describe("a read of more receipts than can be filed (gate 2, N2)", () => {
+  test("answers no more proposals than a photo can file", async () => {
+    const many: ReceiptReader = {
+      model: "fake-haiku",
+      async read() {
+        return Array.from({ length: MAX_RECEIPTS_PER_PHOTO + 1 }, (_, index) => ({
+          ...READ,
+          merchant: `Marchand ${String(index + 1)}`,
+        }));
+      },
+    };
+    const target = await start({ reader: many });
+    const receipt = await uploaded(target);
+
+    const answer = (await read(target, receipt.id)).json<ReadReceiptResponse>();
+
+    expect(answer.proposals).toHaveLength(MAX_RECEIPTS_PER_PHOTO);
+    expect(answer.proposals.at(-1)?.proposal.merchant).toBe(
+      `Marchand ${String(MAX_RECEIPTS_PER_PHOTO)}`,
+    );
   });
 });

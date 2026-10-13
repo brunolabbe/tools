@@ -149,8 +149,11 @@ export const LEDGER_ERROR_CODES = [
   /** The receipt named was never uploaded to this household's books. */
   "RECEIPT_NOT_FOUND",
   /**
-   * The receipt was filed already, as a line or on a row — by the other person
-   * meanwhile, or by a second tap. Filing it again would count it twice.
+   * That receipt in the photo — its part — was filed already, as a line or on a
+   * row, by the other person meanwhile or by a second tap: filing it again would
+   * count it twice. A read raises it too, for a photo with any of its receipts
+   * filed, since the screen that filed one holds the others' proposals (gate 2,
+   * N4).
    */
   "RECEIPT_ALREADY_FILED",
   /**
@@ -208,7 +211,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   RECEIPT_NOT_AN_IMAGE: "That is not a photo. Take one, or choose a JPEG, PNG or WebP image.",
   RECEIPT_NOT_FOUND: "There is no such receipt.",
   RECEIPT_ALREADY_FILED:
-    "That receipt is filed already. It may have been filed since it was loaded.",
+    "That receipt in the photo is filed already. It may have been filed since it was loaded; a photo with one filed is not read again.",
   RECEIPT_READER_UNCONFIGURED:
     "Reading receipts is not set up on this server. Type the receipt in instead.",
   RECEIPT_UNREADABLE: "The receipt could not be read. Type it in instead.",

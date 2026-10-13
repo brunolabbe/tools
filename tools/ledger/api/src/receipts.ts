@@ -21,7 +21,7 @@
 
 import { checkReceipt, matchReceipt } from "@ledger/books";
 import type { MatchableRow } from "@ledger/books";
-import { AppError } from "@ledger/contract";
+import { AppError, MAX_RECEIPTS_PER_PHOTO } from "@ledger/contract";
 import type {
   FileReceiptRequest,
   ReadReceiptResponse,
@@ -169,7 +169,10 @@ export async function readReceipt(
   return {
     receiptId: receipt.id,
     model: reader.model,
-    proposals: proposals.map((proposal) => ({ proposal, flags: checkReceipt(proposal) })),
+    // No more than a photo can file, each as its part (gate 2, N2).
+    proposals: proposals
+      .slice(0, MAX_RECEIPTS_PER_PHOTO)
+      .map((proposal) => ({ proposal, flags: checkReceipt(proposal) })),
   };
 }
 
