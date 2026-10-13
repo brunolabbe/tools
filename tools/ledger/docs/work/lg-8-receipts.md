@@ -233,6 +233,110 @@ trees (none spawned), progress (the busy button states no number).
 buffered, base64-encoded and JSON-encoded per read; sequential peak RSS 215 MiB, concurrent unmeasured · reliability — typed on every shape; a hung read costs up to
 3 × 60 s by the code's own comment, which would pass a 100 s proxy limit (unverified, not measured here); F5 · maintainability — F6, F7.
 
+### Gate 2
+
+**Gate: PASS** — 2026-10-13 · `43b36388..4fba1ff2` (one commit, no merge in the range) · Sonnet 5.5, depth full
+
+Gate 1's `high`-or-FAIL cause (F1) and its other `med` (F2) are fixed and each fix reproduced; F3, F4, F6 and F7 are fixed;
+F5 and F8 are left recorded by the owner's choice and are not re-graded. Four new `low` findings in the lines this round
+touched (N1–N4). Every acceptance line is proven; CI on this head is green (below).
+
+**Acceptance lines the round touched.** The round's test edits delete no assertion and reword none: the file helper in
+`api/test/receipts.test.ts` gained `part: 1`, the paste fixture moved into `pasteRows`, and one test was strengthened.
+
+| Done when                                              | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5. The model is never called without the person asking | `api/test/receipts.test.ts` › "filing as a line and onto a row calls no reader" ✓ — files one receipt as a line and one onto a row with a counting reader and asserts `calls` is 0, beside the existing upload and matches zeros. Plant: a model call at the top of the file handler → that test and the filed-read test fail (`Tests  2 failed \| 84 passed (86)` over receipts and route-limits). Was **unproven** at gate 1.                                                                                                                    |
+| 8. Gates green                                         | `gh pr checks 474` at `4fba1ff2`: 14 of 14 pass — `check`, `test (ubuntu-latest)` 7m26s, `test (windows-latest, informational)` 7m46s, `docker` ×3 (the ledger image built and started), `CodeQL`, `codeql`, `dependency-review`, `pr-title`, `e2e` ×3, `changes`. Mine: `npm run build` exit 0 (contract changed, so rebuilt, and `ROW_ALREADY_DOCUMENTED` found in `contract/dist`); `npm run check` exit 0 (15 warnings, none in a ledger file); `npm test -- --project ledger` with the host's Anthropic variables set: 56 files / 987 of 987. |
+| 1, 2, 3, 4, 6, 7                                       | unchanged by the round; 2, 3 and 7 still proven by their gate 1 tests, which pass under the new contract (`api/test/receipts.test.ts` 31 of 31).                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+**Gate 1 findings**
+
+- **F1 — fixed.** The test above. Verified red under the plant, green restored.
+- **F2 — fixed (option A).** `receipt_filings` gains `part` (1..10) with `UNIQUE (receipt_id, part)`; `fileReceiptRequestSchema` requires it;
+  the screen files each proposal under its index and goes back to the unfiled ones. Gate 1's script, with `part`
+  (`round.mts` R1, scratch directory; the old `two-receipts.mts` unchanged now answers `400 BAD_REQUEST` for both, since `part` is required):
+  `read -> 200, proposals 2`, `file part 1 -> 200`, `file part 2 -> 200`, `file part 2 again -> 409 RECEIPT_ALREADY_FILED`,
+  `period_lines / receipt_filings [2,2]`, filings `(receipt 1, part 1, line 1)` and `(receipt 1, part 2, line 2)`.
+  **Positive control** — the old migration 8 line put back (`receipt_id INTEGER NOT NULL UNIQUE REFERENCES receipts (id)`):
+  `npx vitest run tools/ledger/api/test/receipts.test.ts` → `Tests  1 failed | 30 passed (31)`,
+  `× files each receipt the photo holds, each once`,
+  `AssertionError: {"error":{"code":"INTERNAL",...}}: expected [ 200, 500 ] to deeply equal [ 200, 200 ]`.
+  Restored from the head sha: `Tests  31 passed (31)`. A second plant (the "already filed" lookup ignoring `part`) fails the same test.
+- **F3 — fixed.** `receipt_filings_row` is a partial unique index and `fileReceipt` checks first. `round.mts` R2: two receipts onto one row
+  → `["200","409 ROW_ALREADY_DOCUMENTED"]` sequentially and concurrently; `n 4, distinct 4` documented rows in the table;
+  an absent row → `404 ROW_NOT_FOUND`; a refused attach leaves the receipt unfiled and the line count unchanged.
+  Wiring of the new code, by `grep` of every file that names its sibling `RECEIPT_ALREADY_FILED`: `LEDGER_ERROR_CODES` ✓,
+  `DEFAULT_ERROR_MESSAGES` (a `Record<ErrorCode, string>`, so the compiler forces it) ✓, `STATUS_BY_CODE` 409 ✓ — and
+  `api/test/http-errors.test.ts` sweeps every ledger code for a status (passes) — the producer in `api/src/receipts.ts` ✓, the test ✓,
+  `CLAUDE.md` ✓. The web has no map over the codes. Complete.
+- **F4 — fixed.** `RATE_LIMIT_RECEIPT_READS_PER_MINUTE`, default 5, its own `RateLimiter` for the read route.
+  Burst of 100 reads of one unfiled receipt: `[5, 95, 5]` (200s / 429s / model calls), `RateLimit-Limit 5`, `Retry-After 12` on a 429; sam has his own
+  bucket (200); 20 uploads straight after the burst all 200 (the writes' bucket untouched). A filed receipt: 4 concurrent reads →
+  four `409 RECEIPT_ALREADY_FILED`, 0 model calls. Abort, over real HTTP with the real reader and a stubbed fetch: a client that hangs up
+  mid-read → `[SDK saw a signal, aborted] = [true, true]`, one `request rejected` line with `code CANCELED`, `status 499` logged at info; a normal
+  read over HTTP → `[200, aborted false]` (the `writableEnded` guard holds). Plants, each restored: the read back on the writes' bucket →
+  "takes a bucket of its own" fails; the filed check removed → "refuses to read a receipt already filed" fails; the signal dropped →
+  "hands the reader the request's signal" fails; the read route's limiter removed → `api/test/route-limits.test.ts` › "receiptRead refuses the second request in a minute, as RATE_LIMITED" fails (`Tests  1 failed | 54 passed (55)`).
+- **F5, F8 — left recorded, not re-graded.**
+- **F6 — fixed, and scoped.** `vitest.config.ts` printed through `vitest-scope.mts`: root `test` has only `projects`; `core`, `repo`, `downloader` and
+  `planner` all `setupFiles: null`; `ledger` alone has `["tools/ledger/api/test/helpers/no-model-environment.ts"]`. The diff to `vitest.config.ts` is
+  the one project's block. With `ANTHROPIC_API_KEY`, `ANTHROPIC_CUSTOM_HEADERS` and `RECEIPT_MODEL` exported: `npx vitest run --project ledger tools/ledger/api`
+  → `Test Files  28 passed (28)`, `Tests  525 passed (525)` (gate 1: 17 files and 332 tests failed); the whole project with `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL`
+  added → 56 files / 987 of 987. The tests that want a variable pass their own `env` or `vi.stubEnv`, and still pass. I did not run another project with the
+  variables set to watch it keep them; the config print is the evidence.
+- **F7 — fixed.** The test now builds the real reader from a configured key against a `401` that quotes the key, with a non-empty companion
+  (`toContain("the receipt reader refused the request")`). Plant: a log field carrying the SDK error's message in `receipts/src/reader.ts`, `dist` rebuilt
+  and grepped for the identifier → `× never the photo, and never the key`, `AssertionError: expected '{"level":"error",...' not to contain 'KEY-MARKER'`;
+  restored, `dist` rebuilt, grep 0, `Tests  31 passed (31)`.
+
+**The builder's three choices, attacked**
+
+- **F6 placement** — above: scoped to the ledger project, nothing changes for the others. One cost: it deletes `ANTHROPIC_*` for the ledger's `web`,
+  `books` and `receipts` files too, which read none.
+- **`ROW_ALREADY_DOCUMENTED`** — wired everywhere a map over the code type exists (above).
+- **`part`** (`round.mts` R3–R4):
+  - Out-of-range values: `0`, `-1`, `11`, `1.5`, `"1"`, `null` and a missing `part` are each `400 BAD_REQUEST` and file nothing; `10` files.
+  - **Beyond what the read proposed: yes.** A photo read as one receipt was filed by the client as parts 1, 2 and 3 → `["200","200","200"]`, three lines
+    (N1).
+  - **The same part as a line and onto a row: no.** Line then row, row then line, three concurrent lines, and a concurrent row-vs-line, each end with one 200
+    and the rest `409 RECEIPT_ALREADY_FILED` (lines and filings counted after each). With a fresh row, part 1 onto the row → 200, part 2 onto the same row →
+    `409 ROW_ALREADY_DOCUMENTED`, and part 1 again → `409 RECEIPT_ALREADY_FILED` (the part check wins).
+  - **The read refusal does not stop filing part 2 by hand.** Part 1 filed; a read → `409 RECEIPT_ALREADY_FILED`, 0 model calls; part 2 filed with no read → 200.
+    On the screen the same holds: after a filing, "Type another receipt from this photo" and "Type it in" both open the next unfiled part.
+  - **No existence oracle.** Home and away seeded so their row ids collide (the first 11 ids equal). Home attaches its receipt to row 5 → 200; away attaches _its_ row 5
+    → 200, not 409; a second away receipt on away's row 5 → `409 ROW_ALREADY_DOCUMENTED` in away's books only. An away member naming a row id that exists only in
+    home's books → `404 ROW_NOT_FOUND`, the same answer as an id that exists nowhere (`99999`). Away against home's receipt ids 3 and 99 on read, matches, file-as-line and
+    file-as-row: all eight `404 RECEIPT_NOT_FOUND`, and the bodies for 3 and 99 are byte-identical. An admin with no household: `403 FORBIDDEN`. Each household's
+    books are a file of their own, so a documented row or a filed receipt in one is not visible from the other.
+
+**New findings (lines this round touched)**
+
+- **low** · **N1 — the server does not know how many receipts a photo holds.** A read stores nothing, so `part` is any of 1..10 whatever was proposed (measured:
+  one proposal filed as parts 1–3, three lines). No new capability — `POST /api/period-lines` already adds any line — and the screen files each part once, so no live
+  call site; but the contract still says a receipt is "filed once", which is now per part. Not worth recording the count; say so in the contract comment.
+- **low** · **N2 — the reader can propose more receipts than can be filed.** `MAX_RECEIPTS_PER_PHOTO` is 10, the reader returns every receipt the model lists (500 in
+  gate 1's run), the screen offers each, and `part` 11 is `400 BAD_REQUEST`. The measured maximum is two, so no live call site. A cap on the proposals the read route
+  returns closes it.
+- **low** · **N3 — the unique index on `row_id` is asserted by nothing.** Replacing it with a plain index leaves `Test Files  2 passed (2)`, `Tests  86 passed (86)`
+  (receipts and route-limits): the in-transaction check is what answers, and removing _that_ shows the index works (`500` instead of `409`, no duplicate row). The index
+  matters only to a second writer on the same file, and none exists today. A schema test inserting two filings for one row would pin it.
+- **low** · **N4 — stale words on `RECEIPT_ALREADY_FILED`.** Its comment in `contract/src/errors.ts` still says "The receipt was filed already ... Filing it again would
+  count it twice", and its default message "That receipt is filed already"; it now means one part is filed, and the read route also raises it for a receipt with any part
+  filed. A second member's stale screen would be told the whole receipt is filed when part 2 is not.
+- **dropped** · the Log's "13 of 31 red" and "4 of 9 red" for the new tests before the change: not re-run (I did not reconstruct the pre-change tree); the reds I produced
+  by planting the old schema line and the other mutations are listed above and agree with the Log's descriptions.
+- **dropped** · `RATE_LIMIT_RECEIPT_READS_PER_MINUTE` is not forwarded by `compose.ledger.prod.yaml`: neither is `RATE_LIMIT_READS_PER_MINUTE` nor the planner's runs limit, so a host sets all of them through an override file; the deployment doc's table says so for the key. Not new.
+- **findings** · the hunt returned 6; 4 carried (N1–N4), 2 dropped.
+
+**Invariants and NFR (the round's lines only)**: errors typed, one new ledger code with its status ✓; contract edited for the owner's decision, with its test ✓;
+a migration that is unmerged was edited in place, which the ledger's append-only rule permits only because it has not shipped (`user_version` stays 8 and `schema.test.ts` still
+says so) ✓; style and `npm run check` ✓; no shell, no SSRF surface touched. Security ✓ (the key in 0 of 246 captured lines across the harness, the oracle question answered
+above) · performance — the paid route is now capped at 5 a minute a person · reliability ✓ (a hang-up cancels the model call; a failed attach leaves nothing) · maintainability —
+N3 and N4.
+
+**Gate 2 states plainly: nothing found in this round is a `high`.** A third gate is not called for.
+
 ## Log
 
 ### 2026-10-12 — the measurement, and the owner's choice
