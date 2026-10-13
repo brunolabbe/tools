@@ -10,7 +10,9 @@ spreadsheet.
 > inbox for the rest, and what each bucket holds and whose it is, with the
 > salaries and the ratio, and periods of personal-card spending closed with
 > the settlement they compute, and the old workbook's history imported once,
-> by a command (below). Receipts and the charts are not built. What is decided
+> by a command (below), the history's charts, and a receipt photographed, read
+> by a model when the person asks, and filed. A receipt's items are not read
+> yet. What is decided
 > and what comes next is in
 > [docs/02-ROADMAP.md](./docs/02-ROADMAP.md); where it stands is
 > `npm run status -- --tool ledger`.

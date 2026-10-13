@@ -603,3 +603,21 @@ svg.chart .selected-band {
     padding: calc(var(--gap) * 2);
   }
 }
+
+/* lg-8: the camera button is the file input's label, as large as a thumb. */
+.camera {
+  display: grid;
+  gap: 0.5rem;
+  padding: var(--gap);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.matching > li {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}

@@ -8,6 +8,8 @@
  */
 
 import { AppError } from "@ledger/contract";
+import { createModelReader } from "@ledger/receipts";
+import type { ReceiptReader } from "@ledger/receipts";
 import { RateLimiter } from "@webtools/core/rate-limit";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
@@ -27,6 +29,9 @@ import { registerHealthRoute } from "./routes/health.ts";
 import { registerInboxRoutes } from "./routes/inbox.ts";
 import { registerMeRoute } from "./routes/me.ts";
 import { registerPeriodRoutes } from "./routes/periods.ts";
+import { filePhotoStore, memoryPhotoStore } from "./receipt-photos.ts";
+import type { PhotoStore } from "./receipt-photos.ts";
+import { registerReceiptRoutes } from "./routes/receipts.ts";
 import { registerRuleRoutes } from "./routes/rules.ts";
 import { registerSalaryRoutes } from "./routes/salaries.ts";
 import { registerSpendingCategoryRoutes } from "./routes/spending-categories.ts";
@@ -50,6 +55,14 @@ export interface CreateAppOptions {
    * Either way the app closes it on shutdown.
    */
   directory?: Directory;
+  /**
+   * What reads a receipt photo (lg-8). Tests hand in a fake, and no test reaches
+   * a model; `null` is none, as with no key. Left out, the model reader is built
+   * from `config.receiptReader` when it has a key.
+   */
+  receiptReader?: ReceiptReader | null;
+  /** Where receipt photos are kept; by default files in the data directory, or the process under `:memory:`. */
+  photos?: PhotoStore;
 }
 
 export interface App {
@@ -163,6 +176,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerPeriodRoutes(server, context);
   registerSpendingCategoryRoutes(server, context);
   registerStatsRoutes(server, context);
+  registerReceiptRoutes(server, context, {
+    reader: receiptReaderFor(options.receiptReader, config, logger),
+    photos:
+      options.photos ??
+      (config.dataDir === ":memory:" ? memoryPhotoStore() : filePhotoStore(config.dataDir)),
+  });
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
@@ -186,6 +205,25 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       logger.info("shutdown complete");
     },
   };
+}
+
+/**
+ * The reader handed in, or the model reader when a key is configured, or none.
+ * The model is logged at boot so an operator can see what reads; the key never.
+ */
+function receiptReaderFor(
+  given: ReceiptReader | null | undefined,
+  config: ApiConfig,
+  logger: AppLogger,
+): ReceiptReader | undefined {
+  if (given !== undefined) return given ?? undefined;
+  const { apiKey, model } = config.receiptReader;
+  if (apiKey === undefined) {
+    logger.info("no receipt reader: ANTHROPIC_API_KEY is not set, so receipts are typed by hand");
+    return undefined;
+  }
+  logger.info("receipts are read by a model when a person asks", { model });
+  return createModelReader({ provider: "anthropic", apiKey, model, logger });
 }
 
 /**

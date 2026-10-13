@@ -128,7 +128,7 @@ transcribing by hand.
 
 | Ticket                                                           | What                                                   |
 | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| [lg-8](./work/lg-8-receipts.md)                                  | measure, read locally or with a model, file            |
+| [lg-8](./work/lg-8-receipts.md)                                  | measure, read with a model, file                       |
 | [lg-10](./work/lg-10-receipt-items-exclusions-and-categories.md) | items: not shared, or charged to the other; categorise |
 
 ## Phase 5 — History and stats

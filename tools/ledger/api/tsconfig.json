@@ -8,6 +8,7 @@
   "references": [
     { "path": "../../../packages/core" },
     { "path": "../contract" },
-    { "path": "../books" }
+    { "path": "../books" },
+    { "path": "../receipts" }
   ]
 }

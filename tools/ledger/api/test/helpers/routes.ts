@@ -43,4 +43,11 @@ export const VERBS = {
   statsSpending: ["GET", ROUTES.statsSpending],
   statsFixedItems: ["GET", ROUTES.statsFixedItems],
   statsSettlements: ["GET", ROUTES.statsSettlements],
+  receipts: ["POST", ROUTES.receipts],
+  receiptRead: ["POST", ROUTES.receiptRead.replace(":id", "1")],
+  receiptMatches: [
+    "GET",
+    `${ROUTES.receiptMatches.replace(":id", "1")}?amountCents=2650&date=2026-10-04`,
+  ],
+  receiptFile: ["POST", ROUTES.receiptFile.replace(":id", "1")],
 } as const satisfies Record<keyof typeof ROUTES, readonly ["GET" | "POST", string]>;

@@ -21,6 +21,7 @@ by hand. Both people use it, mostly from a phone.
 ```
 contract     types, error taxonomy, zod schemas — no logic
 books        pure: the statement parser, its proofs and the rule matching; no model, network or clock
+receipts     the receipt reader: a photo in, proposals out; the only package that talks to a model
 api          Fastify, persistence, HTTP — the only place that reads process.env
 web          React + Vite UI, mobile-first
 e2e          Playwright specs — none yet; e2e/README.md says what earns the first
@@ -35,9 +36,12 @@ category (lg-15), and
 what each bucket holds as of a date and the ratio from two salaries (lg-5), and
 the settlement: the matching rule, cumulative, with charges, and which closed
 period's deposit a paste has brought in (lg-6), and the reader of the old
-workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7), and the history's series, one per chart on the stats screen (lg-9). The name is `books` because `ledger` is the tool. _Planned_, arriving
-with the ticket that first needs it rather than as an empty package now:
-**`receipts`**, the one package that talks to a model, reading a receipt photo.
+workbook, from plain cell grids `api` builds out of the `.xlsx` (lg-7), and the history's series, one per chart on the stats screen (lg-9), and the
+receipt check — whether a proposal's subtotal, GST and QST make its total — and
+which stored rows a receipt may document (lg-8). The name is `books` because
+`ledger` is the tool. **`receipts`** is the receipt reader (lg-8): Claude Haiku
+5.5 through Anthropic's SDK, given its key and model by `api`, and reading no
+environment itself.
 
 ## Commands
 
@@ -199,6 +203,17 @@ rules and classifications, and nothing else. Why a name is permanent is in
 **Rules live in the database only.** Caisse names identify a household, so no
 rule is seeded from the repository: not in a migration, not in a fixture. A test
 names invented descriptions.
+
+**A receipt photo leaves the house only when the person asks** (lg-8). Upload
+keeps the photo, at `<data>/receipts/<household>/<uuid>.<ext>` under a name the
+API made — never one a request gave — and reads nothing; only
+`POST /api/receipts/:id/read` hands it to the reader, and the screen names the
+model beside that button. Filing is a third request and the only one that
+writes the books: a line paid by **whoever uploaded the photo**, or the receipt
+attached to the row it documents. A photo is never logged, and **no test calls
+a real model**: `createApp` takes a `receiptReader`, and every test that reads
+hands in a fake (`api/test/receipts.test.ts`); `receipts/test` answers the real
+reader from fixtures through its `fetch`.
 
 **Error `details` carry bank text, so a log carries their names and no values.**
 A refused statement's details name the offending row's description, amount and

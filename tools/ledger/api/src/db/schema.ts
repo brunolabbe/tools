@@ -463,6 +463,45 @@ const MIGRATIONS: readonly string[] = [
     SELECT * FROM classifications
     WHERE id = (SELECT max(id) FROM classifications later WHERE later.row_id = classifications.row_id);
   `,
+
+  // 8 — receipts: a photo uploaded, and what it was filed as on a person's
+  // confirmation (lg-8).
+  `
+  -- A photo, stored on the data volume under photo, a name this service made
+  -- (receipts/<household>/<photo>), never one a request gave. Uploading reads
+  -- nothing and files nothing.
+  CREATE TABLE receipts (
+    id INTEGER PRIMARY KEY,
+    photo TEXT NOT NULL UNIQUE,
+    -- The type its first bytes say it is, never its name or a header.
+    media_type TEXT NOT NULL CHECK (media_type IN ('image/jpeg', 'image/png', 'image/webp')),
+    bytes INTEGER NOT NULL CHECK (bytes > 0),
+    uploaded_at TEXT NOT NULL,
+    -- Who took the photo, and so who paid for a line filed from it.
+    uploaded_by TEXT NOT NULL REFERENCES people (id)
+  );
+
+  -- A receipt filed, once: the proposal as the person confirmed it, and either
+  -- the period line it became or the joint-account row it documents. Never a
+  -- column on the row or the line, which are not edited.
+  CREATE TABLE receipt_filings (
+    id INTEGER PRIMARY KEY,
+    receipt_id INTEGER NOT NULL UNIQUE REFERENCES receipts (id),
+    merchant TEXT,
+    date TEXT,
+    subtotal_cents INTEGER,
+    gst_cents INTEGER,
+    qst_cents INTEGER,
+    total_cents INTEGER,
+    period_line_id INTEGER REFERENCES period_lines (id),
+    row_id INTEGER REFERENCES statement_rows (id),
+    filed_at TEXT NOT NULL,
+    filed_by TEXT NOT NULL,
+    CHECK ((period_line_id IS NULL) <> (row_id IS NULL))
+  );
+
+  CREATE INDEX receipt_filings_row ON receipt_filings (row_id) WHERE row_id IS NOT NULL;
+  `,
 ];
 
 /**

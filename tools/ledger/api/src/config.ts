@@ -8,6 +8,7 @@
 import path from "node:path";
 import process from "node:process";
 import { AppError } from "@ledger/contract";
+import { DEFAULT_RECEIPT_MODEL } from "@ledger/receipts";
 import { trustProxy } from "@webtools/core";
 import { readAddress } from "./directory.ts";
 
@@ -66,6 +67,21 @@ export interface ApiConfig {
 
   /** How a request proves who it is (lg-3), and who is an admin (lg-20). */
   access: AccessConfig;
+
+  /** What reads a receipt photo when the person asks (lg-8). */
+  receiptReader: ReceiptReaderConfig;
+}
+
+/**
+ * The model behind the receipt reader (lg-8). With no key there is no reader:
+ * a read is refused as `RECEIPT_READER_UNCONFIGURED`, and a receipt is typed by
+ * hand, which never needed one.
+ */
+export interface ReceiptReaderConfig {
+  /** `ANTHROPIC_API_KEY`. Read here and nowhere else; never logged. */
+  apiKey: string | undefined;
+  /** `RECEIPT_MODEL`, `claude-haiku-5-5` by default (the owner's choice, measured on lg-8). */
+  model: string;
 }
 
 /**
@@ -105,6 +121,8 @@ export const API_DEFAULTS = {
   directoryFile: "directory.db",
   /** Where each household's books file is, inside the data directory (lg-21). */
   householdsDir: "households",
+  /** Where each household's receipt photos are, inside the data directory (lg-8). */
+  receiptsDir: "receipts",
   logLevel: "info",
   // Two people on a phone. A tap on the inbox is one write and a screen is a
   // handful of reads, so neither is near these; a script is.
@@ -210,6 +228,25 @@ function checkAccessConfig(access: AccessConfig, production: boolean): void {
 }
 
 /**
+ * The receipt reader's configuration (lg-8). `ANTHROPIC_CUSTOM_HEADERS` beside a
+ * key refuses to boot, for the reason the planner's `refuseCustomHeaders` gives
+ * (the owner's decision on pl-39): the SDK applies it to every request whatever
+ * it is passed, and a header in it can replace the key or change what a request
+ * bills. Blank is unset, as the SDK reads it. Without a key nothing builds the
+ * SDK, so the variable reaches nothing and is let be. The value is never
+ * repeated: a variable that carries headers may be carrying a key.
+ */
+function loadReceiptReaderConfig(env: NodeJS.ProcessEnv): ReceiptReaderConfig {
+  const apiKey = optionalString(env["ANTHROPIC_API_KEY"]);
+  if (apiKey !== undefined && optionalString(env["ANTHROPIC_CUSTOM_HEADERS"]) !== undefined) {
+    refuse(
+      "ANTHROPIC_API_KEY and ANTHROPIC_CUSTOM_HEADERS are both set. The Anthropic SDK applies that variable to every request and it can replace the key, so the ledger refuses to start with it. Unset it.",
+    );
+  }
+  return { apiKey, model: optionalString(env["RECEIPT_MODEL"]) ?? DEFAULT_RECEIPT_MODEL };
+}
+
+/**
  * The directory may not be one of the books (lg-20's gate, F4). Pointed at the
  * books file, it once failed at boot and left that file half-migrated with both
  * schemas' tables. Since lg-21 the books are a directory of files, and the one
@@ -261,6 +298,7 @@ export function loadApiConfig(
       int(env["RATE_LIMIT_WRITES_PER_MINUTE"], API_DEFAULTS.rateLimitWritesPerMinute, { min: 0 }),
     production: overrides.production ?? isProduction(env["NODE_ENV"]),
     access: overrides.access ?? loadAccessConfig(env),
+    receiptReader: overrides.receiptReader ?? loadReceiptReaderConfig(env),
   };
   // After the overrides, so a test cannot build a configuration the process
   // would have refused.
