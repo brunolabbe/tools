@@ -290,7 +290,9 @@ describe("the key, on an admin route", () => {
     await expect(callAs(hook, "member@example.test", false)).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
-    expect(limiter.check("@admin:member@example.test").allowed).toBe(true);
+    // Nothing spent, read without naming the key (lg-22's gate 2, N2): the same
+    // address as an admin, on the same one-token limiter, is still admitted.
+    await expect(callAs(hook, "member@example.test", true)).resolves.toBeUndefined();
     await expect(
       callAs(adminHook(new RateLimiter({ perMinute: 0 })), "member@example.test", false),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });

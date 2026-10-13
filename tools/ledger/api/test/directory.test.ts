@@ -388,6 +388,10 @@ describe("a record is never replaced", () => {
       "INSERT INTO households (id) VALUES ('home') ON CONFLICT DO UPDATE SET name = 1",
       "DELETE /* c */ FROM memberships",
       "UPDATE\n  memberships\n  SET person = 1",
+      // lg-22's gate 2, N1: a comment inside the REPLACE, as inside the DELETE.
+      "REPLACE /* c */ INTO memberships (id) VALUES (1)",
+      "INSERT OR /* c */ REPLACE /* c */ INTO memberships (id) VALUES (1)",
+      "INSERT OR -- c\n REPLACE INTO memberships (id) VALUES (1)",
     ]) {
       expect(WRITES_IN_PLACE.test(planted), planted).toBe(true);
     }

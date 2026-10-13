@@ -292,3 +292,26 @@ a command on the host. The owner chose to manage it from the app
     `GET` routes and its control.
   - **F6.** Documented, per the owner's answer: the ledger `CLAUDE.md`, step 4
     of this brief, and the header of `api/src/routes/households.ts`.
+- 2026-10-13 — **The owner answered**, through the orchestrator: gate 2's two
+  lows, N1 and N2, are applied at landing with no re-gate. Options: apply at
+  landing, or leave them recorded. **Chosen: apply at landing**, the
+  orchestrator's recommendation.
+- 2026-10-13 — N1 and N2 _fixed at landing_ (owner, 2026-10-13).
+  - **N1.** `REPLACE /* c */ INTO memberships (id) VALUES (1)` planted in
+    `api/src/directory.ts`: `npx vitest run tools/ledger/api/test/directory.test.ts -t "no source file"`
+    exit 0, `Tests  1 passed | 15 skipped (16)` — the scan missed it. The
+    scan's own test, given that spelling, `INSERT OR /* c */ REPLACE /* c */ INTO …`
+    and an `OR -- c` line break, failed first:
+    `REPLACE /* c */ INTO memberships (id) VALUES (1): expected false to be true`.
+    Both `REPLACE` alternatives now take the separator the `DELETE` one has
+    (`GAP` in `api/test/helpers/append-only.ts`); with the plant still in,
+    `directory.test.ts` exit 1, `+ "directory.ts"`, and restored, both scans
+    `Tests  24 passed (24)`.
+  - **N2.** With the old `admin:` key put back and the hook made to spend the
+    address's token before refusing, the old assertion
+    (`limiter.check("@admin:member@example.test").allowed`) stayed green,
+    `Tests  1 passed | 60 skipped (61)`. The test now calls the hook as an admin
+    with the same address on the same one-token limiter and expects it
+    admitted, which names no key: under the same change it failed,
+    `promise rejected "AppError: Too many requests…" instead of resolving`.
+    Both restored.

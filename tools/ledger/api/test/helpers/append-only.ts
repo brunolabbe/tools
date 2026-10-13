@@ -17,15 +17,19 @@
  * the scan loudly; a miss would pass it silently.
  */
 
+/** What SQLite allows between two keywords: whitespace and comments. */
+const GAP = String.raw`(?:\s|/\*[\s\S]*?\*/|--[^\n]*)+`;
+
 export const WRITES_IN_PLACE = new RegExp(
   [
     String.raw`\bUPDATE\b[^;]*?\bSET\b`,
     String.raw`\bDO\s+UPDATE\b`,
     // Whitespace or SQL comments between, and nothing else: a `delete` and a
-    // `from` in one sentence of prose are too common to flag.
-    String.raw`\bDELETE(?:\s|/\*[\s\S]*?\*/|--[^\n]*)+FROM\b`,
-    String.raw`\bOR\s+REPLACE\b`,
-    String.raw`\bREPLACE\s+INTO\b`,
+    // `from` in one sentence of prose are too common to flag. The two
+    // `REPLACE` spellings take the same separator (lg-22's gate 2, N1).
+    String.raw`\bDELETE${GAP}FROM\b`,
+    String.raw`\bOR${GAP}REPLACE\b`,
+    String.raw`\bREPLACE${GAP}INTO\b`,
   ].join("|"),
   "iu",
 );
