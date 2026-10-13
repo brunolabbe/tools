@@ -103,6 +103,15 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
      assertion, then pin whichever rule is chosen with a unit test on the
      exported `Meter`.
 
+     **Answered, 2026-10-13, by the owner** (through the orchestrator, before
+     the assertion was written). The question: which rule should the unit test
+     pin? The options were (a) leave it and pin it as is, which keeps Done-when 2
+     true; (b) make `release()` of the last member call `interrupt()`, a
+     production change that contradicts Done-when 2; and (c) pin (a) now and file
+     (b) as a separate ticket. **Chosen: (a)**, the orchestrator's
+     recommendation. Pin today's behaviour with a unit test on the exported
+     `Meter`, and change no production behaviour.
+
 ## Done when
 
 1. Each extracted rule has a table test covering every row deleted for it, so
@@ -119,3 +128,6 @@ testability on 2026-10-12**, provided production behaviour is unchanged.
 - 2026-10-12 — Filed from the suite-speed audit. The estimate is about 25 s
   from `sameDocument`, about 33 s from the play-press rule, and about 15 to 18 s
   from `Meter` (inferred).
+- 2026-10-13 — The owner answered the meter-gap question (Build, item 3) before
+  any source changed: option (a), pin today's behaviour. The question, the three
+  options and the answer are written under that bullet.
