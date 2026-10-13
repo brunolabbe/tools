@@ -3,7 +3,7 @@ id: dl-122
 tool: downloader
 title: The dl-118 menu ceiling fails again on the Windows leg, at 4286 ms against 4000
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-119]
 difficulty: standard
@@ -159,6 +159,89 @@ Whichever option is chosen, the work is:
 "clickTimeoutMs caps"` reports `Tests 3 passed`.
 5. Nothing outside the dl-118 cap block of `provoke.test.ts` changes, other than
    this ticket.
+
+## Review
+
+**Gate: PASS** — 2026-10-13 · `2cb4e734..5c41f39d` · Opus 5.5, depth standard
+
+| Done when                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Owner's answer recorded with date and option, `status: ready`                                        | **verified** — the Log's "Owner's answer, status `ready`" entry names 2026-10-13 and option 1 out of four; the frontmatter reads `ready` at the head                                                                                                                                                                                                                                                                                                   |
+| 2. Menu row passes at 4286 ms and fails each plant; Log shows each click's timeout, capped and uncapped | `resolvers/test/browser/provoke.test.ts` › "a shell's 18+ menu button: the blocked clicks are given the cap, not 2000 ms" ✓. The menu row's ceiling is `null`, so `elapsedMs` is never asserted for it. What carries the line is `expect(rejected.filter((click) => click.timeout !== CAP_MS)).toEqual([])` plus the non-empty companion. The gate's plants failed the row (below). The Log gives 200 capped and 2000 uncapped for each rejected click |
+| 3. Each plant fails the row it should, recorded in the Log                                              | same block, re-planted by the gate: consent uncapped → `Tests  2 failed \| 1 passed`, both cookie rows on `expected [ { timeout: 2000, rejected: true } ] to deeply equal []`. Play selector uncapped → 3 failed, menu at 5460 ms with 2 rejected clicks at 2000. Play text uncapped → 3 failed, 2 at 2000. Both → 3 failed, menu at 9073 ms with 4 at 2000. The Log's account agrees ✓                                                                |
+| 4. `-t "clickTimeoutMs caps"` reports `Tests 3 passed`                                                  | gate ran it: `Tests  3 passed \| 261 skipped (264)` ✓                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 5. Nothing outside the dl-118 cap block changes, other than the ticket                                  | **verified** — `git diff --stat 2cb4e734...5c41f39d`: 2 files, the ticket and `provoke.test.ts`. Both hunks lie inside the `describe("clickTimeoutMs caps …")` block, and the import line is untouched                                                                                                                                                                                                                                                 |
+
+- **low** · no live call site · no `Done when` line depends on it · **Some clicks
+  escape the observation.** The test wraps `Locator.prototype.click`. In
+  Playwright 1.62.1, `Locator.click` is
+  `return await this._frame.click(this._selector, { strict: true, ...options })`.
+  `Page.click` also goes to `this._mainFrame.click`, and `ElementHandle.click` goes
+  straight to its channel. So a play click rewritten as `frame.click`, `page.click`
+  or `ElementHandle.click` is never recorded. Today `provoke.ts` has none: all 9 of
+  its `.click(` sites are locator clicks (enumerated with
+  `grep -nE "\.click\(" tools/downloader/resolvers/src/browser/provoke.ts`).
+  Reproduction:
+  `sed -i 's|^        await target.click({ timeout: options.timeoutMs });$|        await frame.click(\`${visibleQuery(selectors)} >> nth=${index}\`, { timeout: 2000 });|' tools/downloader/resolvers/src/browser/provoke.ts`,
+then the cap block. Result: `Tests 2 failed | 1 passed`. **The menu row passes,
+at 5464 ms**, with only 2 rejected clicks recorded, both at 200. The cookie rows
+fail only on their clock (`expected 5707 to be less than 3200`). Before this
+branch, the 4000 ms ceiling would have caught that run. Remedy, measured: wrap
+`Object.getPrototypeOf(page.mainFrame()).click`, with the signature
+`(selector, options)`. Every locator, frame and page click goes through it, and
+the class is just as internal, so the cost is unchanged. With that wrapper, the
+same plant fails all 3 rows (`Tests 3 failed`; menu: 4 rejected, two at 2000),
+and the capped run still reports `Tests 3 passed`. `ElementHandle.click`would
+still escape. — _fixed at landing_ (owner, 2026-10-13), commit`36383710b1368274400ffc582086574dfd4455d6`.
+- **low · open decision** · no `Done when` line depends on it · **The cookie rows
+  keep the same wall-clock shape that failed on the menu row.** The ticket does not
+  require changing them: its Why, its Decision ("the form of the menu row's bound")
+  and Done when 2 are about the menu row only. The builder's Log calls keeping them
+  "Decision taken without the owner". The cookie rows read at most 2329 ms in 39
+  Windows readings, against 3200: 0.87 s of margin. The menu row's outlier was
+  about 2.1 s above its usual reading. A spike that size on a cookie row would
+  read about 4.3 s and fail. In the gate's runs, the cookie ceiling is now
+  redundant for the consent plant, which the click check fails first. But it is
+  the only thing that caught the `frame.click` escape above. Options:
+  (a) **keep them, as built**, and record a trigger: a cookie row that fails its
+  clock on Windows gets `ceilingMs` set to `null`. Recommended, since 0 of 78
+  cookie readings came near the ceiling, and the clock is the only backstop for
+  waits that are not click timeouts.
+  (b) Set both to `null` now. This removes the flake shape everywhere, and loses
+  that backstop.
+  (c) Raise `COOKIE_CEILING_MS`. This is the shape the owner did not choose for
+  the menu row. — owner chose (a), 2026-10-13
+- **low** · `nfr:maintainability` · **The block comment's reason for the
+  asymmetry does not tell the rows apart.** It says the cookie rows keep a clock
+  for "a wait that is not a click's timeout", and the menu row has none because
+  "its play clicks are the only blocked ones, and they are click timeouts". On the
+  cookie sheets, every blocked click is also a click timeout: the gate's probe
+  recorded 5 rejected clicks per sheet, all through `Locator.click`, all at 200.
+  The real difference is the decision's scope, not the mechanism, and the
+  comment should say so. — _fixed at landing_ (owner, 2026-10-13), commit `36383710b1368274400ffc582086574dfd4455d6`.
+- **dropped** · the wrapper leaking into other tests. Restore is in a `finally`
+  that wraps only `provokePlayback`, and nothing that can throw sits between the
+  assignment and the `try`. The root `vitest.config.ts` sets no `concurrent`,
+  `isolate` or `sequence`, and the file has no `.concurrent`. The prototype
+  belongs to one worker's module instance. Not a defect.
+- **dropped** · a click the test keeps uncapped (the age press at 2000, the modal
+  close at 1500) rejecting on a slow runner and failing the row. A rejected age
+  press already fails `toContain(pressed)` at base, so this adds no new failure
+  mode. No video click fired on any of the three pages in the gate's probes.
+- **findings** · the hunt returned 5: 3 carried, 2 dropped.
+- **CI at `5c41f39d`** (read once): `test (ubuntu-latest)` and
+  `test (windows-latest, informational)` both **pending**. `check`, `changes`,
+  `codeql`, `CodeQL`, `dependency-review`, `docker`, `e2e (direct)` and
+  `e2e (sniffer)` passed. No acceptance line needs the Windows leg, but it is the
+  only place the original defect occurs, and it has not run on this head.
+- Invariants: the change is test-only. Style checked: no `any`, no `console`, the
+  import line unchanged; `npm run check` exits 0. Skipped, because the diff
+  cannot touch them: AppError, shell, process trees, redaction, SSRF, progress,
+  contract, test registration (existing file), Dockerfile, routes.
+- NFR: security n/a · performance ✓ (menu row 1871 to 1926 ms locally, unchanged)
+  · reliability: the menu row no longer reads a clock; the cookie rows still do
+  (above) · maintainability: internal `Locator` prototype, a cost the owner's
+  option accepts; comment above.
 
 ## Log
 
