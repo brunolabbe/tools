@@ -113,7 +113,7 @@ Options, the recommended one first:
    cap, with a companion that fails on empty (at least one rejected click, not an
    exact count, which varies with timing) and the uncapped control at 2000. The
    gate's probe, which showed all three plants and the uncapped control, is a
-   starting point: `/tmp/claude-1000/-workspaces-tools/af8e8ee8-720f-4ca5-a229-4eddd777e39b/scratchpad/dl-122/gate-1/probe.mts`
+   starting point: https://github.com/brunolabbe/tools/pull/470#issuecomment-6135917927
    (scratch, not committed; it takes `<worktree> <cap|none> <pathname>`). Wrap
    `click` by hand and restore it in `finally`, rather than `vi.spyOn`: the file
    imports no `vi`, and adding it would change the import line, outside the cap
