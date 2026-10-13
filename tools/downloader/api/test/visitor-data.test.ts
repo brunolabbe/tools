@@ -42,7 +42,7 @@ type Line = Record<string, unknown> & { msg: string };
 // dl-124: a request id is a random UUID unless the caller supplies one, and a
 // UUID is hex, so it can contain `aaaa`, `bbbb` or `cccc` — the interface ids the
 // IPv6 test below uses. Pinning one that does makes the collision happen on every
-// run instead of about one run in a hundred.
+// run instead of about one run in 340.
 const HEX_RUN_REQUEST_ID = "f74250e2-bbbb-4ab7-9146-1d93423997db";
 
 describe("shortenAddress", () => {
@@ -92,7 +92,14 @@ describe("the address on a log line", () => {
   ): Promise<{ lines: Line[]; raw: string }> {
     const raw: string[] = [];
     harness = await createHarness({
-      logger: createLogger({ level: "info", write: (line) => void raw.push(line) }),
+      logger: createLogger({
+        level: "info",
+        write: (line) => void raw.push(line),
+        // dl-124: the logger writes `os.hostname()` on every line, and under Docker that
+        // is a random 12-hex container id that can hold `aaaa`, `bbbb` or `cccc`. A
+        // matching machine would fail the IPv6 leak check below on every run.
+        bindings: { hostname: "test-host" },
+      }),
       resolver: new StubResolver(probeResult()),
       config,
     });

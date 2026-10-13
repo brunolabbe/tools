@@ -140,3 +140,44 @@ bare `aaaa`, `bbbb`, `cccc`, `dead` or `beef` alternative found none
 no output); a pattern of another shape was not looked for. The tests that follow
 this one carry colons or dots in their patterns (`/2001:db8:5:[12]/u`,
 `/203\.0\.113\.7[78]/u`).
+
+### 2026-10-13 — gate 1's two lows applied at landing (Sonnet 5.5, fixer)
+
+**The owner's answer.** Gate 1 (Opus 5.5, CONCERNS) left two lows. The question put
+to the owner, by the orchestrator through `AskUserQuestion`, was what the landing
+should do with them. The options were (a) apply both at landing (recommended),
+(b) apply only the hostname pin, (c) record both and land as built. The owner chose
+(a) on 2026-10-13.
+
+**Low 1, the hostname.** `createCoreLogger` writes `os.hostname()` into every
+line's `base`, and `bindings` is spread after it, so a `bindings: { hostname }`
+overrides it. The `logged` helper in `visitor-data.test.ts` now passes
+`bindings: { hostname: "test-host" }`. No other test in the file reads `hostname`
+(`grep -n hostname tools/downloader/api/test/visitor-data.test.ts` finds only the
+new line and its comment), so the pin changes nothing else.
+
+Red, with a hostname that matches (`bindings: { hostname: "abbbbc" }`, the pin
+temporarily set to a value holding `bbbb`):
+
+```
+$ npx vitest run tools/downloader/api/test/visitor-data.test.ts -t "rate-limited line says the /48"
+AssertionError: expected '{"level":"info","time":"2026-10-13T12…' not to match /2001:db8:1:1|2001:db8:1:2|aaaa|bbbb|…/u
+"hostname":"abbbbc"   (in the received string)
+Tests  1 failed | 27 skipped (28)
+```
+
+Green, with `"test-host"`, and `raw` shown to carry it (a temporary
+`expect(raw).toContain('"hostname":"test-host"')` in the same test, removed after):
+
+```
+$ npx vitest run tools/downloader/api/test/visitor-data.test.ts -t "rate-limited line says the /48"
+Test Files  1 passed (1)
+Tests  1 passed | 27 skipped (28)
+$ npx vitest run tools/downloader/api/test/visitor-data.test.ts
+Test Files  1 passed (1)
+Tests  28 passed (28)
+```
+
+**Low 2, the rate.** The comment above `HEX_RUN_REQUEST_ID` said "about one run in a
+hundred"; the Log's own measurement above is 0.00294 per run, one in 340. The
+comment now says "about one run in 340".
