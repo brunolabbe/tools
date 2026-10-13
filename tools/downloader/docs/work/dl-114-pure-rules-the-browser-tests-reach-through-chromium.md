@@ -369,4 +369,7 @@ B's first byte` in `parallel-ranges-meter.test.ts`: the 8 MB/s origin, A
     `read.set("class", null)` planted `-t "ctl=jw"` fails. Both places now say
     that only `ctl=jw` (a class) can fail on a broken read, and that no browser
     row fails on a broken `id`, `aria-label`, `title` or `data-testid` read.
-    Text only; no code changed.
+    Text only; no code changed. **Owner's answer 4**, on that high: the owner
+    chose, 2026-10-13, to fix it and then run a narrow third gate (the
+    alternatives were not part of this fixer's dispatch, so they are not
+    recorded here). Gate 3 read `e3f65f8e` and passed it.
