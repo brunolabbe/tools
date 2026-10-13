@@ -10,7 +10,7 @@
  */
 
 import { afterEach, describe, expect, test } from "vitest";
-import { ROUTES } from "@ledger/contract";
+import { API_PREFIX, ROUTES } from "@ledger/contract";
 import type { ErrorResponse, MeResponse, PeopleResponse } from "@ledger/contract";
 import { createIdentityVerifier } from "../src/access.ts";
 import type { Directory } from "../src/directory.ts";
@@ -84,7 +84,10 @@ async function me(target: App, email: string) {
   return await send(target, email, "GET", ROUTES.me);
 }
 
-const BOOKS_ROUTES = Object.entries(VERBS).filter(([name]) => name !== "health");
+// lg-22: the admin routes are an admin's whether or not they are in a household.
+const BOOKS_ROUTES = Object.entries(VERBS).filter(
+  ([name, [, url]]) => name !== "health" && !url.startsWith(`${API_PREFIX}/admin/`),
+);
 
 describe("a member", () => {
   test("gets their person and household on the request", async () => {
