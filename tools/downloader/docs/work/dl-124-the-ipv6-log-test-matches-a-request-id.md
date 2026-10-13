@@ -3,7 +3,7 @@ id: dl-124
 tool: downloader
 title: The IPv6 rate-limit log test fails whenever a request id contains aaaa, bbbb or cccc
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-107]
 difficulty: mechanical
@@ -73,6 +73,23 @@ request.ip`; then only the /64 prefix; then only the interface id), confirm
 - The check still fails for a planted leak of the full address, of the /64
   prefix, and of the bare interface id (the Log).
 - `npm run check` and the downloader project's tests pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-10-13 · `4f756c40..95e57de5` · Opus 5.5, depth narrow
+
+| Done when                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The IPv6 test fails against its old regex when a request id contains `bbbb`, deterministically, and passes with the fix | **verified** — the old assertion (`replaceAll` removed, header kept) failed 5 of 5 runs of `api/test/visitor-data.test.ts` › "an IPv6 client's rate-limited line says the /48, while the limiter still counts its /64", each `Tests 1 failed \| 27 skipped (28)`; at the head the file passes 28 of 28. The red and the green are in the Log.                                                                                                                                                |
+| The check still fails for a planted leak of the full address, the /64 prefix and the bare interface id                  | **verified** — each planted as a `remote` field beside `ip` in `registerRequestLogging`'s `onResponse` in `api/src/request-log.ts`, then restored: 3 of 3 fail with `not to match /2001:db8:1:1\|2001:db8:1:2\|aaaa\|bbbb\|…/u`. Three more plants the brief did not name also fail: the raw address in `rate limited` (`createRateLimitHook`, `api/src/rate-limit.ts`), and the raw address and the bare interface id in `request rejected` (`registerErrorHandling`, `api/src/server.ts`). |
+| `npm run check` and the downloader project's tests pass                                                                 | **unproven (gate)** — `check` passed on PR #480 at `95e57de5`; `test (ubuntu-latest)` was still pending when read, and the gate ran only the one spec file (28 of 28), not the downloader project.                                                                                                                                                                                                                                                                                           |
+
+- **low** · no `Done when` line depends on it · the leak check still reads one field that can carry random hex: `hostname`. `createCoreLogger` in `packages/core/src/logger.ts` puts `os.hostname()` in every line's `base`, and under Docker that is the 12-hex container id (this gate's container: `761663532c5c`, written into every line of the test's `raw`). 793 of 2,000,000 random 12-hex strings match `/aaaa|bbbb|cccc/` (about 1 in 2,500). Unlike the request id, this failure is fixed per machine, not random: a container whose id matches fails this test on every run. The other fields that vary between runs cannot match: `time` and `durationMs` are digits and separators, `pid` is digits, and the only other id is the request id the fix pins. GitHub-hosted runner hostnames were not measured. Remedy: give the `logged` helper's `createLogger` call `bindings: { hostname: "test-host" }`. `bindings` is spread after `hostname` in `base`, so it overrides it (read, not run). _Fixed at landing_ (owner, 2026-10-13), in `2f4c756eba6a9bcb82dcb97af5b5bce35c9f4500`: the `logged` helper now binds `hostname: "test-host"`; a `bbbb` hostname fails the test without it and `test-host` passes.
+- **low** · `nfr:maintainability` — the new comment above `HEX_RUN_REQUEST_ID` in `api/test/visitor-data.test.ts` says the collision used to happen "about one run in a hundred". The ticket's own measurement is 0.00294 per run (1,472 of 2,000,000 ids, four ids a run), which is about one run in 340. _Fixed at landing_ (owner, 2026-10-13), in `2f4c756eba6a9bcb82dcb97af5b5bce35c9f4500`: the comment now says one run in 340.
+- **findings** · the hunt returned 2; 2 carried, 0 dropped.
+- Attack 3 · `genReqId: (request) => requestIdFrom(…)` in `createApp` (`api/src/server.ts`) is already on `main` at `4f756c40`, and the branch changes no source. So honouring `x-request-id` is existing behaviour. The new `requestId` assertion fails when `requestIdFrom` ignores the header (`expected [ …(4) ] to deeply equal [ …(4) ]`, 1 failed).
+- Invariants: the diff is test-only and touches no route, logger, spawn, URL or contract, so only style was walked ✓. The rest were skipped as untouched.
+- NFR: security ✓ (all six leak plants fail the test) · performance n/a · reliability — first bullet · maintainability — second bullet.
 
 ## Log
 
