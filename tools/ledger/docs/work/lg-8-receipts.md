@@ -3,7 +3,7 @@ id: lg-8
 tool: ledger
 title: Photograph a receipt, read it with a model, confirm, and file it
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [lg-3, lg-6]
 difficulty: hard
@@ -89,6 +89,149 @@ total }` in cents, each field `null` when not read.
 6. A non-image upload and an oversized upload are both refused.
 7. Nothing is filed without a confirmation. An API test proves it.
 8. Gates green.
+
+## Review
+
+**Gate: FAIL** — 2026-10-13 · `9580c2b1..43b36388` (three-dot, merge from main included) · Sonnet 5.5, depth full · lg-8, rated hard
+
+FAIL because Done when 5 has a clause nothing asserts (F1, a one-assertion fix). Every other
+line is proven, and the hunt found nothing above `med`. CI on this head: all 14 checks green
+(see Done when 8). Settled, not graded: Haiku 5.5 alone with no live call; advisory flags;
+the lg-22 overlap.
+
+| Done when                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Measurement table and the owner's choice on the Log                                    | **verified** — read the base copy of the ticket: the "2026-10-12 — the measurement, and the owner's choice" entry holds the table and "Decided by the owner, 2026-10-12: Claude Haiku 5.5 alone". Nothing asserts a Log.                                                                                                                                                                                                                                                                                                           |
+| 2. A fake-reader proposal, edited and confirmed, becomes a period line for the uploader   | `api/test/receipts.test.ts` › "a read proposal, edited and confirmed, becomes a period line for whoever uploaded it" ✓ — the assertion is on the stored line: `person_id` alex, `source` receipt, `entered_by` sam (sam confirmed).                                                                                                                                                                                                                                                                                                |
+| 3. A matching joint-account row is offered, and confirming attaches without a period line | `api/test/receipts.test.ts` › "a proposal matching a stored joint-account row is offered, and confirming it attaches the receipt and adds no line" ✓ — one match with `daysApart` 1, filing has `rowId` and `periodLineId` null, `period_lines` count 0.                                                                                                                                                                                                                                                                           |
+| 4. The check passes parts that add up; flags a cent off, a wrong tax, a `null` field      | `books/test/receipts.test.ts` › "passes a proposal whose parts add up and whose taxes fit one taxable part", "flags a total a cent off", "flags a wrong tax, even when the parts still add up", "flags %s not read, and guesses nothing" (3 cases) ✓. Second method: see _Arithmetic_ below.                                                                                                                                                                                                                                       |
+| 5. The model is never called without the person asking; an API test proves it             | **unproven for the file route** — `api/test/receipts.test.ts` › "reaches the model only when the person asks, and answers each proposal checked" asserts 0 calls after upload and after matches, and 1 after read. It never files before its zero assertion, though its comment says "Uploading, asking for matches and filing by hand never call it". Planting a model call in the file route leaves the file green (F1). The code is right: **verified** by my run (upload 0, matches 0, file as row 0, file as line 0, read 1). |
+| 6. A non-image and an oversized upload are both refused                                   | `api/test/receipts.test.ts` › "refuses %s as RECEIPT_NOT_AN_IMAGE, and keeps nothing" (text, GIF, PDF, empty) and "refuses a photo over the cap, before keeping any of it" ✓. My boundary run: exactly the cap 200, cap + 1 byte 413 `SIZE_LIMIT_EXCEEDED`, a chunked 8 MiB body with no content-length 413.                                                                                                                                                                                                                       |
+| 7. Nothing is filed without a confirmation; an API test proves it                         | `api/test/receipts.test.ts` › "files nothing: a read proposal waits for the person" ✓ — `period_lines` and `receipt_filings` are both 0 after upload and read; the first upload test asserts the same 0s.                                                                                                                                                                                                                                                                                                                          |
+| 8. Gates green                                                                            | `gh pr checks 474` at head `43b36388`: all 14 pass — `check` (CI), `test (ubuntu-latest)`, `test (windows-latest, informational)`, `docker` (ledger.yml), `CodeQL`, `codeql`, `dependency-review`, `pr-title`, the downloader and planner legs. My own: `npm run build` exit 0, `npm run check` exit 0, `npm test -- --project ledger` 56 files / 978 of 978, `node scripts/check-lockfile-sync.mjs` exit 0, `npx vitest run packages/core/test/image-closure.test.ts` 7 of 7.                                                     |
+
+**Positive control** (isolation suite, `npx vitest run tools/ledger/api/test/isolation.test.ts`):
+
+- Planted: the file route files into household `home`'s books for everyone (`routes/receipts.ts`
+  hands `fileReceipt` home's handle; `server.ts` puts it on the context). Result, red:
+  `Tests  1 failed | 1 passed (2)` — `AssertionError: away POST receiptFile: {"error":{"code":"RECEIPT_ALREADY_FILED",...}}: expected 409 to be 200`.
+- Restored both files from the head sha: `Tests  2 passed (2)`.
+- A second plant, `routes/receipts.ts` photos household hard-coded to `"home"`: red,
+  `home's photos are 2dc66a9f-….jpg, c373e063-….jpg, e2eb844d-….jpg, fe33d14b-….jpg, its receipts name 2dc66a9f-….jpg, e2eb844d-….jpg` /
+  `away's photos are , its receipts name c373e063-….jpg, fe33d14b-….jpg`. The Log's claim for it holds. Restored.
+- The first plant was caught through an id collision (away's receipt id is also a home id). The suite's direct reads of
+  both books files are a second net that this plant did not exercise separately: unmeasured.
+- Other plants, each restored: route-limits red (`receiptRead refuses the second request in a minute` fails, 1 of 55) with the
+  paid route's limiter removed; image-closure red (1 of 7, names the `receipts/dist` line) with that Dockerfile line deleted;
+  the 6-day match window caught by the books suite (1 of 18).
+
+**Findings**
+
+- **med** · **Done when 5 depends on it** · **F1 — the file route's freedom from the model is asserted nowhere.**
+  Reproduce: in `tools/ledger/api/src/routes/receipts.ts`, add `await reader?.read({ bytes: new Uint8Array([0xff, 0xd8, 0xff]), mediaType: "image/jpeg" });`
+  as the first statement of the `ROUTES.receiptFile` handler, then `npx vitest run tools/ledger/api/test/receipts.test.ts` →
+  `Tests  24 passed (24)`. The same test's comment claims filing is covered. Fix: file the receipt (as a line and onto a row)
+  before the `calls` is asserted 0, or assert `counted.calls` at the end of the two filing tests.
+- **med** · no Done when line depends on it · **OPEN DECISION · F2 — a photo that holds two receipts can file only one.**
+  The brief returns a list "because one measured photo held two receipts side by side", and the screen asks which one. Then
+  `receipt_filings.receipt_id` is unique, so the other proposal can never be filed. Reproduce (script in the scratch
+  directory, `two-receipts.mts`, a fake reader returning two proposals): `read -> 200 proposals: 2`,
+  `file Marché A -> 200 filed`, `file Quincaillerie B -> 409 RECEIPT_ALREADY_FILED`. The screen drops the unchosen proposal
+  when filing (`startOver`), and the filed message says nothing of a second receipt, so it is simply forgotten; getting it
+  needs the photo uploaded again and a second paid read. The Log does not mention this. Options: **(A) one filing per proposal**
+  — migration 8 is unmerged, so changing `receipt_filings` now is free, and after the merge it is a migration 9;
+  **(B) keep one filing per photo** and make the filed screen say that the photo held another receipt, filed by taking the
+  photo again, with a test; **(C)** leave it and record it on lg-10. Recommend A (the case was measured, and A is free only
+  until the merge); B if the owner wants to ship this round.
+- **low** · **F3 — the attach path checks only that the row exists, and two receipts can document one row.** The "not
+  offered again" rule is a read filter in `receiptMatches`; the write has no check and `receipt_filings_row` is a non-unique
+  index. Reproduce (`api-harness.mts`, S4): two different receipts attached to the same row → `["200 ","200 "]`; a receipt
+  proposing a total of 1 cent attached to a 26,49 row → 200; a receipt attached to the +5000,00 deposit row → 200. No path
+  adds a line, and file-then-attach, attach-then-file, three concurrent files and attach-vs-line all answer one 200 and the
+  rest 409 `RECEIPT_ALREADY_FILED` (lines and filings counted after each). Two members photographing one receipt is the way
+  into the duplicate; lg-10 will read items against filings, so it matters then. No live consumer yet. Remedy: a partial
+  unique index on `row_id` (also free until the merge) and a 409, and/or re-run `matchReceipt` at filing.
+- **low** · **F4 — the paid route is cheap to repeat.** It takes the shared write bucket (60 a minute per person), a read of
+  an already-filed receipt is allowed, concurrent reads are not coalesced, and a client that hangs up does not stop the call.
+  Measured, default limits: 100 reads of one receipt in a burst → 59 answered and 41 `429`, 59 model calls; after filing,
+  a read → 200 and one more model call; 20 concurrent reads of the filed receipt → 20 calls. At the Log's estimate of
+  ≈ $0.0005 a read that is a ceiling near $0.03 a minute a person: insiders behind Access only, so no live call site.
+  Remedy options: its own bucket (the planner's paid route has `RATE_LIMIT_RUNS_PER_MINUTE`, 5); a filed receipt
+  refused a read as `RECEIPT_ALREADY_FILED`; the request's abort signal passed to `reader.read` (the reader already takes one).
+- **low** · `nfr:reliability` · **F5 — photos accumulate with no cap and no delete, on the volume that holds every household's
+  books.** Measured (`flood.mts`): 80 back-to-back cap-sized uploads → 61 accepted, 19 `429`, 427 MiB on disk, peak RSS
+  215 MiB. `compose.ledger.prod.yaml` limits the container to 512m; concurrent uploads were not measured. Needs a member who
+  scripts it, so no live call site; the Log accepts "an unfiled receipt is a kept photo" but not the growth.
+- **low** · `nfr:maintainability` · **F6 — the host's environment reaches the API suite.** With both Anthropic variables set,
+  `loadApiConfig` refuses to boot in every test that passes no `receiptReader` config, even one that hands in a fake reader.
+  Reproduce: `export ANTHROPIC_API_KEY=sk-ant-host-key ANTHROPIC_CUSTOM_HEADERS="x-gateway: 1"` then
+  `npx vitest run --project ledger tools/ledger/api` → `Test Files  17 failed | 11 passed (28)`, `Failed Tests  332`, all
+  `AppError: ANTHROPIC_API_KEY and ANTHROPIC_CUSTOM_HEADERS are both set. ... so the ledger refuses to start with it.`,
+  including both `isolation.test.ts` tests. With the key alone: `Tests  978 passed (978)` and the key in 0 output lines.
+  `receipts.test.ts` pins `receiptReader: { apiKey: undefined, ... }` ("a key on the host must not reach a test"); the other
+  files do not. CI and the devcontainer carry neither variable. Remedy: pin it in the shared helpers that build the app.
+- **low** · **F7 — a test title overclaims.** `api/test/receipts.test.ts` › "never the photo, and never the key" asserts only
+  the photo: its app has no key configured, so a log line carrying the key would pass it. The claim holds (measured with the
+  real reader built from a configured key, a provider `401` whose body echoes the key, and 158 captured log lines: the key,
+  `sk-ant` and the photo's base64 appear 0 times). Graded low because the table's `med` for an overclaiming title is an
+  unproven acceptance line, and none of the eight names the key. Fix: configure a key and assert its absence, beside the
+  existing non-empty companion.
+- **low** · **F8 — a provider `400` or `408` is the server's fault to the person.** The magic-byte check accepts a 3-byte
+  `FF D8 FF` as a JPEG (also a JPEG header followed by `<script>`, and a 12-byte `RIFF….WEBP`), and the reader sends a photo
+  as uploaded; the API's own `400` (a corrupt image, a side over 8000 px per the vision docs) and `408` answer `INTERNAL`
+  "Something went wrong on our end.", with only status and type logged. `reader-shapes.mts` (scratch directory): `HTTP 400 → INTERNAL`,
+  `HTTP 408 → INTERNAL`. A phone photo is under both limits and Fastify rejects a truncated body, so no live call site.
+- **dropped** · `amount()` in the reader checks `Number.isSafeInteger` after zod's `int()` already does: redundant, harmless.
+- **dropped** · `key={JSON.stringify(checked.proposal)}` in the multi-receipt list repeats for two identical proposals: React warns, nothing mis-files, not a measured case.
+- **dropped** · whitespace-only `ANTHROPIC_CUSTOM_HEADERS` beside a key boots: the SDK splits it on `:` and finds no header, so it changes nothing.
+- **dropped** · a provider `429` answers `UNREACHABLE` where the planner answers `RATE_LIMITED`: both are in the taxonomy; the ledger has no domain code for it and `RATE_LIMITED` would tell a person to slow down. A choice, not a defect.
+- **dropped** · "household B can tell a receipt exists in A": refuted. Away against home ids 2, 3 and a nonexistent 99, on read, matches, file-as-line and file-as-row: all twelve `404 RECEIPT_NOT_FOUND`, and the body for 2 equals the body for 99 byte for byte; zero model calls and zero rows written. An admin with no household gets `403 FORBIDDEN`.
+- **findings** · the hunt returned 13; 8 carried (F1–F8), 5 dropped.
+
+**Measured against the brief's attack list**
+
+- **The model request** — `createModelReader` sends `POST https://api.anthropic.com/v1/messages` with `x-api-key`,
+  `model: claude-haiku-5-5` (the id on the models overview), `max_tokens: 16000`, `output_config: { effort: "medium", format: { type: "json_schema", schema } }`
+  (the shape the structured-outputs page gives; Haiku 5.5 is on its supported list; the schema uses `$defs` and `anyOf` with `null`,
+  no unsupported keyword), and an `image` block (base64, the sniffed media type) then the prompt. Whether structured output combines
+  with adaptive thinking on Haiku 5.5 is **unverified** — the page is silent and no live call was made. 42 canned replies (3 read, 39 refused), a hung call, a caller abort and two retry runs, through the real
+  reader's `fetch` (`reader-shapes.mts`): every failure a typed `AppError`, none filed, 0 bare `Error`:
+  stop reasons `refusal` (empty, with text, with schema-valid text), `max_tokens` (cut and valid-looking), `pause_turn`, `tool_use`,
+  `stop_sequence`, `model_context_window_exceeded`, `null` → `RECEIPT_UNREADABLE`; an empty content array, thinking-only content, non-JSON, fenced
+  JSON, `[]`, `null`, a wrong key, a string for an integer, a float, a missing field, 1e18 → `RECEIPT_UNREADABLE`; a thinking block then text → read;
+  a 200 with an HTML body → `RECEIPT_UNREADABLE`, with invalid JSON → `INTERNAL`; HTTP 429/500/502/503/504/529 and a thrown `TypeError` → `UNREACHABLE`
+  (`retryable: true`); 400/401/403/404/408/409/413/422 → `INTERNAL`; a hung call at 50 ms → `TIMEOUT`; a caller abort → `CANCELED`.
+  Over HTTP, the same: 422 / 502 / 500, with the response body holding only code, message and `retryable`, and 0 filings and 0 lines afterwards.
+  `ANTHROPIC_CUSTOM_HEADERS` + key → `AppError` naming the variable, repeating neither its value nor the key; headers alone, or with a blank key → boots.
+- **Cost and abuse** — all four routes carry the identity hook and the `rateLimit` hook (`printRoutes({ includeHooks: true })`, which also
+  lists the auto-generated `HEAD` of `matches`); keyed `<household>:<person>`; `route-limits.test.ts` walks them (`VERBS` has all four; removing the paid route's
+  limiter turns it red). F4 for the rest.
+- **Upload and storage** — the type comes from the bytes: a JPEG declared as `image/png`, `application/json`, `text/plain`, `multipart/form-data`, `x/y` or nothing is
+  stored as `image/jpeg`; a PNG declared as JPEG is stored as `image/png`; GIF, HEIC, `RIFF….WAVE` and a multipart envelope around a real JPEG are 415. Stored names
+  are `<uuid>.<jpg|png|webp>` in `receipts/home/`; with `?name=../../x.jpg` and `x-file-name: ../../x.jpg` sent, the data directory held only `households` and `receipts`, no
+  `.part` left over. The household is `isHouseholdId`-checked and the path re-checked to sit directly in its directory. No route serves a photo.
+- **Isolation** — above and in the positive control.
+- **Filing** — F3 for the double-write results; no path double-counts or adds a line when attaching. A failed filing leaves nothing (unknown spending category → 404 and 0
+  filings, 0 lines; `chargedTo` equal to the uploader → 400 and the receipt still unfiled). Match boundaries by HTTP, receipt dated 2026-10-10 for 26,50: rows at −6 and +6
+  days not offered; −5, −4, 0, +4, +5 offered with `daysApart` 5, 4, 0, 4, 5; 26,49 and 26,51 not offered for 26,50; the +26,50 credit not offered for a purchase and the only
+  offer for a refund (−26,50).
+- **_Arithmetic_** (`arith.mts`, an independent BigInt half-up oracle): 0 false flags on 300,000 correct all-taxable receipts (0,01 $ to 3 000,00 $); 0 misses
+  of 42,858 receipts a cent off in the total, in GST (parts still adding) or in QST (parts still adding); 0 disagreements with a brute-force "some taxable part" oracle on
+  39,924 random receipts; a refund passes, mixed signs flag `signs-differ`, zero-rated passes. Receipts rounded by another rule are flagged (truncating: 7,500 of
+  100,000; the pre-2013 compounded QST: 99,901 of 100,000): advisory by the owner's decision, and only half-up is modelled.
+- **Closure** — `tsconfig.json` and `tsconfig.tests.json` reference `receipts`; `api/package.json` lists `@ledger/receipts`; both Dockerfile lines are present; the lockfile
+  has the workspace link and its manifest; the `docker` job built and started the image on this head. I added the symlink `node_modules/@ledger/receipts` by hand (the farm lacks
+  it) and ran no install.
+
+**Invariants**: a tool imports nothing from another ✓; errors are `AppError` with ledger or core codes ✓ (the five new codes each have a status in `http-errors.ts`);
+redaction ✓ (F7 for the test); contract edits are the types and codes this ticket first throws, as the ledger `CLAUDE.md` provides, plus the receipt source its own comment
+announced ✓; tests registered (`receipts` reference line; the ledger project's glob covers `receipts/test`) ✓; the Dockerfile's two edits ✓; every new route enumerated by
+`printRoutes` ✓; style (no `any`, no `console`, `import type`) ✓ — `npm run check` exit 0. Skipped: SSRF (the base URL is a constant, not user-influenced), shell and process
+trees (none spawned), progress (the busy button states no number).
+
+**NFR**: security ✓ (key never logged, SDK environment reads neutralised, isolation, identity and limit before the body, no path from the request) · performance — a 7 MiB photo is
+buffered, base64-encoded and JSON-encoded per read; sequential peak RSS 215 MiB, concurrent unmeasured · reliability — typed on every shape; a hung read costs up to
+3 × 60 s by the code's own comment, which would pass a 100 s proxy limit (unverified, not measured here); F5 · maintainability — F6, F7.
 
 ## Log
 
