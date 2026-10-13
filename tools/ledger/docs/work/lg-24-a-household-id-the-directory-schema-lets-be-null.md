@@ -202,10 +202,8 @@ What this shows:
 
 The fix goes in `tools/ledger/api/src/db/directory-schema.ts`, as a new entry
 appended to `DIRECTORY_MIGRATIONS`. Migrations 1 and 2 are shipped and are not
-edited. **The next number is 3.** Migration 2 is lg-22's and is on `main`.
-lg-23's Build 4 says "a directory migration 2 drops the cap's trigger"; that
-number is already taken. Whichever of lg-23 and this ticket lands second takes the
-next free number, and the other's brief is corrected in the commit that lands it.
+edited. The new entry is the next free directory migration: 3 unless lg-23 lands
+first. Migration 2 is lg-22's and is on `main`.
 
 The ticket does not choose between these two options. The build chooses, and says
 in its Log which it chose and why.
@@ -249,7 +247,8 @@ option was taken.
 2. **A directory at the previous migration picks up the fix on open.** The same
    file builds a directory with `migrateDirectory(db, 2)` (the schema on `main`
    today), adds one household and one membership, closes it, and opens it with
-   `Directory.open`. The test expects `PRAGMA user_version` to read 3 afterwards,
+   `Directory.open`. The test expects `PRAGMA user_version` to read the next free
+   directory migration afterwards (3 unless lg-23 lands first),
    the household row and the membership history to be unchanged, and the refusal
    of line 1 to hold on the reopened directory.
 3. **The append-only scan passes on the migration's text.** `npm test -- --project ledger`
@@ -271,7 +270,10 @@ option was taken.
   that choice.
 - 2026-10-13 — `milestone: P6`, from lg-20, lg-22 and lg-23, which is the work this
   defect sits in. `depends_on: []`: the fix needs only what is on `main`. Migration 2
-  is already in place, so a migration 3 does not wait for lg-23.
-- 2026-10-13 — Collision noted, not fixed here: lg-23's Build 4 names "a directory
-  migration 2" for the cap's trigger. That number is lg-22's on `main`. lg-23's
-  brief is not edited by this ticket.
+  is already in place, so the next free directory migration (3 unless lg-23 lands
+  first) does not wait for lg-23.
+- 2026-10-13 — Collision noted: lg-23's Build 4 named "a directory migration 2" for
+  the cap's trigger, and that number is lg-22's on `main`. Corrected in this
+  branch's second commit, which changes lg-23's sentence to "the next free directory
+  migration" and this ticket's claims to match, so whichever of the two lands second
+  takes the next free number.
